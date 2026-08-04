@@ -79,8 +79,8 @@ Building is defensible because the expensive parts already exist in `mm-tools`.
 Everything in this document traces back to these:
 
 1. **Dual-currency per transaction.** Every row carries a local amount *and* a
-   reporting-currency amount. Seven currencies; USD is the main; PLN is 51% of
-   volume and BYN 30%.
+   reporting-currency amount. Seven currencies in use; the main currency is
+   user-configurable and currently USD (§7.0). PLN is 51% of volume, BYN 30%.
 2. **52 active accounts.** Consumer apps assume 3–8 wallets.
 3. **Institutions no aggregator covers.** Seven institutions across three
    countries, only one of which any aggregation service supports. Statement
@@ -107,7 +107,8 @@ Everything in this document traces back to these:
 | G5 | Answer questions without exporting | Agent handles what currently requires Excel |
 | G6 | **Never report a personal expense** | Tax outputs structurally cannot contain non-business rows (§13.1) |
 | G7 | Support more than one tax jurisdiction | PL now; US and DE addable without touching the ledger (§13.2) |
-| G8 | See everything in Excel | Exports that open in Excel and look right |
+| G8 | Make FX cost visible | The gap between the bank's rate and the reference rate is a figure you can total, not an invisible leak (§7.5) |
+| G9 | See everything in Excel | Exports that open in Excel and look right |
 
 ### 2.2 Non-goals
 
@@ -141,6 +142,8 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Users | Single | No auth complexity, no per-row ownership |
 | Tax posture | Feeder and reconciler, not the book | §13.5 |
 | Tax jurisdictions | Pluggable adapters — PL live, US and DE specified | §13.2 |
+| Currency | First-class and user-configured — main currency changeable, sub-currencies addable | §7.0 |
+| FX rates | Reference rates synced on app open; realized rates from actual amounts; manual override at three levels | §7.3, §7.6 |
 | Personal expenses | Structurally excluded from every tax output | §13.1 |
 | Apr–Aug 2026 gap | Entered manually in Money Manager first | Migration runs against a later backup |
 
@@ -370,8 +373,9 @@ eighteen months later.
 ### 6.2 Entities
 
 ```
-currencies              code PK, name, symbol, symbol_position, decimals, is_main
-fx_rates                (base, quote, date) PK, rate, source
+currencies              code PK, name, symbol, symbol_position, decimals,
+                        is_main, rate_source, archived, sort   -- user-configured (§7.0)
+fx_rates                (base, quote, date) PK, rate, source, fetched_at
 account_groups          id, name, sort
 accounts                id, name, kind, currency, group_id,
                         opening_balance, opening_date, memo,
@@ -380,6 +384,7 @@ categories              id, parent_id →self, name, kind,
                         icon, color, archived, sort, external_id
 transactions            id, date, type, account_id, to_account_id, category_id,
                         amount_original, currency, fx_rate, amount_main,
+                        to_amount, to_currency, to_fx_rate,   -- transfers (§7.5)
                         payee, note, is_business,
                         source, external_id, deleted_at
 tags / transaction_tags id, name  ·  m2m
@@ -429,6 +434,8 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 **`actor`** — `user` · `agent` · `import` · `migration`
 **`import_row_status`** — `pending` · `ready` · `needs_review` · `duplicate` ·
 `imported` · `skipped`
+**`fx_source`** — `nbp` · `ecb` · `nbrb` · `nbg` · `manual` · `carried_forward`
+(§7.6; `manual` outranks every synced source for the same pair and date)
 
 ### 6.4 The clearing accounts
 
@@ -455,8 +462,18 @@ transactions_amount_positive     amount_original >= 0
 transactions_transfer_shape      (type = 'transfer') = (to_account_id IS NOT NULL)
 transactions_transfer_distinct   to_account_id IS NULL OR to_account_id <> account_id
 transactions_category_shape      type IN ('income','expense') OR category_id IS NULL
+transactions_to_amount_shape     (type = 'transfer') = (to_amount IS NOT NULL)
+transactions_to_amount_positive  to_amount IS NULL OR to_amount >= 0
 categories_no_self_parent        id <> parent_id
 fx_rates_rate_positive           rate > 0
+```
+
+Plus a partial unique index enforcing **exactly one main currency**, which is
+the invariant every report depends on:
+
+```sql
+CREATE UNIQUE INDEX currencies_one_main
+  ON currencies ((true)) WHERE is_main;
 ```
 
 Plus unique indexes on normalized names, and partial unique indexes on
@@ -481,6 +498,35 @@ instead — never deleted, because history references it.
 
 ## 7. Money and FX semantics
 
+Currency is a **first-class, user-configured domain**, not a fixed list baked
+into the schema. You choose the main currency and which sub-currencies exist;
+everything downstream — reporting, transfers, exports — derives from that
+choice.
+
+### 7.0 Currency configuration
+
+| Concept | Meaning |
+|---|---|
+| **Main currency** | The single reporting currency. Every balance, report, and export total is expressed in it. Exactly one at a time |
+| **Sub-currencies** | Every other currency in use. Accounts are denominated in one of these; transactions keep their original amounts |
+
+Both are editable at runtime, from Settings:
+
+- **Add a sub-currency** — pick an ISO 4217 code, set decimals and symbol
+  placement, choose a rate source. Backfill runs for the period covered by
+  existing data.
+- **Archive a sub-currency** — hidden from pickers; existing history keeps
+  working. Never deleted while any account or transaction references it.
+- **Change the main currency** — supported, and consequential. It does not
+  rewrite history: `amount_original` is untouched, and every stored reference
+  rate is re-expressed against the new main. Because `amount_main` is
+  derived (§7.1), this is a backfill, not a migration. The operation is
+  audited and requires confirmation, since it re-bases every report.
+
+Money Manager hardcodes one main currency chosen at install and offers no way
+back. Making this configurable is the difference between a tool that fits a
+move abroad and one that has to be abandoned when you make one.
+
 ### 7.1 Representation
 
 Amounts are `numeric(20,8)` in Postgres and **decimal strings** in TypeScript,
@@ -501,34 +547,112 @@ Signed values are computed at read time:
 | `transfer` | `−amount` | `+amount` |
 | `adjustment` | `+amount` (may be negative in effect) | — |
 
-### 7.3 Conversion
+### 7.3 Two kinds of rate
+
+The system distinguishes them everywhere, because conflating them is how FX
+cost becomes invisible.
+
+| | **Reference rate** | **Realized rate** |
+|---|---|---|
+| Source | Central bank or market feed | Implied by an actual transaction |
+| Answers | *What was this worth?* | *What did I actually get?* |
+| Used for | Valuation, reporting, tax | Transfers, FX cost analysis |
+| Stored in | `fx_rates` | Derived from the two amounts on the transaction |
+| Authority | Provider | The bank statement |
+
+A reference rate is never used to *compute* money that actually moved. It
+values things; it does not invent them.
+
+### 7.4 Conversion and reporting
 
 `fx_rates(base, quote, date) → rate`, converting one unit of `base` into
-`quote`. Reporting is in USD (`currencies.is_main`).
+`quote`. Reporting is in the configured main currency (§7.0).
 
-- Historical rates backfilled daily from 2020-11-25.
-- A transaction's `fx_rate` is fixed at its date and **does not** change when
+- Historical reference rates are backfilled daily across the full data range.
+- A transaction's `fx_rate` is fixed at its date and **does not** move when
   later rates arrive. A 2021 purchase is reported at 2021 rates.
 - `amount_main` is materialized for query performance and always recomputable
-  as `amount_original × fx_rate`.
+  as `amount_original × fx_rate` — which is what makes changing the main
+  currency (§7.0) a backfill rather than a migration.
 
-**Cross-currency transfers** carry two rates — one per leg — because sending and
-receiving accounts may differ in currency (`Household · USD` → `Cash · PLN`
-appears in the data). The spread between them is real FX cost and should be
-visible, not silently absorbed.
+### 7.5 Cross-currency transfers
 
-### 7.4 Rate sources
+Moving money between accounts of different currencies stores **both amounts**:
 
-| Currency | Source | Notes |
+```
+transactions
+  amount_original   150.00     -- leaves `Household · USD`
+  currency          USD
+  to_amount         565.20     -- arrives in `Cash · PLN`
+  to_currency       PLN
+  → realized rate   3.7680     -- derived, never stored as truth
+```
+
+For same-currency transfers `to_amount` equals `amount_original` and the
+realized rate is 1.
+
+Storing the destination amount rather than deriving it matters because they
+disagree in practice. If the reference rate that day was 3.8100 and your bank
+gave you 3.7680, that 1.1% gap is a real cost — roughly 6 PLN on this transfer.
+Deriving `to_amount` from the reference rate would erase it silently; storing
+both makes it a reportable figure. **FX cost becomes a category you can total**,
+which no version of Money Manager could show.
+
+### 7.6 Rate sync and manual override
+
+**Sync on foreground.** The app refreshes reference rates when opened, subject
+to a staleness threshold — no refetch if the current day's rates are already
+held. Sync is per configured currency pair against the main currency.
+
+| Situation | Behaviour |
+|---|---|
+| Rates current | No network call |
+| Rates stale, online | Fetch, upsert, stamp `fetched_at` |
+| Rates stale, offline | Use the most recent held rate, **visibly marked stale** in the UI |
+| Provider fails | Fall back to last known; surface the failure rather than silently carrying forward |
+| Weekend or holiday | Carry forward the last published rate — standard convention, and what NBP itself does |
+
+**Manual override at three levels**, each recorded with provenance so a figure
+can always be traced to its origin:
+
+1. **Per transaction** — enter the rate your bank actually applied, or let it
+   be implied by entering both amounts (§7.5). This is the common case, and the
+   preferred one: two amounts are observable from a statement, a rate is not.
+2. **Per day, per pair** — correct a bad or missing provider figure for a
+   specific date. Applies to anything valued on that date.
+3. **Provider selection** — per currency, choose which source is authoritative
+   (§7.7).
+
+`fx_rates.source` carries the provenance: `nbp`, `ecb`, `nbrb`, `nbg`,
+`manual`, or `carried_forward`. A manual entry always outranks a synced one for
+the same pair and date, is never overwritten by a later sync, and writes to
+`audit_log`. Reports can be filtered to show which figures rest on overrides —
+useful when a period is being reconciled and you need to know what was asserted
+rather than observed.
+
+### 7.7 Rate sources
+
+Each currency carries its own `rate_source`, selectable in Settings. These are
+the defaults, not hardcoded assignments:
+
+| Currency | Default source | Why |
 |---|---|---|
-| PLN | **NBP** (Narodowy Bank Polski) | Preferred — NBP rates are what Polish tax filing uses |
+| PLN | **NBP** (Narodowy Bank Polski) | NBP rates are what Polish tax filing uses — so valuation matches the book |
 | EUR, GBP | ECB reference rates | Free, authoritative, full history |
-| BYN | NBRB (National Bank of Belarus) | Availability back to 2020 to be verified |
+| BYN | NBRB (National Bank of Belarus) | Availability back to 2020 to be verified (O4) |
 | GEL | NBG (National Bank of Georgia) | — |
-| RUB | NBP or ECB | Post-2022 quotes unreliable; see O5 |
+| RUB | NBP or ECB | Post-2022 quotes unreliable (O5) |
 
-Missing days (weekends, holidays) carry forward the last published rate — the
-standard convention, and what NBP itself does.
+The general rule: **prefer the central bank of the jurisdiction you report in**,
+because that is the rate the tax authority will use. Where no such rate exists,
+fall back to ECB.
+
+Adding a currency means adding a source adapter — a function from
+`(pair, date range)` to rates. Sources are plugins, so a new one is a module
+and a row, not a schema change.
+
+Missing days (weekends, holidays) carry forward the last published rate, marked
+`carried_forward`. This is the standard convention and what NBP itself does.
 
 ---
 
@@ -559,6 +683,7 @@ Every transformation emits a line in a migration report for review:
 | Name collisions | Resolve the 13 documented cases by (parent, kind) |
 | Account kinds | Derive from group + name pattern + memo (§6.3) |
 | Transfers | Pair OUT/IN into single rows; **flag every unmatched leg** |
+| Realized FX | Take `amount_original` from the OUT leg and `to_amount` from the IN leg — both are already stored per-leg, so five years of actual bank rates are recoverable (§7.5) |
 | Categories | Rebuild the tree by `ZPUID`; verify no orphans |
 | FX | Backfill `fx_rates`; recompute every `amount_main` |
 | Recurring | Port 24 `ZREPEATTRANSACTION` rows; translate to RRULE |
@@ -783,7 +908,8 @@ is date, description, account, debit, credit, running balance:
 | `Accounts` | Register with kind, currency, group, current balance |
 | `Cash Flow` | Monthly income, expense, net, by account group |
 | `Business` | Reads `tax_ledger`, shaped to the active jurisdiction (§12.3) |
-| `FX Rates` | Rates actually used, so every USD figure is reproducible |
+| `FX Rates` | Every rate used, with its source and whether it was synced or overridden — so each converted figure is reproducible |
+| `FX Cost` | Realized vs reference rate per cross-currency transfer, and the spread totalled by period and institution (§7.5) |
 
 Debit and credit are separate columns with exactly one populated per row. That
 is the convention every general ledger template follows, and it is what makes
@@ -1043,8 +1169,17 @@ circumstances before it is relied on.
 | Transactions | Search, filter, infinite list, swipe to edit |
 | Transaction detail | Full edit, receipt view, line splits, audit history |
 | Accounts | Register, balances, archive toggle |
+| Transfer | Two accounts, two amounts; live rate shown, editable inline (§7.5) |
 | Agent | Chat, tool-call cards, approval gates |
-| Settings | Categories, rules, recurring, export, sync status |
+| Settings | Currencies (main + subs, rate sources), categories, rules, recurring, export, sync status |
+
+**Transfer entry** deserves calling out, because it is where the FX model meets
+the keyboard. Pick source and destination; if the currencies differ, the
+destination amount is **pre-filled from the reference rate and left editable**.
+Typing over it sets the realized rate, and the difference from the reference is
+shown as it is typed — so the bank's spread is visible at the moment of entry
+rather than discovered in a report months later. The rate itself is never the
+input; two amounts are, because two amounts are what a statement shows.
 
 ### 14.2 Web — dashboard
 
@@ -1062,8 +1197,8 @@ Shares the codebase via React Native Web; different information density.
 
 | State | Behaviour |
 |---|---|
-| Online | Direct tRPC; optimistic updates |
-| Offline | Reads from local SQLite cache; writes to outbox |
+| Online | Direct tRPC; optimistic updates; FX sync on foreground (§7.6) |
+| Offline | Reads from local SQLite cache; writes to outbox; last-known rates, marked stale |
 | Reconnect | Outbox drains in order; server is authoritative |
 | Conflict | Last-write-wins. Single user, single writer — anything more is unjustified |
 
@@ -1137,6 +1272,7 @@ Ordered by how much they block.
 | **O10** | **Are US and German obligations live, or anticipated?** | §13.3 build order | Anticipated — schema carries the shape, adapters wait |
 | **O11** | If live: residency periods, and any treaty / foreign-tax-credit interaction | `tax_residency`, §13.2 | Single jurisdiction at a time, no overlap |
 | **O12** | How far back must business rows be reclassified? 5 years of history predates any tax intent | §13.1 backfill | From 2026 forward only; earlier rows stay personal unless marked |
+| **O13** | **"Synced with banks"** — central-bank reference rates, or your actual banks' rates? | §7.6, §7.7 | Central banks for reference; realized rates come from the amounts, not a feed |
 
 ---
 
