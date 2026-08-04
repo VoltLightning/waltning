@@ -1428,7 +1428,7 @@ Ordered by how much they block.
 | # | Question | Blocks | Default if unanswered |
 |---|---|---|---|
 | **O1** | **Tax form — skala, liniowy, or ryczałt?** | §12.3, §13 | Assume KPiR applies; build the fields, defer the sheet |
-| **O2** | **VAT registered? JPK_V7M or V7K?** | §13.1 timing | Assume not registered |
+| ~~**O2**~~ | ~~VAT registered?~~ | — | **Answered: not registered.** Opting in later must not require a migration, so `counterparty_tax_id`, `document_ref` and `ksef_id` exist as optional fields from day one — but **no JPK_V7 handling is built**. Electronic KPiR therefore binds from 2027-01-01, not 2026-01-01 |
 | **O3** | Does dedicated KPiR software already exist in your workflow? | §13.3 handoff design | Assume yes; build export, not integration |
 | **O4** | BYN and GEL historical FX back to 2020-11 — available? | §7.4, Phase 0 | Fall back to Money Manager's snapshot rates, flagged approximate |
 | **O5** | RUB post-2022 — does accuracy matter for those rows? | §7.4 | Use the snapshot; flag in reports |
@@ -1436,8 +1436,8 @@ Ordered by how much they block.
 | **O7** | Budgets — genuinely wanted, or dropped? | N7 | Dropped; data preserved in the migration dump |
 | **O8** | Off-site backup target (S3? Backblaze? another machine?) | §5.4 | Backblaze B2, age-encrypted |
 | **O9** | Pi model and storage on hand | §15 | Assume Pi 5 / 4 GB / SSD |
-| **O10** | **Are US and German obligations live, or anticipated?** | §13.3 build order | Anticipated — schema carries the shape, adapters wait |
-| **O11** | If live: residency periods, and any treaty / foreign-tax-credit interaction | `tax_residency`, §13.2 | Single jurisdiction at a time, no overlap |
+| ~~**O10**~~ | ~~Are US and German obligations live?~~ | — | **Answered: all three eventually, none urgent.** Build the full adapter layer and **all three scheme definitions** (`PL_KPIR`, `PL_RYCZALT`, `US_SCHED_C`, `DE_EUER`) now while the design is fresh; implement adapters on demand. Poland first |
+| **O11** | Residency periods, and any treaty / foreign-tax-credit interaction | `tax_residency`, §13.2 | Deferred until a second jurisdiction goes live. `tax_residency` exists so this is additive |
 | **O12** | How far back must business rows be reclassified? 5 years of history predates any tax intent | §13.1 backfill | From 2026 forward only; earlier rows stay personal unless marked |
 | **O13** | **"Synced with banks"** — central-bank reference rates, or your actual banks' rates? | §7.6, §7.7 | Central banks for reference; realized rates come from the amounts, not a feed |
 | **O14** | Do counterparties **replace** the 11 loan accounts, or coexist with them? | §6.6, migration | Replace — the accounts exist only because Money Manager had no counterparty concept |

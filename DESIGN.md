@@ -477,8 +477,8 @@ All charts draw from the green ramp; magnitude is depth.
 
 | Component | Use | Requirement |
 |---|---|---|
-| `PieChart` | Category share, whole-of-period | Labels on segments ≥ 5%; the rest fold into *other* with a breakdown on tap |
-| `DonutChart` | Category share with a centre total | Legend **always** present with amounts — the ring is never the only encoding |
+| `PieChart` | Category share, whole-of-period | Max 5 segments + *other*, each directly labelled with its value |
+| `DonutChart` | Category share with a centre total | Same cap. Legend is reinforcement, never the lookup mechanism |
 | `LineChart` | **Income vs expense over time** | Two series, annual or arbitrary range |
 | `BarChart` | Month over month | Increases in spend take `negative` ink |
 | `AreaChart` | Cumulative net worth | Single series, ramp fill |
@@ -516,12 +516,21 @@ Both exist; they are not interchangeable.
 | Composition alone, no meaningful total | `PieChart` |
 | Composition **and** a total worth stating | `DonutChart` — the total sits in the hole |
 
-Neither shows more than **seven segments plus *other***. Beyond that the small
-segments are unreadable and the ramp runs out of distinguishable steps (Q2).
+**Neither shows more than five segments plus *other*, and every segment carries
+a direct label with its value.**
 
-⚠️ **Seven categories in one hue ramp is the system's weakest point.** Adjacent
-steps are hard to distinguish, and roughly 8% of men have a colour vision
-deficiency. Charts need labels or patterns at small sizes (§10, §13 Q2).
+Five is where adjacent steps in a single-hue ramp stay reliably
+distinguishable. Beyond that, colour is doing work it cannot do — roughly 8% of
+men have a colour vision deficiency, and the ramp has only seven usable steps
+to begin with. The direct label is what makes the encoding colour-independent:
+the chart stays readable in greyscale, and the legend becomes reinforcement
+rather than the lookup mechanism.
+
+Tapping *other* breaks the tail out as a list, which is a better reading
+surface for small values than a sliver of arc ever was.
+
+This preserves the single-hue palette and the "magnitude reads as depth"
+principle, which patterns or a second hue family would both have cost.
 
 ---
 
@@ -655,7 +664,7 @@ split cheap.
 | **D2** | `Card`, `Shell`, rows, `TabBar`, `BottomSheet` | Structure for every screen |
 | **D3** | `DiffCard` + `ToolResultCard` | One gate, three call sites — build before any of them |
 | **D4** | States — `EmptyState`, `ErrorState`, `Skeleton`, `Banner` | Closes §9, starting with Quick add |
-| **D5** | Charts + `Legend` + `PeriodPicker` | Blocked on the colour-encoding decision (Q2) |
+| **D5** | Charts + `Legend` + `PeriodPicker` | Unblocked — 5 segments + *other*, directly labelled (§7.2) |
 | **D6** | `Calendar` + cells + navigation (§6) | Virtualization is the hard part; build it once for both modes |
 | **D7** | Debt — `BalanceLedger`, `SettleSheet`, `CounterpartyPicker` (§5.5) | Depends on D0's money components |
 | **D8** | Accessibility pass | Measured contrast, targets, reduced motion, labels |
@@ -671,7 +680,7 @@ order, where screens exist and components do not.
 | # | Question | Blocks | Recommendation |
 |---|---|---|---|
 | **Q1** | `green-300` is undefined, but the contrast audit references "ramp steps 300–400" | Charts, D5 | Define it — roughly `#a3d2b8` |
-| **Q2** | Seven categories in one hue ramp fails colour-independence | D5, §10 | Add a second encoding (pattern or direct labels), or cap the ring at 5 segments + "other" |
+| ~~**Q2**~~ | ~~Seven categories in one hue ramp fails colour-independence~~ | — | **Resolved** — cap at 5 segments + *other*, every segment directly labelled with its value. Single-hue ramp kept; the chart reads in greyscale (§7.2) |
 | **Q3** | Chips at ~34px vs the 44px floor | D1 | Raise padding globally; accept the density loss |
 | **Q4** | Approved diff cards have no revert | D3 | Session-duration revert on the applied card |
 | **Q5** | Partial approval when voice yields two intents | D3 | Per-card actions, not a single *Approve both* |
