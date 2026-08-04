@@ -618,9 +618,26 @@ from exactly one thing: any figure that claims to be *your* money.
 | Net worth | **Excluded** |
 | "Spend this month" headline | **Excluded** |
 | Balances list | Shown, in its own group, with its own subtotal |
-| Category reports | Included, behind a toggle that is off by default |
 | Calendar, search, transaction list | Always included |
+| Reports | Governed by the scope control below |
 | Tax outputs | Never — external accounts are not yours to report |
+
+#### The scope control is a partition
+
+The header segment is **All · Mine · Family · Business**, and these are not
+overlapping filters — they divide the ledger exactly:
+
+| Scope | Definition |
+|---|---|
+| **Mine** | Own accounts, `is_business = false` |
+| **Business** | `is_business = true` — always in own accounts |
+| **Family** | External accounts — never business, never reportable |
+| **All** | The union |
+
+Every transaction lands in exactly one of the three, which is what makes the
+control trustworthy: switching between them can never double-count, and the
+three subtotals always sum to the All figure. That property is worth preserving
+if a fourth scope is ever added.
 
 #### Why one boolean is enough
 
@@ -965,7 +982,7 @@ One module per source, all conforming to `parse(file) → RawRow[]`.
 | `NEOBANK` CSV | 2 | Well-documented, stable format |
 | `BANK-B` | 3 | — |
 | `FX-BANK-1`, `FX-BANK-2` | 3 | — |
-| `CARD-C` | 4 | Second-highest volume, but the format is unknown (O6) |
+| ~~`CARD-C`~~ | — | **Dropped** — account dormant; historical rows migrate, nothing new arrives |
 | Generic CSV | fallback | Column auto-detection, as `classify_statement_openrouter.py` does today |
 
 `scripts/convert_pko_xls.py` ports directly.
@@ -1569,7 +1586,9 @@ shapes do not correspond.
 | Observability | Structured JSON logs, 30-day retention. Health endpoint. Anthropic token spend tracked per feature |
 | Testing | Migration verification (§8.4) is the critical suite. Parser fixtures per bank. Property tests on money arithmetic. Agent tool contract tests |
 | Upgrades | `docker compose pull && up -d`. Drizzle migrations reviewed before applying — never auto-applied on boot |
-| Hardware | Raspberry Pi 4/5, 4 GB+, **booting from SSD, not SD card** |
+| Hardware | **Raspberry Pi 4**, 4 GB+. Comfortable here — 8k rows is nothing, and receipt extraction is model-bound rather than CPU-bound |
+| Storage | **SSD over USB3, not SD card.** SD cards fail under database write patterns and fail silently for a while first. On a Pi 4 this is the single highest-value hardware decision |
+| Tuning | Postgres `shared_buffers` and `work_mem` sized for 4 GB shared with MinIO, the API and Caddy — defaults assume a bigger host |
 
 ---
 
@@ -1608,10 +1627,10 @@ Ordered by how much they block.
 | **O3** | Does dedicated filing software already exist in your workflow? | §13.3 handoff | Assume yes; build export, not integration. Lower stakes under ryczałt — the record is a revenue register, not a book |
 | ~~**O4**~~ | ~~BYN and GEL historical FX?~~ | — | **Verified available.** NBP, NBRB and NBG all serve 2020-11-25 and all quote **directly against USD** — no triangulation for primary pairs, no snapshot fallback. Endpoints in §7.7 |
 | ~~**O5**~~ | ~~RUB post-2022 accuracy?~~ | — | **Decided:** use Money Manager's snapshot rate, marked `carried_forward`, and flag affected rows in reports rather than implying precision that does not exist |
-| **O6** | `CARD-C` statement format (1,269 rows — second-highest volume) | Phase 4 parser priority | **Needs a sample file from you.** Until then the generic CSV parser with column auto-detection, falling back to manual entry |
+| ~~**O6**~~ | ~~`CARD-C` statement format?~~ | — | **Answered: the account is dormant.** Historical rows migrate; nothing new arrives. **No parser needed** — dropped from Phase 4 entirely |
 | ~~**O7**~~ | ~~Budgets?~~ | — | **Answered: targets, not budgets.** A monthly spend target shown as progress against actual — no per-category envelopes, no rollover. See §14.7. The 13 Money Manager budgets are preserved in the migration dump but not imported |
 | ~~**O8**~~ | ~~Off-site backup target?~~ | — | **Answered: Backblaze B2**, age-encrypted before upload so the provider holds ciphertext only. S3-compatible, so MinIO points at it by configuration |
-| **O9** | Pi model and storage on hand | §15 | **Assumed:** Pi 5 / 4 GB / SSD boot. Correct me if it is a Pi 4 or SD-only — the latter changes the backup urgency, not the design |
+| ~~**O9**~~ | ~~Pi model?~~ | — | **Answered: Pi 4.** Ample for the workload — 8k rows is nothing. **Boot from SSD over USB3, not SD**; see §15 |
 | ~~**O10**~~ | ~~Are US and German obligations live?~~ | — | **Answered: all three eventually, none urgent.** Build the full adapter layer and **all three scheme definitions** (`PL_KPIR`, `PL_RYCZALT`, `US_SCHED_C`, `DE_EUER`) now while the design is fresh; implement adapters on demand. Poland first |
 | **O11** | Residency periods, and any treaty / foreign-tax-credit interaction | `tax_residency`, §13.2 | Deferred until a second jurisdiction goes live. `tax_residency` exists so this is additive |
 | ~~**O12**~~ | ~~Business backfill scope?~~ | — | **Answered: 2026 forward only.** Earlier rows stay personal unless explicitly marked. Nothing becomes reportable by omission, and it matches when the current rules took effect |
