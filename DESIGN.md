@@ -697,9 +697,9 @@ order, where screens exist and components do not.
 | **Q10** | Counterparty identity — monogram, colour, or photo? | D7 | Monogram on a ramp tint, deterministic from the name. No photo picker |
 | **Q11** | Does a settlement need a receipt or note requirement? | D7 | Optional, but prompted — an undocumented settlement is the one people dispute |
 
-### Two contradictions with `SPEC.md`
+### Contradictions with `SPEC.md` — both now resolved
 
-Flagged rather than silently resolved, because both are decisions:
+Flagged rather than silently reconciled, because both were decisions.
 
 **~~C1 · Main currency~~ — dissolved.** `Design Spec.dc.html` §1.2 says PLN;
 `SPEC.md` said USD; Money Manager holds USD. The contradiction existed only
@@ -710,8 +710,14 @@ for rate storage — which is what Money Manager already holds, so migration
 needs no conversion — and PLN, USD and EUR are all pinned to the display
 toggle. Both documents were describing preferences that no longer conflict.
 
-**C2 · O1 is answered.** `Design Spec.dc.html` §5 resolves the open tax-form
-question as *all three* Polish schemes — skala, liniowy, and ryczałt. `SPEC.md`
-§17 still lists O1 as open with a different default. That resolution adds the
-ryczałt revenue-rate field, a scheme timeline, and a tax view that removes the
-cost side with a stated reason rather than blanking it.
+**~~C2 · O1~~ — resolved.** `Design Spec.dc.html` §5 answers the tax-form
+question as *all three* Polish schemes — skala, liniowy, and ryczałt — and
+`SPEC.md` §17 now records it. It adds the ryczałt revenue-rate field (which
+exists nowhere else in the design and cannot be inferred from the expense
+taxonomy), a scheme timeline rather than a dropdown, and a tax view that
+removes the cost side under ryczałt with a stated reason rather than blanking
+it.
+
+Also settled since: **VAT** — not registered, so NIP / KSeF / document-ref
+fields exist but no JPK_V7 handling is built. **Jurisdictions** — all three
+scheme definitions written now, adapters implemented on demand, Poland first.
