@@ -1,0 +1,22 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+  - "tools/*"
+
+# esbuild's postinstall links its platform binary; drizzle-kit and tsx both
+# need it. Denying this leaves them broken at runtime, not at install time.
+allowBuilds:
+  esbuild: true
+
+# Expo supports pnpm's isolated installs from SDK 54 onward, and Metro
+# auto-configures for monorepos from SDK 52 — no metro.config.js overrides
+# needed. If a native build ever fails to resolve, switch to:
+#   nodeLinker: hoisted
+# and re-run `npx expo start --clear`.
+
+# Keep a single React / React Native across the workspace. Duplicates are the
+# most common source of "invalid hook call" and native build failures in RN
+# monorepos, and they surface late.
+publicHoistPattern:
+  - "*react*"
+  - "*react-native*"

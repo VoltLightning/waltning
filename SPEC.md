@@ -895,6 +895,36 @@ Missing days (weekends, holidays) carry forward the last published rate, marked
 
 The riskiest phase, and therefore the first.
 
+### 8.0 Scope — balances and income, not five years of history
+
+**Migration is no longer a project gate.** It was Phase 0 with a
+reconcile-to-the-cent blocker; the new UX matters more than reproducing the old
+ledger, and the importer is idempotent (§8.3), so deferring costs nothing and
+closes no doors.
+
+| What | Migrates | Why |
+|---|---|---|
+| Accounts + groups | ✅ | Structure you would otherwise retype |
+| **Opening balances** | ✅ | Read from the `.mmbak` directly — accurate starting positions, zero typing |
+| Currencies | ✅ | With their rate sources |
+| Recurring rules | ✅ | 24 of them |
+| **Income transactions** | ✅ | 506 rows, so "what did I earn in 2023" works |
+| Categories | ⚠️ **mapped, not copied** | A new taxonomy replaces them — see `TAXONOMY.md` |
+| Expenses and transfers | ❌ *for now* | ~7,100 rows. Available any time via the same importer |
+| Counterparty proposals | ⚠️ deferred | Names live in loan-transaction notes; extract when history does |
+
+**What this changes downstream**
+
+- Phase 0 drops from ~2 weeks to ~2 days.
+- The verification gate (§8.4) stops being a project blocker and becomes a
+  check on the balances that *did* come across.
+- **R8 — the largest risk in the register — largely dissolves.** You cannot
+  stall half-migrated if migration was never the prerequisite.
+- **Rules cold-start:** the classification cascade (§9.2) assumes rules
+  accumulate from confirmed history. Starting near-empty means the first months
+  lean harder on the model tier — more API calls, more review, self-correcting
+  within a few months. A cost in euros, not in correctness.
+
 ### 8.1 Pipeline
 
 ```
@@ -1074,6 +1104,45 @@ is correct and enormously simpler.
 
 The component most likely to be built badly. Three rules make it safe.
 
+### 11.0 One operation registry, two consumers
+
+The agent is **not a separate surface with its own hand-written tool list.**
+Every capability in the system is a named, typed operation in a single
+registry; the UI calls it over tRPC, and the agent's tools are **generated from
+the same registry**.
+
+```
+                    ┌────────────────────────┐
+                    │  operation registry    │
+                    │  typed · validated ·   │
+                    │  audited · write-flag  │
+                    └───┬────────────────┬───┘
+                        │                │
+                  tRPC router      generated tools
+                        │                │
+                   ┌────▼────┐      ┌────▼────┐
+                   │   UI    │      │  agent  │
+                   └─────────┘      └─────────┘
+```
+
+Separate lists drift. One registry means adding a feature makes it
+agent-accessible for free, validation and audit cannot diverge between the two
+paths, and there is a single place to reason about what the system can do.
+
+**Reach is everything the UI can do** — including taxonomy changes and
+dashboard configuration. *"Put family spending on my dashboard"* is a write to
+`dashboard_widgets` (§14.5) through the ordinary approval gate, not a special
+case. **Reach is not authority:** every write still gates (§11.2).
+
+Each operation carries: typed input (Zod), validation, an audit entry with
+actor, a write flag, and a description written for the model to read.
+
+**Introspection.** The agent needs to know what exists, so the registry is
+self-describing: the operation catalogue, the category tree, the account list,
+the widget catalogue, and the current dashboard layout are all readable. An
+agent that cannot enumerate its own capabilities cannot be asked open questions
+about them.
+
 ### 11.1 Typed tools, not SQL generation
 
 | Read — auto-runs | Write — requires approval |
@@ -1098,6 +1167,27 @@ tapped to approve. Nothing is written on the model's own authority, ever.
 Implemented with the SDK's tool runner, gating inside each write tool's run
 function — rejecting returns a "declined" result and the loop continues
 normally rather than breaking.
+
+#### Auto mode
+
+Gating every write is correct as the default and tiring as the only option —
+recategorising forty import rows by voice should not be forty approvals.
+
+**Auto mode is opt-in, explicit, and visible.** You turn it on deliberately;
+the interface shows unmistakably that it is on; and it is scoped rather than
+global:
+
+| Property | Behaviour |
+|---|---|
+| Default | **Off.** Every write gates |
+| Scope | Per operation class — e.g. recategorisation on, deletion never |
+| Duration | The session, or a stated number of operations. Never permanent |
+| Never eligible | Deletes, configuration changes, anything touching tax scope or the pivot currency |
+| Audit | Unchanged — auto-applied writes are logged identically, marked `auto` |
+| Exit | One tap, and any single write can still be reverted (§11.2) |
+
+The model is Claude Code's own: gate by default, opt into speed deliberately,
+and make the state you are in obvious at a glance.
 
 ### 11.3 Everything is logged
 
@@ -1599,7 +1689,7 @@ that works.
 
 | Phase | Deliverable | Gate | Est. |
 |---|---|---|---|
-| **0. Migration** | Schema, importer, verification harness | All 52 balances match to the cent | 2 wks |
+| **0. Foundation** | Schema, taxonomy seed, accounts, opening balances, income import | Balances match; taxonomy in place | ~3 days |
 | **1. API + web read** | Hono + tRPC, dashboard, search, reports | You trust the numbers on sight | 2 wks |
 | **2. Mobile** | Expo app, entry, accounts, offline outbox | Replaces daily Money Manager use | 2–3 wks |
 | **3. Receipts** | Capture, extraction, line splits | Faster than typing it in | 2 wks |

@@ -14,6 +14,7 @@ pipeline that grew up around it.
 | **[SPEC.md](SPEC.md)** | Architecture, data model, FX semantics, security, migration, tax layer, phasing |
 | **[DESIGN.md](DESIGN.md)** | Design system — tokens, components, states, accessibility |
 | **[FLOWS.md](FLOWS.md)** | 15 user journeys and specifications for all 29 screens |
+| **[TAXONOMY.md](TAXONOMY.md)** | Proposed category tree, derived from five years of transaction data |
 
 ## Status
 
