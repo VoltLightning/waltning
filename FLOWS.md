@@ -51,7 +51,7 @@ history. Every other journey assumes its output.
 
 ```
 install → S29 Setup wizard
-    1. Choose main currency          ← the decision everything derives from
+    1. Pick display currency         ← a preference, changeable any time
     2. Add sub-currencies            ← optional, addable later
     3. Create first account          → S16 Account editor
     4. Import from Money Manager?    ▸ yes → S29b Migration import
@@ -63,8 +63,9 @@ install → S29 Setup wizard
 
 **Design rules**
 
-- Main currency is asked **first and alone**, because it re-bases everything
-  downstream (`SPEC.md` §7.0) and changing it later is a backfill.
+- Display currency is just a starting preference — it is a toggle afterwards,
+  so this step carries no weight and needs no explanation (`SPEC.md` §7.0). The
+  USD pivot is set silently and never surfaced.
 - Steps 2, 4 and 5 are all skippable. A user who wants to log one coffee should
   reach S04 in under a minute.
 - The migration step is a **file picker plus a verification report**, not a
@@ -264,14 +265,14 @@ segments plus *other*.
 RECORD
   S05 Quick add → attach counterparty
         ▸ new person/company → S15 Counterparty editor
-                                  name · kind · THEIR main currency
+                                  name · kind · THEIR settlement currency
         │
         Save → the transaction now carries counterparty_id
 
 TRACK
   S04 Today → Debt  or  S12 Debt · counterparties
         │  list: name · kind · net position in THEIR currency
-        │        main-currency equivalent beneath
+        │        display-currency equivalent beneath
         │
    S13 Counterparty detail
         │  one row per currency — direction stated in words, not by sign
@@ -395,12 +396,13 @@ MANUAL
    S17 Settings · Currencies
         │  ▸ add sub-currency → code · decimals · symbol · rate source
         │  ▸ archive → hidden from pickers, history keeps working
-        │  ▸ CHANGE MAIN CURRENCY → confirmation → backfill every amount_main
+        │  ▸ pin/unpin currencies shown in the header toggle
 ```
 
-**Changing the main currency is the heaviest operation in the product.** It
-re-bases every report. It gets a confirmation dialog — one of the few places
-`ConfirmDialog` is justified — and an audit entry.
+**Changing the display currency is free** — a header toggle, no backfill, no
+confirmation, nothing written. Changing the **pivot** is the heavy operation,
+and it is not something a move abroad requires; it gets a `ConfirmDialog` and an
+audit entry, and should essentially never happen after setup.
 
 ---
 
@@ -603,14 +605,14 @@ toggle (continuous/stepped) · the grid or list · period total.
 ### S12 · Debt · counterparties
 **Purpose** Who owes you, and whom you owe, across currencies.
 **Regions** Direction segment (All / They owe / You owe) · counterparty list ·
-totals per direction in main currency.
+totals per direction in the display currency.
 **Components** `CounterpartyRow`, `DebtDirectionTag`, `SegmentControl`.
 **States** Loading · populated · empty (no counterparties) · all settled.
 **Actions** Search · filter by direction · tap → S13 · add → S15.
 
 ### S13 · Counterparty detail
 **Purpose** One person's full position, across every currency.
-**Regions** Header (name, kind, their main currency) · `BalanceLedger` — one
+**Regions** Header (name, kind, their settlement currency) · `BalanceLedger` — one
 row per currency with direction in words · derived totals · transaction
 history · ageing (companies only).
 **Components** `CounterpartyCard`, `BalanceLedger`, `AgeingBar`.
@@ -632,7 +634,7 @@ the money moves through.
 
 ### S15 · Counterparty editor
 **Purpose** Create or edit a person or company.
-**Regions** Name · kind (person / company) · **their main currency** · contact ·
+**Regions** Name · kind (person / company) · **their settlement currency** · contact ·
 note · archive.
 **States** New · editing · ⊗ possible duplicate name.
 **Actions** Save · archive.
@@ -645,9 +647,9 @@ editor.
 **Actions** Add · edit · archive · reorder.
 
 ### S17 · Settings · Currencies
-**Purpose** Main currency and sub-currencies (`SPEC.md` §7.0).
-**Regions** Main currency (with change action) · sub-currency list with rate
-source per currency · archive.
+**Purpose** The currency list, which are pinned to the header toggle, and each one's rate source (`SPEC.md` §7.0).
+**Regions** Currency list with rate source per currency · pinned-to-toggle
+set · archive · pivot (shown read-only, with an advanced change action).
 **States** Default · changing main (confirmation) · backfilling.
 **Actions** Add · archive · set rate source · **change main** → `ConfirmDialog`
 → backfill.
@@ -756,7 +758,7 @@ KSeF id, uncategorized business rows).
 ## Both
 
 ### S29 · Setup wizard
-**a · First run** Main currency → sub-currencies → first account → import? →
+**a · First run** Display currency → currencies in use → first account → import? →
 tax scheme? → S04.
 **b · Migration import** File picker · normalization report · **verification
 gate** with per-account balance comparison · counterparty proposals.

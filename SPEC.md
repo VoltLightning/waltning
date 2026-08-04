@@ -79,8 +79,8 @@ Building is defensible because the expensive parts already exist in `mm-tools`.
 Everything in this document traces back to these:
 
 1. **Dual-currency per transaction.** Every row carries a local amount *and* a
-   reporting-currency amount. Seven currencies in use; the main currency is
-   user-configurable and currently USD (§7.0). PLN is 51% of volume, BYN 30%.
+   reporting-currency amount. Seven currencies in use and **no single reporting
+   currency** — display currency is a toggle (§7.0). PLN is 51% of volume, BYN 30%.
 2. **52 active accounts.** Consumer apps assume 3–8 wallets.
 3. **Institutions no aggregator covers.** Seven institutions across three
    countries, only one of which any aggregation service supports. Statement
@@ -142,7 +142,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Users | Single | No auth complexity, no per-row ownership |
 | Tax posture | Feeder and reconciler, not the book | §13.5 |
 | Tax jurisdictions | Pluggable adapters — PL live, US and DE specified | §13.2 |
-| Currency | First-class and user-configured — main currency changeable, sub-currencies addable | §7.0 |
+| Currency | **No main currency.** USD pivot for rate storage; display currency is a header toggle | §7.0 |
 | FX rates | Reference rates synced on app open; realized rates from actual amounts; manual override at three levels | §7.3, §7.6 |
 | Personal expenses | Structurally excluded from every tax output | §13.1 |
 | Apr–Aug 2026 gap | Entered manually in Money Manager first | Migration runs against a later backup |
@@ -361,7 +361,7 @@ currency and applies it retroactively across five years; its own reference doc
 concedes the rates "may be outdated."
 
 → `amount_original` in the account's currency is the fact. `fx_rate` is the
-rate on the transaction date. `amount_main` is derived, stored only to keep
+rate on the transaction date. `amount_pivot` is derived, stored only to keep
 reporting cheap. Correcting a historical rate fixes every affected report with
 one backfill.
 
@@ -374,7 +374,7 @@ eighteen months later.
 
 ```
 currencies              code PK, name, symbol, symbol_position, decimals,
-                        is_main, rate_source, archived, sort   -- user-configured (§7.0)
+                        is_pivot, pinned, rate_source, archived, sort   -- §7.0
 fx_rates                (base, quote, date) PK, rate, source, fetched_at
 account_groups          id, name, sort
 accounts                id, name, kind, currency, group_id,
@@ -382,11 +382,11 @@ accounts                id, name, kind, currency, group_id,
                         is_business, archived, sort, external_id
 categories              id, parent_id →self, name, kind,
                         icon, color, archived, sort, external_id
-counterparties          id, name, kind (person|company), main_currency,
+counterparties          id, name, kind (person|company), settlement_currency,
                         contact, note, archived, sort         -- debt (§6.6)
 transactions            id, date, type, account_id, to_account_id, category_id,
                         counterparty_id,                      -- debt (§6.6)
-                        amount_original, currency, fx_rate, amount_main,
+                        amount_original, currency, fx_rate, amount_pivot,
                         to_amount, to_currency, to_fx_rate,   -- transfers (§7.5)
                         payee, note, is_business,
                         source, external_id, deleted_at
@@ -472,13 +472,16 @@ categories_no_self_parent        id <> parent_id
 fx_rates_rate_positive           rate > 0
 ```
 
-Plus a partial unique index enforcing **exactly one main currency**, which is
-the invariant every report depends on:
+Plus a partial unique index enforcing **exactly one pivot currency** — the hub
+every stored rate is quoted against (§7.0):
 
 ```sql
-CREATE UNIQUE INDEX currencies_one_main
-  ON currencies ((true)) WHERE is_main;
+CREATE UNIQUE INDEX currencies_one_pivot
+  ON currencies ((true)) WHERE is_pivot;
 ```
+
+There is deliberately no constraint on a *reporting* currency, because there
+isn't one. Display currency is a client preference, not a database fact.
 
 Plus unique indexes on normalized names, and partial unique indexes on
 `external_id WHERE external_id IS NOT NULL` — the mechanism that makes
@@ -506,7 +509,7 @@ notes, as free text.
 
 ```
 counterparties     id, name, kind (person | company),
-                   main_currency,            -- their preferred settlement currency
+                   settlement_currency,      -- the currency they prefer to settle in
                    contact, note, archived, sort, created_at
 transactions       + counterparty_id         -- nullable FK
 ```
@@ -531,7 +534,7 @@ different currencies, which the account model made unrepresentable.
 #### Cross-currency debt
 
 A counterparty carries **one balance per currency**, plus two derived totals:
-one in *their* `main_currency`, one in the system main currency. The first is
+one in *their* `settlement_currency`, one in the current display currency. The first is
 what you discuss with them; the second is what appears in your reports.
 
 ```
@@ -600,34 +603,72 @@ instead — never deleted, because history references it.
 
 ## 7. Money and FX semantics
 
-Currency is a **first-class, user-configured domain**, not a fixed list baked
-into the schema. You choose the main currency and which sub-currencies exist;
-everything downstream — reporting, transfers, exports — derives from that
-choice.
+Currency is a **first-class domain**, not a fixed list baked into the schema.
 
-### 7.0 Currency configuration
+### 7.0 There is no main currency
 
-| Concept | Meaning |
-|---|---|
-| **Main currency** | The single reporting currency. Every balance, report, and export total is expressed in it. Exactly one at a time |
-| **Sub-currencies** | Every other currency in use. Accounts are denominated in one of these; transactions keep their original amounts |
+The obvious design gives the system one reporting currency, configurable, with
+changing it as a heavy backfill. That design assumes a home base.
 
-Both are editable at runtime, from Settings:
+This system has no home base. Time is split across Poland, the United States,
+and Germany, so *"how much do I have"* means PLN in Warsaw, USD in New York,
+and EUR in Berlin — and it changes several times a year. Under a
+single-main-currency model, answering that question is a re-base of every row.
 
-- **Add a sub-currency** — pick an ISO 4217 code, set decimals and symbol
-  placement, choose a rate source. Backfill runs for the period covered by
-  existing data.
-- **Archive a sub-currency** — hidden from pickers; existing history keeps
-  working. Never deleted while any account or transaction references it.
-- **Change the main currency** — supported, and consequential. It does not
-  rewrite history: `amount_original` is untouched, and every stored reference
-  rate is re-expressed against the new main. Because `amount_main` is
-  derived (§7.1), this is a backfill, not a migration. The operation is
-  audited and requires confirmation, since it re-bases every report.
+The mistake is conflating two unrelated concerns under one name.
 
-Money Manager hardcodes one main currency chosen at install and offers no way
-back. Making this configurable is the difference between a tool that fits a
-move abroad and one that has to be abandoned when you make one.
+| Concept | Nature | Changes |
+|---|---|---|
+| **Pivot currency** | Technical. The hub all FX rates are stored against, so any pair derives by triangulation | Chosen once at setup. **Never** |
+| **Display currency** | A user preference. What totals are rendered in | Freely, instantly, as often as you like |
+
+**Pivot is `USD`** — the best historical coverage across all seven currencies
+in use, the base that both NBRB and NBG publish against, and what Money Manager
+already stores, so migration needs no rate conversion at all. It is invisible:
+it appears in no screen and no export.
+
+**Display currency is a header toggle.** `PLN · USD · EUR` pinned, tap to
+re-express every figure on screen. No backfill, no confirmation, no audit
+entry — nothing in the database moves.
+
+#### Why this works
+
+`amount_pivot` was only ever a materialization for query speed. The facts are
+`amount_original`, `currency`, and `fx_rate`; everything else derives. At ~8,000
+rows growing ~2,000 a year, per-row conversion is sub-millisecond with an index
+on `fx_rates`. Materializing a *reporting* currency bought performance that was
+never needed, and the switching cost was the price.
+
+#### Conversion is per row, at each row's own date
+
+Converting an aggregate at today's rate would make a 2021 total drift daily.
+Each row converts at the rate for **its own date**, then the results sum:
+
+```
+amount_display(row) = amount_pivot(row) ÷ rate(display → pivot, row.date)
+```
+
+`amount_pivot` stays materialized because it is per-row and date-correct, so
+aggregation is a plain `SUM`; only the final display conversion joins
+`fx_rates`. When display equals pivot, that join is skipped entirely.
+
+#### Currency configuration
+
+- **Add a currency** — ISO 4217 code, decimals, symbol placement, rate source.
+  Rates backfill across the period existing data covers.
+- **Archive** — hidden from pickers; history keeps working. Never deleted while
+  any account or transaction references it.
+- **Pin to the toggle** — which currencies appear in the header switcher.
+- **Change the pivot** — supported but genuinely rare, and the one heavy
+  operation left. Audited, confirmed, and never needed simply because you moved.
+
+#### What this does *not* apply to
+
+**Tax outputs ignore the display toggle entirely.** A KPiR is denominated in
+PLN, Schedule C in USD, Anlage EÜR in EUR — by law, not by preference. Each
+adapter forces its jurisdiction's currency (§13.2), so a display setting can
+never leak into a filing. That separation already existed; this makes it
+load-bearing.
 
 ### 7.1 Representation
 
@@ -668,12 +709,13 @@ values things; it does not invent them.
 ### 7.4 Conversion and reporting
 
 `fx_rates(base, quote, date) → rate`, converting one unit of `base` into
-`quote`. Reporting is in the configured main currency (§7.0).
+`quote`. Every rate is stored against the **USD pivot**; any other pair derives
+by triangulation (§7.0).
 
 - Historical reference rates are backfilled daily across the full data range.
 - A transaction's `fx_rate` is fixed at its date and **does not** move when
   later rates arrive. A 2021 purchase is reported at 2021 rates.
-- `amount_main` is materialized for query performance and always recomputable
+- `amount_pivot` is materialized for query performance and always recomputable
   as `amount_original × fx_rate` — which is what makes changing the main
   currency (§7.0) a backfill rather than a migration.
 
@@ -704,7 +746,8 @@ which no version of Money Manager could show.
 
 **Sync on foreground.** The app refreshes reference rates when opened, subject
 to a staleness threshold — no refetch if the current day's rates are already
-held. Sync is per configured currency pair against the main currency.
+held. Sync fetches each configured currency against the pivot, which is what
+makes an arbitrary display currency free.
 
 | Situation | Behaviour |
 |---|---|
@@ -788,7 +831,7 @@ Every transformation emits a line in a migration report for review:
 | Realized FX | Take `amount_original` from the OUT leg and `to_amount` from the IN leg — both are already stored per-leg, so five years of actual bank rates are recoverable (§7.5) |
 | Counterparties | Extract distinct names from loan and clearing transaction `content`; **propose** a list for review, never write silently (§6.6) |
 | Categories | Rebuild the tree by `ZPUID`; verify no orphans |
-| FX | Backfill `fx_rates`; recompute every `amount_main` |
+| FX | Backfill `fx_rates`; recompute every `amount_pivot` |
 | Recurring | Port 24 `ZREPEATTRANSACTION` rows; translate to RRULE |
 | Deleted rows | Import with `deleted_at` set — preserved, not discarded |
 | Tags | 2 tags, 0 links. Nothing to migrate |
@@ -816,7 +859,7 @@ To the cent, per account, per currency. Plus:
   every later backup.
 - Every transfer has both legs, or appears on an explicit exception list.
 - Category tree depth and membership match.
-- Recomputed `amount_main` monthly totals are within a stated tolerance of
+- Recomputed `amount_pivot` monthly totals are within a stated tolerance of
   Money Manager's, with divergence explained by the FX correction (§6.1) rather
   than by an error.
 
@@ -1340,7 +1383,7 @@ happened. Projected entries are visually distinct from posted ones and are not
 included in any total that claims to be actual.
 
 **Amounts follow the FX rules.** A day containing foreign transactions shows
-its net in the main currency, and opening the day reveals each entry with its
+its net in the current display currency, and opening the day reveals each entry with its
 own `local · rate · main` (§7).
 
 ### 14.5 Dashboard layout
