@@ -1,0 +1,30 @@
+{
+  "name": "waltning",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:psql": "docker compose exec postgres psql -U waltning -d waltning",
+    "db:push": "pnpm --filter @waltning/db push",
+    "db:generate": "pnpm --filter @waltning/db generate",
+    "db:studio": "pnpm --filter @waltning/db studio",
+    "mm:extract": "pnpm --filter @waltning/migrate-mm extract",
+    "mm:import": "pnpm --filter @waltning/migrate-mm import",
+    "mm:verify": "pnpm --filter @waltning/migrate-mm verify",
+    "mm:all": "pnpm mm:extract && pnpm mm:import && pnpm mm:verify",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.5",
+    "typescript": "^5.9.3"
+  }
+}
