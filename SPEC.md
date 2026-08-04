@@ -387,6 +387,7 @@ counterparties          id, name, kind (person|company), settlement_currency,
                         contact, note, archived, sort         -- debt (§6.6)
 transactions            id, date, type, account_id, to_account_id, category_id,
                         counterparty_id,                      -- debt (§6.6)
+                        is_capital,                           -- one-off (§6.8)
                         amount_original, currency, fx_rate, amount_pivot,
                         to_amount, to_currency, to_fx_rate,   -- transfers (§7.5)
                         payee, note, is_business,
@@ -649,6 +650,32 @@ and switching scope can never double-count.
 any screen with a headline figure shows both *mine* and *ours* — they answer
 different questions and both are wanted.
 
+#### Income is what you earned
+
+A general rule that happens to solve the family case as a side effect:
+
+> **Not every inflow is income.** Income is what you *earned*. Money that
+> merely arrives — a gift, a refund, a repayment, a withdrawal from a shared
+> pot — increases your balance without being earnings.
+
+```
+inflows
+├── earnings          counts as income
+│   ├── business revenue        ← the only reportable slice under ryczałt
+│   ├── salary
+│   ├── bonus and equity
+│   └── investment returns
+└── unearned          increases balance, never income
+    ├── gift received           ← from anyone: family, friends, birthdays
+    ├── refund
+    └── repayment received      ← a debt coming back is not a gain
+```
+
+Income categories carry an `is_earnings` flag, so *"what did I earn"* sums only
+the first group. This is one rule covering gifts from a co-owner, birthday
+presents from friends, and refunds alike — rather than a family-shaped
+exception bolted onto each.
+
 #### Why a co-owner's money is not your income
 
 The account's ownership already carries this, so no flag on the transaction is
@@ -672,6 +699,34 @@ than silently miscounting.
 A transfer from your account into the shared one is meanwhile a genuine outflow
 from *mine* and internal to *ours*, which is exactly right and needs no special
 handling.
+
+#### The shared boundary is asymmetric, and nets
+
+Money you send to the shared pot is **spending from your point of view** —
+it has left you. Money coming back is not earnings, because it was never
+earned; it is your own contribution returning.
+
+Both are transfers, so balances stay correct automatically. The asymmetry is in
+**reporting**, and it nets:
+
+```
+my spending includes:  Σ(transfers out to shared) − Σ(transfers in from shared)
+                       ── over the period, as one derived line ──
+```
+
+So sending 1,000 and taking 300 back reports **700**, not 1,200. Gross-only
+would overstate your spending by every withdrawal you ever make, and after five
+years that drift is both large and invisible.
+
+The line can go negative in a period where you drew out more than you put in.
+That is shown plainly rather than floored at zero — a negative contribution is
+a real thing that happened.
+
+**Two spending figures, never summed.** *My spending* counts your own outgoings
+plus your net contribution; *ours* counts your outgoings plus what the shared
+account actually spent. They measure different things in different frames, so
+adding them is meaningless and the interface never places them where that
+invites itself.
 
 #### Contributions are attributed
 
@@ -698,7 +753,38 @@ not one worth introducing for a single house.
 never reaches a tax output (§13). Ownership and tax scope are independent
 fields, but this combination is invalid and constrained against.
 
-### 6.8 Soft deletion
+### 6.8 One-off capital transactions
+
+A single property purchase accounts for **96% of its category** and roughly
+seven times a normal year's spending in that area. Left as an ordinary expense,
+it makes every year-over-year comparison, trend line and target meaningless
+permanently — one row dominates the series forever.
+
+```
+transactions + is_capital   boolean, default false
+```
+
+Marked transactions are **excluded by default** from trends, targets, and
+period comparisons, with the exclusion stated rather than silent:
+
+```
+2025 spending   34,200      excludes 1 one-off (see detail)
+```
+
+They remain fully present in balances, the ledger, search, and the calendar —
+this affects *comparison*, not *record*.
+
+Deliberately a flag rather than an asset model. Tracking property as an asset
+would need an asset account kind, a revaluation operation, and a concept of
+unrealised gains — a large addition for one house. The flag also generalises to
+a car, a deposit, or a large medical bill, which an asset model would not.
+
+> **Open:** this is a recommendation, not a settled decision. The distortion is
+> demonstrated, and the fix is one boolean plus a report default — but say so
+> if you would rather handle it with an isolated category and remember to
+> exclude it manually.
+
+### 6.9 Soft deletion
 
 `transactions.deleted_at`. Money Manager carries 253 deleted rows it never
 purges; the same escape hatch is wanted, and a hard delete in a financial
@@ -1072,6 +1158,10 @@ the model only sees novel merchants.
 - `output_config.format` with a JSON schema, so classifications arrive
   validated rather than parsed out of prose.
 - `effort: "medium"` — bulk extraction, not reasoning.
+- **Descriptions are trilingual** — English, Polish and Russian appear in the
+  same account and often the same month. The prompt states this explicitly and
+  the category tree is supplied in one language, so the model translates rather
+  than guessing. This is most of the tail, not an edge case.
 - Batches of ~50 rows.
 
 ### 9.3 Duplicate and transfer detection

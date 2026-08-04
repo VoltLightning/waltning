@@ -25,14 +25,14 @@ Measured across 3,763 expense and 498 income transactions, 2020-11 → 2026-03.
 
 ### 1.1 Where the money actually is
 
-| Category | Share | Txns | Avg |
+| Category | Share of spend | Txns | Relative size |
 |---|---|---|---|
-| Household | **41.5%** | 78 | $2,894 |
-| Family budget | 15.3% | 30 | $2,777 |
-| Tax | 8.3% | 128 | $352 |
-| Rental | 6.7% | 43 | $850 |
-| Other | 3.7% | 194 | $103 |
-| Food (parent, used directly) | 2.6% | **705** | $20 |
+| Household | **41.5%** | 78 | very large, very rare |
+| Family budget | 15.3% | 30 | very large, very rare |
+| Tax | 8.3% | 128 | mid |
+| Rental | 6.7% | 43 | mid, monthly |
+| Other | 3.7% | 194 | small |
+| Food (parent, used directly) | 2.6% | **705** | small, very frequent |
 
 Two distinct populations. **A handful of large, rare transactions carry the
 value** — Household alone is 41.5% of five years of spending across 78 rows.
@@ -63,8 +63,8 @@ parent's name, which means the parent was never a real group.
 `Travel` (0) — plus `Vacation > Food`, `Vacation > Hotels`.
 
 **5 · The blind spot.** 41.5% of everything you have ever spent sits in
-`Household` with no subcategory. Whatever that money went on — and at $2,894
-average across 78 transactions it is clearly property work — is invisible.
+`Household` with no subcategory, across only 78 transactions — so the average
+row is enormous and nothing says what any of it was.
 
 ---
 
@@ -97,45 +97,58 @@ from employment income and carry its own ryczałt rate.
 `◆` = group (not assignable) · `·` = leaf (assignable)
 Percentages are the historical share the leaf inherits.
 
-### Income — 9 leaves
+### Inflows — 10 leaves, split by whether they were *earned*
+
+`SPEC.md` §6.7: income is what you earned. Everything else raises your balance
+without being income.
 
 ```
-◆ Business revenue          ← reportable under ryczałt; each row carries a rate
-  · Services
-  · Other revenue
+◆ EARNINGS — counts as income
 
-◆ Employment
-  · Salary                  97.3%
-  · Bonus                    0.3%
+  ◆ Business revenue        ← the only slice reportable under ryczałt
+    · Services                      each row carries a ryczałt rate
+    · Other revenue
 
-◆ Personal income
-  · Gift received            0.2%
-  · Repayment received       1.0%   (was: Debt)
-  · Interest & returns
-  · Refunds
-  · Other income             0.1%
+  ◆ Employment
+    · Salary                97.3%
+    · Bonus & equity         0.3%
+
+  ◆ Returns
+    · Investment returns
+    · Interest
+
+◆ UNEARNED — raises the balance, never income
+
+  · Gift received           0.2%   ← from anyone: family, friends, birthdays
+  · Refund
+  · Repayment received      1.0%   ← a debt coming back is not a gain
+  · Other inflow            0.1%
 ```
 
-`Business revenue` is new and load-bearing: it is the only part of the ledger
-that reaches a tax output. Splitting it from `Salary` is what makes the ryczałt
-register possible at all.
+**`is_earnings` lives on the category**, so *"what did I earn"* sums the first
+group only. One rule covers a co-owner's money, a birthday present, and a
+refund — rather than three exceptions.
 
-Dropped: `Base saving`, `Allowance`, `My debt` — stale, and all three are
-transfers rather than income.
+`Business revenue` is separately load-bearing: it is the only part of the
+ledger that reaches a tax output at all.
+
+Dropped: `Base saving`, `Allowance`, `My debt` — stale, and all three were
+transfers rather than inflows.
 
 ### Expense — 46 leaves
 
 ```
 ◆ Home                                        48.2%  ← was Household + Rental
+  · Property purchase                                ← one-off capital (SPEC §6.8)
   · Rent                                       0.5%
   · Utilities                                  0.6%
-  · Renovation & building                            ← the 41.5% blind spot
-  · Plumbing                                         ← piping and plumbing, merged
-  · Electrical & network
-  · Facade & exterior
-  · Garden
-  · Furniture & appliances                     0.1%
+  · Furniture & appliances                           ← where the homeware tail lands
   · Household supplies
+  · Renovation & building                            ┐
+  · Plumbing                                         │ forward-looking: almost no
+  · Electrical & network                             │ historical basis, but the
+  · Facade & exterior                                │ house is months old
+  · Garden                                           ┘
 
 ◆ Food                                         5.6%
   · Groceries                                  2.7%
@@ -276,10 +289,10 @@ enumerated.
 ## 5. Two decisions worth arguing about
 
 **`Family budget` is not a category — it is an account scope.** It held 15.3%
-of spend ($83,324 across 30 rows, averaging $2,777). Combined with `Household`
-($225,734 across 78 rows), that is **$309k across 108 large transactions** —
-which, given you and your father bought a house together, is almost certainly
-the house.
+of spend across 30 rows. Combined with `Household`'s 41.5% across 78 rows,
+that is **56.8% of everything ever recorded, in 108 transactions** — which,
+given the house bought jointly with a co-owner, is almost certainly the
+property.
 
 Under the ownership model (`SPEC.md` §6.7) that money is not reclassified as a
 transfer and does not vanish from your spending. It moves from the *mine* total
@@ -300,19 +313,31 @@ in bulk (`FLOWS.md` J12). Calling it `Other` made it feel like a valid answer.
 
 ## 6. What needs you
 
-**The house — 56.8% of everything.** `Household` ($225,734 / 78 rows) plus
-`Family budget` ($83,324 / 30 rows) is **$309,058 across 108 transactions**,
-and the arithmetic says it is the house purchase and the work since.
+**The rows were assessed, and the premise was wrong.** An earlier draft treated
+`Household` as a large undifferentiated pool of property work needing nine
+subcategories. Reading the actual rows shows otherwise:
 
-Two things follow. First, those 108 rows should live in a **shared** account,
-not a personal one — which is the whole point of §6.7 and changes which total
-they land in. Second, splitting them across the `Home` leaves is the single
-highest-value classification work available, because right now more than half
-of everything you have ever recorded sits in two undifferentiated buckets.
+- **96% of the category is a single capital event** — one property purchase,
+  three rows, one date, split across a shared account and two personal ones.
+- The **remaining 94 rows average under $100** and are ordinary homeware:
+  flat-pack furniture, kitchen equipment, decorations, small appliances.
 
-If you can characterise what that money went on — purchase price versus
-renovation versus fit-out — the `Home` leaves can be tuned to it. Otherwise the
-agent can propose a split from the transaction notes and you approve in bulk.
+So `Home` needed one thing the draft lacked — an isolated `Property purchase`
+leaf, flagged as capital (`SPEC.md` §6.8) — and did *not* need a deep renovation
+breakdown derived from history, because that history does not exist.
+
+The renovation leaves stay, but as a **forecast rather than a finding**: the
+house is months old, and the spending they anticipate has not happened yet.
+
+**Descriptions are trilingual.** English, Polish and Russian all appear in the
+same category, often in the same month. The classification prompt must handle
+this explicitly (`SPEC.md` §9.2) — it is not an edge case, it is most of the
+tail.
+
+**The old data is genuinely misclassified.** Rows literally described
+"Groceries" sit under `Household`, as does at least one debt settlement. This
+is an argument for an agent-assisted reclassification pass rather than trusting
+the inherited categories.
 
 **Also open**
 
