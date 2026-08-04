@@ -122,7 +122,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | N4 | Bank API / PSD2 aggregation | Requires TPP licensing; these banks have no consumer API |
 | N5 | Multi-user, sharing, permissions | Single user (§3) |
 | N6 | Investment performance tracking | The `Crypto` account is a balance, not a portfolio |
-| N7 | Budgets and goals | 13 budgets exist, lightly used. Deferred, not designed out |
+| N7 | **Envelope budgets** | Replaced by targets (§14.7) — a monthly figure with progress, not per-category envelopes with rollover |
 | N8 | Public SaaS, other people's data | Personal system; shapes every security tradeoff |
 
 ---
@@ -303,8 +303,8 @@ The Pi is a single point of failure with an SD card in it. Assume it dies.
 
 | What | Cadence | Where |
 |---|---|---|
-| `pg_dump --format=custom` | Nightly | Local volume, then age-encrypted off-site |
-| Receipt images | On write | Mirrored to the same off-site bucket |
+| `pg_dump --format=custom` | Nightly | Local volume, then age-encrypted to **Backblaze B2** |
+| Receipt images | On write | Mirrored to the same B2 bucket. MinIO is S3-compatible, so this is configuration, not code |
 | Retention | 30 daily, 12 monthly, 3 yearly | — |
 | **Restore drill** | **Quarterly, to a scratch container** | An untested backup is not a backup |
 
@@ -1284,18 +1284,48 @@ commercial software is bad at:
 - **The agent** — *"what did I spend on the business in Q2, and is any of it
   missing from the book?"*
 
-### 13.6 Prerequisites
+### 13.6 Current position — ryczałt, not VAT-registered
 
-Open, and blocking parts of this section (§17):
+Both prerequisites are answered, and together they make the tax layer
+**substantially smaller than this section implies**.
 
-- **O1** — Polish tax form: skala, liniowy, or ryczałt. Ryczałt removes the
-  entire cost side and reduces §12.3 to a revenue sheet.
-- **O2** — VAT registration, which determines JPK_V7 and the electronic-KPiR
-  timing.
-- **O10** — Are US and German obligations **live**, or being designed for
-  ahead of a possible move? Live means residency periods and possible
-  double-taxation treaty handling. Anticipated means the schema carries the
-  shape and the adapters wait.
+| | Consequence |
+|---|---|
+| **Ryczałt** | The record is an *ewidencja przychodów* — a revenue register. **No cost side exists.** Outside JPK_PKPiR entirely |
+| **Not VAT-registered** | No JPK_V7M/K. Electronic record-keeping binds from **2027-01-01**, not 2026-01-01 |
+
+**What this removes**
+
+- No KPiR, so the 19-column mapping is defined (`PL_KPIR`) but unimplemented.
+- No cost side, so **business expense categorisation is not tax-relevant**. It
+  remains useful for your own analysis, but a miscategorised business expense
+  is no longer a compliance problem — which materially lowers the stakes on
+  import review's business fields.
+- No JPK filing of any kind.
+
+**What this adds**
+
+One field that exists nowhere else in the design:
+
+> **A ryczałt rate on each revenue row.** Derived from the *activity*, not the
+> category — the expense taxonomy cannot imply it. Defaulted per counterparty
+> or per revenue category, editable per row, and versioned with the scheme
+> (§13.4), because the rates change by year and by activity.
+
+**What still applies**
+
+- KSeF, for invoices you issue. You are inside the JDG obligation from
+  2026-04-01, with the ≤10,000 PLN/month relief running to 2026-12-31 and
+  penalties suspended to the same date.
+- Counterparty NIP on revenue rows.
+- The exclusion guarantee (§13.1), unchanged — though under ryczałt it protects
+  a smaller surface, since only revenue is reportable at all.
+
+**Build order:** `PL_RYCZALT` first and alone. `PL_KPIR`, `US_SCHED_C` and
+`DE_EUER` are defined so the shape is right, and wait.
+
+**Still open:** O11 — residency and treaty interaction, deferred until a second
+jurisdiction is live.
 
 **Nothing in this section is tax advice.** It is a scope argument built from
 published sources, and every specific should be confirmed against your own
@@ -1423,6 +1453,32 @@ import review queue and the reports screens are.
 package. The monorepo exists partly to make that split cheap; taking it is a
 decision, not a failure.
 
+### 14.7 Targets
+
+Not budgets. A monthly spend **target** — one figure, or a small number of
+them — shown as progress against actual.
+
+| | Targets | Envelope budgets (not built) |
+|---|---|---|
+| Granularity | Overall, or a handful of categories | Every category |
+| Period rollover | None | Unspent carries forward |
+| Over-spend | Shown, no enforcement | Borrowing between envelopes |
+| Surfaces touched | One widget, one settings row | Every screen showing a category |
+
+```
+targets   id, scope (overall | category_id), period (month | year),
+          amount, currency, active_from, active_to
+```
+
+Rendered as a progress bar on the dashboard widget and in the calendar's period
+header. Over-target is stated, never scolded — the figure goes `negative` ink
+and nothing else changes.
+
+This is roughly a fifth of the work of envelope budgeting and answers the
+question that actually gets asked, which is *am I on track*. Money Manager's 13
+budget definitions are preserved in the migration dump but not imported; the
+shapes do not correspond.
+
 ---
 
 ## 15. Non-functional requirements
@@ -1470,22 +1526,22 @@ Ordered by how much they block.
 
 | # | Question | Blocks | Default if unanswered |
 |---|---|---|---|
-| **O1** | **Tax form — skala, liniowy, or ryczałt?** | §12.3, §13 | Assume KPiR applies; build the fields, defer the sheet |
+| ~~**O1**~~ | ~~Tax form?~~ | — | **Answered: ryczałt.** Revenue-only *ewidencja przychodów*, no cost side, outside JPK_PKPiR entirely. `PL_RYCZALT` is the first adapter built; `PL_KPIR` is defined but unimplemented. See §13.6 |
 | ~~**O2**~~ | ~~VAT registered?~~ | — | **Answered: not registered.** Opting in later must not require a migration, so `counterparty_tax_id`, `document_ref` and `ksef_id` exist as optional fields from day one — but **no JPK_V7 handling is built**. Electronic KPiR therefore binds from 2027-01-01, not 2026-01-01 |
-| **O3** | Does dedicated KPiR software already exist in your workflow? | §13.3 handoff design | Assume yes; build export, not integration |
+| **O3** | Does dedicated filing software already exist in your workflow? | §13.3 handoff | Assume yes; build export, not integration. Lower stakes under ryczałt — the record is a revenue register, not a book |
 | **O4** | BYN and GEL historical FX back to 2020-11 — available? | §7.4, Phase 0 | Fall back to Money Manager's snapshot rates, flagged approximate |
-| **O5** | RUB post-2022 — does accuracy matter for those rows? | §7.4 | Use the snapshot; flag in reports |
-| **O6** | Belarusian card statement format (1,269 rows) | Phase 4 parser priority | Manual entry until a sample exists |
-| **O7** | Budgets — genuinely wanted, or dropped? | N7 | Dropped; data preserved in the migration dump |
-| **O8** | Off-site backup target (S3? Backblaze? another machine?) | §5.4 | Backblaze B2, age-encrypted |
-| **O9** | Pi model and storage on hand | §15 | Assume Pi 5 / 4 GB / SSD |
+| ~~**O5**~~ | ~~RUB post-2022 accuracy?~~ | — | **Decided:** use Money Manager's snapshot rate, marked `carried_forward`, and flag affected rows in reports rather than implying precision that does not exist |
+| **O6** | `CARD-C` statement format (1,269 rows — second-highest volume) | Phase 4 parser priority | **Needs a sample file from you.** Until then the generic CSV parser with column auto-detection, falling back to manual entry |
+| ~~**O7**~~ | ~~Budgets?~~ | — | **Answered: targets, not budgets.** A monthly spend target shown as progress against actual — no per-category envelopes, no rollover. See §14.7. The 13 Money Manager budgets are preserved in the migration dump but not imported |
+| ~~**O8**~~ | ~~Off-site backup target?~~ | — | **Answered: Backblaze B2**, age-encrypted before upload so the provider holds ciphertext only. S3-compatible, so MinIO points at it by configuration |
+| **O9** | Pi model and storage on hand | §15 | **Assumed:** Pi 5 / 4 GB / SSD boot. Correct me if it is a Pi 4 or SD-only — the latter changes the backup urgency, not the design |
 | ~~**O10**~~ | ~~Are US and German obligations live?~~ | — | **Answered: all three eventually, none urgent.** Build the full adapter layer and **all three scheme definitions** (`PL_KPIR`, `PL_RYCZALT`, `US_SCHED_C`, `DE_EUER`) now while the design is fresh; implement adapters on demand. Poland first |
 | **O11** | Residency periods, and any treaty / foreign-tax-credit interaction | `tax_residency`, §13.2 | Deferred until a second jurisdiction goes live. `tax_residency` exists so this is additive |
-| **O12** | How far back must business rows be reclassified? 5 years of history predates any tax intent | §13.1 backfill | From 2026 forward only; earlier rows stay personal unless marked |
-| **O13** | **"Synced with banks"** — central-bank reference rates, or your actual banks' rates? | §7.6, §7.7 | Central banks for reference; realized rates come from the amounts, not a feed |
-| **O14** | Do counterparties **replace** the 11 loan accounts, or coexist with them? | §6.6, migration | Replace — the accounts exist only because Money Manager had no counterparty concept |
-| **O15** | Should a counterparty's balance age (30/60/90 days outstanding)? | Debt screens | Yes for companies, no for people — ageing a friend's coffee debt is absurd |
-| **O16** | Dashboard layout — presets, or free drag-and-drop? | §14.5 | Presets first; drag only if presets prove insufficient |
+| ~~**O12**~~ | ~~Business backfill scope?~~ | — | **Answered: 2026 forward only.** Earlier rows stay personal unless explicitly marked. Nothing becomes reportable by omission, and it matches when the current rules took effect |
+| ~~**O13**~~ | ~~"Synced with banks"?~~ | — | **Decided:** central-bank reference rates, quoted against the USD pivot. Realized rates are implied by the two amounts on a transfer or settlement, never fetched |
+| ~~**O14**~~ | ~~Counterparties replace the loan accounts?~~ | — | **Decided: replace.** They exist only because Money Manager had no counterparty concept. `loan_receivable` / `loan_payable` survive as `account_kind` values for migration fidelity |
+| ~~**O15**~~ | ~~Ageing on counterparty balances?~~ | — | **Decided: companies only.** Putting a 60-days-overdue badge on a friend's share of dinner is absurd; on an unpaid invoice it is the point |
+| ~~**O16**~~ | ~~Dashboard layout?~~ | — | **Decided: presets first.** A layout engine is a lot of work to build before knowing which arrangements are wanted; presets answer that cheaply. Free placement only if they prove insufficient |
 
 ---
 

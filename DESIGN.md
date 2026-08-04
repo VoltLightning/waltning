@@ -79,7 +79,7 @@ second hue is needed.
 | `green-50` | `#f2f9f4` | Table headers, inset boxes |
 | `green-100` | `#e4f1e8` | Ramp floor, tag fills |
 | `green-200` | `#cbe6d6` | Borders, rules, dividers |
-| `green-300` | **undefined — see §13 Q1** | Gap in the ramp |
+| `green-300` | `#a3d2b8` | Chart step; the ramp's middle |
 | `green-400` | `#75bd99` | Chart step; table header underline |
 | `green-500` | `#48a479` | **Focus ring**; chart step; primary accent |
 | `green-600` | `#2f7d5a` | Primary action fill; pins |
@@ -489,6 +489,7 @@ All charts draw from the green ramp; magnitude is depth.
 | `BarChart` | Month over month | Increases in spend take `negative` ink |
 | `AreaChart` | Cumulative net worth | Single series, ramp fill |
 | `Treemap` | Category deep-dive | Tiles ≥ ramp 500 use white ink; ≤ 400 use `ink` |
+| `TargetBar` | Progress against a monthly target (`SPEC.md` §14.7) | Over-target goes `negative` ink and states the overage — never a warning icon |
 | `Sparkline` | Balance trend in rows, year-view cells | No axes; paired with a figure |
 | `Legend` | Every chart | Order matches segment order |
 | `PeriodPicker` | Every chart | Presets (month, quarter, year, YTD) **plus** an arbitrary range |
@@ -685,17 +686,17 @@ order, where screens exist and components do not.
 
 | # | Question | Blocks | Recommendation |
 |---|---|---|---|
-| **Q1** | `green-300` is undefined, but the contrast audit references "ramp steps 300–400" | Charts, D5 | Define it — roughly `#a3d2b8` |
+| ~~**Q1**~~ | ~~`green-300` undefined~~ | — | **Decided: `#a3d2b8`**, interpolated between 200 and 400. Now in §2.1 |
 | ~~**Q2**~~ | ~~Seven categories in one hue ramp fails colour-independence~~ | — | **Resolved** — cap at 5 segments + *other*, every segment directly labelled with its value. Single-hue ramp kept; the chart reads in greyscale (§7.2) |
-| **Q3** | Chips at ~34px vs the 44px floor | D1 | Raise padding globally; accept the density loss |
-| **Q4** | Approved diff cards have no revert | D3 | Session-duration revert on the applied card |
-| **Q5** | Partial approval when voice yields two intents | D3 | Per-card actions, not a single *Approve both* |
-| **Q6** | Movable confidence threshold on import review — described but not built | D7 #2 | Draggable, with a live count |
-| **Q7** | Category maintenance — rename, merge, archive | Screen 19 | Needed regardless; 13 collisions exist today |
-| **Q8** | Calendar cell density — figure, count, category dots, or all three? | D6 | Net figure always; dots on week and month only, where there is room |
-| **Q9** | Does the calendar replace the transactions list, or complement it? | Screens 10, 11 | Complement — the list answers *"find what I remember"*, the calendar *"what happened then"* |
-| **Q10** | Counterparty identity — monogram, colour, or photo? | D7 | Monogram on a ramp tint, deterministic from the name. No photo picker |
-| **Q11** | Does a settlement need a receipt or note requirement? | D7 | Optional, but prompted — an undocumented settlement is the one people dispute |
+| ~~**Q3**~~ | ~~Chips ~34px vs the 44px floor~~ | — | **Decided:** raise padding in the `Chip` primitive so every instance clears 44px. Accept the density loss — fixing this once at the source is a day; fixing it across 29 screens is a week |
+| ~~**Q4**~~ | ~~No revert on approved diffs~~ | — | **Decided:** session-duration revert on the applied card. Beyond the session, correction goes through normal editing with its audit trail |
+| ~~**Q5**~~ | ~~Partial approval for multi-intent voice~~ | — | **Decided:** per-card Approve / Decline. *Approve both* stays as a convenience, but never as the only control |
+| ~~**Q6**~~ | ~~Movable confidence threshold~~ | — | **Decided:** draggable, with the affected count updating live in the bulk-accept label |
+| ~~**Q7**~~ | ~~Category maintenance~~ | — | **Decided: build it.** Not really optional — 122 categories with 13 name collisions exist today and nothing can currently fix them (S19) |
+| ~~**Q8**~~ | ~~Calendar cell density~~ | — | **Decided:** net figure always; category dots on week and month only, where there is room. Never count alone — a number of transactions answers nothing |
+| ~~**Q9**~~ | ~~Calendar vs transactions list~~ | — | **Decided: complement.** The list answers *"find what I remember"*; the calendar answers *"what happened then"*. Both are entry points to the same detail screen (`FLOWS.md` J5) |
+| ~~**Q10**~~ | ~~Counterparty identity~~ | — | **Decided:** monogram on a ramp tint, derived deterministically from the name. No photo picker — it is a debt ledger, not a contacts app |
+| ~~**Q11**~~ | ~~Settlement documentation~~ | — | **Decided:** optional but prompted. An undocumented settlement is precisely the one that gets disputed later |
 
 ### Contradictions with `SPEC.md` — both now resolved
 
