@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Expo / React Native
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+ios/Pods/
+android/.gradle/
+android/app/build/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Financial data — never commit
+*.mmbak
+*.sqlite
+*.sqlite3
+*.db
+/data/
+/receipts/
+/backups/
+/exports/
+*.dump
+*.sql.gz
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Editors and OS
+.DS_Store
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
