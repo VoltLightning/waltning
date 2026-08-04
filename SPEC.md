@@ -379,7 +379,7 @@ fx_rates                (base, quote, date) PK, rate, source, fetched_at
 account_groups          id, name, sort
 accounts                id, name, kind, currency, group_id,
                         opening_balance, opening_date, memo,
-                        is_business, counts_toward_net_worth,   -- §6.7
+                        is_business, ownership (own | shared),   -- §6.7
                         archived, sort, external_id
 categories              id, parent_id →self, name, kind,
                         icon, color, archived, sort, external_id
@@ -432,7 +432,7 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 | `clearing` | `Loan X (distributed)` | §6.4 |
 | `investment` | group `Investments` | — |
 | `deposit` | group `Deposits` | — |
-| `external` | A shared pot — recorded, not owned (§6.7) | `Household · USD`, 498 transactions |
+
 
 **`txn_type`** — `income` · `expense` · `transfer` · `adjustment`
 **`category_kind`** — `income` · `expense`
@@ -593,80 +593,110 @@ an automatic write: the names are inconsistent (first name, first name plus
 initial, nickname) and merging two spellings of one person silently would
 corrupt a balance.
 
-### 6.7 External accounts — money that is recorded but not yours
+### 6.7 Ownership — mine, and ours
 
-Some transactions are worth recording without being yours. The clearest case is
-a **family budget**: a shared pot you contribute to and draw from, where you
-record the purchases you know about — a washing machine bought with your
-parents' money — without tracking their income or their finances generally.
+Two people bought a house. Each paid half. It is a common asset, so the money
+the other owner put in is **not your income** — but it is also not invisible,
+and the account it sits in is not a blind spot.
 
-The transaction genuinely happened and belongs in the ledger. It must not touch
-your net worth.
+This is not exclusion. It is a **second aggregation level**.
 
 ```
-accounts   + counts_toward_net_worth  boolean, default true
-account_kind  + 'external'
+accounts  + ownership   own | shared
 ```
 
-An account marked `counts_toward_net_worth = false` is **fully a real account**
-— it has a balance, transactions, categories, receipts, and a currency, and it
-appears in the calendar, in search, and in category reports. It is excluded
-from exactly one thing: any figure that claims to be *your* money.
+A `shared` account is a completely ordinary account. It has a balance, it
+appears in the balances list, it takes transactions and categories and
+receipts, and **it can go negative**, because a jointly-owned account being
+overdrawn is a real fact about a real account.
 
-| Figure | External accounts |
-|---|---|
-| Net worth | **Excluded** |
-| "Spend this month" headline | **Excluded** |
-| Balances list | Shown, in its own group, with its own subtotal |
-| Calendar, search, transaction list | Always included |
-| Reports | Governed by the scope control below |
-| Tax outputs | Never — external accounts are not yours to report |
+#### Totals nest, they do not exclude
 
-#### The scope control is a partition
+```
+Mine  = accounts where ownership = 'own'
+Ours  = Mine + shared accounts
+```
 
-The header segment is **All · Mine · Family · Business**, and these are not
-overlapping filters — they divide the ledger exactly:
+**Both are shown.** Every screen carrying a headline figure carries two: what
+concerns only you, and what includes the shared pot. Neither is a filter on the
+other, and neither is more real.
+
+| Figure | Mine | Ours |
+|---|---|---|
+| Net worth | own accounts | own + shared |
+| Spending this period | own accounts | own + shared |
+| Earnings | income into own accounts | — see below |
+| Inflows | — | all income, including contributions |
+
+#### The scope control, and the two totals
+
+Two distinct mechanisms, easily confused.
+
+**The scope segment is a filter** — **All · Mine · Shared · Business** — and
+its options partition the ledger exactly:
 
 | Scope | Definition |
 |---|---|
-| **Mine** | Own accounts, `is_business = false` |
+| **Mine** | `ownership = own`, `is_business = false` |
 | **Business** | `is_business = true` — always in own accounts |
-| **Family** | External accounts — never business, never reportable |
+| **Shared** | `ownership = shared` — never business, never reportable |
 | **All** | The union |
 
-Every transaction lands in exactly one of the three, which is what makes the
-control trustworthy: switching between them can never double-count, and the
-three subtotals always sum to the All figure. That property is worth preserving
-if a fourth scope is ever added.
+Every transaction is in exactly one, so the three subtotals always sum to All
+and switching scope can never double-count.
 
-#### Why one boolean is enough
+**The two headline totals are not a filter.** Regardless of the scope setting,
+any screen with a headline figure shows both *mine* and *ours* — they answer
+different questions and both are wanted.
 
-Contributions handle themselves. A transfer from a personal account into an
-external one moves money out of the included set, so it **reads as an outflow
-without needing to be classified as one** — which is exactly what giving money
-to the family pot is. Money coming back in reads as an inflow. No special
-transaction type, no rule.
+#### Why a co-owner's money is not your income
 
-And a negative balance on an external account is simply not a problem: it isn't
-your overdraft, it's a pot that has been spent down. Nothing warns, nothing
-turns red, and no total moves.
+The account's ownership already carries this, so no flag on the transaction is
+needed:
 
-#### Not a counterparty
+| Flow | Recorded as | Your earnings? | Counts in *ours*? |
+|---|---|---|---|
+| Salary → your account | Income | **Yes** | Yes |
+| You → shared account | Transfer | No — it is a move | No — internal to *ours* |
+| **Co-owner → shared account** | Income into a `shared` account | **No** | **Yes**, as an inflow |
+| Shared account → building work | Expense | No | **Yes** |
 
-Deliberately distinct from §6.6. A counterparty is a **debt relationship** —
-someone owes someone, and the balance is meant to settle. A family pot is a
-**shared fund** with no expectation of settlement, and no ledger of who owes
-what. Modelling it as debt would produce a balance that is meaningless and an
-ageing figure that is offensive.
+**Income into a shared account is a contribution, not earnings.** So *"what did
+I earn"* reads income into `own` accounts only, and a co-owner's half never
+reaches it.
 
-#### In the existing data
+The rule that makes this hold: **personal income is never recorded into a
+shared account.** If it arrives there, move it — the interface warns rather
+than silently miscounting.
 
-`Household · USD` is already this account, with 498 transactions — the
-fourth-most-active in the system. Migration marks it `external` and excludes
-it, which will change the migrated net worth figure relative to what Money
-Manager shows. That difference is **expected and correct**, and must be stated
-explicitly in the verification report (§8.4) so it is not mistaken for a
-reconciliation failure.
+A transfer from your account into the shared one is meanwhile a genuine outflow
+from *mine* and internal to *ours*, which is exactly right and needs no special
+handling.
+
+#### Contributions are attributed
+
+Each inflow to a shared account carries a `counterparty_id`, so *"he has put in
+X, I have put in Y"* is answerable at any time. Your own contributions are
+already attributable because they arrive as transfers from your accounts.
+
+This uses counterparties for **attribution, not debt** (§6.6). There is no
+settlement expectation and no ageing — a co-owner's contribution is not
+something owed back. The `find_unsettled` and ageing surfaces do not apply to
+shared-account contributions, and must not treat them as outstanding.
+
+#### What is deliberately not modelled
+
+**The house is not an asset.** Only cash flows are tracked, so net worth is
+money and does not include property. *"What did the house cost us"* is
+answerable; *"what am I worth including the house"* is not, by choice.
+
+Adding it later means an asset account kind, a revaluation operation, and a
+decision about unrealised gains — a genuinely new concept in this ledger, and
+not one worth introducing for a single house.
+
+**Shared is never business.** Shared-account activity is never reportable and
+never reaches a tax output (§13). Ownership and tax scope are independent
+fields, but this combination is invalid and constrained against.
 
 ### 6.8 Soft deletion
 
@@ -977,10 +1007,9 @@ To the cent, per account, per currency. Plus:
 
 - Transaction count matches (7,621 active, 253 deleted) — and re-matches on
   every later backup.
-- **Net worth will differ from Money Manager's**, because external accounts
-  (§6.7) are excluded here and were not there. The report states the figure
-  both ways — with and without external — so the divergence is visibly
-  intentional rather than looking like a failure.
+- Net worth is reported **twice** — *mine* and *ours* (§6.7). Money Manager
+  had only one figure, which corresponds to *ours*. The report states both so
+  the difference reads as the new distinction it is, not as a shortfall.
 - Every transfer has both legs, or appears on an explicit exception list.
 - Category tree depth and membership match.
 - Recomputed `amount_pivot` monthly totals are within a stated tolerance of

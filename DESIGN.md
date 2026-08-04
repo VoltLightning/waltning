@@ -231,13 +231,16 @@ marker, P2) · focus · disabled.
 
 ### 3.6 Segment control
 
-2–4 options, one active. Used for scope (**All · Mine · Family · Business**)
+2–4 options, one active. Used for scope (**All · Mine · Shared · Business**)
 and import filters (Needs review / Ready / Duplicates / Skipped), with live
 counts per segment.
 
-The scope options are a **partition**, not overlapping filters (`SPEC.md`
-§6.7) — every transaction is in exactly one, so the three subtotals always sum
-to All. Switching scope can never double-count.
+The scope options are a **partition** (`SPEC.md` §6.7) — every transaction is
+in exactly one, so the three subtotals always sum to All and switching can
+never double-count.
+
+Distinct from the **two headline totals** (`DualTotal` below), which are *not*
+a filter: *mine* and *ours* show together regardless of scope.
 
 ### 3.7 Inputs
 
@@ -328,10 +331,12 @@ what this is set to.
 
 | Component | Contents |
 |---|---|
-| `Shell` | Dark gradient band — brand, nav, scope segment, `FxStatusChip`, `CurrencyChip`, hero figure. The hero **excludes external accounts** (`SPEC.md` §6.7) |
+| `Shell` | Dark gradient band — brand, nav, scope segment, `FxStatusChip`, `CurrencyChip`, `DualTotal` hero |
 | `GroundPanel` | `radius-xl` surface lifting over the shell |
 | `Card` | `surface`, `radius-lg`, `shadow-card`; optional title and action |
 | `StatTile` | Figure + label + delta. Delta takes `negative` ink when spend rose |
+| `DualTotal` | **The two headline figures** — *mine* dominant, *ours* secondary beneath (`SPEC.md` §6.7). Never a toggle: showing one at a time invites reading the wrong number. Degrades to a single figure when no shared account exists |
+| `ContributionRow` | An inflow to a shared account, attributed to a counterparty. Reads as a contribution, never a debt — no settle action, no ageing |
 | `BottomSheet` | 170px from top; search, content, **pinned footer** |
 | `TabBar` | 5 tabs + raised `+`. Duotone icons, ≥44px targets |
 | `Dock` | Bottom-anchored composer: mode row, keypad, full-width Save |
@@ -343,7 +348,7 @@ what this is set to.
 | `TransactionRow` | Date · payee · category · `Amount`. `BIZ` tag when business |
 | `TransferRow` | Variant showing both accounts — one row, never two |
 | `BalanceRow` | Account · kind · `FxAmount` for foreign accounts |
-| `ExternalGroup` | Balances group for external accounts — own subtotal, visually set apart, never folded into net worth. A negative balance here is unremarkable and gets no warning treatment |
+| `SharedGroup` | Balances group for shared accounts — own subtotal, visually distinct but **not diminished**. A negative balance here is an ordinary fact and gets no warning treatment |
 | `ImportRow` | Collapsed: date, payee + raw string, tier pill, proposed category + basis, amount + FX, Accept/Skip. Expanded: three panes — reason + business/rule toggles, category picker, currency and rate panel |
 | `AuditRow` | Tool call · kind (read/write) · state · timestamp |
 | `TrailRow` | *"Heard: forty-eight ninety, cash, coffee"* + **Undo**. The P2 component |

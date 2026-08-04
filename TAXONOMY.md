@@ -189,8 +189,7 @@ transfers rather than income.
   · ZUS & business tax
   · Business other                             0.5%
 
-◆ Transfers out                               15.3%
-  · Family contribution                       15.3%   ← see §5
+◆ Transfers out                                0.1%
   · Repayment made                             0.1%
   · Charity
 
@@ -214,7 +213,7 @@ enumerated.
 | Household › Kitchen, Appliances, Furniture | Home › Furniture & appliances |
 | Household › Toiletries, Chandlery | Home › Household supplies |
 | Household › Maintenance | Home › Renovation & building |
-| Family budget | Transfers out › Family contribution |
+| Family budget | **Home › Renovation & building**, recorded in the *shared* account — see §5 |
 | Tax | Financial › Tax |
 | Rental › Rent | Home › Rent |
 | Rental › Utilities | Home › Utilities |
@@ -276,14 +275,21 @@ enumerated.
 
 ## 5. Two decisions worth arguing about
 
-**Family contribution as a category, when family is also an account.**
-`Family budget` was a category (15.3% of spend, $83k). Under the new model,
-family money lives in an *external account* (`SPEC.md` §6.7), so contributing
-to it is a **transfer**, not an expense — which is why it appears under
-`Transfers out` rather than as a spending category. The consequence is real:
-your historical "spending" drops by 15.3% because that money was never spent,
-it was moved. That is more truthful, but the numbers will not match what Money
-Manager showed.
+**`Family budget` is not a category — it is an account scope.** It held 15.3%
+of spend ($83,324 across 30 rows, averaging $2,777). Combined with `Household`
+($225,734 across 78 rows), that is **$309k across 108 large transactions** —
+which, given you and your father bought a house together, is almost certainly
+the house.
+
+Under the ownership model (`SPEC.md` §6.7) that money is not reclassified as a
+transfer and does not vanish from your spending. It moves from the *mine* total
+to the *ours* total, and it keeps a real expense category — most likely
+`Home › Renovation & building`. **Nothing is lost and no total drops**; a
+second total appears alongside the first.
+
+An earlier draft of this document mapped it to `Transfers out` and claimed your
+historical spending would fall by 15.3%. That was wrong, and followed from
+modelling shared money as excluded rather than as separately aggregated.
 
 **`Uncategorized` is deliberate.** 194 transactions currently sit in `Other`.
 Renaming it to `Uncategorized` makes it a **queue**, not a destination — it
@@ -294,15 +300,19 @@ in bulk (`FLOWS.md` J12). Calling it `Other` made it feel like a valid answer.
 
 ## 6. What needs you
 
-**The 41.5% question.** `Household` is $225,734 across 78 transactions with no
-breakdown. I have mapped it to `Home › Renovation & building` as the safest
-default, but that is a guess. Those 78 rows are your single largest analytical
-gap, and splitting them properly is the highest-value classification work in
-the entire migration — even if no other history comes across.
+**The house — 56.8% of everything.** `Household` ($225,734 / 78 rows) plus
+`Family budget` ($83,324 / 30 rows) is **$309,058 across 108 transactions**,
+and the arithmetic says it is the house purchase and the work since.
 
-If you can characterize what that money went on, the `Home` leaves can be
-tuned to it. Otherwise the agent can propose a split from the transaction notes
-and you approve in bulk.
+Two things follow. First, those 108 rows should live in a **shared** account,
+not a personal one — which is the whole point of §6.7 and changes which total
+they land in. Second, splitting them across the `Home` leaves is the single
+highest-value classification work available, because right now more than half
+of everything you have ever recorded sits in two undifferentiated buckets.
+
+If you can characterise what that money went on — purchase price versus
+renovation versus fit-out — the `Home` leaves can be tuned to it. Otherwise the
+agent can propose a split from the transaction notes and you approve in bulk.
 
 **Also open**
 
