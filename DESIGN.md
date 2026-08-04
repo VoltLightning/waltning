@@ -23,13 +23,14 @@ so the interface can be built once and reused rather than redrawn per screen.
 3. [Primitives](#3-primitives)
 4. [Money and FX components](#4-money-and-fx-components)
 5. [Composites](#5-composites)
-6. [Data visualization](#6-data-visualization)
-7. [Screen inventory](#7-screen-inventory)
-8. [State matrix](#8-state-matrix)
-9. [Accessibility](#9-accessibility)
-10. [Platform notes](#10-platform-notes)
-11. [Build order](#11-build-order)
-12. [Open questions](#12-open-questions)
+6. [Calendar](#6-calendar)
+7. [Data visualization](#7-data-visualization)
+8. [Screen inventory](#8-screen-inventory)
+9. [State matrix](#9-state-matrix)
+10. [Accessibility](#10-accessibility)
+11. [Platform notes](#11-platform-notes)
+12. [Build order](#12-build-order)
+13. [Open questions](#13-open-questions)
 
 ---
 
@@ -57,7 +58,7 @@ override. Overloading it destroys its signal value.
 
 **P5 · Colour is never the only encoding.** Every tint pairs with text, an
 icon, or a label. Charts included — the current design does not meet this
-(§9), which is why it is a principle and not a claim.
+(§10), which is why it is a principle and not a claim.
 
 ---
 
@@ -78,7 +79,7 @@ second hue is needed.
 | `green-50` | `#f2f9f4` | Table headers, inset boxes |
 | `green-100` | `#e4f1e8` | Ramp floor, tag fills |
 | `green-200` | `#cbe6d6` | Borders, rules, dividers |
-| `green-300` | **undefined — see §12 Q1** | Gap in the ramp |
+| `green-300` | **undefined — see §13 Q1** | Gap in the ramp |
 | `green-400` | `#75bd99` | Chart step; table header underline |
 | `green-500` | `#48a479` | **Focus ring**; chart step; primary accent |
 | `green-600` | `#2f7d5a` | Primary action fill; pins |
@@ -163,7 +164,7 @@ removed, never replaced by a colour change alone.
 | `motion-none` | 0 | — | `prefers-reduced-motion` branch |
 
 **Every animation needs the `motion-none` branch.** The waveform, the mic halo,
-and the sheet rise are all currently unbranched (§9).
+and the sheet rise are all currently unbranched (§10).
 
 ### 2.8 Icons
 
@@ -194,7 +195,7 @@ that asymmetry is the affordance.
 
 ### 3.2 IconButton
 
-32 / 40 / 44. **44 minimum for any touch target** (§9). Requires `aria-label`.
+32 / 40 / 44. **44 minimum for any touch target** (§10). Requires `aria-label`.
 
 ### 3.3 Tag
 
@@ -226,7 +227,7 @@ account, category, date, scope, note.
 States: empty (placeholder) · filled · **machine-filled** (carries the trail
 marker, P2) · focus · disabled.
 
-⚠️ Chips currently measure ~34px against a 44px floor (§9).
+⚠️ Chips currently measure ~34px against a 44px floor (§10).
 
 ### 3.6 Segment control
 
@@ -366,7 +367,7 @@ generic dialog teaches nothing and gets clicked through.
 **`<ToolResultCard>`** — read results. Visually distinct from writes, labelled
 `ran automatically · 240 ms`.
 
-⚠️ Approved cards need a **revert** affordance for the session (§12 Q4).
+⚠️ Approved cards need a **revert** affordance for the session (§13 Q4).
 
 ### 5.4 Messaging
 
@@ -377,29 +378,156 @@ generic dialog teaches nothing and gets clicked through.
 | `ErrorState` | What failed, why, what to do. Never a bare code |
 | `ConfirmDialog` | Genuinely destructive and irreversible only — deleting an account, changing main currency |
 
+### 5.5 Debt and counterparties
+
+Implements `SPEC.md` §6.6. The hard part is not the list — it is that one
+person can owe you in one currency while you owe them in another.
+
+| Component | Notes |
+|---|---|
+| `CounterpartyRow` | Avatar or monogram · name · kind icon (person / company) · net position in **their** currency, with the main-currency equivalent beneath |
+| `CounterpartyCard` | Full position: one row per currency, then both derived totals |
+| `BalanceLedger` | Per-currency table. Positive = they owe you, negative = you owe them. Direction stated in words, never by sign alone (P5) |
+| `SettleSheet` | Amount, currency, which balance it discharges, rate (editable), **residual shown before commit** |
+| `DebtDirectionTag` | `owes you` / `you owe` — text, not a colour |
+| `CounterpartyPicker` | Search, recent, create-in-place. Same shape as the category sheet |
+| `AgeingBar` | Days outstanding. **Companies only** — see O15 |
+
+**`<BalanceLedger>` is the component that justifies the model change:**
+
+```
+  ┌ person · settles in EUR ──────────────┐
+  │  PLN    +840,00        owes you       │
+  │  EUR    −120,00        you owe        │
+  │  ───────────────────────────────────  │
+  │  net    +75,40 €       @ 2026-08-04   │
+  │         +321,60 zł                    │
+  └───────────────────────────────────────┘
+```
+
+Two currencies, opposite directions, one person. The account model could not
+express this at all — it would appear as unrelated balances in
+`Loan · PLN` and `Loan · EUR (my)` with nothing connecting them.
+
+**`<SettleSheet>` follows `<TransferAmount>`** (§4.3): two amounts, derived
+rate, spread against the reference shown. The settlement rate defaults to the
+reference but is editable, because a debt is discharged at the rate the two
+parties agreed — not the rate a central bank published.
+
 ---
 
-## 6. Data visualization
+## 6. Calendar
+
+A time-shaped view of the ledger (`SPEC.md` §14.4). One component tree, four
+scales, two navigation modes — not four screens.
+
+### 6.1 `<Calendar>`
+
+```
+props: scale       "day" | "week" | "month" | "year"
+       navigation  "continuous" | "stepped"
+       anchor      Date
+       scope       all | personal | business
+```
+
+Scale and navigation are independent and both persist. Switching scale keeps
+the anchor date, so moving month → day lands on the day you were looking at
+rather than resetting to today — the single most common calendar annoyance.
+
+### 6.2 Scales
+
+| Scale | Cell | Shows |
+|---|---|---|
+| `CalendarDay` | `TransactionRow` | Chronological entries, running day total, projected items last |
+| `CalendarWeek` | `DayCell` | Seven columns; net figure, count, category dots |
+| `CalendarMonth` | `DayCell` compact | Grid; per-day net, density shading from the green ramp |
+| `CalendarYear` | `MonthCell` | Twelve tiles; month net plus a daily sparkline |
+
+`<DayCell>` states: empty · has entries · **today** · selected · projected-only
+· over-budget (if budgets ever land, N7).
+
+**Density shading uses the ramp**, which puts it straight into the
+colour-independence problem (Q2) — a heavy day and a moderate day are adjacent
+steps. Cells therefore carry the figure as text, and shading is reinforcement,
+never the sole encoding.
+
+### 6.3 Navigation
+
+| Mode | Mechanics |
+|---|---|
+| `continuous` | Virtualized infinite scroll in **both** directions. Sticky header updates as period boundaries pass. ~2,100 days from 2020 to now, so windowing is mandatory, not an optimization |
+| `stepped` | One period per page. Swipe or arrow. Edges snap; the header names the period and stays fixed |
+
+Shared: `<PeriodHeader>` (label + prev/next + *Today*), `<ScaleSwitcher>`
+(segment control, 4 options), `<NavModeToggle>`.
+
+### 6.4 Projected entries
+
+Recurring rules (`SPEC.md` §6.2) project forward, so the calendar shows what is
+coming as well as what happened. Projected cells are outlined rather than
+filled, carry a `scheduled` tag, and are **excluded from any total labelled
+actual**. A total that silently mixes posted and projected amounts is a bug,
+not a feature.
+
+---
+
+## 7. Data visualization
 
 All charts draw from the green ramp; magnitude is depth.
 
 | Component | Use | Requirement |
 |---|---|---|
-| `DonutChart` | Category share | Legend **always** present with amounts — the ring is never the only encoding |
+| `PieChart` | Category share, whole-of-period | Labels on segments ≥ 5%; the rest fold into *other* with a breakdown on tap |
+| `DonutChart` | Category share with a centre total | Legend **always** present with amounts — the ring is never the only encoding |
+| `LineChart` | **Income vs expense over time** | Two series, annual or arbitrary range |
 | `BarChart` | Month over month | Increases in spend take `negative` ink |
+| `AreaChart` | Cumulative net worth | Single series, ramp fill |
 | `Treemap` | Category deep-dive | Tiles ≥ ramp 500 use white ink; ≤ 400 use `ink` |
-| `Sparkline` | Balance trend in rows | No axes; paired with a figure |
+| `Sparkline` | Balance trend in rows, year-view cells | No axes; paired with a figure |
 | `Legend` | Every chart | Order matches segment order |
+| `PeriodPicker` | Every chart | Presets (month, quarter, year, YTD) **plus** an arbitrary range |
+
+### 7.1 `<LineChart>` — income vs expense
+
+Two series over a chosen period, at a granularity that follows the range
+(daily ≤ 3 months, weekly ≤ 1 year, monthly beyond).
+
+```
+  income   green-600, solid
+  expense  negative,  solid
+  net      green-900, dashed — optional third series
+```
+
+This is the one place `negative` ink appears as a **series colour** rather than
+an alert. That is a deliberate exception: expense-versus-income is the single
+comparison where red carries its ordinary financial meaning, and forcing both
+series into the green ramp would make them harder to tell apart, not easier.
+
+Requirements: shared Y axis in the main currency · hover and tap crosshair
+reading both series at that point · zero line always visible when net is shown ·
+projected periods (§6.4) rendered dashed and labelled.
+
+### 7.2 Pie versus donut
+
+Both exist; they are not interchangeable.
+
+| Use | Component |
+|---|---|
+| Composition alone, no meaningful total | `PieChart` |
+| Composition **and** a total worth stating | `DonutChart` — the total sits in the hole |
+
+Neither shows more than **seven segments plus *other***. Beyond that the small
+segments are unreadable and the ramp runs out of distinguishable steps (Q2).
 
 ⚠️ **Seven categories in one hue ramp is the system's weakest point.** Adjacent
 steps are hard to distinguish, and roughly 8% of men have a colour vision
-deficiency. Charts need labels or patterns at small sizes (§9, §12 Q2).
+deficiency. Charts need labels or patterns at small sizes (§10, §13 Q2).
 
 ---
 
-## 7. Screen inventory
+## 8. Screen inventory
 
-### 7.1 Designed
+### 8.1 Designed
 
 | # | Screen | Surface | Key components |
 |---|---|---|---|
@@ -412,26 +540,41 @@ deficiency. Charts need labels or patterns at small sizes (§9, §12 Q2).
 | 7 | Receipt capture + review | Mobile | Camera brackets, `QueueItem`, per-field confidence, `receipt strip`, line splits |
 | 8 | Voice, multi-intent | Mobile | Waveform, transcript, `DiffCard` ×2, *Approve both* |
 
-### 7.2 Not yet designed
+### 8.2 Not yet designed
 
 Ordered by `Design Spec.dc.html` §4.4.
+
+Ordered by dependency, then by `Design Spec.dc.html` §4.4.
 
 | # | Screen | Surface | Why it matters | New components |
 |---|---|---|---|---|
 | 9 | Transaction detail | Mobile | Everything created must be findable and fixable | `AuditHistory`, receipt viewer, split editor |
 | 10 | Transactions list | Mobile | Search, filter, infinite list, swipe to edit | `FilterBar`, `SwipeAction`, virtualized list |
-| 11 | Reports | Web | Period comparison, category deep-dive, business view | `PeriodPicker`, `ComparisonTable`, `Treemap` |
-| 12 | Export | Web | The manifest asserting zero personal rows is a **design** problem | `WorkbookBuilder`, `SchemeSelector`, `ManifestCard` |
-| 13 | Tax view | Web | The exclusion guarantee needs to be legible | `SchemeTimeline`, KPiR column map, ryczałt rate chip |
-| 14 | Accounts | Mobile | Register, balances, archive, opening balances | `AccountEditor`, `KindPicker` |
-| 15 | Settings · Currencies | Mobile | Main + subs, rate sources (`SPEC.md` §7.0) | `CurrencyList`, `RateSourcePicker`, main-currency change flow |
-| 16 | Settings · Categories | Mobile | **122 categories, 13 collisions** need rename / merge / archive | `CategoryTree`, `MergeFlow` |
-| 17 | Settings · Tax | Mobile | Scheme timeline, VAT, NIP, default ryczałt rate | `SchemeTimeline`, `NipField` |
-| 18 | Settings · Rules | Mobile | Rule list, hit counts, edit, disable | `RuleEditor`, `RuleTestPanel` |
-| 19 | Settings · Recurring | Mobile | 24 migrated rules | `RecurringEditor`, RRULE picker |
-| 20 | Onboarding / first run | Both | Main currency, first account, migration import | `SetupWizard` |
+| 11 | **Calendar** | Mobile | 4 scales × 2 navigation modes, one component (§6) | `Calendar`, `DayCell`, `MonthCell`, `PeriodHeader`, `ScaleSwitcher`, `NavModeToggle` |
+| 12 | **Debt · counterparties** | Mobile | Who owes you what, across currencies (§5.5) | `CounterpartyRow`, `BalanceLedger`, `DebtDirectionTag` |
+| 13 | **Counterparty detail** | Mobile | Per-currency position, history, settle | `CounterpartyCard`, `AgeingBar` |
+| 14 | **Settle debt** | Mobile | Cross-currency discharge at an agreed rate | `SettleSheet`, `RateField`, residual preview |
+| 15 | **Counterparty editor** | Mobile | Create person or company, set their main currency | `KindPicker`, `CurrencySelect` |
+| 16 | Accounts | Mobile | Register, balances, archive, opening balances. Card / cash / bank kinds | `AccountEditor`, `KindPicker` |
+| 17 | Settings · Currencies | Mobile | Main + subs, rate sources (`SPEC.md` §7.0) | `CurrencyList`, `RateSourcePicker`, main-currency change flow |
+| 18 | **Settings · Exchange rates** | Mobile | Rate table by pair and date, manual override, sync history | `RateTable`, `RateEditor`, `SyncLog` |
+| 19 | Settings · Categories | Mobile | **122 categories, 13 collisions** need rename / merge / archive | `CategoryTree`, `MergeFlow` |
+| 20 | Settings · Rules | Mobile | Rule list, hit counts, edit, disable | `RuleEditor`, `RuleTestPanel` |
+| 21 | Settings · Recurring | Mobile | 24 migrated rules | `RecurringEditor`, RRULE picker |
+| 22 | Settings · Tax | Mobile | Scheme timeline, VAT, NIP, default ryczałt rate | `SchemeTimeline`, `NipField` |
+| 23 | **Calendar** | Web | Wider canvas; week and month gain per-day detail | reuses §6 |
+| 24 | **Dashboard layout** | Web | Preset arrangements, widget config (`SPEC.md` §14.5) | `WidgetGrid`, `WidgetCard`, `LayoutPicker` |
+| 25 | Reports | Web | Period comparison, category deep-dive, business view | `PeriodPicker`, `ComparisonTable`, `LineChart`, `PieChart` |
+| 26 | **Debt overview** | Web | Totals both directions, ageing, per-counterparty drill-down | `DebtSummary`, `AgeingTable` |
+| 27 | Export | Web | The manifest asserting zero personal rows is a **design** problem | `WorkbookBuilder`, `SchemeSelector`, `ManifestCard` |
+| 28 | Tax view | Web | The exclusion guarantee needs to be legible | `SchemeTimeline`, KPiR column map, ryczałt rate chip |
+| 29 | Onboarding / first run | Both | Main currency, first account, migration import | `SetupWizard` |
 
-### 7.3 Tax-layer components
+**29 screens, 8 designed.** The count roughly tripled from the original seven
+outstanding — mostly because Settings was one line item covering six distinct
+surfaces, and because calendar and debt were absent entirely.
+
+### 8.3 Tax-layer components
 
 `Design Spec.dc.html` §5 answers **O1: all three Polish schemes**. One field
 exists nowhere in the current design:
@@ -446,7 +589,7 @@ every export (`PL_KPIR v2026`, `PL_RYCZALT v2026`).
 
 ---
 
-## 8. State matrix
+## 9. State matrix
 
 Every screen needs all five. Only the import queue has an empty state today.
 
@@ -465,7 +608,7 @@ used daily, and the only one where a machine fills fields.
 
 ---
 
-## 9. Accessibility
+## 10. Accessibility
 
 | Requirement | State | Action |
 |---|---|---|
@@ -483,9 +626,9 @@ to fix screen by screen.
 
 ---
 
-## 10. Platform notes
+## 11. Platform notes
 
-One codebase via Expo + React Native Web (`SPEC.md` §14.4).
+One codebase via Expo + React Native Web (`SPEC.md` §14.6).
 
 | Concern | Approach |
 |---|---|
@@ -503,7 +646,7 @@ split cheap.
 
 ---
 
-## 11. Build order
+## 12. Build order
 
 | Phase | Deliverable | Rationale |
 |---|---|---|
@@ -511,27 +654,33 @@ split cheap.
 | **D1** | Primitives — Button, Tag, Pill, Chip, Segment, inputs | Fix the 44px floor once, at the source |
 | **D2** | `Card`, `Shell`, rows, `TabBar`, `BottomSheet` | Structure for every screen |
 | **D3** | `DiffCard` + `ToolResultCard` | One gate, three call sites — build before any of them |
-| **D4** | States — `EmptyState`, `ErrorState`, `Skeleton`, `Banner` | Closes §8, starting with Quick add |
-| **D5** | Charts + `Legend` | Blocked on the colour-encoding decision (Q2) |
-| **D6** | Accessibility pass | Measured contrast, targets, reduced motion, labels |
-| **D7** | Screens 9–20 | Everything above already exists by now |
+| **D4** | States — `EmptyState`, `ErrorState`, `Skeleton`, `Banner` | Closes §9, starting with Quick add |
+| **D5** | Charts + `Legend` + `PeriodPicker` | Blocked on the colour-encoding decision (Q2) |
+| **D6** | `Calendar` + cells + navigation (§6) | Virtualization is the hard part; build it once for both modes |
+| **D7** | Debt — `BalanceLedger`, `SettleSheet`, `CounterpartyPicker` (§5.5) | Depends on D0's money components |
+| **D8** | Accessibility pass | Measured contrast, targets, reduced motion, labels |
+| **D9** | Screens 9–29 | Everything above already exists by now |
 
 D0–D3 build against `packages/ui`; D7 consumes it. This inverts the current
 order, where screens exist and components do not.
 
 ---
 
-## 12. Open questions
+## 13. Open questions
 
 | # | Question | Blocks | Recommendation |
 |---|---|---|---|
 | **Q1** | `green-300` is undefined, but the contrast audit references "ramp steps 300–400" | Charts, D5 | Define it — roughly `#a3d2b8` |
-| **Q2** | Seven categories in one hue ramp fails colour-independence | D5, §9 | Add a second encoding (pattern or direct labels), or cap the ring at 5 segments + "other" |
+| **Q2** | Seven categories in one hue ramp fails colour-independence | D5, §10 | Add a second encoding (pattern or direct labels), or cap the ring at 5 segments + "other" |
 | **Q3** | Chips at ~34px vs the 44px floor | D1 | Raise padding globally; accept the density loss |
 | **Q4** | Approved diff cards have no revert | D3 | Session-duration revert on the applied card |
 | **Q5** | Partial approval when voice yields two intents | D3 | Per-card actions, not a single *Approve both* |
 | **Q6** | Movable confidence threshold on import review — described but not built | D7 #2 | Draggable, with a live count |
-| **Q7** | Category maintenance — rename, merge, archive | Screen 16 | Needed regardless; 13 collisions exist today |
+| **Q7** | Category maintenance — rename, merge, archive | Screen 19 | Needed regardless; 13 collisions exist today |
+| **Q8** | Calendar cell density — figure, count, category dots, or all three? | D6 | Net figure always; dots on week and month only, where there is room |
+| **Q9** | Does the calendar replace the transactions list, or complement it? | Screens 10, 11 | Complement — the list answers *"find what I remember"*, the calendar *"what happened then"* |
+| **Q10** | Counterparty identity — monogram, colour, or photo? | D7 | Monogram on a ramp tint, deterministic from the name. No photo picker |
+| **Q11** | Does a settlement need a receipt or note requirement? | D7 | Optional, but prompted — an undocumented settlement is the one people dispute |
 
 ### Two contradictions with `SPEC.md`
 
