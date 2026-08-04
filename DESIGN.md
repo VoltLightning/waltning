@@ -231,9 +231,13 @@ marker, P2) · focus · disabled.
 
 ### 3.6 Segment control
 
-2–4 options, one active. Used for scope (All / Personal / Business) and import
-filters (Needs review / Ready / Duplicates / Skipped), with live counts per
-segment.
+2–4 options, one active. Used for scope (**All · Mine · Family · Business**)
+and import filters (Needs review / Ready / Duplicates / Skipped), with live
+counts per segment.
+
+The scope options are a **partition**, not overlapping filters (`SPEC.md`
+§6.7) — every transaction is in exactly one, so the three subtotals always sum
+to All. Switching scope can never double-count.
 
 ### 3.7 Inputs
 
