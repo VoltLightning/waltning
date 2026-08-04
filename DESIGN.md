@@ -324,7 +324,7 @@ what this is set to.
 
 | Component | Contents |
 |---|---|
-| `Shell` | Dark gradient band — brand, nav, scope segment, `FxStatusChip`, `CurrencyChip`, hero figure |
+| `Shell` | Dark gradient band — brand, nav, scope segment, `FxStatusChip`, `CurrencyChip`, hero figure. The hero **excludes external accounts** (`SPEC.md` §6.7) |
 | `GroundPanel` | `radius-xl` surface lifting over the shell |
 | `Card` | `surface`, `radius-lg`, `shadow-card`; optional title and action |
 | `StatTile` | Figure + label + delta. Delta takes `negative` ink when spend rose |
@@ -339,6 +339,7 @@ what this is set to.
 | `TransactionRow` | Date · payee · category · `Amount`. `BIZ` tag when business |
 | `TransferRow` | Variant showing both accounts — one row, never two |
 | `BalanceRow` | Account · kind · `FxAmount` for foreign accounts |
+| `ExternalGroup` | Balances group for external accounts — own subtotal, visually set apart, never folded into net worth. A negative balance here is unremarkable and gets no warning treatment |
 | `ImportRow` | Collapsed: date, payee + raw string, tier pill, proposed category + basis, amount + FX, Accept/Skip. Expanded: three panes — reason + business/rule toggles, category picker, currency and rate panel |
 | `AuditRow` | Tool call · kind (read/write) · state · timestamp |
 | `TrailRow` | *"Heard: forty-eight ninety, cash, coffee"* + **Undo**. The P2 component |
