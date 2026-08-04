@@ -7,8 +7,13 @@ Built to replace [RealByte Money Manager](https://www.realbyteapps.com/), which
 has no API, no bulk editing, and limited export — and the file-based Python
 pipeline that grew up around it.
 
-See **[SPEC.md](SPEC.md)** for the architecture, data model, security design,
-tax layer, and build phases.
+## Documents
+
+| | |
+|---|---|
+| **[SPEC.md](SPEC.md)** | Architecture, data model, FX semantics, security, migration, tax layer, phasing |
+| **[DESIGN.md](DESIGN.md)** | Design system — tokens, components, states, accessibility |
+| **[FLOWS.md](FLOWS.md)** | 15 user journeys and specifications for all 29 screens |
 
 ## Status
 
