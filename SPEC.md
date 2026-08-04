@@ -379,7 +379,8 @@ fx_rates                (base, quote, date) PK, rate, source, fetched_at
 account_groups          id, name, sort
 accounts                id, name, kind, currency, group_id,
                         opening_balance, opening_date, memo,
-                        is_business, archived, sort, external_id
+                        is_business, counts_toward_net_worth,   -- §6.7
+                        archived, sort, external_id
 categories              id, parent_id →self, name, kind,
                         icon, color, archived, sort, external_id
 counterparties          id, name, kind (person|company), settlement_currency,
@@ -431,6 +432,7 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 | `clearing` | `Loan X (distributed)` | §6.4 |
 | `investment` | group `Investments` | — |
 | `deposit` | group `Deposits` | — |
+| `external` | A shared pot — recorded, not owned (§6.7) | `Household · USD`, 498 transactions |
 
 **`txn_type`** — `income` · `expense` · `transfer` · `adjustment`
 **`category_kind`** — `income` · `expense`
@@ -591,7 +593,65 @@ an automatic write: the names are inconsistent (first name, first name plus
 initial, nickname) and merging two spellings of one person silently would
 corrupt a balance.
 
-### 6.7 Soft deletion
+### 6.7 External accounts — money that is recorded but not yours
+
+Some transactions are worth recording without being yours. The clearest case is
+a **family budget**: a shared pot you contribute to and draw from, where you
+record the purchases you know about — a washing machine bought with your
+parents' money — without tracking their income or their finances generally.
+
+The transaction genuinely happened and belongs in the ledger. It must not touch
+your net worth.
+
+```
+accounts   + counts_toward_net_worth  boolean, default true
+account_kind  + 'external'
+```
+
+An account marked `counts_toward_net_worth = false` is **fully a real account**
+— it has a balance, transactions, categories, receipts, and a currency, and it
+appears in the calendar, in search, and in category reports. It is excluded
+from exactly one thing: any figure that claims to be *your* money.
+
+| Figure | External accounts |
+|---|---|
+| Net worth | **Excluded** |
+| "Spend this month" headline | **Excluded** |
+| Balances list | Shown, in its own group, with its own subtotal |
+| Category reports | Included, behind a toggle that is off by default |
+| Calendar, search, transaction list | Always included |
+| Tax outputs | Never — external accounts are not yours to report |
+
+#### Why one boolean is enough
+
+Contributions handle themselves. A transfer from a personal account into an
+external one moves money out of the included set, so it **reads as an outflow
+without needing to be classified as one** — which is exactly what giving money
+to the family pot is. Money coming back in reads as an inflow. No special
+transaction type, no rule.
+
+And a negative balance on an external account is simply not a problem: it isn't
+your overdraft, it's a pot that has been spent down. Nothing warns, nothing
+turns red, and no total moves.
+
+#### Not a counterparty
+
+Deliberately distinct from §6.6. A counterparty is a **debt relationship** —
+someone owes someone, and the balance is meant to settle. A family pot is a
+**shared fund** with no expectation of settlement, and no ledger of who owes
+what. Modelling it as debt would produce a balance that is meaningless and an
+ageing figure that is offensive.
+
+#### In the existing data
+
+`Household · USD` is already this account, with 498 transactions — the
+fourth-most-active in the system. Migration marks it `external` and excludes
+it, which will change the migrated net worth figure relative to what Money
+Manager shows. That difference is **expected and correct**, and must be stated
+explicitly in the verification report (§8.4) so it is not mistaken for a
+reconciliation failure.
+
+### 6.8 Soft deletion
 
 `transactions.deleted_at`. Money Manager carries 253 deleted rows it never
 purges; the same escape hatch is wanted, and a hard delete in a financial
@@ -792,6 +852,19 @@ The general rule: **prefer the central bank of the jurisdiction you report in**,
 because that is the rate the tax authority will use. Where no such rate exists,
 fall back to ECB.
 
+**Verified endpoints** — each tested against 2020-11-25, the first date in the
+data, and each quotes directly against the USD pivot:
+
+| Source | Endpoint | Verified |
+|---|---|---|
+| NBP | `api.nbp.pl/api/exchangerates/rates/a/USD/{date}/?format=json` | 3.7556 PLN |
+| NBRB | `api.nbrb.by/exrates/rates/USD?parammode=2&ondate={date}` | 2.5548 BYN |
+| NBG | `nbg.gov.ge/gw/api/ct/monetarypolicy/currencies/en/json/?currencies=USD&date={date}` | 3.3193 GEL |
+| ECB | Data Portal SDMX — EUR and GBP | — |
+
+All three are free, unauthenticated, and need no API key. This closes the main
+Phase 0 risk on FX: no currency falls back to a stale snapshot.
+
 Adding a currency means adding a source adapter — a function from
 `(pair, date range)` to rates. Sources are plugins, so a new one is a module
 and a row, not a schema change.
@@ -857,6 +930,10 @@ To the cent, per account, per currency. Plus:
 
 - Transaction count matches (7,621 active, 253 deleted) — and re-matches on
   every later backup.
+- **Net worth will differ from Money Manager's**, because external accounts
+  (§6.7) are excluded here and were not there. The report states the figure
+  both ways — with and without external — so the divergence is visibly
+  intentional rather than looking like a failure.
 - Every transfer has both legs, or appears on an explicit exception list.
 - Category tree depth and membership match.
 - Recomputed `amount_pivot` monthly totals are within a stated tolerance of
@@ -1529,7 +1606,7 @@ Ordered by how much they block.
 | ~~**O1**~~ | ~~Tax form?~~ | — | **Answered: ryczałt.** Revenue-only *ewidencja przychodów*, no cost side, outside JPK_PKPiR entirely. `PL_RYCZALT` is the first adapter built; `PL_KPIR` is defined but unimplemented. See §13.6 |
 | ~~**O2**~~ | ~~VAT registered?~~ | — | **Answered: not registered.** Opting in later must not require a migration, so `counterparty_tax_id`, `document_ref` and `ksef_id` exist as optional fields from day one — but **no JPK_V7 handling is built**. Electronic KPiR therefore binds from 2027-01-01, not 2026-01-01 |
 | **O3** | Does dedicated filing software already exist in your workflow? | §13.3 handoff | Assume yes; build export, not integration. Lower stakes under ryczałt — the record is a revenue register, not a book |
-| **O4** | BYN and GEL historical FX back to 2020-11 — available? | §7.4, Phase 0 | Fall back to Money Manager's snapshot rates, flagged approximate |
+| ~~**O4**~~ | ~~BYN and GEL historical FX?~~ | — | **Verified available.** NBP, NBRB and NBG all serve 2020-11-25 and all quote **directly against USD** — no triangulation for primary pairs, no snapshot fallback. Endpoints in §7.7 |
 | ~~**O5**~~ | ~~RUB post-2022 accuracy?~~ | — | **Decided:** use Money Manager's snapshot rate, marked `carried_forward`, and flag affected rows in reports rather than implying precision that does not exist |
 | **O6** | `CARD-C` statement format (1,269 rows — second-highest volume) | Phase 4 parser priority | **Needs a sample file from you.** Until then the generic CSV parser with column auto-detection, falling back to manual entry |
 | ~~**O7**~~ | ~~Budgets?~~ | — | **Answered: targets, not budgets.** A monthly spend target shown as progress against actual — no per-category envelopes, no rollover. See §14.7. The 13 Money Manager budgets are preserved in the migration dump but not imported |
