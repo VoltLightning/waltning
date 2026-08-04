@@ -137,7 +137,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Language | TypeScript end to end | One language across API, web, mobile |
 | Repo | Monorepo, pnpm workspaces | Shared types; `pnpm deploy --filter` for lean Pi images |
 | Mobile | Expo (React Native) | iOS today; Android free if ever wanted |
-| Web | React Native Web via Expo | One codebase; revisit if the dashboard fights it (§14.4) |
+| Web | React Native Web via Expo | One codebase; revisit if the dashboard fights it (§14.6) |
 | Scope vs Money Manager | Core parity + receipts, import, agent | Skip budgets, goals, tags (0 rows used) |
 | Users | Single | No auth complexity, no per-row ownership |
 | Tax posture | Feeder and reconciler, not the book | §13.5 |
@@ -382,11 +382,15 @@ accounts                id, name, kind, currency, group_id,
                         is_business, archived, sort, external_id
 categories              id, parent_id →self, name, kind,
                         icon, color, archived, sort, external_id
+counterparties          id, name, kind (person|company), main_currency,
+                        contact, note, archived, sort         -- debt (§6.6)
 transactions            id, date, type, account_id, to_account_id, category_id,
+                        counterparty_id,                      -- debt (§6.6)
                         amount_original, currency, fx_rate, amount_main,
                         to_amount, to_currency, to_fx_rate,   -- transfers (§7.5)
                         payee, note, is_business,
                         source, external_id, deleted_at
+dashboard_widgets       id, kind, slot, size, config, sort    -- layout (§14.5)
 tags / transaction_tags id, name  ·  m2m
 recurring_transactions  id, type, account_id, to_account_id, category_id,
                         amount_original, currency, payee, note,
@@ -486,7 +490,105 @@ indexes, the `coalesce`-based sibling uniqueness index, partial unique indexes,
 and every check constraint. It has not yet been applied to a live database end
 to end.
 
-### 6.6 Soft deletion
+### 6.6 Counterparties and debt
+
+Money Manager has no concept of a person. Debt is encoded as **accounts**
+sliced by currency and direction — `Loan · PLN`, `Loan · PLN (my)`,
+`Loan · BYN`, `Loan · USD`, and so on. Eleven accounts exist only to carry it,
+which is a large share of why there are 68 accounts at all.
+
+That structure cannot answer the question you actually have. It knows the total
+owed to you in PLN; it does not know that one person owes you PLN *and* EUR,
+because the person is not a record anywhere. The names live in transaction
+notes, as free text.
+
+**Counterparties become first-class entities.**
+
+```
+counterparties     id, name, kind (person | company),
+                   main_currency,            -- their preferred settlement currency
+                   contact, note, archived, sort, created_at
+transactions       + counterparty_id         -- nullable FK
+```
+
+**Debt is derived, never stored.** A counterparty's position is the running sum
+of transactions referencing them. Nothing is posted twice, so a balance cannot
+drift from its history:
+
+```sql
+CREATE VIEW counterparty_balances AS
+  SELECT counterparty_id, currency,
+         SUM(signed_amount) AS balance
+  FROM   transactions
+  WHERE  counterparty_id IS NOT NULL AND deleted_at IS NULL
+  GROUP  BY counterparty_id, currency;
+```
+
+**Sign convention:** positive means *they owe you* (a receivable); negative
+means *you owe them* (a payable). One counterparty can hold both at once in
+different currencies, which the account model made unrepresentable.
+
+#### Cross-currency debt
+
+A counterparty carries **one balance per currency**, plus two derived totals:
+one in *their* `main_currency`, one in the system main currency. The first is
+what you discuss with them; the second is what appears in your reports.
+
+```
+Counterparty · person · settles in EUR
+
+    PLN    +840,00      they owe you
+    EUR     −120,00     you owe them
+    ─────────────────
+    net in EUR   +75,40    @ NBP 2026-08-04
+    net in PLN  +321,60
+```
+
+Neither derived total is stored. Both recompute from `fx_rates`, so a corrected
+rate fixes every counterparty at once.
+
+#### Settlement
+
+Settling raises a real question: if someone owes you 200 PLN and hands you
+50 EUR, at what rate is the debt discharged?
+
+Not at the market rate — at **whatever the two of you agreed**. So settlement
+follows the same shape as a cross-currency transfer (§7.5): both amounts are
+stored, the rate is derived, and the gap against the reference rate is a
+visible FX gain or loss rather than a silent adjustment.
+
+| Field | Meaning |
+|---|---|
+| `amount_original` / `currency` | What actually changed hands |
+| Debt currency | Which balance it discharges |
+| Settlement rate | Defaults to the reference rate for that date; **editable** |
+| Residual | What remains outstanding, shown before commit |
+
+A settlement never fully clears a balance implicitly. If the amounts do not
+reconcile, the remainder stays outstanding and is stated.
+
+#### What this replaces
+
+The eleven loan accounts collapse into counterparties, and the `clearing`
+accounts (§6.4) gain meaning: a group expense is allocated by attaching each
+share to its counterparty, so `find_unsettled` reports *who* has not settled,
+not merely that something has not.
+
+`loan_receivable` and `loan_payable` remain valid `account_kind` values for
+migration fidelity, but new debt is recorded against counterparties. Direction
+is a property of the balance, not of the account it sits in.
+
+#### Migration opportunity
+
+The counterparty names already exist in the data — as free text in the
+`content` field of loan and clearing transactions (*"‹name› total"*,
+*"coffee for ‹name›"*). Migration extracts distinct names from those rows and
+proposes a counterparty list for review. Extraction is a **suggestion**, never
+an automatic write: the names are inconsistent (first name, first name plus
+initial, nickname) and merging two spellings of one person silently would
+corrupt a balance.
+
+### 6.7 Soft deletion
 
 `transactions.deleted_at`. Money Manager carries 253 deleted rows it never
 purges; the same escape hatch is wanted, and a hard delete in a financial
@@ -684,6 +786,7 @@ Every transformation emits a line in a migration report for review:
 | Account kinds | Derive from group + name pattern + memo (§6.3) |
 | Transfers | Pair OUT/IN into single rows; **flag every unmatched leg** |
 | Realized FX | Take `amount_original` from the OUT leg and `to_amount` from the IN leg — both are already stored per-leg, so five years of actual bank rates are recoverable (§7.5) |
+| Counterparties | Extract distinct names from loan and clearing transaction `content`; **propose** a list for review, never write silently (§6.6) |
 | Categories | Rebuild the tree by `ZPUID`; verify no orphans |
 | FX | Backfill `fx_rates`; recompute every `amount_main` |
 | Recurring | Port 24 `ZREPEATTRANSACTION` rows; translate to RRULE |
@@ -1166,6 +1269,8 @@ circumstances before it is relied on.
 | Today | Balances by group, recent activity, unsettled clearing warnings |
 | Quick add | Amount → account → category → done. Under 10 seconds |
 | Scan | Camera, queue status, extraction review |
+| **Calendar** | Day / week / month / year, with both continuous scroll and stepped paging (§14.4) |
+| **Debt** | Counterparties, per-currency balances, settle flow (§6.6) |
 | Transactions | Search, filter, infinite list, swipe to edit |
 | Transaction detail | Full edit, receipt view, line splits, audit history |
 | Accounts | Register, balances, archive toggle |
@@ -1187,8 +1292,10 @@ Shares the codebase via React Native Web; different information density.
 
 | Screen | Purpose |
 |---|---|
-| Dashboard | Charts, month-over-month, category breakdown |
+| Dashboard | Configurable widget grid (§14.5) — charts, balances, calendar, debt |
 | Import | Upload, review queue, bulk accept — keyboard-driven |
+| Calendar | Same four scales, wider canvas; week and month gain per-day detail |
+| Debt | Counterparty register, ageing, settlement history |
 | Reports | Period comparison, category deep-dive, business view |
 | Export | Build a workbook, download |
 | Agent | Same conversation, wider canvas |
@@ -1202,7 +1309,67 @@ Shares the codebase via React Native Web; different information density.
 | Reconnect | Outbox drains in order; server is authoritative |
 | Conflict | Last-write-wins. Single user, single writer — anything more is unjustified |
 
-### 14.4 The React Native Web caveat
+### 14.4 Calendar
+
+A time-shaped view of the ledger, complementing rather than replacing the
+transactions list — the list answers *"find the thing I remember"*, the
+calendar answers *"what happened in this period"*. Mobile first, then web.
+
+**Four scales**, one component, one data source:
+
+| Scale | Contents | Cell |
+|---|---|---|
+| **Day** | Chronological list of that day's entries | The transaction row itself |
+| **Week** | Seven days with per-day totals | Net figure, count, category dots |
+| **Month** | Calendar grid | Per-day net, density shading from the green ramp |
+| **Year** | Twelve months | Month net, and a sparkline of daily movement |
+
+**Two navigation modes**, switchable and remembered:
+
+| Mode | Behaviour | Suits |
+|---|---|---|
+| **Continuous** | Infinite scroll across period boundaries; the header updates as you pass into a new period | Browsing, scanning for something half-remembered |
+| **Stepped** | One period at a time, swipe or arrow between them, edges snap | Reviewing a specific month, reconciling |
+
+Both render the same cells; only traversal differs. Continuous is virtualized
+in both directions, since 2020 to now is ~2,100 days.
+
+**Future entries.** `recurring_transactions.next_date` (§6.2) projects
+scheduled items forward, so the calendar shows what is coming as well as what
+happened. Projected entries are visually distinct from posted ones and are not
+included in any total that claims to be actual.
+
+**Amounts follow the FX rules.** A day containing foreign transactions shows
+its net in the main currency, and opening the day reveals each entry with its
+own `local · rate · main` (§7).
+
+### 14.5 Dashboard layout
+
+The dashboard is a **configurable grid of widgets**, not a fixed page.
+
+```
+dashboard_widgets   id, kind, slot, size, config, sort
+```
+
+| Widget | Sizes | Config |
+|---|---|---|
+| `net_worth` | S · M | Scope, currency |
+| `spend_by_category` | M · L | Period, chart type (pie / donut / bar) |
+| `income_vs_expense` | M · L | Period, granularity |
+| `balances` | M · L | Groups shown, archived visible |
+| `calendar` | M · L | Scale, navigation mode |
+| `debt` | S · M | Direction, currency |
+| `recent` | M | Row count |
+| `unsettled` | S | — |
+| `fx_status` | S | Pairs shown |
+
+**Phase 1 ships preset layouts** — three or four arrangements you pick between.
+Free drag-and-drop placement comes later, if the presets prove insufficient.
+That order is deliberate: a layout engine is a lot of work to build before
+knowing which arrangements are actually wanted, and presets answer the question
+cheaply.
+
+### 14.6 The React Native Web caveat
 
 One codebase for iOS and web is the right default, and Expo makes it nearly
 free. The known friction is dense data grids and charts — exactly what the
@@ -1273,6 +1440,9 @@ Ordered by how much they block.
 | **O11** | If live: residency periods, and any treaty / foreign-tax-credit interaction | `tax_residency`, §13.2 | Single jurisdiction at a time, no overlap |
 | **O12** | How far back must business rows be reclassified? 5 years of history predates any tax intent | §13.1 backfill | From 2026 forward only; earlier rows stay personal unless marked |
 | **O13** | **"Synced with banks"** — central-bank reference rates, or your actual banks' rates? | §7.6, §7.7 | Central banks for reference; realized rates come from the amounts, not a feed |
+| **O14** | Do counterparties **replace** the 11 loan accounts, or coexist with them? | §6.6, migration | Replace — the accounts exist only because Money Manager had no counterparty concept |
+| **O15** | Should a counterparty's balance age (30/60/90 days outstanding)? | Debt screens | Yes for companies, no for people — ageing a friend's coffee debt is absurd |
+| **O16** | Dashboard layout — presets, or free drag-and-drop? | §14.5 | Presets first; drag only if presets prove insufficient |
 
 ---
 
@@ -1284,7 +1454,7 @@ Ordered by how much they block.
 | R2 | Unmatched transfer legs (OUT 1,734 ≠ IN 1,754) | **High** | Medium | Explicit exception list; manual resolution before cutover |
 | R3 | Historical FX unavailable for BYN/GEL | Medium | Medium | O4 fallback; flag affected rows rather than silently approximating |
 | R4 | Scope creep into full tax compliance | **High** | High | §13 boundary is explicit; N1–N3 are non-goals |
-| R5 | RN Web insufficient for the dashboard | Medium | Low | §14.4 escape hatch designed in |
+| R5 | RN Web insufficient for the dashboard | Medium | Low | §14.6 escape hatch designed in |
 | R6 | Pi SD card failure | **High** over years | High | SSD boot; nightly off-site backups; tested restore |
 | R7 | Anthropic spend higher than expected | Low | Low | Rules tier absorbs the recurring set; per-feature tracking |
 | R8 | Project stalls half-migrated, data split across two systems | Medium | **High** | Phases independently useful; Money Manager authoritative until Phase 7 |
