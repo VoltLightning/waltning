@@ -40,7 +40,7 @@ Five rules the components encode, so screens inherit them rather than
 re-implementing them.
 
 **P1 · A converted amount never travels alone.** Any foreign figure renders as
-*local · rate · main*, with the rate for that row's own date. There is no
+*local · rate · display*, with the rate for that row's own date. There is no
 component that displays a converted amount without its basis. This is a
 component-level guarantee, not a guideline — `<Amount>` cannot render a
 conversion without a rate.
@@ -110,7 +110,7 @@ is the single most common omission when amounts are rendered ad hoc.
 
 | Step | Size / line-height | Use |
 |---|---|---|
-| `display-hero` | 54 / 1.05 | The one dominant main-currency figure |
+| `display-hero` | 54 / 1.05 | The one dominant total, in the display currency |
 | `display-1` | 38 / 1.1 | Board and page titles |
 | `display-2` | 23 / 1.2 | Section headings |
 | `display-3` | 17 / 1.3 | Card titles |
@@ -262,7 +262,7 @@ The heart of the system. These enforce §7 of `SPEC.md` structurally.
 ### 4.1 `<Amount>`
 
 ```
-  1 234,56 zł        main currency — serif, tabular
+  1 234,56 zł        display currency — serif, tabular
   $ 62.40            foreign, unconverted
 ```
 
@@ -307,8 +307,14 @@ Header-resident: `FX 09:12 · NBP · 2 manual`. States: fresh · syncing ·
 
 ### 4.5 `<CurrencyChip>`
 
-Main-currency selector and indicator. Reflects that main currency is
-user-configurable (`SPEC.md` §7.0) — a changeable setting, not a constant.
+The **display-currency toggle**, resident in every header. Pinned currencies
+(`PLN · USD · EUR`) with the active one marked; tapping re-expresses every
+figure on screen at that row's own historical rate.
+
+Switching is free — no backfill, no confirmation, nothing written (`SPEC.md`
+§7.0). It is a client preference, so it does not survive to any export: tax
+outputs are always denominated in their jurisdiction's currency regardless of
+what this is set to.
 
 ---
 
@@ -376,7 +382,7 @@ generic dialog teaches nothing and gets clicked through.
 | `Banner` | Page-level. `warn` = unsettled clearing, with a stated meaning and one action. `negative` = failure. `neutral` = offline |
 | `EmptyState` | Icon, title, explanation, action. Currently only the import queue has one |
 | `ErrorState` | What failed, why, what to do. Never a bare code |
-| `ConfirmDialog` | Genuinely destructive and irreversible only — deleting an account, changing main currency |
+| `ConfirmDialog` | Genuinely destructive and irreversible only — deleting an account, changing the **pivot** currency |
 
 ### 5.5 Debt and counterparties
 
@@ -385,7 +391,7 @@ person can owe you in one currency while you owe them in another.
 
 | Component | Notes |
 |---|---|
-| `CounterpartyRow` | Avatar or monogram · name · kind icon (person / company) · net position in **their** currency, with the main-currency equivalent beneath |
+| `CounterpartyRow` | Avatar or monogram · name · kind icon (person / company) · net position in **their** currency, with the display-currency equivalent beneath |
 | `CounterpartyCard` | Full position: one row per currency, then both derived totals |
 | `BalanceLedger` | Per-currency table. Positive = they owe you, negative = you owe them. Direction stated in words, never by sign alone (P5) |
 | `SettleSheet` | Amount, currency, which balance it discharges, rate (editable), **residual shown before commit** |
@@ -503,7 +509,7 @@ an alert. That is a deliberate exception: expense-versus-income is the single
 comparison where red carries its ordinary financial meaning, and forcing both
 series into the green ramp would make them harder to tell apart, not easier.
 
-Requirements: shared Y axis in the main currency · hover and tap crosshair
+Requirements: shared Y axis in the display currency · hover and tap crosshair
 reading both series at that point · zero line always visible when net is shown ·
 projected periods (§6.4) rendered dashed and labelled.
 
@@ -563,9 +569,9 @@ Ordered by dependency, then by `Design Spec.dc.html` §4.4.
 | 12 | **Debt · counterparties** | Mobile | Who owes you what, across currencies (§5.5) | `CounterpartyRow`, `BalanceLedger`, `DebtDirectionTag` |
 | 13 | **Counterparty detail** | Mobile | Per-currency position, history, settle | `CounterpartyCard`, `AgeingBar` |
 | 14 | **Settle debt** | Mobile | Cross-currency discharge at an agreed rate | `SettleSheet`, `RateField`, residual preview |
-| 15 | **Counterparty editor** | Mobile | Create person or company, set their main currency | `KindPicker`, `CurrencySelect` |
+| 15 | **Counterparty editor** | Mobile | Create person or company, set their settlement currency | `KindPicker`, `CurrencySelect` |
 | 16 | Accounts | Mobile | Register, balances, archive, opening balances. Card / cash / bank kinds | `AccountEditor`, `KindPicker` |
-| 17 | Settings · Currencies | Mobile | Main + subs, rate sources (`SPEC.md` §7.0) | `CurrencyList`, `RateSourcePicker`, main-currency change flow |
+| 17 | Settings · Currencies | Mobile | Currency list, pinned toggle set, rate sources (`SPEC.md` §7.0) | `CurrencyList`, `RateSourcePicker`, `PinToggle` |
 | 18 | **Settings · Exchange rates** | Mobile | Rate table by pair and date, manual override, sync history | `RateTable`, `RateEditor`, `SyncLog` |
 | 19 | Settings · Categories | Mobile | **122 categories, 13 collisions** need rename / merge / archive | `CategoryTree`, `MergeFlow` |
 | 20 | Settings · Rules | Mobile | Rule list, hit counts, edit, disable | `RuleEditor`, `RuleTestPanel` |
@@ -577,7 +583,7 @@ Ordered by dependency, then by `Design Spec.dc.html` §4.4.
 | 26 | **Debt overview** | Web | Totals both directions, ageing, per-counterparty drill-down | `DebtSummary`, `AgeingTable` |
 | 27 | Export | Web | The manifest asserting zero personal rows is a **design** problem | `WorkbookBuilder`, `SchemeSelector`, `ManifestCard` |
 | 28 | Tax view | Web | The exclusion guarantee needs to be legible | `SchemeTimeline`, KPiR column map, ryczałt rate chip |
-| 29 | Onboarding / first run | Both | Main currency, first account, migration import | `SetupWizard` |
+| 29 | Onboarding / first run | Both | Display currency, first account, migration import | `SetupWizard` |
 
 **29 screens, 8 designed.** The count roughly tripled from the original seven
 outstanding — mostly because Settings was one line item covering six distinct
@@ -695,13 +701,14 @@ order, where screens exist and components do not.
 
 Flagged rather than silently resolved, because both are decisions:
 
-**C1 · Main currency.** `Design Spec.dc.html` §1.2 states *"Main currency is
-PLN. Sub-currencies in priority order: USD, EUR, then BYN and GEL."*
-`SPEC.md` §1.3 says USD, which is what Money Manager actually holds. Both can
-be true — main currency is user-configurable (§7.0) and changing it is a
-supported backfill — but **migration needs to know which it targets.** If PLN,
-the migration sets main to PLN and re-bases every `amount_main`, which is a
-larger Phase 0 than currently specified.
+**~~C1 · Main currency~~ — dissolved.** `Design Spec.dc.html` §1.2 says PLN;
+`SPEC.md` said USD; Money Manager holds USD. The contradiction existed only
+because the design assumed a single reporting currency.
+
+There is now no main currency (`SPEC.md` §7.0). USD is the invisible **pivot**
+for rate storage — which is what Money Manager already holds, so migration
+needs no conversion — and PLN, USD and EUR are all pinned to the display
+toggle. Both documents were describing preferences that no longer conflict.
 
 **C2 · O1 is answered.** `Design Spec.dc.html` §5 resolves the open tax-form
 question as *all three* Polish schemes — skala, liniowy, and ryczałt. `SPEC.md`
