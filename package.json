@@ -20,7 +20,8 @@
     "mm:import": "pnpm --filter @waltning/migrate-mm import",
     "mm:verify": "pnpm --filter @waltning/migrate-mm verify",
     "mm:all": "pnpm mm:extract && pnpm mm:import && pnpm mm:verify",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "db:seed": "pnpm --filter @waltning/db seed"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
