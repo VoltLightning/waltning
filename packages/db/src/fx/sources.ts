@@ -25,16 +25,27 @@ export type FetchFn = (
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
+/**
+ * All date arithmetic is UTC. Using the local-time setters (`setDate`) while
+ * formatting with `toISOString` silently breaks across DST: a local "+1 day" is
+ * 23 or 25 real hours, so the UTC date repeats in spring and skips in autumn.
+ * That produced duplicate keys in a single insert batch, and only showed up on
+ * ranges long enough to contain a transition.
+ */
+const addDaysUTC = (d: Date, n: number) => {
+  const out = new Date(d);
+  out.setUTCDate(out.getUTCDate() + n);
+  return out;
+};
+
 /** NBP caps a single request at 367 days, so ranges are chunked. */
 async function* chunkRanges(from: string, to: string, days: number) {
-  let start = new Date(from);
-  const end = new Date(to);
+  let start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
   while (start <= end) {
-    const stop = new Date(start);
-    stop.setDate(stop.getDate() + days - 1);
+    const stop = addDaysUTC(start, days - 1);
     yield [isoDay(start), isoDay(stop > end ? end : stop)] as const;
-    start = new Date(stop);
-    start.setDate(start.getDate() + 1);
+    start = addDaysUTC(stop, 1);
   }
 }
 
@@ -106,9 +117,11 @@ export const ecb: FetchFn = async (currency, from, to) => {
 export const sources: Record<string, FetchFn> = { nbp, nbrb, nbg, ecb };
 
 function* eachDay(from: string, to: string) {
-  const end = new Date(to);
-  for (let d = new Date(from); d <= end; d.setDate(d.getDate() + 1)) {
+  const end = new Date(`${to}T00:00:00Z`);
+  let d = new Date(`${from}T00:00:00Z`);
+  while (d <= end) {
     yield isoDay(d);
+    d = addDaysUTC(d, 1);
   }
 }
 
