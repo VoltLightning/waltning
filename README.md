@@ -12,13 +12,17 @@ pipeline that grew up around it.
 | | |
 |---|---|
 | **[SPEC.md](SPEC.md)** | Architecture, data model, FX semantics, security, migration, tax layer, phasing |
-| **[DESIGN.md](DESIGN.md)** | Design system — tokens, components, states, accessibility |
-| **[FLOWS.md](FLOWS.md)** | 15 user journeys and specifications for all 29 screens |
+| **[docs/specification/](docs/specification/)** | The interface: principles, design system, 15 journeys, 29 screens |
 | **[TAXONOMY.md](TAXONOMY.md)** | Proposed category tree, derived from five years of transaction data |
 
 ## Status
 
-Specification. No implementation yet — Phase 0 (schema and migration) is next.
+Specification, with the data foundation built.
+
+**Done** — schema applied and its invariants verified against Postgres;
+taxonomy seeded (57 leaves); FX backfilled against a USD pivot from 2020-11.
+**Next** — specifying all 29 screens individually (`docs/specification/`),
+then the API and the app.
 
 ## What makes it different
 
