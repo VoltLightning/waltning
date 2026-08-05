@@ -114,9 +114,10 @@ S04 Today  ──tap +──→  S05 Quick add
 **The trail is the honest part.** Any machine-filled field states what was heard
 or read, in one line, with Undo (`DESIGN.md` P2). The draft is never a black box.
 
-⊗ **The largest gap in the product.** No design for: speech not understood, no
-network for extraction, extraction confidence below threshold, duplicate
-detected on save. All four occur on the daily path.
+✅ **Designed** — `Gaps.dc.html` G3. All four states: speech not understood
+(recording kept, keypad offered), offline extraction (queued, draft still
+editable), low confidence (marked **per field**, not per receipt), and a
+duplicate caught at save showing the row it matched.
 
 ---
 
@@ -333,9 +334,9 @@ you pay for the group
 clearing balance told you *that* something was unallocated; now it tells you
 *who*.
 
-⊗ The allocation screen itself is undesigned — splitting one transaction across
-N counterparties with per-share amounts is not the same control as a category
-split.
+✅ **Designed** — `Gaps.dc.html` G2. Even / custom / shares, with the
+unallocated remainder always visible: an allocation that does not sum is the
+commonest way a clearing balance quietly stops meaning anything.
 
 ---
 
@@ -801,8 +802,8 @@ Walking the journeys surfaced nine things the inventory did not.
 | # | Gap | Journey | Severity |
 |---|---|---|---|
 | G1 | **Failed migration** — the wizard cannot just continue when balances do not reconcile | J1, J15 | **Blocking** |
-| G2 | **Allocation screen** — splitting one transaction across N counterparties is not the category-split control | J8 | **Blocking** for J8 |
-| G3 | Quick-add error states — speech, network, low confidence, duplicate | J2 | **Blocking** — daily path |
+| ~~G2~~ | ~~Allocation screen~~ | J8 | **Designed** — `Gaps.dc.html` |
+| ~~G3~~ | ~~Quick-add error states~~ | J2 | **Designed** — `Gaps.dc.html` |
 | G4 | Import upload and parsing screens (S02a, S02b) were assumed but never specified | J4 | High |
 | G5 | Unreadable photo | J3 | High |
 | G6 | Agent thinking/streaming, against 3–15 s turns | J9 | High |

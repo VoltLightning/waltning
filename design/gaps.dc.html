@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css"><style>
+body{margin:0;--gbg:#f2f6f1;--gink:#1a2620;--gmut:#5f7168;--g50:#f2f9f4;--g100:#e4f1e8;--g200:#cbe6d6;--g300:#a3d2b8;--g400:#75bd99;--g500:#48a479;--g600:#2f7d5a;--g700:#215f45;--g800:#164531;--g900:#0e2e20;--amb:#f8eed9;--ambink:#856223;--neg:#a8452f;--negbg:#f6e7e3;background:#e6ece5;font-family:Figtree,-apple-system,system-ui,sans-serif;color:var(--gink)}
+.sb-dsp{font-family:"Source Serif 4",Georgia,serif;font-weight:600;letter-spacing:-.02em;color:var(--gink)}
+.sb-k{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gmut)}
+.board{padding:44px 52px;border-bottom:1px solid rgba(14,46,32,.09)}
+.hd{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.id{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--g900);color:#fff}
+.note{display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.5;color:var(--gmut);max-width:76ch;margin:0 0 20px;flex-wrap:wrap}
+.pin{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;background:var(--g600);color:#fff;font-size:11px;font-weight:700;flex:none;margin-top:1px}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.ph{width:300px;height:620px;background:var(--gbg);border-radius:26px;box-shadow:0 8px 30px rgba(14,46,32,.14);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.phh{background:linear-gradient(160deg,var(--g900),var(--g800));color:#fff;padding:16px 18px 14px}
+.phb{padding:16px 18px;flex:1;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.cap{font-size:11.5px;font-weight:700;color:var(--gmut);margin:10px 0 0;text-align:center;letter-spacing:.02em}
+.amt{font-family:"Source Serif 4",serif;font-weight:600;font-variant-numeric:tabular-nums lining-nums}
+.card{background:#fff;border-radius:16px;padding:13px 14px;box-shadow:0 6px 18px rgba(18,48,34,.05)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:9px 12px;border-radius:999px;background:var(--g100);color:var(--g700);min-height:44px;box-sizing:border-box}
+.chip.warn{background:var(--amb);color:var(--ambink)}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--g100);color:var(--g700)}
+.tag.warn{background:var(--amb);color:var(--ambink)}
+.tag.neg{background:var(--negbg);color:var(--neg)}
+.btn{display:block;text-align:center;font-size:14px;font-weight:700;padding:13px;border-radius:13px;background:var(--g600);color:#fff;min-height:44px;box-sizing:border-box}
+.btn.sec{background:transparent;color:var(--g700);border:1.5px solid var(--g200)}
+.btn.gho{background:transparent;color:var(--gmut);font-weight:600}
+.trail{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;line-height:1.45;color:var(--gmut);background:var(--g50);border-radius:11px;padding:9px 11px}
+.undo{color:var(--g700);font-weight:700;white-space:nowrap}
+.err{background:var(--negbg);border-radius:13px;padding:12px 13px}
+.warnbox{background:var(--amb);border-radius:13px;padding:12px 13px}
+.lbl{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--gmut)}
+.mini{font-size:11.5px;color:var(--gmut);line-height:1.5}
+.split{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0}
+.bar{height:7px;border-radius:99px;background:var(--g100);overflow:hidden}
+.bar > i{display:block;height:100%;background:var(--g500)}
+</style></helmet>
+
+<div style="padding:52px 52px 22px">
+<div class="sb-k">Blocking gaps · v1</div>
+<div class="sb-dsp" style="font-size:34px;line-height:1.1;margin-top:4px">The states nobody designed</div>
+<p style="margin:10px 0 0;font-size:14px;line-height:1.6;color:var(--gmut);max-width:60ch">Two gaps found by walking the journeys rather than listing the screens. G3 sits on the path used several times a day; G2 makes the clearing account better than the one it replaces. Both were <strong>⊗</strong> in FLOWS.md.</p>
+</div>
+
+<!-- ─────────────────────────── G3 ─────────────────────────── -->
+<section class="board">
+<div class="hd"><span class="id">G3</span><span class="sb-dsp" style="font-size:21px">Quick add — the four failure states</span><span class="sb-k" style="font-weight:600">392 × 812 · J2, several times a day</span></div>
+<p class="note"><span class="pin">1</span>Speech not understood keeps the recording and offers the keypad — never an empty draft. <span class="pin">2</span>Offline extraction queues and says when it will run; the draft stays editable meanwhile. <span class="pin">3</span>Low confidence is per-field, not per-receipt — 0.62 looks different from 0.99 and lands on the field, not a banner. <span class="pin">4</span>A duplicate is caught at Save and shows the row it matched, because the answer is usually "yes, I bought coffee twice".</p>
+
+<div class="row">
+
+  <!-- 1 · speech not understood -->
+  <div>
+  <div class="ph">
+    <div class="phh"><div style="font-size:11px;opacity:.75;font-weight:600">QUICK ADD</div>
+      <div class="amt" style="font-size:30px;margin-top:6px">0,00 zł</div></div>
+    <div class="phb">
+      <div class="err">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <i class="ph-fill ph-microphone-slash" style="color:var(--neg);font-size:17px;margin-top:1px"></i>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--neg)">Didn't catch that</div>
+            <div class="mini" style="margin-top:3px">Heard 1.2 s of audio, no amount in it.</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="lbl">What you said</div>
+        <div style="font-size:12.5px;margin-top:5px;color:var(--gmut);font-style:italic">"…przy kasie… coffee…"</div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <span class="chip" style="font-size:11.5px"><i class="ph-fill ph-play"></i> Replay</span>
+          <span class="chip" style="font-size:11.5px"><i class="ph-fill ph-arrow-counter-clockwise"></i> Again</span>
+        </div>
+      </div>
+      <div class="mini">The recording is kept until you save or discard — a retry never starts from nothing.</div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
+        <div class="btn">Type it instead</div>
+        <div class="btn gho">Discard</div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">1 · speech not understood</p>
+  </div>
+
+  <!-- 2 · offline -->
+  <div>
+  <div class="ph">
+    <div class="phh"><div style="font-size:11px;opacity:.75;font-weight:600">QUICK ADD</div>
+      <div class="amt" style="font-size:30px;margin-top:6px">— zł</div></div>
+    <div class="phb">
+      <div class="warnbox">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <i class="ph-fill ph-cloud-slash" style="color:var(--ambink);font-size:17px;margin-top:1px"></i>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--ambink)">Offline — reading later</div>
+            <div class="mini" style="margin-top:3px;color:var(--ambink)">Queued 14:06. Runs when you reconnect.</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;gap:10px;align-items:center">
+          <div style="width:44px;height:56px;border-radius:7px;background:var(--g200);display:grid;place-items:center"><i class="ph-fill ph-receipt" style="color:var(--g700);font-size:19px"></i></div>
+          <div style="flex:1">
+            <div style="font-size:12.5px;font-weight:600">Receipt captured</div>
+            <div class="mini">1 of 1 waiting · 214 kB</div>
+          </div>
+          <span class="tag warn">waiting</span>
+        </div>
+      </div>
+      <div class="mini">You can fill the amount and category now — extraction fills what you leave blank.</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <span class="chip">Account</span><span class="chip">Category</span><span class="chip">Today</span>
+      </div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
+        <div class="btn">Save as draft</div>
+        <div class="mini" style="text-align:center">Nothing is lost if you close the app.</div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">2 · no network for extraction</p>
+  </div>
+
+  <!-- 3 · low confidence -->
+  <div>
+  <div class="ph">
+    <div class="phh"><div style="font-size:11px;opacity:.75;font-weight:600">CHECK THIS</div>
+      <div class="amt" style="font-size:30px;margin-top:6px">251,05 zł</div>
+      <div style="font-size:11px;opacity:.8;margin-top:3px">62,40 $ · 4,0231 · receipt date</div></div>
+    <div class="phb">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="split" style="padding:11px 13px;border-bottom:1px solid var(--g100)">
+          <div><div class="lbl">Merchant</div><div style="font-size:13px;font-weight:600;margin-top:2px">Biedronka</div></div>
+          <span class="tag">0.98</span>
+        </div>
+        <div class="split" style="padding:11px 13px;border-bottom:1px solid var(--g100);background:var(--amb)">
+          <div><div class="lbl" style="color:var(--ambink)">Total</div>
+            <div style="font-size:13px;font-weight:700;margin-top:2px;color:var(--ambink);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px">62,40</div></div>
+          <span class="tag warn">0.62 · check</span>
+        </div>
+        <div class="split" style="padding:11px 13px">
+          <div><div class="lbl">Date</div><div style="font-size:13px;font-weight:600;margin-top:2px">4 Aug 2026</div></div>
+          <span class="tag">0.95</span>
+        </div>
+      </div>
+      <div class="mini"><strong style="color:var(--ambink)">One field needs you.</strong> The rest was read cleanly — only the uncertain field is marked, and it is the field itself, not a banner over the screen.</div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><div class="lbl">Confidence</div><div class="bar" style="margin-top:5px"><i style="width:62%;background:var(--ambink)"></i></div></div>
+      </div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
+        <div class="btn">Looks right — save</div>
+        <div class="btn sec">Open the photo</div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">3 · extraction below threshold</p>
+  </div>
+
+  <!-- 4 · duplicate -->
+  <div>
+  <div class="ph">
+    <div class="phh"><div style="font-size:11px;opacity:.75;font-weight:600">BEFORE SAVING</div>
+      <div class="amt" style="font-size:30px;margin-top:6px">48,90 zł</div></div>
+    <div class="phb">
+      <div class="warnbox">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <i class="ph-fill ph-copy" style="color:var(--ambink);font-size:17px;margin-top:1px"></i>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--ambink)">Possibly already recorded</div>
+            <div class="mini" style="margin-top:3px;color:var(--ambink)">Same amount and account, 40 minutes apart.</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="lbl">Existing</div>
+        <div class="split" style="padding:7px 0 0">
+          <div><div style="font-size:13px;font-weight:600">Coffee</div>
+            <div class="mini">Today 09:12 · Cash · Eating out</div></div>
+          <div class="amt" style="font-size:14px">48,90</div>
+        </div>
+      </div>
+      <div class="card" style="border:1.5px solid var(--g500)">
+        <div class="lbl" style="color:var(--g700)">About to save</div>
+        <div class="split" style="padding:7px 0 0">
+          <div><div style="font-size:13px;font-weight:600">Coffee</div>
+            <div class="mini">Today 09:52 · Cash · Eating out</div></div>
+          <div class="amt" style="font-size:14px">48,90</div>
+        </div>
+      </div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
+        <div class="btn">Save both — I bought two</div>
+        <div class="btn sec">It's the same one, discard</div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">4 · duplicate caught at save</p>
+  </div>
+
+</div>
+</section>
+
+<!-- ─────────────────────────── G2 ─────────────────────────── -->
+<section class="board" style="border-bottom:0">
+<div class="hd"><span class="id">G2</span><span class="sb-dsp" style="font-size:21px">Allocate a group expense</span><span class="sb-k" style="font-weight:600">392 × 812 · J8, weekly</span></div>
+<p class="note"><span class="pin">1</span>Splitting across <em>people</em> is a different control from splitting across categories — each share becomes a receivable against that person. <span class="pin">2</span>Even, custom and by-share, with the remainder always visible so it cannot silently round away. <span class="pin">3</span>The clearing balance is the point: it should reach zero, and the screen says how far off it is. <span class="pin">4</span>Afterwards the unsettled banner names <em>who</em>, which the account model could never do.</p>
+
+<div class="row">
+
+  <!-- allocate -->
+  <div>
+  <div class="ph">
+    <div class="phh"><div style="font-size:11px;opacity:.75;font-weight:600">ALLOCATE</div>
+      <div class="amt" style="font-size:30px;margin-top:6px">640,00 zł</div>
+      <div style="font-size:11px;opacity:.8;margin-top:3px">Dinner · Clearing · PLN</div></div>
+    <div class="phb">
+      <div style="display:flex;gap:6px">
+        <span class="chip" style="background:var(--g600);color:#fff;flex:1;justify-content:center">Even</span>
+        <span class="chip" style="flex:1;justify-content:center">Custom</span>
+        <span class="chip" style="flex:1;justify-content:center">Shares</span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="split" style="padding:11px 13px;border-bottom:1px solid var(--g100)">
+          <div style="display:flex;gap:9px;align-items:center">
+            <span style="width:29px;height:29px;border-radius:50%;background:var(--g200);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--g800)">VP</span>
+            <div><div style="font-size:13px;font-weight:600">You</div><div class="mini">paid</div></div>
+          </div>
+          <div class="amt" style="font-size:13.5px">160,00</div>
+        </div>
+        <div class="split" style="padding:11px 13px;border-bottom:1px solid var(--g100)">
+          <div style="display:flex;gap:9px;align-items:center">
+            <span style="width:29px;height:29px;border-radius:50%;background:var(--g100);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--g700)">SL</span>
+            <div><div style="font-size:13px;font-weight:600">S. L.</div><div class="mini">owes you</div></div>
+          </div>
+          <div class="amt" style="font-size:13.5px">160,00</div>
+        </div>
+        <div class="split" style="padding:11px 13px;border-bottom:1px solid var(--g100)">
+          <div style="display:flex;gap:9px;align-items:center">
+            <span style="width:29px;height:29px;border-radius:50%;background:var(--g100);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--g700)">IK</span>
+            <div><div style="font-size:13px;font-weight:600">I. K.</div><div class="mini">owes you</div></div>
+          </div>
+          <div class="amt" style="font-size:13.5px">160,00</div>
+        </div>
+        <div class="split" style="padding:11px 13px">
+          <div style="display:flex;gap:9px;align-items:center">
+            <span style="width:29px;height:29px;border-radius:50%;background:var(--g100);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--g700)">+</span>
+            <div style="font-size:13px;font-weight:600;color:var(--g700)">Add someone</div>
+          </div>
+        </div>
+      </div>
+      <div class="split" style="padding:0">
+        <span class="mini"><strong>Unallocated</strong></span>
+        <span class="amt" style="font-size:13.5px;color:var(--g600)">0,00</span>
+      </div>
+      <div class="mini">Your own share is spending. The other three become receivables — nothing is owed until it is allocated.</div>
+      <div style="margin-top:auto"><div class="btn">Allocate to 3 people</div></div>
+    </div>
+  </div>
+  <p class="cap">1 · split across people</p>
+  </div>
+
+  <!-- remainder -->
+  <div>
+  <div class="ph">
+    <div class="phh"><div style="font-size:11px;opacity:.75;font-weight:600">ALLOCATE</div>
+      <div class="amt" style="font-size:30px;margin-top:6px">640,00 zł</div>
+      <div style="font-size:11px;opacity:.8;margin-top:3px">Custom amounts</div></div>
+    <div class="phb">
+      <div style="display:flex;gap:6px">
+        <span class="chip" style="flex:1;justify-content:center">Even</span>
+        <span class="chip" style="background:var(--g600);color:#fff;flex:1;justify-content:center">Custom</span>
+        <span class="chip" style="flex:1;justify-content:center">Shares</span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="split" style="padding:11px 13px;border-bottom:1px solid var(--g100)">
+          <div style="font-size:13px;font-weight:600">You</div>
+          <div class="amt" style="font-size:13.5px">200,00</div>
+        </div>
+        <div class="split" style="padding:11px 13px;border-bottom:1px solid var(--g100)">
+          <div style="font-size:13px;font-weight:600">S. L.</div>
+          <div class="amt" style="font-size:13.5px">180,00</div>
+        </div>
+        <div class="split" style="padding:11px 13px">
+          <div style="font-size:13px;font-weight:600">I. K.</div>
+          <div class="amt" style="font-size:13.5px">180,00</div>
+        </div>
+      </div>
+      <div class="warnbox split" style="padding:11px 13px">
+        <div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--ambink)">80,00 zł unallocated</div>
+          <div class="mini" style="color:var(--ambink)">Allocate it or it stays in clearing.</div>
+        </div>
+        <span class="tag warn">fix</span>
+      </div>
+      <div class="mini">The remainder is never rounded away silently — an allocation that does not sum is the commonest way a clearing balance quietly stops meaning anything.</div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
+        <div class="btn sec">Spread the remainder evenly</div>
+        <div class="btn" style="background:var(--g300);color:var(--g800)">Allocate anyway</div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">2 · the remainder is visible</p>
+  </div>
+
+  <!-- after -->
+  <div>
+  <div class="ph">
+    <div class="phh"><div style="font-size:11px;opacity:.75;font-weight:600">CLEARING · PLN</div>
+      <div class="amt" style="font-size:30px;margin-top:6px">0,00 zł</div>
+      <div style="font-size:11px;opacity:.8;margin-top:3px">settled — trending to zero</div></div>
+    <div class="phb">
+      <div class="card">
+        <div class="lbl">Now owed to you</div>
+        <div class="split" style="padding:8px 0 0">
+          <div style="display:flex;gap:9px;align-items:center">
+            <span style="width:27px;height:27px;border-radius:50%;background:var(--g100);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--g700)">SL</span>
+            <div style="font-size:13px;font-weight:600">S. L.</div>
+          </div>
+          <div class="amt" style="font-size:13.5px">160,00</div>
+        </div>
+        <div class="split" style="padding:8px 0 0">
+          <div style="display:flex;gap:9px;align-items:center">
+            <span style="width:27px;height:27px;border-radius:50%;background:var(--g100);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--g700)">IK</span>
+            <div style="font-size:13px;font-weight:600">I. K.</div>
+          </div>
+          <div class="amt" style="font-size:13.5px">160,00</div>
+        </div>
+      </div>
+      <div class="card" style="background:var(--g50)">
+        <div style="font-size:12.5px;line-height:1.55"><strong>Before:</strong> "something is unallocated".<br><strong>Now:</strong> two people, named, with amounts.</div>
+      </div>
+      <div class="mini">This is the capability the account model could not provide. A clearing balance used to say <em>that</em> something was unsettled; it now says <em>who</em>.</div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
+        <div class="btn sec">Remind them</div>
+        <div class="btn gho">Done</div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">3 · afterwards — who, not what</p>
+  </div>
+
+</div>
+</section>
+</x-dc>
+</body>
+</html>
