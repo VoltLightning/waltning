@@ -63,6 +63,13 @@ async function getJson(url: string, attempt = 0): Promise<unknown> {
       signal: AbortSignal.timeout(20_000),
     });
     if (res.status === 404) return null; // NBP returns 404 for empty ranges
+    // NBG answers a self-redirect once its bot defence trips — retrying is
+    // futile and the honest report is "rate-limited", not "fetch failed".
+    if (res.redirected || (res.status >= 300 && res.status < 400)) {
+      throw new Error(
+        `rate-limited (redirect loop) — back off and retry later: ${url}`,
+      );
+    }
     if (res.status === 429 || res.status >= 500) {
       throw new Error(`${res.status} ${res.statusText}`);
     }
