@@ -37,10 +37,14 @@ async function main() {
   const pivot = pivotRow[0]?.code;
   if (!pivot) throw new Error("no pivot currency — run the seed first");
 
-  const targets = await db
+  /** Optional filter, so one failed currency can be retried alone. */
+  const only = process.argv[4]?.toUpperCase().split(",").filter(Boolean);
+
+  const all = await db
     .select({ code: currencies.code, source: currencies.rateSource })
     .from(currencies)
     .where(and(eq(currencies.archived, false), sql`${currencies.isPivot} = false`));
+  const targets = only ? all.filter((t) => only.includes(t.code)) : all;
 
   console.log(`backfilling ${from} → ${to}, pivot ${pivot}\n`);
 

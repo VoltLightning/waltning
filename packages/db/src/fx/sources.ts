@@ -49,11 +49,30 @@ async function* chunkRanges(from: string, to: string, days: number) {
   }
 }
 
-async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (res.status === 404) return null; // NBP returns 404 for empty ranges
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
-  return res.json();
+/**
+ * Retried with backoff. NBRB and NBG publish one day per call, so a full
+ * backfill is ~2,000 sequential requests per currency — at that volume a
+ * transient failure is close to certain, and losing the whole run to one
+ * dropped connection is not acceptable.
+ */
+async function getJson(url: string, attempt = 0): Promise<unknown> {
+  const MAX = 4;
+  try {
+    const res = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (res.status === 404) return null; // NBP returns 404 for empty ranges
+    if (res.status === 429 || res.status >= 500) {
+      throw new Error(`${res.status} ${res.statusText}`);
+    }
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+    return await res.json();
+  } catch (e) {
+    if (attempt >= MAX) throw e;
+    await new Promise((r) => setTimeout(r, 2 ** attempt * 400));
+    return getJson(url, attempt + 1);
+  }
 }
 
 /** Narodowy Bank Polski — the rates Polish tax filing uses. PLN per USD. */
@@ -129,24 +148,38 @@ function* eachDay(from: string, to: string) {
  * Weekends and holidays have no published rate. Carrying the last one forward
  * is the standard convention and what NBP itself does — and it is marked as
  * such, so a carried figure is never mistaken for a quoted one.
+ *
+ * But carrying is bounded. When ECB delisted RUB in March 2022 the naive fill
+ * produced 1,754 consecutive days holding a single 2022 figure, presented
+ * exactly like a weekend gap. A four-year carry is not a gap, it is a dead
+ * source — and §7.6 says surface the failure rather than carry silently.
+ *
+ * Beyond MAX_CARRY_DAYS nothing is written, so the rate is visibly absent
+ * rather than confidently wrong.
  */
+export const MAX_CARRY_DAYS = 10;
+
 export function fillForward(
   rates: DailyRate[],
   from: string,
   to: string,
+  maxCarry = MAX_CARRY_DAYS,
 ): { date: string; rate: string; carried: boolean }[] {
   const byDate = new Map(rates.map((r) => [r.date, r.rate]));
   const out: { date: string; rate: string; carried: boolean }[] = [];
   let last: string | null = null;
+  let carriedFor = 0;
   for (const d of eachDay(from, to)) {
     const quoted = byDate.get(d);
     if (quoted != null) {
       last = quoted;
+      carriedFor = 0;
       out.push({ date: d, rate: quoted, carried: false });
-    } else if (last != null) {
+    } else if (last != null && carriedFor < maxCarry) {
+      carriedFor++;
       out.push({ date: d, rate: last, carried: true });
     }
-    // Before the first quote there is nothing to carry — skipped, not invented.
+    // Before the first quote, or past the carry limit: skipped, not invented.
   }
   return out;
 }
