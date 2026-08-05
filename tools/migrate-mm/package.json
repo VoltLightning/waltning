@@ -1,0 +1,16 @@
+{
+  "name": "@waltning/migrate-mm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "extract": "python3 extract.py",
+    "import": "tsx src/import.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@waltning/db": "workspace:*",
+    "decimal.js": "^10.6.0",
+    "drizzle-orm": "^0.45.2"
+  }
+}

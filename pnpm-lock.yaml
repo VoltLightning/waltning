@@ -34,6 +34,18 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  tools/migrate-mm:
+    dependencies:
+      '@waltning/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      decimal.js:
+        specifier: ^10.6.0
+        version: 10.6.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+
 packages:
 
   '@drizzle-team/brocli@0.10.2':
