@@ -8,7 +8,9 @@ import { fillForward } from "../sources.ts";
 
 const from = "2020-11-25";
 const to = "2026-08-04";
-const filled = fillForward([{ date: from, rate: "1" }], from, to);
+// Carry is uncapped here on purpose: this checks date iteration, not carry
+// policy, and the default cap would truncate the range under test.
+const filled = fillForward([{ date: from, rate: "1" }], from, to, Infinity);
 const dates = filled.map((r) => r.date);
 const uniq = new Set(dates);
 const expected =
