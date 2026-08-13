@@ -50,3 +50,9 @@ coming as well as what happened. Projected cells are outlined rather than
 filled, carry a `scheduled` tag, and are **excluded from any total labelled
 actual**. A total that silently mixes posted and projected amounts is a bug,
 not a feature.
+
+**`<PeriodHeader>` therefore carries two figures, never one.** The actual total
+is unqualified; beneath it, in the same muted dashed treatment as the projected
+cells, `plus 4 200,00 scheduled`. They are never summed, and no forecast of
+where the period will land is offered — a prediction set in the same typography
+as a measurement is precisely the conflation this rule exists to prevent.

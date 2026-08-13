@@ -2,6 +2,7 @@
 
 **Frequency** several times a day | weekly | monthly | annually | once
 **Surface** mobile | web | both · **Screens** S00, S00, S00
+**Status** migrated | specified
 
 ---
 
