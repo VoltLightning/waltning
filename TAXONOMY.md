@@ -4,14 +4,20 @@ A proposed replacement for Money Manager's 122 categories, derived from what
 7,874 transactions actually say, plus the old→new mapping so history can be
 translated rather than imported verbatim.
 
-**Status:** proposal, for editing.
-**Companion to:** [`SPEC.md`](SPEC.md) §6.3 · [`DESIGN.md`](DESIGN.md) · [`FLOWS.md`](FLOWS.md) J12
+**Status:** seeded. The tree below is live in the database (59 leaves, 15
+groups); the *mapping* in §4 is still a proposal, because no history has been
+translated through it yet.
+**Companion to:** [`SPEC.md`](SPEC.md) §6.3 ·
+[`docs/specification/`](docs/specification/) ·
+[J12 · Maintain categories](docs/specification/flows/J12-maintain-categories.md)
 
 ---
 
 ## 1. What the data says
 
 Measured across 3,763 expense and 498 income transactions, 2020-11 → 2026-03.
+These are **active rows only**; `SPEC.md` Appendix A counts all 7,874 including
+the 253 deleted, which is why its by-type figures run slightly higher.
 
 | Finding | Figure |
 |---|---|
@@ -97,7 +103,7 @@ from employment income and carry its own ryczałt rate.
 `◆` = group (not assignable) · `·` = leaf (assignable)
 Percentages are the historical share the leaf inherits.
 
-### Inflows — 10 leaves, split by whether they were *earned*
+### Inflows — 11 leaves, split by whether they were *earned*
 
 `SPEC.md` §6.7: income is what you earned. Everything else raises your balance
 without being income.
@@ -121,6 +127,7 @@ without being income.
 
   · Gift received           0.2%   ← from anyone: family, friends, birthdays
   · Refund
+  · Borrowed                       ← money you will give back
   · Repayment received      1.0%   ← a debt coming back is not a gain
   · Other inflow            0.1%
 ```
@@ -135,7 +142,7 @@ ledger that reaches a tax output at all.
 Dropped: `Base saving`, `Allowance`, `My debt` — stale, and all three were
 transfers rather than inflows.
 
-### Expense — 46 leaves
+### Expense — 48 leaves
 
 ```
 ◆ Home                                        48.2%  ← was Household + Rental
@@ -202,14 +209,29 @@ transfers rather than inflows.
   · ZUS & business tax
   · Business other                             0.5%
 
-◆ Transfers out                                0.1%
+◆ Debt & giving                                0.1%
+  · Lent out                                         ← money you expect back
   · Repayment made                             0.1%
   · Charity
 
 · Uncategorized                                3.7%   ← was "Other", 194 rows
 ```
 
-**46 expense leaves, 9 income leaves. 55 total, down from 122.**
+**48 expense leaves** — 47 under a group, plus `Uncategorized` at top level —
+**and 11 income leaves. 59 assignable leaves across 15 groups, down from 122
+entries of which 41 were never used.**
+
+`Lent out` and `Borrowed` complete the debt lifecycle. Receivables sit outside
+net worth (`SPEC.md` §6.6), so lending is a real outgoing and borrowing a real
+inflow — and the pairing means *"how much did I lend this year"* is separable
+from *"how much came back"*, which one shared leaf could not answer. Neither is
+earnings, by construction: `Borrowed` sits under `Other inflows`.
+
+One refinement was made when this was seeded: `EARNINGS` and `UNEARNED` are
+drawn above as top-level groups, which would put income three levels deep and
+break R2. That split is not hierarchy — it is the `is_earnings` flag. The four
+income groups in the database are `Business revenue`, `Employment`, `Returns`,
+and `Other inflows`.
 
 ---
 
@@ -260,16 +282,16 @@ enumerated.
 | Celebration | Social › Celebrations |
 | Vacation *(all)*, Travelling, Travel | Travel › * by nature |
 | Banking | Financial › Bank fees & commission |
-| Debt *(expense)*, My debt *(expense)* | Transfers out › Repayment made |
-| Charity | Transfers out › Charity |
+| Debt *(expense)*, My debt *(expense)* | Debt & giving › Repayment made |
+| Charity | Debt & giving › Charity |
 | Self-development, Education › * | Personal › Education |
 | Hobbies | Personal › Hobbies |
 | Fines, Visa, Work | **Uncategorized** — rare, revisit individually |
 | Salary | Employment › Salary |
-| Bonus | Employment › Bonus |
-| Debt *(income)*, My debt *(income)* | Personal income › Repayment received |
-| Gift *(income)* | Personal income › Gift received |
-| Other *(income)*, Petty cash | Personal income › Other income |
+| Bonus | Employment › Bonus & equity |
+| Debt *(income)*, My debt *(income)* | Other inflows › Repayment received |
+| Gift *(income)* | Other inflows › Gift received |
+| Other *(income)*, Petty cash | Other inflows › Other inflow |
 | Base saving, Allowance | **Not migrated** — transfers, not income |
 
 ### 4.2 Rules for the tail
@@ -300,14 +322,14 @@ to the *ours* total, and it keeps a real expense category — most likely
 `Home › Renovation & building`. **Nothing is lost and no total drops**; a
 second total appears alongside the first.
 
-An earlier draft of this document mapped it to `Transfers out` and claimed your
+An earlier draft of this document mapped it to `Transfers out` (now `Debt & giving`) and claimed your
 historical spending would fall by 15.3%. That was wrong, and followed from
 modelling shared money as excluded rather than as separately aggregated.
 
 **`Uncategorized` is deliberate.** 194 transactions currently sit in `Other`.
 Renaming it to `Uncategorized` makes it a **queue**, not a destination — it
 should visibly shrink over time, and the agent can propose reclassifications
-in bulk (`FLOWS.md` J12). Calling it `Other` made it feel like a valid answer.
+in bulk (J12). Calling it `Other` made it feel like a valid answer.
 
 ---
 
@@ -341,8 +363,11 @@ the inherited categories.
 
 **Also open**
 
-- Is `Business revenue` live yet, or anticipated? It shapes whether the ryczałt
-  rate field is needed at build time or later.
+- ~~Is `Business revenue` live yet, or anticipated?~~ **Answered: live.** The
+  JDG is trading and revenue rows exist today, so the per-row ryczałt rate,
+  counterparty NIP and KSeF id are needed **at build time**, not deferred. See
+  `SPEC.md` §13.6 and §16 — this moves the revenue side of the tax layer out of
+  the last phase.
 - Do you want `Uncategorized` to block anything — a nag on the dashboard, or
   silent?
 - Any leaves here you would never use, and any missing that you have wanted?

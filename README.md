@@ -19,10 +19,18 @@ pipeline that grew up around it.
 
 Specification, with the data foundation built.
 
-**Done** — schema applied and its invariants verified against Postgres;
-taxonomy seeded (57 leaves); FX backfilled against a USD pivot from 2020-11.
-**Next** — specifying all 29 screens individually (`docs/specification/`),
-then the API and the app.
+**Done** — schema applied to Postgres and its invariants verified; taxonomy
+seeded (57 leaves live, 59 in the seed pending a re-run); FX backfilled against
+a USD pivot from 2020-11 — 8,803 rate-days, complete for PLN, EUR, GBP and BYN.
+
+**Known gaps** — GEL holds 11 of 2,080 days (NBG rate-limits aggressively); RUB
+stops at 2022-03-11, where ECB delisted it. The Money Manager import has been
+written but not yet run, so there are no accounts or transactions.
+
+**Next** — specifying the interface (`docs/specification/`), then the API and
+the app. Specification comes first deliberately: the pass that produced this
+spec found twenty defects in the model, and every one was cheaper to fix as
+prose than as a migration.
 
 ## What makes it different
 
