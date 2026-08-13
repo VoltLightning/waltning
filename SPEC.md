@@ -187,8 +187,8 @@ Explicitly out of scope. Each is a decision, not an oversight.
               └───────────────┬───────────────────┘
                               │ outbound only
                     ┌─────────▼──────────┐
-                    │  api.anthropic.com │
-                    │  claude-opus-5     │
+                    │  model provider(s) │
+                    │  per surface (§11.4)│
                     │  FX rate provider  │
                     └────────────────────┘
 ```
@@ -294,7 +294,7 @@ Single user, but real. Tailscale is the perimeter; this stands behind it.
 
 | Secret | Where it lives | Never |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Pi environment, injected by Compose | App bundle, git, or a prompt |
+| Model provider key(s) | Pi environment, injected by Compose. One per configured provider (§11.4) | App bundle, git, or a prompt |
 | Postgres password | Docker secret / `.env` (0600, gitignored) | Committed |
 | Session signing key | Generated on first boot, persisted to a mounted volume | Hard-coded |
 | Backup encryption key | `age` key on a hardware token, plus a paper copy off-site | On the Pi alone |
@@ -1449,7 +1449,7 @@ alongside `rule_applied`. Editing a rule afterwards changes future
 classification and cannot rewrite the record of what happened — which is what
 keeps the audit trail (§6.1) honest about machine-classified rows.
 
-**Model tier** uses `claude-opus-5` with:
+**Model tier** — the configured `classify` model (§11.4), with:
 
 - Account list, full category tree, and active rules in the system prompt
   behind a `cache_control` breakpoint — the taxonomy is cache-written once and
@@ -1500,7 +1500,7 @@ mutated, so a reparse after a prompt change is always possible.
 ### 10.1 Flow
 
 ```
-camera → local queue (SQLite) → upload → claude-opus-5 vision
+camera → local queue (SQLite) → upload → the configured `receipt` model
        → structured extraction → draft transaction → confirm → commit
 ```
 
@@ -1676,14 +1676,99 @@ and make the state you are in obvious at a glance.
 `audit_log` marks agent-originated changes with `actor = 'agent'`. Sessions are
 retained as an audit trail.
 
-### 11.4 Model configuration
+### 11.4 Four model surfaces — one agent, three extractors
 
-- `claude-opus-5`; adaptive thinking (on by default on this model).
-- `effort: "high"` for analysis, `"medium"` for routine logging turns.
-- Context carries the category tree, account list, and recent activity — not all
+The system makes four kinds of model call, and treating them as one thing is a
+mistake. Only one of them is an agent.
+
+| Surface | Shape | Tools | Reviewed by |
+|---|---|---|---|
+| **Receipt** (§10.2) | image → JSON schema, one shot | — | A draft you save in seconds |
+| **Classification** (§9.2) | text batch → JSON schema, one shot | — | Bulk accept above a threshold |
+| **Voice** (J2, S08) | audio → text → intents, one shot | — | A `DiffCard` per intent |
+| **Agent** (§11) | multi-turn tool loop | ✅ registry | A `DiffCard` per write |
+
+The first three are **stateless extractors**: schema-constrained, no tool
+access, no conversation, no memory. They take input and return validated JSON.
+That makes each one independently swappable and — more usefully —
+**independently benchmarkable against a fixture set offline**, which the agent
+is not.
+
+#### Model quality matters inversely to how much review the output gets
+
+The instinct is to buy the best model for the chat surface. That is backwards
+here.
+
+Every agent write passes a gate you tap (§11.2), so a weak proposal costs a
+decline — annoying, never corrupting. But import classification is **bulk
+accepted** above a confidence threshold, and a receipt fills a draft saved in
+under ten seconds. Those are the paths where a mediocre model writes wrong data
+into the ledger without anyone reading it.
+
+So: **spend on the extractors, economise on the agent.** Receipt, classification
+and voice carry the quality bar; the conversational agent is the one surface
+that can afford a smaller model, because it is the one whose every output is
+already read by a human before it takes effect.
+
+#### The model is configuration, per surface
+
+```
+models   surface (receipt | classify | voice | agent)
+         provider, model_id, effort, max_tokens
+```
+
+Nothing in the ledger, the registry or the UI knows which model answered. Four
+independent choices, changeable without a migration, and comparable by
+swapping one row.
+
+#### Cost is not the constraint at this volume
+
+Measured against ~2,000 transactions, ~200 receipts and ~200 agent turns a
+year, total annual model spend runs between roughly **$0.50 and $25** depending
+entirely on which tier is chosen — and stays under $250 at ten times the usage
+on the most expensive option.
+
+This retires the assumption behind **R7**. The reasons to prefer a smaller model
+are **latency** (receipt extraction targets 2–5 s, agent turns 3–15 s) and
+**routing** (below), not cost. Choosing a cheap model to save money here is
+optimising a rounding error.
+
+#### What is provider-specific, and must not be treated as architecture
+
+Four things in this spec are one vendor's API surface written as though they
+were design:
+
+| Currently specified | Reality |
+|---|---|
+| `cache_control` breakpoints (§9.2) | Caching semantics and discounts vary by provider and, through a router, by upstream. §9.2's cost argument **must be measured, not assumed** |
+| `stop_reason: "refusal"` (§11.4) | One vendor's response shape. `RefusalCard` (S03) needs a normalized signal |
+| The SDK tool runner (§11.2) | An implementation detail. The gate is ours; the loop is theirs |
+| `effort` and adaptive thinking | Not universally available |
+
+The approval gate, the audit trail and the operation registry are ours and
+survive any provider change. These four do not, and the provider adapter is
+where they belong.
+
+#### Routing is the real question, and it is a §5 question
+
+Going through an aggregator means receipt images and transaction descriptions
+transit a third party **in addition to** the upstream model provider. §1 opens
+with physical custody of the data; §5.5 keeps receipt images indefinitely
+because they are the evidence trail; §5.4 now encrypts them before they reach
+Backblaze precisely so a storage provider holds ciphertext only.
+
+Sending the same images to a router in plaintext is not inconsistent with that
+by accident — it is a different decision about a different provider, and it
+should be made deliberately rather than inherited from a convenience. **O17.**
+
+#### Still true regardless of provider
+
+- Context carries the category tree, account list and recent activity — not all
   7,874 rows. Tools fetch what is needed.
-- Prompt caching on the stable prefix (taxonomy, tool definitions).
-- Handle `stop_reason: "refusal"` before reading content.
+- The stable prefix (taxonomy, account list, tool definitions) is cacheable
+  where the provider supports it, and the per-batch payload goes after it.
+- Structured output is a schema contract, not prose parsed afterwards.
+- A refusal is handled before content is read.
 
 ### 11.5 Category proposals
 
@@ -2333,6 +2418,7 @@ Ordered by how much they block.
 | ~~**O9**~~ | ~~Pi model?~~ | — | **Answered: Pi 4.** Ample for the workload — 8k rows is nothing. **Boot from SSD over USB3, not SD**; see §15 |
 | ~~**O10**~~ | ~~Are US and German obligations live?~~ | — | **Answered: all three eventually, none urgent.** Build the full adapter layer and **all three scheme definitions** (`PL_KPIR`, `PL_RYCZALT`, `US_SCHED_C`, `DE_EUER`) now while the design is fresh; implement adapters on demand. Poland first |
 | **O11** | ~~Residency periods~~, and any treaty / foreign-tax-credit interaction | §13.2 | **Split.** *Residency periods:* **answered — build now.** A dated timeline on S22; scheme resolution becomes *(jurisdiction resident in, transaction date)*, which removes a restructure later since every lookup would otherwise change shape. *Treaties and foreign tax credits:* **still deferred**, and S22 states so rather than letting a residency control imply them |
+| **O17** | **Does financial data leave through an aggregator?** Routing through OpenRouter means receipt images and transaction descriptions transit a third party *in addition to* the model provider | §5.5, §11.4 | Undecided, and it is a §5 question rather than a §11 one. The project opens with physical custody; receipt images are age-encrypted before Backblaze so a storage provider holds ciphertext only. A router sees them in plaintext. Options: direct provider APIs only · router for text surfaces, direct for images · accept it deliberately. **Not to be inherited from a convenience** |
 | ~~**O12**~~ | ~~Business backfill scope?~~ | — | **Answered: 2026 forward only.** Earlier rows stay personal unless explicitly marked. Nothing becomes reportable by omission, and it matches when the current rules took effect |
 | ~~**O13**~~ | ~~"Synced with banks"?~~ | — | **Decided:** central-bank reference rates, quoted against the USD pivot. Realized rates are implied by the two amounts on a transfer or settlement, never fetched |
 | ~~**O14**~~ | ~~Counterparties replace the loan accounts?~~ | — | **Decided: replace.** They exist only because Money Manager had no counterparty concept. `loan_receivable` / `loan_payable` survive as `account_kind` values for migration fidelity |
@@ -2351,7 +2437,8 @@ Ordered by how much they block.
 | R4 | Scope creep into full tax compliance | **High** | High | §13 boundary is explicit; N1–N3 are non-goals |
 | R5 | RN Web insufficient for the dashboard | Medium | Low | §14.6 escape hatch designed in |
 | R6 | Pi SD card failure | **High** over years | High | SSD boot; nightly off-site backups; tested restore |
-| R7 | Anthropic spend higher than expected | Low | Low | Rules tier absorbs the recurring set; per-feature tracking |
+| ~~R7~~ | ~~Model spend higher than expected~~ | — | — | **Retired.** Measured at real volume, total annual spend is $0.50–$25 depending on tier, and under $250 at 10× usage on the most expensive option (§11.4). Cost was never the constraint; latency and routing are |
+| **R13** | Financial data exposed to an aggregator | Medium | **High** | O17 — undecided. A router sees receipt images and transaction descriptions in plaintext, against a project premise of physical custody (§5.5) |
 | R8 | Project stalls half-migrated, data split across two systems | Medium | **High** | Phases independently useful; Money Manager authoritative until Phase 7 |
 | R9 | Agent writes bad data | Low | High | Approval gates on every write; full audit; soft delete |
 | R10 | A personal expense reaches a tax output | Low | **Critical** | §13.1 — separate DB role with no privilege on `transactions`; fails loudly rather than quietly |

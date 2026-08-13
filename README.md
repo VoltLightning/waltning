@@ -54,7 +54,7 @@ TypeScript throughout. Hono, tRPC, and Drizzle over PostgreSQL 16 on the
 server; Expo for mobile, with the web dashboard built from the same codebase
 via React Native Web. Deployed as Docker Compose on a Raspberry Pi, reachable
 only over Tailscale — no public ingress. Receipt extraction and the agent run
-on `claude-opus-5`.
+on small vision-capable models, chosen per surface (`SPEC.md` §11.4).
 
 ## Data handling
 
