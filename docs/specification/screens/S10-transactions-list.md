@@ -40,7 +40,7 @@ Find the thing you remember.
 │  Salary · Employment          +9 200,00 zł      │
 │  5 Aug                                          │
 │  Rewe · Groceries          62,40 € · 4,0231     │
-│                                251,05 zł        │
+│                                251,04 zł        │
 │  Cash → BANK-A            −500,00 → +500,00 zł  │  ← TransferRow, one row
 └─────────────────────────────────────────────────┘
 ```

@@ -15,7 +15,7 @@ Props: `value`, `currency`, `size`, `emphasis`, `signed`. Negative values take
 ### 4.2 `<FxAmount>` — the P1 component
 
 ```
-  62,40 $ · 4,0231 · 251,05 zł
+  62,40 $ · 4,0231 · 251,04 zł
   └ local    └ rate   └ main
 ```
 

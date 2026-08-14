@@ -33,7 +33,7 @@ Scrolling column, ordered by how often each region is the reason you came.
   48,90 zł                          ← display-hero
   Cash · PLN
 
-  62,40 $ · 4,0231 · 251,05 zł      ← FxAmount, when foreign
+  62,40 $ · 4,0231 · 251,04 zł      ← FxAmount, when foreign
   NBP · 2026-08-04 · synced            provenance stated in full
 
   ┌ fields ───────────────────────────────┐

@@ -22,7 +22,6 @@ CREATE TABLE "dashboard_layouts" (
 	"sort" integer DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "fx_rates" DROP CONSTRAINT "fx_rates_pk";--> statement-breakpoint
 DROP INDEX "fx_rates_lookup_idx";--> statement-breakpoint
 ALTER TABLE "dashboard_widgets" ALTER COLUMN "size" SET DEFAULT 'm'::"public"."widget_size";--> statement-breakpoint
 ALTER TABLE "dashboard_widgets" ALTER COLUMN "size" SET DATA TYPE "public"."widget_size" USING "size"::"public"."widget_size";--> statement-breakpoint
@@ -33,6 +32,7 @@ ALTER TABLE "targets" ALTER COLUMN "period" SET DATA TYPE "public"."target_perio
 ALTER TABLE "transactions" ALTER COLUMN "amount_pivot" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "transactions" drop column "amount_pivot";--> statement-breakpoint
 ALTER TABLE "transactions" ADD COLUMN "amount_pivot" numeric(20, 8) GENERATED ALWAYS AS ("transactions"."amount_original" * "transactions"."fx_rate") STORED;--> statement-breakpoint
+ALTER TABLE "fx_rates" DROP CONSTRAINT "fx_rates_pk";--> statement-breakpoint
 ALTER TABLE "fx_rates" ADD CONSTRAINT "fx_rates_pk" PRIMARY KEY("base","quote","date");--> statement-breakpoint
 ALTER TABLE "dashboard_widgets" ADD COLUMN "layout_id" uuid NOT NULL;--> statement-breakpoint
 ALTER TABLE "transactions" ADD COLUMN "counterparty_role" "counterparty_role";--> statement-breakpoint

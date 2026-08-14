@@ -42,7 +42,7 @@ transaction that needs allocating.
   ┌─────────────────────────────────────┐
   │ (A)  Nina              owes you     │
   │      person · settles EUR           │
-  │                   +75,40 € · 321,60 │
+  │                   +74,44 € · 321,60 │
   ├─────────────────────────────────────┤
   │ (M)  Marek             you owe      │
   │      person             −120,00 zł  │

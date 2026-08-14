@@ -417,8 +417,13 @@ export const transactions = pgTable(
     currency: text("currency")
       .notNull()
       .references(() => currencies.code),
-    /** To the pivot, on this row's own date. */
-    fxRate: rate("fx_rate").notNull().default("1"),
+    /**
+     * To the pivot, on this row's own date. **No default**: a forgotten rate
+     * must be a NOT NULL violation, not a silent 1:1 valuation. With
+     * amountPivot generated, a defaulted 1 would turn a bad input into an
+     * authoritative-looking output.
+     */
+    fxRate: rate("fx_rate").notNull(),
     /**
      * §7.6 — no rate was published for this date and the nearest was used. The
      * rate *table* stays capped at 10 days of carry, so it never holds an
@@ -485,16 +490,24 @@ export const transactions = pgTable(
     index("transactions_counterparty_idx").on(t.counterpartyId),
     index("transactions_payee_idx").on(t.payee),
     index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
+    // Excludes soft-deleted rows: otherwise deleting an imported row makes its
+    // external_id permanently unusable, and the blocking row is invisible in
+    // every read path (§6.9).
     uniqueIndex("transactions_external_id_uq")
       .on(t.externalId)
-      .where(sql`${t.externalId} is not null`),
+      .where(sql`${t.externalId} is not null and ${t.deletedAt} is null`),
     // A recurring rule fills each occurrence exactly once. If you already
     // entered this month's rent by hand, the rule's insert is rejected.
     uniqueIndex("transactions_occurrence_uq")
       .on(t.recurringId, t.occurrenceDate)
-      .where(sql`${t.recurringId} is not null`),
+      .where(sql`${t.recurringId} is not null and ${t.deletedAt} is null`),
 
-    check("transactions_amount_positive", sql`${t.amountOriginal} >= 0`),
+    // Adjustments carry their own sign: reconciling an account DOWNWARD is the
+    // ordinary use, and every other type takes direction from `type` (§7.2).
+    check(
+      "transactions_amount_positive",
+      sql`${t.amountOriginal} >= 0 or ${t.type} = 'adjustment'`,
+    ),
     check(
       "transactions_transfer_shape",
       sql`(${t.type} = 'transfer') = (${t.toAccountId} is not null)`,
@@ -609,25 +622,40 @@ export const receipts = pgTable(
     currency: text("currency").references(() => currencies.code),
     purchasedAt: date("purchased_at"),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
-    capturedAt: createdAt(),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("receipts_transaction_idx").on(t.transactionId)],
 );
 
-export const receiptLines = pgTable(
-  "receipt_lines",
+/**
+ * §6.10 — the optional breakdown belongs to the PAYMENT, not to the photograph.
+ * A card tap covering fuel and a coffee is one transaction and can be broken
+ * down whether or not a receipt was ever captured; a receipt populates these
+ * rows rather than owning them.
+ */
+export const transactionLines = pgTable(
+  "transaction_lines",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    receiptId: uuid("receipt_id")
+    transactionId: uuid("transaction_id")
       .notNull()
-      .references(() => receipts.id, { onDelete: "cascade" }),
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    /** Set when a receipt extraction produced this line. Null when hand-entered. */
+    receiptId: uuid("receipt_id").references(() => receipts.id, {
+      onDelete: "set null",
+    }),
     description: text("description").notNull(),
     amount: money("amount").notNull(),
     quantity: numeric("quantity", { precision: 12, scale: 3 }),
     categoryId: uuid("category_id").references(() => categories.id),
     sort: integer("sort").notNull().default(0),
   },
-  (t) => [index("receipt_lines_receipt_idx").on(t.receiptId)],
+  (t) => [
+    index("transaction_lines_transaction_idx").on(t.transactionId),
+    index("transaction_lines_receipt_idx").on(t.receiptId),
+  ],
 );
 
 /* ------------------------------------------------------------------ *
@@ -937,7 +965,8 @@ export const auditLog = pgTable(
     actor: actor("actor").notNull(),
     before: jsonb("before"),
     after: jsonb("after"),
-    at: createdAt(),
+    /** Explicit: the createdAt() helper hardcodes "created_at", so `at` would not exist. */
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("audit_log_entity_idx").on(t.entity, t.entityId),

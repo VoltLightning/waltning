@@ -49,7 +49,7 @@ TRACK
         │    PLN  +840,00   owes you
         │    EUR  −120,00   you owe
         │    ─────────────
-        │    net in EUR  +75,40   @ 2026-08-04
+        │    net in EUR  +74,44   @ 4,3200
         │    net in PLN +321,60
         │  history · ageing (companies only, O15)
 

@@ -683,7 +683,7 @@ Counterparty · person · settles in EUR
     PLN    +840,00      they owe you
     EUR     −120,00     you owe them
     ─────────────────
-    net in EUR   +75,40    @ NBP 2026-08-04
+    net in EUR   +74,44    @ 4,3200 · 2026-08-04
     net in PLN  +321,60
 ```
 

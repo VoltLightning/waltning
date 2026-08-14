@@ -284,7 +284,15 @@ async function main() {
     await db
       .insert(transactions)
       .values(values)
-      .onConflictDoUpdate({ target: transactions.externalId, set: values });
+      // The index is PARTIAL (`WHERE external_id is not null and deleted_at is
+      // null`); Postgres cannot infer it without the matching predicate, so
+      // without targetWhere this throws 42P10 on the first row — and §8.3 calls
+      // this the mechanism that makes re-migration idempotent.
+      .onConflictDoUpdate({
+        target: transactions.externalId,
+        targetWhere: sql`${transactions.externalId} is not null and ${transactions.deletedAt} is null`,
+        set: values,
+      });
 
     imported.set(
       t.account,

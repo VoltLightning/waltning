@@ -12,6 +12,7 @@ system it is built from, every user journey, and every screen.
 | 3 | [`flows/`](flows/) — 15 journeys, ordered by how often they run |
 | 4 | [`screens/`](screens/) — 30 screens, specified individually |
 | 5 | [`operations.md`](operations.md) — the registry the UI and the agent are both generated from |
+| 6 | [`defects.md`](defects.md) — what ten adversarial reviews found, and what is still open |
 
 **Outside this folder:** [`SPEC.md`](../../SPEC.md) is the system specification
 — architecture, data model, FX semantics, tax layer. [`TAXONOMY.md`](../../TAXONOMY.md)

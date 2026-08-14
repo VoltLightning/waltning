@@ -87,6 +87,17 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- The other direction. Without this, inserting a child under a LEAF that
+  -- already holds transactions silently recreates the Money Manager defect
+  -- (705 rows on the `Food` parent) without touching the parent row at all.
+  IF NEW.parent_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM categories WHERE id = NEW.parent_id AND is_leaf
+  ) THEN
+    RAISE EXCEPTION
+      'category % cannot be a child of leaf %', NEW.id, NEW.parent_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   IF NOT NEW.is_leaf AND EXISTS (
     SELECT 1 FROM transactions
     WHERE category_id = NEW.id AND deleted_at IS NULL
@@ -114,6 +125,25 @@ CREATE TRIGGER categories_shape
   AFTER INSERT OR UPDATE OF is_leaf, parent_id, kind ON categories
   FOR EACH ROW EXECUTE FUNCTION assert_category_shape();--> statement-breakpoint
 
+-- Changing a PARENT's kind never revalidated its children, so an income leaf
+-- could end up under an expense group — offered by the wrong picker and summed
+-- into the wrong side of every report.
+CREATE OR REPLACE FUNCTION assert_children_kind()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM categories WHERE parent_id = NEW.id AND kind <> NEW.kind
+  ) THEN
+    RAISE EXCEPTION 'category % has children of a different kind', NEW.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;--> statement-breakpoint
+
+CREATE TRIGGER categories_children_kind
+  AFTER UPDATE OF kind ON categories
+  FOR EACH ROW EXECUTE FUNCTION assert_children_kind();--> statement-breakpoint
+
 -- 3 ── Shared money is never business.
 --
 -- §6.7 says the combination "is invalid and constrained against", and
@@ -138,4 +168,65 @@ END $$;--> statement-breakpoint
 
 CREATE TRIGGER transactions_business_not_shared
   BEFORE INSERT OR UPDATE OF is_business, account_id ON transactions
-  FOR EACH ROW EXECUTE FUNCTION assert_business_not_shared();
+  FOR EACH ROW EXECUTE FUNCTION assert_business_not_shared();--> statement-breakpoint
+
+-- A transfer INTO a shared account was unguarded: only account_id was tested.
+CREATE OR REPLACE FUNCTION assert_business_not_shared_target()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.is_business AND NEW.to_account_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM accounts
+    WHERE id = NEW.to_account_id AND ownership = 'shared'
+  ) THEN
+    RAISE EXCEPTION
+      'a business transaction cannot move into a shared account (SPEC.md §6.7)'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;--> statement-breakpoint
+
+CREATE TRIGGER transactions_business_not_shared_target
+  BEFORE INSERT OR UPDATE OF is_business, to_account_id ON transactions
+  FOR EACH ROW EXECUTE FUNCTION assert_business_not_shared_target();--> statement-breakpoint
+
+-- 4 ── The account side of all three invariants.
+--
+-- Every trigger above lives on `transactions`. Mutating `accounts` walked past
+-- all of them: changing an account's currency left 3,000 rows denominated in
+-- something else, and flipping ownership to 'shared' pushed every business row
+-- it held straight into `tax_ledger`. One UPDATE on a different table defeated
+-- §13.1 point 5a entirely.
+CREATE OR REPLACE FUNCTION assert_account_change_safe()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  n bigint;
+BEGIN
+  IF NEW.currency IS DISTINCT FROM OLD.currency THEN
+    SELECT count(*) INTO n FROM transactions
+    WHERE (account_id = NEW.id OR to_account_id = NEW.id) AND deleted_at IS NULL;
+    IF n > 0 THEN
+      RAISE EXCEPTION
+        'cannot change the currency of account % — % transactions are denominated in %',
+        NEW.id, n, OLD.currency
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF NEW.ownership = 'shared' AND OLD.ownership <> 'shared' THEN
+    SELECT count(*) INTO n FROM transactions
+    WHERE (account_id = NEW.id OR to_account_id = NEW.id)
+      AND is_business AND deleted_at IS NULL;
+    IF n > 0 THEN
+      RAISE EXCEPTION
+        'cannot make account % shared — it holds % business transactions (SPEC.md §6.7)',
+        NEW.id, n
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END $$;--> statement-breakpoint
+
+CREATE TRIGGER accounts_change_safe
+  BEFORE UPDATE OF currency, ownership ON accounts
+  FOR EACH ROW EXECUTE FUNCTION assert_account_change_safe();

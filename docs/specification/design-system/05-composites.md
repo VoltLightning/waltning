@@ -124,7 +124,7 @@ person can owe you in one currency while you owe them in another.
   │  PLN    +840,00        owes you       │
   │  EUR    −120,00        you owe        │
   │  ───────────────────────────────────  │
-  │  net    +75,40 €       @ 2026-08-04   │
+  │  net    +74,44 €       @ 4,3200       │
   │         +321,60 zł                    │
   └───────────────────────────────────────┘
 ```

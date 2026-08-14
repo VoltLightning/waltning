@@ -35,7 +35,7 @@ agreed.
   Into          [ Cash · PLN ▾ ]       where the money lands
 
   Rate          [ 4,2810 ]             editable
-                reference 4,3120 · spread 15,50 zł
+                reference 4,3120 · spread 1,55 zł
 
   ┌ result ─────────────────────────────┐
   │  discharges        214,05 zł        │

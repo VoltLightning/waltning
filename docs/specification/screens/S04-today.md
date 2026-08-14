@@ -50,7 +50,7 @@ tab bar → S10, S11, S12, S03.
 │  Today      Coffee · Eating out      −48,90 zł  │
 │  Today      Salary · Employment   +9 200,00 zł  │
 │  Yesterday  Rewe · Groceries    62,40 € · 4,02  │  ← FxAmount, foreign
-│                                    251,05 zł    │
+│                                    251,04 zł    │
 │                                       Show all →│
 └─────────────────────────────────────────────────┘
 ┌ tab bar · 5 + raised ＋ ────────────────────────┐
