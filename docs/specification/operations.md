@@ -118,6 +118,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `create_account` · `update_account` · `archive_account` · `reorder_accounts` | ❌ | Structural |
 | `create_category` | ❌ | The agent **proposes**; it never creates silently (§11.5) |
 | `rename_category` · `reparent_category` · `convert_leaf_group` | ❌ | |
+| `archive_category` | ❌ | S19's fourth verb, and it was missing here. Archiving is not deletion — a leaf with history keeps it and stops being offerable (`TAXONOMY.md` R2). Refused on a group with unarchived children |
 | `merge_categories` | ❌ | Not reversible in one step (J12) |
 | `create_counterparty` · `update_counterparty` | ✅ | |
 | `merge_counterparties` · `unmerge_counterparties` | ❌ | Reversible, and still never automatic (S15) |

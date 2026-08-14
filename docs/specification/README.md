@@ -15,6 +15,7 @@ system it is built from, every user journey, and every screen.
 | 6 | [`computations.md`](computations.md) — every figure the interface promises, defined |
 | 7 | [`defects.md`](defects.md) — what ten adversarial reviews found, and what is still open |
 | 8 | [`build-order.md`](build-order.md) — the single sequence, reconciling `SPEC.md` §16 with the component order |
+| 9 | [`architecture/`](architecture/) — the engineering view: containers, components, domain model, sequences, deployment, budgets, test strategy |
 
 **Outside this folder:** [`SPEC.md`](../../SPEC.md) is the system specification
 — architecture, data model, FX semantics, tax layer. [`TAXONOMY.md`](../../TAXONOMY.md)
@@ -29,13 +30,21 @@ missing section is visible rather than merely absent.
 
 ## Status
 
-**The specification is complete.** Fifteen journeys and thirty screens,
-every one written against its template with no section missing and no `⊗`
-remaining. `migrated` — the old thin content — no longer appears.
+**The specification is complete, and the open questions are now closed too.**
+Fifteen journeys and thirty screens, every one written against its template with
+no section missing and no `⊗` remaining.
 
-What is *not* settled is recorded rather than hidden: every screen ends with
-numbered open questions, and the design system carries its own (§13). Those are
-the honest remainder, and they are meant to be closed one at a time.
+All **75** numbered open questions across the screens and flows are decided, with
+each decision recorded in place beside the question it answers rather than
+collected elsewhere — so the reasoning stays next to the thing it governs. The
+design system's own eleven (§13) are closed as well. The last three, on S32, were
+the agent-memory questions: whether a memory is explained when used, whether it
+survives a counterparty merge, and whether memory is shared across surfaces.
+
+Three mechanical audits back that claim rather than resting on it: every screen
+and flow conforms to its template, every operation a screen references exists in
+the registry, and no `TODO`, `TBD` or `⊗` remains outside the templates
+themselves.
 
 ### Journeys
 

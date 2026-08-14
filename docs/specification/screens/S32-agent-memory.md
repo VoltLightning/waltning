@@ -118,14 +118,39 @@ way to lose several at a stroke.
 
 ## 9. Open questions
 
-1. **Should the agent explain a memory when it uses one?** *"Categorised as
-   business — you said Georgia trips usually are"* makes memory legible at the
-   moment it acts, which is stronger than legible on a settings screen nobody
-   opens. It also adds a line to every result that used one.
-2. **Does a memory about a counterparty survive a merge?** S15's merge moves
-   transactions between ids; the memories attached to the absorbed record have to
-   go somewhere, and silently dropping them would lose corrections you made.
-3. **Is there a shared memory across surfaces, or one per surface?** Currently
-   one, read by the capture loop and the agent. A convention learned while
-   capturing should apply when asking — but nothing has tested whether the
-   reverse is also true.
+1. ~~**Should the agent explain a memory when it uses one?**~~ **Decided: yes,
+   but only when the memory changed the outcome.** §11.6 makes memory the one
+   documented exception to the approval gate — nothing else in the system is
+   written on the model's own authority. An exception is only acceptable if it is
+   accountable, and legibility on a settings screen nobody opens is the weakest
+   possible form of that. So the trail names the memory at the moment it acts —
+   *"business — you said Georgia trips usually are"* — and says nothing on the
+   turns where no memory applied. That keeps the cost proportional to the
+   exception rather than adding a line to every result, and it makes a wrong
+   memory visible where you can act on it instead of in a settings list you would
+   have to think to open.
+
+2. ~~**Does a memory about a counterparty survive a merge?**~~ **Decided: it
+   moves with the transactions, and unmerge restores it.** S15 already fixed the
+   paradigm: a merge **archives rather than deletes**, records exactly which
+   transactions moved, and is reversible indefinitely. Memory follows the same
+   rule or the two disagree. Scoped memories re-point to the surviving
+   counterparty and the move is recorded alongside the transaction move, so
+   unmerge returns them to the restored record. Duplicates that result — two
+   memories now saying the same thing about one person — surface on this screen
+   as a merge candidate rather than being resolved silently, because collapsing
+   two corrections into one is itself a correction.
+
+3. ~~**Is there a shared memory across surfaces, or one per surface?**~~
+   **Decided: one shared store, scoped by subject and never by surface.** The
+   system already answers this everywhere else: one registry with two consumers
+   (§11.0), and the loop/pipeline choice is *positional* — where you are — rather
+   than a property of the feature (§11.4). Memory is behaviour, and behaviour
+   should not depend on which door you came in through: a preference learned
+   while capturing at a till is the same preference when you ask about the month
+   later. `agent_memory.scope` is `global | counterparty | account | category`,
+   with no surface dimension, and adding one would create exactly the drift the
+   single registry exists to prevent.
+
+**All three are now closed.** This screen was the last in the specification
+carrying open questions.
