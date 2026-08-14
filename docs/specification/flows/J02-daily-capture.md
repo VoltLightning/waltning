@@ -29,14 +29,16 @@ offline, unauthenticated to the network, and with no rate data for today.
 ```
 S04 Today  ──tap +──→  S05 Quick add
                           │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-   [123] keypad      [◉] voice         [▣] photo
-        │                 │                 │
-   amount typed     transcript →       camera → J3
-        │           fills fields
-        │                 │
-        └────────→  chips: account · category · date · scope · note
+        ┌──────────────┬────────────┬──────────────┐
+        │              │            │              │
+   [123] keypad   [◉] voice   [▣] photo   [💬] converse
+        │              │            │              │
+   amount typed   transcript    camera → J3    a LOOP — it can
+        │         fills fields                 ask you a question
+        │              │            │              │
+        └──────────────┴────────────┴──────┬───────┘
+                                           │
+                    chips: account · category · date · scope · note
                           │              └─ counterparty, when attached
                           │
                      S06 Category sheet   (if category tapped)
@@ -44,9 +46,18 @@ S04 Today  ──tap +──→  S05 Quick add
                      Save → S04 Today
 ```
 
-**One draft, three ways in, one Save.** The input modes are not three flows —
-they fill the same draft, and any field is editable regardless of which mode
-produced it. Switching modes mid-draft never discards what is already there.
+**One draft, four ways in, one Save.** The modes are not four flows — they fill
+the same draft, and any field is editable regardless of which produced it.
+Switching modes mid-draft never discards what is already there.
+
+**Three fill and stop; the fourth converses.** Keypad, voice and photo produce a
+draft in one pass. `💬` is an agentic loop (`SPEC.md` §11.4) — *"coffee at that
+place near the office"* can search recent payees and **ask you which one**,
+which a single pass cannot do.
+
+**The ten-second target belongs to the keypad path**, which uses no model at
+all. Choosing to converse is choosing a slower, better interaction; the budget
+follows the path rather than the screen.
 
 **The chip row is the whole model.** Account, category, date, scope, note, and
 counterparty when present. Each chip is empty, filled, or **machine-filled** —

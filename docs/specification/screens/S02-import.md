@@ -69,16 +69,21 @@ currency and rate — plus a **refine** line.
 ```
  ▾ MIGROS GENEVE                              Model 0.91
    "Swiss grocery chain, matches prior Migros rows
-    in this account"          ← the loop read the ledger to say this
+    in this account"      ← retrieved before the call, not looked up during it
    Food › Groceries                    [ Travel › Travel food ]
    ⌨ this trip was a holiday — these are travel food
 ```
 
-**Refining re-runs the row with your correction in context**, and the model may
-re-read the ledger while doing it. One sentence beats correcting a category,
-a business flag and a payee separately — and unlike a direct edit it can be
-applied to *the rest of the batch*, which is the case that actually costs time:
-forty holiday rows, one sentence.
+**Classification is a deterministic pipeline, not a loop** (`SPEC.md` §11.4):
+similar prior payees are retrieved first and handed to a single call. Same
+reason string, and reproducible — which §9.4 requires, since `import_rows.raw`
+is kept unmutated precisely so a reparse is always available, and that is worth
+nothing if a reparse can answer differently.
+
+**Refining re-runs the row with your correction in context** — a second pass,
+not a conversation. One sentence beats correcting a category, a business flag
+and a payee separately, and unlike a direct edit it can be applied to *the rest
+of the batch*: forty holiday rows, one sentence.
 
 **d · Empty** — queue clear, session counts, verify-balances action.
 

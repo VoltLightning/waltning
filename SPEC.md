@@ -1423,9 +1423,9 @@ Three tiers, cheapest first:
 ```
 raw row → [1] exact duplicate?  → skip
         → [2] rule match?       → classified, deterministic, free
-        → [3] model LOOP        → may read the ledger while deciding
-                                  classified with confidence + reason
-        → review queue          → refinable in place (S02c)
+        → [3] retrieve + one call → classified with confidence + reason
+                                    deterministic, reproducible, scoreable
+        → review queue            → refinable in place (S02c)
 ```
 
 **Rules** (`rules` table) match on payee regex, amount range, account, and
@@ -1450,17 +1450,26 @@ alongside `rule_applied`. Editing a rule afterwards changes future
 classification and cannot rewrite the record of what happened — which is what
 keeps the audit trail (§6.1) honest about machine-classified rows.
 
-**Model tier** is a **bounded tool loop, not a call** (§11.4). It may read the
-ledger while classifying — `search_transactions`, `get_category_tree`,
-`get_rules` — so *"have I seen this merchant before, and what did I call it?"*
-is a lookup rather than a guess. That is what makes a reason like *"matches
-prior Migros rows in this account"* possible at all, and it is why the tier is
-far less dependent on rules having accumulated yet (§8.0).
+**Model tier is a deterministic pipeline, not a loop** (§11.4). Retrieval runs
+first and the model runs once:
 
-Read tools only. The tier produces a **proposal per row**; nothing it does
-reaches the ledger without an accept.
+```
+normalize payee → retrieve k most similar prior payees + their categories
+                → one call: retrieved context + row batch → schema out
+```
 
-It runs with the configured `classify` model, plus:
+That is what makes a reason like *"matches prior Migros rows in this account"*
+possible, and it is why the tier is far less dependent on rules having
+accumulated yet (§8.0) — the model is handed history rather than having to go
+find it.
+
+**Reproducibility is the reason it stays a pipeline.** §9.4 keeps
+`import_rows.raw` unmutated so a reparse is always available, and that promise
+is empty if a reparse can return a different answer. It also keeps the tier
+scoreable against fixture rows, which a loop is not.
+
+It produces a **proposal per row**; nothing reaches the ledger without an
+accept. It runs with the configured `classify` model, plus:
 
 - Account list, full category tree, and active rules in the system prompt
   behind a `cache_control` breakpoint — the taxonomy is cache-written once and
@@ -1687,81 +1696,96 @@ and make the state you are in obvious at a glance.
 `audit_log` marks agent-originated changes with `actor = 'agent'`. Sessions are
 retained as an audit trail.
 
-### 11.4 Four surfaces, all of them loops
+### 11.4 Loops where you are present; pipelines where you are not
 
-Every model surface in this system is a **bounded tool loop**, not a single
-call. The distinction between them is **not whether they have tools — it is
-whether they can write.**
+The dividing line is **not** read-versus-write, and it is not extraction versus
+conversation. It is whether a person is sitting inside the interaction while it
+happens.
 
-| Surface | Tools | Produces | Gated by |
+| Surface | Shape | Reproducible | Why |
 |---|---|---|---|
-| **Receipt** (§10.2) | read | A draft | The review screen (S07c) |
-| **Classification** (§9.2) | read | A proposal per row | Accept, or bulk accept |
-| **Voice** (J2, S08) | read | A draft per intent | A `DiffCard` each |
-| **Agent** (§11) | read **+ write** | Gated writes | A `DiffCard` each |
+| **Quick add — conversational** (S05) | **Agentic loop**, read tools | No | You are present, working on **one** transaction, and correcting as you go |
+| **Agent** (S03) | **Agentic loop**, read + write | No | Conversational by definition |
+| Receipt (§10.2) | Pipeline, one pass · refinable | Per pass | Queued and extracted in the background |
+| **Classification** (§9.2) | **Deterministic pipeline** | **Yes** | Hundreds of rows, reviewed in bulk |
+| Voice (S08) | One pass · refinable | Yes | J2 targets **under 10 seconds** at a till |
 
-#### Why an extractor needs tools
+#### Retrieval is not agency
 
-Classifying `ZABKA NR 2831 WARSZAWA` is guesswork from a static prompt and
-nearly free with a lookup: *have I seen this merchant, and what did I call it?*
-The same holds for a receipt — a merchant, a currency and a set of line items
-are all far easier to place correctly against prior decisions than against
-instructions.
+The distinction I need to make, because conflating them is what pushed loops
+into places they do not belong.
 
-**The spec already assumed this.** S02c specifies a model reason reading
-*"Swiss grocery chain, matches prior Migros rows in this account"* — which is
-not something a stateless call can know. The example was written before the
-architecture that would permit it.
+S02c specifies a model reason reading *"Swiss grocery chain, matches prior
+Migros rows in this account"*. That requires the model to **have** prior-merchant
+context. It does not require the model to be able to **go looking** for it.
 
-It also changes the cold-start problem. §8.0 notes that rules accumulate from
-confirmed history, so the first months lean on the model tier. A model tier that
-can **read** that history is far less dependent on rules existing yet.
+A deterministic step does it better:
 
-#### What extractors may call
+```
+raw row → normalize payee
+        → retrieve the k most similar prior payees + their categories
+        → one call, that context in the prompt, schema out
+```
 
-The read half of the operation registry (`operations.md`) — and nothing else.
-`search_transactions`, `get_category_tree`, `get_accounts`,
-`get_counterparties`, `get_rules`. No writes, not even gated ones: an
-extractor's output is a **draft**, and the draft is the proposal.
+Same reason string, same quality — and reproducible, cheap, fast, and
+benchmarkable against fixtures. This is retrieval, not a tool loop, and it is
+what the classification tier should be.
 
-That is the whole safety boundary, and it is enforced by which tools are
-generated for that surface rather than by the model's restraint.
+#### Why bulk import must stay deterministic
 
-#### Iteration is the point, in both directions
+Beyond speed and cost, **reproducibility is a stated guarantee**. §9.4 keeps
+`import_rows.raw` unmutated so a reparse after a prompt or parser change is
+always possible — and that promise only means something if a reparse produces
+the same answer. An agentic loop cannot offer that: two runs over the same row
+may take different paths.
 
-**The model iterates.** It can read the image, notice the lines do not sum,
-re-read, search for the merchant, and revise — the way a task in a coding agent
-works, rather than one shot at an answer.
+Determinism also makes the tier *evaluable*. Three hundred fixture rows scored
+against known-good classifications is a number you can watch move when you
+change a model or a prompt. A loop gives you an outcome without a trajectory.
 
-**You iterate too.** Extraction results are conversational: *"this is household,
-not groceries — the Spülmittel line"* re-runs the reasoning with your correction
-in context, rather than making you hand-edit four fields. S07c and S02c both
-gain this (below).
+So: one call per row (or per batch), cached stable prefix, retrieved context,
+structured output. **No tool loop in the import path.**
 
-#### Loops are bounded, and the budget follows whether you are waiting
+#### Where the loop earns its place
 
-A loop with no bound is a cost and latency risk. Each surface carries a maximum
-tool-call count and a wall-clock budget, and the budget is set by whether a
-person is standing still:
+Tapping `+` and starting a transaction is the opposite situation. One row, you
+are present, and the interaction *is* the iteration:
 
-| Surface | Budget | Because |
-|---|---|---|
-| Receipt | Generous — 6 calls | Queued and extracted in the background (§10.4). You are not watching |
-| Classification | Generous per row, batched | Reviewed at a desk (S02c) |
-| **Voice** | **Tight — 1 pass, refine on demand** | J2 targets **under 10 seconds** at a till. A three-turn loop breaks it |
-| Agent | Generous — the turn is the unit | 3–15 s is the stated expectation (§15) |
+> *"coffee at that place near the office"*
+> → searches recent payees near prior transactions
+> → *"the café near the office?"*
+> → yes
+> → draft filled, with its trail
 
-Voice is the one surface where the loop must be opt-in rather than default: it
-extracts in a single pass, and refinement is something you ask for after the
-draft exists.
+That cannot be a pipeline, because the useful move — asking you a question — is
+only available to something that can take another turn. It is also the one place
+where a slower, smarter interaction is what you asked for by choosing to talk
+rather than type.
 
-#### What this costs
+#### The ten-second target is per path, not per screen
 
-Predictability. A loop is less deterministic than a schema-constrained call, and
-harder to evaluate — you can still score final output against fixtures, but not
-reproduce a trajectory. For bulk import that is a real trade, and it is the
-reason the confidence threshold and the bounded bulk-accept (S02c) matter more,
-not less.
+J2's target belongs to the **keypad** path, which involves no model at all and
+should stay instant. Choosing to converse is choosing a different trade, and the
+budget follows the choice:
+
+| Path | Budget |
+|---|---|
+| Keypad | **Under 10 s**, no model call |
+| Photo | Queued; background |
+| Voice — dictating a transaction | One pass, tight |
+| **Conversational capture** | As long as it takes to get it right |
+
+#### What every model surface shares
+
+Read tools only, except the agent. Extractors and the capture loop are generated
+the **read half** of the registry and nothing below it — not a restricted write,
+no write operation at all. The boundary is which tools exist for that surface,
+so it survives a confused model, a prompt injection inside a receipt image, and
+a future refactor that forgets why the rule was there.
+
+And every machine-produced draft is refinable in one sentence (`RefineRequest`),
+whether it came from a loop or a pipeline. Refinement is a second pass, not a
+conversation, on the surfaces that are pipelines.
 
 #### Quality still matters inversely to how much review the output gets
 

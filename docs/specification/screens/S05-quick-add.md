@@ -71,6 +71,30 @@ counterparty when attached. Each chip is empty (placeholder), filled, or
 all within thumb reach without a hand shift. Save is full-width because it is
 the only affirmative action and it is pressed in motion.
 
+### The fourth mode — conversational capture
+
+`[123]` `[◉]` `[▣]` `[💬]`. The first three fill a draft and stop. The fourth is
+an **agentic loop** (`SPEC.md` §11.4), and it is the one place in the system
+where a loop is the right shape:
+
+```
+  💬  coffee at that place near the office
+      ⟳ searching recent payees …
+      the café near the office?          [ yes ]  [ no, the other one ]
+      → 48,90 zł · Cash · Eating out
+        ◉ from: "that place near the office" → Costa   Undo
+```
+
+**It can ask a question, which a pipeline cannot.** One row, you are present,
+and the interaction *is* the iteration — you are not reviewing an answer, you
+are arriving at one together. Read tools only; the output is still a draft that
+Save commits.
+
+**This is a deliberate trade against the ten-second target**, and the target
+survives because it belongs to the *keypad* path, not to the screen. Someone who
+wants speed types an amount. Choosing to talk is choosing a slower, smarter
+interaction — and the budget follows the choice rather than the screen.
+
 ### Web — ≥1024px
 
 Quick add appears as a **command bar**, not a screen: `N` from anywhere opens a
@@ -101,7 +125,8 @@ still, and a numeric keypad on screen would be slower than typing.
 
 | Component | Notes |
 |---|---|
-| `Dock` | Mode row, keypad, full-width Save |
+| `Dock` | Mode row (`123` · `◉` · `▣` · `💬`), keypad, full-width Save |
+| `ThinkingIndicator` | Conversational mode, between turns |
 | `Keypad` | 0–9, comma decimal, delete. Bottom-anchored (Fitts) |
 | `AmountField` | `display-hero`, tabular lining numerals, comma decimal, currency affix |
 | `Chip` | Account · category · date · scope · note · counterparty. **≥44px** (Q3). The account chip fills from last-used **only within a short window**, and is otherwise empty with Save disabled — a stale default reads as an answer rather than a question (§9) |

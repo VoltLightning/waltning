@@ -64,21 +64,31 @@ remember to log itself is an operation that will eventually forget.
 its own capabilities cannot be asked open questions about them** (§11.0), so the
 registry is readable through the registry.
 
-### The extractors get this half, and only this half
+### Two ways to reach a read
 
-Receipt, classification and voice are bounded tool loops too (§11.4) — they read
-the ledger while deciding, which is what lets a classification say *"matches
-prior Migros rows in this account"* instead of guessing from a static prompt.
+**As a tool**, by the surfaces that are loops — the conversational capture mode
+on S05, and the agent. They call `search_transactions` mid-turn because they may
+need to ask you something about what they found.
 
-They are generated **the read table above and nothing below it.** Not a
-restricted write, not a gated write — no write operation is generated for those
-surfaces at all. An extractor's output is a draft, and the draft is its
-proposal.
+**As retrieval**, by the surfaces that are pipelines — classification, receipt,
+voice. The same reads run *before* the model call and their results go into the
+prompt. `search_transactions` for similar prior payees, `get_category_tree`,
+`get_accounts`. Identical data, no loop, and reproducible (§11.4).
+
+That is why a classification can say *"matches prior Migros rows in this
+account"* without being agentic. It was handed the history; it did not go
+looking.
+
+### No surface but the agent is generated a write
+
+Not a restricted write, not a gated write — **no write operation exists** for
+the capture loop or for any pipeline. Their output is a draft, and the draft is
+the proposal.
 
 **The boundary is which tools exist for that surface**, not which ones the model
 is asked not to call. A tool that was never generated cannot be invoked by a
-confused model, a prompt injection in a receipt image, or a future refactor that
-forgets why the rule was there.
+confused model, by a prompt injection inside a receipt image, or by a future
+refactor that forgets why the rule was there.
 
 ---
 
