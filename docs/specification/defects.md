@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 18 |
+| **C** | A stated guarantee is false | 19 |
 | **H** | Wrong data, silently | 31 |
 | **M** | Cannot be implemented from the spec | 24 |
 | **L** | Correct but under-specified | 18 |
@@ -216,6 +216,30 @@ They now migrate as `debt_reassignment`: one row, two counterparties, no cash
 flow, checkable by the invariant that a reassignment must not move net
 receivables. The names are prose in three languages and cannot be resolved
 automatically, so all 173 enter the review queue.
+
+### C19 — The gate could only ever measure fidelity, never completeness
+**Found by reconciling against the bank; §8.4 now specifies both.** Every source
+§8.4 named — the typed balances, the second derivation — asks whether our
+reading of the `.mmbak` matches what Money Manager shows. None can ask whether
+Money Manager matches reality, because both sides come out of the same file.
+
+Bank A's `.xls` statements carry `Saldo po transakcji`, a balance computed by the
+bank. Running it (`tools/migrate-mm/reconcile_bank.py`):
+
+- **169 of 246** real transactions on `Bank A · PLN` are not in Money Manager, and
+  **35 of 56** on `Bank A · Business PLN`.
+- **98 ledger rows match a bank row on the *signed* amount**, which is
+  independent corroboration of `SIGN` — an inverted map would match ~0. This is
+  evidence the `.mmbak` cannot produce about itself.
+
+So fidelity is externally corroborated and completeness is not. The ledger is
+internally consistent and partial, which no balance check can detect, and every
+downstream figure inherits it — period spend, category totals, the ryczałt
+revenue check. **A gate that passes on fidelity and is never run for
+completeness certifies a faithful copy of an incomplete ledger.**
+
+Not an extractor defect. It is what the ledger contains, and it is the reason
+the sync tooling stays rather than migration being a one-off.
 
 ### C16 — Every `DELETE` on `transactions` was silently suppressed
 **Fixed in `0006`.** `assert_period_not_closed` ended `RETURN NEW`, and in a

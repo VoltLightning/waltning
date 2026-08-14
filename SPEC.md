@@ -1508,8 +1508,7 @@ Two independent sources, both required:
 account list into a CSV, loaded as `accounts.expected_balance`, compared per
 account per currency. Money Manager stores no balance — `ZLEFTMONEY` is zero on
 every account — so its *displayed* figure is the only value in existence that
-was not computed by our own extractor. Tedious once; it is the only genuinely
-external oracle available.
+was not computed by our own extractor. Tedious once, and unavoidable.
 
 **2 · A structurally different second derivation.** The extractor computes
 balances by signing each leg once, keyed on `ZASSETUID`. The check recomputes
@@ -1517,9 +1516,49 @@ them by crediting destinations through `ZTOASSETUID` on the OUT leg instead. The
 two methods share no code path, so agreement is evidence and disagreement names
 the transfer-layout question directly (§8.1a).
 
-Both must agree with the imported ledger. **Agreement of two derivations that
-share an assumption is not evidence**, which is exactly what the first version
-had.
+**3 · The bank's own running balance.** Bank A's `.xls` statements carry a
+`Saldo po transakcji` column — a balance computed by the bank, in a file we did
+not produce, about an account Money Manager only claims to describe.
+`tools/migrate-mm/reconcile_bank.py` reads it.
+
+All three must agree with the imported ledger. **Agreement of two derivations
+that share an assumption is not evidence**, which is exactly what the first
+version had.
+
+#### Fidelity and completeness are different gates, and only one was specified
+
+Sources 1 and 2 both ask: *does our reading of the `.mmbak` match what Money
+Manager shows?* Neither can ask whether Money Manager matches **reality**,
+because every figure on both sides comes out of the same file. That question
+needs the bank, and asking it changes the answer:
+
+| | `Bank A · PLN` | `Bank A · Business PLN` |
+|---|---|---|
+| Statement window | 2025-11-30 … 2026-03-29 | 2025-12-02 … 2026-03-29 |
+| Statement self-consistent (Σ Kwota = Saldo span) | ✅ −349,47 | ✅ 5 879,00 |
+| Bank movement | −349,47 (246 rows) | 5 879,00 (56 rows) |
+| Ledger movement | −1 281,59 (101 rows) | −26,00 (22 rows) |
+| Ledger rows matching a bank row **on signed amount** | 77 / 101 | 21 / 22 |
+| Bank rows absent from the ledger | **169 / 246** | **35 / 56** |
+
+Two conclusions, and they point in opposite directions.
+
+**Fidelity is externally corroborated.** 98 ledger rows match a bank row on the
+*signed* amount. An inverted sign map would match approximately none, so this is
+independent evidence for `SIGN` — the one thing the `.mmbak` cannot tell us
+about itself, and previously the entire reason source 1 was needed.
+
+**Completeness is not.** 169 of 246 real transactions on `Bank A · PLN` are not in
+Money Manager at all. The migration will copy that faithfully, and every
+downstream figure — period spend, category totals, the ryczałt revenue check —
+inherits it. This is not an extractor defect and no balance check can see it:
+the ledger is internally consistent, just partial.
+
+That is why §16 keeps the sync tooling rather than treating migration as a
+one-off. **A gate that passes on fidelity and is never run for completeness
+certifies a faithful copy of an incomplete ledger** — which is the state this
+backup is in, and worth knowing before five years of it becomes the system of
+record.
 
 #### The other checks
 

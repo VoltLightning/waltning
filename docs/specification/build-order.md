@@ -28,6 +28,7 @@ each one invalidates the next if wrong.
 |---|---|---|---|
 | **1** | ~~Run `probe.py` against the `.mmbak`~~ **done — Reading A confirmed at 100%** | 1,680 of 1,680 OUT legs pair with an IN leg on the named destination. `extract.py`'s assumption holds and every destination is credited. It also surfaced one blocking finding that had never been visible: 173 debt reassignments that net to zero (C18, §6.6a) | ✅ |
 | **1b** | Resolve the 173 reassignment counterparties | Names are prose in three languages, in the import review queue. Unresolved rows import as zero-effect, which is their behaviour today — so this gates *fidelity*, not the migration | ~1 hr |
+| **1c** | ~~Reconcile against the bank~~ **done** | `Saldo po transakcji` in the Bank A `.xls` exports is a balance computed by the bank. 98 ledger rows match on *signed* amount — external corroboration of `SIGN`. It also showed 169/246 and 35/56 bank rows missing from Money Manager: the ledger is faithful and **partial** (C19) | ✅ |
 | **2** | Type 52 balances off the Money Manager UI into `accounts.expected_balance` | The gate had no independent right-hand side, so it evaluated `(computed − Σ) + Σ = computed` and printed `0,00` down all 52 rows regardless of correctness (§8.4). `ZASSET.ZLEFTMONEY` was checked as a free substitute and is `0.00` on all 52 accounts — unused. These are genuinely the only figures our extractor did not compute | ~1 hr |
 | **3** | Run the migration; both gates must pass | Both derivations, not one. Agreement between two sides that share an assumption is decoration | 1 day |
 | **4** | Auth and perimeter — **Phase 0.5**, see below | Real financial data exists from step 3 onward | 2–3 days |
@@ -170,10 +171,16 @@ register is now closed in code or in the specification.
 One input remains, and it is not a decision:
 
 **52 balances**, read off the Money Manager UI and typed into
-`accounts.expected_balance`. Tedious, about an hour, and the only reason the
-verification gate can fail at all. `ZASSET.ZLEFTMONEY` was checked as a free
-substitute — it is `0.00` on all 52 accounts, so the column is unused and the
-figures have to come off the screen.
+`accounts.expected_balance`. Tedious, about an hour. Two substitutes were tried
+and neither replaces it: `ZASSET.ZLEFTMONEY` is `0.00` on all 52 accounts, and
+the bank statements cover 2 accounts over 4 months — enough to corroborate the
+sign map, not enough to gate 52 balances over five years.
+
+What the bank check *did* establish is that the gate was measuring the wrong
+thing on its own. Fidelity is now externally corroborated; **completeness is
+not**, and 169 of 246 real transactions on `Bank A · PLN` are missing from the
+ledger (C19). Type the balances to close fidelity, and treat the sync tooling as
+permanent rather than a migration step.
 
 Resolving the 173 reassignment names is the other piece of human work, but it
 does not gate the migration: unresolved rows import as zero-effect rows keeping
