@@ -7,7 +7,8 @@ already learned about tests that do not work.
 
 ## The lesson the defect register actually taught
 
-Nineteen C-class defects, and the pattern in almost all of them is one thing:
+Twenty C-class defects — and 31 H and 24 M behind them — and the pattern in
+almost all of them is one thing:
 **a guarantee was asserted and never executed.** Two of them were defects *in the
 fix for another defect*, found only by running the trigger:
 

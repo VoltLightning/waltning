@@ -198,8 +198,10 @@ claims "the inversion that would have made every receivable read backwards
 cannot occur"; it occurs on every transfer.
 
 ### C18 — 173 debt reassignments migrate as nothing at all
-**Found by running the probe; specified in §6.6a; the migration is blocked on
-resolving the names.** 173 transfers have the same source and destination. They
+**Fixed** — specified in §6.6a and given a table in migration `0007`. The
+remaining work is human and does not block the migration: unresolved rows import
+as zero-effect rows keeping their description, which is exactly their behaviour
+in Money Manager today. 173 transfers have the same source and destination. They
 net to zero — which is why no balance check has ever seen them — and every one
 sits on a Loan account. Their descriptions are *"Marek. Total"*, *"Piotr.
 Total"*, *"Доля Кати после реструктуризации"*: **debts moving between people**,
@@ -218,7 +220,8 @@ receivables. The names are prose in three languages and cannot be resolved
 automatically, so all 173 enter the review queue.
 
 ### C19 — The gate could only ever measure fidelity, never completeness
-**Found by reconciling against the bank; §8.4 now specifies both.** Every source
+**Fixed** — found by reconciling against the bank; §8.4 now names three sources
+and separates the two questions. Every source
 §8.4 named — the typed balances, the second derivation — asks whether our
 reading of the `.mmbak` matches what Money Manager shows. None can ask whether
 Money Manager matches reality, because both sides come out of the same file.

@@ -16,6 +16,7 @@ first module, and the boundaries that must not be crossed while writing the rest
 | 5 | [`05-deployment.md`](05-deployment.md) | Environments, boot order, roles, backup/restore runbook, cutover |
 | 6 | [`06-quality-attributes.md`](06-quality-attributes.md) | Budgets an implementation can fail against |
 | 7 | [`07-test-strategy.md`](07-test-strategy.md) | What to test, at which layer, and what this project learned about tests that do not work |
+| 8 | [`08-offline-and-concurrency.md`](08-offline-and-concurrency.md) | What an outbox entry *is* — and the eight defects that lived in not saying |
 
 **Sequence of work** is [`../build-order.md`](../build-order.md) — the single
 plan reconciling `SPEC.md` §16 with the component order, including the Phase 0.5
@@ -40,9 +41,14 @@ is not agency.*
 guarantee this system makes about tax isolation, closed periods, currency
 matching and leaf-only categories is a trigger, a `CHECK`, a view predicate or a
 role privilege — not a convention. This is not defensive style; it is the direct
-lesson of [`../defects.md`](../defects.md), where nineteen critical defects
-reduced to one sentence: **this specification asserts guarantees, and asserting
+lesson of [`../defects.md`](../defects.md), where seventy-five critical and
+high defects reduced to one sentence: **this specification asserts guarantees, and asserting
 is not enforcing.**
+
+A fourth idea earns its place once you go offline: **an outbox entry is one user
+intention, not one row change** ([`08`](08-offline-and-concurrency.md)). Eight
+H-class defects were the same gap seen from eight angles, and all eight follow
+from getting that one definition right.
 
 ---
 
@@ -53,8 +59,8 @@ is not enforcing.**
 | Open questions across 30 screens and 15 flows | **0** — all decided, decisions recorded in place |
 | Template conformance | 30/30 screens, 15/15 flows |
 | Operations referenced by a screen but missing from the registry | **0** |
-| C-class defects | 19, all closed in code or specification |
-| Migrations | 8, all verified to apply cleanly from empty |
+| Defects | **C 20 · H 31 · M 24 — all closed.** L triaged, two items remain as scheduled implementation work |
+| Migrations | 10, all verified to apply cleanly from empty |
 | Database guarantees driven to refusal in test | period lock (7 cases), T1 (3 breaches), memory `CHECK`, reassignment invariant |
 
 **The one input still outstanding** is 52 account balances typed off the Money
