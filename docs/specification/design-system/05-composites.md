@@ -56,6 +56,21 @@ generic dialog teaches nothing and gets clicked through.
 **`<ToolResultCard>`** — read results. Visually distinct from writes, labelled
 `ran automatically · 240 ms`.
 
+**`<RefineRequest>`** — a one-line input beneath any machine-produced draft, on
+S02c and S07c. Typing a correction **re-runs the extraction with it in context**
+rather than editing fields directly, so the model can propagate consequences a
+field edit cannot: a receipt line changing group may change the receipt's
+dominant category, and *"this trip was a holiday"* may re-place forty import
+rows.
+
+States: idle · running (`ThinkingIndicator`) · returned (a new draft, which you
+still approve). It never writes — the output is a draft, exactly as the first
+pass was.
+
+**Direct editing stays, and is faster when you already know the answer.**
+Refinement is for when the model reasoned wrongly rather than read wrongly, and
+for when the correction applies to more than the row in front of you.
+
 **`<AutoModeComposer>`** — the agent composer while an auto-mode grant is live.
 Carries a persistent inline label above the input — `AUTO · recategorise · 14
 left` — with a `✕` to exit and a doubled send glyph (`▶▶`).

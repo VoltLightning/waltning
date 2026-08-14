@@ -64,7 +64,21 @@ wrong account is invisible afterwards and corrupts two balances.
 ```
 
 Expanding a row gives three panes: reason and toggles · category picker ·
-currency and rate.
+currency and rate — plus a **refine** line.
+
+```
+ ▾ MIGROS GENEVE                              Model 0.91
+   "Swiss grocery chain, matches prior Migros rows
+    in this account"          ← the loop read the ledger to say this
+   Food › Groceries                    [ Travel › Travel food ]
+   ⌨ this trip was a holiday — these are travel food
+```
+
+**Refining re-runs the row with your correction in context**, and the model may
+re-read the ledger while doing it. One sentence beats correcting a category,
+a business flag and a payee separately — and unlike a direct edit it can be
+applied to *the rest of the batch*, which is the case that actually costs time:
+forty holiday rows, one sentence.
 
 **d · Empty** — queue clear, session counts, verify-balances action.
 
@@ -75,6 +89,7 @@ currency and rate.
 | `ImportRow` | Collapsed and expanded forms |
 | `Pill` | Tier — `rule` names the rule and hit count; `model` states confidence **and** reason; `transfer`; `duplicate` |
 | `ThresholdSlider` | 0.50–1.00, live count in the button label, **cannot reach 1.00** |
+| `RefineRequest` | Re-runs a row — or the rest of the batch — with your correction in context. *"This trip was a holiday"* beats forty manual recategorisations |
 | `SegmentControl` | Status filters with live counts |
 | `UndoToast` | Every accept and skip; bulk accept is **one** undoable unit |
 | `KeyHint` | `J K A R S T` legend |

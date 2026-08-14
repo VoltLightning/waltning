@@ -66,7 +66,21 @@ at a time.
    unallocated            12,00 €           ← always visible
 
   ▸ Keep as one          ▸ Split
+
+  ┌ not right? ─────────────────────────────┐
+  │ ⌨ the Spülmittel line is household      │
+  └─────────────────────────────────────────┘
 ```
+
+**Extraction is refinable, not just editable.** Typing a correction re-runs the
+reasoning with it in context — one sentence instead of hand-editing four fields,
+and the model can propagate the consequence (a line moving group may change the
+receipt's dominant category). The re-run is bounded like any extractor loop
+(`SPEC.md` §11.4) and produces a new draft, which you still approve.
+
+Direct field editing stays available and is the faster path when you already
+know the answer. Refinement is for when the *model* was reasoning wrongly rather
+than reading wrongly.
 
 **Confidence is per field**, and low values are marked on the field itself. A
 banner over the whole receipt tells you nothing about which value to check.
@@ -93,7 +107,8 @@ the fact.
 |---|---|
 | `QueueItem` | `waiting` (queued 14:06) · `extracting` · `ready` · `unreadable` |
 | `ProgressBar` | Determinate — upload and extraction both report real progress |
-| `ThinkingIndicator` | During extraction |
+| `ThinkingIndicator` | During extraction, and during a refine |
+| `RefineRequest` | Re-runs extraction with a typed correction, so a consequence propagates — a line changing group may change the receipt's dominant category |
 | `FxAmount` | The rate is for the **receipt's** date, not today |
 | `Chip` | Per-line category — leaves only |
 | `ErrorState(terminal)` | Unreadable — image retained, partial extraction shown |

@@ -1423,8 +1423,9 @@ Three tiers, cheapest first:
 ```
 raw row → [1] exact duplicate?  → skip
         → [2] rule match?       → classified, deterministic, free
-        → [3] model call        → classified with confidence + reason
-        → review queue
+        → [3] model LOOP        → may read the ledger while deciding
+                                  classified with confidence + reason
+        → review queue          → refinable in place (S02c)
 ```
 
 **Rules** (`rules` table) match on payee regex, amount range, account, and
@@ -1449,7 +1450,17 @@ alongside `rule_applied`. Editing a rule afterwards changes future
 classification and cannot rewrite the record of what happened — which is what
 keeps the audit trail (§6.1) honest about machine-classified rows.
 
-**Model tier** — the configured `classify` model (§11.4), with:
+**Model tier** is a **bounded tool loop, not a call** (§11.4). It may read the
+ledger while classifying — `search_transactions`, `get_category_tree`,
+`get_rules` — so *"have I seen this merchant before, and what did I call it?"*
+is a lookup rather than a guess. That is what makes a reason like *"matches
+prior Migros rows in this account"* possible at all, and it is why the tier is
+far less dependent on rules having accumulated yet (§8.0).
+
+Read tools only. The tier produces a **proposal per row**; nothing it does
+reaches the ledger without an accept.
+
+It runs with the configured `classify` model, plus:
 
 - Account list, full category tree, and active rules in the system prompt
   behind a `cache_control` breakpoint — the taxonomy is cache-written once and
@@ -1676,25 +1687,83 @@ and make the state you are in obvious at a glance.
 `audit_log` marks agent-originated changes with `actor = 'agent'`. Sessions are
 retained as an audit trail.
 
-### 11.4 Four model surfaces — one agent, three extractors
+### 11.4 Four surfaces, all of them loops
 
-The system makes four kinds of model call, and treating them as one thing is a
-mistake. Only one of them is an agent.
+Every model surface in this system is a **bounded tool loop**, not a single
+call. The distinction between them is **not whether they have tools — it is
+whether they can write.**
 
-| Surface | Shape | Tools | Reviewed by |
+| Surface | Tools | Produces | Gated by |
 |---|---|---|---|
-| **Receipt** (§10.2) | image → JSON schema, one shot | — | A draft you save in seconds |
-| **Classification** (§9.2) | text batch → JSON schema, one shot | — | Bulk accept above a threshold |
-| **Voice** (J2, S08) | audio → text → intents, one shot | — | A `DiffCard` per intent |
-| **Agent** (§11) | multi-turn tool loop | ✅ registry | A `DiffCard` per write |
+| **Receipt** (§10.2) | read | A draft | The review screen (S07c) |
+| **Classification** (§9.2) | read | A proposal per row | Accept, or bulk accept |
+| **Voice** (J2, S08) | read | A draft per intent | A `DiffCard` each |
+| **Agent** (§11) | read **+ write** | Gated writes | A `DiffCard` each |
 
-The first three are **stateless extractors**: schema-constrained, no tool
-access, no conversation, no memory. They take input and return validated JSON.
-That makes each one independently swappable and — more usefully —
-**independently benchmarkable against a fixture set offline**, which the agent
-is not.
+#### Why an extractor needs tools
 
-#### Model quality matters inversely to how much review the output gets
+Classifying `ZABKA NR 2831 WARSZAWA` is guesswork from a static prompt and
+nearly free with a lookup: *have I seen this merchant, and what did I call it?*
+The same holds for a receipt — a merchant, a currency and a set of line items
+are all far easier to place correctly against prior decisions than against
+instructions.
+
+**The spec already assumed this.** S02c specifies a model reason reading
+*"Swiss grocery chain, matches prior Migros rows in this account"* — which is
+not something a stateless call can know. The example was written before the
+architecture that would permit it.
+
+It also changes the cold-start problem. §8.0 notes that rules accumulate from
+confirmed history, so the first months lean on the model tier. A model tier that
+can **read** that history is far less dependent on rules existing yet.
+
+#### What extractors may call
+
+The read half of the operation registry (`operations.md`) — and nothing else.
+`search_transactions`, `get_category_tree`, `get_accounts`,
+`get_counterparties`, `get_rules`. No writes, not even gated ones: an
+extractor's output is a **draft**, and the draft is the proposal.
+
+That is the whole safety boundary, and it is enforced by which tools are
+generated for that surface rather than by the model's restraint.
+
+#### Iteration is the point, in both directions
+
+**The model iterates.** It can read the image, notice the lines do not sum,
+re-read, search for the merchant, and revise — the way a task in a coding agent
+works, rather than one shot at an answer.
+
+**You iterate too.** Extraction results are conversational: *"this is household,
+not groceries — the Spülmittel line"* re-runs the reasoning with your correction
+in context, rather than making you hand-edit four fields. S07c and S02c both
+gain this (below).
+
+#### Loops are bounded, and the budget follows whether you are waiting
+
+A loop with no bound is a cost and latency risk. Each surface carries a maximum
+tool-call count and a wall-clock budget, and the budget is set by whether a
+person is standing still:
+
+| Surface | Budget | Because |
+|---|---|---|
+| Receipt | Generous — 6 calls | Queued and extracted in the background (§10.4). You are not watching |
+| Classification | Generous per row, batched | Reviewed at a desk (S02c) |
+| **Voice** | **Tight — 1 pass, refine on demand** | J2 targets **under 10 seconds** at a till. A three-turn loop breaks it |
+| Agent | Generous — the turn is the unit | 3–15 s is the stated expectation (§15) |
+
+Voice is the one surface where the loop must be opt-in rather than default: it
+extracts in a single pass, and refinement is something you ask for after the
+draft exists.
+
+#### What this costs
+
+Predictability. A loop is less deterministic than a schema-constrained call, and
+harder to evaluate — you can still score final output against fixtures, but not
+reproduce a trajectory. For bulk import that is a real trade, and it is the
+reason the confidence threshold and the bounded bulk-accept (S02c) matter more,
+not less.
+
+#### Quality still matters inversely to how much review the output gets
 
 The instinct is to buy the best model for the chat surface. That is backwards
 here.
@@ -1709,6 +1778,10 @@ So: **spend on the extractors, economise on the agent.** Receipt, classification
 and voice carry the quality bar; the conversational agent is the one surface
 that can afford a smaller model, because it is the one whose every output is
 already read by a human before it takes effect.
+
+Giving the extractors tools does not soften this — it sharpens it. A model that
+can look up prior decisions is a model whose mistakes are better-informed and
+therefore more plausible, which is exactly the kind that survives a bulk accept.
 
 #### The model is configuration, per surface
 

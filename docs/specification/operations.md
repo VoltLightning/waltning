@@ -64,6 +64,22 @@ remember to log itself is an operation that will eventually forget.
 its own capabilities cannot be asked open questions about them** (§11.0), so the
 registry is readable through the registry.
 
+### The extractors get this half, and only this half
+
+Receipt, classification and voice are bounded tool loops too (§11.4) — they read
+the ledger while deciding, which is what lets a classification say *"matches
+prior Migros rows in this account"* instead of guessing from a static prompt.
+
+They are generated **the read table above and nothing below it.** Not a
+restricted write, not a gated write — no write operation is generated for those
+surfaces at all. An extractor's output is a draft, and the draft is its
+proposal.
+
+**The boundary is which tools exist for that surface**, not which ones the model
+is asked not to call. A tool that was never generated cannot be invoked by a
+confused model, a prompt injection in a receipt image, or a future refactor that
+forgets why the rule was there.
+
 ---
 
 ## Writes — every one gated
