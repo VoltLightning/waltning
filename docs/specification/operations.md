@@ -149,6 +149,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 |---|---|---|
 | `create_layout` · `set_active_layout` · `add_widget` · `update_widget_config` · `remove_widget` | ✅ | *"Put family spending on my dashboard"* is an ordinary write (§11.0) |
 | `export_excel` · `record_export` | ✅ | |
+| `get_targets` · `create_target` · `update_target` · `delete_target` | ❌ | **These were missing entirely** — `computations.md` §11 defines progress and no operation exposed it. Structural, so never auto-eligible. A target is period-to-date against `spend_to_date(p, scope=mine, capital excluded)`; **not** an envelope budget (N7) — no rollover, no allocation, and going over is information rather than an error |
 | `add_scheme_period` · `add_residency_period` · `update_registration` · `set_ryczalt_rate` | ❌ | **Tax scope. Never eligible** (§11.2) |
 | `close_period` · `reopen_period` | ❌ | Freezes or unfreezes a filed period (§13.4) |
 | `run_backup` | ✅ | Idempotent |

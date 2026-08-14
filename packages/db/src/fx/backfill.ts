@@ -88,11 +88,27 @@ async function main() {
             fetchedAt: new Date(),
           })),
         )
-        // A manual override is never clobbered by a later sync.
+        // Sources are ranked, and a write only happens if it does not lower the
+        // rank. Protecting only `manual` was not enough: a `carried_forward`
+        // fill would overwrite a *published* quote for the same date with a
+        // stale weekend carry, and the row would keep looking authoritative
+        // because `source` was overwritten too. Rank order is
+        // manual > published > carried_forward, and equal rank still refreshes
+        // so a corrected publication lands.
         .onConflictDoUpdate({
           target: [fxRates.base, fxRates.quote, fxRates.date],
           set: { rate: sql`excluded.rate`, source: sql`excluded.source`, fetchedAt: sql`excluded.fetched_at` },
-          setWhere: sql`${fxRates.source} <> 'manual'`,
+          setWhere: sql`
+            (case ${fxRates.source}
+               when 'manual' then 2
+               when 'carried_forward' then 0
+               else 1 end)
+            <=
+            (case excluded.source
+               when 'manual' then 2
+               when 'carried_forward' then 0
+               else 1 end)
+            and ${fxRates.source} <> 'manual'`,
         });
       written += slice.length;
     }

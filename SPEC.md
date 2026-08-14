@@ -1234,6 +1234,39 @@ Deriving `to_amount` from the reference rate would erase it silently; storing
 both makes it a reportable figure. **FX cost becomes a category you can total**,
 which no version of Money Manager could show.
 
+#### `to_fx_rate` is the reference rate, not the realized one
+
+This was never stated, and the obvious reading makes the whole feature vanish.
+`to_fx_rate` holds the **reference** rate for `to_currency` on that date, in the
+same pivot-per-unit direction as `fx_rate`, so `to_amount_pivot` is a generated
+`to_amount × to_fx_rate`. The realized rate is `to_amount ÷ amount_original` and
+is **derived at read time, never stored**.
+
+Store the *realized* rate in `to_fx_rate` instead and both legs value to exactly
+the same pivot amount — the spread becomes identically zero for every transfer
+ever recorded, and the FX-cost feature reports nothing while looking like it
+works. The two legs are *meant* to disagree; that disagreement is the figure.
+
+```
+margin_pivot(t) = amount_pivot − to_amount_pivot
+                = amount_original × fx_rate − to_amount × to_fx_rate
+margin_pct(t)   = margin_pivot ÷ amount_pivot
+```
+
+Worked, from the transfer above with a reference rate of 3.8100 PLN per USD and
+a pivot of USD:
+
+```
+amount_pivot     = 150.00 × 1.0        = 150.00 USD
+to_amount_pivot  = 565.20 × (1/3.8100) = 148.35 USD
+margin_pivot     =                       1.65 USD   (≈ 6.29 PLN)
+margin_pct       = 1.65 ÷ 150.00       = 1.10 %
+```
+
+Positive means the transfer cost you money, which is the ordinary case. A
+negative margin is not an error — it means you beat the reference rate — and it
+must render as such rather than being clamped.
+
 **The margin and any stated fee are separate figures.** A transfer carries an
 optional `fee`, so `FX Cost` (§12.2) reports them as distinct lines rather than
 one blended number. They are different kinds of cost: a stated fee is avoidable
@@ -2570,6 +2603,29 @@ Both prerequisites are answered, and together they make the tax layer
   import review's business fields.
 - No JPK filing of any kind.
 
+#### Which day's rate values a foreign-currency revenue row
+
+Unspecified until now, and **the system's general FX path is the wrong answer
+here.** §7 converts by triangulating through the USD pivot, which produces a
+cross-rate NBP never published. A tax authority uses the rate its own central
+bank actually printed.
+
+**The rule: the average NBP rate from the last working day *preceding* the day
+the revenue arose.** Not the day itself, and never derived through another
+currency. An invoice issued in EUR on a Monday is valued at the NBP EUR table-A
+rate published for the preceding Friday.
+
+It is **stamped per row** — `tax_fx_rate`, `tax_fx_date`, `tax_fx_source`
+(migration `0009`) — for the same reason `ryczalt_rate` is stamped: a later rate
+correction must not reprice a period you have already filed. Adapters read the
+stamped value and never recompute one.
+
+A foreign-currency business row with no stamped rate **cannot be filed**, and
+that is reported rather than refused (`tax_unvalued_revenue`, surfaced on S28's
+completeness list). Refusing the write would block capture at the moment of
+entry — and the preceding working day's rate may not be published yet when you
+record the invoice.
+
 **What this adds**
 
 One field that exists nowhere else in the design:
@@ -2893,6 +2949,8 @@ reported on S30 beside the backup status.
 | `debt_reassignment_effects` sums to zero per currency | A reassignment changed what is owed in total, which is the one thing it must not do (§6.6a) |
 | No two rows share `(recurring_id, occurrence_date)` | Free — unique index (§6.5) |
 | Every currency in active use has ≥95% rate coverage | The GEL condition (§7.7), which went unnoticed for months |
+| `tax_residency` has no gaps across the ledger's date range | A transaction dated inside a gap has **no jurisdiction**, so every tax figure for that period is silently incomplete. Overlaps are refused outright by an `EXCLUDE` constraint; gaps are legitimate and therefore reported (§13.6, `0009`) |
+| No foreign-currency business row lacks a stamped `tax_fx_rate` | It cannot be filed (§13.6). Reported, never refused — the preceding working day's rate may not exist yet when you record the invoice |
 
 The first four replace a single earlier line — *"`tax_ledger` contains zero rows
 with `is_business = false`"* — which was **unfalsifiable**. It restated the

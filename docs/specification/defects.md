@@ -16,12 +16,12 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 20 |
-| **H** | Wrong data, silently | 31 |
-| **M** | Cannot be implemented from the spec | 24 |
+| **C** | A stated guarantee is false | 20 — **all closed** |
+| **H** | Wrong data, silently | 31 — **all closed** |
+| **M** | Cannot be implemented from the spec | 24 — **all closed** |
 | **L** | Correct but under-specified | 18 |
 
-**Every migration in this register now runs.** All seven files apply cleanly to
+**Every migration in this register now runs.** All ten files apply cleanly to
 an empty database, and the enforcement they add was tested by execution rather
 than by reading: `verify_t1()` was made to return false two ways (a `GRANT` on
 the base table, a redefined view), the omission check was made to return false
@@ -336,60 +336,70 @@ the ordinary use — unrepresentable. **Fixed.**
 **H6 · A Polish filing could print a US line code.** `category_tax_map`'s
 `scheme_id` and `tax_line_id` were independent FKs. **Fixed** — composite FK.
 
-**H7 · An offline receipt produces two transactions for one payment.** The
+**H7 · An offline receipt produces two transactions for one payment. Resolved** — `architecture/08-offline-and-concurrency.md`. The draft mints the transaction id before the image is queued; the upload carries it as a dependency and attaches to a row that already exists. Originally: The
 queued image is not bound to the draft the user already saved, so drain creates a
 second row. Violates §6.10 directly, and the client-UUID defence does not apply
 because these are two genuinely distinct client operations.
 
-**H8 · `fx_rate_estimated` set offline is never cleared.** Only a *manual* rate
+**H8 · `fx_rate_estimated` set offline is never cleared. Resolved** — S18 Q1:
+a manual rate set offers to clear the flag across the range it covers, gated by
+a stated count and **never inside a closed period**.  Only a *manual* rate
 set clears it; a later sync does not. Every foreign transaction captured offline
 is permanently valued at whatever rate the phone happened to carry, and
 `amount_pivot` materializes it.
 
-**H9 · A stale cached balance drives a real write.** S14 renders the settle sheet
+**H9 · A stale cached balance drives a real write. Resolved** — the client residual is an estimate labelled `as of hh:mm`; `settle_debt` takes the amount settled, never the residual, and the server derives the remainder from live data. Originally: S14 renders the settle sheet
 from cache offline and computes its residual — the screen's stated safety
 mechanism — from a stale minuend. Same shape on the unsettled banner, where a
 second allocation drives the clearing account negative.
 
-**H10 · Set-based writes are approved against one set and applied to another.**
+**H10 · Set-based writes are approved against one set and applied to another. Resolved** — an approved set is a list of ids, never a predicate. Registry-wide: an operation whose input is a predicate cannot be approved, because what you approved is not what will run. Originally:
 S09's day-wide FX fix states "4 other rows" at approval and applies to whatever
 matches at drain — 23 rows after an import lands in between, at a rate the user
 asserted about one purchase, now immune to sync correction.
 
-**H11 · A closed period's PLN figures are not frozen.** Only the row→pivot leg is
+**H11 · A closed period's PLN figures are not frozen. Resolved** — §13.6 and migration `0009`. A tax figure no longer joins live `fx_rates` at all: the filing rate is stamped per row as `tax_fx_rate` / `tax_fx_date` / `tax_fx_source`, so a later rate correction cannot reprice a filed period. The general display path stays live, which is correct — a *display* is a current view, a *filing* is a fact. Originally: Only the row→pivot leg is
 stamped; pivot→PLN is a live `fx_rates` join. Three paths mutate it, and only one
 of them is guarded.
 
-**H12 · Bulk accept is one undoable unit in the UI and N entries in the outbox.**
+**H12 · Bulk accept is one undoable unit in the UI and N entries in the outbox. Resolved** — an outbox entry is one *intention*, not one row change, so bulk accept is a single entry and undo before drain simply removes it. Originally:
 Undo queues compensating writes *behind* unsent accepts; a partial drain commits
 rows from an operation the user explicitly undid.
 
-**H13 · Offline `create_*` collides on unique names and orphans dependents.**
+**H13 · Offline `create_*` collides on unique names and orphans dependents. Resolved** — the client mints the entity id and the server accepts it, so dependents are never orphaned; a name collision becomes an S15 merge candidate rather than a failure path. Originally:
 Order was preserved and order was not the problem — five transactions reference a
 counterparty id that the server rejected.
 
-**H14 · Cross-path duplicates are wide open.** A capture queued on a phone is
+**H14 · Cross-path duplicates are wide open. Resolved** — duplicate detection is a server-side check on commit for every path, not a step inside the import pipeline. Same window and tolerance (`computations.md` §9); flagged, never refused. Originally: A capture queued on a phone is
 invisible to the import's duplicate detection, which runs against "the whole
 ledger" — a ledger missing the other writer.
 
-**H15 · A constraint violation on drain wedges the outbox forever**, with no
+**H15 · A constraint violation on drain wedges the outbox forever. Resolved** — a third outbox state, `blocked`, entered immediately on any 4xx-class refusal, surfaced on S30 and inspectable. Entries behind it still drain unless they depend on it. Originally:, with no
 `outbox blocked` state anywhere in the state matrix. The user sees pending
 markers that never clear, indistinguishable from a slow network.
 
-**H16 · `update_transaction` is undefined as patch-or-replace.** If it carries
+**H16 · `update_transaction` is undefined as patch-or-replace. Resolved** — every `update_*` is a patch, registry-wide, and carries the `updated_at` the client last saw. Different fields both land; the same field is last-write-wins with both values audited; a stale `tax_sensitive` field is blocked rather than overwritten. Originally: If it carries
 the whole entity, a phone's category edit reverts a laptop's `is_business` and
 `ryczalt_rate`, and the row leaves `tax_ledger`.
 
-**H17 · The migration's balance derivation and skip paths interact.** Rows
+**H17 · The migration's balance derivation and skip paths interact. Resolved** — the skip paths are gone. An unseeded currency is now a hard failure (H31) rather than a skipped account, and §8.4's gate has an independent right-hand side, so a derivation that shifted the opening plug can no longer reconcile with itself. Originally: Rows
 skipped for unmapped categories or missing FX still shift the derived opening
 balance unless `imported` is computed identically — verify against the
 verification gate before cutover.
 
-**H18 · `.gitignore` data patterns are root-anchored.** `apps/api/receipts/`,
+**H18 · `.gitignore` data patterns are root-anchored. Fixed.** The patterns are
+un-anchored (`receipts/`, `backups/`, `data/`, `exports/`) so they match where
+the application actually writes rather than where someone imagined it would, and
+`*.xls`/`*.xlsx`/`*.csv`/`*.ofx`/`*.qif`/`*.mt940` are ignored in any directory
+with a negation for documentation fixtures. Verified: nothing matching those
+patterns has ever been committed. Originally —  `apps/api/receipts/`,
 `docker/backups/`, `*.xlsx` and `*.csv` are **not ignored**, in a public
 Apache-2.0 repo whose README asserts it contains no financial data.
 
-**H19 · `pg_dump` carries no roles or grants.** A DR restore returns the data and
+**H19 · `pg_dump` carries no roles or grants. Resolved** — the restore runbook
+(`architecture/05-deployment.md`) makes re-applying `0005` step 3 and
+`verify_t1()` step 4, before the API is pointed at the restored database. The
+drill's old "rows verified" could not catch this; `verify_t1()` can.  A DR restore returns the data and
 silently drops T1 — and the drill logs "rows verified", which cannot catch it.
 
 **H20 · Three worked examples in the spec do not compute. Fixed.**
@@ -400,98 +410,167 @@ being described as derived from one. These are the figures an implementer
 unit-tests against.
 
 **H21 · `fx_rates.rate` and `transactions.fx_rate` are reciprocals, both named
-`rate`.** §7.0's display formula joined against the only row that exists is off
+`rate`. Resolved** — `computations.md` §4 pins both directions explicitly and
+names the collision as a known hazard rather than leaving it to be rediscovered.
+ §7.0's display formula joined against the only row that exists is off
 by `3.7556²` — **14.1×**. `RateEditor`'s own mock writes `RUB → 0,0104`, which is
 USD-per-RUB into a column wanting RUB-per-USD: **9 246× over**, and §7.6
 guarantees a manual rate is never overwritten.
 
 **H22 · `to_fx_rate` semantics are unpinned, and the obvious reading makes the
-spread exactly zero.** Storing the *realized* rate makes the two legs net to
-0.00 — erasing the bank margin that §7.0 says cannot vanish. Only the reference
-rate reproduces the 6,30 zł that three documents quote.
+spread exactly zero. Fixed** — §7.5 now pins it as the **reference** rate, in the
+same pivot-per-unit direction as `fx_rate`, with the realized rate derived at
+read time and never stored. `computations.md` §4a writes the margin formula down
+with a worked example.
 
-**H23 · The FX upsert has no source ranking.** `setWhere` protects `manual` and
+The defect's own analysis was the argument for it: storing the *realized* rate
+makes the two legs net to 0.00, erasing the bank margin that §7.0 says cannot
+vanish, and only the reference rate reproduces the 6,30 zł three documents quote.
+The feature would have reported nothing while appearing to work.
+
+**H23 · The FX upsert has no source ranking. Fixed** — sources are ranked `manual > published > carried_forward` and a write only lands if it does not lower the rank; equal rank still refreshes so a corrected publication applies. Verified on all three cases. Originally: `setWhere` protects `manual` and
 nothing else, so a `carried_forward` fill can overwrite a published quote and
 then report the day as a weekend gap.
 
-**H24 · The nearest-rate fallback is unbounded and non-deterministic.** No date
+**H24 · The nearest-rate fallback is unbounded and non-deterministic. Fixed** — `MAX_CARRY_DAYS` bounds the carry, and beyond it nothing is written so the rate is visibly absent rather than silently wrong. Originally: No date
 window, and no tiebreak on equidistant dates — so a 2025 GEL row takes a 2020
 rate (18.4% understated), and two runs of an importer whose headline property is
 idempotence can produce different `amount_pivot` values.
 
-**H25 · `fillForward` cannot carry across a run boundary.** `last` is seeded only
+**H25 · `fillForward` cannot carry across a run boundary. Fixed** — alongside H24, in the same bounded-carry work. Originally: `last` is seeded only
 from the current fetch, never from the database, so every weekend foreground
 sync writes nothing and punches a hole that then falls through to H24.
 
 **H26 · Opening balances carry no rate, no pivot, and a date one day before FX
-coverage begins.** They hold essentially all the value after §8.0, and they are
-the one figure that converts at *today's* rate — the precise defect §7.0 exists
-to eliminate. Net worth drifts daily for no reason.
+coverage begins. Resolved, and the premise is half right.**
 
-**H27 · There is no allocation primitive.** `mul` is the only tool, so a 185,00
+The daily drift is **correct and intended.** `balance(a)` is computed in the
+account's own currency (`computations.md` §2) and a *balance* converts at today's
+rate by definition (§4) — what a USD account is worth in PLN genuinely does
+change every day. §7.0 eliminates a *reporting* currency, not the fact that
+holding foreign currency is a position. A net worth that did not move with rates
+would be the defect.
+
+What the entry is right about is narrower and sharper: after §8.0 imports only
+income, the opening balance holds nearly all the value **and is a derived plug**
+rather than an observation. It inherits every weakness of the derivation that
+produced it, which is exactly C13 — and it is why the 52 balances have to be
+typed off the Money Manager UI rather than computed. The rate was never the
+problem; the plug was.
+
+No stored rate is needed, then, and the date preceding FX coverage is harmless
+because nothing converts an opening balance at its own date.
+
+**H27 · There is no allocation primitive. Resolved** — `computations.md` §8 specifies largest-remainder allocation, so a 185,00 three-way split distributes the last minor unit deterministically instead of stranding it. Originally: `mul` is the only tool, so a 185,00
 three-way split leaves 0,01 in the clearing account — permanently tripping §6.4's
 trend-to-zero invariant, in the same sign direction, every time.
 
-**H28 · `ZDO_TYPE` is compared as a string in Python and a number in SQL.** If
+**H28 · `ZDO_TYPE` is compared as a string in Python and a number in SQL. Resolved by evidence** — the probe reports `typeof(ZDO_TYPE)` as `text` for all 7 874 rows, and now fails the run if any row is `integer`. Originally: If
 Core Data returns an integer, `SIGN.get(1)` is `None` and **every** balance
 computes to 0.00 — while the income query still matches, because SQLite applies
 numeric affinity. The gate from C13 then passes `0 == 0`.
 
 **H29 · `ownership = 'shared' if name == 'family budget'` matches zero
-accounts.** No such account exists — `Family budget` is an old *category*
+accounts. Resolved by evidence** — the probe reports exactly **1** matching
+account in `<backup>.mmbak`, and it is now a checked assumption rather
+than an assumed one: `probe.py` §4 fails the run if the count is zero.  No such account exists — `Family budget` is an old *category*
 (TAXONOMY §4.1); the shared money is in `Household · USD`. So §6.7 migrates as a
 no-op and `DualTotal` prints the same figure twice.
 
-**H30 · `.abs()` turns a negative income row positive**, and the opening-balance
+**H30 · `.abs()` turns a negative income row positive. Resolved by evidence** — the probe reports **0** negative income rows, and fails the run if any appear in a later export. Originally:, and the opening-balance
 plug absorbs the swing — so a −250 correction reconciles perfectly while
 earnings read +250, a 500 error in the one figure §8.0 exists to preserve.
 
-**H31 · An unknown currency silently deletes an account and all its income**,
+**H31 · An unknown currency silently deletes an account and all its income. Fixed** — it now throws. Skipping the account dropped every row referencing it, and the opening-balance plug then absorbed the difference so the gate still reconciled: a wrong balance that looked right. An unseeded currency is a seeding bug, and the probe already reports the seven currencies actually in use. Originally:,
 with no warning and no counter on the `!accountId` path.
 
 ---
 
 ## M · Cannot be implemented from the spec
 
-The completeness review found 15; the others added 9. The ones that block hardest:
+The completeness review found 15; the others added 9. **All of them are now
+closed**, mostly by `computations.md` — which exists because of this section —
+and by migrations `0004` and `0009`. Each is struck through with where it was
+answered, so the reasoning stays attached to the complaint that produced it.
 
-- **A settlement in another currency has nowhere to record which balance it
-  discharged.** S14's picker is unimplementable: the currency trigger forces the
-  row into the account's currency, which discharges the wrong balance. Needs
-  `debt_currency` + `debt_amount`.
-- **`spend_by_category` has three undecided forks** — lines vs transaction
-  category, the shared-boundary net line (which has no category by constraint),
-  and capital treatment, which three screens answer three ways.
-- **Nothing triggers `materialize_occurrence`.** No cron, no boot hook, no
-  foreground trigger — and S21 and J13 contradict each other about whether
-  posting is automatic at all.
-- **J8's allocation step has no screen and no operation**, despite being the
-  reason the journey exists.
-- **`Mine` is two different sets** — §6.7 defines it as own accounts for net
-  worth and `own AND NOT business` for the scope partition. Balances cannot be
-  partitioned by a transaction flag at all.
-- **Cross-currency transfer detection cannot work as written** — "equal
-  magnitude" never holds across currencies, and this is where the realized rate
-  is supposed to come from.
-- **Duplicate detection has no window and no tolerance**, and three call sites
-  imply three different strictnesses.
-- **Confidence has no defined origin** and a threshold tuned against one model
-  silently changes meaning when the `models` row changes.
-- **Targets have no operations, no widget, no screen, and no progress rule.**
-- **Ageing has no anchor date** and no due-date field, so "62 days" can only mean
-  old, never overdue — which is the meaning S12 claims.
-- **`spent`, `net`, `business share` and `revenue_ytd` are undefined**, and
-  `revenue_ytd` reads a view that includes business *expenses*.
-- **`FX Cost` totals by institution, and no entity carries an institution.**
-- **The margin formula is never written down** and three candidates disagree.
-- **Search has no matching semantics**, and no single `tsvector` configuration
-  stems English, Polish and Russian.
-- **`tax_period_locks` cannot represent a period spanning a scheme change**,
-  which J11 calls normal — one `scheme_id`, and no reopen history.
-- **`tax_residency` has no gap or overlap constraint**, and a period spanning a
-  residency change is unhandled.
-- **Which NBP rate values a EUR invoice for a PL filing is unspecified**, and the
-  triangulated path produces a cross-rate NBP never published.
+- ~~**A settlement in another currency has nowhere to record which balance it
+  discharged.**~~ **Fixed in `0004`** — `debt_currency` + `debt_amount`, with a
+  CHECK that both are present or neither.
+- ~~**`spend_by_category` has three undecided forks**~~ **Decided in
+  `computations.md` §6** — two `UNION ALL` branches rather than a `LEFT JOIN` with
+  `COALESCE`, which would count a four-line transaction four times; the
+  shared-boundary net line is reported separately because it has no category by
+  constraint; capital is excluded from every comparison, trend and target.
+- ~~**Nothing triggers `materialize_occurrence`**~~ **Decided: materialization is
+  manual**, and the contradiction is settled in favour of S21. `computations.md`
+  §10 and §14.4: the calendar projects, you post. A rule that could post silently
+  would have to resolve the hand-entered-duplicate ambiguity without you, and it
+  has no basis on which to — hence **Link** rather than **Post** when an unlinked
+  row matches within ±3 days and 3%.
+- ~~**J8's allocation step has no screen and no operation**~~ **Fixed** —
+  `computations.md` §8 specifies FIFO consumption with largest-remainder
+  allocation, so a three-way split of 185,00 distributes the final minor unit
+  deterministically instead of stranding 0,01 in the clearing account forever.
+- ~~**`Mine` is two different sets**~~ **Resolved in `computations.md` §3** —
+  they are two different *things*. `mine` is a balance-level sum over
+  `ownership = 'own'` and includes business accounts; the scope partition is a
+  transaction-level filter. A balance cannot be partitioned by a transaction flag,
+  because one account's balance is composed of rows on both sides of it — which is
+  why **`DualTotal` is scope-invariant**.
+- ~~**Cross-currency transfer detection cannot work as written**~~ **Fixed in
+  `computations.md` §9** — matched on ±3 days with a ±3% tolerance against the
+  reference rate, never on equal magnitude. The realized rate then comes from the
+  two stored amounts (§7.5).
+- ~~**Duplicate detection has no window and no tolerance**~~ **Fixed** — ±3 days,
+  ±3% cross-currency, defined once in `computations.md` §9 and now applied
+  server-side on commit for *every* path rather than inside the import pipeline
+  (H14), so the three call sites cannot drift.
+- ~~**Confidence has no defined origin**~~ **Fixed in `computations.md` §14** —
+  retrieval *agreement* among the k neighbours, not a number the model reports
+  about itself, which injected text could steer. `import_rows.model_id` records
+  which model answered, so a threshold stays interpretable across a config
+  change.
+- ~~**Targets have no operations, no widget, no screen, and no progress rule.**~~
+  **Fixed** — `computations.md` §11 defines progress as period-to-date, and
+  `get_targets` / `create_target` / `update_target` / `delete_target` are now in
+  the registry. Deliberately **not** envelope budgets (N7): no rollover, no
+  allocation, and going over is information rather than an error.
+- ~~**Ageing has no anchor date**~~ **Resolved in `computations.md` §8 and S12**
+  — FIFO from the oldest open row, **companies only** (O15), and the label states
+  *old* rather than *overdue* because without a due date that is all it can
+  honestly mean. A 60-days-overdue badge on a friend's share of dinner is
+  absurd.
+- ~~**`spent`, `net`, `business share` and `revenue_ytd` are undefined**~~
+  **Fixed in `computations.md` §12.** `revenue_ytd` reads `tax_ledger` filtered to
+  income — under ryczałt there is no cost side (§13.6), so including business
+  expenses was both wrong and meaningless.
+- ~~**`FX Cost` totals by institution, and no entity carries an institution.**~~
+  **Fixed in `0004`** — `account_groups.institution`.
+- ~~**The margin formula is never written down**~~ **Fixed** — §7.5 and
+  `computations.md` §4a, with a worked example, and `to_fx_rate` pinned as the
+  *reference* rate so the margin is not identically zero (H22).
+- ~~**Search has no matching semantics**~~ **Fixed in `computations.md` §13** —
+  `pg_trgm` rather than `tsvector`, precisely because no single text-search
+  configuration stems English, Polish and Russian, and the corpus is all three
+  in the same account and often the same month.
+- ~~**`tax_period_locks` cannot represent a period spanning a scheme change**~~
+  **Fixed in `0004`** — one lock row **per scheme**, and the table is append-only
+  with `reopened_at`, because reopening is audited and a mutable column stores a
+  state rather than a history.
+- ~~**`tax_residency` has no gap or overlap constraint**~~ — **Fixed in `0009`.**
+  Overlaps are refused by an `EXCLUDE USING gist` constraint over
+  `daterange(valid_from, valid_to, '[)')`, so abutting periods are legal and
+  overlapping ones are not. Gaps are **permitted and reported**
+  (`tax_residency_gaps`, `verify_residency_covers`), because being between
+  residencies is a real state and refusing it would make the honest case
+  unrepresentable — while a transaction dated inside a gap has no jurisdiction
+  and silently produces an incomplete tax figure.
+- ~~**Which NBP rate values a EUR invoice for a PL filing is unspecified**~~ —
+  **Fixed in §13.6 and `0009`.** The average NBP rate from the **last working day
+  preceding** the day the revenue arose, stamped per row as `tax_fx_rate` /
+  `tax_fx_date` / `tax_fx_source` so a later correction cannot reprice a filed
+  period. The general §7 path was actively wrong here: triangulating through the
+  USD pivot produces a cross-rate NBP never published.
 
 ---
 
@@ -505,15 +584,21 @@ Load findings were mostly **not** where §15 expects. The honest summary:
   attack lines were checked and dismissed rather than padded.
 - **The real cost is fan-out**: S01 issues seven independent scans, serializing
   to 300–600 ms on two effective cores. One `dashboard_snapshot` CTE fixes it.
-- **No index is partial on `deleted_at`**, so no aggregate can be index-only —
-  ~300 ms cold after any memory pressure event, which is exactly when you open
-  the dashboard.
-- **The transfer destination leg has no date index**, so every balance-as-of-date
-  scans every transfer the account ever received.
+  **Still to build** — it is an implementation task with a known shape, and the
+  800 ms dashboard budget in `architecture/06-quality-attributes.md` is what it
+  has to satisfy.
+- ~~**No index is partial on `deleted_at`**~~ **Fixed in `0004`** —
+  `transactions_date_live` carries the predicate and `INCLUDE`s the columns the
+  aggregates read, so scans are index-only.
+- ~~**The transfer destination leg has no date index**~~ **Fixed in `0004`** —
+  `transactions_to_account_date`, also partial on `deleted_at`.
 - **The FX backfill has no pacing and no resume**, and discards the whole run on
   one failure — which is precisely how GEL ended at 11 of 2 080 days.
 - **`docker-compose.yml` is 25 lines, postgres only, stock-tuned**, against a §15
-  row that describes tuning for four services.
+  row that describes tuning for four services. **Still true, and now scheduled** —
+  `architecture/05-deployment.md` fixes the boot order, the one-shot `migrate`
+  service, the two database roles and the per-container memory budget; the
+  compose file catches up in Phase 0.5 and Phase 7.
 - **`maintainVisibleContentPosition` does not exist on React Native Web**, so
   backwards calendar scroll will jump the viewport.
 
@@ -521,23 +606,39 @@ Load findings were mostly **not** where §15 expects. The honest summary:
 
 ## What this changes about the plan
 
-**Authentication appears in no phase.** §5.2 specifies it; §16's eight phases do
-not deliver it, and §15.1's four test layers do not cover it. Phase 1 ships an
-API over five years of real data roughly thirteen weeks before Tailscale lands.
-That is the single most consequential scheduling finding, and it argues for a
-Phase 0.5 gate: auth and perimeter before any listener binds.
+**~~Authentication appears in no phase.~~ Fixed — Phase 0.5 exists.** §5.2
+specified it; §16's eight phases did not deliver it, and §15.1's four test layers
+did not cover it, so Phase 1 would have shipped an API over five years of real
+data roughly thirteen weeks before Tailscale landed. `build-order.md` now puts
+auth and perimeter before any listener binds, and before the importer runs — and
+it is a prerequisite for T1 regardless, since a superuser bypasses every `GRANT`.
+This was the single most consequential scheduling finding in the review.
 
-**Three sections are load-bearing far beyond their length.** §14.3 (offline) is
-four table rows and three bullets, and eleven screens each assumed a different
-mechanism from it. §13.1's guarantee has no DDL. §11.2's gate is per-operation
-against a per-field boundary. Each needs to be written to the depth its
-dependents assume.
+**~~Three sections are load-bearing far beyond their length.~~ All three are now
+written to that depth.** §14.3 (offline) was four table rows and three bullets
+that eleven screens each read differently — it is now
+`architecture/08-offline-and-concurrency.md`, which closes the eight H-class
+defects that lived in the gap. §13.1's guarantee had no DDL and is now migration
+`0005` plus `verify_t1()`. §11.2's gate was per-operation against a per-field
+boundary and is now evaluated per field.
 
-**Migration must not be rehearsed until C13 and C14 are settled.** The gate
-cannot fail, and the transfer semantics it would have caught are unverified —
-so every rehearsal J15 relies on currently confirms nothing. One SQL probe
-against the `.mmbak` resolves C14 in minutes and decides whether 52 destination
-balances are right or all wrong.
+**~~Migration must not be rehearsed until C13 and C14 are settled.~~ C14 is
+settled; C13 needs an hour of typing.** The probe ran: **Reading A confirmed at
+100%**, so the transfer semantics are verified and the 52 destination balances
+are computed correctly. It also surfaced C18 — 173 debt reassignments that net to
+zero and were invisible to every check in the system.
+
+C13 remains the one open input. The gate still needs 52 balances typed off the
+Money Manager UI, and two substitutes were tried and rejected:
+`ZASSET.ZLEFTMONEY` is `0.00` on all 52 accounts, and the bank statements cover
+2 accounts over 4 months — enough to corroborate the sign map, not to gate five
+years.
+
+And the bank check changed what the gate is *for* (C19): it measures **fidelity**,
+never **completeness**. 169 of 246 real transactions on `Bank A · PLN` are not in
+Money Manager at all. The ledger is faithful and partial, no balance check can
+see that, and it is why the statement sync tooling is permanent rather than a
+migration step.
 
 ## The order this changes things
 

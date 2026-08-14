@@ -96,6 +96,28 @@ triangulation through pivot.
 
 ---
 
+## 4a · FX margin on a transfer
+
+```
+margin_pivot(t) = amount_pivot − to_amount_pivot
+margin_pct(t)   = margin_pivot ÷ amount_pivot
+realized_rate(t)= to_amount ÷ amount_original      -- derived, never stored
+```
+
+`to_fx_rate` is the **reference** rate for `to_currency`, in the same
+pivot-per-unit direction as `fx_rate` (§7.5). Storing the *realized* rate there
+makes both legs value to the same pivot amount and the margin identically zero
+for every transfer in the ledger — the feature would report nothing while
+appearing to work.
+
+A negative margin means you beat the reference rate. Render it, never clamp it.
+
+`FX Cost` (§12.2) reports margin and stated `fee` as **separate lines**, grouped
+by `account_groups.institution`. They are different kinds of cost: a fee is
+avoidable by choosing another route, a margin is not.
+
+---
+
 ## 5 · Period spend, net, and the shared boundary
 
 For period `p` and scope `s`:

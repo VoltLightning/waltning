@@ -516,6 +516,21 @@ export const transactions = pgTable(
     ryczaltRate: numeric("ryczalt_rate", { precision: 5, scale: 4 }),
     ryczaltActivity: text("ryczalt_activity"),
 
+    /**
+     * The rate a **tax filing** uses, stamped per row (§13.6, migration `0009`).
+     *
+     * Deliberately not `fx_rate`. §7 triangulates through the USD pivot, which
+     * produces a cross-rate the jurisdiction's central bank never published; a
+     * tax authority uses the rate it actually printed. For PL that is the average
+     * NBP rate from the **last working day preceding** the day the revenue arose.
+     *
+     * Stamped rather than joined so a later rate correction cannot reprice a
+     * filed period — the same reason `ryczaltRate` is stamped.
+     */
+    taxFxRate: rate("tax_fx_rate"),
+    taxFxDate: date("tax_fx_date"),
+    taxFxSource: text("tax_fx_source"),
+
     source: txnSource("source").notNull().default("manual"),
     externalId: text("external_id"),
 
@@ -794,7 +809,15 @@ export const taxResidency = pgTable(
     validFrom: date("valid_from").notNull(),
     validTo: date("valid_to"),
   },
-  (t) => [index("tax_residency_range_idx").on(t.jurisdiction, t.validFrom)],
+  (t) => [
+    index("tax_residency_range_idx").on(t.jurisdiction, t.validFrom),
+    // Non-overlap is an EXCLUDE constraint (`tax_residency_no_overlap`, migration
+    // `0009`) — Drizzle has no builder for one, so it lives in SQL only. Two
+    // overlapping rows make jurisdiction resolution ambiguous, and silently so:
+    // the query returns two rows and something downstream picks the first. Gaps
+    // are permitted and *reported* (`tax_residency_gaps`), because being between
+    // residencies is a real state and refusing it would make it unrepresentable.
+  ],
 );
 
 /**

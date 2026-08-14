@@ -64,6 +64,13 @@
       "when": 1786000600000,
       "tag": "0008_memory_figure_check",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786000700000,
+      "tag": "0009_residency_and_rate_day",
+      "breakpoints": true
     }
   ]
 }

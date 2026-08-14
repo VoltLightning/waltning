@@ -114,12 +114,20 @@ async function main() {
 
   /* ---- accounts (opening balance filled in after income) ---------------- */
   const accountIds = new Map<string, string>();
-  let skippedAccounts = 0;
   for (const a of data.accounts) {
     if (!a.currency || !known.has(a.currency)) {
-      console.warn(`  ! ${a.name}: unknown currency ${a.currency} — skipped`);
-      skippedAccounts++;
-      continue;
+      // Not a warning. Skipping the account silently drops every row that
+      // references it, and the opening-balance plug then absorbs the difference
+      // so the verification gate still reconciles — a wrong balance that looks
+      // right. The probe reports the currencies actually in use (7 in this
+      // backup); an unseeded one is a seeding bug, and the fix is to seed it,
+      // not to import a partial ledger.
+      throw new Error(
+        `${a.name}: currency ${a.currency ?? "(none)"} is not seeded. ` +
+          `Seed it before importing — skipping the account would drop its ` +
+          `transactions and let the opening-balance plug hide the gap. ` +
+          `Run tools/migrate-mm/probe.py §5 for the full list.`,
+      );
     }
     const existing = await db
       .select({ id: accounts.id })
@@ -320,7 +328,7 @@ async function main() {
   }
 
   console.log("\nimported");
-  console.log(`  accounts          ${accountIds.size}${skippedAccounts ? ` (${skippedAccounts} skipped)` : ""}`);
+  console.log(`  accounts          ${accountIds.size}`);
   console.log(`  income rows       ${inserted}`);
   console.log(`  skipped by map    ${skippedCategory}  (Base saving / Allowance are transfers)`);
   if (estimated)
