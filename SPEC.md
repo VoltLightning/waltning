@@ -777,12 +777,17 @@ zero. Every one of these 173 rows contributes nothing, and ~52 000 zł of
 happen to name. The balances still reconcile, because they netted to zero in
 Money Manager too. Nothing fails.
 
-**So they migrate as `debt_reassignment`, not as transfers.** A reassignment is
-one row with two counterparties — `from_counterparty_id`, `to_counterparty_id`,
-an amount and a currency — and no cash flow, because none occurred. It applies
+**So they migrate as `debt_reassignments`, not as transfers** (migration
+`0007`). A reassignment is one row with two counterparties —
+`from_counterparty_id`, `to_counterparty_id`, an amount and a currency — and no
+cash flow, because none occurred. It is not a transaction: a transaction has one
+counterparty and a cash flow, and forcing this into `transactions` would mean
+either a second counterparty column that is NULL on every other row, or two rows
+kept in sync by convention. It applies
 `+amount` to one balance and `−amount` to the other, leaving net receivables
 unchanged, which is the invariant that makes it checkable: **a reassignment must
-not move the total.**
+not move the total.** That is the `debt_reassignment_effects` view, so §15.1 can
+evaluate it on a schedule rather than it being another sentence.
 
 The counterparties cannot be resolved automatically. The names are in prose, in
 three languages, and §6.6's own extraction rule already says merging two
@@ -2828,6 +2833,7 @@ reported on S30 beside the backup status.
 | No `is_business` row sits in a `shared` account | §6.7 breached |
 | Every clearing account trends toward zero | Not a defect — a **prompt** (§6.4). Reported as an amount and an age |
 | `counterparty_balances` equals the negated sum of its `debt`-role rows | The derivation drifted from the definition (§6.6) |
+| `debt_reassignment_effects` sums to zero per currency | A reassignment changed what is owed in total, which is the one thing it must not do (§6.6a) |
 | No two rows share `(recurring_id, occurrence_date)` | Free — unique index (§6.5) |
 | Every currency in active use has ≥95% rate coverage | The GEL condition (§7.7), which went unnoticed for months |
 

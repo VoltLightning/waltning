@@ -905,6 +905,65 @@ export const taxPeriodLocks = pgTable(
 );
 
 /**
+ * §6.6a — a debt moving between people, with no cash flow.
+ *
+ * The migration found 173 of these: transfers whose source and destination are
+ * the same Loan account, netting to zero and therefore invisible to every
+ * balance check, with the person named only in free text ("Marek. Total",
+ * "Доля Кати после реструктуризации"). Money Manager had no counterparty, so a
+ * self-transfer was the only way to say "this 180 is now Marek's, not Tomek's".
+ *
+ * Not a transaction: a transaction has one counterparty and a cash flow, this
+ * has two counterparties and none. Putting it in `transactions` would mean a
+ * second counterparty column NULL on every other row, or two rows kept in sync
+ * by convention.
+ *
+ * The invariant is that it must not move net receivables — it takes from one
+ * balance exactly what it gives another (`debt_reassignment_effects`).
+ */
+export const debtReassignments = pgTable(
+  "debt_reassignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    date: date("date").notNull(),
+    fromCounterpartyId: uuid("from_counterparty_id")
+      .notNull()
+      .references(() => counterparties.id),
+    toCounterpartyId: uuid("to_counterparty_id")
+      .notNull()
+      .references(() => counterparties.id),
+    currency: text("currency")
+      .notNull()
+      .references(() => currencies.code),
+    amount: money("amount").notNull(),
+    note: text("note").notNull().default(""),
+    /** The original text, kept whether or not the names were ever resolved (§9.4). */
+    sourceText: text("source_text"),
+    externalId: text("external_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("debt_reassignments_external_id_uq")
+      .on(t.externalId)
+      .where(sql`${t.externalId} is not null`),
+    index("debt_reassignments_from_idx")
+      .on(t.fromCounterpartyId, t.currency)
+      .where(sql`${t.deletedAt} is null`),
+    index("debt_reassignments_to_idx")
+      .on(t.toCounterpartyId, t.currency)
+      .where(sql`${t.deletedAt} is null`),
+    // Reassigning to oneself is the Money Manager artefact, not a thing to keep.
+    check(
+      "debt_reassignments_distinct",
+      sql`${t.fromCounterpartyId} <> ${t.toCounterpartyId}`,
+    ),
+    check("debt_reassignments_positive", sql`${t.amount} > 0`),
+  ],
+);
+
+/**
  * §11.6 — what the agent keeps in mind. Behaviour, never facts: the ledger is
  * queryable and a stored balance would drift from it, which is the defect §6.6
  * removed by deriving. Prepended to every turn, so it is both the most-repeated
