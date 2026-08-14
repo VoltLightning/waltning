@@ -1874,6 +1874,101 @@ silently. This is the guardrail that keeps a dynamic taxonomy from becoming 400
 junk categories — and the risk is not hypothetical, given 122 categories with 13
 name collisions today.
 
+### 11.6 What the agent keeps in mind
+
+A loop that forgets everything between turns re-asks questions you have already
+answered. But this system has a property most agent memory designs do not: **the
+facts are already queryable.** Balances, history and categories live in Postgres
+and are always current. That decides most of what follows.
+
+#### Three mechanisms, three different problems
+
+| Mechanism | Handles | In Waltning |
+|---|---|---|
+| **Clearing** | Bulky, re-fetchable tool results | Aggressive. A `search_transactions` result is large and perfectly re-fetchable — the ledger is authoritative and always there |
+| **Compaction** | Long dialogue and reasoning | On long agent sessions only. Capture loops are short by construction |
+| **Memory** | Knowledge that must survive a session | Narrow, and deliberately so — see below |
+
+Memory tool results are **excluded from clearing**, so the loop can rely on what
+it wrote still being present.
+
+#### Memory holds behaviour, never facts
+
+The tempting mistake is to let memory accumulate financial knowledge — *"Nina
+owes 840 PLN"*, *"the flat cost 380k"*. That would create a second source of
+truth that drifts from the first, which is the exact defect §6.6 removed by
+deriving balances instead of storing them.
+
+**Memory holds what the ledger cannot answer:** conventions, preferences, and
+resolved ambiguities.
+
+```
+✅  "Calls BANK-A/BIZ 'the business account'"
+✅  "Georgia trips are usually business — ask, don't assume"
+✅  "Nina's shares are always debt, never reference"
+✅  "Splits restaurant bills by shares, not evenly"
+
+❌  "Nina owes 840 PLN"                  → derived, query it
+❌  "Żabka is Groceries"                 → this is a RULE
+❌  "The February statement had 340 rows" → query it
+```
+
+#### Prefer a rule to a memory
+
+Anything expressible as a rule (§9.2) **must be one**. A rule is deterministic,
+inspectable, editable on S20, carries hit counts, and applies for free without a
+model call. A memory is prose that costs tokens on every turn and cannot be
+tested.
+
+So the hierarchy is: **schema for facts · rules for deterministic behaviour ·
+memory for the rest.** Memory is the smallest of the three by design, and a
+memory that could have been a rule is a bug.
+
+#### Memory does not gate, and is not opaque
+
+§11.2 says nothing is written on the model's own authority. Memory is a write —
+but it is not ledger state, so it moves no balance, changes no report, and
+reaches no tax output. Gating every memory write would be exhausting and would
+defeat the point.
+
+**The accountability substitute is inspection.** Everything the agent believes is
+readable and deletable on one screen (S32), in the prose it was written in.
+Where the ledger is protected by a gate, memory is protected by being legible.
+
+#### Memory ships on every turn, which bounds it
+
+Whatever memory holds is prepended to every call on every surface that reads it.
+That makes it simultaneously the **most-repeated** content in the system and, if
+routing goes through an aggregator (**O17**), the **most-exposed**.
+
+Two consequences:
+
+- **A hard size bound**, enforced rather than encouraged. When it is reached the
+  agent consolidates — distilling entries and dropping stale ones — as an
+  ordinary operation.
+- **No amounts, no counterparty balances, no account numbers.** Not as a
+  guideline: memory is the one place where a careless line is transmitted
+  hundreds of times.
+
+#### Shape
+
+Organised by domain rather than chronology — one entry per convention, not one
+per session. A session log would grow without bound and be re-read entirely to
+find one preference.
+
+```
+memory   id, scope (global | counterparty | account | category),
+         subject_id, body, created_at, last_used_at, source
+```
+
+`last_used_at` is what makes consolidation possible: an entry that has not
+informed anything in months is the first candidate to drop.
+
+**Read by** the capture loop (S05 `💬`) and the agent (S03). **Written by** the
+same two. The deterministic pipelines do not read it — retrieval gives them
+their context (§11.4), and a pipeline that consulted a mutable prose blob would
+stop being reproducible.
+
 ---
 
 ## 12. Reporting and Excel export
