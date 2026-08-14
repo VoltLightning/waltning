@@ -59,11 +59,21 @@ on small vision-capable models, chosen per surface (`SPEC.md` §11.4).
 ## Data handling
 
 This repository contains no financial data. Ledger contents, receipt images,
-database dumps, and app backups are excluded by `.gitignore` and stay out of
-version control.
+database dumps, bank statements and app backups are excluded by `.gitignore` and
+stay out of version control — the patterns are un-anchored, so they match
+wherever the application writes rather than only at the repository root.
 
-Institutions and accounts are referred to by role (`BANK-A`, `Clearing · PLN`)
-rather than by name throughout the specification.
+**Institutions, accounts and people are referred to by role or by a fictional
+placeholder** — `Bank A · PLN`, `Clearing · PLN`, and invented first names —
+throughout the specification and the migrations.
+
+The examples keep the *shape* of a real five-year ledger, because the design
+reasoning only holds if they are realistic: a debt reassigned between three
+people, a trilingual statement description, a clearing account that never quite
+settles. The identities in them are not real.
+
+Structural facts are real and describe the problem rather than the person: row
+counts, the number of accounts, the currency list, and the tax scheme.
 
 ## License
 

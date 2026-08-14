@@ -22,6 +22,14 @@ system it is built from, every user journey, and every screen.
 is the category tree. This folder specifies the *interface*; those specify what
 sits underneath it.
 
+> **Every personal name, bank and balance in this repository is fictional.**
+> The design was derived from a real five-year ledger, and the examples keep that
+> shape — a debt reassigned between three people, a trilingual statement
+> description, a clearing account that never quite settles — because the
+> reasoning only holds if the examples are realistic. The identities are not.
+> Row counts, currency lists and the tax scheme are real: they describe the
+> problem's shape and identify nobody.
+
 **Templates:** [`_TEMPLATE-screen.md`](_TEMPLATE-screen.md) ·
 [`_TEMPLATE-flow.md`](_TEMPLATE-flow.md). Every file follows one of them, so a
 missing section is visible rather than merely absent.
