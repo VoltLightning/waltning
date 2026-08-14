@@ -6,8 +6,13 @@ scanner, statement import, and an LLM agent over a Postgres ledger you own.
 Replaces [RealByte Money Manager](https://www.realbyteapps.com/) and the
 `mm-tools` Python pipeline in `<path-to-mm-tools>`.
 
-**Status:** specification. No implementation committed.
-**Last updated:** 2026-08-04
+**Status:** specification, with the data foundation built — schema applied,
+taxonomy seeded, FX backfilled. See §16 for what remains.
+**Last updated:** 2026-08-05
+
+**The interface is specified separately**, in [`docs/specification/`](docs/specification/):
+principles, design system, 15 journeys, 29 screens. This document specifies what
+sits underneath it.
 
 ---
 
@@ -182,8 +187,8 @@ Explicitly out of scope. Each is a decision, not an oversight.
               └───────────────┬───────────────────┘
                               │ outbound only
                     ┌─────────▼──────────┐
-                    │  api.anthropic.com │
-                    │  claude-opus-5     │
+                    │  model provider(s) │
+                    │  per surface (§11.4)│
                     │  FX rate provider  │
                     └────────────────────┘
 ```
@@ -289,7 +294,7 @@ Single user, but real. Tailscale is the perimeter; this stands behind it.
 
 | Secret | Where it lives | Never |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Pi environment, injected by Compose | App bundle, git, or a prompt |
+| Model provider key(s) | Pi environment, injected by Compose. One per configured provider (§11.4) | App bundle, git, or a prompt |
 | Postgres password | Docker secret / `.env` (0600, gitignored) | Committed |
 | Session signing key | Generated on first boot, persisted to a mounted volume | Hard-coded |
 | Backup encryption key | `age` key on a hardware token, plus a paper copy off-site | On the Pi alone |
@@ -304,7 +309,7 @@ The Pi is a single point of failure with an SD card in it. Assume it dies.
 | What | Cadence | Where |
 |---|---|---|
 | `pg_dump --format=custom` | Nightly | Local volume, then age-encrypted to **Backblaze B2** |
-| Receipt images | On write | Mirrored to the same B2 bucket. MinIO is S3-compatible, so this is configuration, not code |
+| Receipt images | On write | **age-encrypted, then** mirrored to the same B2 bucket. MinIO is S3-compatible, so the mirror is configuration; the encryption is not, and is the part that must not be skipped |
 | Retention | 30 daily, 12 monthly, 3 yearly | — |
 | **Restore drill** | **Quarterly, to a scratch container** | An untested backup is not a backup |
 
@@ -315,7 +320,9 @@ they fail silently for a while first.
 
 - Postgres bound to the Docker network only; never a published port.
 - Receipt images and OCR JSON retained indefinitely — they are the evidence
-  trail behind every business expense claim.
+  trail behind every business expense claim. Retained indefinitely and
+  photographs of five years of your life, they are the one artifact that leaves
+  your custody, so they leave it as ciphertext (§5.4).
 - The repo contains no financial data. `.gitignore` excludes `*.mmbak`,
   `*.sqlite`, `/data/`, `/receipts/`, `/backups/`, `*.dump`, `.env`.
 - Agent conversation history is stored (it is an audit trail) and deletable per
@@ -382,25 +389,43 @@ accounts                id, name, kind, currency, group_id,
                         is_business, ownership (own | shared),   -- §6.7
                         archived, sort, external_id
 categories              id, parent_id →self, name, kind,
+                        is_leaf,                              -- group or leaf, never both
+                        is_earnings,                          -- income only (§6.7)
                         icon, color, archived, sort, external_id
+category_mappings       external_id PK, external_path, category_id, note
+                                                              -- old MM category → new taxonomy
 counterparties          id, name, kind (person|company), settlement_currency,
                         contact, note, archived, sort         -- debt (§6.6)
 transactions            id, date, type, account_id, to_account_id, category_id,
-                        counterparty_id,                      -- debt (§6.6)
+                        counterparty_id, counterparty_role,   -- debt (§6.6)
                         is_capital,                           -- one-off (§6.8)
-                        amount_original, currency, fx_rate, amount_pivot,
+                        amount_original, currency, fx_rate,
+                        fx_rate_estimated,                    -- §7.6
+                        amount_pivot,                         -- GENERATED (§7.4)
                         to_amount, to_currency, to_fx_rate,   -- transfers (§7.5)
+                        fee,                                  -- stated bank fee, distinct
+                                                              -- from the rate margin (S31)
+                        recurring_id, occurrence_date,        -- no double-post (§6.5)
+                        counterparty_tax_id, document_ref, ksef_id,
+                        ryczalt_rate,                         -- revenue rows (§13.6)
+                                                              -- business rows only (§13.2)
                         payee, note, is_business,
                         source, external_id, deleted_at
-dashboard_widgets       id, kind, slot, size, config, sort    -- layout (§14.5)
+dashboard_layouts       id, name, is_active, is_preset, sort  -- §14.5
+dashboard_widgets       id, layout_id, kind, slot, size, config, sort
+targets                 id, category_id, period, amount, currency,
+                        active_from, active_to                -- not budgets (§14.7)
+agent_auto_grants       id, session_id, operation_class, granted_at,
+                        expires_at, max_operations, used_operations,
+                        revoked_at                            -- §11.2
 tags / transaction_tags id, name  ·  m2m
 recurring_transactions  id, type, account_id, to_account_id, category_id,
                         amount_original, currency, payee, note,
                         rrule, next_date, end_date, enabled
 receipts                id, transaction_id, image_key, ocr_json,
                         merchant, total, currency, purchased_at, confidence
-receipt_lines           id, receipt_id, description, amount, quantity,
-                        category_id, sort
+transaction_lines       id, transaction_id, description, amount, quantity,
+                        category_id, sort            -- optional breakdown (§6.10)
 import_batches          id, source_file, parser, account_id,
                         period_start, period_end, status
 import_rows             id, batch_id, raw, parsed, status,
@@ -471,9 +496,21 @@ transactions_transfer_distinct   to_account_id IS NULL OR to_account_id <> accou
 transactions_category_shape      type IN ('income','expense') OR category_id IS NULL
 transactions_to_amount_shape     (type = 'transfer') = (to_amount IS NOT NULL)
 transactions_to_amount_positive  to_amount IS NULL OR to_amount >= 0
+transactions_to_currency_shape   (type = 'transfer') = (to_currency IS NOT NULL)
+transactions_to_fx_rate_shape    (type = 'transfer') = (to_fx_rate IS NOT NULL)
 categories_no_self_parent        id <> parent_id
+categories_earnings_income_only  kind = 'income' OR is_earnings = false
+accounts_shared_not_business     ownership = 'own' OR is_business = false
+currencies_decimals_sane         decimals BETWEEN 0 AND 8
 fx_rates_rate_positive           rate > 0
+fx_rates_distinct                base <> quote
 ```
+
+The two `to_*` shape constraints matter more than they look. `to_amount` was
+already guarded; `to_currency` and `to_fx_rate` were not, so a transfer could be
+written with a destination amount and no way to value it — and since the
+destination leg's pivot value is computed rather than stored (§7.4), that is a
+balance that silently comes out wrong rather than a write that fails.
 
 Plus a partial unique index enforcing **exactly one pivot currency** — the hub
 every stored rate is quoted against (§7.0):
@@ -488,13 +525,83 @@ isn't one. Display currency is a client preference, not a database fact.
 
 Plus unique indexes on normalized names, and partial unique indexes on
 `external_id WHERE external_id IS NOT NULL` — the mechanism that makes
-re-migration idempotent.
+re-migration idempotent. The same mechanism prevents a recurring rule from
+double-posting (§14.4):
 
-**Validation status:** this schema has been expressed in Drizzle, and
-`drizzle-kit` generates clean PostgreSQL 16 DDL for all of it — expression
-indexes, the `coalesce`-based sibling uniqueness index, partial unique indexes,
-and every check constraint. It has not yet been applied to a live database end
-to end.
+```sql
+CREATE UNIQUE INDEX transactions_occurrence_uq
+  ON transactions (recurring_id, occurrence_date)
+  WHERE recurring_id IS NOT NULL;
+```
+
+#### Three invariants a CHECK cannot express
+
+Each spans two tables, so each is a trigger. They are listed here rather than
+left to application code because every one of them is a rule the design
+elsewhere claims as a guarantee:
+
+| Invariant | Why it matters |
+|---|---|
+| `transactions.currency = accounts.currency` (and `to_currency` = destination's) | §7.1 states `amount_original` *is* in the account's currency. Nothing enforced it, so a USD amount could sit on a PLN account and every balance downstream would be wrong |
+| Only leaves are assignable — `category_id` must reference a row with `is_leaf` | `TAXONOMY.md` R1 is called "the single rule that eliminates faults 1, 2 and 3", and it is the exact defect that put 705 transactions on the `Food` parent. It was unenforced |
+| A business transaction cannot sit in a `shared` account | §6.7 says the combination "is invalid and constrained against". It was constrained on `accounts` only, so a transaction-level `is_business` flag bypassed it — a hole in T1 (§13.1) |
+
+A trigger is heavier than a CHECK and is used here only where the alternative is
+an unenforced claim.
+
+The schema carries four further checks this section does not list individually:
+`accounts_shared_not_business` (shared money is never reportable, §6.7),
+`categories_earnings_income_only`, `currencies_decimals_sane`, and
+`fx_rates_distinct`.
+
+**Validation status:** `drizzle-kit` generates clean PostgreSQL 16 DDL for all
+of it — expression indexes, the `coalesce`-based sibling uniqueness index,
+partial unique indexes, the generated `amount_pivot` column, and every check
+constraint. Three migrations exist: `0000` (base), `0001` (the corrections in
+this section), and `0002` (the cross-table triggers below, hand-written because
+triggers are database behaviour and no ORM emits them).
+
+**`0000` is applied and verified** against a live PostgreSQL 16 — every table,
+constraint and expression index, with the taxonomy seeded and FX backfilled
+against it.
+
+**`0001` and `0002` are not applied**, and one detail matters when they are:
+`0000` reached the database through `drizzle-kit push`, not `migrate`, so no
+`__drizzle_migrations` ledger exists. `push` also **cannot apply `0002` at all**
+— triggers are not part of the Drizzle schema, so there is nothing for it to
+diff. Applying them means adopting `drizzle-kit migrate` and baselining `0000`
+as already-run, which is the right move regardless: §15 requires migrations be
+reviewed before applying, and `push` is a diff you cannot review.
+
+`0001` also drops and recreates `amount_pivot` as a generated column,
+recomputing every value from `amount_original × fx_rate` — harmless if the
+invariant held, and a silent correction if it did not. Run it against a copy
+first for that reason alone.
+
+**Migrations `0002`–`0004` are hand-written**, and `drizzle-kit generate` will
+not run until someone rebuilds the snapshot chain: it needs an interactive TTY to
+disambiguate the `receipt_lines` → `transaction_lines` rename, and the meta
+snapshots diverged when `0002` was written by hand. Adopt `drizzle-kit migrate`,
+baseline `0000`, and **delete `db:push`** — `push` diffs the Drizzle schema and
+therefore cannot see triggers, views or grants, which is most of what this
+system's correctness rests on.
+
+**Closed since `0001`**, all in `0004`: `to_amount_pivot` · `debt_currency` /
+`debt_amount` · `fee` · `ryczalt_rate` / `ryczalt_activity` ·
+`accounts.expected_balance` · `account_groups.institution` ·
+`import_rows.model_id` / `rule_snapshot` / `retrieved_ids` · `ryczalt_rates` ·
+`tax_period_locks` · `agent_memory` · the closed-period write guard · and the
+covering indexes every aggregate needed.
+
+**Still outstanding:**
+
+| Change | Why |
+|---|---|
+| `receipt_lines` → **`transaction_lines`**, keyed on `transaction_id` | Lines belong to the payment, not the photograph (§6.10, §10.3). Today a hand-entered card payment cannot be broken down at all |
+| `ryczalt_rate` on `transactions`; `ryczalt_rates` table; `counterparties.default_activity` | Revenue is live (§13.6) |
+| `tax_period_locks` | Closing a period is an explicit act (§13.4) |
+| GIN index on `receipts.merchant` and line descriptions | Receipt search (S10) |
+| `import_rows.rule_snapshot` | Rule conditions as they were when they fired (§9.2) |
 
 ### 6.6 Counterparties and debt
 
@@ -515,24 +622,68 @@ counterparties     id, name, kind (person | company),
                    settlement_currency,      -- the currency they prefer to settle in
                    contact, note, archived, sort, created_at
 transactions       + counterparty_id         -- nullable FK
+                   + counterparty_role       -- debt | contribution | reference
 ```
 
+**`counterparty_role` decides what a reference *means*.** Naming a counterparty
+is not the same as owing them, and three different things want the field:
+
+| Role | Meaning | Debt ledger | Ageing |
+|---|---|---|---|
+| `debt` | Money moved that is expected back, in either direction | ✅ | companies only (O15) |
+| `contribution` | An inflow to a shared account, attributed to who put it in (§6.7) | ❌ | never |
+| `reference` | This transaction merely involved them — no obligation either way | ❌ | never |
+
+Set at write time, never inferred. The alternative — deriving the distinction
+from `accounts.ownership` — works today but silently rewrites the meaning of
+five years of history the moment an account is reclassified.
+
 **Debt is derived, never stored.** A counterparty's position is the running sum
-of transactions referencing them. Nothing is posted twice, so a balance cannot
-drift from its history:
+of the `debt`-role transactions referencing them. Nothing is posted twice, so a
+balance cannot drift from its history:
 
 ```sql
 CREATE VIEW counterparty_balances AS
-  SELECT counterparty_id, currency,
-         SUM(signed_amount) AS balance
+  SELECT counterparty_id,
+         currency,
+         SUM(-signed_amount(type, amount_original)) AS balance
   FROM   transactions
-  WHERE  counterparty_id IS NOT NULL AND deleted_at IS NULL
+  WHERE  counterparty_id IS NOT NULL
+    AND  counterparty_role = 'debt'
+    AND  deleted_at IS NULL
   GROUP  BY counterparty_id, currency;
 ```
+
+**The negation is the whole trick.** The ledger signs by *cash flow*; a debt
+balance signs by *obligation*, and they are exact opposites. All four cases fall
+out of one rule:
+
+| Event | Cash | Debt delta | Reads as |
+|---|---|---|---|
+| You lend 200 | −200 | **+200** | they owe you |
+| They repay 200 | +200 | **−200** | back to zero |
+| You borrow 200 | +200 | **−200** | you owe them |
+| You repay 200 | −200 | **+200** | back to zero |
+
+So no direction field is needed, and the inversion that would have made every
+receivable read backwards cannot occur.
 
 **Sign convention:** positive means *they owe you* (a receivable); negative
 means *you owe them* (a payable). One counterparty can hold both at once in
 different currencies, which the account model made unrepresentable.
+
+**Receivables sit outside net worth.** Lending is an ordinary expense
+(`Debt & giving › Lent out`) and repayment an unearned inflow
+(`Other inflows › Repayment received`), so net worth is money you hold, not
+money you are owed. The counterparty ledger is a parallel record consulted on
+S12 and S13; it does not reconcile to net worth and is not meant to.
+
+The cost is stated rather than hidden: **net worth understates you by whatever
+you are owed, and period spending includes money you expect back.** The debt
+screens are where that gap is legible. The alternative — folding receivables
+into net worth — buys accounting correctness at the price of a second class of
+balance that no account holds, and was judged not worth it for a personal
+ledger.
 
 #### Cross-currency debt
 
@@ -546,7 +697,7 @@ Counterparty · person · settles in EUR
     PLN    +840,00      they owe you
     EUR     −120,00     you owe them
     ─────────────────
-    net in EUR   +75,40    @ NBP 2026-08-04
+    net in EUR   +74,44    @ 4,3200 · 2026-08-04
     net in PLN  +321,60
 ```
 
@@ -593,6 +744,59 @@ proposes a counterparty list for review. Extraction is a **suggestion**, never
 an automatic write: the names are inconsistent (first name, first name plus
 initial, nickname) and merging two spellings of one person silently would
 corrupt a balance.
+
+### 6.6a Debt reassignment — the transfer that moves nothing
+
+The probe (§8.1a) found **173 transfers whose source and destination are the
+same account.** They net to zero, which is why no balance check has ever seen
+them, and every one sits on a Loan account:
+
+| Account | Rows | Turnover |
+|---|---|---|
+| `Loan Zł (distributed)` | 157 | ~52 000 |
+| `Loan Zł` | 6 | 3 136,23 |
+| `Loan USD` | 6 | 413,40 |
+| `Loan Zl (my)` | 2 | 296,30 |
+| `Loan BYN (distributed)` | 1 | 105,00 |
+| `Loan BYN` | 1 | 212,00 |
+
+Their descriptions say what they are: *"Tomek and Ola. Total"*, *"Marek.
+Total"*, *"Piotr. Total"*, *"PCIe Joined BD 2023. Darek's liability"*,
+*"Доля Кати после реструктуризации"*. **These are debts moving between
+people** — a group bill re-split, one person taking over another's share, a
+restructuring. Money Manager has no counterparty, only accounts, so the only way
+to record *"this 180 is now Marek's rather than Tomek's"* was a transfer from the
+loan account to itself with the name in free text.
+
+This is precisely what §6.6 says the new model is for, and it is also the case
+the migration silently drops. Collapsing loan accounts into counterparties reads
+each leg's counterparty from the account it sits on — and both legs sit on the
+same account, so both resolve to the same counterparty and `debtDelta` sums to
+zero. Every one of these 173 rows contributes nothing, and ~52 000 zł of
+`Loan Zł (distributed)` ends up attributed to whoever the surrounding rows
+happen to name. The balances still reconcile, because they netted to zero in
+Money Manager too. Nothing fails.
+
+**So they migrate as `debt_reassignments`, not as transfers** (migration
+`0007`). A reassignment is one row with two counterparties —
+`from_counterparty_id`, `to_counterparty_id`, an amount and a currency — and no
+cash flow, because none occurred. It is not a transaction: a transaction has one
+counterparty and a cash flow, and forcing this into `transactions` would mean
+either a second counterparty column that is NULL on every other row, or two rows
+kept in sync by convention. It applies
+`+amount` to one balance and `−amount` to the other, leaving net receivables
+unchanged, which is the invariant that makes it checkable: **a reassignment must
+not move the total.** That is the `debt_reassignment_effects` view, so §15.1 can
+evaluate it on a schedule rather than it being another sentence.
+
+The counterparties cannot be resolved automatically. The names are in prose, in
+three languages, and §6.6's own extraction rule already says merging two
+spellings of one person silently would corrupt a balance — here it would corrupt
+two. So all 173 land in the import review queue as proposals with the original
+text attached, and unresolved ones import as zero-effect rows retaining their
+description, which is exactly their behaviour today. **The migration must not
+proceed as though these are ordinary transfers**, which is the one thing it
+would do by default.
 
 ### 6.7 Ownership — mine, and ours
 
@@ -730,14 +934,16 @@ invites itself.
 
 #### Contributions are attributed
 
-Each inflow to a shared account carries a `counterparty_id`, so *"he has put in
-X, I have put in Y"* is answerable at any time. Your own contributions are
-already attributable because they arrive as transfers from your accounts.
+Each inflow to a shared account carries a `counterparty_id` with
+`counterparty_role = 'contribution'`, so *"he has put in X, I have put in Y"* is
+answerable at any time. Your own contributions are already attributable because
+they arrive as transfers from your accounts.
 
 This uses counterparties for **attribution, not debt** (§6.6). There is no
 settlement expectation and no ageing — a co-owner's contribution is not
-something owed back. The `find_unsettled` and ageing surfaces do not apply to
-shared-account contributions, and must not treat them as outstanding.
+something owed back. `counterparty_balances` filters on the role, so
+`find_unsettled` and the ageing surfaces cannot see contributions at all; the
+exclusion is structural rather than a rule each query has to remember.
 
 #### What is deliberately not modelled
 
@@ -792,6 +998,35 @@ ledger is rarely the right default. Every read path filters
 `deleted_at IS NULL`. Reference data (accounts, categories) uses `archived`
 instead — never deleted, because history references it.
 
+### 6.10 One transaction per payment event
+
+The unit of a transaction is **the payment**, not the thing bought.
+
+A single card tap at a petrol station covering fuel and a coffee is **one**
+transaction — one payee, one amount, one date — with an optional line breakdown
+underneath (§10.3). It is one movement of money out of one account, and
+splitting it into two rows would invent a second payment that never happened,
+put two entries on the statement reconciliation that only match one, and break
+duplicate detection against the imported row.
+
+Cash is the user's call. Two handovers at the same counter can honestly be one
+row or two, because they genuinely were two events; nothing in the model
+prefers either, and the interface should not either.
+
+**The breakdown is optional and always subordinate.** The transaction's own
+amount is the fact; lines are an allocation of it. So:
+
+- Balances, reconciliation and duplicate detection read the **transaction**.
+- Category reporting reads the **lines** where they exist, and the transaction's
+  own category where they do not.
+- A breakdown that does not sum to the total carries an explicit `unallocated`
+  line rather than silently disagreeing (S07 §9).
+
+This is what makes a receipt and a hand-entered split the same shape, and it is
+why `is_business` splitting (§13.1 point 4) is deliberately *not* this: a
+70%-business laptop becomes **two transactions**, because the tax boundary must
+be visible in every report, and a line inside one row is not.
+
 ---
 
 ## 7. Money and FX semantics
@@ -842,8 +1077,32 @@ amount_display(row) = amount_pivot(row) ÷ rate(display → pivot, row.date)
 ```
 
 `amount_pivot` stays materialized because it is per-row and date-correct, so
-aggregation is a plain `SUM`; only the final display conversion joins
-`fx_rates`. When display equals pivot, that join is skipped entirely.
+aggregation over income and expense is a plain `SUM`; only the final display
+conversion joins `fx_rates`. When display equals pivot, that join is skipped
+entirely.
+
+#### Transfers are the exception, and deliberately do not net to zero
+
+A transfer is one row (§6.1) carrying **one** `amount_pivot` — the source leg.
+The destination leg's pivot value is `to_amount × to_fx_rate`, computed at read
+time, because materializing it would mean a second stored derivation to keep
+honest. So any aggregate spanning both legs — a balance, net worth — sums the
+two sides separately rather than summing a column:
+
+```
+balance(account) = opening_balance
+                 + Σ  signed leg where account_id    = account   (−amount_original)
+                 + Σ  signed leg where to_account_id = account   (+to_amount)
+```
+
+Category and period spending are unaffected: transfers carry no category and
+are excluded from both.
+
+On a **cross-currency** transfer the two legs are valued at different rates, so
+in pivot terms they do not cancel. That residue is not an error — it is the
+bank's spread (§7.5), and it is the reason FX cost is a figure you can total
+rather than an invisible leak. A model that forced the legs to net would have
+to invent one of the two amounts to do it.
 
 #### Currency configuration
 
@@ -863,6 +1122,32 @@ adapter forces its jurisdiction's currency (§13.2), so a display setting can
 never leak into a filing. That separation already existed; this makes it
 load-bearing.
 
+### 7.0a Dates and time
+
+Two kinds of time field, and they follow opposite rules.
+
+| | **Accounting date** | **System timestamp** |
+|---|---|---|
+| Columns | `transactions.date`, `fx_rates.date`, `receipts.purchased_at`, `targets.active_from` | `created_at`, `updated_at`, `approved_at`, `applied_at`, `audit_log.at` |
+| Type | `date` — no time, no zone | `timestamptz`, stored UTC |
+| Set by | The **device's local calendar at capture** | The server clock |
+| Rendered | Verbatim. Never converted | Converted to the viewer's locale |
+
+**An accounting date is not an instant.** It is a business fact: NBP publishes a
+rate *for a date*, a tax period is bounded *by dates*, and a month's total is
+the set of rows carrying that month. If the date were derived from a UTC instant
+and re-resolved per viewer, a purchase at 00:30 in Warsaw would belong to the
+previous day when read in New York — and a 31 December revenue row could move
+into the wrong tax year purely because of where the phone was. So the calendar
+date is resolved once, at capture, from the zone you were actually standing in,
+and is thereafter immutable.
+
+System timestamps have the opposite requirement: an audit entry answers *when
+did this happen*, which is a genuine instant. Those are UTC and render local.
+
+This matters here rather than being a footnote because the premise of §7.0 is
+that time is split across three countries.
+
 ### 7.1 Representation
 
 Amounts are `numeric(20,8)` in Postgres and **decimal strings** in TypeScript,
@@ -878,10 +1163,20 @@ Signed values are computed at read time:
 
 | Type | From account | To account |
 |---|---|---|
-| `income` | `+amount` | — |
-| `expense` | `−amount` | — |
-| `transfer` | `−amount` | `+amount` |
-| `adjustment` | `+amount` (may be negative in effect) | — |
+| `income` | `+amount_original` | — |
+| `expense` | `−amount_original` | — |
+| `transfer` | `−amount_original` | **`+to_amount`** |
+| `adjustment` | `+amount_original` (may be negative in effect) | — |
+
+**The destination leg uses `to_amount`, not `amount_original`.** On a
+cross-currency transfer they are different numbers, and using the source amount
+on the destination account is the single easiest way to corrupt a balance. The
+signing helper takes both amounts for this reason; a helper that takes one
+cannot express a transfer at all.
+
+**Debt inverts this.** A counterparty balance signs by obligation rather than
+cash flow, so it negates the figures above (§6.6). Nothing else in the system
+does.
 
 ### 7.3 Two kinds of rate
 
@@ -908,9 +1203,13 @@ by triangulation (§7.0).
 - Historical reference rates are backfilled daily across the full data range.
 - A transaction's `fx_rate` is fixed at its date and **does not** move when
   later rates arrive. A 2021 purchase is reported at 2021 rates.
-- `amount_pivot` is materialized for query performance and always recomputable
-  as `amount_original × fx_rate` — which is what makes changing the main
-  currency (§7.0) a backfill rather than a migration.
+- `amount_pivot` is **a generated column** — `GENERATED ALWAYS AS
+  (amount_original * fx_rate) STORED`. It is the figure every aggregate reads,
+  so leaving it to application code to keep in step would make the system's
+  most-read number the one most able to drift. Postgres computes it or the
+  write fails; there is no third outcome.
+- Because it is generated, changing the pivot (§7.0) is a rate backfill plus a
+  column recompute rather than a data migration.
 
 ### 7.5 Cross-currency transfers
 
@@ -935,6 +1234,46 @@ Deriving `to_amount` from the reference rate would erase it silently; storing
 both makes it a reportable figure. **FX cost becomes a category you can total**,
 which no version of Money Manager could show.
 
+#### `to_fx_rate` is the reference rate, not the realized one
+
+This was never stated, and the obvious reading makes the whole feature vanish.
+`to_fx_rate` holds the **reference** rate for `to_currency` on that date, in the
+same pivot-per-unit direction as `fx_rate`, so `to_amount_pivot` is a generated
+`to_amount × to_fx_rate`. The realized rate is `to_amount ÷ amount_original` and
+is **derived at read time, never stored**.
+
+Store the *realized* rate in `to_fx_rate` instead and both legs value to exactly
+the same pivot amount — the spread becomes identically zero for every transfer
+ever recorded, and the FX-cost feature reports nothing while looking like it
+works. The two legs are *meant* to disagree; that disagreement is the figure.
+
+```
+margin_pivot(t) = amount_pivot − to_amount_pivot
+                = amount_original × fx_rate − to_amount × to_fx_rate
+margin_pct(t)   = margin_pivot ÷ amount_pivot
+```
+
+Worked, from the transfer above with a reference rate of 3.8100 PLN per USD and
+a pivot of USD:
+
+```
+amount_pivot     = 150.00 × 1.0        = 150.00 USD
+to_amount_pivot  = 565.20 × (1/3.8100) = 148.35 USD
+margin_pivot     =                       1.65 USD   (≈ 6.29 PLN)
+margin_pct       = 1.65 ÷ 150.00       = 1.10 %
+```
+
+Positive means the transfer cost you money, which is the ordinary case. A
+negative margin is not an error — it means you beat the reference rate — and it
+must render as such rather than being clamped.
+
+**The margin and any stated fee are separate figures.** A transfer carries an
+optional `fee`, so `FX Cost` (§12.2) reports them as distinct lines rather than
+one blended number. They are different kinds of cost: a stated fee is avoidable
+by choosing another route, a rate margin is not — and blending them makes the
+total look like something you cannot act on when part of it is exactly what you
+would act on.
+
 ### 7.6 Rate sync and manual override
 
 **Sync on foreground.** The app refreshes reference rates when opened, subject
@@ -956,8 +1295,11 @@ can always be traced to its origin:
 1. **Per transaction** — enter the rate your bank actually applied, or let it
    be implied by entering both amounts (§7.5). This is the common case, and the
    preferred one: two amounts are observable from a statement, a rate is not.
-2. **Per day, per pair** — correct a bad or missing provider figure for a
-   specific date. Applies to anything valued on that date.
+2. **Per pair, over a date or a date range** — correct a bad or missing
+   provider figure. A range writes one `manual` row per day across it from a
+   single entry, which is what makes a dead source recoverable by hand: RUB has
+   had no published quote since ECB delisted it in March 2022, and covering
+   that day by day would be some 1,600 entries.
 3. **Provider selection** — per currency, choose which source is authoritative
    (§7.7).
 
@@ -967,6 +1309,24 @@ the same pair and date, is never overwritten by a later sync, and writes to
 `audit_log`. Reports can be filtered to show which figures rest on overrides —
 useful when a period is being reconciled and you need to know what was asserted
 rather than observed.
+
+#### When no rate exists at all
+
+Carry-forward is capped at ten days (§7.7), so a dead source eventually leaves
+genuine holes. **A missing rate must never cost you the transaction.** The row
+is written with the nearest available rate and
+`fx_rate_estimated = true`, which:
+
+- keeps every aggregate working, with no nullable `amount_pivot` to handle;
+- marks the row so reports can filter to *figures resting on an estimate*,
+  alongside the manual-override filter above;
+- renders through `<FxAmount variant="stale">`, so the estimate is visible on
+  the row rather than buried in a report.
+
+The cap stays on `fx_rates` itself — the rate **table** never holds an invented
+figure. The estimate lives on the transaction, where it is attributable to one
+row rather than presented as a published quote. Setting a real rate by hand
+(level 2 above) clears the flag on every affected row.
 
 ### 7.7 Rate sources
 
@@ -995,8 +1355,23 @@ data, and each quotes directly against the USD pivot:
 | NBG | `nbg.gov.ge/gw/api/ct/monetarypolicy/currencies/en/json/?currencies=USD&date={date}` | 3.3193 GEL |
 | ECB | Data Portal SDMX — EUR and GBP | — |
 
-All three are free, unauthenticated, and need no API key. This closes the main
-Phase 0 risk on FX: no currency falls back to a stale snapshot.
+All three are free, unauthenticated, and need no API key.
+
+**Reachable is not the same as backfilled.** Measured against the live table,
+8,803 rate-days from 2020-11-25:
+
+| Currency | Source | Coverage | Note |
+|---|---|---|---|
+| PLN, EUR, GBP, BYN | NBP · ECB · NBRB | **100%** | Complete over the full range |
+| RUB | ECB | 23% | Stops **2022-03-11** — ECB delisted RUB, and the carry cap (below) correctly refused to invent four more years. Covered by a manual range override (§7.6, O5) |
+| GEL | NBG | **0.5%** | **11 days of 2,080.** NBG answers a self-redirect once its bot defence trips, and the backfill stopped there |
+
+GEL is the open one. The adapter reports the rate-limit honestly rather than as
+a fetch failure, which is why nothing looked broken — but one of the three
+countries in use has no usable rate history, and under §7.6 every GEL row would
+otherwise be valued at a December 2020 rate and flagged `estimated` for five
+years. That is not a fallback anyone should accept, so the backfill needs
+re-running against NBG with request pacing, not merely retries.
 
 Adding a currency means adding a source adapter — a function from
 `(pair, date range)` to rates. Sources are plugins, so a new one is a module
@@ -1024,7 +1399,7 @@ closes no doors.
 | **Opening balances** | ✅ | Read from the `.mmbak` directly — accurate starting positions, zero typing |
 | Currencies | ✅ | With their rate sources |
 | Recurring rules | ✅ | 24 of them |
-| **Income transactions** | ✅ | 506 rows, so "what did I earn in 2023" works |
+| **Income transactions** | ✅ | 498 active rows, so "what did I earn in 2023" works |
 | Categories | ⚠️ **mapped, not copied** | A new taxonomy replaces them — see `TAXONOMY.md` |
 | Expenses and transfers | ❌ *for now* | ~7,100 rows. Available any time via the same importer |
 | Counterparty proposals | ⚠️ deferred | Names live in loan-transaction notes; extract when history does |
@@ -1040,6 +1415,64 @@ closes no doors.
   accumulate from confirmed history. Starting near-empty means the first months
   lean harder on the model tier — more API calls, more review, self-correcting
   within a few months. A cost in euros, not in correctness.
+
+### 8.1a Probe before you trust the extractor
+
+`extract.py` computes every balance from an assertion in its own docstring: that
+a transfer is two rows, each naming its own account. Two readings of the Core
+Data layout fit the evidence, and the other one credits **no destination at
+all** — every transfer nets to zero on the source.
+
+That reading fails *plausibly*, which is what makes it dangerous:
+`Clearing · PLN` is 636 transfers of 678 rows, so under the wrong reading it
+computes to ≈0 — and §6.4 says a clearing account should trend to zero. The bug
+reads as confirmation of the design.
+
+```
+python3 tools/migrate-mm/probe.py <backup.mmbak>
+```
+
+It exits non-zero on any blocking finding and answers seven assumptions the
+extractor otherwise makes silently: the transfer layout, `ZDO_TYPE`'s storage
+class (an integer makes every balance 0.00 while the income query still
+matches), unmapped types, whether any account matches the hardcoded shared-name
+test, unseeded currencies, negative income rows, and income heads missing from
+`INCOME_MAP`.
+
+**Run it against every backup, not once.** §8.3 relies on re-running the import
+against progressively later exports, and each one may add a category, a
+currency, or a type the map has never seen.
+
+#### What it found — `<backup>.mmbak`
+
+**Reading A is confirmed, at 100%.** All 1,680 OUT legs name a destination in
+`ZTOASSETUID` that is the account of a same-dated IN leg, and the converse holds
+for all 1,680 IN legs. `extract.py`'s docstring assumption is correct and every
+destination is credited. This was the finding that gated everything downstream,
+and it is now closed by evidence rather than by argument.
+
+Getting there required fixing the probe itself. Its first test asked the weaker
+question — *do IN and OUT legs share a `ZASSETUID`?* — expecting ~0% under
+Reading A, and measured **17.4%**, which is neither answer. Two other mechanisms
+produce a shared `ZASSETUID`: pass-through accounts that receive and send the
+same amount the same day, and the same-account transfers below. A heuristic
+three mechanisms can satisfy cannot decide between two readings, and a threshold
+on it would have "confirmed" Reading A for the wrong reason. The direct test —
+does `ZTOASSETUID` name the account the paired leg sits on — is unambiguous.
+
+The remaining assumptions hold: `ZDO_TYPE` is stored as `text`, so the string-
+keyed sign map is correct; no unmapped types; exactly one account matches the
+hardcoded `family budget` test; seven currencies in use (USD 16 accounts, PLN
+12, EUR 8, BYN 7, GEL 6, RUB 2, GBP 1); no negative income rows; all eight
+income heads are in `INCOME_MAP`.
+
+**One blocking finding, and it is new** — see §6.6a.
+
+**`ZASSET.ZLEFTMONEY` is not the gate's missing right-hand side.** It looked
+like Money Manager's own stored balance, which would have made §8.4's 52
+hand-typed figures unnecessary. It is `0.00` on all 52 accounts — the column is
+unused in this export. Recorded so it is not investigated twice; the balances
+still have to be read off the UI.
 
 ### 8.1 Pipeline
 
@@ -1083,16 +1516,92 @@ against progressively later backups before cutover.
 
 ### 8.4 The verification gate
 
-**Go/no-go for the entire project.** For all 52 active accounts:
+**Go/no-go for the entire project** — and the version that shipped could not
+fail.
+
+#### Why the obvious gate is decoration
+
+`opening_balance` is derived as `computed_balance − Σ(imported income)`, and
+§8.0 imports only income. So the gate
 
 ```
-opening_balance + Σ(signed transactions) == Money Manager's reported balance
+opening_balance + Σ(signed transactions) == computed_balance
 ```
+
+evaluates `(computed − Σ) + Σ = computed` for every account, unconditionally.
+Break the sign map so transfers never credit a destination and it still prints
+`0,00` down all 52 rows. **A gate whose two sides share a derivation cannot
+detect anything**, and this one was the sole check on the riskiest phase.
+
+#### The right-hand side must come from outside the pipeline
+
+Two independent sources, both required:
+
+**1 · Balances typed from Money Manager.** 52 figures read off the app's own
+account list into a CSV, loaded as `accounts.expected_balance`, compared per
+account per currency. Money Manager stores no balance — `ZLEFTMONEY` is zero on
+every account — so its *displayed* figure is the only value in existence that
+was not computed by our own extractor. Tedious once, and unavoidable.
+
+**2 · A structurally different second derivation.** The extractor computes
+balances by signing each leg once, keyed on `ZASSETUID`. The check recomputes
+them by crediting destinations through `ZTOASSETUID` on the OUT leg instead. The
+two methods share no code path, so agreement is evidence and disagreement names
+the transfer-layout question directly (§8.1a).
+
+**3 · The bank's own running balance.** Bank A's `.xls` statements carry a
+`Saldo po transakcji` column — a balance computed by the bank, in a file we did
+not produce, about an account Money Manager only claims to describe.
+`tools/migrate-mm/reconcile_bank.py` reads it.
+
+All three must agree with the imported ledger. **Agreement of two derivations
+that share an assumption is not evidence**, which is exactly what the first
+version had.
+
+#### Fidelity and completeness are different gates, and only one was specified
+
+Sources 1 and 2 both ask: *does our reading of the `.mmbak` match what Money
+Manager shows?* Neither can ask whether Money Manager matches **reality**,
+because every figure on both sides comes out of the same file. That question
+needs the bank, and asking it changes the answer:
+
+| | `Bank A · PLN` | `Bank A · Business PLN` |
+|---|---|---|
+| Statement window | 2025-11-30 … 2026-03-29 | 2025-12-02 … 2026-03-29 |
+| Statement self-consistent (Σ Kwota = Saldo span) | ✅ −349,47 | ✅ 5 879,00 |
+| Bank movement | −349,47 (246 rows) | 5 879,00 (56 rows) |
+| Ledger movement | −1 281,59 (101 rows) | −26,00 (22 rows) |
+| Ledger rows matching a bank row **on signed amount** | 77 / 101 | 21 / 22 |
+| Bank rows absent from the ledger | **169 / 246** | **35 / 56** |
+
+Two conclusions, and they point in opposite directions.
+
+**Fidelity is externally corroborated.** 98 ledger rows match a bank row on the
+*signed* amount. An inverted sign map would match approximately none, so this is
+independent evidence for `SIGN` — the one thing the `.mmbak` cannot tell us
+about itself, and previously the entire reason source 1 was needed.
+
+**Completeness is not.** 169 of 246 real transactions on `Bank A · PLN` are not in
+Money Manager at all. The migration will copy that faithfully, and every
+downstream figure — period spend, category totals, the ryczałt revenue check —
+inherits it. This is not an extractor defect and no balance check can see it:
+the ledger is internally consistent, just partial.
+
+That is why §16 keeps the sync tooling rather than treating migration as a
+one-off. **A gate that passes on fidelity and is never run for completeness
+certifies a faithful copy of an incomplete ledger** — which is the state this
+backup is in, and worth knowing before five years of it becomes the system of
+record.
+
+#### The other checks
+
+Plus:
 
 To the cent, per account, per currency. Plus:
 
-- Transaction count matches (7,621 active, 253 deleted) — and re-matches on
-  every later backup.
+- Income row count matches (498 active) — and re-matches on every later backup.
+  The full-history counts (7,621 active, 253 deleted) become part of this gate
+  only when expenses and transfers are imported, which §8.0 defers.
 - Net worth is reported **twice** — *mine* and *ours* (§6.7). Money Manager
   had only one figure, which corresponds to *ours*. The report states both so
   the difference reads as the new distinction it is, not as a shortfall.
@@ -1104,6 +1613,14 @@ To the cent, per account, per currency. Plus:
 
 If balances do not reconcile, nothing built on top is trustworthy. Failure here
 stops the project until it is understood.
+
+**The migration runs inside one transaction, and abandoning rolls it back
+entirely.** No accounts, no opening balances, no rows — the state before the
+file was chosen. Nothing partial survives, because a partial ledger looks whole
+at a glance and every figure built on it is quietly wrong. The discrepancy
+report is written *before* the rollback, so the evidence of what failed outlives
+the data that failed, and re-running against a corrected backup costs nothing
+(§8.3).
 
 ### 8.5 Cutover
 
@@ -1139,17 +1656,53 @@ Three tiers, cheapest first:
 ```
 raw row → [1] exact duplicate?  → skip
         → [2] rule match?       → classified, deterministic, free
-        → [3] model call        → classified with confidence + reason
-        → review queue
+        → [3] retrieve + one call → classified with confidence + reason
+                                    deterministic, reproducible, scoreable
+        → review queue            → refinable in place (S02c)
 ```
 
 **Rules** (`rules` table) match on payee regex, amount range, account, and
 currency; they apply a category, payee normalization, note, and business flag.
-Confirming a model suggestion offers to write a rule. After a few months the
-recurring set — rent, salary, subscriptions, utilities — is entirely rules, and
-the model only sees novel merchants.
+After a few months the recurring set — rent, salary, subscriptions, utilities —
+is entirely rules, and the model only sees novel merchants.
 
-**Model tier** uses `claude-opus-5` with:
+**Rules accumulate from demonstrated repetition, not from prompting.** When the
+same normalized payee has been confirmed to the same category three times with
+no rule covering it, one prefilled suggestion appears, and is never raised again
+for that payee. Confidence is the wrong trigger — a high score usually means an
+obvious merchant, and a single confirmation is thin evidence it will recur.
+
+**Conflicts resolve by specificity, then age.** When two rules match, the one
+with more conditions wins — payee *and* account beats payee alone — and only
+then does creation order decide. Priority integers stay as a manual override,
+not as the mechanism, because hand-numbering rules to express "narrower" is a
+bookkeeping task nobody sustains.
+
+**`import_rows` snapshots the rule's conditions as they were when it fired**,
+alongside `rule_applied`. Editing a rule afterwards changes future
+classification and cannot rewrite the record of what happened — which is what
+keeps the audit trail (§6.1) honest about machine-classified rows.
+
+**Model tier is a deterministic pipeline, not a loop** (§11.4). Retrieval runs
+first and the model runs once:
+
+```
+normalize payee → retrieve k most similar prior payees + their categories
+                → one call: retrieved context + row batch → schema out
+```
+
+That is what makes a reason like *"matches prior Migros rows in this account"*
+possible, and it is why the tier is far less dependent on rules having
+accumulated yet (§8.0) — the model is handed history rather than having to go
+find it.
+
+**Reproducibility is the reason it stays a pipeline.** §9.4 keeps
+`import_rows.raw` unmutated so a reparse is always available, and that promise
+is empty if a reparse can return a different answer. It also keeps the tier
+scoreable against fixture rows, which a loop is not.
+
+It produces a **proposal per row**; nothing reaches the ledger without an
+accept. It runs with the configured `classify` model, plus:
 
 - Account list, full category tree, and active rules in the system prompt
   behind a `cache_control` breakpoint — the taxonomy is cache-written once and
@@ -1174,6 +1727,18 @@ Cross-account transfer detection also ports: a debit and a credit of equal
 magnitude in different accounts within a few days is a transfer candidate, not
 two independent transactions.
 
+**Both run against the whole ledger, not the current batch.** A month means five
+statements from five institutions, and a transfer's two legs land in two
+different files — so batch-scoped detection would never pair them, and the
+re-pairing would fall back to exactly the manual heuristic §6.1 exists to
+remove. Candidates are matched against committed transactions plus every open
+batch; the review queue names the counterpart's batch and date, and confirming
+commits **one row carrying both legs and the realized rate**.
+
+For a cross-currency transfer this is also where the realized rate comes from:
+the two amounts are observed from two statements, and the rate is derived from
+them rather than fetched (§7.5).
+
 ### 9.4 Review
 
 Today this is editing CSVs in Excel. It becomes a screen: proposed rows with
@@ -1188,7 +1753,7 @@ mutated, so a reparse after a prompt change is always possible.
 ### 10.1 Flow
 
 ```
-camera → local queue (SQLite) → upload → claude-opus-5 vision
+camera → local queue (SQLite) → upload → the configured `receipt` model
        → structured extraction → draft transaction → confirm → commit
 ```
 
@@ -1199,6 +1764,20 @@ Both the image and the raw model response are retained permanently — the image
 is the evidence, and the raw response allows re-extraction after a prompt
 improvement without re-photographing anything.
 
+**Stored downscaled, and only after extraction succeeds.** A phone camera
+produces ~3.5 MB per capture; a legible till receipt needs ~250 KB. The original
+is held until extraction returns, then discarded — so the compression can never
+cost a reading that had not happened yet. Retention stays unlimited, which is
+what the evidence argument requires; this only removes the growth rate as a
+concern on a Pi with a finite SSD.
+
+**The merchant and line descriptions are indexed for search** (S10). They are
+already structured columns, so this is a GIN index rather than a pipeline, and
+it makes a business expense provable from its contents rather than only its
+total. The raw response stays unindexed — it carries confidence scores and model
+commentary alongside the text, and matches against those look like data without
+being it.
+
 **Currency is detected, not assumed.** A supermarket receipt from one country
 is not in the same currency as a café receipt from another, and the app is used
 across several. The FX rate is looked up for the *receipt* date.
@@ -1206,9 +1785,25 @@ across several. The FX rate is looked up for the *receipt* date.
 ### 10.3 Line-item splitting
 
 One supermarket run split across `Food → Groceries` and `Household → Toiletries`.
-Money Manager cannot do this at all. Implemented as `receipt_lines` with
-per-line categories; the parent transaction holds the total, the lines carry
-the allocation.
+Money Manager cannot do this at all.
+
+**Lines belong to the transaction, not to the receipt.** A receipt *populates*
+them; it does not own them.
+
+```
+transaction_lines   id, transaction_id, description, amount,
+                    quantity, category_id, sort
+receipts            id, transaction_id, image_key, ocr_json, …
+```
+
+This follows from §6.10: the breakdown exists because one payment covered
+several things, and whether you photographed the till slip is irrelevant to
+that. Binding lines to `receipts` would mean a card tap covering fuel and a
+coffee — entered by hand, no photo — could not be broken down at all, while the
+identical purchase with a photograph could.
+
+The parent transaction holds the total and every balance reads it, so a
+mis-summed breakdown can never move a balance.
 
 ### 10.4 Offline
 
@@ -1268,12 +1863,20 @@ about them.
 |---|---|
 | `search_transactions` | `create_transaction` |
 | `get_balances` | `update_transaction` |
-| `spend_by_category` | `split_transaction` |
+| `spend_by_category` | `set_transaction_lines` |
 | `compare_periods` | `categorize_batch` |
 | `find_duplicates` | `create_category` |
 | `find_unsettled` (§6.4) | `propose_rule` |
 | `get_category_tree` | `run_import` |
 | `export_excel` | — |
+
+**This table is illustrative, not the contract.** §11.0 is the contract: the
+agent's tools are *generated from the operation registry*, so its reach is
+whatever the UI can do — settling a debt, overriding a rate, editing a rule,
+configuring a widget, archiving an account. Enumerating a fixed list here would
+recreate the drift that having one registry exists to prevent. What the two
+columns fix is the **read/write split**, which is a property of each operation
+and the thing the approval gate keys on.
 
 Text-to-SQL over a financial ledger trades unbounded blast radius for marginal
 flexibility. A bounded typed surface is also far easier to evaluate.
@@ -1302,8 +1905,44 @@ global:
 | Scope | Per operation class — e.g. recategorisation on, deletion never |
 | Duration | The session, or a stated number of operations. Never permanent |
 | Never eligible | Deletes, configuration changes, anything touching tax scope or the pivot currency |
+| Field ineligibility | Enforced per **field**, not per operation — see below |
 | Audit | Unchanged — auto-applied writes are logged identically, marked `auto` |
 | Exit | One tap, and any single write can still be reverted (§11.2) |
+
+**The tax boundary is a field boundary, and the grant is an operation
+boundary.** *"Anything touching tax scope"* is not expressible as a list of
+operation names, because the operation you would obviously auto-grant is the one
+that can cross it: `update_transaction` sets `category_id` — which is
+recategorisation, the motivating example — and the same operation sets
+`is_business`, `ryczalt_rate` and `ryczalt_activity`. Grant recategorisation for
+the session and a single tool call can move forty rows into or out of the tax
+view with no approval and no distinguishing mark. Under ryczałt the damaging
+direction is *out*, and §13.1's whole argument is that this cannot happen.
+
+So eligibility is evaluated against the **fields the call actually writes**, not
+the operation it belongs to. The registry (§11.0) marks each writable field
+`tax_sensitive`; a call under an auto grant that names one is gated
+individually, whatever else it also sets, and the approval card shows only the
+sensitive fields with the rest already applied. The ineligible set is
+`is_business`, `ryczalt_rate`, `ryczalt_activity`, `counterparty_tax_id`,
+`date` (it decides the period), `accounts.ownership`, and `currencies.is_pivot`.
+
+A category change *can* alter tax scope indirectly, since `is_earnings` feeds
+`tax_omission_candidates`. That is a report, not a write, and it is checked at
+close (§13.4) rather than gated per row — the point of the field list is that
+nothing silently changes a filed figure, not that no figure can ever move.
+
+The grant itself is stored, not just its consequences:
+
+```
+agent_auto_grants   id, session_id, operation_class, granted_at,
+                    expires_at, max_operations, used_operations, revoked_at
+```
+
+`agent_tool_calls.auto` records that a write was auto-applied; this records
+**what was permitted, and until when**. Without it the scope and duration rules
+above are enforced only by whatever the running process happens to remember,
+which is not a property you want on the one feature that bypasses approval.
 
 The model is Claude Code's own: gate by default, opt into speed deliberately,
 and make the state you are in obvious at a glance.
@@ -1314,14 +1953,198 @@ and make the state you are in obvious at a glance.
 `audit_log` marks agent-originated changes with `actor = 'agent'`. Sessions are
 retained as an audit trail.
 
-### 11.4 Model configuration
+### 11.4 Loops where you are present; pipelines where you are not
 
-- `claude-opus-5`; adaptive thinking (on by default on this model).
-- `effort: "high"` for analysis, `"medium"` for routine logging turns.
-- Context carries the category tree, account list, and recent activity — not all
+The dividing line is **not** read-versus-write, and it is not extraction versus
+conversation. It is whether a person is sitting inside the interaction while it
+happens.
+
+| Surface | Shape | Reproducible | Why |
+|---|---|---|---|
+| **Quick add — conversational** (S05) | **Agentic loop**, read tools | No | You are present, working on **one** transaction, and correcting as you go |
+| **Agent** (S03) | **Agentic loop**, read + write | No | Conversational by definition |
+| Receipt (§10.2) | Pipeline, one pass · refinable | Per pass | Queued and extracted in the background |
+| **Classification** (§9.2) | **Deterministic pipeline** | **Yes** | Hundreds of rows, reviewed in bulk |
+| Voice (S08) | One pass · refinable | Yes | J2 targets **under 10 seconds** at a till |
+
+#### Retrieval is not agency
+
+The distinction I need to make, because conflating them is what pushed loops
+into places they do not belong.
+
+S02c specifies a model reason reading *"Swiss grocery chain, matches prior
+Migros rows in this account"*. That requires the model to **have** prior-merchant
+context. It does not require the model to be able to **go looking** for it.
+
+A deterministic step does it better:
+
+```
+raw row → normalize payee
+        → retrieve the k most similar prior payees + their categories
+        → one call, that context in the prompt, schema out
+```
+
+Same reason string, same quality — and reproducible, cheap, fast, and
+benchmarkable against fixtures. This is retrieval, not a tool loop, and it is
+what the classification tier should be.
+
+#### Why bulk import must stay deterministic
+
+Beyond speed and cost, **replayability is a stated guarantee**. §9.4 keeps
+`import_rows.raw` unmutated so a reparse after a prompt or parser change is
+always possible — and that promise only means something if the earlier answer
+can be accounted for. An agentic loop cannot offer that: two runs over the same
+row may take different paths.
+
+**Be precise about what is being promised, because a pipeline is not a pure
+function either.** Three things move underneath it independently of the row: the
+model version behind a floating alias; the retrieved neighbours, which come from
+the *live* ledger and therefore change as you keep using the system; and batch
+co-tenancy, since row 37 shares a context with rows 1–36 and a different batch
+boundary gives it different company. Nothing here pins temperature or a seed,
+and §11.4 states plainly that nothing records which model answered. A claim of
+bit-identical reruns would be false in three independent ways.
+
+What is actually guaranteed is that **every classification can be explained and
+re-derived from its recorded inputs.** `import_rows` stores `model_id`, the rule
+conditions as they fired (`rule_snapshot`), and the ids that retrieval returned
+(`retrieved_ids`) — added in migration `0004`. Replay pins those neighbours and
+that model rather than re-retrieving, so the run is reproducible against the
+state it actually saw. Re-running against *today's* ledger is a different
+operation with a different name, `reclassify`, and it is expected to differ;
+conflating the two is how a "reproducible" system quietly stops being one.
+
+The deterministic shape is what makes this possible at all: with no tool loop
+there is one call whose entire input is those three recorded things plus the
+untouched raw row.
+
+Determinism also makes the tier *evaluable*. Three hundred fixture rows scored
+against known-good classifications is a number you can watch move when you
+change a model or a prompt. A loop gives you an outcome without a trajectory.
+
+So: one call per row (or per batch), cached stable prefix, retrieved context,
+structured output. **No tool loop in the import path.**
+
+#### Where the loop earns its place
+
+Tapping `+` and starting a transaction is the opposite situation. One row, you
+are present, and the interaction *is* the iteration:
+
+> *"coffee at that place near the office"*
+> → searches recent payees near prior transactions
+> → *"the café near the office?"*
+> → yes
+> → draft filled, with its trail
+
+That cannot be a pipeline, because the useful move — asking you a question — is
+only available to something that can take another turn. It is also the one place
+where a slower, smarter interaction is what you asked for by choosing to talk
+rather than type.
+
+#### The ten-second target is per path, not per screen
+
+J2's target belongs to the **keypad** path, which involves no model at all and
+should stay instant. Choosing to converse is choosing a different trade, and the
+budget follows the choice:
+
+| Path | Budget |
+|---|---|
+| Keypad | **Under 10 s**, no model call |
+| Photo | Queued; background |
+| Voice — dictating a transaction | One pass, tight |
+| **Conversational capture** | As long as it takes to get it right |
+
+#### What every model surface shares
+
+Read tools only, except the agent. Extractors and the capture loop are generated
+the **read half** of the registry and nothing below it — not a restricted write,
+no write operation at all. The boundary is which tools exist for that surface,
+so it survives a confused model, a prompt injection inside a receipt image, and
+a future refactor that forgets why the rule was there.
+
+And every machine-produced draft is refinable in one sentence (`RefineRequest`),
+whether it came from a loop or a pipeline. Refinement is a second pass, not a
+conversation, on the surfaces that are pipelines.
+
+#### Quality still matters inversely to how much review the output gets
+
+The instinct is to buy the best model for the chat surface. That is backwards
+here.
+
+Every agent write passes a gate you tap (§11.2), so a weak proposal costs a
+decline — annoying, never corrupting. But import classification is **bulk
+accepted** above a confidence threshold, and a receipt fills a draft saved in
+under ten seconds. Those are the paths where a mediocre model writes wrong data
+into the ledger without anyone reading it.
+
+So: **spend on the extractors, economise on the agent.** Receipt, classification
+and voice carry the quality bar; the conversational agent is the one surface
+that can afford a smaller model, because it is the one whose every output is
+already read by a human before it takes effect.
+
+Giving the extractors tools does not soften this — it sharpens it. A model that
+can look up prior decisions is a model whose mistakes are better-informed and
+therefore more plausible, which is exactly the kind that survives a bulk accept.
+
+#### The model is configuration, per surface
+
+```
+models   surface (receipt | classify | voice | agent)
+         provider, model_id, effort, max_tokens
+```
+
+Nothing in the ledger, the registry or the UI knows which model answered. Four
+independent choices, changeable without a migration, and comparable by
+swapping one row.
+
+#### Cost is not the constraint at this volume
+
+Measured against ~2,000 transactions, ~200 receipts and ~200 agent turns a
+year, total annual model spend runs between roughly **$0.50 and $25** depending
+entirely on which tier is chosen — and stays under $250 at ten times the usage
+on the most expensive option.
+
+This retires the assumption behind **R7**. The reasons to prefer a smaller model
+are **latency** (receipt extraction targets 2–5 s, agent turns 3–15 s) and
+**routing** (below), not cost. Choosing a cheap model to save money here is
+optimising a rounding error.
+
+#### What is provider-specific, and must not be treated as architecture
+
+Four things in this spec are one vendor's API surface written as though they
+were design:
+
+| Currently specified | Reality |
+|---|---|
+| `cache_control` breakpoints (§9.2) | Caching semantics and discounts vary by provider and, through a router, by upstream. §9.2's cost argument **must be measured, not assumed** |
+| `stop_reason: "refusal"` (§11.4) | One vendor's response shape. `RefusalCard` (S03) needs a normalized signal |
+| The SDK tool runner (§11.2) | An implementation detail. The gate is ours; the loop is theirs |
+| `effort` and adaptive thinking | Not universally available |
+
+The approval gate, the audit trail and the operation registry are ours and
+survive any provider change. These four do not, and the provider adapter is
+where they belong.
+
+#### Routing is the real question, and it is a §5 question
+
+Going through an aggregator means receipt images and transaction descriptions
+transit a third party **in addition to** the upstream model provider. §1 opens
+with physical custody of the data; §5.5 keeps receipt images indefinitely
+because they are the evidence trail; §5.4 now encrypts them before they reach
+Backblaze precisely so a storage provider holds ciphertext only.
+
+Sending the same images to a router in plaintext is not inconsistent with that
+by accident — it is a different decision about a different provider, and it
+should be made deliberately rather than inherited from a convenience. **O17.**
+
+#### Still true regardless of provider
+
+- Context carries the category tree, account list and recent activity — not all
   7,874 rows. Tools fetch what is needed.
-- Prompt caching on the stable prefix (taxonomy, tool definitions).
-- Handle `stop_reason: "refusal"` before reading content.
+- The stable prefix (taxonomy, account list, tool definitions) is cacheable
+  where the provider supports it, and the per-batch payload goes after it.
+- Structured output is a schema contract, not prose parsed afterwards.
+- A refusal is handled before content is read.
 
 ### 11.5 Category proposals
 
@@ -1329,6 +2152,119 @@ The agent may **propose** a new category when nothing fits; it never creates one
 silently. This is the guardrail that keeps a dynamic taxonomy from becoming 400
 junk categories — and the risk is not hypothetical, given 122 categories with 13
 name collisions today.
+
+### 11.6 What the agent keeps in mind
+
+A loop that forgets everything between turns re-asks questions you have already
+answered. But this system has a property most agent memory designs do not: **the
+facts are already queryable.** Balances, history and categories live in Postgres
+and are always current. That decides most of what follows.
+
+#### Three mechanisms, three different problems
+
+| Mechanism | Handles | In Waltning |
+|---|---|---|
+| **Clearing** | Bulky, re-fetchable tool results | Aggressive. A `search_transactions` result is large and perfectly re-fetchable — the ledger is authoritative and always there |
+| **Compaction** | Long dialogue and reasoning | On long agent sessions only. Capture loops are short by construction |
+| **Memory** | Knowledge that must survive a session | Narrow, and deliberately so — see below |
+
+Memory tool results are **excluded from clearing**, so the loop can rely on what
+it wrote still being present.
+
+#### Memory holds behaviour, never facts
+
+The tempting mistake is to let memory accumulate financial knowledge — *"Nina
+owes 840 PLN"*, *"the flat cost 380k"*. That would create a second source of
+truth that drifts from the first, which is the exact defect §6.6 removed by
+deriving balances instead of storing them.
+
+**Memory holds what the ledger cannot answer:** conventions, preferences, and
+resolved ambiguities.
+
+```
+✅  "Calls BANK-A/BIZ 'the business account'"
+✅  "Georgia trips are usually business — ask, don't assume"
+✅  "Nina's shares are always debt, never reference"
+✅  "Splits restaurant bills by shares, not evenly"
+
+❌  "Nina owes 840 PLN"                  → derived, query it
+❌  "Żabka is Groceries"                 → this is a RULE
+❌  "The February statement had 340 rows" → query it
+```
+
+**Enforced, not merely stated** — `agent_memory_no_figures`, a `CHECK`. This is
+content prepended to *every* turn and, under O17, the most-exposed data in the
+system, so a screen is not enforcement.
+
+The predicate refuses a ledger **figure**, not any number: a quantity carrying a
+currency code or symbol, a run of four or more digits, or a two-decimal amount.
+The first version was `[0-9]{2,}`, which also rejected *"split group dinners
+50/50"*, *"anything from Żabka after 22:00"* and *"round cash to the nearest
+10"* — every one of them behaviour, none of them capable of drifting, and all
+three precisely what this feature exists to learn. A guard that blocks the main
+use case with an unreadable constraint violation, on the one write that bypasses
+the approval gate, is worse than a slightly loose one (C20, migration `0008`).
+
+**It is a guard, not a proof.** *"Rent went up by a third"* still passes. The
+`CHECK` stops the mechanical failure — a figure copied out of the ledger into a
+prompt prefix, where it silently goes stale — and S32 covers the remainder by
+keeping every memory listed, editable and deletable.
+
+#### Prefer a rule to a memory
+
+Anything expressible as a rule (§9.2) **must be one**. A rule is deterministic,
+inspectable, editable on S20, carries hit counts, and applies for free without a
+model call. A memory is prose that costs tokens on every turn and cannot be
+tested.
+
+So the hierarchy is: **schema for facts · rules for deterministic behaviour ·
+memory for the rest.** Memory is the smallest of the three by design, and a
+memory that could have been a rule is a bug.
+
+#### Memory does not gate, and is not opaque
+
+§11.2 says nothing is written on the model's own authority. Memory is a write —
+but it is not ledger state, so it moves no balance, changes no report, and
+reaches no tax output. Gating every memory write would be exhausting and would
+defeat the point.
+
+**The accountability substitute is inspection.** Everything the agent believes is
+readable and deletable on one screen (S32), in the prose it was written in.
+Where the ledger is protected by a gate, memory is protected by being legible.
+
+#### Memory ships on every turn, which bounds it
+
+Whatever memory holds is prepended to every call on every surface that reads it.
+That makes it simultaneously the **most-repeated** content in the system and, if
+routing goes through an aggregator (**O17**), the **most-exposed**.
+
+Two consequences:
+
+- **A hard size bound**, enforced rather than encouraged. When it is reached the
+  agent consolidates — distilling entries and dropping stale ones — as an
+  ordinary operation.
+- **No amounts, no counterparty balances, no account numbers.** Not as a
+  guideline: memory is the one place where a careless line is transmitted
+  hundreds of times.
+
+#### Shape
+
+Organised by domain rather than chronology — one entry per convention, not one
+per session. A session log would grow without bound and be re-read entirely to
+find one preference.
+
+```
+memory   id, scope (global | counterparty | account | category),
+         subject_id, body, created_at, last_used_at, source
+```
+
+`last_used_at` is what makes consolidation possible: an entry that has not
+informed anything in months is the first candidate to drop.
+
+**Read by** the capture loop (S05 `💬`) and the agent (S03). **Written by** the
+same two. The deterministic pipelines do not read it — retrieval gives them
+their context (§11.4), and a pipeline that consulted a mutable prose blob would
+stop being reproducible.
 
 ---
 
@@ -1421,10 +2357,17 @@ never the base table:
 
 ```sql
 CREATE VIEW tax_ledger AS
-  SELECT ... FROM transactions
-  WHERE is_business = true
-    AND deleted_at IS NULL;
+  SELECT ... FROM transactions t JOIN accounts a ON a.id = t.account_id
+  WHERE t.is_business = true
+    AND t.deleted_at IS NULL
+    AND a.ownership = 'own';
 ```
+
+**The ownership join is load-bearing and was missing for a long time.** With
+only the first two predicates, 5a below is defeated by a write to a different
+table: S16 makes `own → shared` explicitly retroactive across 498 rows, and a
+trigger on `transactions` does not fire on an `accounts` update. Business rows
+would sit in a now-shared account and remain visible to every tax adapter.
 
 **3 · Enforced by the database, not by discipline.** The export path connects
 as a Postgres role holding `SELECT` on `tax_ledger` and **no privilege at all**
@@ -1432,6 +2375,23 @@ on `transactions`. A tax adapter that tried to read personal data would fail
 with a permissions error rather than succeed quietly. This is the part that
 makes T1 a guarantee: correctness no longer depends on every future query being
 written carefully.
+
+The role, the view, and the `REVOKE`s are `packages/db/drizzle/0005_tax_ledger_roles.sql`.
+Until that migration existed, `tax_ledger` appeared in the repository's SQL
+exactly once — inside a comment — and this section described a mechanism that
+had never been built. Two details the DDL has to get right and the prose above
+does not say:
+
+- The denials are **enumerated**, not implied. Personal rows also live in
+  `receipts.ocr_json`, `import_rows.raw`, `agent_tool_calls.output`,
+  `agent_memory` and `transaction_lines`; an `ALTER DEFAULT PRIVILEGES … REVOKE`
+  keeps anything added later out by default, because `GRANT SELECT ON ALL
+  TABLES` is what a tired person types at 2am.
+- `POSTGRES_USER` is the bootstrap **superuser**, and a superuser bypasses every
+  `GRANT`. `createDb()`'s default argument means an export module written the
+  obvious way silently connects as it — converting *fails loudly* into *succeeds
+  quietly*, which is the worst available outcome. The export path must take its
+  connection explicitly.
 
 **4 · Mixed purchases are split, not apportioned.** A laptop that is 70%
 business becomes two transactions — one business, one personal — rather than
@@ -1441,6 +2401,12 @@ in every report and each carries its own evidence.
 **5 · Every flip is audited.** Changing `is_business` writes to `audit_log`
 with the actor. Bulk changes by the agent require approval like any other write
 (§11.2).
+
+**5a · Shared money cannot become business.** `accounts_shared_not_business`
+blocks it at the account level, and a trigger blocks it at the transaction level
+(§6.5). Without the second, a transaction flagged `is_business = true` in a
+jointly-owned account would pass every check and land in `tax_ledger` — a hole
+in exactly the guarantee this section exists to make.
 
 **6 · Every export carries a manifest.** Row count, date range, jurisdiction,
 scheme version, and an explicit assertion that zero non-business rows were
@@ -1494,6 +2460,18 @@ transactions        + counterparty_tax_id, document_ref, ksef_id
 years. A 2026 transaction resolves against the scheme effective in 2026 for the
 jurisdiction you were resident in — not against today's rules.
 
+**Residency is modelled as a dated timeline and surfaced on S22**, so scheme
+resolution keys on *(jurisdiction resident in, transaction date)* rather than
+date alone. Building it while only Poland is live is deliberate: every scheme
+lookup would otherwise change shape the moment a second jurisdiction arrived.
+
+**It selects which jurisdiction's forms apply, and nothing more.**
+Double-taxation relief, treaty positions and foreign tax credits are not
+modelled and remain deferred (O11). A period resolving to `DE` yields a
+German-shaped projection of German-resident activity; it does not tell you what
+is owed after relief. The interface states this, because a residency timeline
+otherwise looks like a system that understands being taxed in two places.
+
 ### 13.3 Jurisdiction profiles
 
 Poland is implemented first because it is live. The other two are specified now
@@ -1510,7 +2488,7 @@ so the model does not have to change later.
 | Filing | JPK_PKPiR by 30 April; JPK_V7M/K if VAT-registered |
 | Invoicing | [KSeF mandatory for JDG since 2026-04-01](https://ksef.podatki.gov.pl/jdg-i-msp/); ≤10,000 PLN/month gross exempt to 2026-12-31; penalties suspended to 2026-12-31 |
 | Under ryczałt | No KPiR, no cost side, and [explicitly outside JPK_PKPiR](https://poradnikprzedsiebiorcy.pl/-obowiazek-przesylania-jpk-pkpir) |
-| FX | NBP rates — which is why NBP is preferred over ECB for PLN in §7.4 |
+| FX | NBP rates — which is why NBP is preferred over ECB for PLN in §7.7 |
 
 #### United States — `US`
 
@@ -1522,7 +2500,7 @@ so the model does not have to change later.
 | Quirks | Meals 50% deductible, entertainment 0%, commuting never. Line 27a is reserved for §179D, so "other" sits on **27b** |
 | Deductibility test | IRC §162 — ordinary *and* necessary |
 | Mileage | 72.5 ¢/mile for 2026, or actual costs |
-| Currency | USD is already the reporting currency (§7.3), so no conversion layer needed |
+| Currency | USD is the pivot every rate is already stored against (§7.0), so no conversion layer is needed |
 
 The 50%-deductible meals rule and the mileage option mean a `tax_lines` row
 needs an optional **deduction rate** and an optional **alternative basis**
@@ -1554,8 +2532,27 @@ that applied at the time. Two changes already in scope prove the need:
   for §179D.
 
 Hence `tax_schemes.version` with `effective_from` / `effective_to`, and
-resolution by transaction date rather than by export date. A scheme is
-immutable once a period closes against it.
+resolution by transaction date rather than by export date.
+
+**A scheme is immutable once a period closes against it — and closing is an
+explicit act.** It is yours to perform, from S28, because you know when you have
+filed and the software does not. Closing records who closed it and when, freezes
+the scheme for that period, and requires every completeness warning to be
+cleared **or explicitly acknowledged** — so the lock also carries a record of
+what was known to be incomplete at the time, rather than implying it was clean.
+Reopening is possible and audited.
+
+```
+tax_period_locks   jurisdiction, period_start, period_end,
+                   scheme_id, closed_at, closed_by,
+                   acknowledged_warnings jsonb, reopened_at
+```
+
+The lock is load-bearing beyond the tax layer. A closed period's rows are
+frozen, which is what lets an export rebuild be **guaranteed byte-identical**
+(S27) and what stops a later FX correction silently re-rating figures you have
+already filed against (S18). Automatic alternatives were rejected: an export
+gets built to check a figure, and a deadline would lock periods you never filed.
 
 ### 13.5 The scope boundary
 
@@ -1606,6 +2603,29 @@ Both prerequisites are answered, and together they make the tax layer
   import review's business fields.
 - No JPK filing of any kind.
 
+#### Which day's rate values a foreign-currency revenue row
+
+Unspecified until now, and **the system's general FX path is the wrong answer
+here.** §7 converts by triangulating through the USD pivot, which produces a
+cross-rate NBP never published. A tax authority uses the rate its own central
+bank actually printed.
+
+**The rule: the average NBP rate from the last working day *preceding* the day
+the revenue arose.** Not the day itself, and never derived through another
+currency. An invoice issued in EUR on a Monday is valued at the NBP EUR table-A
+rate published for the preceding Friday.
+
+It is **stamped per row** — `tax_fx_rate`, `tax_fx_date`, `tax_fx_source`
+(migration `0009`) — for the same reason `ryczalt_rate` is stamped: a later rate
+correction must not reprice a period you have already filed. Adapters read the
+stamped value and never recompute one.
+
+A foreign-currency business row with no stamped rate **cannot be filed**, and
+that is reported rather than refused (`tax_unvalued_revenue`, surfaced on S28's
+completeness list). Refusing the write would block capture at the moment of
+entry — and the preceding working day's rate may not be published yet when you
+record the invoice.
+
 **What this adds**
 
 One field that exists nowhere else in the design:
@@ -1626,6 +2646,41 @@ One field that exists nowhere else in the design:
 
 **Build order:** `PL_RYCZALT` first and alone. `PL_KPIR`, `US_SCHED_C` and
 `DE_EUER` are defined so the shape is right, and wait.
+
+#### Revenue is live, which moves this earlier
+
+The JDG is trading and revenue rows exist **now**, so the revenue side is not a
+Phase 6 concern. Three fields are needed at build time rather than later:
+
+```
+transactions  + ryczalt_rate      numeric — per revenue row, from the ACTIVITY
+              + counterparty_tax_id            (already present)
+              + ksef_id                        (already present)
+```
+
+`ryczalt_rate` is the one field that exists nowhere else in the design and
+cannot be inferred from the expense taxonomy. It resolves from a **dated rate
+table**, keyed by activity, using the same by-transaction-date rule schemes
+already follow (§13.4):
+
+```
+ryczalt_rates     id, activity, rate, valid_from, valid_to
+counterparties  + default_activity
+```
+
+The resolved figure is **stamped on the row**, not left as a lookup — so a rate
+change next January cannot reprice last year, and correcting the table does not
+rewrite history. Two clients at different rates and an annual rate change become
+the same mechanism rather than two special cases.
+
+**What is and is not urgent.** KSeF has been mandatory for JDG since
+2026-04-01, the ≤10,000 PLN/month relief expires 2026-12-31, penalties resume
+2027-01-01, and electronic record-keeping binds from the same date. None of
+that is Waltning's obligation to discharge — N1–N3 hold, and the invoices are
+issued elsewhere. What Waltning owes is the **reconciliation and evidence** side:
+somewhere to record the NIP and KSeF id against each revenue row, and a view
+that says what is missing. That is S28 and the completeness list, and it wants
+to exist before the first period it is used to check.
 
 **Still open:** O11 — residency and treaty interaction, deferred until a second
 jurisdiction is live.
@@ -1683,7 +2738,27 @@ Shares the codebase via React Native Web; different information density.
 | Online | Direct tRPC; optimistic updates; FX sync on foreground (§7.6) |
 | Offline | Reads from local SQLite cache; writes to outbox; last-known rates, marked stale |
 | Reconnect | Outbox drains in order; server is authoritative |
-| Conflict | Last-write-wins. Single user, single writer — anything more is unjustified |
+| Conflict | Last-write-wins. One user, but **two devices** — see below |
+
+**"Single writer" is not true, and the design should not lean on it.** The
+phone and the laptop browser both hold caches and both write; a phone with a
+full outbox is a second writer by definition. Last-write-wins is still the right
+answer — one *person* means conflicting intent is vanishingly rare and
+merge machinery would cost more than it saves — but it is justified by low
+conflict probability, not by there being one writer.
+
+What that changes:
+
+- **Every outbox entry carries a client-generated UUID and an idempotency key.**
+  The row's `id` is minted on the device, so a retry after a dropped response
+  upserts rather than inserting a second coffee. Without this, a flaky
+  reconnect duplicates transactions — the exact failure a personal ledger is
+  least able to notice.
+- **A drain that fails mid-queue stops rather than skipping.** Order is part of
+  the meaning when a receipt image and its transaction are two operations.
+- **An expired session (§5.2) does not discard the queue.** It re-authenticates
+  and resumes; a 30-day sliding expiry against an outbox filled offline is a
+  routine collision, not an edge case.
 
 ### 14.4 Calendar
 
@@ -1715,17 +2790,48 @@ scheduled items forward, so the calendar shows what is coming as well as what
 happened. Projected entries are visually distinct from posted ones and are not
 included in any total that claims to be actual.
 
+**A rule posts each occurrence at most once.** The posted row carries
+`recurring_id` and the `occurrence_date` it satisfies, under a unique index
+(§6.5), so a second attempt at an occurrence already materialized is rejected by
+the database rather than avoided by a scheduler that has to remember what it
+did. An occurrence you deliberately skip is simply a date with no row, and the
+calendar renders it as still-projected.
+
+**That index does not catch the case you actually hit.** A rent row you typed by
+hand has `recurring_id = NULL`, so the index predicate excludes it — it is not
+in the index at all. Nothing about it collides with the rule's own row. The
+guarantee is *this rule fires once per occurrence*, which is a scheduler
+property; it is not *this rent is in the ledger once*, which is the property
+that matters to you and the one an earlier draft of this section claimed.
+
+The claim-or-post decision is therefore a match, not a constraint, and it is
+why materialization is manual (`computations.md` §11). Before offering an
+occurrence, the system looks for an unlinked row within ±3 days carrying the
+same account and a within-3% amount — the duplicate rule of `computations.md`
+§9 — and if one exists the card offers **Link** rather than **Post**. Linking
+stamps `recurring_id` and `occurrence_date` onto the row you already entered,
+which both satisfies the occurrence and puts the row into the index, so the
+question cannot be asked twice. A rule that could post silently would have to
+resolve this ambiguity without you, and it has no basis on which to.
+
 **Amounts follow the FX rules.** A day containing foreign transactions shows
 its net in the current display currency, and opening the day reveals each entry with its
-own `local · rate · main` (§7).
+own `local · rate · display` (§7).
 
 ### 14.5 Dashboard layout
 
 The dashboard is a **configurable grid of widgets**, not a fixed page.
 
 ```
-dashboard_widgets   id, kind, slot, size, config, sort
+dashboard_layouts   id, name, is_active, is_preset, sort
+dashboard_widgets   id, layout_id →dashboard_layouts, kind, slot, size, config, sort
 ```
+
+**Layouts are rows, not constants.** Presets ship as seeded `is_preset` rows, so
+switching between them preserves each one's per-widget configuration instead of
+overwriting a single stored grid. It also makes *"put family spending on my
+dashboard"* an ordinary audited write through the operation registry (§11.0)
+rather than a special case the agent cannot reach.
 
 | Widget | Sizes | Config |
 |---|---|---|
@@ -1738,6 +2844,17 @@ dashboard_widgets   id, kind, slot, size, config, sort
 | `recent` | M | Row count |
 | `unsettled` | S | — |
 | `fx_status` | S | Pairs shown |
+| `system_health` | S | — · backup age, FX coverage, reachability (S30) |
+| `revenue_ytd` | M | Period · reads `tax_ledger` |
+| `completeness` | M | Missing NIP, KSeF id, uncategorized, estimated rates |
+| `tax_period_status` | S | Scheme in force, open or closed |
+
+**Four presets ship** (S24), each answering one question rather than serving one
+mood: **Standing** (where do I stand), **Flowing** (where is it going),
+**Owing** (who owes whom), **Business** (what is reportable). The last earns
+little daily space and is included anyway — it is the highest-stakes journey with
+the longest gap between uses, which is the combination that leaves you
+re-learning it every April.
 
 **Phase 1 ships preset layouts** — three or four arrangements you pick between.
 Free drag-and-drop placement comes later, if the presets prove insufficient.
@@ -1789,15 +2906,121 @@ shapes do not correspond.
 | Area | Requirement |
 |---|---|
 | Scale | ~8k transactions today, ~2k/year growth. Trivial for Postgres — do not over-engineer for it |
-| Latency | Ledger queries < 100 ms on Pi hardware. Receipt extraction 2–5 s (model-bound). Agent turns 3–15 s |
+| Latency | **Full budget table: `docs/specification/architecture/06-quality-attributes.md`.** Headlines: a simple ledger query < 100 ms; an *aggregate* < 200 ms warm and < 400 ms cold, since grouping over 25k rows is a different class of work and only stays fast because every index carries `WHERE deleted_at IS NULL`; receipt extraction 2–5 s (model-bound); agent turns 3–15 s; **voice capture end-to-end < 10 s (J02)** — the one budget where missing it changes behaviour rather than perception |
 | Availability | Best-effort. It is one Pi in a flat; offline-capable mobile covers outages |
 | Backups | §5.4. The quarterly restore drill is mandatory |
-| Observability | Structured JSON logs, 30-day retention. Health endpoint. Anthropic token spend tracked per feature |
-| Testing | Migration verification (§8.4) is the critical suite. Parser fixtures per bank. Property tests on money arithmetic. Agent tool contract tests |
+| Observability | Structured JSON logs, 30-day retention. Health endpoint. **Model spend tracked per surface**, not per feature — §11.4 configures a model per surface and may point them at different providers, so per-feature totals would not add up. No metrics stack: S30 is the operational surface, and it exists to make the four *silent* failures loud — stale backups, FX coverage, invariant results, spend |
+| Testing | §15.1 — four layers, weighted by what actually goes wrong |
 | Upgrades | `docker compose pull && up -d`. Drizzle migrations reviewed before applying — never auto-applied on boot |
 | Hardware | **Raspberry Pi 4**, 4 GB+. Comfortable here — 8k rows is nothing, and receipt extraction is model-bound rather than CPU-bound |
 | Storage | **SSD over USB3, not SD card.** SD cards fail under database write patterns and fail silently for a while first. On a Pi 4 this is the single highest-value hardware decision |
 | Tuning | Postgres `shared_buffers` and `work_mem` sized for 4 GB shared with MinIO, the API and Caddy — defaults assume a bigger host |
+
+### 15.1 Verification
+
+This system's whole argument is that correctness is **structural** rather than
+remembered — a role that cannot see personal rows, an index that cannot hold two
+rents, a component that cannot render a converted amount without its rate. That
+argument is only as good as the evidence that the structures hold.
+
+Four layers, weighted by what actually goes wrong in a ledger.
+
+#### 1 · Continuous invariants — the most valuable layer
+
+A ledger's characteristic failure is not a crash. It is a number that has been
+quietly wrong for months. So the invariants are checked **against the live
+database on a schedule**, not only against fixtures in CI, and the result is
+reported on S30 beside the backup status.
+
+| Invariant | Violation means |
+|---|---|
+| `amount_pivot = amount_original × fx_rate` | Free — it is a generated column (§7.4). Listed so its absence from the failure list is deliberate |
+| Every account: `opening_balance + Σ signed legs` equals its stored balance | The balance query and the write path disagree |
+| Every transfer has `to_currency` and `to_fx_rate` | A destination leg that cannot be valued (§6.5) |
+| Every transaction's currency equals its account's | The trigger was bypassed — by a migration, a bulk load, or a dropped constraint |
+| Every `category_id` points at a leaf | `TAXONOMY.md` R1 broken (§6.5) |
+| `pg_get_viewdef('tax_ledger')` still filters `is_business`, `deleted_at` **and** `ownership` | The view was redefined or dropped and recreated — the only way its own `WHERE` stops being true |
+| The export role gets `42501` probing `transactions` | The role is missing, the `REVOKE` was lost in a restore, or the connection is the superuser (§13.1) |
+| `tax_ledger`'s count equals the same predicate evaluated against the base table | The two derivations disagree — a grant, a rewritten view, or a stale materialization |
+| Zero income rows with an earnings category, in an `own` account, not marked business | **Under-declared revenue** — the ryczałt failure mode, and the one nothing else in the system looks for (C5) |
+| No `is_business` row sits in a `shared` account | §6.7 breached |
+| Every clearing account trends toward zero | Not a defect — a **prompt** (§6.4). Reported as an amount and an age |
+| `counterparty_balances` equals the negated sum of its `debt`-role rows | The derivation drifted from the definition (§6.6) |
+| `debt_reassignment_effects` sums to zero per currency | A reassignment changed what is owed in total, which is the one thing it must not do (§6.6a) |
+| No two rows share `(recurring_id, occurrence_date)` | Free — unique index (§6.5) |
+| Every currency in active use has ≥95% rate coverage | The GEL condition (§7.7), which went unnoticed for months |
+| `tax_residency` has no gaps across the ledger's date range | A transaction dated inside a gap has **no jurisdiction**, so every tax figure for that period is silently incomplete. Overlaps are refused outright by an `EXCLUDE` constraint; gaps are legitimate and therefore reported (§13.6, `0009`) |
+| No foreign-currency business row lacks a stamped `tax_fx_rate` | It cannot be filed (§13.6). Reported, never refused — the preceding working day's rate may not exist yet when you record the invoice |
+
+The first four replace a single earlier line — *"`tax_ledger` contains zero rows
+with `is_business = false`"* — which was **unfalsifiable**. It restated the
+view's own `WHERE` clause, so it returned true whether or not the view existed
+as specified, whether or not the role existed, and whether or not something held
+`SELECT` on the base table. It could not detect any way T1 actually fails. The
+replacements are `verify_t1()` and `verify_no_omitted_revenue()` in `0005`, and
+each can return false.
+
+Note the direction of the fourth. Every other mechanism in §13.1 stops a
+personal row from *entering* a tax output. Under ryczałt only revenue is
+reportable, so the material failure is the opposite one: a revenue row never
+marked business and therefore silently **absent**. `is_business` defaults false
+and the migration sets it nowhere, which makes this the likely state on day one
+rather than an unlucky one — and it is the direction a tax authority penalises.
+
+**A violation is a defect report, not an exception.** Each writes an
+`audit_log` entry with `actor = 'system'` and surfaces on S30; none of them
+block a write, because a check that can halt the ledger is a new failure mode.
+
+#### 2 · Property tests on money
+
+Money arithmetic is where a bug is both easy to write and invisible. These are
+properties, not examples — generated inputs across all seven currencies:
+
+- Signing is an involution: `signed(tx, from)` and `signed(tx, to)` sum to the
+  spread on a cross-currency transfer, and to zero on a same-currency one.
+- `debtDelta(tx, side)` is exactly `−signed(tx, side)` for all four debt cases
+  (§6.6) — **on both sides**, since a repayment arrives as a transfer whose
+  counterparty sits on the `to` leg and defaulting to `from` inverts it.
+- Round-tripping a decimal string through storage and back is lossless at
+  scale 8.
+- Conversion at a row's own date is order-independent: summing then converting
+  a same-currency set equals converting then summing.
+- An allocation always sums to its total, including the remainder line (S07).
+- No arithmetic path produces a JS `number`. This is checkable statically and
+  worth doing so — `0.1 + 0.2` is the failure the whole representation exists
+  to prevent (§7.1).
+
+#### 3 · Fixtures — parsers, extraction, classification
+
+| Suite | Shape | Passing means |
+|---|---|---|
+| Parsers | Real statement files per institution, redacted, with expected `RawRow[]` | A format change is caught on the file rather than in the queue |
+| Receipt extraction | ~50 photographs with hand-checked expected fields | A model or prompt swap is scored, not guessed at |
+| Classification | ~300 rows with known-good categories | Same, and it is why §11.4 keeps this tier deterministic — a pipeline is scoreable, a loop is not |
+
+**The extraction and classification suites are what make §11.4's model choice a
+measurement instead of an opinion.** Swap Luna for Gemini Flash, run 300 rows,
+read the number. Without them, "which model" is unanswerable and every future
+provider change is a leap.
+
+#### 4 · Contract tests on the registry
+
+Every operation in `operations.md` is checked for: input schema rejects
+malformed input; the write flag matches whether it mutates; an `audit_log` entry
+appears with the right actor; a read is genuinely side-effect free.
+
+The one that matters most: **for every non-agent surface, assert that no write
+operation was generated at all.** That is the boundary §11.4 rests on, and it is
+exactly the kind of thing a refactor removes without noticing.
+
+#### What is deliberately not tested
+
+No end-to-end UI suite. Single user, one deployment, and the cost of maintaining
+one exceeds what it would catch here — the failure modes this system has are in
+arithmetic and in state, and layers 1–3 address both more directly. If that
+proves wrong, the evidence will be a defect that reached the ledger through a
+path all four layers were blind to, and that defect is the argument for adding
+the fifth.
 
 ---
 
@@ -1808,20 +3031,50 @@ that works.
 
 | Phase | Deliverable | Gate | Est. |
 |---|---|---|---|
-| **0. Foundation** | Schema, taxonomy seed, accounts, opening balances, income import | Balances match; taxonomy in place | ~3 days |
+| **0. Foundation** | Schema, taxonomy seed, accounts, opening balances, income import | Balances match; taxonomy in place | ~3 days · **partly done** — schema applied and taxonomy seeded; FX complete for 4 of 6 currencies (§7.7); the importer is written but has not been run, so there are no accounts or transactions yet |
 | **1. API + web read** | Hono + tRPC, dashboard, search, reports | You trust the numbers on sight | 2 wks |
 | **2. Mobile** | Expo app, entry, accounts, offline outbox | Replaces daily Money Manager use | 2–3 wks |
 | **3. Receipts** | Capture, extraction, line splits | Faster than typing it in | 2 wks |
 | **4. Import** | Parsers, rules, classification, review | A month of statements in minutes | 3 wks |
 | **5. Agent** | Tool calling, approval gates, audit | Answers what needs Excel today | 2 wks |
 | **6. Export** | Excel workbook, `tax_ledger` view, PL adapter | Opens in Excel; manifest asserts zero personal rows | 1–2 wks |
-| **7. Cutover** | Pi deploy, Tailscale, backups, restore drill | Money Manager read-only | 1 wk |
+| **7. Cutover** | Pi deploy, backups, restore drill | Money Manager read-only; a restore drill actually run | 1 wk |
+
+**Phase 0.5 is missing from the table above and belongs between 0 and 1.** §5.1
+and §5.2 specify the perimeter and the authentication behind it in full, and
+neither appears in any phase — Tailscale first surfaces in Phase 7, at week 15.
+As written this plan loads five years of real financial history into a dev stack
+in week one and then builds an API, a mobile client and an agent against it for
+thirteen weeks before a perimeter exists. It is also a hard prerequisite for
+§13.1: the application connects as `POSTGRES_USER`, a superuser bypasses every
+`GRANT`, and T1 is unenforceable until the app stops being one. Three days,
+scheduled before the importer runs.
+
+**The revenue side no longer belongs in Phase 6.** Business revenue is live
+(§13.6), so `ryczalt_rate`, the NIP and KSeF fields, and S28's completeness list
+want to exist before the first period they are used to check — not after the
+agent and the export engine. They are a small addition to Phase 1 (a few fields
+and one read-only view) rather than a phase of their own, and pulling them
+forward costs days.
+
+The rest of Phase 6 — the workbook, the adapters, the manifest — stays where it
+is. Nothing about it is time-pressured, because Waltning is not the filing
+path (§13.5).
 
 **Total: 15–17 weeks** of evenings and weekends. The agent phase is the least
 certain — tool surfaces are easy, good agent UX is not.
 
 Phase 0 before any UI. It is where the project proves viable, and a migration
 bug found in week one is cheap.
+
+**The full sequence is `docs/specification/build-order.md`**, which reconciles
+this table with the component order in `design-system/12-build-order.md` — the
+two were written independently and neither referenced the other. It carries the
+critical path (five strictly serial items, headed by a probe script that takes
+minutes and gates everything), Phase 0.5 above, where each component phase
+actually lands, and the three specified things that should be deleted rather
+than scheduled. Its total is 13 weeks, and the reduction against the estimate
+above comes from the subtractions rather than from optimism.
 
 ---
 
@@ -1835,13 +3088,14 @@ Ordered by how much they block.
 | ~~**O2**~~ | ~~VAT registered?~~ | — | **Answered: not registered.** Opting in later must not require a migration, so `counterparty_tax_id`, `document_ref` and `ksef_id` exist as optional fields from day one — but **no JPK_V7 handling is built**. Electronic KPiR therefore binds from 2027-01-01, not 2026-01-01 |
 | **O3** | Does dedicated filing software already exist in your workflow? | §13.3 handoff | Assume yes; build export, not integration. Lower stakes under ryczałt — the record is a revenue register, not a book |
 | ~~**O4**~~ | ~~BYN and GEL historical FX?~~ | — | **Verified available.** NBP, NBRB and NBG all serve 2020-11-25 and all quote **directly against USD** — no triangulation for primary pairs, no snapshot fallback. Endpoints in §7.7 |
-| ~~**O5**~~ | ~~RUB post-2022 accuracy?~~ | — | **Decided:** use Money Manager's snapshot rate, marked `carried_forward`, and flag affected rows in reports rather than implying precision that does not exist |
+| ~~**O5**~~ | ~~RUB post-2022 accuracy?~~ | — | **Decided: set it by hand.** ECB delisted RUB in March 2022, so the range is covered by a **manual override over a date range** (§7.6), entered once and outranking every synced source. No extractor, no snapshot import — the figure is asserted by you and labelled as such. Rows falling outside any override carry `fx_rate_estimated` |
 | ~~**O6**~~ | ~~`CARD-C` statement format?~~ | — | **Answered: the account is dormant.** Historical rows migrate; nothing new arrives. **No parser needed** — dropped from Phase 4 entirely |
 | ~~**O7**~~ | ~~Budgets?~~ | — | **Answered: targets, not budgets.** A monthly spend target shown as progress against actual — no per-category envelopes, no rollover. See §14.7. The 13 Money Manager budgets are preserved in the migration dump but not imported |
 | ~~**O8**~~ | ~~Off-site backup target?~~ | — | **Answered: Backblaze B2**, age-encrypted before upload so the provider holds ciphertext only. S3-compatible, so MinIO points at it by configuration |
 | ~~**O9**~~ | ~~Pi model?~~ | — | **Answered: Pi 4.** Ample for the workload — 8k rows is nothing. **Boot from SSD over USB3, not SD**; see §15 |
 | ~~**O10**~~ | ~~Are US and German obligations live?~~ | — | **Answered: all three eventually, none urgent.** Build the full adapter layer and **all three scheme definitions** (`PL_KPIR`, `PL_RYCZALT`, `US_SCHED_C`, `DE_EUER`) now while the design is fresh; implement adapters on demand. Poland first |
-| **O11** | Residency periods, and any treaty / foreign-tax-credit interaction | `tax_residency`, §13.2 | Deferred until a second jurisdiction goes live. `tax_residency` exists so this is additive |
+| **O11** | ~~Residency periods~~, and any treaty / foreign-tax-credit interaction | §13.2 | **Split.** *Residency periods:* **answered — build now.** A dated timeline on S22; scheme resolution becomes *(jurisdiction resident in, transaction date)*, which removes a restructure later since every lookup would otherwise change shape. *Treaties and foreign tax credits:* **still deferred**, and S22 states so rather than letting a residency control imply them |
+| **O17** | **Does financial data leave through an aggregator?** Routing through OpenRouter means receipt images and transaction descriptions transit a third party *in addition to* the model provider | §5.5, §11.4 | Undecided, and it is a §5 question rather than a §11 one. The project opens with physical custody; receipt images are age-encrypted before Backblaze so a storage provider holds ciphertext only. A router sees them in plaintext. Options: direct provider APIs only · router for text surfaces, direct for images · accept it deliberately. **Not to be inherited from a convenience** |
 | ~~**O12**~~ | ~~Business backfill scope?~~ | — | **Answered: 2026 forward only.** Earlier rows stay personal unless explicitly marked. Nothing becomes reportable by omission, and it matches when the current rules took effect |
 | ~~**O13**~~ | ~~"Synced with banks"?~~ | — | **Decided:** central-bank reference rates, quoted against the USD pivot. Realized rates are implied by the two amounts on a transfer or settlement, never fetched |
 | ~~**O14**~~ | ~~Counterparties replace the loan accounts?~~ | — | **Decided: replace.** They exist only because Money Manager had no counterparty concept. `loan_receivable` / `loan_payable` survive as `account_kind` values for migration fidelity |
@@ -1856,11 +3110,12 @@ Ordered by how much they block.
 |---|---|---|---|---|
 | R1 | Migration balances do not reconcile | Medium | Critical | Phase 0 gate; project stops until understood |
 | R2 | Unmatched transfer legs (OUT 1,734 ≠ IN 1,754) | **High** | Medium | Explicit exception list; manual resolution before cutover |
-| R3 | Historical FX unavailable for BYN/GEL | Medium | Medium | O4 fallback; flag affected rows rather than silently approximating |
+| R3 | ~~Historical FX unavailable for BYN/GEL~~ → **GEL backfill blocked by NBG rate-limiting** | **Materialized** | Medium | BYN came back 100% complete; GEL holds 11 of 2,080 days (§7.7). Needs a paced re-run, not a retry. Until then GEL rows carry `fx_rate_estimated` against a 2020 rate — visible, but not good enough to build on |
 | R4 | Scope creep into full tax compliance | **High** | High | §13 boundary is explicit; N1–N3 are non-goals |
 | R5 | RN Web insufficient for the dashboard | Medium | Low | §14.6 escape hatch designed in |
 | R6 | Pi SD card failure | **High** over years | High | SSD boot; nightly off-site backups; tested restore |
-| R7 | Anthropic spend higher than expected | Low | Low | Rules tier absorbs the recurring set; per-feature tracking |
+| ~~R7~~ | ~~Model spend higher than expected~~ | — | — | **Retired.** Measured at real volume, total annual spend is $0.50–$25 depending on tier, and under $250 at 10× usage on the most expensive option (§11.4). Cost was never the constraint; latency and routing are |
+| **R13** | Financial data exposed to an aggregator | Medium | **High** | O17 — undecided. A router sees receipt images and transaction descriptions in plaintext, against a project premise of physical custody (§5.5) |
 | R8 | Project stalls half-migrated, data split across two systems | Medium | **High** | Phases independently useful; Money Manager authoritative until Phase 7 |
 | R9 | Agent writes bad data | Low | High | Approval gates on every write; full audit; soft delete |
 | R10 | A personal expense reaches a tax output | Low | **Critical** | §13.1 — separate DB role with no privilege on `transactions`; fails loudly rather than quietly |
@@ -1883,7 +3138,8 @@ From `exports/<backup>.mmbak`, 4.0 MB, SQLite (Core Data).
 | Transactions | 7,874 total · 7,621 active · 253 deleted |
 | Date range | 2020-11-25 → 2026-03-28 |
 | By year | 2020: 57 · 2021: 1,051 · 2022: 1,397 · 2023: 1,313 · 2024: 2,133 · 2025: 1,855 · 2026: 68 |
-| By type | income 506 · expense 3,878 · transfer-out 1,734 · transfer-in 1,754 · adjustment 2 |
+| By type *(all rows, deleted included)* | income 506 · expense 3,878 · transfer-out 1,734 · transfer-in 1,754 · adjustment 2 |
+| By type *(active only)* | income 498 · expense 3,763 — the basis `TAXONOMY.md` measures against |
 | Accounts | 68 total · 52 active |
 | Categories | 122 · 37 top-level expense · ~60 sub · 9 income |
 | Currencies | 7 — USD (main), PLN 51%, BYN 30%, EUR, GEL, GBP, RUB |

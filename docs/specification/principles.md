@@ -17,9 +17,15 @@ never a black box.
 receipt extraction all pass through the same `<DiffCard>`. One pattern used in
 three places, not three patterns.
 
-**P4 · Amber means exactly two things.** Unsettled clearing, and a manual FX
-override. Overloading it destroys its signal value.
+**P4 · Amber means one thing: not finished, or not fully observed.** It covers
+a figure you asserted rather than measured (a manual FX override), an action
+still outstanding (unsettled clearing, an open item), and data that has aged
+past trust (a stale rate). What holds the meaning together is what amber never
+is: it is never an error, never a success, and never chrome. A single idea with
+four instances keeps its signal; an enumeration of two that the components
+quietly grew to four had already lost it.
 
 **P5 · Colour is never the only encoding.** Every tint pairs with text, an
-icon, or a label. Charts included — the current design does not meet this
-(§10), which is why it is a principle and not a claim.
+icon, or a label. Charts included: composition charts cap at five segments and
+label each directly (`design-system/07` §7.2), and the income-versus-expense
+line pairs its two hues with distinct strokes and end-of-line labels (§7.1).

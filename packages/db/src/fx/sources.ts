@@ -26,6 +26,20 @@ export type FetchFn = (
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
+ * A central bank publishes its own currency against USD and nothing else. The
+ * adapter signature takes a currency because ECB is genuinely multi-currency;
+ * the others must refuse rather than return a rate for the wrong one.
+ */
+function assertServes(source: string, currency: string, serves: string): void {
+  if (currency !== serves) {
+    throw new Error(
+      `${source} publishes ${serves} only — it cannot serve ${currency}. ` +
+        `Set currencies.rate_source for ${currency} to 'ecb' (SPEC.md §7.7).`,
+    );
+  }
+}
+
+/**
  * All date arithmetic is UTC. Using the local-time setters (`setDate`) while
  * formatting with `toISOString` silently breaks across DST: a local "+1 day" is
  * 23 or 25 real hours, so the UTC date repeats in spring and skips in autumn.
@@ -82,8 +96,16 @@ async function getJson(url: string, attempt = 0): Promise<unknown> {
   }
 }
 
-/** Narodowy Bank Polski — the rates Polish tax filing uses. PLN per USD. */
-export const nbp: FetchFn = async (_currency, from, to) => {
+/**
+ * Narodowy Bank Polski — the rates Polish tax filing uses. PLN per USD.
+ *
+ * Serves PLN and nothing else. §7.7 lists NBP as a permitted source for RUB;
+ * configuring that would have fetched PLN-per-USD and stored it as the RUB
+ * rate — valuing a 50 000 RUB expense at $13 313 instead of $685, silently,
+ * with source = 'nbp' and no estimate flag. Assert rather than serve garbage.
+ */
+export const nbp: FetchFn = async (currency, from, to) => {
+  assertServes("nbp", currency, "PLN");
   const out: DailyRate[] = [];
   for await (const [a, b] of chunkRanges(from, to, 360)) {
     const j = (await getJson(
@@ -97,7 +119,8 @@ export const nbp: FetchFn = async (_currency, from, to) => {
 };
 
 /** National Bank of the Republic of Belarus. BYN per USD, one day per call. */
-export const nbrb: FetchFn = async (_currency, from, to) => {
+export const nbrb: FetchFn = async (currency, from, to) => {
+  assertServes("nbrb", currency, "BYN");
   const out: DailyRate[] = [];
   for (const d of eachDay(from, to)) {
     const j = (await getJson(
@@ -112,7 +135,8 @@ export const nbrb: FetchFn = async (_currency, from, to) => {
 };
 
 /** National Bank of Georgia. GEL per USD, normalized by `quantity`. */
-export const nbg: FetchFn = async (_currency, from, to) => {
+export const nbg: FetchFn = async (currency, from, to) => {
+  assertServes("nbg", currency, "GEL");
   const out: DailyRate[] = [];
   for (const d of eachDay(from, to)) {
     const j = (await getJson(

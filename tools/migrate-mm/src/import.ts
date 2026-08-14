@@ -114,12 +114,20 @@ async function main() {
 
   /* ---- accounts (opening balance filled in after income) ---------------- */
   const accountIds = new Map<string, string>();
-  let skippedAccounts = 0;
   for (const a of data.accounts) {
     if (!a.currency || !known.has(a.currency)) {
-      console.warn(`  ! ${a.name}: unknown currency ${a.currency} — skipped`);
-      skippedAccounts++;
-      continue;
+      // Not a warning. Skipping the account silently drops every row that
+      // references it, and the opening-balance plug then absorbs the difference
+      // so the verification gate still reconciles — a wrong balance that looks
+      // right. The probe reports the currencies actually in use (7 in this
+      // backup); an unseeded one is a seeding bug, and the fix is to seed it,
+      // not to import a partial ledger.
+      throw new Error(
+        `${a.name}: currency ${a.currency ?? "(none)"} is not seeded. ` +
+          `Seed it before importing — skipping the account would drop its ` +
+          `transactions and let the opening-balance plug hide the gap. ` +
+          `Run tools/migrate-mm/probe.py §5 for the full list.`,
+      );
     }
     const existing = await db
       .select({ id: accounts.id })
@@ -164,13 +172,25 @@ async function main() {
     catIds.set(key, row.id);
   }
 
-  /** Rate converting `ccy` into the pivot on `date`. */
-  const rateCache = new Map<string, string>();
-  async function pivotRate(ccy: string, date: string): Promise<string | null> {
-    if (ccy === pivot) return "1";
+  /**
+   * Rate converting `ccy` into the pivot on `date`.
+   *
+   * Falls back to the nearest available rate when the date has none — the
+   * carry cap (§7.7) deliberately leaves holes where a source died, and a
+   * missing rate must never cost us the transaction (§7.6). The fallback is
+   * reported so the row can carry `fx_rate_estimated`.
+   */
+  const rateCache = new Map<string, { rate: string; estimated: boolean }>();
+  async function pivotRate(
+    ccy: string,
+    date: string,
+  ): Promise<{ rate: string; estimated: boolean } | null> {
+    if (ccy === pivot) return { rate: "1", estimated: false };
     const k = `${ccy}|${date}`;
-    if (rateCache.has(k)) return rateCache.get(k)!;
-    const row = (
+    const hit = rateCache.get(k);
+    if (hit) return hit;
+
+    const exact = (
       await db
         .select({ rate: fxRates.rate })
         .from(fxRates)
@@ -183,17 +203,35 @@ async function main() {
         )
         .limit(1)
     )[0];
+
+    // Nearest by absolute distance in either direction — a rate from three
+    // days later is a better estimate than one from four years earlier.
+    const row =
+      exact ??
+      (
+        await db
+          .select({ rate: fxRates.rate })
+          .from(fxRates)
+          .where(and(eq(fxRates.base, pivot!), eq(fxRates.quote, ccy)))
+          .orderBy(sql`abs(${fxRates.date} - ${date}::date)`)
+          .limit(1)
+      )[0];
     if (!row) return null;
+
     // Stored as units of `ccy` per 1 pivot; we want pivot per unit of `ccy`.
-    const inv = new Decimal(1).div(row.rate).toFixed(12);
-    rateCache.set(k, inv);
-    return inv;
+    const out = {
+      rate: new Decimal(1).div(row.rate).toFixed(12),
+      estimated: !exact,
+    };
+    rateCache.set(k, out);
+    return out;
   }
 
   const imported = new Map<string, Decimal>(); // account external id → Σ amount
   let inserted = 0;
   let skippedCategory = 0;
   let missingRate = 0;
+  let estimated = 0;
   let driftMax = new Decimal(0);
 
   for (const t of data.income) {
@@ -214,14 +252,18 @@ async function main() {
     if (!accountId) continue;
 
     const acct = data.accounts.find((a) => a.external_id === t.account)!;
-    const rate = await pivotRate(acct.currency, t.date);
-    if (rate === null) {
+    const fx = await pivotRate(acct.currency, t.date);
+    // Only reachable when a currency has no rate at all — nothing to estimate
+    // from. Reported rather than swallowed.
+    if (fx === null) {
+      console.warn(`  ! no rate at all for ${acct.currency} — row skipped`);
       missingRate++;
       continue;
     }
+    if (fx.estimated) estimated++;
 
     const amount = new Decimal(t.amount).abs();
-    const pivotAmount = amount.times(rate);
+    const pivotAmount = amount.times(fx.rate);
 
     // Money Manager's own USD figure used one global, undated rate. Divergence
     // here is expected and is the FX correction (§6.1), not an error — but it
@@ -238,8 +280,9 @@ async function main() {
       categoryId: catIds.get(key)!,
       amountOriginal: amount.toFixed(8),
       currency: acct.currency,
-      fxRate: rate,
-      amountPivot: pivotAmount.toFixed(8),
+      fxRate: fx.rate,
+      fxRateEstimated: fx.estimated,
+      // amountPivot is GENERATED ALWAYS (§7.4) — Postgres computes it.
       payee: t.payee,
       note: t.note,
       source: "migration" as const,
@@ -249,7 +292,15 @@ async function main() {
     await db
       .insert(transactions)
       .values(values)
-      .onConflictDoUpdate({ target: transactions.externalId, set: values });
+      // The index is PARTIAL (`WHERE external_id is not null and deleted_at is
+      // null`); Postgres cannot infer it without the matching predicate, so
+      // without targetWhere this throws 42P10 on the first row — and §8.3 calls
+      // this the mechanism that makes re-migration idempotent.
+      .onConflictDoUpdate({
+        target: transactions.externalId,
+        targetWhere: sql`${transactions.externalId} is not null and ${transactions.deletedAt} is null`,
+        set: values,
+      });
 
     imported.set(
       t.account,
@@ -277,10 +328,15 @@ async function main() {
   }
 
   console.log("\nimported");
-  console.log(`  accounts          ${accountIds.size}${skippedAccounts ? ` (${skippedAccounts} skipped)` : ""}`);
+  console.log(`  accounts          ${accountIds.size}`);
   console.log(`  income rows       ${inserted}`);
   console.log(`  skipped by map    ${skippedCategory}  (Base saving / Allowance are transfers)`);
-  if (missingRate) console.log(`  ! missing FX      ${missingRate}`);
+  if (estimated)
+    console.log(
+      `  estimated FX      ${estimated}  (no published rate for the date; nearest used, flagged on the row)`,
+    );
+  if (missingRate)
+    console.log(`  ! no rate at all  ${missingRate}  — rows skipped`);
   console.log(`  opening balances  ${withOpening} non-zero`);
   console.log(`  max FX drift vs Money Manager's stale global rate: ${driftMax.toFixed(2)}`);
   process.exit(0);

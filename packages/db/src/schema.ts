@@ -1,6 +1,10 @@
 /**
  * Waltning ledger schema.
  *
+ * NOTE: migrations 0001 and 0002 are generated but NOT yet applied — see
+ * SPEC.md §6.5. 0002 is hand-written, because triggers are database behaviour
+ * rather than schema and no ORM generates them.
+ *
  * Six deliberate departures from Money Manager, each fixing a defect visible in
  * the 7,874-row backup or a limit its model could not express:
  *
@@ -32,6 +36,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -101,6 +106,18 @@ export const actor = pgEnum("actor", ["user", "agent", "import", "migration"]);
 export const counterpartyKind = pgEnum("counterparty_kind", [
   "person",
   "company",
+]);
+
+/**
+ * §6.6 — naming a counterparty is not the same as owing them. Only `debt` rows
+ * reach `counterparty_balances`; `contribution` attributes an inflow to a
+ * shared account (§6.7) and carries no settlement expectation; `reference`
+ * merely records who was involved.
+ */
+export const counterpartyRole = pgEnum("counterparty_role", [
+  "debt",
+  "contribution",
+  "reference",
 ]);
 
 /** §7.6 — `manual` outranks every synced source for the same pair and date. */
@@ -185,8 +202,13 @@ export const fxRates = pgTable(
     fetchedAt: timestamp("fetched_at", { withTimezone: true }),
   },
   (t) => [
-    unique("fx_rates_pk").on(t.base, t.quote, t.date),
-    index("fx_rates_lookup_idx").on(t.base, t.quote, t.date),
+    // A real primary key: (base, quote, date) *is* the identity of a rate. The
+    // unique constraint already builds the btree that lookups use, so a
+    // separate index on the same columns would be pure duplication.
+    primaryKey({
+      name: "fx_rates_pk",
+      columns: [t.base, t.quote, t.date],
+    }),
     check("fx_rates_rate_positive", sql`${t.rate} > 0`),
     check("fx_rates_distinct", sql`${t.base} <> ${t.quote}`),
   ],
@@ -201,6 +223,8 @@ export const accountGroups = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    /** §12.2 totals FX cost by institution, and no entity carried one. */
+    institution: text("institution"),
     sort: integer("sort").notNull().default(0),
   },
   (t) => [uniqueIndex("account_groups_name_uq").on(normalized(t.name))],
@@ -231,6 +255,13 @@ export const accounts = pgTable(
      */
     openingBalance: money("opening_balance").notNull().default("0"),
     openingDate: date("opening_date"),
+    /**
+     * §8.4 — the balance as displayed by Money Manager, typed in by hand. The
+     * ONLY figure in existence not computed by our own extractor, and therefore
+     * the only genuinely external oracle the verification gate has. Without it
+     * the gate is an algebraic identity that cannot fail.
+     */
+    expectedBalance: money("expected_balance"),
 
     memo: text("memo").notNull().default(""),
     isBusiness: boolean("is_business").notNull().default(false),
@@ -350,6 +381,8 @@ export const counterparties = pgTable(
     ),
     contact: text("contact"),
     note: text("note").notNull().default(""),
+    /** §13.6 — resolves the ryczalt rate for revenue rows from this party. */
+    defaultActivity: text("default_activity"),
     archived: boolean("archived").notNull().default(false),
     sort: integer("sort").notNull().default(0),
     createdAt: createdAt(),
@@ -383,16 +416,47 @@ export const transactions = pgTable(
      * The latter carries no settlement expectation and is never aged.
      */
     counterpartyId: uuid("counterparty_id").references(() => counterparties.id),
+    /**
+     * What the reference *means*. Set at write time, never inferred: deriving
+     * it from `accounts.ownership` works today but silently rewrites the
+     * meaning of history the moment an account is reclassified.
+     */
+    counterpartyRole: counterpartyRole("counterparty_role"),
+    /**
+     * Which balance a settlement discharges, when that differs from the
+     * currency that changed hands (§6.6). Without these, S14's picker is
+     * unimplementable: the currency trigger forces the row into the account's
+     * currency, which discharges the wrong balance.
+     */
+    debtCurrency: text("debt_currency").references(() => currencies.code),
+    debtAmount: money("debt_amount"),
 
     /** Authoritative: the account's own currency, always positive. */
     amountOriginal: money("amount_original").notNull(),
     currency: text("currency")
       .notNull()
       .references(() => currencies.code),
-    /** To the pivot, on this row's own date. */
-    fxRate: rate("fx_rate").notNull().default("1"),
-    /** Derived — amountOriginal × fxRate. Materialized for aggregation only. */
-    amountPivot: money("amount_pivot").notNull(),
+    /**
+     * To the pivot, on this row's own date. **No default**: a forgotten rate
+     * must be a NOT NULL violation, not a silent 1:1 valuation. With
+     * amountPivot generated, a defaulted 1 would turn a bad input into an
+     * authoritative-looking output.
+     */
+    fxRate: rate("fx_rate").notNull(),
+    /**
+     * §7.6 — no rate was published for this date and the nearest was used. The
+     * rate *table* stays capped at 10 days of carry, so it never holds an
+     * invented figure; the estimate lives here, attributable to one row.
+     */
+    fxRateEstimated: boolean("fx_rate_estimated").notNull().default(false),
+    /**
+     * Generated, not written. This is the column every aggregate reads, so
+     * leaving it to application code would make the most-read number in the
+     * system the one most able to drift from its inputs.
+     */
+    amountPivot: money("amount_pivot").generatedAlwaysAs(
+      (): SQL => sql`${transactions.amountOriginal} * ${transactions.fxRate}`,
+    ),
 
     /**
      * Cross-currency transfers store BOTH amounts (§7.5). What actually landed
@@ -401,7 +465,17 @@ export const transactions = pgTable(
      */
     toAmount: money("to_amount"),
     toCurrency: text("to_currency").references(() => currencies.code),
+    /**
+     * The **reference** rate for `to_currency` on this row's date, pivot per
+     * unit. NOT the realized rate: storing that makes the two legs net to
+     * exactly zero and erases the bank's margin, which §7.0 says cannot happen.
+     * The realized rate is derived for display as to_amount / amount_original.
+     */
     toFxRate: rate("to_fx_rate"),
+    /** Generated. The destination leg needs its own pivot value (computations §5). */
+    toAmountPivot: money("to_amount_pivot").generatedAlwaysAs(
+      (): SQL => sql`${transactions.toAmount} * ${transactions.toFxRate}`,
+    ),
 
     payee: text("payee").notNull().default(""),
     note: text("note").notNull().default(""),
@@ -414,6 +488,48 @@ export const transactions = pgTable(
      * makes every comparison meaningless permanently.
      */
     isCapital: boolean("is_capital").notNull().default(false),
+
+    /**
+     * §14.4 — which recurring rule produced this row, and which occurrence it
+     * satisfies. The unique index below is what makes double-posting
+     * impossible rather than something a scheduler has to remember.
+     */
+    recurringId: uuid("recurring_id").references(
+      (): AnyPgColumn => recurringTransactions.id,
+    ),
+    occurrenceDate: date("occurrence_date"),
+
+    /** A stated bank fee, distinct from the rate margin (§7.5). */
+    fee: money("fee"),
+
+    /** §13.2 — business rows only; optional from day one so opting into VAT later is not a migration. */
+    counterpartyTaxId: text("counterparty_tax_id"),
+    documentRef: text("document_ref"),
+    ksefId: text("ksef_id"),
+    /**
+     * §13.6 — resolved from `ryczalt_rates` at the row's own date and STAMPED,
+     * so a later rate correction cannot reprice a filed period. The activity is
+     * stamped too: without it, two activities sharing 12% today are
+     * indistinguishable if the rates later diverge, and a retroactive
+     * correction has no affected-row query.
+     */
+    ryczaltRate: numeric("ryczalt_rate", { precision: 5, scale: 4 }),
+    ryczaltActivity: text("ryczalt_activity"),
+
+    /**
+     * The rate a **tax filing** uses, stamped per row (§13.6, migration `0009`).
+     *
+     * Deliberately not `fx_rate`. §7 triangulates through the USD pivot, which
+     * produces a cross-rate the jurisdiction's central bank never published; a
+     * tax authority uses the rate it actually printed. For PL that is the average
+     * NBP rate from the **last working day preceding** the day the revenue arose.
+     *
+     * Stamped rather than joined so a later rate correction cannot reprice a
+     * filed period — the same reason `ryczaltRate` is stamped.
+     */
+    taxFxRate: rate("tax_fx_rate"),
+    taxFxDate: date("tax_fx_date"),
+    taxFxSource: text("tax_fx_source"),
 
     source: txnSource("source").notNull().default("manual"),
     externalId: text("external_id"),
@@ -430,11 +546,24 @@ export const transactions = pgTable(
     index("transactions_counterparty_idx").on(t.counterpartyId),
     index("transactions_payee_idx").on(t.payee),
     index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
+    // Excludes soft-deleted rows: otherwise deleting an imported row makes its
+    // external_id permanently unusable, and the blocking row is invisible in
+    // every read path (§6.9).
     uniqueIndex("transactions_external_id_uq")
       .on(t.externalId)
-      .where(sql`${t.externalId} is not null`),
+      .where(sql`${t.externalId} is not null and ${t.deletedAt} is null`),
+    // A recurring rule fills each occurrence exactly once. If you already
+    // entered this month's rent by hand, the rule's insert is rejected.
+    uniqueIndex("transactions_occurrence_uq")
+      .on(t.recurringId, t.occurrenceDate)
+      .where(sql`${t.recurringId} is not null and ${t.deletedAt} is null`),
 
-    check("transactions_amount_positive", sql`${t.amountOriginal} >= 0`),
+    // Adjustments carry their own sign: reconciling an account DOWNWARD is the
+    // ordinary use, and every other type takes direction from `type` (§7.2).
+    check(
+      "transactions_amount_positive",
+      sql`${t.amountOriginal} >= 0 or ${t.type} = 'adjustment'`,
+    ),
     check(
       "transactions_transfer_shape",
       sql`(${t.type} = 'transfer') = (${t.toAccountId} is not null)`,
@@ -452,9 +581,30 @@ export const transactions = pgTable(
       "transactions_to_amount_positive",
       sql`${t.toAmount} is null or ${t.toAmount} >= 0`,
     ),
+    // The destination leg's pivot value is computed as to_amount × to_fx_rate
+    // (§7.4), so a transfer missing either is a balance that comes out silently
+    // wrong rather than a write that fails.
+    check(
+      "transactions_to_currency_shape",
+      sql`(${t.type} = 'transfer') = (${t.toCurrency} is not null)`,
+    ),
+    check(
+      "transactions_to_fx_rate_shape",
+      sql`(${t.type} = 'transfer') = (${t.toFxRate} is not null)`,
+    ),
     check(
       "transactions_category_shape",
       sql`(${t.type} in ('income', 'expense')) or ${t.categoryId} is null`,
+    ),
+    // A counterparty reference must say what it means, and a role without a
+    // counterparty is meaningless.
+    check(
+      "transactions_counterparty_role_shape",
+      sql`(${t.counterpartyId} is not null) = (${t.counterpartyRole} is not null)`,
+    ),
+    check(
+      "transactions_occurrence_shape",
+      sql`(${t.recurringId} is null) = (${t.occurrenceDate} is null)`,
     ),
   ],
 );
@@ -528,30 +678,52 @@ export const receipts = pgTable(
     currency: text("currency").references(() => currencies.code),
     purchasedAt: date("purchased_at"),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
-    capturedAt: createdAt(),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [index("receipts_transaction_idx").on(t.transactionId)],
 );
 
-export const receiptLines = pgTable(
-  "receipt_lines",
+/**
+ * §6.10 — the optional breakdown belongs to the PAYMENT, not to the photograph.
+ * A card tap covering fuel and a coffee is one transaction and can be broken
+ * down whether or not a receipt was ever captured; a receipt populates these
+ * rows rather than owning them.
+ */
+export const transactionLines = pgTable(
+  "transaction_lines",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    receiptId: uuid("receipt_id")
+    transactionId: uuid("transaction_id")
       .notNull()
-      .references(() => receipts.id, { onDelete: "cascade" }),
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    /** Set when a receipt extraction produced this line. Null when hand-entered. */
+    receiptId: uuid("receipt_id").references(() => receipts.id, {
+      onDelete: "set null",
+    }),
     description: text("description").notNull(),
     amount: money("amount").notNull(),
     quantity: numeric("quantity", { precision: 12, scale: 3 }),
     categoryId: uuid("category_id").references(() => categories.id),
     sort: integer("sort").notNull().default(0),
   },
-  (t) => [index("receipt_lines_receipt_idx").on(t.receiptId)],
+  (t) => [
+    index("transaction_lines_transaction_idx").on(t.transactionId),
+    index("transaction_lines_receipt_idx").on(t.receiptId),
+  ],
 );
 
 /* ------------------------------------------------------------------ *
  * Statement import
  * ------------------------------------------------------------------ */
+
+export const importBatchStatus = pgEnum("import_batch_status", [
+  "open",
+  "reviewing",
+  "complete",
+  "abandoned",
+]);
 
 export const importBatches = pgTable("import_batches", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -560,7 +732,7 @@ export const importBatches = pgTable("import_batches", {
   accountId: uuid("account_id").references(() => accounts.id),
   periodStart: date("period_start"),
   periodEnd: date("period_end"),
-  status: text("status").notNull().default("open"),
+  status: importBatchStatus("status").notNull().default("open"),
   createdAt: createdAt(),
 });
 
@@ -580,8 +752,20 @@ export const importRows = pgTable(
       { onDelete: "set null" },
     ),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    /** Which model produced it — a threshold is uninterpretable without this once §11.4's config changes. */
+    modelId: text("model_id"),
     reason: text("reason"),
-    ruleApplied: uuid("rule_applied"),
+    ruleApplied: uuid("rule_applied").references((): AnyPgColumn => rules.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * The rule's conditions AS THEY WERE when it fired, and the retrieved
+     * neighbour ids the model tier was handed. Editing a rule afterwards
+     * changes future classification and cannot rewrite what happened — which is
+     * what §9.4's reparse promise actually requires.
+     */
+    ruleSnapshot: jsonb("rule_snapshot"),
+    retrievedIds: jsonb("retrieved_ids"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -625,7 +809,15 @@ export const taxResidency = pgTable(
     validFrom: date("valid_from").notNull(),
     validTo: date("valid_to"),
   },
-  (t) => [index("tax_residency_range_idx").on(t.jurisdiction, t.validFrom)],
+  (t) => [
+    index("tax_residency_range_idx").on(t.jurisdiction, t.validFrom),
+    // Non-overlap is an EXCLUDE constraint (`tax_residency_no_overlap`, migration
+    // `0009`) — Drizzle has no builder for one, so it lives in SQL only. Two
+    // overlapping rows make jurisdiction resolution ambiguous, and silently so:
+    // the query returns two rows and something downstream picks the first. Gaps
+    // are permitted and *reported* (`tax_residency_gaps`), because being between
+    // residencies is a real state and refusing it would make it unrepresentable.
+  ],
 );
 
 /**
@@ -687,15 +879,177 @@ export const categoryTaxMap = pgTable(
   (t) => [unique("category_tax_map_pk").on(t.categoryId, t.schemeId)],
 );
 
+/** §13.6 — rates change by year AND by activity, so both are keys. */
+export const ryczaltRates = pgTable(
+  "ryczalt_rates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    activity: text("activity").notNull(),
+    rate: numeric("rate", { precision: 5, scale: 4 }).notNull(),
+    validFrom: date("valid_from").notNull(),
+    validTo: date("valid_to"),
+  },
+  (t) => [
+    index("ryczalt_rates_activity_idx").on(t.activity, t.validFrom),
+    check("ryczalt_rates_range_sane", sql`${t.validTo} is null or ${t.validTo} >= ${t.validFrom}`),
+    check("ryczalt_rates_sane", sql`${t.rate} between 0 and 1`),
+  ],
+);
+
+/**
+ * §13.4 — closing is an explicit act, and the lock is what makes an export
+ * rebuild reproducible and stops a later FX correction re-rating a filed
+ * period. Append-only: a close/reopen/reclose cycle is three rows, not one row
+ * overwritten, because §13.4 says reopening is audited and a mutable column
+ * stores a state rather than a history.
+ */
+export const taxPeriodLocks = pgTable(
+  "tax_period_locks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    jurisdiction: text("jurisdiction")
+      .notNull()
+      .references(() => taxJurisdictions.code),
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    /** A period spanning a scheme change produces one lock per scheme (J11). */
+    schemeId: uuid("scheme_id")
+      .notNull()
+      .references(() => taxSchemes.id),
+    closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
+    /** What was known to be incomplete at close — so the lock does not imply clean. */
+    acknowledgedWarnings: jsonb("acknowledged_warnings").notNull().default({}),
+    reopenedAt: timestamp("reopened_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("tax_period_locks_lookup_idx").on(t.jurisdiction, t.periodStart, t.periodEnd),
+    check("tax_period_locks_range_sane", sql`${t.periodEnd} >= ${t.periodStart}`),
+  ],
+);
+
+/**
+ * §6.6a — a debt moving between people, with no cash flow.
+ *
+ * The migration found 173 of these: transfers whose source and destination are
+ * the same Loan account, netting to zero and therefore invisible to every
+ * balance check, with the person named only in free text ("Marek. Total",
+ * "Доля Кати после реструктуризации"). Money Manager had no counterparty, so a
+ * self-transfer was the only way to say "this 180 is now Marek's, not Tomek's".
+ *
+ * Not a transaction: a transaction has one counterparty and a cash flow, this
+ * has two counterparties and none. Putting it in `transactions` would mean a
+ * second counterparty column NULL on every other row, or two rows kept in sync
+ * by convention.
+ *
+ * The invariant is that it must not move net receivables — it takes from one
+ * balance exactly what it gives another (`debt_reassignment_effects`).
+ */
+export const debtReassignments = pgTable(
+  "debt_reassignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    date: date("date").notNull(),
+    fromCounterpartyId: uuid("from_counterparty_id")
+      .notNull()
+      .references(() => counterparties.id),
+    toCounterpartyId: uuid("to_counterparty_id")
+      .notNull()
+      .references(() => counterparties.id),
+    currency: text("currency")
+      .notNull()
+      .references(() => currencies.code),
+    amount: money("amount").notNull(),
+    note: text("note").notNull().default(""),
+    /** The original text, kept whether or not the names were ever resolved (§9.4). */
+    sourceText: text("source_text"),
+    externalId: text("external_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("debt_reassignments_external_id_uq")
+      .on(t.externalId)
+      .where(sql`${t.externalId} is not null`),
+    index("debt_reassignments_from_idx")
+      .on(t.fromCounterpartyId, t.currency)
+      .where(sql`${t.deletedAt} is null`),
+    index("debt_reassignments_to_idx")
+      .on(t.toCounterpartyId, t.currency)
+      .where(sql`${t.deletedAt} is null`),
+    // Reassigning to oneself is the Money Manager artefact, not a thing to keep.
+    check(
+      "debt_reassignments_distinct",
+      sql`${t.fromCounterpartyId} <> ${t.toCounterpartyId}`,
+    ),
+    check("debt_reassignments_positive", sql`${t.amount} > 0`),
+  ],
+);
+
+/**
+ * §11.6 — what the agent keeps in mind. Behaviour, never facts: the ledger is
+ * queryable and a stored balance would drift from it, which is the defect §6.6
+ * removed by deriving. Prepended to every turn, so it is both the most-repeated
+ * and, under O17, the most-exposed content in the system.
+ */
+export const memoryScope = pgEnum("memory_scope", [
+  "global",
+  "counterparty",
+  "account",
+  "category",
+]);
+
+export const memorySource = pgEnum("memory_source", [
+  "told_directly",
+  "learned_from_correction",
+  "learned_from_usage",
+]);
+
+export const agentMemory = pgTable(
+  "agent_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scope: memoryScope("scope").notNull().default("global"),
+    subjectId: uuid("subject_id"),
+    body: text("body").notNull(),
+    source: memorySource("source").notNull(),
+    /** Never eviction candidates — an "ask, don't assume" entry is rarely used by design. */
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("agent_memory_scope_idx").on(t.scope, t.subjectId),
+    check("agent_memory_subject_shape", sql`(${t.scope} = 'global') = (${t.subjectId} is null)`),
+    /**
+     * Behaviour, never facts (§11.6) — a stored figure drifts from the ledger,
+     * the same defect §6.6 removed by deriving balances rather than storing them.
+     *
+     * The predicate refuses a ledger **figure**, not any number. The first
+     * version was `[0-9]{2,}`, which also rejected *"split 50/50"* and *"after
+     * 22:00"* — behaviour, not facts, and exactly what this feature exists to
+     * learn. A guard that blocks the main use case with an unreadable constraint
+     * violation is worse than a slightly loose one, especially on the one write
+     * that bypasses the approval gate. See migration `0008`.
+     */
+    check(
+      "agent_memory_no_figures",
+      sql`${t.body} !~ '(?i)([0-9][0-9  ]*([.,][0-9]{2})?\s*(pln|usd|eur|byn|gel|rub|gbp|zł|zl|\$|€|₾|₽|£))|((pln|usd|eur|byn|gel|rub|gbp|zł|zl|\$|€|₾|₽|£)\s*[0-9])|([0-9]{4,})|([0-9]+[.,][0-9]{2}\M)'`,
+    ),
+  ],
+);
+
 /* ------------------------------------------------------------------ *
  * Targets — §14.7. Not budgets: no envelopes, no rollover.
  * ------------------------------------------------------------------ */
+
+export const targetPeriod = pgEnum("target_period", ["month", "year"]);
 
 export const targets = pgTable("targets", {
   id: uuid("id").primaryKey().defaultRandom(),
   /** Null category = an overall target. */
   categoryId: uuid("category_id").references(() => categories.id),
-  period: text("period").notNull().default("month"), // month | year
+  period: targetPeriod("period").notNull().default("month"),
   amount: money("amount").notNull(),
   currency: text("currency")
     .notNull()
@@ -708,14 +1062,46 @@ export const targets = pgTable("targets", {
  * Dashboard — widgets are data, so the agent can configure them (§11.0)
  * ------------------------------------------------------------------ */
 
-export const dashboardWidgets = pgTable("dashboard_widgets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  kind: text("kind").notNull(),
-  slot: text("slot").notNull(),
-  size: text("size").notNull().default("m"),
-  config: jsonb("config").notNull().default({}),
-  sort: integer("sort").notNull().default(0),
-});
+/**
+ * §14.5 — layouts are rows, not constants. Presets ship as seeded `isPreset`
+ * rows, so switching between them preserves each layout's per-widget config
+ * instead of overwriting one stored grid.
+ */
+export const dashboardLayouts = pgTable(
+  "dashboard_layouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    isActive: boolean("is_active").notNull().default(false),
+    isPreset: boolean("is_preset").notNull().default(false),
+    sort: integer("sort").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("dashboard_layouts_name_uq").on(normalized(t.name)),
+    // Exactly one active layout, by the same trick as the pivot currency.
+    uniqueIndex("dashboard_layouts_one_active")
+      .on(sql`(true)`)
+      .where(sql`${t.isActive}`),
+  ],
+);
+
+export const widgetSize = pgEnum("widget_size", ["s", "m", "l"]);
+
+export const dashboardWidgets = pgTable(
+  "dashboard_widgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    layoutId: uuid("layout_id")
+      .notNull()
+      .references(() => dashboardLayouts.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    slot: text("slot").notNull(),
+    size: widgetSize("size").notNull().default("m"),
+    config: jsonb("config").notNull().default({}),
+    sort: integer("sort").notNull().default(0),
+  },
+  (t) => [index("dashboard_widgets_layout_idx").on(t.layoutId)],
+);
 
 /* ------------------------------------------------------------------ *
  * Agent — one operation registry, two consumers (§11.0)
@@ -767,6 +1153,38 @@ export const agentToolCalls = pgTable(
   (t) => [index("agent_tool_calls_message_idx").on(t.messageId)],
 );
 
+/**
+ * §11.2 — auto mode. `agentToolCalls.auto` records that a write bypassed the
+ * gate; this records what was *permitted*, and until when. Without it the
+ * scope and duration rules are enforced only by what the running process
+ * happens to remember — not a property you want on the one feature that
+ * bypasses approval.
+ */
+export const agentAutoGrants = pgTable(
+  "agent_auto_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => agentSessions.id, { onDelete: "cascade" }),
+    /** e.g. 'categorize' — never 'delete', never config or tax scope. */
+    operationClass: text("operation_class").notNull(),
+    grantedAt: createdAt(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    maxOperations: integer("max_operations"),
+    usedOperations: integer("used_operations").notNull().default(0),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("agent_auto_grants_session_idx").on(t.sessionId),
+    // A grant that never ends is not a grant, it is a setting.
+    check(
+      "agent_auto_grants_bounded",
+      sql`${t.expiresAt} is not null or ${t.maxOperations} is not null`,
+    ),
+  ],
+);
+
 /* ------------------------------------------------------------------ *
  * Audit
  * ------------------------------------------------------------------ */
@@ -781,7 +1199,8 @@ export const auditLog = pgTable(
     actor: actor("actor").notNull(),
     before: jsonb("before"),
     after: jsonb("after"),
-    at: createdAt(),
+    /** Explicit: the createdAt() helper hardcodes "created_at", so `at` would not exist. */
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("audit_log_entity_idx").on(t.entity, t.entityId),

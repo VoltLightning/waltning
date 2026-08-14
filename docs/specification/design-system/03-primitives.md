@@ -2,7 +2,7 @@
 
 Variants and states for each. `—` means the variant does not exist by design.
 
-### 3.1 Button
+### 3.1 `Button`
 
 | Variant | Fill | Ink | Use |
 |---|---|---|---|
@@ -18,22 +18,22 @@ disabled · **loading** (spinner replaces label, width held).
 Accept/Skip and the diff card's Approve/Decline are both primary + secondary —
 that asymmetry is the affordance.
 
-### 3.2 IconButton
+### 3.2 `IconButton`
 
 32 / 40 / 44. **44 minimum for any touch target** (§10). Requires `aria-label`.
 
-### 3.3 Tag
+### 3.3 `Tag`
 
 Static, non-interactive. Text always present — never tint alone (P5).
 
 | Variant | Fill / ink | Use |
 |---|---|---|
 | `neutral` | `green-100` / `green-700` | Default |
-| `warn` | `amber` / `amber-ink` | Manual override, unsettled, open item |
+| `warn` | `amber` / `amber-ink` | Asserted rather than measured (manual override, estimated rate), outstanding (unsettled clearing, open item), or aged (stale). One meaning, four instances — P4 |
 | `negative` | `negative-bg` / `negative` | Gaps, failures |
 | `biz` | `green-100` / `green-700`, uppercase `BIZ` | Business row marker — appears in **every** view a business row appears in |
 
-### 3.4 Pill — classification tier
+### 3.4 `Pill` — classification tier
 
 Import review's row-level provenance marker. Carries text, not just tint.
 
@@ -44,7 +44,7 @@ Import review's row-level provenance marker. Carries text, not just tint.
 | `transfer` | `Transfer` | Pair already collapsed to one row |
 | `duplicate` | `Duplicate` | Matched an existing transaction |
 
-### 3.5 Chip — interactive
+### 3.5 `Chip` — interactive
 
 Tappable, holds a value, opens a picker. Used across the Quick-add composer for
 account, category, date, scope, note.
@@ -54,7 +54,7 @@ marker, P2) · focus · disabled.
 
 ⚠️ Chips currently measure ~34px against a 44px floor (§10).
 
-### 3.6 Segment control
+### 3.6 `SegmentControl`
 
 2–4 options, one active. Used for scope (**All · Mine · Shared · Business**)
 and import filters (Needs review / Ready / Duplicates / Skipped), with live
@@ -67,7 +67,7 @@ never double-count.
 Distinct from the **two headline totals** (`DualTotal` below), which are *not*
 a filter: *mine* and *ours* show together regardless of scope.
 
-### 3.7 Inputs
+### 3.7 `Inputs`
 
 | Component | Notes |
 |---|---|
@@ -79,7 +79,7 @@ a filter: *mine* and *ours* show together regardless of scope.
 | `DateField` | Defaults to today; relative shortcuts (yesterday) |
 | `Toggle` | Business / personal, write-a-rule |
 
-### 3.8 Feedback
+### 3.8 `Feedback`
 
 `Spinner` · `Skeleton` (matches the shape it replaces, never a grey box) ·
 `ProgressBar` (determinate — uploads, extraction) · `Toast` (transient, with

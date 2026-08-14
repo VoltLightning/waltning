@@ -19,10 +19,18 @@ pipeline that grew up around it.
 
 Specification, with the data foundation built.
 
-**Done** — schema applied and its invariants verified against Postgres;
-taxonomy seeded (57 leaves); FX backfilled against a USD pivot from 2020-11.
-**Next** — specifying all 29 screens individually (`docs/specification/`),
-then the API and the app.
+**Done** — schema applied to Postgres and its invariants verified; taxonomy
+seeded (57 leaves live, 59 in the seed pending a re-run); FX backfilled against
+a USD pivot from 2020-11 — 8,803 rate-days, complete for PLN, EUR, GBP and BYN.
+
+**Known gaps** — GEL holds 11 of 2,080 days (NBG rate-limits aggressively); RUB
+stops at 2022-03-11, where ECB delisted it. The Money Manager import has been
+written but not yet run, so there are no accounts or transactions.
+
+**Next** — specifying the interface (`docs/specification/`), then the API and
+the app. Specification comes first deliberately: the pass that produced this
+spec found twenty defects in the model, and every one was cheaper to fix as
+prose than as a migration.
 
 ## What makes it different
 
@@ -46,16 +54,26 @@ TypeScript throughout. Hono, tRPC, and Drizzle over PostgreSQL 16 on the
 server; Expo for mobile, with the web dashboard built from the same codebase
 via React Native Web. Deployed as Docker Compose on a Raspberry Pi, reachable
 only over Tailscale — no public ingress. Receipt extraction and the agent run
-on `claude-opus-5`.
+on small vision-capable models, chosen per surface (`SPEC.md` §11.4).
 
 ## Data handling
 
 This repository contains no financial data. Ledger contents, receipt images,
-database dumps, and app backups are excluded by `.gitignore` and stay out of
-version control.
+database dumps, bank statements and app backups are excluded by `.gitignore` and
+stay out of version control — the patterns are un-anchored, so they match
+wherever the application writes rather than only at the repository root.
 
-Institutions and accounts are referred to by role (`BANK-A`, `Clearing · PLN`)
-rather than by name throughout the specification.
+**Institutions, accounts and people are referred to by role or by a fictional
+placeholder** — `Bank A · PLN`, `Clearing · PLN`, and invented first names —
+throughout the specification and the migrations.
+
+The examples keep the *shape* of a real five-year ledger, because the design
+reasoning only holds if they are realistic: a debt reassigned between three
+people, a trilingual statement description, a clearing account that never quite
+settles. The identities in them are not real.
+
+Structural facts are real and describe the problem rather than the person: row
+counts, the number of accounts, the currency list, and the tax scheme.
 
 ## License
 

@@ -27,17 +27,35 @@ android/app/build/
 .env.*
 !.env.example
 
-# Financial data — never commit
+# Financial data — never commit.
+#
+# These patterns are deliberately NOT root-anchored. A leading slash anchors to
+# the repository root, so `/receipts/` missed `apps/api/receipts/` and
+# `/backups/` missed `docker/backups/` — which are the paths the application
+# actually writes to. This is a public Apache-2.0 repository whose README states
+# it contains no financial data, so the patterns have to match where the files
+# land rather than where someone imagined they would.
 *.mmbak
 *.sqlite
 *.sqlite3
 *.db
-/data/
-/receipts/
-/backups/
-/exports/
+data/
+receipts/
+backups/
+exports/
 *.dump
 *.sql.gz
+
+# Bank statements and their conversions. The formats every bank exports, in any
+# directory — this is how a statement arrives, and none of it belongs in git.
+*.xls
+*.xlsx
+*.csv
+*.ofx
+*.qif
+*.mt940
+!docs/**/*.csv
+!**/fixtures/**/*.csv
 
 # Logs
 *.log

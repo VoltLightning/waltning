@@ -22,7 +22,7 @@ second hue is needed.
 | `green-700` | `#215f45` | Links; heading ink; hover on 600 |
 | `green-800` | `#164531` | Shell gradient end |
 | `green-900` | `#0e2e20` | Shell gradient start; display headings |
-| `amber` | `#f8eed9` | Fill — unsettled clearing, manual override **only** |
+| `amber` | `#f8eed9` | Fill — *not finished, or not fully observed* (P4). Never error, never success, never chrome |
 | `amber-ink` | `#856223` | Text on amber |
 | `negative` | `#a8452f` | Negative balances, MoM spend increases. **Never chrome** |
 | `negative-bg` | `#f6e7e3` | Fill behind negative tags |

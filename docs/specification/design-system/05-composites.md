@@ -9,7 +9,7 @@
 | `Card` | `surface`, `radius-lg`, `shadow-card`; optional title and action |
 | `StatTile` | Figure + label + delta. Delta takes `negative` ink when spend rose |
 | `DualTotal` | **The two headline figures** — *mine* dominant, *ours* secondary beneath (`SPEC.md` §6.7). Never a toggle: showing one at a time invites reading the wrong number. Degrades to a single figure when no shared account exists |
-| `ContributionRow` | An inflow to a shared account, attributed to a counterparty. Reads as a contribution, never a debt — no settle action, no ageing |
+| `ContributionRow` | An inflow to a shared account, attributed to a counterparty (`counterparty_role = 'contribution'`). Reads as a contribution, never a debt — no settle action, no ageing. The role is what keeps it out of `counterparty_balances`, so this is a rendering of a distinction the data already makes, not one the component invents |
 | `BottomSheet` | 170px from top; search, content, **pinned footer** |
 | `TabBar` | 5 tabs + raised `+`. Duotone icons, ≥44px targets |
 | `Dock` | Bottom-anchored composer: mode row, keypad, full-width Save |
@@ -56,16 +56,51 @@ generic dialog teaches nothing and gets clicked through.
 **`<ToolResultCard>`** — read results. Visually distinct from writes, labelled
 `ran automatically · 240 ms`.
 
+**`<RefineRequest>`** — a one-line input beneath any machine-produced draft, on
+S02c and S07c. Typing a correction **re-runs the extraction with it in context**
+rather than editing fields directly, so the model can propagate consequences a
+field edit cannot: a receipt line changing group may change the receipt's
+dominant category, and *"this trip was a holiday"* may re-place forty import
+rows.
+
+States: idle · running (`ThinkingIndicator`) · returned (a new draft, which you
+still approve). It never writes — the output is a draft, exactly as the first
+pass was.
+
+**Direct editing stays, and is faster when you already know the answer.**
+Refinement is for when the model reasoned wrongly rather than read wrongly, and
+for when the correction applies to more than the row in front of you.
+
+**`<AutoModeComposer>`** — the agent composer while an auto-mode grant is live.
+Carries a persistent inline label above the input — `AUTO · recategorise · 14
+left` — with a `✕` to exit and a doubled send glyph (`▶▶`).
+
+**State lives on the composer, not the page.** It is the one region you cannot
+avoid before issuing an instruction, whereas a banner at the top of a
+three-column screen is ignorable within a day. It **uses no colour**, which
+keeps P4's single meaning for amber intact, and it states the *scope and
+remaining count* — because *auto mode is on* is much less useful than *auto mode
+is on for recategorisation, fourteen operations left*.
+
 ⚠️ Approved cards need a **revert** affordance for the session (§13 Q4).
 
 ### 5.4 Messaging
 
+Variants, copy rules and the recovery patterns are specified in
+[`08-states-and-recovery.md`](08-states-and-recovery.md). This is the roster.
+
 | Component | Use |
 |---|---|
-| `Banner` | Page-level. `warn` = unsettled clearing, with a stated meaning and one action. `negative` = failure. `neutral` = offline |
-| `EmptyState` | Icon, title, explanation, action. Currently only the import queue has one |
-| `ErrorState` | What failed, why, what to do. Never a bare code |
-| `ConfirmDialog` | Genuinely destructive and irreversible only — deleting an account, changing the **pivot** currency |
+| `Banner` | Page-level. `warn` = not finished or not fully observed, with one action (P4). `negative` = failure. `neutral` = offline, stated as freshness |
+| `EmptyState` | Three variants — `first-run` · `filtered` · `range`. Never one generic blank; they have different causes and different fixes (§8.1) |
+| `ErrorState` | Three variants — `recoverable` · `terminal` · `partial`. Carries what failed, why, what it cost, what to do. Never a bare code (§8.2) |
+| `UndoToast` | Transient with Undo, 8 s. Repeats collapse to a count; a bulk operation is **one** undoable unit (§8.4) |
+| `MatchWarning` | Near-duplicate guard on save, showing the candidate's balance. No default action (§8.4) |
+| `ThinkingIndicator` | Thinking · tool running · streaming, with a cancel at 20 s (§8.5) |
+| `RefusalCard` | The model declined. Distinct from an error and from a decline (§8.7) |
+| `ThresholdSlider` | Bulk-accept confidence bar; cannot reach 1.00 |
+| `RuleHealthTag` | `never posted` · `overdue` · `ending soon` · `amount drifted` · `healthy` |
+| `ConfirmDialog` | Genuinely destructive and irreversible only — deleting an account, changing the **pivot** currency, running a restore drill |
 
 ### 5.5 Debt and counterparties
 
@@ -76,7 +111,7 @@ person can owe you in one currency while you owe them in another.
 |---|---|
 | `CounterpartyRow` | Avatar or monogram · name · kind icon (person / company) · net position in **their** currency, with the display-currency equivalent beneath |
 | `CounterpartyCard` | Full position: one row per currency, then both derived totals |
-| `BalanceLedger` | Per-currency table. Positive = they owe you, negative = you owe them. Direction stated in words, never by sign alone (P5) |
+| `BalanceLedger` | Per-currency table. Positive = they owe you, negative = you owe them — the **negation** of the ledger's cash-flow sign (`SPEC.md` §6.6), computed once here so no screen has to remember it. Direction stated in words, never by sign alone (P5) |
 | `SettleSheet` | Amount, currency, which balance it discharges, rate (editable), **residual shown before commit** |
 | `DebtDirectionTag` | `owes you` / `you owe` — text, not a colour |
 | `CounterpartyPicker` | Search, recent, create-in-place. Same shape as the category sheet |
@@ -89,7 +124,7 @@ person can owe you in one currency while you owe them in another.
   │  PLN    +840,00        owes you       │
   │  EUR    −120,00        you owe        │
   │  ───────────────────────────────────  │
-  │  net    +75,40 €       @ 2026-08-04   │
+  │  net    +74,44 €       @ 4,3200       │
   │         +321,60 zł                    │
   └───────────────────────────────────────┘
 ```
@@ -102,3 +137,46 @@ express this at all — it would appear as unrelated balances in
 rate, spread against the reference shown. The settlement rate defaults to the
 reference but is editable, because a debt is discharged at the rate the two
 parties agreed — not the rate a central bank published.
+
+### 5.6 Data surfaces
+
+| Component | Notes |
+|---|---|
+| `FilterBar` | Account · category · scope · currency · date range · counterparty. Each filter is a `Chip` carrying its **value**, not its name — `Business` rather than `Scope`. An active filter shows the count it excludes, which is what `EmptyState(filtered)` reads from (§8.1). Clear-one and clear-all are separate affordances |
+| `SwipeAction` | Row gestures, mobile only. Short swipe → categorize; long swipe → edit. **Nothing destructive is ever on a swipe** — deletion requires the detail screen, because a gesture you can perform by accident should not be able to remove a financial record. Haptic on commit; the web equivalent is the keyboard map, not a hover control |
+| `AuditHistory` | Chronological `audit_log` entries for one entity: actor · action · before/after. Agent-originated changes are marked, as are `import` and `migration`. This is the component that answers *"why is this categorized this way?"* eighteen months later (`SPEC.md` §6.1), so it renders a **diff**, not a sentence |
+| `ComparisonTable` | Period × metric with deltas. Increases in spend take `negative` ink (§7). Rows excluded as capital state the exclusion inline — `34 200 · excludes 1 one-off` — never silently (§6.8) |
+
+### 5.7 Dashboard
+
+| Component | Notes |
+|---|---|
+| `WidgetGrid` | Renders one layout's widgets into slots at S · M · L. Reads `dashboard_layouts` → `dashboard_widgets` (`SPEC.md` §14.5) |
+| `WidgetCard` | One widget: title, body, and a configure affordance. Every widget states its **period and scope** in its own header — a figure on a dashboard with no stated frame is a figure you will misread. Scope inherits from the shell segment unless the widget **pins** one, and a pinned widget says `· pinned` so it never reads as being on its neighbours' frame |
+| `LayoutPicker` | Named layouts, active one marked, presets distinguished from custom. Switching preserves every layout's per-widget config, which is the whole reason layouts are rows rather than constants |
+
+Free drag-and-drop placement is deferred by decision (O16), not missing.
+
+### 5.8 Tax and export
+
+Small in count, and load-bearing out of proportion to it — this is where the
+T1 guarantee becomes something a person can actually check.
+
+| Component | Notes |
+|---|---|
+| `ResidencyTimeline` | Dated jurisdiction changes. Scheme resolution keys on *(jurisdiction, transaction date)*. Selects which forms apply — **not** treaty or foreign-tax-credit treatment, which stays unmodelled (O11) |
+| `SchemeTimeline` | Dated scheme changes — **a timeline, not a dropdown**, because you may file under different schemes in different years and a transaction resolves against the scheme in force on *its* date (§13.4). A period with no scheme is rendered as a **gap and an error**, not as a blank |
+| `SchemeSelector` | Jurisdiction · scheme · **version** for one export. Version defaults from the period rather than from today, so a 2025 export produces 17 KPiR columns and a 2026 export 19 |
+| `WorkbookBuilder` | Scope · period · sheet selection. States which sheets a jurisdiction forces — under ryczałt the cost side is **removed with a stated reason**, never blanked (§13.6) |
+| `ManifestCard` | Row count · date range · jurisdiction · scheme version · the assertion that zero non-business rows are included |
+
+**`<ManifestCard>` is the visible half of a structural guarantee** (§13.1), and
+two rules follow from that:
+
+- It renders **before the build and inside the file**. A manifest you only see
+  after downloading is a receipt for a decision you already made.
+- Its assertion is **read from the export path**, never composed by the
+  interface. The path holds `SELECT` on `tax_ledger` and no privilege on
+  `transactions`, so the claim is backed by a database role rather than by a
+  query someone remembered to write. A `ManifestCard` that constructed its own
+  assurance would be decorating a promise instead of reporting a fact.

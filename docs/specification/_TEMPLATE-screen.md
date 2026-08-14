@@ -1,7 +1,7 @@
 # S00 · Screen name
 
 **Surface** mobile | web | both · **Journeys** J0, J0 · **Frequency** daily | weekly | rare
-**Design** none | in `Gaps.dc.html` | in `Waltning App.dc.html`
+**Design** none | `design/gaps.dc.html` §G0 | Claude Design project
 **Status** stub | specified | designed | built
 
 ---
@@ -18,8 +18,25 @@ sentence the screen is doing two jobs.
 
 ## 3. Layout
 
-Regions top to bottom (mobile) or by column (web). Say what occupies each and
-why it earns the space.
+**One document per concept, both surfaces inside it.** Purpose, components,
+data, states and rules are written once because they do not differ by surface.
+Only layout and interaction split — that is where a 390pt thumb and a 1440px
+pointer genuinely diverge.
+
+Delete the subsection that does not apply when **Surface** is single.
+
+### Mobile — 390pt
+
+Regions top to bottom. Say what occupies each and why it earns the space.
+Name the thumb-zone anchor: what sits within reach without a hand shift.
+
+### Web — ≥1024px
+
+Regions by column, and what the extra width actually buys. If the answer is
+"the same thing, wider", say so — a screen that gains nothing from the desktop
+canvas should say it rather than invent density.
+
+**Between 390 and 1024** the mobile layout stretches; there is no third design.
 
 ## 4. Components
 
@@ -52,8 +69,21 @@ All six. A screen missing one is a screen with an undesigned failure.
 
 ## 7. Interaction
 
-Keyboard (web), gestures (mobile), focus order, what is destructive and what
-confirms.
+Split like §3, and for the same reason.
+
+### Mobile
+
+Gestures, what each swipe direction does, haptics, what is destructive and what
+confirms. Every touch target ≥44px (`design-system/10-accessibility.md`).
+
+### Web
+
+Keyboard map, focus order, what is reachable without the pointer. A dense
+review or reporting screen that cannot be driven from the keyboard has not been
+specified yet.
+
+**Shared:** what is destructive, what confirms, and what is merely undoable.
+`ConfirmDialog` is for the genuinely irreversible only (`design-system/05`).
 
 ## 8. Rules this screen must obey
 

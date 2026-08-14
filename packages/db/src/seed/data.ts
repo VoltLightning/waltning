@@ -79,6 +79,7 @@ export const incomeTree: SeedGroup[] = [
     leaves: [
       { key: "gift-received", name: "Gift received", note: "from anyone — family, friends, birthdays" },
       { key: "refund", name: "Refund" },
+      { key: "borrowed", name: "Borrowed", note: "money you will give back — never earnings" },
       { key: "repayment-received", name: "Repayment received", note: "a debt coming back is not a gain" },
       { key: "other-inflow", name: "Other inflow" },
     ],
@@ -201,10 +202,14 @@ export const expenseTree: SeedGroup[] = [
     ],
   },
   {
-    key: "transfers-out",
-    name: "Transfers out",
+    key: "debt-giving",
+    name: "Debt & giving",
     kind: "expense",
     leaves: [
+      // Receivables sit outside net worth (§6.6), so lending is a real
+      // outgoing. Paired with `Borrowed` so "how much did I lend this year"
+      // stays separable from "how much came back".
+      { key: "lent-out", name: "Lent out", note: "money you expect back" },
       { key: "repayment-made", name: "Repayment made" },
       { key: "charity", name: "Charity" },
     ],

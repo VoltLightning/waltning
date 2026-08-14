@@ -8,6 +8,69 @@
       "when": 1785912193790,
       "tag": "0000_curved_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785962515210,
+      "tag": "0001_faithful_ultragirl",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0002_adversarial_review_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786000100000,
+      "tag": "0003_cross_table_invariants",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786000200000,
+      "tag": "0004_business_logic_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786000300000,
+      "tag": "0005_tax_ledger_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786000400000,
+      "tag": "0006_period_guard_both_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786000500000,
+      "tag": "0007_debt_reassignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786000600000,
+      "tag": "0008_memory_figure_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786000700000,
+      "tag": "0009_residency_and_rate_day",
+      "breakpoints": true
     }
   ]
 }
