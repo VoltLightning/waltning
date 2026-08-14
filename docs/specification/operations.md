@@ -60,6 +60,7 @@ remember to log itself is an operation that will eventually forget.
 | Agent | `get_agent_sessions` · `get_messages` |
 | Introspection | `get_operation_catalogue` |
 | Memory | `get_memory` (§11.6) |
+| Verification | `get_invariant_results` (§15.1) |
 
 `get_operation_catalogue` is not decoration. **An agent that cannot enumerate
 its own capabilities cannot be asked open questions about them** (§11.0), so the
@@ -151,6 +152,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `close_period` · `reopen_period` | ❌ | Freezes or unfreezes a filed period (§13.4) |
 | `run_backup` | ✅ | Idempotent |
 | `run_restore_drill` | ❌ | Expensive, and ends in a judgement (S30) |
+| `run_invariant_checks` | ✅ | Read-only against the ledger; writes only its own result rows (§15.1) |
 | `run_migration` | ❌ | Runs in one transaction; rolls back entirely on failure (§8.4) |
 | `send_message` · `grant_auto_mode` | ❌ | A grant that could be granted automatically is not a grant |
 | `write_memory` · `forget_memory` | **n/a** | **The documented exception to the gate** (§11.6). Not ledger state — moves no balance, reaches no tax output. Accountable by being legible on S32 rather than by gating |

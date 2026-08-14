@@ -2550,11 +2550,94 @@ shapes do not correspond.
 | Availability | Best-effort. It is one Pi in a flat; offline-capable mobile covers outages |
 | Backups | §5.4. The quarterly restore drill is mandatory |
 | Observability | Structured JSON logs, 30-day retention. Health endpoint. Anthropic token spend tracked per feature |
-| Testing | Migration verification (§8.4) is the critical suite. Parser fixtures per bank. Property tests on money arithmetic. Agent tool contract tests |
+| Testing | §15.1 — four layers, weighted by what actually goes wrong |
 | Upgrades | `docker compose pull && up -d`. Drizzle migrations reviewed before applying — never auto-applied on boot |
 | Hardware | **Raspberry Pi 4**, 4 GB+. Comfortable here — 8k rows is nothing, and receipt extraction is model-bound rather than CPU-bound |
 | Storage | **SSD over USB3, not SD card.** SD cards fail under database write patterns and fail silently for a while first. On a Pi 4 this is the single highest-value hardware decision |
 | Tuning | Postgres `shared_buffers` and `work_mem` sized for 4 GB shared with MinIO, the API and Caddy — defaults assume a bigger host |
+
+### 15.1 Verification
+
+This system's whole argument is that correctness is **structural** rather than
+remembered — a role that cannot see personal rows, an index that cannot hold two
+rents, a component that cannot render a converted amount without its rate. That
+argument is only as good as the evidence that the structures hold.
+
+Four layers, weighted by what actually goes wrong in a ledger.
+
+#### 1 · Continuous invariants — the most valuable layer
+
+A ledger's characteristic failure is not a crash. It is a number that has been
+quietly wrong for months. So the invariants are checked **against the live
+database on a schedule**, not only against fixtures in CI, and the result is
+reported on S30 beside the backup status.
+
+| Invariant | Violation means |
+|---|---|
+| `amount_pivot = amount_original × fx_rate` | Free — it is a generated column (§7.4). Listed so its absence from the failure list is deliberate |
+| Every account: `opening_balance + Σ signed legs` equals its stored balance | The balance query and the write path disagree |
+| Every transfer has `to_currency` and `to_fx_rate` | A destination leg that cannot be valued (§6.5) |
+| Every transaction's currency equals its account's | The trigger was bypassed — by a migration, a bulk load, or a dropped constraint |
+| Every `category_id` points at a leaf | `TAXONOMY.md` R1 broken (§6.5) |
+| `tax_ledger` contains zero rows with `is_business = false` | **T1 breached** (§13.1). Should be impossible; checked anyway, because "impossible" is a claim |
+| No `is_business` row sits in a `shared` account | §6.7 breached |
+| Every clearing account trends toward zero | Not a defect — a **prompt** (§6.4). Reported as an amount and an age |
+| `counterparty_balances` equals the negated sum of its `debt`-role rows | The derivation drifted from the definition (§6.6) |
+| No two rows share `(recurring_id, occurrence_date)` | Free — unique index (§6.5) |
+| Every currency in active use has ≥95% rate coverage | The GEL condition (§7.7), which went unnoticed for months |
+
+**A violation is a defect report, not an exception.** Each writes an
+`audit_log` entry with `actor = 'system'` and surfaces on S30; none of them
+block a write, because a check that can halt the ledger is a new failure mode.
+
+#### 2 · Property tests on money
+
+Money arithmetic is where a bug is both easy to write and invisible. These are
+properties, not examples — generated inputs across all seven currencies:
+
+- Signing is an involution: `signed(tx, from)` and `signed(tx, to)` sum to the
+  spread on a cross-currency transfer, and to zero on a same-currency one.
+- `debtDelta` is exactly `−signed(from)` for all four debt cases (§6.6).
+- Round-tripping a decimal string through storage and back is lossless at
+  scale 8.
+- Conversion at a row's own date is order-independent: summing then converting
+  a same-currency set equals converting then summing.
+- An allocation always sums to its total, including the remainder line (S07).
+- No arithmetic path produces a JS `number`. This is checkable statically and
+  worth doing so — `0.1 + 0.2` is the failure the whole representation exists
+  to prevent (§7.1).
+
+#### 3 · Fixtures — parsers, extraction, classification
+
+| Suite | Shape | Passing means |
+|---|---|---|
+| Parsers | Real statement files per institution, redacted, with expected `RawRow[]` | A format change is caught on the file rather than in the queue |
+| Receipt extraction | ~50 photographs with hand-checked expected fields | A model or prompt swap is scored, not guessed at |
+| Classification | ~300 rows with known-good categories | Same, and it is why §11.4 keeps this tier deterministic — a pipeline is scoreable, a loop is not |
+
+**The extraction and classification suites are what make §11.4's model choice a
+measurement instead of an opinion.** Swap Luna for Gemini Flash, run 300 rows,
+read the number. Without them, "which model" is unanswerable and every future
+provider change is a leap.
+
+#### 4 · Contract tests on the registry
+
+Every operation in `operations.md` is checked for: input schema rejects
+malformed input; the write flag matches whether it mutates; an `audit_log` entry
+appears with the right actor; a read is genuinely side-effect free.
+
+The one that matters most: **for every non-agent surface, assert that no write
+operation was generated at all.** That is the boundary §11.4 rests on, and it is
+exactly the kind of thing a refactor removes without noticing.
+
+#### What is deliberately not tested
+
+No end-to-end UI suite. Single user, one deployment, and the cost of maintaining
+one exceeds what it would catch here — the failure modes this system has are in
+arithmetic and in state, and layers 1–3 address both more directly. If that
+proves wrong, the evidence will be a defect that reached the ledger through a
+path all four layers were blind to, and that defect is the argument for adding
+the fifth.
 
 ---
 

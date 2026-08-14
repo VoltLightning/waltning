@@ -44,8 +44,20 @@ wrong far more often than out of curiosity.
   │  GEL                    0.5%  ⚠   │
   │                  [ Re-run GEL ]   │
   └───────────────────────────────────┘
+  ┌ Ledger invariants ────────────  ✓ ┐
+  │  11 checks · last run 04:00       │
+  │  ✓ balances reconcile      52/52  │
+  │  ✓ transfers valued               │
+  │  ✓ tax_ledger clean               │
+  │  ⚠ clearing · PLN  340,00 · 8 d   │
+  │                    [ Run now ]    │
+  └───────────────────────────────────┘
   ┌ Storage · Services · Model spend ─┐
 ```
+
+The clearing line is **not a defect** — a non-zero clearing balance is a prompt
+to allocate (§6.4), and it appears here as an amount and an age rather than as a
+failure.
 
 ### Web — ≥1024px
 
@@ -77,8 +89,18 @@ No new components. That is the point of specifying it after `08`.
 | Backup manifest — last success, size, destination, encryption status | `run_backup` |
 | Restore-drill log — date, duration, outcome, rows verified | `run_restore_drill` |
 | FX coverage per currency (`fx_rates` grouped by quote) | `backfill_fx_rates(currency, from, to)` |
+| **Ledger invariant results** (`SPEC.md` §15.1) | `run_invariant_checks` |
 | Disk headroom, container health, API reachability | — |
-| Anthropic token spend per feature (`SPEC.md` §15) | — |
+| Model token spend per surface (§11.4) | — |
+
+**The invariant panel is the reason this screen is not only about
+infrastructure.** §15.1's checks run against the live database on a schedule and
+report here: balances that disagree with their own query, a transfer that cannot
+be valued, a `tax_ledger` row that should be impossible. A ledger's
+characteristic failure is a number quietly wrong for months, and this is where
+that becomes visible.
+
+A violation is a **defect report, not an exception** — it never blocks a write.
 
 Every write goes through the operation registry (§11.0), so the agent inherits
 them: *"when did the last backup run"* and *"re-run the GEL backfill"* are
