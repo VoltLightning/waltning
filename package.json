@@ -13,7 +13,6 @@
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
     "db:psql": "docker compose exec postgres psql -U waltning -d waltning",
-    "db:push": "pnpm --filter @waltning/db push",
     "db:generate": "pnpm --filter @waltning/db generate",
     "db:studio": "pnpm --filter @waltning/db studio",
     "mm:extract": "pnpm --filter @waltning/migrate-mm extract",

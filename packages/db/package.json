@@ -9,7 +9,6 @@
     "./money": "./src/money.ts"
   },
   "scripts": {
-    "push": "drizzle-kit push",
     "generate": "drizzle-kit generate",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",

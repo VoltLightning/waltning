@@ -16,10 +16,19 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 15 |
+| **C** | A stated guarantee is false | 17 |
 | **H** | Wrong data, silently | 31 |
 | **M** | Cannot be implemented from the spec | 24 |
 | **L** | Correct but under-specified | 18 |
+
+**Every migration in this register now runs.** All seven files apply cleanly to
+an empty database, and the enforcement they add was tested by execution rather
+than by reading: `verify_t1()` was made to return false two ways (a `GRANT` on
+the base table, a redefined view), the omission check was made to return false
+with a real unmarked revenue row, and the closed-period guard was driven through
+all seven write cases including the two moves. That last exercise found C16 and
+C17 — two defects *in the fix*, one of which suppressed every delete in the
+system.
 
 **The single worst class was not in the design at all — it was in the arithmetic
 the design shows you.** Three worked examples in the specification do not
@@ -48,21 +57,30 @@ transfer *into* a shared account is refused.
 ### C3 — The period lock freezes nothing
 **Fixed** — `transactions_period_not_closed` in `0004` guards INSERT, UPDATE and
 DELETE against every open lock, so backdating into a filed period is refused
-rather than merely discouraged. §13.4 says a closed period's rows are frozen, and S27's byte-identical
-rebuild guarantee rests on that sentence. No write guard exists: `S09` edits per
-field with no form-level save, `delete_transaction` has no date check, nothing
-prevents backdating a new row into a filed period, and `run_migration` upserts
-below the registry entirely. The only closed-period guard in the whole registry
-is on `rerate_transactions`.
+rather than merely discouraged.
+
+Previously: §13.4 said a closed period's rows are frozen and S27's byte-identical
+rebuild guarantee rested on that sentence, while `S09` edited per field with no
+form-level save, `delete_transaction` had no date check, and nothing stopped
+backdating into a filed period. The only closed-period guard in the entire
+registry was on `rerate_transactions`.
 
 ### C4 — `tax_ledger` has no `ownership` predicate, and the ownership flip is retroactive
-**Open.** The view filters `is_business AND deleted_at IS NULL` and never joins
+**Fixed** — the view in `0005` joins `accounts` and filters `a.ownership = 'own'`,
+so the retroactive flip removes those rows from the tax view by construction
+rather than depending on a trigger that cannot fire.
+
+Previously: the view filtered `is_business AND deleted_at IS NULL` and never joins
 `accounts.ownership`. S16 makes `own → shared` explicitly retroactive over 498
 rows. A trigger on `transactions` does not fire on an `accounts` update — so
 business rows land in a shared account and stay in the tax view.
 
 ### C5 — Under ryczałt the risk is omission, and nothing guards it
-**Open, and the sharpest finding in the set.** Every mechanism in §13.1 prevents
+**Fixed** — `tax_omission_candidates` and `verify_no_omitted_revenue()` in
+`0005`, promoted into §15.1's continuous invariants so it runs against the live
+database on a schedule rather than only at close.
+
+Why it was the sharpest finding: every mechanism in §13.1 prevents
 a personal row *entering* a tax output. Under ryczałt only revenue is
 reportable, so the material failure is a revenue row never marked business and
 therefore silently **absent** — under-declared revenue. `is_business` defaults
@@ -71,7 +89,12 @@ none of which is *income rows with an earnings category, in own accounts, not
 marked business.*
 
 ### C6 — The T1 assertion is unfalsifiable, and so is the invariant written to check it
-**Open.** The manifest asserts zero non-business rows; that is a restatement of
+**Fixed** — `verify_t1()` in `0005` implements exactly the three checks this
+entry prescribed: `pg_get_viewdef` against a pinned shape, `has_table_privilege`
+denied on `transactions`, and the two counts agreed from both sides. §15.1's
+invariant table now lists those three instead of the tautology.
+
+Previously: the manifest asserted zero non-business rows; that is a restatement of
 the view's own `WHERE`, made by a role that by construction cannot see
 `transactions` and therefore cannot detect a breach. §15.1's new invariant has
 the same shape. Neither detects a redefined view, a missing view, a missing
@@ -80,14 +103,29 @@ role, or a grant on the base table — every way T1 actually fails.
 the export role gets SQLSTATE 42501 on `transactions`; and the two counts agree.
 
 ### C7 — No role, no view, no migrate script. T1 is entirely aspirational
-**Open.** Repo-wide, `tax_ledger` appears in SQL exactly once — in a comment.
+**Fixed** — `0005_tax_ledger_roles.sql` creates the view, the `waltning_export`
+role, enumerated `REVOKE`s covering the five other tables holding personal rows,
+and an `ALTER DEFAULT PRIVILEGES` so nothing added later is readable by
+accident. The superuser hazard is documented in §13.1: the export path must take
+its connection explicitly, because `createDb()`'s default argument silently
+hands it `POSTGRES_USER`, which bypasses every GRANT.
+
+Previously: repo-wide, `tax_ledger` appears in SQL exactly once — in a comment.
 Zero `CREATE ROLE`, `GRANT`, `REVOKE`, or `CREATE VIEW`. `POSTGRES_USER` is the
 bootstrap **superuser**, which bypasses every GRANT. And `createDb()`'s default
 argument means an export module written the obvious way silently gets that
 superuser — converting *fails loudly* into *succeeds quietly*.
 
 ### C8 — "Structurally impossible" double-posting is not
-**Open.** §14.4 claims the unique index means a rule cannot post a second rent if
+**Fixed by correcting the claim and specifying the real mechanism.** §14.4 now
+states what the index actually gives — *this rule fires once per occurrence*, a
+scheduler property — and separates it from what you care about, *this rent is in
+the ledger once*. Materialization is manual and offers **Link** rather than
+**Post** when an unlinked row matches within ±3 days and 3%; linking stamps
+`recurring_id` and `occurrence_date`, which puts the row into the index so the
+question cannot be asked twice.
+
+Previously: §14.4 claimed the unique index means a rule cannot post a second rent if
 you entered one by hand. A hand-entered row has `recurring_id = NULL` and is
 excluded by the index predicate — it is not in the index at all. The index
 prevents the *same rule* firing twice for the same occurrence, which is a much
@@ -101,7 +139,14 @@ longer claimed to be the hub. Deferred constraint trigger added; same gap on
 `dashboard_layouts.is_active` noted.
 
 ### C10 — Reproducibility is claimed three times and supported by nothing
-**Open.** §9.2 and §11.4 rest on a reparse returning the same answer. Nothing
+**Fixed** — §11.4 now names the three independent ways determinism breaks
+(floating model alias, live-ledger retrieval, batch co-tenancy) and narrows the
+guarantee to what is true: every classification is re-derivable from recorded
+inputs. `import_rows.model_id`, `rule_snapshot` and `retrieved_ids` (migration
+`0004`) are those inputs; replay pins them instead of re-retrieving, and running
+against today's ledger is a separately named `reclassify`.
+
+Previously: §9.2 and §11.4 rested on a reparse returning the same answer. Nothing
 pins temperature, seed, or model version — and §11.4 explicitly says *nothing
 knows which model answered*. Worse, retrieval reads the **live ledger**, so
 neighbours change between runs, and batch co-tenancy means row 37 is conditioned
@@ -147,8 +192,38 @@ Nina repaying 200 moves her balance from +200 to **+400**. The doc comment
 claims "the inversion that would have made every receivable read backwards
 cannot occur"; it occurs on every transfer.
 
+### C16 — Every `DELETE` on `transactions` was silently suppressed
+**Fixed in `0006`.** `assert_period_not_closed` ended `RETURN NEW`, and in a
+`BEFORE DELETE` trigger `NEW` is NULL. Returning NULL from a BEFORE trigger
+cancels the operation — so no row could be deleted from `transactions` in any
+period, open or closed, and Postgres reported `DELETE 0` as ordinary success
+rather than raising. A guard written to refuse *some* deletes refused *all* of
+them, quietly.
+
+### C17 — A filed row could be moved out of a closed period
+**Fixed in `0006`.** The guard evaluated `coalesce(NEW.date, OLD.date)`, which
+on UPDATE is always `NEW.date` because `date` is `NOT NULL`. It asked whether
+the row's *destination* was closed and never whether it had come out of a closed
+period. Moving a February transaction to June therefore succeeded, and
+February's filed total dropped by that amount with nothing inserted, deleted or
+edited inside the period. Worse than the backdating case it was written for:
+backdating leaves a row you did not expect, a move leaves nothing at all. A move
+touches two periods and both must now be open.
+
+**Both were found by running the trigger, not by reading it** — on a scratch
+database, one case per statement, checking the resulting rows rather than the
+absence of an error. That is this register's own thesis arriving one layer down:
+the fix for *asserting is not enforcing* is itself an assertion until executed.
+
 ### C11 — Auto mode is per-operation; the tax boundary is per-field
-**Open.** §11.2 says auto mode is *never eligible for anything touching tax
+**Fixed** — §11.2 now evaluates eligibility against the **fields a call actually
+writes**. The registry marks each writable field `tax_sensitive`; a call under an
+auto grant naming one is gated individually whatever else it also sets, and the
+approval card shows only those fields with the rest already applied. The
+ineligible set is `is_business`, `ryczalt_rate`, `ryczalt_activity`,
+`counterparty_tax_id`, `date`, `accounts.ownership` and `currencies.is_pivot`.
+
+Previously: §11.2 said auto mode is *never eligible for anything touching tax
 scope*. `update_transaction` is ✅ auto-eligible and can write `is_business`,
 which is exactly what decides `tax_ledger` membership. `categorize_batch` is ✅
 and unbounded in rows. `accept_row` and `materialize_occurrence` are ✅ and both

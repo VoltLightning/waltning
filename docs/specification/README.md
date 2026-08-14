@@ -14,6 +14,7 @@ system it is built from, every user journey, and every screen.
 | 5 | [`operations.md`](operations.md) — the registry the UI and the agent are both generated from |
 | 6 | [`computations.md`](computations.md) — every figure the interface promises, defined |
 | 7 | [`defects.md`](defects.md) — what ten adversarial reviews found, and what is still open |
+| 8 | [`build-order.md`](build-order.md) — the single sequence, reconciling `SPEC.md` §16 with the component order |
 
 **Outside this folder:** [`SPEC.md`](../../SPEC.md) is the system specification
 — architecture, data model, FX semantics, tax layer. [`TAXONOMY.md`](../../TAXONOMY.md)

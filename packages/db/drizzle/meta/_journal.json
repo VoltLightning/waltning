@@ -36,6 +36,20 @@
       "when": 1786000200000,
       "tag": "0004_business_logic_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786000300000,
+      "tag": "0005_tax_ledger_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786000400000,
+      "tag": "0006_period_guard_both_dates",
+      "breakpoints": true
     }
   ]
 }

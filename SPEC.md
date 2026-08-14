@@ -1749,8 +1749,32 @@ global:
 | Scope | Per operation class — e.g. recategorisation on, deletion never |
 | Duration | The session, or a stated number of operations. Never permanent |
 | Never eligible | Deletes, configuration changes, anything touching tax scope or the pivot currency |
+| Field ineligibility | Enforced per **field**, not per operation — see below |
 | Audit | Unchanged — auto-applied writes are logged identically, marked `auto` |
 | Exit | One tap, and any single write can still be reverted (§11.2) |
+
+**The tax boundary is a field boundary, and the grant is an operation
+boundary.** *"Anything touching tax scope"* is not expressible as a list of
+operation names, because the operation you would obviously auto-grant is the one
+that can cross it: `update_transaction` sets `category_id` — which is
+recategorisation, the motivating example — and the same operation sets
+`is_business`, `ryczalt_rate` and `ryczalt_activity`. Grant recategorisation for
+the session and a single tool call can move forty rows into or out of the tax
+view with no approval and no distinguishing mark. Under ryczałt the damaging
+direction is *out*, and §13.1's whole argument is that this cannot happen.
+
+So eligibility is evaluated against the **fields the call actually writes**, not
+the operation it belongs to. The registry (§11.0) marks each writable field
+`tax_sensitive`; a call under an auto grant that names one is gated
+individually, whatever else it also sets, and the approval card shows only the
+sensitive fields with the rest already applied. The ineligible set is
+`is_business`, `ryczalt_rate`, `ryczalt_activity`, `counterparty_tax_id`,
+`date` (it decides the period), `accounts.ownership`, and `currencies.is_pivot`.
+
+A category change *can* alter tax scope indirectly, since `is_earnings` feeds
+`tax_omission_candidates`. That is a report, not a write, and it is checked at
+close (§13.4) rather than gated per row — the point of the field list is that
+nothing silently changes a filed figure, not that no figure can ever move.
 
 The grant itself is stored, not just its consequences:
 
@@ -1810,11 +1834,33 @@ what the classification tier should be.
 
 #### Why bulk import must stay deterministic
 
-Beyond speed and cost, **reproducibility is a stated guarantee**. §9.4 keeps
+Beyond speed and cost, **replayability is a stated guarantee**. §9.4 keeps
 `import_rows.raw` unmutated so a reparse after a prompt or parser change is
-always possible — and that promise only means something if a reparse produces
-the same answer. An agentic loop cannot offer that: two runs over the same row
-may take different paths.
+always possible — and that promise only means something if the earlier answer
+can be accounted for. An agentic loop cannot offer that: two runs over the same
+row may take different paths.
+
+**Be precise about what is being promised, because a pipeline is not a pure
+function either.** Three things move underneath it independently of the row: the
+model version behind a floating alias; the retrieved neighbours, which come from
+the *live* ledger and therefore change as you keep using the system; and batch
+co-tenancy, since row 37 shares a context with rows 1–36 and a different batch
+boundary gives it different company. Nothing here pins temperature or a seed,
+and §11.4 states plainly that nothing records which model answered. A claim of
+bit-identical reruns would be false in three independent ways.
+
+What is actually guaranteed is that **every classification can be explained and
+re-derived from its recorded inputs.** `import_rows` stores `model_id`, the rule
+conditions as they fired (`rule_snapshot`), and the ids that retrieval returned
+(`retrieved_ids`) — added in migration `0004`. Replay pins those neighbours and
+that model rather than re-retrieving, so the run is reproducible against the
+state it actually saw. Re-running against *today's* ledger is a different
+operation with a different name, `reclassify`, and it is expected to differ;
+conflating the two is how a "reproducible" system quietly stops being one.
+
+The deterministic shape is what makes this possible at all: with no tool loop
+there is one call whose entire input is those three recorded things plus the
+untouched raw row.
 
 Determinism also makes the tier *evaluable*. Three hundred fixture rows scored
 against known-good classifications is a number you can watch move when you
@@ -2137,10 +2183,17 @@ never the base table:
 
 ```sql
 CREATE VIEW tax_ledger AS
-  SELECT ... FROM transactions
-  WHERE is_business = true
-    AND deleted_at IS NULL;
+  SELECT ... FROM transactions t JOIN accounts a ON a.id = t.account_id
+  WHERE t.is_business = true
+    AND t.deleted_at IS NULL
+    AND a.ownership = 'own';
 ```
+
+**The ownership join is load-bearing and was missing for a long time.** With
+only the first two predicates, 5a below is defeated by a write to a different
+table: S16 makes `own → shared` explicitly retroactive across 498 rows, and a
+trigger on `transactions` does not fire on an `accounts` update. Business rows
+would sit in a now-shared account and remain visible to every tax adapter.
 
 **3 · Enforced by the database, not by discipline.** The export path connects
 as a Postgres role holding `SELECT` on `tax_ledger` and **no privilege at all**
@@ -2148,6 +2201,23 @@ on `transactions`. A tax adapter that tried to read personal data would fail
 with a permissions error rather than succeed quietly. This is the part that
 makes T1 a guarantee: correctness no longer depends on every future query being
 written carefully.
+
+The role, the view, and the `REVOKE`s are `packages/db/drizzle/0005_tax_ledger_roles.sql`.
+Until that migration existed, `tax_ledger` appeared in the repository's SQL
+exactly once — inside a comment — and this section described a mechanism that
+had never been built. Two details the DDL has to get right and the prose above
+does not say:
+
+- The denials are **enumerated**, not implied. Personal rows also live in
+  `receipts.ocr_json`, `import_rows.raw`, `agent_tool_calls.output`,
+  `agent_memory` and `transaction_lines`; an `ALTER DEFAULT PRIVILEGES … REVOKE`
+  keeps anything added later out by default, because `GRANT SELECT ON ALL
+  TABLES` is what a tired person types at 2am.
+- `POSTGRES_USER` is the bootstrap **superuser**, and a superuser bypasses every
+  `GRANT`. `createDb()`'s default argument means an export module written the
+  obvious way silently connects as it — converting *fails loudly* into *succeeds
+  quietly*, which is the worst available outcome. The export path must take its
+  connection explicitly.
 
 **4 · Mixed purchases are split, not apportioned.** A laptop that is 70%
 business becomes two transactions — one business, one personal — rather than
@@ -2523,13 +2593,29 @@ scheduled items forward, so the calendar shows what is coming as well as what
 happened. Projected entries are visually distinct from posted ones and are not
 included in any total that claims to be actual.
 
-**A projection becomes a transaction exactly once.** The posted row carries
+**A rule posts each occurrence at most once.** The posted row carries
 `recurring_id` and the `occurrence_date` it satisfies, under a unique index
-(§6.5). So a rule that fires for a month you had already entered by hand cannot
-insert a second row — the duplicate is rejected by the database rather than
-avoided by a scheduler that has to remember what it did. An occurrence you
-deliberately skip is simply a date with no row, and the calendar renders it as
-still-projected.
+(§6.5), so a second attempt at an occurrence already materialized is rejected by
+the database rather than avoided by a scheduler that has to remember what it
+did. An occurrence you deliberately skip is simply a date with no row, and the
+calendar renders it as still-projected.
+
+**That index does not catch the case you actually hit.** A rent row you typed by
+hand has `recurring_id = NULL`, so the index predicate excludes it — it is not
+in the index at all. Nothing about it collides with the rule's own row. The
+guarantee is *this rule fires once per occurrence*, which is a scheduler
+property; it is not *this rent is in the ledger once*, which is the property
+that matters to you and the one an earlier draft of this section claimed.
+
+The claim-or-post decision is therefore a match, not a constraint, and it is
+why materialization is manual (`computations.md` §11). Before offering an
+occurrence, the system looks for an unlinked row within ±3 days carrying the
+same account and a within-3% amount — the duplicate rule of `computations.md`
+§9 — and if one exists the card offers **Link** rather than **Post**. Linking
+stamps `recurring_id` and `occurrence_date` onto the row you already entered,
+which both satisfies the occurrence and puts the row into the index, so the
+question cannot be asked twice. A rule that could post silently would have to
+resolve this ambiguity without you, and it has no basis on which to.
 
 **Amounts follow the FX rules.** A day containing foreign transactions shows
 its net in the current display currency, and opening the day reveals each entry with its
@@ -2656,12 +2742,30 @@ reported on S30 beside the backup status.
 | Every transfer has `to_currency` and `to_fx_rate` | A destination leg that cannot be valued (§6.5) |
 | Every transaction's currency equals its account's | The trigger was bypassed — by a migration, a bulk load, or a dropped constraint |
 | Every `category_id` points at a leaf | `TAXONOMY.md` R1 broken (§6.5) |
-| `tax_ledger` contains zero rows with `is_business = false` | **T1 breached** (§13.1). Should be impossible; checked anyway, because "impossible" is a claim |
+| `pg_get_viewdef('tax_ledger')` still filters `is_business`, `deleted_at` **and** `ownership` | The view was redefined or dropped and recreated — the only way its own `WHERE` stops being true |
+| The export role gets `42501` probing `transactions` | The role is missing, the `REVOKE` was lost in a restore, or the connection is the superuser (§13.1) |
+| `tax_ledger`'s count equals the same predicate evaluated against the base table | The two derivations disagree — a grant, a rewritten view, or a stale materialization |
+| Zero income rows with an earnings category, in an `own` account, not marked business | **Under-declared revenue** — the ryczałt failure mode, and the one nothing else in the system looks for (C5) |
 | No `is_business` row sits in a `shared` account | §6.7 breached |
 | Every clearing account trends toward zero | Not a defect — a **prompt** (§6.4). Reported as an amount and an age |
 | `counterparty_balances` equals the negated sum of its `debt`-role rows | The derivation drifted from the definition (§6.6) |
 | No two rows share `(recurring_id, occurrence_date)` | Free — unique index (§6.5) |
 | Every currency in active use has ≥95% rate coverage | The GEL condition (§7.7), which went unnoticed for months |
+
+The first four replace a single earlier line — *"`tax_ledger` contains zero rows
+with `is_business = false`"* — which was **unfalsifiable**. It restated the
+view's own `WHERE` clause, so it returned true whether or not the view existed
+as specified, whether or not the role existed, and whether or not something held
+`SELECT` on the base table. It could not detect any way T1 actually fails. The
+replacements are `verify_t1()` and `verify_no_omitted_revenue()` in `0005`, and
+each can return false.
+
+Note the direction of the fourth. Every other mechanism in §13.1 stops a
+personal row from *entering* a tax output. Under ryczałt only revenue is
+reportable, so the material failure is the opposite one: a revenue row never
+marked business and therefore silently **absent**. `is_business` defaults false
+and the migration sets it nowhere, which makes this the likely state on day one
+rather than an unlucky one — and it is the direction a tax authority penalises.
 
 **A violation is a defect report, not an exception.** Each writes an
 `audit_log` entry with `actor = 'system'` and surfaces on S30; none of them
@@ -2674,7 +2778,9 @@ properties, not examples — generated inputs across all seven currencies:
 
 - Signing is an involution: `signed(tx, from)` and `signed(tx, to)` sum to the
   spread on a cross-currency transfer, and to zero on a same-currency one.
-- `debtDelta` is exactly `−signed(from)` for all four debt cases (§6.6).
+- `debtDelta(tx, side)` is exactly `−signed(tx, side)` for all four debt cases
+  (§6.6) — **on both sides**, since a repayment arrives as a transfer whose
+  counterparty sits on the `to` leg and defaulting to `from` inverts it.
 - Round-tripping a decimal string through storage and back is lossless at
   scale 8.
 - Conversion at a row's own date is order-independent: summing then converting
@@ -2732,7 +2838,17 @@ that works.
 | **4. Import** | Parsers, rules, classification, review | A month of statements in minutes | 3 wks |
 | **5. Agent** | Tool calling, approval gates, audit | Answers what needs Excel today | 2 wks |
 | **6. Export** | Excel workbook, `tax_ledger` view, PL adapter | Opens in Excel; manifest asserts zero personal rows | 1–2 wks |
-| **7. Cutover** | Pi deploy, Tailscale, backups, restore drill | Money Manager read-only | 1 wk |
+| **7. Cutover** | Pi deploy, backups, restore drill | Money Manager read-only; a restore drill actually run | 1 wk |
+
+**Phase 0.5 is missing from the table above and belongs between 0 and 1.** §5.1
+and §5.2 specify the perimeter and the authentication behind it in full, and
+neither appears in any phase — Tailscale first surfaces in Phase 7, at week 15.
+As written this plan loads five years of real financial history into a dev stack
+in week one and then builds an API, a mobile client and an agent against it for
+thirteen weeks before a perimeter exists. It is also a hard prerequisite for
+§13.1: the application connects as `POSTGRES_USER`, a superuser bypasses every
+`GRANT`, and T1 is unenforceable until the app stops being one. Three days,
+scheduled before the importer runs.
 
 **The revenue side no longer belongs in Phase 6.** Business revenue is live
 (§13.6), so `ryczalt_rate`, the NIP and KSeF fields, and S28's completeness list
@@ -2750,6 +2866,15 @@ certain — tool surfaces are easy, good agent UX is not.
 
 Phase 0 before any UI. It is where the project proves viable, and a migration
 bug found in week one is cheap.
+
+**The full sequence is `docs/specification/build-order.md`**, which reconciles
+this table with the component order in `design-system/12-build-order.md` — the
+two were written independently and neither referenced the other. It carries the
+critical path (five strictly serial items, headed by a probe script that takes
+minutes and gates everything), Phase 0.5 above, where each component phase
+actually lands, and the three specified things that should be deleted rather
+than scheduled. Its total is 13 weeks, and the reduction against the estimate
+above comes from the subtractions rather than from optimism.
 
 ---
 
