@@ -998,6 +998,21 @@ export const agentMemory = pgTable(
   (t) => [
     index("agent_memory_scope_idx").on(t.scope, t.subjectId),
     check("agent_memory_subject_shape", sql`(${t.scope} = 'global') = (${t.subjectId} is null)`),
+    /**
+     * Behaviour, never facts (§11.6) — a stored figure drifts from the ledger,
+     * the same defect §6.6 removed by deriving balances rather than storing them.
+     *
+     * The predicate refuses a ledger **figure**, not any number. The first
+     * version was `[0-9]{2,}`, which also rejected *"split 50/50"* and *"after
+     * 22:00"* — behaviour, not facts, and exactly what this feature exists to
+     * learn. A guard that blocks the main use case with an unreadable constraint
+     * violation is worse than a slightly loose one, especially on the one write
+     * that bypasses the approval gate. See migration `0008`.
+     */
+    check(
+      "agent_memory_no_figures",
+      sql`${t.body} !~ '(?i)([0-9][0-9  ]*([.,][0-9]{2})?\s*(pln|usd|eur|byn|gel|rub|gbp|zł|zl|\$|€|₾|₽|£))|((pln|usd|eur|byn|gel|rub|gbp|zł|zl|\$|€|₾|₽|£)\s*[0-9])|([0-9]{4,})|([0-9]+[.,][0-9]{2}\M)'`,
+    ),
   ],
 );
 

@@ -57,6 +57,13 @@
       "when": 1786000500000,
       "tag": "0007_debt_reassignments",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786000600000,
+      "tag": "0008_memory_figure_check",
+      "breakpoints": true
     }
   ]
 }

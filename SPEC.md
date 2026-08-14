@@ -2159,6 +2159,24 @@ resolved ambiguities.
 ❌  "The February statement had 340 rows" → query it
 ```
 
+**Enforced, not merely stated** — `agent_memory_no_figures`, a `CHECK`. This is
+content prepended to *every* turn and, under O17, the most-exposed data in the
+system, so a screen is not enforcement.
+
+The predicate refuses a ledger **figure**, not any number: a quantity carrying a
+currency code or symbol, a run of four or more digits, or a two-decimal amount.
+The first version was `[0-9]{2,}`, which also rejected *"split group dinners
+50/50"*, *"anything from Żabka after 22:00"* and *"round cash to the nearest
+10"* — every one of them behaviour, none of them capable of drifting, and all
+three precisely what this feature exists to learn. A guard that blocks the main
+use case with an unreadable constraint violation, on the one write that bypasses
+the approval gate, is worse than a slightly loose one (C20, migration `0008`).
+
+**It is a guard, not a proof.** *"Rent went up by a third"* still passes. The
+`CHECK` stops the mechanical failure — a figure copied out of the ledger into a
+prompt prefix, where it silently goes stale — and S32 covers the remainder by
+keeping every memory listed, editable and deletable.
+
 #### Prefer a rule to a memory
 
 Anything expressible as a rule (§9.2) **must be one**. A rule is deterministic,
@@ -2832,10 +2850,10 @@ shapes do not correspond.
 | Area | Requirement |
 |---|---|
 | Scale | ~8k transactions today, ~2k/year growth. Trivial for Postgres — do not over-engineer for it |
-| Latency | Ledger queries < 100 ms on Pi hardware. Receipt extraction 2–5 s (model-bound). Agent turns 3–15 s |
+| Latency | **Full budget table: `docs/specification/architecture/06-quality-attributes.md`.** Headlines: a simple ledger query < 100 ms; an *aggregate* < 200 ms warm and < 400 ms cold, since grouping over 25k rows is a different class of work and only stays fast because every index carries `WHERE deleted_at IS NULL`; receipt extraction 2–5 s (model-bound); agent turns 3–15 s; **voice capture end-to-end < 10 s (J02)** — the one budget where missing it changes behaviour rather than perception |
 | Availability | Best-effort. It is one Pi in a flat; offline-capable mobile covers outages |
 | Backups | §5.4. The quarterly restore drill is mandatory |
-| Observability | Structured JSON logs, 30-day retention. Health endpoint. Anthropic token spend tracked per feature |
+| Observability | Structured JSON logs, 30-day retention. Health endpoint. **Model spend tracked per surface**, not per feature — §11.4 configures a model per surface and may point them at different providers, so per-feature totals would not add up. No metrics stack: S30 is the operational surface, and it exists to make the four *silent* failures loud — stale backups, FX coverage, invariant results, spend |
 | Testing | §15.1 — four layers, weighted by what actually goes wrong |
 | Upgrades | `docker compose pull && up -d`. Drizzle migrations reviewed before applying — never auto-applied on boot |
 | Hardware | **Raspberry Pi 4**, 4 GB+. Comfortable here — 8k rows is nothing, and receipt extraction is model-bound rather than CPU-bound |

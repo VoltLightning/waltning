@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 19 |
+| **C** | A stated guarantee is false | 20 |
 | **H** | Wrong data, silently | 31 |
 | **M** | Cannot be implemented from the spec | 24 |
 | **L** | Correct but under-specified | 18 |
@@ -240,6 +240,36 @@ completeness certifies a faithful copy of an incomplete ledger.**
 
 Not an extractor defect. It is what the ledger contains, and it is the reason
 the sync tooling stays rather than migration being a one-off.
+
+### C20 — The memory guard rejected behaviour along with facts
+**Fixed in `0008`.** `agent_memory`'s CHECK was `body !~ '[0-9]{2,}'` — the right
+instinct, the wrong predicate. It correctly refused *"Rent is 4500 PLN"* and
+*"My salary is 12000"*, and it also refused:
+
+| | |
+|---|---|
+| `Split group dinners 50/50 with Marek` | a ratio |
+| `Treat anything from Zabka after 22:00 as groceries` | a clock time |
+| `Round cash expenses to the nearest 10` | a rounding unit |
+
+All three are behaviour. None duplicates a ledger figure, none can drift, and
+all three are exactly what the feature exists to learn. **A guard that blocks the
+main use case is worse than a slightly loose one** — especially here, where the
+write is the one documented exception to the approval gate (§11.6) and the
+violation surfaces mid-conversation as unreadable SQL.
+
+The predicate now refuses a ledger *figure*: a number carrying a currency code or
+symbol, a run of four or more digits, or a two-decimal quantity. Verified against
+thirteen cases, seven accept and six reject.
+
+It is a guard, not a proof — *"rent went up by a third"* still passes. It stops
+the mechanical failure of a number copied out of the ledger into a prompt prefix
+where it goes stale; S32 covers the rest by keeping every memory listed and
+editable.
+
+**Also closed a real drift:** the constraint existed only in migration `0004`'s
+`ALTER`, never in `schema.ts`, so the Drizzle model and the database disagreed
+about what `agent_memory` permits.
 
 ### C16 — Every `DELETE` on `transactions` was silently suppressed
 **Fixed in `0006`.** `assert_period_not_closed` ended `RETURN NEW`, and in a

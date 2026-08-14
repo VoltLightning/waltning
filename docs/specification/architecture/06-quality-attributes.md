@@ -10,11 +10,15 @@ flow spec, it is quoted rather than restated, so there is one source.
 The hardware is a Raspberry Pi 4 over WireGuard, which is the binding constraint
 on every figure below. These are **p95 on the target hardware**, not on a laptop.
 
+This table is the source; `SPEC.md` §15 quotes its headlines rather than
+restating them.
+
 | Interaction | Budget | Source | Why this number |
 |---|---|---|---|
 | Quick add, voice → committed | **< 10 s** | J02 | Standing at a till. Past this, you stop using it |
 | Dashboard first meaningful paint | < 800 ms | S01 | It is the app's front door |
-| Any aggregate (period spend, category) | < 200 ms warm · < 400 ms cold | — | Index-only scans; see below |
+| Simple ledger query (row fetch, filtered list) | < 100 ms | §15 | Small database; anything slower is a missing index |
+| Any **aggregate** (period spend, category) | < 200 ms warm · < 400 ms cold | — | A different class from the above: grouping over 25k rows. Only stays fast because every index carries `WHERE deleted_at IS NULL` |
 | Transaction search, trigram | < 300 ms | S10 | 2 100 days of history, trilingual corpus |
 | Calendar month render | < 150 ms | S11 | Virtualized; continuous scroll must not stutter |
 | Statement import, 300 rows | < 90 s end-to-end | J04 | Dominated by model latency, batched ~50/call |
