@@ -578,8 +578,22 @@ recomputing every value from `amount_original × fx_rate` — harmless if the
 invariant held, and a silent correction if it did not. Run it against a copy
 first for that reason alone.
 
-**Outstanding against the schema**, from decisions taken after `0001` was
-generated and not yet expressed in code:
+**Migrations `0002`–`0004` are hand-written**, and `drizzle-kit generate` will
+not run until someone rebuilds the snapshot chain: it needs an interactive TTY to
+disambiguate the `receipt_lines` → `transaction_lines` rename, and the meta
+snapshots diverged when `0002` was written by hand. Adopt `drizzle-kit migrate`,
+baseline `0000`, and **delete `db:push`** — `push` diffs the Drizzle schema and
+therefore cannot see triggers, views or grants, which is most of what this
+system's correctness rests on.
+
+**Closed since `0001`**, all in `0004`: `to_amount_pivot` · `debt_currency` /
+`debt_amount` · `fee` · `ryczalt_rate` / `ryczalt_activity` ·
+`accounts.expected_balance` · `account_groups.institution` ·
+`import_rows.model_id` / `rule_snapshot` / `retrieved_ids` · `ryczalt_rates` ·
+`tax_period_locks` · `agent_memory` · the closed-period write guard · and the
+covering indexes every aggregate needed.
+
+**Still outstanding:**
 
 | Change | Why |
 |---|---|
@@ -1316,6 +1330,33 @@ closes no doors.
   lean harder on the model tier — more API calls, more review, self-correcting
   within a few months. A cost in euros, not in correctness.
 
+### 8.1a Probe before you trust the extractor
+
+`extract.py` computes every balance from an assertion in its own docstring: that
+a transfer is two rows, each naming its own account. Two readings of the Core
+Data layout fit the evidence, and the other one credits **no destination at
+all** — every transfer nets to zero on the source.
+
+That reading fails *plausibly*, which is what makes it dangerous:
+`Clearing · PLN` is 636 transfers of 678 rows, so under the wrong reading it
+computes to ≈0 — and §6.4 says a clearing account should trend to zero. The bug
+reads as confirmation of the design.
+
+```
+python3 tools/migrate-mm/probe.py <backup.mmbak>
+```
+
+It exits non-zero on any blocking finding and answers seven assumptions the
+extractor otherwise makes silently: the transfer layout, `ZDO_TYPE`'s storage
+class (an integer makes every balance 0.00 while the income query still
+matches), unmapped types, whether any account matches the hardcoded shared-name
+test, unseeded currencies, negative income rows, and income heads missing from
+`INCOME_MAP`.
+
+**Run it against every backup, not once.** §8.3 relies on re-running the import
+against progressively later exports, and each one may add a category, a
+currency, or a type the map has never seen.
+
 ### 8.1 Pipeline
 
 ```
@@ -1358,11 +1399,47 @@ against progressively later backups before cutover.
 
 ### 8.4 The verification gate
 
-**Go/no-go for the entire project.** For all 52 active accounts:
+**Go/no-go for the entire project** — and the version that shipped could not
+fail.
+
+#### Why the obvious gate is decoration
+
+`opening_balance` is derived as `computed_balance − Σ(imported income)`, and
+§8.0 imports only income. So the gate
 
 ```
-opening_balance + Σ(signed transactions) == Money Manager's reported balance
+opening_balance + Σ(signed transactions) == computed_balance
 ```
+
+evaluates `(computed − Σ) + Σ = computed` for every account, unconditionally.
+Break the sign map so transfers never credit a destination and it still prints
+`0,00` down all 52 rows. **A gate whose two sides share a derivation cannot
+detect anything**, and this one was the sole check on the riskiest phase.
+
+#### The right-hand side must come from outside the pipeline
+
+Two independent sources, both required:
+
+**1 · Balances typed from Money Manager.** 52 figures read off the app's own
+account list into a CSV, loaded as `accounts.expected_balance`, compared per
+account per currency. Money Manager stores no balance — `ZLEFTMONEY` is zero on
+every account — so its *displayed* figure is the only value in existence that
+was not computed by our own extractor. Tedious once; it is the only genuinely
+external oracle available.
+
+**2 · A structurally different second derivation.** The extractor computes
+balances by signing each leg once, keyed on `ZASSETUID`. The check recomputes
+them by crediting destinations through `ZTOASSETUID` on the OUT leg instead. The
+two methods share no code path, so agreement is evidence and disagreement names
+the transfer-layout question directly (§8.1a).
+
+Both must agree with the imported ledger. **Agreement of two derivations that
+share an assumption is not evidence**, which is exactly what the first version
+had.
+
+#### The other checks
+
+Plus:
 
 To the cent, per account, per currency. Plus:
 

@@ -46,7 +46,9 @@ else. Added `accounts_change_safe`, plus a target-side guard so a business
 transfer *into* a shared account is refused.
 
 ### C3 — The period lock freezes nothing
-**Open.** §13.4 says a closed period's rows are frozen, and S27's byte-identical
+**Fixed** — `transactions_period_not_closed` in `0004` guards INSERT, UPDATE and
+DELETE against every open lock, so backdating into a filed period is refused
+rather than merely discouraged. §13.4 says a closed period's rows are frozen, and S27's byte-identical
 rebuild guarantee rests on that sentence. No write guard exists: `S09` edits per
 field with no form-level save, `delete_transaction` has no date check, nothing
 prevents backdating a new row into a filed period, and `run_migration` upserts
@@ -116,7 +118,7 @@ expense at **$13 313 instead of $685**, with `source = 'nbp'` and no estimate
 flag. Adapters now assert the currency they actually serve.
 
 ### C13 — The verification gate is an algebraic identity and cannot fail
-**Open, and it invalidates every rehearsal.** `opening = computed_balance −
+**Fixed in the specification (§8.4); needs the 52 balances typed in.** `opening = computed_balance −
 Σ(imported income)`, and §8.0 imports only income — so the gate evaluates
 `(computed − Σ) + Σ = computed` for every account, unconditionally. Break the
 sign map so transfers never credit and the gate still prints 0,00 down all 52
@@ -126,7 +128,10 @@ read off the Money Manager UI, or a structurally different second derivation.
 in code — the go/no-go for the project is prose.
 
 ### C14 — The transfer reasoning is unfalsified, and two readings are consistent with the evidence
-**Open, and it must be probed before anything else.** `extract.py` asserts each
+**Answerable in one command** — `python3 tools/migrate-mm/probe.py <backup>`
+(§8.1a). It exits non-zero on any blocking finding and settles this plus six
+other silent assumptions. The backup lives outside the repo, so this is the one
+finding that needs you rather than a change. `extract.py` asserts each
 leg references its own account. If instead both legs are written on the source
 with the destination in `ZTOASSETUID`, every transfer nets to zero on the source
 and **no destination is ever credited**. The cited evidence — that adding
@@ -135,7 +140,7 @@ readings. And it fails *plausibly*: `Clearing · PLN` would compute to ≈0, whi
 §6.4 says is exactly what a clearing account should do.
 
 ### C15 — `debtDelta` hardcodes the source leg, inverting every debt recorded as a transfer
-**Open.** §6.4 says the clearing account is 636 transfers of 678 rows, and §6.6
+**Fixed.** `side` is now a required argument. §6.4 says the clearing account is 636 transfers of 678 rows, and §6.6
 collapses the loan accounts into counterparties — so repayment is naturally a
 transfer. `debtDelta(tx) = neg(signed(tx, "from"))` never reads the `to` side, so
 Nina repaying 200 moves her balance from +200 to **+400**. The doc comment

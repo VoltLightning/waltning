@@ -29,6 +29,13 @@
       "when": 1786000100000,
       "tag": "0003_cross_table_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786000200000,
+      "tag": "0004_business_logic_columns",
+      "breakpoints": true
     }
   ]
 }

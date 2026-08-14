@@ -223,6 +223,8 @@ export const accountGroups = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    /** §12.2 totals FX cost by institution, and no entity carried one. */
+    institution: text("institution"),
     sort: integer("sort").notNull().default(0),
   },
   (t) => [uniqueIndex("account_groups_name_uq").on(normalized(t.name))],
@@ -253,6 +255,13 @@ export const accounts = pgTable(
      */
     openingBalance: money("opening_balance").notNull().default("0"),
     openingDate: date("opening_date"),
+    /**
+     * §8.4 — the balance as displayed by Money Manager, typed in by hand. The
+     * ONLY figure in existence not computed by our own extractor, and therefore
+     * the only genuinely external oracle the verification gate has. Without it
+     * the gate is an algebraic identity that cannot fail.
+     */
+    expectedBalance: money("expected_balance"),
 
     memo: text("memo").notNull().default(""),
     isBusiness: boolean("is_business").notNull().default(false),
@@ -372,6 +381,8 @@ export const counterparties = pgTable(
     ),
     contact: text("contact"),
     note: text("note").notNull().default(""),
+    /** §13.6 — resolves the ryczalt rate for revenue rows from this party. */
+    defaultActivity: text("default_activity"),
     archived: boolean("archived").notNull().default(false),
     sort: integer("sort").notNull().default(0),
     createdAt: createdAt(),
@@ -411,6 +422,14 @@ export const transactions = pgTable(
      * meaning of history the moment an account is reclassified.
      */
     counterpartyRole: counterpartyRole("counterparty_role"),
+    /**
+     * Which balance a settlement discharges, when that differs from the
+     * currency that changed hands (§6.6). Without these, S14's picker is
+     * unimplementable: the currency trigger forces the row into the account's
+     * currency, which discharges the wrong balance.
+     */
+    debtCurrency: text("debt_currency").references(() => currencies.code),
+    debtAmount: money("debt_amount"),
 
     /** Authoritative: the account's own currency, always positive. */
     amountOriginal: money("amount_original").notNull(),
@@ -446,7 +465,17 @@ export const transactions = pgTable(
      */
     toAmount: money("to_amount"),
     toCurrency: text("to_currency").references(() => currencies.code),
+    /**
+     * The **reference** rate for `to_currency` on this row's date, pivot per
+     * unit. NOT the realized rate: storing that makes the two legs net to
+     * exactly zero and erases the bank's margin, which §7.0 says cannot happen.
+     * The realized rate is derived for display as to_amount / amount_original.
+     */
     toFxRate: rate("to_fx_rate"),
+    /** Generated. The destination leg needs its own pivot value (computations §5). */
+    toAmountPivot: money("to_amount_pivot").generatedAlwaysAs(
+      (): SQL => sql`${transactions.toAmount} * ${transactions.toFxRate}`,
+    ),
 
     payee: text("payee").notNull().default(""),
     note: text("note").notNull().default(""),
@@ -470,10 +499,22 @@ export const transactions = pgTable(
     ),
     occurrenceDate: date("occurrence_date"),
 
+    /** A stated bank fee, distinct from the rate margin (§7.5). */
+    fee: money("fee"),
+
     /** §13.2 — business rows only; optional from day one so opting into VAT later is not a migration. */
     counterpartyTaxId: text("counterparty_tax_id"),
     documentRef: text("document_ref"),
     ksefId: text("ksef_id"),
+    /**
+     * §13.6 — resolved from `ryczalt_rates` at the row's own date and STAMPED,
+     * so a later rate correction cannot reprice a filed period. The activity is
+     * stamped too: without it, two activities sharing 12% today are
+     * indistinguishable if the rates later diverge, and a retroactive
+     * correction has no affected-row query.
+     */
+    ryczaltRate: numeric("ryczalt_rate", { precision: 5, scale: 4 }),
+    ryczaltActivity: text("ryczalt_activity"),
 
     source: txnSource("source").notNull().default("manual"),
     externalId: text("external_id"),
@@ -696,10 +737,20 @@ export const importRows = pgTable(
       { onDelete: "set null" },
     ),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    /** Which model produced it — a threshold is uninterpretable without this once §11.4's config changes. */
+    modelId: text("model_id"),
     reason: text("reason"),
     ruleApplied: uuid("rule_applied").references((): AnyPgColumn => rules.id, {
       onDelete: "set null",
     }),
+    /**
+     * The rule's conditions AS THEY WERE when it fired, and the retrieved
+     * neighbour ids the model tier was handed. Editing a rule afterwards
+     * changes future classification and cannot rewrite what happened — which is
+     * what §9.4's reparse promise actually requires.
+     */
+    ruleSnapshot: jsonb("rule_snapshot"),
+    retrievedIds: jsonb("retrieved_ids"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -803,6 +854,92 @@ export const categoryTaxMap = pgTable(
     note: text("note"),
   },
   (t) => [unique("category_tax_map_pk").on(t.categoryId, t.schemeId)],
+);
+
+/** §13.6 — rates change by year AND by activity, so both are keys. */
+export const ryczaltRates = pgTable(
+  "ryczalt_rates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    activity: text("activity").notNull(),
+    rate: numeric("rate", { precision: 5, scale: 4 }).notNull(),
+    validFrom: date("valid_from").notNull(),
+    validTo: date("valid_to"),
+  },
+  (t) => [
+    index("ryczalt_rates_activity_idx").on(t.activity, t.validFrom),
+    check("ryczalt_rates_range_sane", sql`${t.validTo} is null or ${t.validTo} >= ${t.validFrom}`),
+    check("ryczalt_rates_sane", sql`${t.rate} between 0 and 1`),
+  ],
+);
+
+/**
+ * §13.4 — closing is an explicit act, and the lock is what makes an export
+ * rebuild reproducible and stops a later FX correction re-rating a filed
+ * period. Append-only: a close/reopen/reclose cycle is three rows, not one row
+ * overwritten, because §13.4 says reopening is audited and a mutable column
+ * stores a state rather than a history.
+ */
+export const taxPeriodLocks = pgTable(
+  "tax_period_locks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    jurisdiction: text("jurisdiction")
+      .notNull()
+      .references(() => taxJurisdictions.code),
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    /** A period spanning a scheme change produces one lock per scheme (J11). */
+    schemeId: uuid("scheme_id")
+      .notNull()
+      .references(() => taxSchemes.id),
+    closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
+    /** What was known to be incomplete at close — so the lock does not imply clean. */
+    acknowledgedWarnings: jsonb("acknowledged_warnings").notNull().default({}),
+    reopenedAt: timestamp("reopened_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("tax_period_locks_lookup_idx").on(t.jurisdiction, t.periodStart, t.periodEnd),
+    check("tax_period_locks_range_sane", sql`${t.periodEnd} >= ${t.periodStart}`),
+  ],
+);
+
+/**
+ * §11.6 — what the agent keeps in mind. Behaviour, never facts: the ledger is
+ * queryable and a stored balance would drift from it, which is the defect §6.6
+ * removed by deriving. Prepended to every turn, so it is both the most-repeated
+ * and, under O17, the most-exposed content in the system.
+ */
+export const memoryScope = pgEnum("memory_scope", [
+  "global",
+  "counterparty",
+  "account",
+  "category",
+]);
+
+export const memorySource = pgEnum("memory_source", [
+  "told_directly",
+  "learned_from_correction",
+  "learned_from_usage",
+]);
+
+export const agentMemory = pgTable(
+  "agent_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scope: memoryScope("scope").notNull().default("global"),
+    subjectId: uuid("subject_id"),
+    body: text("body").notNull(),
+    source: memorySource("source").notNull(),
+    /** Never eviction candidates — an "ask, don't assume" entry is rarely used by design. */
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("agent_memory_scope_idx").on(t.scope, t.subjectId),
+    check("agent_memory_subject_shape", sql`(${t.scope} = 'global') = (${t.subjectId} is null)`),
+  ],
 );
 
 /* ------------------------------------------------------------------ *

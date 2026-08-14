@@ -92,11 +92,17 @@ export const signed = (
  * The ledger signs by cash flow; a debt balance signs by obligation. Nothing
  * else in the system inverts, which is why this is its own function rather
  * than a flag on `signed`.
+ *
+ * **`side` is required and is not always `from`.** §6.4 makes the clearing
+ * account 636 transfers of 678 rows, and §6.6 collapses the loan accounts into
+ * counterparties — so a repayment is naturally a transfer INTO your bank, whose
+ * counterparty sits on the `to` leg. Defaulting to `from` inverted the sign on
+ * every debt recorded as a transfer: being repaid 200 moved the balance from
+ * +200 to +400.
  */
-export const debtDelta = (tx: {
-  type: TxnType;
-  amountOriginal: Money;
-  toAmount?: Money | null;
-}): Money => neg(signed(tx, "from"));
+export const debtDelta = (
+  tx: { type: TxnType; amountOriginal: Money; toAmount?: Money | null },
+  side: "from" | "to",
+): Money => neg(signed(tx, side));
 
 export { Decimal };
