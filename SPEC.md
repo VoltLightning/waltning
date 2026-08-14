@@ -745,6 +745,54 @@ an automatic write: the names are inconsistent (first name, first name plus
 initial, nickname) and merging two spellings of one person silently would
 corrupt a balance.
 
+### 6.6a Debt reassignment — the transfer that moves nothing
+
+The probe (§8.1a) found **173 transfers whose source and destination are the
+same account.** They net to zero, which is why no balance check has ever seen
+them, and every one sits on a Loan account:
+
+| Account | Rows | Turnover |
+|---|---|---|
+| `Loan Zł (distributed)` | 157 | ~52 000 |
+| `Loan Zł` | 6 | 3 136,23 |
+| `Loan USD` | 6 | 413,40 |
+| `Loan Zl (my)` | 2 | 296,30 |
+| `Loan BYN (distributed)` | 1 | 105,00 |
+| `Loan BYN` | 1 | 212,00 |
+
+Their descriptions say what they are: *"Tomek and Ola. Total"*, *"Marek.
+Total"*, *"Piotr. Total"*, *"PCIe Joined BD 2023. Darek's liability"*,
+*"Доля Кати после реструктуризации"*. **These are debts moving between
+people** — a group bill re-split, one person taking over another's share, a
+restructuring. Money Manager has no counterparty, only accounts, so the only way
+to record *"this 180 is now Marek's rather than Tomek's"* was a transfer from the
+loan account to itself with the name in free text.
+
+This is precisely what §6.6 says the new model is for, and it is also the case
+the migration silently drops. Collapsing loan accounts into counterparties reads
+each leg's counterparty from the account it sits on — and both legs sit on the
+same account, so both resolve to the same counterparty and `debtDelta` sums to
+zero. Every one of these 173 rows contributes nothing, and ~52 000 zł of
+`Loan Zł (distributed)` ends up attributed to whoever the surrounding rows
+happen to name. The balances still reconcile, because they netted to zero in
+Money Manager too. Nothing fails.
+
+**So they migrate as `debt_reassignment`, not as transfers.** A reassignment is
+one row with two counterparties — `from_counterparty_id`, `to_counterparty_id`,
+an amount and a currency — and no cash flow, because none occurred. It applies
+`+amount` to one balance and `−amount` to the other, leaving net receivables
+unchanged, which is the invariant that makes it checkable: **a reassignment must
+not move the total.**
+
+The counterparties cannot be resolved automatically. The names are in prose, in
+three languages, and §6.6's own extraction rule already says merging two
+spellings of one person silently would corrupt a balance — here it would corrupt
+two. So all 173 land in the import review queue as proposals with the original
+text attached, and unresolved ones import as zero-effect rows retaining their
+description, which is exactly their behaviour today. **The migration must not
+proceed as though these are ordinary transfers**, which is the one thing it
+would do by default.
+
 ### 6.7 Ownership — mine, and ours
 
 Two people bought a house. Each paid half. It is a common asset, so the money
@@ -1356,6 +1404,37 @@ test, unseeded currencies, negative income rows, and income heads missing from
 **Run it against every backup, not once.** §8.3 relies on re-running the import
 against progressively later exports, and each one may add a category, a
 currency, or a type the map has never seen.
+
+#### What it found — `<backup>.mmbak`
+
+**Reading A is confirmed, at 100%.** All 1,680 OUT legs name a destination in
+`ZTOASSETUID` that is the account of a same-dated IN leg, and the converse holds
+for all 1,680 IN legs. `extract.py`'s docstring assumption is correct and every
+destination is credited. This was the finding that gated everything downstream,
+and it is now closed by evidence rather than by argument.
+
+Getting there required fixing the probe itself. Its first test asked the weaker
+question — *do IN and OUT legs share a `ZASSETUID`?* — expecting ~0% under
+Reading A, and measured **17.4%**, which is neither answer. Two other mechanisms
+produce a shared `ZASSETUID`: pass-through accounts that receive and send the
+same amount the same day, and the same-account transfers below. A heuristic
+three mechanisms can satisfy cannot decide between two readings, and a threshold
+on it would have "confirmed" Reading A for the wrong reason. The direct test —
+does `ZTOASSETUID` name the account the paired leg sits on — is unambiguous.
+
+The remaining assumptions hold: `ZDO_TYPE` is stored as `text`, so the string-
+keyed sign map is correct; no unmapped types; exactly one account matches the
+hardcoded `family budget` test; seven currencies in use (USD 16 accounts, PLN
+12, EUR 8, BYN 7, GEL 6, RUB 2, GBP 1); no negative income rows; all eight
+income heads are in `INCOME_MAP`.
+
+**One blocking finding, and it is new** — see §6.6a.
+
+**`ZASSET.ZLEFTMONEY` is not the gate's missing right-hand side.** It looked
+like Money Manager's own stored balance, which would have made §8.4's 52
+hand-typed figures unnecessary. It is `0.00` on all 52 accounts — the column is
+unused in this export. Recorded so it is not investigated twice; the balances
+still have to be read off the UI.
 
 ### 8.1 Pipeline
 

@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 17 |
+| **C** | A stated guarantee is false | 18 |
 | **H** | Wrong data, silently | 31 |
 | **M** | Cannot be implemented from the spec | 24 |
 | **L** | Correct but under-specified | 18 |
@@ -163,7 +163,10 @@ expense at **$13 313 instead of $685**, with `source = 'nbp'` and no estimate
 flag. Adapters now assert the currency they actually serve.
 
 ### C13 — The verification gate is an algebraic identity and cannot fail
-**Fixed in the specification (§8.4); needs the 52 balances typed in.** `opening = computed_balance −
+**Fixed in the specification (§8.4); still needs the 52 balances typed in.**
+`ZASSET.ZLEFTMONEY` was checked as a possible free right-hand side — it is
+`0.00` on all 52 accounts, unused in this export. Recorded so it is not
+investigated twice. `opening = computed_balance −
 Σ(imported income)`, and §8.0 imports only income — so the gate evaluates
 `(computed − Σ) + Σ = computed` for every account, unconditionally. Break the
 sign map so transfers never credit and the gate still prints 0,00 down all 52
@@ -173,16 +176,18 @@ read off the Money Manager UI, or a structurally different second derivation.
 in code — the go/no-go for the project is prose.
 
 ### C14 — The transfer reasoning is unfalsified, and two readings are consistent with the evidence
-**Answerable in one command** — `python3 tools/migrate-mm/probe.py <backup>`
-(§8.1a). It exits non-zero on any blocking finding and settles this plus six
-other silent assumptions. The backup lives outside the repo, so this is the one
-finding that needs you rather than a change. `extract.py` asserts each
-leg references its own account. If instead both legs are written on the source
-with the destination in `ZTOASSETUID`, every transfer nets to zero on the source
-and **no destination is ever credited**. The cited evidence — that adding
-`ZTOASSETUID` produced implausible balances — is equally consistent with both
-readings. And it fails *plausibly*: `Clearing · PLN` would compute to ≈0, which
-§6.4 says is exactly what a clearing account should do.
+**Resolved by evidence. Reading A is confirmed at 100%.** All 1,680 OUT legs
+name a destination in `ZTOASSETUID` that is the account of a same-dated IN leg,
+and the converse holds for all 1,680 IN legs. `extract.py`'s docstring
+assumption is correct; every destination is credited.
+
+The probe had to be fixed first. Its original test asked whether IN and OUT legs
+share a `ZASSETUID` and expected ~0% under Reading A. It measured **17.4%** —
+neither answer — because two other mechanisms produce a shared `ZASSETUID`:
+pass-through accounts, and the 173 same-account transfers now filed as C18. A
+threshold on that number would have returned "Reading A" for the wrong reason,
+which is the same failure this register exists to catch. The direct test — does
+`ZTOASSETUID` name the account the paired leg sits on — is unambiguous.
 
 ### C15 — `debtDelta` hardcodes the source leg, inverting every debt recorded as a transfer
 **Fixed.** `side` is now a required argument. §6.4 says the clearing account is 636 transfers of 678 rows, and §6.6
@@ -191,6 +196,26 @@ transfer. `debtDelta(tx) = neg(signed(tx, "from"))` never reads the `to` side, s
 Nina repaying 200 moves her balance from +200 to **+400**. The doc comment
 claims "the inversion that would have made every receivable read backwards
 cannot occur"; it occurs on every transfer.
+
+### C18 — 173 debt reassignments migrate as nothing at all
+**Found by running the probe; specified in §6.6a; the migration is blocked on
+resolving the names.** 173 transfers have the same source and destination. They
+net to zero — which is why no balance check has ever seen them — and every one
+sits on a Loan account. Their descriptions are *"Marek. Total"*, *"Piotr.
+Total"*, *"Доля Кати после реструктуризации"*: **debts moving between people**,
+recorded as a self-transfer because Money Manager has no counterparty field.
+
+§6.6 collapses loan accounts into counterparties by reading each leg's
+counterparty from the account it sits on. Both legs sit on the same account, so
+both resolve to the same counterparty and `debtDelta` sums to zero. All 173 rows
+contribute nothing and ~52 000 zł on `Loan Zł (distributed)` is attributed to
+whoever the surrounding rows happen to name. **Nothing fails** — the balances
+reconcile, because they netted to zero in Money Manager too.
+
+They now migrate as `debt_reassignment`: one row, two counterparties, no cash
+flow, checkable by the invariant that a reassignment must not move net
+receivables. The names are prose in three languages and cannot be resolved
+automatically, so all 173 enter the review queue.
 
 ### C16 — Every `DELETE` on `transactions` was silently suppressed
 **Fixed in `0006`.** `assert_period_not_closed` ended `RETURN NEW`, and in a

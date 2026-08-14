@@ -83,62 +83,79 @@ def main() -> None:
     in_n = q("select count(*) c from ZINOUTCOME where ZDO_TYPE=? and ZISDEL=0", TRANSFER_IN)[0]["c"]
     print(f"    OUT rows {out_n}   IN rows {in_n}   (delta {in_n - out_n})")
 
-    # Reading A: each leg names its own account, so an IN leg's ZASSETUID is the
-    #            destination and differs from its paired OUT leg's ZASSETUID.
-    # Reading B: both legs are written on the source, so the IN leg's ZASSETUID
-    #            EQUALS an OUT leg's ZASSETUID for the same amount and date.
-    paired_same_account = q(
+    # Reading A: each leg names its OWN account, so an OUT leg's ZTOASSETUID is
+    #            the destination and equals the paired IN leg's ZASSETUID.
+    # Reading B: both legs sit on the source, so no IN leg is ever written on
+    #            the destination and the match rate is ~0%.
+    #
+    # This is the direct test. An earlier version of this probe asked a weaker
+    # question — "do IN and OUT legs share a ZASSETUID?" — and expected ~0%
+    # under A. It measured 17.4%, which is neither answer, because two other
+    # things produce a shared ZASSETUID: pass-through accounts that receive and
+    # send the same amount the same day, and the 173 same-account transfers
+    # section 3b explains. A heuristic that three mechanisms can satisfy cannot
+    # decide between two readings.
+    matched = q(
         """
         select count(*) c
-        from ZINOUTCOME i
-        where i.ZDO_TYPE = ? and i.ZISDEL = 0
+        from ZINOUTCOME o
+        where o.ZDO_TYPE = ? and o.ZISDEL = 0
           and exists (
-            select 1 from ZINOUTCOME o
-            where o.ZDO_TYPE = ? and o.ZISDEL = 0
-              and o.ZASSETUID = i.ZASSETUID
-              and o.ZTXDATESTR = i.ZTXDATESTR
-              and abs(coalesce(o.ZAMOUNTACCOUNT,0) - coalesce(i.ZAMOUNTACCOUNT,0)) < 0.005
+            select 1 from ZINOUTCOME i
+            where i.ZDO_TYPE = ? and i.ZISDEL = 0
+              and i.ZASSETUID  = o.ZTOASSETUID
+              and i.ZTXDATESTR = o.ZTXDATESTR
           )
         """,
-        TRANSFER_IN,
         TRANSFER_OUT,
+        TRANSFER_IN,
     )[0]["c"]
-    pct = 100.0 * paired_same_account / in_n if in_n else 0.0
-    print(f"    IN legs sharing ZASSETUID with a same-date same-amount OUT leg:")
-    print(f"      {paired_same_account} of {in_n}  ({pct:.1f}%)")
+    pct = 100.0 * matched / out_n if out_n else 0.0
+    print("    OUT legs whose ZTOASSETUID is an IN leg's own account, same date:")
+    print(f"      {matched} of {out_n}  ({pct:.1f}%)")
 
-    if pct > 50:
+    if pct < 95:
         fail.append(
-            "READING B — both legs sit on the SOURCE account. Transfers net to "
-            "zero on the source and NO destination is ever credited. Every "
+            f"Only {pct:.1f}% of OUT legs pair with an IN leg on the named "
+            "destination. Under READING B both legs sit on the SOURCE: transfers "
+            "net to zero there and NO destination is ever credited, so every "
             "destination balance from extract.py is wrong. Credit destinations "
             "via ZTOASSETUID on the OUT leg instead."
         )
-        print("      ⇒ READING B. extract.py is wrong.")
+        print("      ⇒ READING B, or something else. extract.py is NOT safe.")
     else:
-        print("      ⇒ READING A. extract.py's assumption holds.")
-
-    # Corroboration: a receive-only account computing to 0.00 proves B.
+        print("      ⇒ READING A confirmed. extract.py's assumption holds.")
     print()
-    print("    corroboration — accounts whose ONLY activity is transfer-in:")
-    rows = q(
+
+    # ── 3b. Same-account transfers ──────────────────────────────────────────
+    # A transfer whose source and destination are the SAME account nets to zero
+    # and is invisible in every balance — which is why it survives unnoticed.
+    # It is not noise: in this dataset all of them sit on Loan accounts, and
+    # §6.6 collapses those into counterparties.
+    print("3b · transfers where ZTOASSETUID = ZASSETUID (net-zero, invisible)")
+    self_rows = q(
         """
-        select a.ZNICNAME name,
-               sum(case when t.ZDO_TYPE=? then 1 else 0 end) ins,
-               count(*) total
-        from ZASSET a join ZINOUTCOME t on t.ZASSETUID = a.ZUID
-        where a.ZISDEL=0 and t.ZISDEL=0
-        group by a.ZUID having ins = total and total > 0
-        limit 5
+        select coalesce(a.ZNICNAME, '?') n, count(*) c, sum(abs(t.ZAMOUNTACCOUNT)) amt
+        from ZINOUTCOME t left join ZASSET a on a.ZUID = t.ZASSETUID
+        where t.ZDO_TYPE = ? and t.ZISDEL = 0 and t.ZTOASSETUID = t.ZASSETUID
+        group by 1 order by c desc
         """,
-        TRANSFER_IN,
+        TRANSFER_OUT,
     )
-    if rows:
-        for r in rows:
-            print(f"      {(r['name'] or '').strip():<28} {r['total']} rows, all transfer-in")
-        print("      (under reading B these accounts hold no rows at all)")
+    n_self = sum(r["c"] for r in self_rows)
+    if n_self:
+        for r in self_rows:
+            print(f"      {(r['n'] or '').strip():<28} {r['c']:>4} rows  {r['amt']:>12,.2f}")
+        fail.append(
+            f"{n_self} transfers have the same source and destination. They net "
+            "to zero, so no balance check can see them, and in this backup every "
+            "one is on a Loan account — where §6.6 collapses the account into "
+            "counterparties and the person is named only in free text. Migrated "
+            "as ordinary transfers they contribute 0 to every counterparty "
+            "balance and the reassignment is lost. Needs an explicit decision."
+        )
     else:
-        print("      none found — inconclusive on its own")
+        print("      none")
     print()
 
     # ── 4. Shared account ───────────────────────────────────────────────────

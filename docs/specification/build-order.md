@@ -26,8 +26,9 @@ each one invalidates the next if wrong.
 
 | # | Item | Why it is on the path | Cost |
 |---|---|---|---|
-| **1** | Run `probe.py` against the `.mmbak` | `extract.py` computes every balance from a *docstring assertion* about transfer leg layout, and the competing reading credits no destination at all. It fails **plausibly**: Clearing · PLN would compute to ≈0 and §6.4 says a clearing account should. Nothing downstream is trustworthy until this is settled — and it is one command | **minutes** |
-| **2** | Type 52 balances off the Money Manager UI into `accounts.expected_balance` | The gate had no independent right-hand side, so it evaluated `(computed − Σ) + Σ = computed` and printed `0,00` down all 52 rows regardless of correctness (§8.4). These are the only figures in existence our extractor did not compute | ~1 hr |
+| **1** | ~~Run `probe.py` against the `.mmbak`~~ **done — Reading A confirmed at 100%** | 1,680 of 1,680 OUT legs pair with an IN leg on the named destination. `extract.py`'s assumption holds and every destination is credited. It also surfaced one blocking finding that had never been visible: 173 debt reassignments that net to zero (C18, §6.6a) | ✅ |
+| **1b** | Resolve the 173 reassignment counterparties | Names are prose in three languages, in the import review queue. Unresolved rows import as zero-effect, which is their behaviour today — so this gates *fidelity*, not the migration | ~1 hr |
+| **2** | Type 52 balances off the Money Manager UI into `accounts.expected_balance` | The gate had no independent right-hand side, so it evaluated `(computed − Σ) + Σ = computed` and printed `0,00` down all 52 rows regardless of correctness (§8.4). `ZASSET.ZLEFTMONEY` was checked as a free substitute and is `0.00` on all 52 accounts — unused. These are genuinely the only figures our extractor did not compute | ~1 hr |
 | **3** | Run the migration; both gates must pass | Both derivations, not one. Agreement between two sides that share an assumption is decoration | 1 day |
 | **4** | Auth and perimeter — **Phase 0.5**, see below | Real financial data exists from step 3 onward | 2–3 days |
 | **5** | FX backfill to ≥95% coverage per active currency | Every `amount_pivot` is generated from a rate, and a rate absent at write time is not repaired by a later sync. GEL sat at 0.5% coverage for months unnoticed | 1 day |
@@ -159,17 +160,22 @@ atomic.
 
 ---
 
-## The two gates that need you rather than a change
+## The one gate that still needs you
 
-Everything in the defect register is now closed in code or in the specification
-except two, and both need a human with the source material:
+The probe has been run. Reading A is confirmed at 100%, six other assumptions
+hold, and the exercise found C18 — 173 debt reassignments that net to zero and
+were therefore invisible to every check in the system. Everything in the defect
+register is now closed in code or in the specification.
 
-1. **`python3 tools/migrate-mm/probe.py <backup>`** — the `.mmbak` is outside
-   the repository. It exits non-zero on any blocking finding and settles the
-   transfer-leg question plus six other silent assumptions.
-2. **52 balances**, read off the Money Manager UI and typed into
-   `accounts.expected_balance`. Tedious, an hour, and the only reason the
-   verification gate can fail at all.
+One input remains, and it is not a decision:
 
-Neither is a decision. Both are inputs, and the plan does not start without
-them.
+**52 balances**, read off the Money Manager UI and typed into
+`accounts.expected_balance`. Tedious, about an hour, and the only reason the
+verification gate can fail at all. `ZASSET.ZLEFTMONEY` was checked as a free
+substitute — it is `0.00` on all 52 accounts, so the column is unused and the
+figures have to come off the screen.
+
+Resolving the 173 reassignment names is the other piece of human work, but it
+does not gate the migration: unresolved rows import as zero-effect rows keeping
+their description, which is exactly what they do in Money Manager today. It can
+happen in the review queue afterwards.
