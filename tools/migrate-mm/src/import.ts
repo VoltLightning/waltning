@@ -19,7 +19,6 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { and, eq, sql } from "drizzle-orm";
 import { createDb } from "@waltning/db";
 import {
   accountGroups,
@@ -30,6 +29,7 @@ import {
   transactions,
 } from "@waltning/db/schema";
 import { Decimal } from "decimal.js";
+import { and, eq, sql } from "drizzle-orm";
 
 const rootEnv = fileURLToPath(new URL("../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
@@ -150,10 +150,7 @@ async function main() {
       await db.update(accounts).set(values).where(eq(accounts.id, existing[0].id));
       accountIds.set(a.external_id, existing[0].id);
     } else {
-      const [row] = await db
-        .insert(accounts)
-        .values(values)
-        .returning({ id: accounts.id });
+      const [row] = await db.insert(accounts).values(values).returning({ id: accounts.id });
       accountIds.set(a.external_id, row!.id);
     }
   }
@@ -194,13 +191,7 @@ async function main() {
       await db
         .select({ rate: fxRates.rate })
         .from(fxRates)
-        .where(
-          and(
-            eq(fxRates.base, pivot!),
-            eq(fxRates.quote, ccy),
-            eq(fxRates.date, date),
-          ),
-        )
+        .where(and(eq(fxRates.base, pivot!), eq(fxRates.quote, ccy), eq(fxRates.date, date)))
         .limit(1)
     )[0];
 
@@ -302,10 +293,7 @@ async function main() {
         set: values,
       });
 
-    imported.set(
-      t.account,
-      (imported.get(t.account) ?? new Decimal(0)).plus(amount),
-    );
+    imported.set(t.account, (imported.get(t.account) ?? new Decimal(0)).plus(amount));
     inserted++;
   }
 
@@ -314,9 +302,7 @@ async function main() {
   for (const a of data.accounts) {
     const id = accountIds.get(a.external_id);
     if (!id) continue;
-    const opening = new Decimal(a.computed_balance).minus(
-      imported.get(a.external_id) ?? 0,
-    );
+    const opening = new Decimal(a.computed_balance).minus(imported.get(a.external_id) ?? 0);
     await db
       .update(accounts)
       .set({
@@ -335,8 +321,7 @@ async function main() {
     console.log(
       `  estimated FX      ${estimated}  (no published rate for the date; nearest used, flagged on the row)`,
     );
-  if (missingRate)
-    console.log(`  ! no rate at all  ${missingRate}  — rows skipped`);
+  if (missingRate) console.log(`  ! no rate at all  ${missingRate}  — rows skipped`);
   console.log(`  opening balances  ${withOpening} non-zero`);
   console.log(`  max FX drift vs Money Manager's stale global rate: ${driftMax.toFixed(2)}`);
   process.exit(0);

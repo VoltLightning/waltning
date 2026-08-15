@@ -68,6 +68,17 @@ and the count is visibly sitting there not shrinking.
 | Offline | Read-only. Structural changes to a taxonomy that other queued writes reference are refused rather than queued |
 | Gated | Convert to group refused while transactions reference it; reparent refused across kinds; merge onto a group refused |
 
+
+**One rule, stated the same way in S06 and S19:** *creating a leaf under an
+existing parent queues offline — it can only be referenced by rows you are
+creating now. Renaming, moving, merging or deleting an existing node is refused
+offline, because it changes the meaning of rows that already exist.*
+
+Previously S06 said category creation queues and S19 said structural changes are
+refused, which are the same act described twice. Offline at a market you could
+create `Groceries › Market` from the capture sheet and be refused the identical
+thing from Settings — and a rule that looks arbitrary is how a person stops
+trusting every other refusal.
 ## 7. Interaction
 
 **Merge is the screen that matters.** It states how many transactions will move

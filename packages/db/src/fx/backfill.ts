@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { currencies, fxRates } from "../schema.ts";
-import { fillForward, sources } from "./sources.ts";
+import { type DailyRate, fillForward, sources } from "./sources.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
@@ -61,7 +61,7 @@ async function main() {
     }
 
     process.stdout.write(`  ${t.code.padEnd(4)} via ${t.source.padEnd(5)} `);
-    let quoted;
+    let quoted: DailyRate[];
     try {
       quoted = await fetchFn(t.code, from, to);
     } catch (e) {
@@ -84,7 +84,11 @@ async function main() {
             date: r.date,
             rate: r.rate,
             source: (r.carried ? "carried_forward" : t.source) as
-              | "nbp" | "ecb" | "nbrb" | "nbg" | "carried_forward",
+              | "nbp"
+              | "ecb"
+              | "nbrb"
+              | "nbg"
+              | "carried_forward",
             fetchedAt: new Date(),
           })),
         )
@@ -97,7 +101,11 @@ async function main() {
         // so a corrected publication lands.
         .onConflictDoUpdate({
           target: [fxRates.base, fxRates.quote, fxRates.date],
-          set: { rate: sql`excluded.rate`, source: sql`excluded.source`, fetchedAt: sql`excluded.fetched_at` },
+          set: {
+            rate: sql`excluded.rate`,
+            source: sql`excluded.source`,
+            fetchedAt: sql`excluded.fetched_at`,
+          },
           setWhere: sql`
             (case ${fxRates.source}
                when 'manual' then 2

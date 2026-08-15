@@ -84,6 +84,17 @@ scrolling one.
 | `EmptyState(first-run)` | Nothing has ever existed |
 | `SegmentControl` | Scope — a partition, so subtotals always sum to All |
 
+
+**`Needs attention` — a pinned, count-bearing filter chip.** Without it, a row
+the grammar guessed at becomes visually identical to one you typed the moment its
+pending dot clears, and three weeks later there is no way to find it. Membership
+is exactly three predicates: category is `Uncategorized`, a receipt is attached
+but unextracted, or a rate is still estimated. Rows carry an amber dot, labelled
+in the detail view (P5).
+
+A row captured offline that is **complete** gets no marker — there is nothing to
+act on, and that is what keeps the filter drainable to zero.
+
 ## 5. Data
 
 | Reads | Writes |

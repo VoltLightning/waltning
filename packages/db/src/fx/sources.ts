@@ -17,11 +17,7 @@ export type DailyRate = {
   rate: string;
 };
 
-export type FetchFn = (
-  currency: string,
-  from: string,
-  to: string,
-) => Promise<DailyRate[]>;
+export type FetchFn = (currency: string, from: string, to: string) => Promise<DailyRate[]>;
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -80,9 +76,7 @@ async function getJson(url: string, attempt = 0): Promise<unknown> {
     // NBG answers a self-redirect once its bot defence trips — retrying is
     // futile and the honest report is "rate-limited", not "fetch failed".
     if (res.redirected || (res.status >= 300 && res.status < 400)) {
-      throw new Error(
-        `rate-limited (redirect loop) — back off and retry later: ${url}`,
-      );
+      throw new Error(`rate-limited (redirect loop) — back off and retry later: ${url}`);
     }
     if (res.status === 429 || res.status >= 500) {
       throw new Error(`${res.status} ${res.statusText}`);
@@ -123,9 +117,10 @@ export const nbrb: FetchFn = async (currency, from, to) => {
   assertServes("nbrb", currency, "BYN");
   const out: DailyRate[] = [];
   for (const d of eachDay(from, to)) {
-    const j = (await getJson(
-      `https://api.nbrb.by/exrates/rates/USD?parammode=2&ondate=${d}`,
-    )) as { Cur_OfficialRate?: number; Cur_Scale?: number } | null;
+    const j = (await getJson(`https://api.nbrb.by/exrates/rates/USD?parammode=2&ondate=${d}`)) as {
+      Cur_OfficialRate?: number;
+      Cur_Scale?: number;
+    } | null;
     if (j?.Cur_OfficialRate != null) {
       const scale = j.Cur_Scale ?? 1;
       out.push({ date: d, rate: String(j.Cur_OfficialRate / scale) });

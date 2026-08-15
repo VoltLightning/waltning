@@ -9,13 +9,15 @@ system it is built from, every user journey, and every screen.
 |---|---|
 | 1 | [`principles.md`](principles.md) — the five rules every screen inherits |
 | 2 | [`design-system/`](design-system/) — tokens, components, states, build order |
-| 3 | [`flows/`](flows/) — 15 journeys, ordered by how often they run |
-| 4 | [`screens/`](screens/) — 30 screens, specified individually |
+| 3 | [`flows/`](flows/) — 17 journeys, ordered by how often they run |
+| 4 | [`screens/`](screens/) — 31 screens, specified individually |
 | 5 | [`operations.md`](operations.md) — the registry the UI and the agent are both generated from |
 | 6 | [`computations.md`](computations.md) — every figure the interface promises, defined |
 | 7 | [`defects.md`](defects.md) — what ten adversarial reviews found, and what is still open |
-| 8 | [`build-order.md`](build-order.md) — the single sequence, reconciling `SPEC.md` §16 with the component order |
-| 9 | [`architecture/`](architecture/) — the engineering view: containers, components, domain model, sequences, deployment, budgets, test strategy |
+| 8 | [`completeness.md`](completeness.md) — nine domains audited by cross-referencing the spec against itself, and what each check found |
+| 9 | [`migration-runbook.md`](migration-runbook.md) — the eleven-step procedure, its gates, and where rollback stops being practical |
+| 10 | [`build-order.md`](build-order.md) — the single sequence, reconciling `SPEC.md` §16 with the component order |
+| 11 | [`architecture/`](architecture/) — the engineering view: containers, components, domain model, sequences, deployment, budgets, test strategy |
 
 **Outside this folder:** [`SPEC.md`](../../SPEC.md) is the system specification
 — architecture, data model, FX semantics, tax layer. [`TAXONOMY.md`](../../TAXONOMY.md)
@@ -39,7 +41,7 @@ missing section is visible rather than merely absent.
 ## Status
 
 **The specification is complete, and the open questions are now closed too.**
-Fifteen journeys and thirty screens, every one written against its template with
+Seventeen journeys and thirty-one screens, every one written against its template with
 no section missing and no `⊗` remaining.
 
 All **75** numbered open questions across the screens and flows are decided, with
@@ -78,6 +80,8 @@ in each journey's §5.
 | [J13](flows/J13-recurring.md) | Recurring | monthly | specified |
 | [J14](flows/J14-accounts.md) | Accounts | rare | specified |
 | [J15](flows/J15-cutover.md) | Cutover | once | specified |
+| [J16](flows/J16-move-money.md) | Move money between your own accounts | weekly | specified |
+| [J17](flows/J17-correct-the-agent.md) | The agent learns something, and you correct it | monthly | specified |
 
 **Still open, but not design gaps:** GEL holds 0.5% of its rate range
 (`SPEC.md` §7.7) — a data problem with a designed remedy, not an undesigned
@@ -107,7 +111,7 @@ prose depth is tiered:
 |---|---|---|
 | **1 · deep** | Every state designed, both surfaces laid out, interaction specified to the keystroke | S01–S07, S09, S10, S11 |
 | **2 · full** | All nine sections at working depth; layout described rather than drawn | S08, S12–S16, S25, S27, S28, S29, S31 |
-| **3 · floor** | All nine sections, concise. Enough to build from, not enough to prototype from | S17–S22, S24, S30, S32 |
+| **3 · floor** | All nine sections, concise. Enough to build from, not enough to prototype from | S17–S22, S24, S30, S32, S33 |
 
 A tier-3 screen is not a stub — it is a screen whose open questions are worth
 more than its prose.

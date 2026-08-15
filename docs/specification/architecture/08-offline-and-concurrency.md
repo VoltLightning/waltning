@@ -10,9 +10,55 @@ This closes it.
 
 ---
 
-## The rule the rest follows from
+## Two rules the rest follows from
 
-> **An outbox entry is one user intention, not one row change.**
+> **1 · The phone is not an authoritative writer. The backend admits every
+> write.**
+>
+> **2 · An outbox entry is one user intention, not one row change.**
+
+The first bounds the problem before the second solves it.
+
+Every guarantee in §6.5 is a Postgres mechanism — cross-table triggers, `CHECK`s,
+an `EXCLUDE` constraint, generated columns, role privileges. SQLite has no
+equivalent, so an authoritative phone would either reimplement them (this
+register's own thesis, in a new place) or be quietly weaker and accept rows the
+server later refuses. And a sync-time refusal after days of authoritative
+operation has no clean recovery: the balances shown for those days were wrong,
+and you cannot un-show a number someone acted on.
+
+**An earlier draft of this document over-reached from that, to "the phone never
+computes a derived figure."** That was wrong, and an eight-way review overturned
+it. Write *admission* needs `EXCLUDE` and triggers; `SUM(-amount_original)` over
+rows the phone already holds needs neither. The draft also broke its own rule two
+paragraphs later, with a balance formula that is plainly a computation.
+
+The rule is now **checkpoint-plus-fold**, and every figure in `computations.md`
+carries a class — foldable, replica-computable, or server-only. `SPEC.md` §14.3
+holds the definitions; the short version is that the phone may fold its own
+unacknowledged entries into a server-issued checkpoint, may compute over a range
+its replica covers completely, and may never compute a figure with a documented
+way of being subtly wrong.
+
+**Offline capability is not reduced by any of this.** Everything you do on a
+phone works with no network: manual entry, the grammar, transfers, settling a
+debt, capturing a receipt, editing what you entered, and reading your history.
+What degrades is *quality* — the conversational loop and extraction need a
+model — and it degrades down a ladder rather than off a cliff.
+
+Import, migration, bulk review, period close and rerating are backend
+operations, reached from the web dashboard. They never enter the outbox, so the
+set-based hazards below (H10, H12) largely cannot arise on the phone. Migration
+in particular is one-time and the phone has no part in it.
+
+**Connectivity detection is `09-connectivity.md`, and Rule 0 lives there: a 200
+is not a success.** No response advances this queue until it authenticates as
+ours. A captive portal answering 200 to every POST would otherwise delete a
+week of captures while reporting a successful sync.
+
+---
+
+## Applying the second rule
 
 Every defect below is the consequence of letting an entry be a row change
 instead. A bulk accept of forty rows is **one** entry. A receipt capture plus its
@@ -23,21 +69,148 @@ An entry is:
 
 ```ts
 interface OutboxEntry {
-  id: string;             // client-minted UUIDv7 — this IS the external_id
-  op: string;             // registry operation name
-  input: unknown;         // validated against the same Zod schema as online
-  deps: string[];         // ids of entries that must land first
-  capturedAt: string;     // client clock, for ordering and for "as of" display
-  state: 'pending' | 'sending' | 'blocked';
+  id: string;              // client-minted UUIDv7 — identity and idempotency key
+  seq: number;             // AUTOINCREMENT — this, and only this, carries ORDER
+  op: string;              // registry operation name
+  opVersion: number;       // payload shape version — see "Surviving an app update"
+  payload: string;         // opaque JSON. The outbox table never changes with the domain
+  deps: string[];          // derived automatically at enqueue, not hand-maintained
+  capturedAt: string;      // client clock — DISPLAY ONLY, never load-bearing
+  capturedTz: string;      // IANA zone, for the date-drift check (§14.3)
+  capturedOffsetMinutes: number;
+  state: 'pending' | 'sending' | 'blocked' | 'stalled';
+  blockedKind?: 'terminal' | 'repairable';
+  blockedReason?: string;
   attempts: number;
+  sentAt?: string;         // set on transition to `sending`, for crash recovery
   lastError?: string;
 }
 ```
 
-`id` doubles as the idempotency key, so replaying the whole queue is safe. The
-partial unique index on `external_id WHERE external_id IS NOT NULL AND deleted_at
-IS NULL` is what enforces it — and both predicates matter, since a soft-deleted
-row that kept its key reserved would make re-sending fail forever.
+### Idempotency is a server-side ledger, not an index
+
+The earlier draft grounded its whole idempotency claim in the partial unique
+index on `external_id`. **That index exists on four tables and only fires on
+INSERT.** Every `update_*`, `delete_*`, `categorize_batch`, `attach_receipt` and
+`merge_counterparties` queued to the outbox had no replay protection at all.
+
+The failure is not theoretical and it is nasty. Edit a synced row's
+`is_business` offline. The drain commits; the connection drops before the 200
+arrives; the entry retries. It carries the `updated_at` it was minted with —
+which its own first application already advanced. `is_business` is
+`tax_sensitive`, so H16 blocks rather than overwrites. **The entry is permanently
+blocked by a conflict with itself**, and S30 reports that another device changed
+the field. Nothing did.
+
+Worse on `settle_debt`: the server derives the residual from live data (H9), so a
+replay after a lost response **settles twice** — a wrong number in a debt
+balance, arriving through the path the design called safe.
+
+So:
+
+```sql
+CREATE TABLE outbox_receipts (
+  entry_id      uuid PRIMARY KEY,
+  op            text NOT NULL,
+  request_hash  text NOT NULL,
+  response      jsonb NOT NULL,
+  applied_at    timestamptz NOT NULL DEFAULT now()
+);
+```
+
+Checked **first**, for every write, insert or not, and written **inside the same
+transaction as the effects**. A repeated `entry_id` returns the stored response
+verbatim without re-evaluating the version check. A repeated id with a *different*
+`request_hash` is a genuine violation and blocks.
+
+This is also what makes a timeout safe to retry, and what makes the drain report
+stable across retries — which H9 depends on.
+
+`external_id` returns to meaning *"a key from a foreign system"*, which is what
+the importer needs it for.
+
+### `seq` carries order; the clock does not
+
+`capturedAt` is a client clock, and clocks go backwards — DST, a westward
+flight, an NTP correction after a flat battery. Sorting by it means an edit can
+drain before the create it modifies: 404, blocked, and then the create lands with
+the *uncorrected* value.
+
+UUIDv7 is worse than it looks here, because it embeds the wall clock and is
+sortable, which invites sorting by `id`. A naive implementation after a backward
+jump can also **mint a duplicate id** — and that id is the idempotency key, so
+one of two genuine captures is silently swallowed as a replay. Use an RFC 9562
+monotonic-counter implementation.
+
+**`id` carries identity. `seq` carries order. `capturedAt` is for the human.**
+
+`deps` is **derived at enqueue**, not hand-maintained: scan the payload for any
+client-minted id belonging to an entry not yet acknowledged, and add it. H13
+argues a dependent is never orphaned because the client mints the id — but that
+covers only name collisions. Any other refusal of `create_counterparty` leaves
+five transactions pointing at a row that does not exist, and a hand-maintained
+dependency list in a queue this varied will be wrong within a month.
+
+### Crash recovery, and the drain's transaction boundaries
+
+iOS force-quit gives **no callback at all**, so an entry interrupted in `sending`
+is not an edge case. Without recovery it orphans forever and the pending count
+never moves — H15's own complaint, reintroduced.
+
+- **On launch, before anything else:** `UPDATE outbox SET state='pending' WHERE
+  state='sending'`. Safe *only* because of the idempotency ledger above.
+- **One transaction per entry, opened after the response arrives**, containing
+  both the entry's removal and the application of the server's canonical row to
+  the replica. Splitting those two is the bug: mark-sent commits, replica-apply
+  does not, and the row is gone from the queue and absent from the replica.
+- **Never hold one transaction across N network calls.** That holds a write lock
+  across I/O, and a kill rolls back sends the server already committed.
+- **Receipt file deletion is a third step**, after that transaction commits.
+
+### `blocked` is not always terminal
+
+`blocked` means *retrying will not help*. Two common causes are repairable:
+
+| Kind | Cause | Behaviour |
+|---|---|---|
+| `repairable: period` | Dated inside a period closed while you were offline | **Auto-requeues when the period is reopened** |
+| `repairable: recompress` | Receipt image too large | Recompresses once, retries |
+| `terminal` | Validation, malformed input, deleted target | Editable or discardable on S30 |
+
+`stalled` is separate: a 5xx that exhausted its retry budget. Visible, and
+distinct from both `blocked` (which asserts futility) and silent infinite retry.
+
+### Surviving an app update
+
+Nothing previously specified the client's own schema version, and the default
+shortcut — drop the database on mismatch — destroys the one thing in the system
+that exists nowhere else.
+
+The subtler failure is worse. An entry's payload is *"validated against the same
+Zod schema as online"*. Ship v2 with a changed schema for `create_transaction`
+and every v1 payload fails validation on drain. That is 4xx. Under the rule
+above, 4xx is `blocked` and never retried. **A week of offline captures goes
+permanently blocked in one batch — correctly, by the rules as written.**
+
+The event-sourcing pattern is the right one, because the payload *is* a recorded
+intention:
+
+1. **Two independent version counters.** `PRAGMA user_version` for the replica —
+   mismatch means drop and refetch, which is free. A separate, forward-only,
+   never-destructive chain for the outbox.
+2. **The outbox table's shape never changes with the domain.** The payload is
+   opaque to it, so domain changes change *payloads*, not tables.
+3. **Upcasters, not migrations.** Pure functions `upcast(op, v, payload)` chained
+   from every historical version to current, applied **at drain time**. Tested
+   with golden fixtures of every historical shape — those fixtures are what stops
+   this recurring.
+4. **The server accepts N−2 op versions.** A phone can be offline across two
+   releases, or simply not updated.
+5. **Never drop.** No upcaster means `blocked(unsupported_version)`, surfaced on
+   S30 with the raw payload readable and exportable, so a lost intention can be
+   re-entered by hand rather than vanishing.
+6. **Migrate in one transaction, bumping the version inside it.** Migrations run
+   at launch, which is when iOS is most likely to kill the app.
 
 ---
 

@@ -7,8 +7,14 @@ import { defineConfig } from "drizzle-kit";
 const rootEnv = fileURLToPath(new URL("../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
-const url = process.env["DATABASE_URL"];
-if (!url) throw new Error("DATABASE_URL is not set — copy .env.example to .env");
+// Migrations run as the bootstrap superuser, not the app role: `0005` creates
+// a ROLE and issues GRANTs, which `waltning_app` has no privilege to do. This
+// is the one place the superuser connection is correct — §13.1's separation
+// only holds if everything else refuses it.
+const url = process.env["MIGRATE_DATABASE_URL"];
+if (!url) {
+  throw new Error("MIGRATE_DATABASE_URL is not set — copy .env.example to .env and fill it in");
+}
 
 export default defineConfig({
   schema: "./src/schema.ts",

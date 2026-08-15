@@ -9,6 +9,7 @@
     "./money": "./src/money.ts"
   },
   "scripts": {
+    "migrate": "drizzle-kit migrate",
     "generate": "drizzle-kit generate",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",

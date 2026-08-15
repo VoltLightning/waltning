@@ -9,14 +9,15 @@ first module, and the boundaries that must not be crossed while writing the rest
 
 | | | Answers |
 |---|---|---|
-| 1 | [`01-context-and-containers.md`](01-context-and-containers.md) | What talks to what, which arrows are trust boundaries, what each dependency's absence costs |
+| 1 | [`01-context-and-containers.md`](01-context-and-containers.md) | What talks to what, which arrows are trust boundaries, what each dependency's absence costs — **and the physical layer**: the bill of materials and what each part costs when it fails |
 | 2 | [`02-components.md`](02-components.md) | Inside the API: the operation registry, the domain services, and where the loop/pipeline choice is fixed |
 | 3 | [`03-domain-model.md`](03-domain-model.md) | 33 tables by aggregate, and **where each rule is enforced** |
 | 4 | [`04-sequences.md`](04-sequences.md) | The five interactions where wrong ordering produces a wrong number |
-| 5 | [`05-deployment.md`](05-deployment.md) | Environments, boot order, roles, backup/restore runbook, cutover |
+| 5 | [`05-deployment.md`](05-deployment.md) | Environments, boot order, **how the web dashboard is served**, roles, backup/restore runbook, cutover |
 | 6 | [`06-quality-attributes.md`](06-quality-attributes.md) | Budgets an implementation can fail against |
 | 7 | [`07-test-strategy.md`](07-test-strategy.md) | What to test, at which layer, and what this project learned about tests that do not work |
-| 8 | [`08-offline-and-concurrency.md`](08-offline-and-concurrency.md) | What an outbox entry *is* — and the eight defects that lived in not saying |
+| 8 | [`08-offline-and-concurrency.md`](08-offline-and-concurrency.md) | What an outbox entry *is*, idempotency, ordering, and surviving an app update |
+| 9 | [`09-connectivity.md`](09-connectivity.md) | That "online" is not a boolean — twelve states, a probe contract, and why a 200 is not a success |
 
 **Sequence of work** is [`../build-order.md`](../build-order.md) — the single
 plan reconciling `SPEC.md` §16 with the component order, including the Phase 0.5

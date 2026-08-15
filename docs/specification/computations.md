@@ -12,6 +12,41 @@ Every amount is `numeric`; nothing here is ever a JS number (§7.1).
 
 ---
 
+## 0 · Where each figure may be computed
+
+`SPEC.md` §14.3 lets the phone compute some of these and forbids others. The
+class is part of each figure's definition, not a separate table to drift from:
+
+| Class | Meaning |
+|---|---|
+| **F** — foldable | A server-issued checkpoint plus the device's own unacknowledged outbox entries, using `signed()` / `debtDelta()` from `money.ts` |
+| **R** — replica-computable | Derivable from replicated rows, **only over a date range the replica covers completely** |
+| **S** — server-only | Has a documented way to be subtly wrong, or depends on state the device holds staler than it knows |
+
+| Figure | Class | Why |
+|---|---|---|
+| §2 Account balance | **F** | A checkpoint plus signed entries |
+| §3 Net worth, mine and ours | **F** | A sum of account checkpoints |
+| §4 Display conversion | **R** | The replica carries each row's already-converted display amount |
+| §4a FX margin | **S** | Needs both reference rates; a stale one makes the margin identically zero |
+| §5 Period spend | **R** for the base figure · **S** for shared-boundary netting | Netting needs `to_amount_pivot`, and getting it wrong silently uses the source amount |
+| §6 Spend by category | **S** | Two `UNION ALL` branches; a `LEFT JOIN … COALESCE` counts a four-line transaction four times |
+| §7 Counterparty balances | **F** per currency · **S** for ageing | Ageing is FIFO over the full history |
+| §8 Clearing and `find_unsettled` | **F** for the balance · **S** for allocation | Largest-remainder allocation must not be reimplemented |
+| §9 Duplicate and transfer detection | **S** | Runs server-side on commit, for every path |
+| §10 Recurring materialization | **S** | The occurrence date is resolved under a row lock |
+| §11 Targets | **S** | Period-to-date with capital excluded |
+| §12 Headline figures | **S** | Every one |
+| §13 Search | **R** | Substring over the replica, and it says so — SQLite has no `pg_trgm` |
+| §14 Confidence | **S** | Retrieval agreement over the full ledger |
+| Every tax figure (§13.x) | **S**, permanently | Depends on period locks, residency and rates the device may hold staler than it knows |
+
+**The S list is not timidity.** Each entry has a defect in
+[`defects.md`](defects.md) behind it. A second implementation in TypeScript is a
+permanent drift surface in exactly the place where drift is invisible.
+
+---
+
 ## 1 · Signing, and the two legs
 
 ```
@@ -304,15 +339,28 @@ Converted at each row's own date into `target.currency`. Over-target goes
 | `net` | §5 — all inflows minus all outflows |
 | `business share` | business expense ÷ total expense, over the hero's period and scope |
 | `revenue_ytd` | `tax_ledger` filtered to `type = 'income' AND is_earnings` — the broad view includes business *expenses*, which are not reportable under ryczałt |
+| `income_vs_expense` | Per bucket of the chosen granularity: `Σ signed(t) where type='income'` and `Σ |signed(t)| where type='expense'`, both in display currency, **capital excluded** and transfers excluded entirely — a transfer is not income to one side and expense to the other |
 | `FX cost` | margin + fee, **as two lines** (§7.5) |
 
 ```
-margin = (reference_rate − realized_rate) × amount_original    -- destination currency
-fee    = transactions.fee                                      -- stated by the bank
+margin_dest  = (reference_rate − realized_rate) × amount_original   -- destination currency
+fee          = transactions.fee                                     -- stated by the bank
 ```
 
-Totalled by period and by `account_groups.institution` — the field the export
-sheet assumes and the schema must gain.
+**This is §4a's figure in a different unit, not a second definition.** The
+register's M-class list recorded *"the margin formula is never written down and
+three candidates disagree"*, so it is worth showing that these two agree:
+
+```
+margin_pivot = amount_original × to_fx_rate × (reference_rate − realized_rate)
+             = margin_dest × to_fx_rate
+```
+
+Use `margin_dest` when reporting a single transfer — you want the number in the
+currency you received. Use `margin_pivot` when totalling across currencies, which
+is what `FX Cost` does. **Never mix them in one total.**
+
+Totalled by period and by `account_groups.institution` (added in `0004`).
 
 ---
 
@@ -321,9 +369,13 @@ sheet assumes and the schema must gain.
 Trigram (`pg_trgm`) over `payee`, `note`, `receipts.merchant` and
 `transaction_lines.description`. Ranked by similarity, then date descending.
 
-Trigram rather than `tsvector` **because the corpus is trilingual** — English,
-Polish and Russian share a month (§9.2), and no single text-search configuration
-stems all three. Trigram does not stem, which is the point.
+Trigram rather than `tsvector` **because the archive is permanently mixed.**
+Capture is overwhelmingly English now, and imported statement text is almost
+entirely Polish — but five years of history carries a large Cyrillic tail that
+never goes away, and no single text-search configuration stems English, Polish
+and Russian. Trigram similarity needs to know none of that: it is
+language-agnostic by construction, which is the property that matters here and
+the reason this choice survives the language mix changing again.
 
 An amount token matches `amount_original` exactly, in any currency. A match
 inside a receipt names the line that matched. Offline search is substring-only

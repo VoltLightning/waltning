@@ -102,7 +102,7 @@ bank statement exported manually
 - **A transfer is one row here too**, matching the ledger. Presenting the two
   legs and asking the user to pair them would import the exact defect the data
   model exists to remove (§6.1).
-- **Descriptions are trilingual.** English, Polish and Russian appear in the
+- **Imported descriptions are ~96% Polish** — the bank writes them. Your own capture text is a different corpus and appears in the
   same account and often the same month. The prompt states this explicitly and
   the category tree is supplied in one language, so the model translates rather
   than guessing — this is most of the tail, not an edge case (§9.2).

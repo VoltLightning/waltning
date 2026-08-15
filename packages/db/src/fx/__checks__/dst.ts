@@ -14,16 +14,12 @@ const filled = fillForward([{ date: from, rate: "1" }], from, to, Infinity);
 const dates = filled.map((r) => r.date);
 const uniq = new Set(dates);
 const expected =
-  Math.round(
-    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000,
-  ) + 1;
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
 
 let gaps = 0;
 for (let i = 1; i < dates.length; i++) {
   const step =
-    (Date.parse(`${dates[i]}T00:00:00Z`) -
-      Date.parse(`${dates[i - 1]}T00:00:00Z`)) /
-    86400000;
+    (Date.parse(`${dates[i]}T00:00:00Z`) - Date.parse(`${dates[i - 1]}T00:00:00Z`)) / 86400000;
   if (step !== 1) gaps++;
 }
 

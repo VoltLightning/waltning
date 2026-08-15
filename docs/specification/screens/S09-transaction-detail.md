@@ -107,6 +107,20 @@ readable receipt, which is the one thing a phone genuinely cannot give you.
 | The rate and its provenance | `attach_receipt` |
 | **Count of rows sharing this date and pair** | `set_manual_rate(pair, date)` — the day-wide fix |
 
+**This screen is where `is_capital` is set, and nothing said so.** §6.8 defines
+one-off capital events, S10 splits its running total when one is in range, and
+S25 excludes them from every comparison — three consumers and no producer. It is
+a toggle in the detail sheet, off by default, labelled *one-off — exclude from
+comparisons*.
+
+It is deliberately **not** on the capture sheet. You rarely know at the till that
+a purchase is the kind that would distort a trend, and S05's budget is ten
+seconds. Marking it later is the ordinary path, and it is why the flag affects
+comparisons rather than the record: changing it never moves a balance.
+
+Unlike `is_business`, it is **not** tax-sensitive and carries no §11.2 field
+gate — getting it wrong costs a trend line, not a filed figure.
+
 ## 6. States
 
 | State | Treatment |

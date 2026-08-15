@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    // Formatter and linter. Without it, format-on-save does nothing and the
+    // pre-commit hook becomes the first place you learn about a violation.
+    "biomejs.biome",
+    // Inline results for the SQL in packages/db/drizzle.
+    "ms-ossdata.vscode-pgsql",
+    // .editorconfig support for the file types Biome does not format.
+    "editorconfig.editorconfig"
+  ],
+  "unwantedRecommendations": [
+    // Both would fight Biome for the same files.
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint"
+  ]
+}

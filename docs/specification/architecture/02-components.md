@@ -178,6 +178,17 @@ graph TB
     Q -->|online| API
 ```
 
+**The phone implements a *subset* of the registry, and that is a property of the
+surface rather than a limitation.** Roughly fifteen of the ~70 operations —
+create/update/delete a transaction, transfer, settle a debt, create a
+counterparty, capture a receipt, plus the reads that feed the pickers. Import,
+migration, bulk review, period close, rerating and export are backend
+operations reached from the web dashboard.
+
+Because the phone never computes a derived figure, `computations.md` has exactly
+one implementation, in SQL. The client displays cached scalars adjusted by its
+own pending entries — arithmetic on a snapshot, not a second derivation (§14.3).
+
 **The outbox is the mobile-only component that changes every write path.** A
 capture made offline is queued locally and replayed on reconnect, which means
 every write operation must be **idempotent under replay** — that is what

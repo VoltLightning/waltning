@@ -81,8 +81,39 @@ balances derived and unable to drift from history.
 | Populated | Entering · **partial** (residual shown) · exact · **over-settlement** |
 | Empty | n/a |
 | Error | Save failed → the draft is retained with its rate |
-| Offline | Works. Reference rate comes from cache, marked stale; the rate is editable regardless, which is the point |
+| Offline | Works, with the **balance** stamped, not just the rate — see below |
 | Gated | n/a |
+
+#### Offline, the balance is an estimate and says so
+
+This screen can cost real money offline, and until now it did not say so. The
+scenario: the phone last synced Tuesday; the counterparty repaid €80 on the
+laptop on Wednesday; on Thursday, offline, this sheet shows `EUR −120,00 you
+owe` and you hand over €120 in cash. The ledger self-corrects on drain — they
+now owe *you* €80 — but you handed over money you did not owe, on a figure the
+screen presented without qualification.
+
+So, offline and whenever the checkpoint is older than the session:
+
+- **Every row in the Discharges picker carries its own stamp:**
+  `(•) EUR  −120,00  you owe · as of Tue 11 Aug`.
+- Past ~24 h the result card relabels to `remaining (estimated)` with
+  *from a balance as of Tue 11 Aug* beneath it, amber — P4's *not fully
+  observed* is literally this case.
+- **The settlement sends the amount, never the residual** (`architecture/08`
+  H9). The server derives the remainder from live data and returns it.
+- When the drain finds a **different sign** — you settled against a balance that
+  had already been cleared — that is not a line in a drain report. It is a card
+  on S13 naming the counterparty and stating both figures, because this is the
+  one drain outcome that means money moved wrongly.
+
+**The rate is a derived figure, not an input.** §4 already says this sheet
+follows `TransferAmount` — *two amounts, derived rate, spread* — while §3's
+layout showed a rate field and one amount. Two amounts are observable from a
+statement; a rate is not (§7.6). You enter what changed hands **and** the debt it
+discharges; the rate falls out. Offline this becomes *exact* rather than
+approximate, because both inputs are facts the two of you agreed and neither
+depends on a feed.
 
 **Over-settlement is a state, not an error.** Paying more than owed becomes a
 balance in the other direction, stated as such rather than clamped to zero.

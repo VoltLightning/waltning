@@ -54,9 +54,88 @@ through `0007`, is most of what this schema's guarantees consist of. A push that
 silently drops `assert_period_not_closed` leaves a database that looks correct
 and enforces nothing.
 
-Migrations `0002`–`0007` are **hand-written**. `drizzle-kit generate` needs a TTY
+Migrations `0002`–`0009` are **hand-written**. `drizzle-kit generate` needs a TTY
 for its rename prompts and would need a snapshot rebuild to resume; the journal
-is maintained by hand. Applying them is `drizzle-kit migrate` or `psql` in order.
+is maintained by hand and lists all ten. Applying them is **`pnpm db:migrate`**
+(`drizzle-kit migrate`) or `psql` in order.
+
+**`pnpm db:generate` is a trap in the current state and is kept only for the day
+the snapshots are rebuilt.** `meta/` holds snapshots for `0000` and `0001` only,
+so `generate` diffs the schema against `0001` and would emit a migration
+re-creating everything `0002`–`0009` already built. The journal is the source of
+truth here, not the snapshots.
+
+**Migrations connect as the bootstrap superuser** — `MIGRATE_DATABASE_URL`.
+`0005` creates a role and issues `GRANT`s, which `waltning_app` has no privilege
+to do. This is the only place that connection is correct: the app takes
+`APP_DATABASE_URL` and the tax export takes `EXPORT_DATABASE_URL`, and §13.1's
+separation holds only because everything else refuses the superuser. A single
+URL serving all three would leave T1 unenforceable while every query succeeded.
+
+---
+
+## Serving the web dashboard
+
+**Nothing specified this.** Caddy appeared four times across the documents and
+was described only as TLS termination; §4.1's diagram draws `caddy ─── api` and
+stops. But 19 screens specify a `≥1024px` web layout with keyboard navigation,
+and something has to serve them.
+
+**The web app is a static export of the same Expo codebase** (§4.3, §14.6) —
+`expo export --platform web` produces a client bundle. Caddy serves it directly
+and reverse-proxies the API. There is no Node process rendering HTML.
+
+```
+                    waltning.<tailnet>.ts.net
+                              │
+                    ┌─────────▼─────────┐
+                    │       caddy       │  Tailscale-issued cert
+                    └─────────┬─────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+        /trpc/*  ────→   api:3000        /*  ────→  static bundle
+        /healthz              │                      SPA fallback → index.html
+        /readyz               │
+                              ▼
+                        postgres · minio
+```
+
+| Route | Served by | Notes |
+|---|---|---|
+| `/trpc/*` | `api` | The only dynamic path |
+| `/healthz` `/readyz` | `api` | The probe contract (`09-connectivity.md`). **Must not be cached** |
+| `/assets/*` | Caddy, from the export | Content-hashed → `immutable`, one year |
+| `/*` | Caddy, SPA fallback to `index.html` | **`no-cache` on `index.html` itself**, or a deploy ships a stale bundle pointing at assets that no longer exist |
+
+**The bundle is built at image build time**, not on the Pi. Metro bundling an
+Expo web app on a 4 GB ARM board is slow enough to matter, and it puts a
+toolchain on the appliance for no reason. The compose service is a volume of
+static files.
+
+**Cache invalidation is the failure to design for.** The client checks
+`/healthz`'s `build` field against its own on foreground; a mismatch prompts a
+reload. Without it, a phone browser holds a bundle whose `opVersion` the server
+no longer accepts — the version-skew row in the status table.
+
+**No public certificate.** There is no public name, so Caddy uses the
+Tailscale-issued cert for `waltning.<tailnet>.ts.net` and auto-renews it. The
+tailnet is the only path in.
+
+### If RN Web fights the dense screens
+
+§14.6 says the fork is a decision, not a failure: add `apps/web` as Vite +
+React reusing the same tRPC client and `packages/core`. The monorepo exists
+partly to make that split cheap.
+
+**The trigger should be stated rather than felt.** Take the fork if the import
+review queue (S02) or reports (S25) cannot hold their budgets — 300 ms search,
+800 ms dashboard paint — on the target hardware after one honest attempt at
+optimisation. Those two screens are the dense-grid case §14.6 names, and they
+are the ones to build first on web for exactly that reason.
+
+Serving does not change if the fork is taken: a Vite build is also a static
+bundle behind the same Caddy routes.
 
 ---
 

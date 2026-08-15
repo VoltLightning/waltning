@@ -1,0 +1,116 @@
+# Docker build context — what never reaches an image.
+#
+# Two images are built from this repository root as their context: `api`
+# (Hono + tRPC) and the web bundle, which is built at image build time rather
+# than on the Pi (architecture/05 § Serving the web dashboard). Both need the
+# whole workspace, because pnpm resolves `packages/*` and `tools/*` from the
+# lockfile — so the context is the repo and this file is what keeps it sane.
+#
+# .dockerignore is NOT .gitignore. Patterns are matched with Go's
+# filepath.Match against paths relative to the context root, so a bare
+# `node_modules` matches only the one at the root and silently misses
+# `packages/db/node_modules`. Every directory pattern below is written `**/`
+# for that reason — in a pnpm workspace the nested copies are the majority.
+
+# --- Secrets. This is the reason the file exists. ---
+#
+# `COPY . .` with .env present bakes POSTGRES_PASSWORD, the session key and the
+# model API keys into an image layer. They survive deleting the file in a later
+# layer and are readable by anyone who can run `docker history`. §5.3 puts keys
+# in the Pi's environment, injected by Compose at run time — never in an image.
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.crt
+**/*.key
+**/*.p8
+**/*.p12
+**/*.jks
+**/*.keystore
+**/*.mobileprovision
+
+# --- Host dependencies. Never reuse them. ---
+#
+# pnpm links platform-specific binaries; esbuild's is named explicitly in
+# pnpm-workspace.yaml. A macOS/arm64 esbuild copied into a linux/arm64 image
+# fails at run time rather than at build time, which is the expensive way to
+# discover it. The image runs its own `pnpm install --frozen-lockfile`.
+**/node_modules
+**/.pnp
+**/.pnp.js
+
+# --- Build output. Rebuilt inside the image. ---
+**/dist
+**/build
+**/.next
+**/out
+**/.expo
+**/.expo-shared
+**/.turbo
+**/*.tsbuildinfo
+**/coverage
+**/.nyc_output
+
+# --- Financial data. The same list as .gitignore, for a different reason. ---
+#
+# These are gitignored, so they are absent from a fresh clone — but the build
+# context is the working directory, not the clone, and a working directory is
+# exactly where a .mmbak or a downloaded statement sits. This is a public
+# repository whose README states it holds no financial data; an image pushed
+# anywhere would be the way that stops being true.
+**/*.mmbak
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/*.dump
+**/*.sql.gz
+**/*.age
+**/*.xls
+**/*.xlsx
+**/*.csv
+**/*.ofx
+**/*.qif
+**/*.mt940
+data/
+exports/
+**/receipts
+**/backups
+!**/fixtures/**/*.csv
+
+# --- History and local tooling that no image reads ---
+#
+# .githooks matters more than it looks: it holds private-terms.txt, the
+# gitignored list of real names the public specification replaced with
+# placeholders. Gitignoring keeps it out of the repository, but the build
+# context is the working directory — so without this line the one file that
+# must never be published would be copied into an image layer.
+.git
+.githooks
+.gitignore
+.gitattributes
+.github
+.vscode
+.editorconfig
+biome.json
+.idea
+**/.DS_Store
+**/*.log
+**/*.orig
+**/*.rej
+
+# --- Documentation. Roughly 6,000 lines that nothing at run time reads. ---
+#
+# TAXONOMY.md is safe to drop: the category tree is compiled into
+# packages/db/src/seed/data.ts, not parsed from markdown when seeding runs.
+docs/
+design/
+**/*.md
+!README.md
+
+# Deliberately NOT excluded, because the api image needs them on boot:
+#   packages/db/drizzle/*.sql        drizzle-kit migrate runs these
+#   packages/db/drizzle/meta/*.json  the migration journal
+#   pnpm-lock.yaml, pnpm-workspace.yaml, */package.json, tsconfig.base.json
+#   tools/  — the lockfile references tools/migrate-mm, so removing it breaks
+#            `pnpm install --frozen-lockfile` for the whole workspace

@@ -113,7 +113,7 @@ Not pass/fail. A number you watch move when you change a model or a prompt.
 
 | Surface | Corpus | Metric |
 |---|---|---|
-| Classification | 300 real statement rows, hand-labelled, **trilingual** | Top-1 accuracy; accuracy on rows with no matching rule |
+| Classification | 300 real statement rows, hand-labelled, **weighted as the source is: ~96% Polish** | Top-1 accuracy; accuracy on rows with no matching rule |
 | Receipt extraction | ~50 receipts incl. crumpled, PLN/GEL, non-Latin | Total match rate; line-count match |
 | Duplicate detection | Known duplicate pairs + known near-misses | Precision **and** recall — a false positive hides a real transaction |
 | Voice | ~40 utterances, three languages | Intent + amount + account correct |
@@ -121,9 +121,11 @@ Not pass/fail. A number you watch move when you change a model or a prompt.
 **This is why the import path is a pipeline.** A loop gives you an outcome
 without a trajectory and cannot be scored against fixtures.
 
-Fixtures must include the trilingual tail. English, Polish and Russian appear in
-the same account and often the same month — that is most of the tail, not an edge
-case.
+**Weight the fixtures the way the path is weighted.** Classification runs on the
+import path, and that text is written by the bank — roughly 96% Polish. Sampling
+evenly across three languages would tune the tier against a distribution it never
+sees. The capture path is a different corpus (overwhelmingly English) and a
+different tier, and search is a third (a permanently mixed archive).
 
 ### 5 · Journey tests
 
@@ -166,11 +168,23 @@ no balance check can see that.
 
 ## CI
 
-There is no CI (§4.3 — four packages, one developer). The equivalent is a
-pre-cutover checklist that must pass on the Pi:
+There is no CI (§4.3 — four packages, one developer). Two things stand in for
+it, at different distances from the keyboard.
+
+**Per commit,** `.githooks/pre-commit` — installed by `git config
+core.hooksPath` from the `prepare` script, so there is no hook manager to keep
+current. It refuses key material and financial-data file types *even when
+force-added*, sweeps the staged diff against a gitignored list of the real
+names this repository replaced with placeholders, runs Biome over staged files,
+and typechecks the whole program. Budget is under two seconds, because the only
+automated gate there is must never be worth skipping. It deliberately does not
+`--write`: a hook that rewrites files changes what you are committing after you
+have read it.
+
+**Per cutover,** a checklist that must pass on the Pi:
 
 ```
-pnpm -r typecheck
+pnpm verify                           # biome check + typecheck, ~2s
 pnpm -r test                          # properties, contracts, database
 psql -f drizzle/*.sql  → fresh db     # every migration, from empty
 SELECT * FROM verify_t1();            # three trues

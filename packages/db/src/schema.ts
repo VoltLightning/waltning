@@ -25,8 +25,9 @@
  * See SPEC.md §6–§7 for the reasoning behind each.
  */
 
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   date,
@@ -42,7 +43,6 @@ import {
   unique,
   uniqueIndex,
   uuid,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /* ------------------------------------------------------------------ *
@@ -56,10 +56,8 @@ const rate = (name: string) => numeric(name, { precision: 24, scale: 12 });
 /** Normalized name for uniqueness: case- and whitespace-insensitive. */
 const normalized = (col: AnyPgColumn): SQL => sql`lower(btrim(${col}))`;
 
-const createdAt = () =>
-  timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
-const updatedAt = () =>
-  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
+const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
 /* ------------------------------------------------------------------ *
  * Enums
@@ -86,12 +84,7 @@ export const ownership = pgEnum("ownership", ["own", "shared"]);
 
 export const categoryKind = pgEnum("category_kind", ["income", "expense"]);
 
-export const txnType = pgEnum("txn_type", [
-  "income",
-  "expense",
-  "transfer",
-  "adjustment",
-]);
+export const txnType = pgEnum("txn_type", ["income", "expense", "transfer", "adjustment"]);
 
 export const txnSource = pgEnum("txn_source", [
   "manual",
@@ -103,10 +96,7 @@ export const txnSource = pgEnum("txn_source", [
 
 export const actor = pgEnum("actor", ["user", "agent", "import", "migration"]);
 
-export const counterpartyKind = pgEnum("counterparty_kind", [
-  "person",
-  "company",
-]);
+export const counterpartyKind = pgEnum("counterparty_kind", ["person", "company"]);
 
 /**
  * §6.6 — naming a counterparty is not the same as owing them. Only `debt` rows
@@ -114,11 +104,7 @@ export const counterpartyKind = pgEnum("counterparty_kind", [
  * shared account (§6.7) and carries no settlement expectation; `reference`
  * merely records who was involved.
  */
-export const counterpartyRole = pgEnum("counterparty_role", [
-  "debt",
-  "contribution",
-  "reference",
-]);
+export const counterpartyRole = pgEnum("counterparty_role", ["debt", "contribution", "reference"]);
 
 /** §7.6 — `manual` outranks every synced source for the same pair and date. */
 export const fxSource = pgEnum("fx_source", [
@@ -139,11 +125,7 @@ export const importRowStatus = pgEnum("import_row_status", [
   "skipped",
 ]);
 
-export const taxLineKind = pgEnum("tax_line_kind", [
-  "revenue",
-  "expense",
-  "excluded",
-]);
+export const taxLineKind = pgEnum("tax_line_kind", ["revenue", "expense", "excluded"]);
 
 /* ------------------------------------------------------------------ *
  * Currencies and FX
@@ -175,9 +157,7 @@ export const currencies = pgTable(
   (t) => [
     // Exactly one pivot. There is deliberately no equivalent constraint on a
     // reporting currency, because none exists.
-    uniqueIndex("currencies_one_pivot")
-      .on(sql`(true)`)
-      .where(sql`${t.isPivot}`),
+    uniqueIndex("currencies_one_pivot").on(sql`(true)`).where(sql`${t.isPivot}`),
     check("currencies_decimals_sane", sql`${t.decimals} between 0 and 8`),
   ],
 );
@@ -276,16 +256,11 @@ export const accounts = pgTable(
   },
   (t) => [
     uniqueIndex("accounts_name_uq").on(normalized(t.name)),
-    uniqueIndex("accounts_external_id_uq")
-      .on(t.externalId)
-      .where(sql`${t.externalId} is not null`),
+    uniqueIndex("accounts_external_id_uq").on(t.externalId).where(sql`${t.externalId} is not null`),
     index("accounts_kind_idx").on(t.kind),
     index("accounts_ownership_idx").on(t.ownership),
     // Shared money is never reportable (§13).
-    check(
-      "accounts_shared_not_business",
-      sql`${t.ownership} = 'own' or ${t.isBusiness} = false`,
-    ),
+    check("accounts_shared_not_business", sql`${t.ownership} = 'own' or ${t.isBusiness} = false`),
   ],
 );
 
@@ -346,10 +321,7 @@ export const categories = pgTable(
     index("categories_parent_idx").on(t.parentId),
     check("categories_no_self_parent", sql`${t.id} <> ${t.parentId}`),
     // Earnings is an income-side concept only.
-    check(
-      "categories_earnings_income_only",
-      sql`${t.kind} = 'income' or ${t.isEarnings} = false`,
-    ),
+    check("categories_earnings_income_only", sql`${t.kind} = 'income' or ${t.isEarnings} = false`),
   ],
 );
 
@@ -376,9 +348,7 @@ export const counterparties = pgTable(
     name: text("name").notNull(),
     kind: counterpartyKind("kind").notNull().default("person"),
     /** The currency they prefer to settle in — not a system-wide concept. */
-    settlementCurrency: text("settlement_currency").references(
-      () => currencies.code,
-    ),
+    settlementCurrency: text("settlement_currency").references(() => currencies.code),
     contact: text("contact"),
     note: text("note").notNull().default(""),
     /** §13.6 — resolves the ryczalt rate for revenue rows from this party. */
@@ -494,9 +464,7 @@ export const transactions = pgTable(
      * satisfies. The unique index below is what makes double-posting
      * impossible rather than something a scheduler has to remember.
      */
-    recurringId: uuid("recurring_id").references(
-      (): AnyPgColumn => recurringTransactions.id,
-    ),
+    recurringId: uuid("recurring_id").references((): AnyPgColumn => recurringTransactions.id),
     occurrenceDate: date("occurrence_date"),
 
     /** A stated bank fee, distinct from the rate margin (§7.5). */
@@ -577,10 +545,7 @@ export const transactions = pgTable(
       "transactions_to_amount_shape",
       sql`(${t.type} = 'transfer') = (${t.toAmount} is not null)`,
     ),
-    check(
-      "transactions_to_amount_positive",
-      sql`${t.toAmount} is null or ${t.toAmount} >= 0`,
-    ),
+    check("transactions_to_amount_positive", sql`${t.toAmount} is null or ${t.toAmount} >= 0`),
     // The destination leg's pivot value is computed as to_amount × to_fx_rate
     // (§7.4), so a transfer missing either is a balance that comes out silently
     // wrong rather than a write that fails.
@@ -678,9 +643,7 @@ export const receipts = pgTable(
     currency: text("currency").references(() => currencies.code),
     purchasedAt: date("purchased_at"),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
-    capturedAt: timestamp("captured_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("receipts_transaction_idx").on(t.transactionId)],
 );
@@ -747,10 +710,9 @@ export const importRows = pgTable(
     raw: jsonb("raw").notNull(),
     parsed: jsonb("parsed"),
     status: importRowStatus("status").notNull().default("pending"),
-    matchedTransactionId: uuid("matched_transaction_id").references(
-      () => transactions.id,
-      { onDelete: "set null" },
-    ),
+    matchedTransactionId: uuid("matched_transaction_id").references(() => transactions.id, {
+      onDelete: "set null",
+    }),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
     /** Which model produced it — a threshold is uninterpretable without this once §11.4's config changes. */
     modelId: text("model_id"),
@@ -978,10 +940,7 @@ export const debtReassignments = pgTable(
       .on(t.toCounterpartyId, t.currency)
       .where(sql`${t.deletedAt} is null`),
     // Reassigning to oneself is the Money Manager artefact, not a thing to keep.
-    check(
-      "debt_reassignments_distinct",
-      sql`${t.fromCounterpartyId} <> ${t.toCounterpartyId}`,
-    ),
+    check("debt_reassignments_distinct", sql`${t.fromCounterpartyId} <> ${t.toCounterpartyId}`),
     check("debt_reassignments_positive", sql`${t.amount} > 0`),
   ],
 );
@@ -1079,9 +1038,7 @@ export const dashboardLayouts = pgTable(
   (t) => [
     uniqueIndex("dashboard_layouts_name_uq").on(normalized(t.name)),
     // Exactly one active layout, by the same trick as the pivot currency.
-    uniqueIndex("dashboard_layouts_one_active")
-      .on(sql`(true)`)
-      .where(sql`${t.isActive}`),
+    uniqueIndex("dashboard_layouts_one_active").on(sql`(true)`).where(sql`${t.isActive}`),
   ],
 );
 

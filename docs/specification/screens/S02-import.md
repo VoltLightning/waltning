@@ -142,7 +142,7 @@ Bulk accept states its count and its threshold in the button itself. It is
   rule and its hits.** A guess with no rationale cannot be judged, and an
   unjudgeable proposal gets accepted by reflex.
 - **A transfer is one row here too**, matching the ledger.
-- **§9.2** — descriptions are trilingual (English, Polish, Russian), often in
+- **§9.2** — imported descriptions are written by the bank and are ~96% Polish, not
   the same month. This is most of the tail, not an edge case.
 - **§13.6** — under ryczałt a miscategorised business *expense* is not a
   compliance problem. The business toggle matters for analysis, and the screen

@@ -136,6 +136,88 @@ network boundary, and that seam is enforced by types.
 
 ---
 
+## The physical layer
+
+Containers say what runs; this says what it runs **on**. The distinction matters
+here more than in most systems, because the whole design rests on physical
+custody (§1.3, O17) and because the hardware has exactly one of everything.
+
+```mermaid
+graph TB
+    subgraph home["Home"]
+        ROUTER["Router<br/><small>ISP · DHCP reservation for the Pi</small>"]
+        subgraph pi["<b>Raspberry Pi 4 · 4 GB</b>"]
+            SSD[("<b>USB 3 SSD</b><br/><small>boot + data<br/>NOT an SD card</small>")]
+            OS["Raspberry Pi OS 64-bit<br/><small>Docker Compose · Tailscale</small>"]
+            OS --- SSD
+        end
+        ROUTER --- pi
+    end
+
+    subgraph devices["Devices — each an enrolled tailnet node"]
+        PHONE["iPhone<br/><small>Expo app · outbox · replica</small>"]
+        LAPTOP["Laptop<br/><small>browser · dev machine</small>"]
+    end
+
+    subgraph off["Off-site"]
+        B2[("Backblaze B2<br/><small>age-encrypted</small>")]
+        KEY["age key<br/><small>hardware token + paper</small>"]
+    end
+
+    PHONE -.->|WireGuard| TS(("Tailscale<br/>coordination"))
+    LAPTOP -.->|WireGuard| TS
+    TS -.-> pi
+    pi -->|nightly, outbound| B2
+    KEY -.->|decrypts| B2
+
+    classDef hw fill:#4a3f8f,stroke:#2a2260,color:#fff
+    classDef dev fill:#2f5fa8,stroke:#1a3a6b,color:#fff
+    classDef ext fill:#2b2b2b,stroke:#555,color:#ddd
+    class SSD,OS hw
+    class PHONE,LAPTOP dev
+    class B2,KEY,TS,ROUTER ext
+```
+
+### The bill of materials, and what each part costs when it fails
+
+| Part | Spec | If it dies |
+|---|---|---|
+| **Raspberry Pi 4** | 4 GB. 8 GB is headroom, not a requirement | Replaceable in a day. Restore from B2 and **re-apply `0005`** — roles are not in the dump |
+| **USB 3 SSD** | Boot **and** data. Never an SD card | **The single most likely failure** (R6, High over years). Nightly dumps bound the loss to a day |
+| Power supply | Official 5 V 3 A | Undervoltage corrupts writes silently before it kills the board. `vcgencmd get_throttled` belongs on S30 |
+| Router | Any. **DHCP reservation** for the Pi | Tailscale hides most of it — the tailnet IP does not change |
+| Cooling | Passive is enough at this load | Thermal throttling shows up as latency, not failure, which makes it hard to spot |
+
+**Boot from SSD, never an SD card.** SD cards fail under database write patterns
+and they fail *silently for a while first* — which is the worst shape a storage
+failure can have for a ledger, because the corruption is in the backups by the
+time you notice.
+
+### One of everything
+
+There is no redundancy anywhere in the home box, and that is a deliberate
+accepted risk rather than an oversight (§15, `06-quality-attributes.md` — *there
+is no availability target, and that is a decision*).
+
+What compensates, and what each actually covers:
+
+| Compensation | Covers | Does not cover |
+|---|---|---|
+| Nightly `pg_dump` → age-encrypted → B2 | Total hardware loss, to within a day | Anything since the last dump |
+| **Quarterly restore drill** | The dump being unrestorable — the failure nobody notices until it matters | — |
+| The phone's replica | Reading your history while the Pi is dead | Writing anything the server must admit |
+| The phone's outbox | **Capture continues with the Pi off**, indefinitely | Figures classed **S** |
+
+The phone is the interesting one: it makes the hardware's single point of failure
+survivable *for the thing you do most*. You can capture through a week of the Pi
+being down and lose nothing.
+
+**The `age` key is the real single point of failure**, not the Pi. Hardware
+token plus a paper copy off-site, because a B2 bucket you cannot decrypt is
+indistinguishable from no backup at all.
+
+---
+
 ## Trust boundaries
 
 ```mermaid

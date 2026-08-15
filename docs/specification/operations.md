@@ -38,6 +38,8 @@ free, and the two can never drift, because they are the same declaration.
 | **Auto-eligible** | Whether a bounded auto-mode grant may cover it. Most writes: no |
 | **Audit** | Entity, action, actor, before/after — written by the registry, not by each implementation |
 | **Description** | Written for the model to read, not for a developer. This is the tool's documentation |
+| **`offlineEligible`** | Whether this operation may enter a device outbox. `run_import`, `close_period`, `rerate_transactions`, `materialize_occurrence` and every migration operation are **false** — they need server state the device cannot have. A §15.1 contract test asserts no `offlineEligible: false` operation can be constructed as an outbox entry |
+| **`opVersion`** | The payload shape version. Upcasters chain every historical version to current at drain time, and the server accepts N−2 — a phone can be offline across two releases (`architecture/08`) |
 
 **Audit is the registry's job, not the operation's.** An operation that had to
 remember to log itself is an operation that will eventually forget.
@@ -116,6 +118,8 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | Operation | Auto | Notes |
 |---|---|---|
 | `create_account` · `update_account` · `archive_account` · `reorder_accounts` | ❌ | Structural |
+| `create_group` · `update_group` · `reorder_groups` · `archive_group` | ❌ | **Were missing.** `update_group` sets `institution`, which `FX Cost` totals by — a headline figure whose grouping field nothing could set. Several groups may share one institution |
+| `reconcile_account` | ❌ | **Was missing entirely.** Writes one `adjustment` transaction for the difference between the computed balance and one you observed, and updates `expected_balance`. Never a silent balance overwrite — the balance is derived (`computations.md` §2) and there is no field to set. The agent may *notice* a discrepancy; it cannot assert what you counted |
 | `create_category` | ❌ | The agent **proposes**; it never creates silently (§11.5) |
 | `rename_category` · `reparent_category` · `convert_leaf_group` | ❌ | |
 | `archive_category` | ❌ | S19's fourth verb, and it was missing here. Archiving is not deletion — a leaf with history keeps it and stops being offerable (`TAXONOMY.md` R2). Refused on a group with unarchived children |
@@ -140,7 +144,9 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `run_import` · `accept_row` · `skip_row` | ✅ | Undoable as one unit (§8.4) |
 | `propose_rule` · `create_rule` · `update_rule` · `disable_rule` · `reorder_rules` | ❌ | A rule changes future classification |
 | `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | |
-| `materialize_occurrence` | ✅ | Cannot double-post — unique on `(recurring_id, occurrence_date)` |
+| `materialize_occurrence` | ✅ | Posts an occurrence. The unique index on `(recurring_id, occurrence_date)` stops **this rule** firing twice — it does **not** stop a hand-entered duplicate, whose `recurring_id` is NULL and which is therefore not in the index at all (C8, §14.4) |
+| `link_occurrence` | ❌ | The other half of C8's fix, and it was missing. Stamps `recurring_id` and `occurrence_date` onto a row **you already entered by hand**, which both satisfies the occurrence and puts the row into the index so the question cannot be asked twice. Offered instead of *Post* when an unlinked row matches within ±3 days and ±1% on the same account and currency |
+| `reclassify` | ❌ | **Was referenced in four documents and defined in none.** Re-runs classification against **today's** ledger, so it is expected to differ from the original — which is exactly why it is not called "replay". Replay pins `model_id`, `rule_snapshot` and `retrieved_ids` and reproduces the recorded answer (C10); this does not. Never auto: it rewrites rows you already accepted |
 | `upload_receipt` · `extract_receipt` | ✅ | |
 
 ### Dashboard, export, tax, system
@@ -149,6 +155,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 |---|---|---|
 | `create_layout` · `set_active_layout` · `add_widget` · `update_widget_config` · `remove_widget` | ✅ | *"Put family spending on my dashboard"* is an ordinary write (§11.0) |
 | `export_excel` · `record_export` | ✅ | |
+| `settle_debt` | ❌ | **Was missing, and H9's whole resolution depends on it.** Takes the amount that changed hands and the debt it discharges — never the residual, which the server derives from live data and returns. S14 previously called `create_transaction`, which has no notion of a residual and no channel to return a corrected one |
 | `get_targets` · `create_target` · `update_target` · `delete_target` | ❌ | **These were missing entirely** — `computations.md` §11 defines progress and no operation exposed it. Structural, so never auto-eligible. A target is period-to-date against `spend_to_date(p, scope=mine, capital excluded)`; **not** an envelope budget (N7) — no rollover, no allocation, and going over is information rather than an error |
 | `add_scheme_period` · `add_residency_period` · `update_registration` · `set_ryczalt_rate` | ❌ | **Tax scope. Never eligible** (§11.2) |
 | `close_period` · `reopen_period` | ❌ | Freezes or unfreezes a filed period (§13.4) |

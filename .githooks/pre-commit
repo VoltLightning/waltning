@@ -1,0 +1,124 @@
+#!/bin/sh
+#
+# Pre-commit gate.
+#
+# architecture/07 records a deliberate decision: there is no CI — four
+# packages, one developer. That makes this hook the *only* automated thing
+# standing between an edit and history, which raises its importance rather
+# than lowering it.
+#
+# It must therefore stay fast enough that it is never worth skipping.
+# Budget is under two seconds: Biome over staged files (~0.3s) and a
+# whole-program typecheck (~1.4s).
+#
+# Installed by the `prepare` script via `git config core.hooksPath .githooks`,
+# so there is no hook-manager dependency to keep current.
+#
+# To bypass in a genuine emergency:  git commit --no-verify
+
+set -eu
+
+RED='\033[31m'
+DIM='\033[2m'
+OFF='\033[0m'
+
+fail() {
+  printf "\n${RED}✗ pre-commit: %s${OFF}\n" "$1" >&2
+  [ $# -gt 1 ] && printf "${DIM}  %s${OFF}\n" "$2" >&2
+  exit 1
+}
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+# ── 1 · Files that must never enter history ──────────────────────────────────
+#
+# .gitignore already covers these, but `git add -f` bypasses it and this is a
+# public repository. The check is on the staged path list, so it catches the
+# force-add that the ignore file cannot.
+blocked=$(
+  printf '%s\n' "$staged" \
+    | grep -Ei '(^|/)\.env$|\.(mmbak|sqlite|sqlite3|db|dump|age|xls|xlsx|ofx|qif|mt940|pem|crt|key|p8|p12|jks|keystore|mobileprovision)$' \
+    | grep -vE '(^|/)\.env\.example$' \
+    || true
+)
+if [ -n "$blocked" ]; then
+  fail "these look like secrets or financial data:" "$(printf '%s' "$blocked" | tr '\n' ' ')"
+fi
+
+# CSV is a bank-statement format here, so it is blocked everywhere except the
+# two places .gitignore already whitelists.
+blocked_csv=$(
+  printf '%s\n' "$staged" \
+    | grep -Ei '\.csv$' \
+    | grep -vE '^docs/|/fixtures/' \
+    || true
+)
+if [ -n "$blocked_csv" ]; then
+  fail "CSV outside docs/ and fixtures/ is a bank statement:" "$(printf '%s' "$blocked_csv" | tr '\n' ' ')"
+fi
+
+# ── 2 · Key material by content ──────────────────────────────────────────────
+#
+# Catches a key pasted into an otherwise innocent file, which the path check
+# above cannot see.
+# This file is excluded from its own scan: the patterns below are written out
+# literally here, so including it would make every edit to this hook look like
+# a leaked key. The cost is that a secret pasted into the hook itself is not
+# caught by the hook itself.
+if git diff --cached -- . ':(exclude).githooks/pre-commit' \
+  | grep -qE 'BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY|AGE-SECRET-KEY-1|sk-[A-Za-z0-9_-]{24,}|ghp_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}'; then
+  fail "the staged diff contains something shaped like a private key or token."
+fi
+
+# ── 3 · Personal data sweep ──────────────────────────────────────────────────
+#
+# The repository is public and every real name, bank and balance was replaced
+# with a placeholder. A bank name crept back in once while writing prose, which
+# is what this exists to catch — the lesson was that the sweep has to run after
+# every writing pass, and a lesson that depends on remembering is not a control.
+#
+# The term list itself cannot live in the repository, because it *is* the
+# private data. Keep it at .githooks/private-terms.txt (gitignored); the vault
+# note "Real to abstract mapping" is the source. One term per line, # for
+# comments. Absent, this check is skipped with a notice rather than failing —
+# a fresh clone by anyone else has nothing to sweep for.
+terms=".githooks/private-terms.txt"
+if [ -f "$terms" ]; then
+  # Blank lines in a -f pattern file match every line, so they must go.
+  cleaned=$(mktemp)
+  trap 'rm -f "$cleaned"' EXIT
+  grep -vE '^[[:space:]]*(#|$)' "$terms" > "$cleaned" || true
+  if [ -s "$cleaned" ]; then
+    # -w matches whole words only. Several terms on the list are short and sit
+    # inside ordinary identifiers — one of them is a substring of a field name
+    # this ledger uses — so substring matching refused perfectly clean code. A
+    # guard that cries wolf gets bypassed, which is worse than not having it.
+    hits=$(git diff --cached -- . | grep -inwFf "$cleaned" || true)
+    if [ -n "$hits" ]; then
+      fail "the staged diff contains a term from the private list." \
+           "$(printf '%s' "$hits" | head -3 | cut -c1-100)"
+    fi
+  fi
+else
+  printf "${DIM}  pre-commit: no %s — personal-data sweep skipped${OFF}\n" "$terms"
+fi
+
+# ── 4 · Format and lint, staged files only ───────────────────────────────────
+#
+# Deliberately does not --write. A hook that silently rewrites files changes
+# what you are committing after you have read it; failing and naming the fix
+# keeps the commit yours.
+if ! pnpm exec biome check --staged --no-errors-on-unmatched; then
+  fail "formatting or lint failed." "run: pnpm fix"
+fi
+
+# ── 5 · Types, whole program ─────────────────────────────────────────────────
+#
+# Not staged-file-scoped: types are a property of the program, and a staged
+# file can break a file that is not staged.
+if ! pnpm -r typecheck; then
+  fail "typecheck failed."
+fi

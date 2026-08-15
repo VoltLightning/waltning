@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 20 — **all closed** |
+| **C** | A stated guarantee is false | 28 — **all closed** |
 | **H** | Wrong data, silently | 31 — **all closed** |
 | **M** | Cannot be implemented from the spec | 24 — **all closed** |
 | **L** | Correct but under-specified | 18 |
@@ -273,6 +273,92 @@ editable.
 **Also closed a real drift:** the constraint existed only in migration `0004`'s
 `ALTER`, never in `schema.ts`, so the Drizzle model and the database disagreed
 about what `agent_memory` permits.
+
+### C21 — A captive portal's `200` deleted the outbox
+**Fixed** — Rule 0 in `architecture/09-connectivity.md`: *a 200 is not a
+success.* The drain classified on status class alone, and a hotel portal answers
+`200` with HTML to every POST. It read the 200, marked the entries sent and
+removed them. Nothing reached the Pi.
+
+§14.3 says in its own words that losing a capture is **the worst outcome in the
+system**, and this delivered exactly that while reporting a successful sync — on
+hotel wifi, which is precisely where a week of travel captures would be. Every
+response must now authenticate as ours (`x-waltning` header, parseable envelope,
+session nonce) before status is consulted at all.
+
+### C22 — Idempotency covered only INSERTs, so a retry blocked against itself
+**Fixed** — a server-side `outbox_receipts` ledger. The claim rested on the
+partial unique index on `external_id`, which exists on four tables and fires only
+on INSERT. Every `update_*`, `delete_*`, `categorize_batch`, `attach_receipt` and
+`merge_counterparties` had no replay protection.
+
+Edit a synced row's `is_business` offline; the drain commits; the connection
+drops before the 200; the entry retries carrying the `updated_at` its own first
+application already advanced. `is_business` is `tax_sensitive`, so H16 blocks
+rather than overwrites — **the entry is permanently blocked by a conflict with
+itself**, and S30 reports another device changed it. Nothing did. On
+`settle_debt`, which derives the residual from live data, the same replay
+**settles twice**.
+
+### C23 — The client stamped four valuations it could not know
+**Fixed** — `fx_rate`, `to_fx_rate`, `tax_fx_rate` and `ryczalt_rate` all resolve
+server-side at commit (§14.3). The headline claim *"the phone never computes a
+derived figure"* was false in four places, and all four freeze into `GENERATED`
+columns that are not re-derivable.
+
+The sharpest: a cross-currency transfer captured offline pre-filled its
+destination amount from the cached reference rate, so both legs valued to the
+same pivot amount and **the margin was identically zero** — the exact failure
+§7.5 exists to prevent, and indistinguishable from a genuinely fee-free transfer.
+Three documents also disagreed about whether an offline estimate would ever be
+corrected: §14.3 promised a firm-up offer, H8 said only a manual rate clears the
+flag, S18 attached the offer solely to `set_manual_rate`. The ordinary path had
+no mechanism at all.
+
+### C24 — An app update would block a week of captures, correctly
+**Fixed** — opaque payloads with `opVersion` and drain-time upcasters
+(`architecture/08`). Nothing specified the client's own schema version. Ship v2
+with a changed Zod schema for `create_transaction` and every v1 payload in the
+outbox fails validation on drain; that is 4xx; H15 says 4xx blocks and is never
+retried. A week of offline captures goes permanently blocked in one batch, **by
+the rules as written**. The server now accepts N−2 versions, and an unknown
+version is surfaced with its payload readable rather than dropped.
+
+### C25 — `sending` had no crash recovery
+**Fixed** — `UPDATE outbox SET state='pending' WHERE state='sending'` on launch,
+safe only because C22's ledger exists. iOS force-quit gives no callback at all,
+so an interrupted entry orphaned in `sending` forever and the pending count never
+moved — which is H15's own complaint, reintroduced by its own fix.
+
+### C26 — Receipt originals were held at full resolution for the whole outage
+**Fixed** — downscale **at capture**, not on upload. §10.2 held the original
+"until extraction returns", and extraction needs a model, which needs a network.
+Three receipts a day across a two-week trip is **147 MB** of originals against
+10.5 MB downscaled — 14×, using the spec's own 250 KB figure. A 4032×3024 JPEG
+also decodes to **48.8 MB of bitmap**, and S07 supports ten captures in a
+session; that is a jetsam kill. And in `Caches/`, iOS purges the images under
+storage pressure **without telling the app**, so the transaction drains with no
+evidence.
+
+### C27 — §5 had no threat model for the device
+**Fixed** — §5.7 Device custody. §5 reasons entirely about ingress; §14.3 put a
+named third-party debt register, day-level history and a queue of receipt
+photographs on a phone that is itself an enrolled tailnet node carrying a 30-day
+session token. A stolen phone was both the perimeter and the credential, and
+§5.1's lost-device row said only *"revoke that node — no password reset"*.
+
+The decision that unlocks the rest: **drain never runs while locked.** A
+background drain needs the database and its key readable while locked, which
+forces the weakest protection class and makes every other control theatre.
+
+### C28 — The accounting date came from a timezone that lags the border
+**Fixed** — `capturedTz` recorded, the date editable at capture, and a drain-time
+flag on timezone change. §7.0a resolves the date once and makes it immutable,
+which is right; but the device's zone is not the zone you are standing in. Land
+in Tbilisi at 01:00 after four hours in airplane mode and the phone still says
+Warsaw, where it is 23:00 the previous day. Every capture in that window is dated
+**yesterday**, permanently. Across a New Year's Eve flight that is a revenue row
+in the wrong tax year — precisely what §7.0a exists to prevent.
 
 ### C16 — Every `DELETE` on `transactions` was silently suppressed
 **Fixed in `0006`.** `assert_period_not_closed` ended `RETURN NEW`, and in a
@@ -534,9 +620,13 @@ answered, so the reasoning stays attached to the complaint that produced it.
   which model answered, so a threshold stays interpretable across a config
   change.
 - ~~**Targets have no operations, no widget, no screen, and no progress rule.**~~
-  **Fixed** — `computations.md` §11 defines progress as period-to-date, and
-  `get_targets` / `create_target` / `update_target` / `delete_target` are now in
-  the registry. Deliberately **not** envelope budgets (N7): no rollover, no
+  **Fixed, in two passes — the first was incomplete and claimed otherwise.**
+  `computations.md` §11 defines progress as period-to-date and the four
+  operations are in the registry; the **widget and the settings surface were
+  still missing** while this entry said the item was closed. §14.5's catalogue
+  now carries `targets`, and S24's widget config is the *"one settings row"*
+  §14.7 asked for — a target is one number against one category for one period
+  and does not earn a screen. Deliberately **not** envelope budgets (N7): no rollover, no
   allocation, and going over is information rather than an error.
 - ~~**Ageing has no anchor date**~~ **Resolved in `computations.md` §8 and S12**
   — FIFO from the oldest open row, **companies only** (O15), and the label states
