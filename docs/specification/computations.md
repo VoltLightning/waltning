@@ -339,15 +339,28 @@ Converted at each row's own date into `target.currency`. Over-target goes
 | `net` | §5 — all inflows minus all outflows |
 | `business share` | business expense ÷ total expense, over the hero's period and scope |
 | `revenue_ytd` | `tax_ledger` filtered to `type = 'income' AND is_earnings` — the broad view includes business *expenses*, which are not reportable under ryczałt |
+| `income_vs_expense` | Per bucket of the chosen granularity: `Σ signed(t) where type='income'` and `Σ |signed(t)| where type='expense'`, both in display currency, **capital excluded** and transfers excluded entirely — a transfer is not income to one side and expense to the other |
 | `FX cost` | margin + fee, **as two lines** (§7.5) |
 
 ```
-margin = (reference_rate − realized_rate) × amount_original    -- destination currency
-fee    = transactions.fee                                      -- stated by the bank
+margin_dest  = (reference_rate − realized_rate) × amount_original   -- destination currency
+fee          = transactions.fee                                     -- stated by the bank
 ```
 
-Totalled by period and by `account_groups.institution` — the field the export
-sheet assumes and the schema must gain.
+**This is §4a's figure in a different unit, not a second definition.** The
+register's M-class list recorded *"the margin formula is never written down and
+three candidates disagree"*, so it is worth showing that these two agree:
+
+```
+margin_pivot = amount_original × to_fx_rate × (reference_rate − realized_rate)
+             = margin_dest × to_fx_rate
+```
+
+Use `margin_dest` when reporting a single transfer — you want the number in the
+currency you received. Use `margin_pivot` when totalling across currencies, which
+is what `FX Cost` does. **Never mix them in one total.**
+
+Totalled by period and by `account_groups.institution` (added in `0004`).
 
 ---
 

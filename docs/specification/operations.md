@@ -118,6 +118,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | Operation | Auto | Notes |
 |---|---|---|
 | `create_account` · `update_account` · `archive_account` · `reorder_accounts` | ❌ | Structural |
+| `reconcile_account` | ❌ | **Was missing entirely.** Writes one `adjustment` transaction for the difference between the computed balance and one you observed, and updates `expected_balance`. Never a silent balance overwrite — the balance is derived (`computations.md` §2) and there is no field to set. The agent may *notice* a discrepancy; it cannot assert what you counted |
 | `create_category` | ❌ | The agent **proposes**; it never creates silently (§11.5) |
 | `rename_category` · `reparent_category` · `convert_leaf_group` | ❌ | |
 | `archive_category` | ❌ | S19's fourth verb, and it was missing here. Archiving is not deletion — a leaf with history keeps it and stops being offerable (`TAXONOMY.md` R2). Refused on a group with unarchived children |
@@ -142,7 +143,9 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `run_import` · `accept_row` · `skip_row` | ✅ | Undoable as one unit (§8.4) |
 | `propose_rule` · `create_rule` · `update_rule` · `disable_rule` · `reorder_rules` | ❌ | A rule changes future classification |
 | `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | |
-| `materialize_occurrence` | ✅ | Cannot double-post — unique on `(recurring_id, occurrence_date)` |
+| `materialize_occurrence` | ✅ | Posts an occurrence. The unique index on `(recurring_id, occurrence_date)` stops **this rule** firing twice — it does **not** stop a hand-entered duplicate, whose `recurring_id` is NULL and which is therefore not in the index at all (C8, §14.4) |
+| `link_occurrence` | ❌ | The other half of C8's fix, and it was missing. Stamps `recurring_id` and `occurrence_date` onto a row **you already entered by hand**, which both satisfies the occurrence and puts the row into the index so the question cannot be asked twice. Offered instead of *Post* when an unlinked row matches within ±3 days and ±1% on the same account and currency |
+| `reclassify` | ❌ | **Was referenced in four documents and defined in none.** Re-runs classification against **today's** ledger, so it is expected to differ from the original — which is exactly why it is not called "replay". Replay pins `model_id`, `rule_snapshot` and `retrieved_ids` and reproduces the recorded answer (C10); this does not. Never auto: it rewrites rows you already accepted |
 | `upload_receipt` · `extract_receipt` | ✅ | |
 
 ### Dashboard, export, tax, system

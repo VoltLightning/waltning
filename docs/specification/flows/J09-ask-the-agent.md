@@ -1,7 +1,7 @@
 # J9 · Ask the agent
 
 **Frequency** a few times a week · **Surface** both
-**Screens** S03, S04, S09, S27
+**Screens** S03, S04, S09, S27, S33
 **Status** specified
 
 ---
@@ -73,6 +73,18 @@ S03 Agent (web, three columns)   or   S04 → Agent (mobile)
 | Write declined | Returns a "declined" result and the loop continues normally rather than breaking (§11.2) |
 | Offline | Disabled with the reason stated. Not queued — an agent turn is not a write that can be replayed later |
 | Auto-mode grant expires mid-batch | Remaining writes gate. The grant is bounded by construction: it must carry an expiry or a maximum count |
+
+**Which model answered is visible, and changeable.** The session header names
+the model; tapping it opens **S33**, where each of the four surfaces is
+configured independently (§11.4). This matters because the agent's model and the
+classifier's model are different choices for different reasons — a conversational
+loop wants a strong model, a deterministic pipeline over hundreds of rows wants a
+cheap one with a stable cached prefix — and a single global setting would be the
+wrong shape.
+
+Changing a model here is never retroactive. `import_rows.model_id` records what
+answered at the time (C10), and re-running against today's ledger is
+`reclassify`, a separate operation that is expected to differ.
 
 ## 6. Rules
 

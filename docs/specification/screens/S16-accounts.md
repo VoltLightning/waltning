@@ -78,9 +78,60 @@ otherwise buried in an editor.
 |---|---|
 | `get_accounts` with computed balances | `create_account` · `update_account` · `archive_account` |
 | `opening_balance + Σ signed legs` per account | `reorder_accounts` |
+| `accounts.expected_balance` — what you last observed | **`reconcile_account(account_id, observed_balance, as_of, note)`** |
 
 The balance query sums **both legs** of transfers — source by `amount_original`,
 destination by `to_amount` (§7.4). It is not a plain `SUM` over `amount_pivot`.
+
+### Reconciling against reality
+
+**`adjustment` existed in the type enum, in `signed()`, and in H5's sign fix —
+and nothing in the specification could create one.** This is where it belongs,
+and C19 is why it matters: the ledger is faithful to Money Manager and
+**partial** against the bank — 169 of 246 real transactions on one account were
+never recorded. A ledger that cannot be corrected against an observed balance
+compounds that forever.
+
+The action is *I counted, and it says this*:
+
+```
+  Bank A · PLN            1 240,50        ⌃ reconcile
+  ─────────────────────────────────────────────────────
+  Computed                1 240,50
+  You observed            1 198,30        [        ]
+  Difference               −42,20
+                                          Uncategorized ▾
+                                          "cash spent, not recorded"
+```
+
+Committing writes **one `adjustment` transaction** for the difference, dated
+`as_of`, categorised (defaulting to `Uncategorized`, which is a queue and not a
+destination) and carrying the note. It is an ordinary ledger row: audited,
+editable, reversible, and visible in every list.
+
+**Not a silent balance overwrite**, which is what most finance apps do here. A
+balance is `opening_balance + Σ signed legs` (`computations.md` §2) — there is no
+field to set. Making the correction a *transaction* keeps the balance derived,
+keeps the discrepancy visible as an amount you can categorise later, and keeps
+§6.9's rule that nothing is destroyed.
+
+**An adjustment may be negative in effect**, which is the ordinary case — you
+almost always find *less* money than the ledger claims, because unrecorded
+spending is the failure mode, not unrecorded income. H5 fixed exactly this: an
+`amount >= 0` CHECK across all types made reconciling an account *down*
+unrepresentable.
+
+`expected_balance` is the same column §8.4's migration gate uses. Reconciling
+updates it, so the last observation is always recorded next to the derivation —
+and the two are never conflated.
+
+**Rules:**
+
+- Refused inside a closed period (§13.4). An adjustment changes a filed total.
+- **Never auto-eligible** (§11.2). The agent may notice a discrepancy and say so;
+  asserting what you counted is not something it can know.
+- Offline it is available — you are standing at the ATM looking at the balance,
+  which is the moment you have the observation.
 
 ## 6. States
 
