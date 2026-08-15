@@ -356,9 +356,13 @@ sheet assumes and the schema must gain.
 Trigram (`pg_trgm`) over `payee`, `note`, `receipts.merchant` and
 `transaction_lines.description`. Ranked by similarity, then date descending.
 
-Trigram rather than `tsvector` **because the corpus is trilingual** — English,
-Polish and Russian share a month (§9.2), and no single text-search configuration
-stems all three. Trigram does not stem, which is the point.
+Trigram rather than `tsvector` **because the archive is permanently mixed.**
+Capture is overwhelmingly English now, and imported statement text is almost
+entirely Polish — but five years of history carries a large Cyrillic tail that
+never goes away, and no single text-search configuration stems English, Polish
+and Russian. Trigram similarity needs to know none of that: it is
+language-agnostic by construction, which is the property that matters here and
+the reason this choice survives the language mix changing again.
 
 An amount token matches `amount_original` exactly, in any currency. A match
 inside a receipt names the line that matched. Offline search is substring-only

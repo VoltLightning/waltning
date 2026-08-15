@@ -351,7 +351,7 @@ breakdown derived from history, because that history does not exist.
 The renovation leaves stay, but as a **forecast rather than a finding**: the
 house is months old, and the spending they anticipate has not happened yet.
 
-**Descriptions are trilingual.** English, Polish and Russian all appear in the
+**Descriptions are mixed-language, by path.** English, Polish and Russian all appear in the
 same category, often in the same month. The classification prompt must handle
 this explicitly (`SPEC.md` §9.2) — it is not an edge case, it is most of the
 tail.

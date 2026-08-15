@@ -1788,9 +1788,20 @@ accept. It runs with the configured `classify` model, plus:
 - `output_config.format` with a JSON schema, so classifications arrive
   validated rather than parsed out of prose.
 - `effort: "medium"` — bulk extraction, not reasoning.
-- **Descriptions are trilingual** — English, Polish and Russian appear in the
-  same account and often the same month. The prompt states this explicitly and
-  the category tree is supplied in one language, so the model translates rather
+- **Language is segregated by path, not mixed within one.** This was previously
+  stated as "descriptions are trilingual, often in the same month", which is true
+  of the *archive* and false of any single surface today:
+
+  | Path | Who writes it | Reality |
+  |---|---|---|
+  | **Capture** — what you type or say | You | Overwhelmingly **English** in recent years |
+  | **Statement import** — this tier | The bank | **~96% Polish.** Not a preference; PKO-style banks generate it |
+  | **Receipts** | The merchant | Polish, and Georgian for the GEL accounts |
+  | **Search over history** | The archive | Permanently mixed — a large Cyrillic tail from earlier years never goes away |
+
+  **So this tier's problem is Polish**, specifically, and the classifier's prompt
+  and fixtures should say so rather than hedging evenly across three languages.
+  The category tree is supplied in one language and the model translates rather
   than guessing. This is most of the tail, not an edge case.
 - Batches of ~50 rows.
 
@@ -3053,8 +3064,8 @@ timezone — check these 4 dates."*
 
 | Tier | Needs | Gives you |
 |---|---|---|
-| **1 · Deterministic grammar + on-device memory** | nothing | Amount, account, payee, and a category proposed by fuzzy nearest-neighbour over your own payee history, with a trilingual alias table. **Always available** |
-| **2 · Cloud model** | a network | The conversational loop, receipt extraction, the full trilingual classifier |
+| **1 · Deterministic grammar + on-device memory** | nothing | Amount, account, payee, and a category proposed by fuzzy nearest-neighbour over your own payee history, with an alias table (Polish for imports, a small legacy Cyrillic set). **Always available** |
+| **2 · Cloud model** | a network | The conversational loop, receipt extraction, and the classifier that reads bank Polish |
 
 **The on-device generative model tier was assessed and dropped.** Four reasons,
 in descending force:
@@ -3064,8 +3075,14 @@ in descending force:
    string is the *web* command bar, which reaches the Pi over Tailscale; "offline"
    there means no server at all. Building tier 2 would first require designing a
    text-entry mode that does not exist.
-2. **Apple's on-device model does not support Polish or Russian.** Not degraded
-   output — a thrown `unsupportedLanguageOrLocale`. Two of three languages.
+2. ~~**Apple's on-device model does not support Polish or Russian.**~~ **This
+   argument has mostly fallen away.** It was made on the assumption of a
+   trilingual capture path; capture is in fact overwhelmingly **English**, which
+   Apple's model does support. Russian is a legacy tail, not current input.
+   What survives is narrow: a Russian or Polish capture would throw
+   `unsupportedLanguageOrLocale` rather than degrade, so the tier would need a
+   fallback for the case it was supposed to handle. That is a wrinkle, not a
+   blocker — arguments 1, 3 and 4 are what carry the decision.
 3. **The neighbours are the classifier.** `computations.md` §14 already defines
    confidence as *agreement among the k retrieved neighbours*, with the model's
    own figure a tiebreak. Trigram similarity is language-agnostic by
@@ -3084,16 +3101,22 @@ a stable position is hit from muscle memory.
 **Tier 1.5 replaces it, with no model:** exact normalised payee → last confirmed
 category; else trigram nearest-neighbour over distinct payees with the modal
 category and neighbour-agreement confidence, computed exactly as §14 defines it;
-plus a hand-written trilingual alias table. This is a genuine improvement over
+plus a hand-written alias table. This is a genuine improvement over
 the bare grammar and it ships no weights.
 
-**The redirect worth taking: on-device speech recognition.** S08 states that
-transcription requires the network. iOS has had on-device recognition for years
-(`SFSpeechRecognizer.supportsOnDeviceRecognition`, now `SpeechAnalyzer`). If
-`pl-PL` and `ru-RU` are covered on-device, offline **voice** capture is available —
-which delivers far more than a classifier could, ships no model, and gives the
-phone the text input tier 2 lacked. It is a one-line runtime check and it should
-be run before anything else in this area.
+**The redirect worth taking: on-device speech recognition** — and the English
+finding makes it substantially more promising. S08 states that transcription
+requires the network. iOS has had on-device recognition for years
+(`SFSpeechRecognizer.supportsOnDeviceRecognition`, now `SpeechAnalyzer`), and
+**English is the best-supported locale on every platform.** Since capture is
+overwhelmingly English, the case that used to need three languages to work now
+needs one.
+
+If `en-*` is covered on-device — and it almost certainly is — offline **voice**
+capture is available. That delivers far more than a classifier could, ships no
+model, and gives the phone the text input tier 2 lacked. `pl-PL` and `ru-RU` are
+then a bonus rather than a prerequisite. It is a one-line runtime check and it
+should be run before anything else in this area.
 
 #### Reconnecting
 

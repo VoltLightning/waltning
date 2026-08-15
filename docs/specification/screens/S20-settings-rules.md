@@ -69,7 +69,7 @@ is savable — it may be for a merchant you have not seen yet — but it is tagg
   the model. Deterministic and free.
 - **Every rule names itself in the import queue**, with its hit count. A rule
   that fires invisibly is indistinguishable from a model guess.
-- **§9.2** — descriptions are trilingual; a regex written against Polish text
+- **§9.2** — imported descriptions are ~96% Polish; a regex written against Polish text
   will not match its Russian equivalent, and the test panel is where that
   becomes obvious.
 
