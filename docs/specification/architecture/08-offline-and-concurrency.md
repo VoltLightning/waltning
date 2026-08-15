@@ -10,9 +10,40 @@ This closes it.
 
 ---
 
-## The rule the rest follows from
+## Two rules the rest follows from
 
-> **An outbox entry is one user intention, not one row change.**
+> **1 · The phone captures; the backend reconciles.**
+>
+> **2 · An outbox entry is one user intention, not one row change.**
+
+The first bounds the problem before the second solves it. The phone creates
+transactions, transfers, settlements and receipts — and **never computes a
+derived figure**. It displays balances and counterparty totals as cached
+scalars, stamped with when they were true, adjusted only by its own pending
+entries via `signed()` (§14.3).
+
+That is what keeps offline affordable. A phone that recomputed truth from a local
+ledger would need every invariant reimplemented in SQLite — which has no
+`EXCLUDE`, no `pg_trgm`, different trigger semantics and no roles — giving two
+enforcers that disagree silently, in the area where disagreement is invisible.
+Every figure in `computations.md` therefore has exactly one implementation, in
+SQL, on the server.
+
+**Offline capability is not reduced by this.** Everything you do on a phone works
+with no network: manual entry, the deterministic grammar, transfers, settling a
+debt, capturing a receipt, editing what you just entered. What degrades is
+*quality* — the conversational loop and extraction need a model — and it degrades
+down a ladder rather than off a cliff (§14.3).
+
+Import, migration, bulk review, period close and rerating are backend
+operations, reached from the web dashboard. They never appear in the outbox, so
+the set-based hazards below (H10, H12) largely cannot arise on the phone at all.
+
+Migration in particular is a one-time backend job. The phone has no part in it.
+
+---
+
+## Applying the second rule
 
 Every defect below is the consequence of letting an entry be a row change
 instead. A bulk accept of forty rows is **one** entry. A receipt capture plus its

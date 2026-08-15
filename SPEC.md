@@ -2733,11 +2733,96 @@ Shares the codebase via React Native Web; different information density.
 
 ### 14.3 Offline behaviour
 
+**The phone must work with no connectivity at all.** Not degraded, not
+read-only — you can capture everything you capture on a phone, and it lands
+correctly when you reconnect. An expense tracker that needs a network at the
+till is not an expense tracker.
+
+#### The phone captures; the backend reconciles
+
+The division that makes offline cheap rather than expensive:
+
+| | Phone | Backend |
+|---|---|---|
+| Create a transaction, transfer, settlement | ✅ | ✅ |
+| Capture a receipt | ✅ (extraction deferred) | ✅ |
+| Edit or delete something you just entered | ✅ | ✅ |
+| **Compute a balance, net worth, period spend** | ❌ — displays what it was handed | ✅ |
+| Statement import, migration, bulk review | ❌ | ✅ |
+| Close a tax period, rerate, reclassify | ❌ | ✅ |
+| Agent, receipt extraction, classification | needs a model, so needs a network | ✅ |
+
+**The phone never runs `computations.md`.** It caches the *results* — a balance,
+a counterparty total — as scalars, stamped with when they were true. Every figure
+in this system therefore has exactly one implementation, in SQL, on the server.
+
+That is the whole reason offline is affordable here. The alternative — a phone
+that recomputes truth from a local ledger — needs every invariant reimplemented
+in SQLite, which has no `EXCLUDE`, no `pg_trgm`, different trigger semantics and
+no roles. It would mean two implementations of every figure and every guarantee,
+diverging silently, in the one area where divergence is invisible. §15's whole
+argument is that asserting is not enforcing; two enforcers that disagree is
+worse than one.
+
+The phone is not weaker for this. It is **capture-complete and derivation-free**,
+which is exactly the shape of what you do on a phone.
+
+#### What the phone holds
+
+A small, bounded mirror — kilobytes, refreshed on sync, and **discardable at any
+time** because nothing in it is a source of truth:
+
+| | Why |
+|---|---|
+| Accounts, category leaves, counterparties | The quick-add pickers |
+| Recent transactions (~90 days) | *Recent*, payee suggestions, and your own pending rows |
+| Last known FX rates | A foreign amount still gets a rate, marked `fx_rate_estimated` |
+| Cached balances and counterparty totals | Displayed, never recomputed |
+| **Open period locks** | Pre-validation — see below |
+
+It does not grow with the ledger, so there is no pagination or eviction problem
+to design.
+
+#### Balances offline: a snapshot plus your own pending entries
+
+A cached balance with three unsent expenses behind it is stale in a way you can
+feel, so the phone adjusts it:
+
+```
+displayed = cached_balance + Σ signed(entry, side)   over pending outbox entries
+```
+
+This is **not** reimplementing §2. `signed()` is one shared function in
+`money.ts` — already written, already property-tested on both legs — applied to
+a cached scalar. The distinction that matters: arithmetic on a snapshot, not a
+derivation from a ledger.
+
+Rendered as `1 240,50 zł · as of 14:20 · 3 pending`. The timestamp is the honest
+part: it is usually right, and a banner that cries wolf gets dismissed.
+
+#### Validate at entry, not at sync
+
+The phone holds the open period locks, the account currencies and the category
+tree, so it can refuse locally what the server would refuse anyway — a date
+inside a filed period, a non-leaf category, a currency that does not match the
+account.
+
+This is the difference between a refusal you can act on while you still remember
+the purchase, and a `blocked` entry you discover three days later. It does not
+make the phone authoritative: the server still enforces all of it, and the phone's
+copy is an optimisation for the common case, never the guarantee.
+
+#### Sync is visible and can be demanded
+
+Automatic on reconnect and on foreground, and there is a **sync control** showing
+`12 pending · last synced 14:20` that drains on tap. Silent sync is what makes a
+person stop trusting an app when they cannot tell whether the coffee saved.
+
 | State | Behaviour |
 |---|---|
 | Online | Direct tRPC; optimistic updates; FX sync on foreground (§7.6) |
-| Offline | Reads from local SQLite cache; writes to outbox; last-known rates, marked stale |
-| Reconnect | Outbox drains in order; server is authoritative |
+| Offline | Reads from the local mirror; writes to the outbox; last-known rates, marked stale |
+| Reconnect | Outbox drains in order; **server is authoritative** |
 | Conflict | Last-write-wins. One user, but **two devices** — see below |
 
 **"Single writer" is not true, and the design should not lean on it.** The
@@ -2746,6 +2831,10 @@ full outbox is a second writer by definition. Last-write-wins is still the right
 answer — one *person* means conflicting intent is vanishingly rare and
 merge machinery would cost more than it saves — but it is justified by low
 conflict probability, not by there being one writer.
+
+Capture-only narrows that further: the phone creates new rows and edits rows it
+created minutes ago. A genuine conflict needs the same row edited on two devices
+inside one sync window.
 
 What that changes:
 
@@ -2759,6 +2848,57 @@ What that changes:
 - **An expired session (§5.2) does not discard the queue.** It re-authenticates
   and resumes; a 30-day sliding expiry against an outbox filled offline is a
   routine collision, not an edge case.
+
+#### Capture with no model available — a quality ladder, not a cliff
+
+Offline you lose *quality*, never *capability*. Three tiers, each usable on its
+own, each better than the one below:
+
+| Tier | Needs | Gives you |
+|---|---|---|
+| **1 · Deterministic grammar** | nothing | *"coffee 18 cash"* → amount, account, payee. Instant, no network, no model. **Always available** |
+| **2 · On-device model** *(optional)* | a small local model | Payee → category on the common cases, and looser phrasing than the grammar accepts |
+| **3 · Cloud model** | a network | The conversational loop, receipt extraction, the full trilingual classifier |
+
+Tier 1 is the floor and it is not a consolation prize: it is the **fastest** path
+even when online, which is why S05 makes it the default and the model an explicit
+fallback. J02's under-ten-seconds budget is met by the grammar, not by a model.
+
+**Tier 2 is worth trying and is not a commitment.** The tractable task for an
+on-device model is narrow — payee text to a category leaf, given the cached
+tree — not transaction interpretation. Treat it as an accuracy upgrade over the
+grammar that happens to need no network, keep it behind the same registry
+operation, and record `model_id` as usual so a classification made this way is
+distinguishable later. If it does not earn its place, tier 1 already works.
+
+A receipt captured offline queues its image and saves its transaction
+immediately; extraction happens on reconnect against the row that already exists.
+The agent is simply unavailable, which is the correct behaviour for a
+conversational surface with nothing to converse with.
+
+#### Reconnecting: drain silently, *suggest* the upgrade
+
+Two different things happen on reconnect, and they deserve different treatment.
+
+**Draining the outbox is automatic.** Losing a capture is the worst outcome in
+the system, entries are idempotent, and requiring a tap to save data you already
+entered would eventually cost you data. It drains, and the sync control shows it
+happened.
+
+**Re-processing degraded work is suggested, never automatic.** Rows captured at
+tier 1 or 2 may have a thinner category, no receipt extraction, or an estimated
+rate. That is a *quality* gap, not a data-safety one, so it surfaces as an offer:
+
+> *6 captured offline · 2 need a category, 1 receipt to extract, 3 rates to firm up* — **Review**
+
+Automatic re-processing would rewrite rows you already accepted, on the model's
+authority, which §11.2 forbids for exactly this reason. Suggesting it keeps the
+approval gate intact and puts the choice where it belongs.
+
+**Estimated rates firm up the same way.** A foreign amount captured offline
+carries `fx_rate_estimated = true` against the last known rate; the offer to
+re-rate the affected range is gated, counted, and never applied inside a closed
+period (S18).
 
 ### 14.4 Calendar
 
