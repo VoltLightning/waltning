@@ -1818,7 +1818,7 @@ accept. It runs with the configured `classify` model, plus:
   | Path | Who writes it | Reality |
   |---|---|---|
   | **Capture** — what you type or say | You | Overwhelmingly **English** in recent years |
-  | **Statement import** — this tier | The bank | **~96% Polish.** Not a preference; PKO-style banks generate it |
+  | **Statement import** — this tier | The bank | **~96% Polish.** Not a preference — the bank generates it |
   | **Receipts** | The merchant | Polish, and Georgian for the GEL accounts |
   | **Search over history** | The archive | Permanently mixed — a large Cyrillic tail from earlier years never goes away |
 
