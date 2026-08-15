@@ -15,7 +15,10 @@ console.log(`  carried          ${carried.length}   (cap is 10)`);
 console.log(`  last date        ${filled.at(-1)!.date}`);
 
 const weekend = fillForward(
-  [{ date: "2020-11-27", rate: "3.7614" }, { date: "2020-11-30", rate: "3.7364" }],
+  [
+    { date: "2020-11-27", rate: "3.7614" },
+    { date: "2020-11-30", rate: "3.7364" },
+  ],
   "2020-11-27",
   "2020-11-30",
 );

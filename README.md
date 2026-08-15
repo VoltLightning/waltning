@@ -56,6 +56,11 @@ via React Native Web. Deployed as Docker Compose on a Raspberry Pi, reachable
 only over Tailscale — no public ingress. Receipt extraction and the agent run
 on small vision-capable models, chosen per surface (`SPEC.md` §11.4).
 
+Biome formats and lints, TypeScript runs strict enough that configuration is
+read by bracket and every array index is `T | undefined`, and a pre-commit hook
+enforces both — plus a refusal to commit key material or financial-data file
+types. `pnpm verify` is the whole gate, and it takes about two seconds.
+
 ## Data handling
 
 This repository contains no financial data. Ledger contents, receipt images,

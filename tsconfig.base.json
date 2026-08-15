@@ -13,6 +13,31 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
 
+    // Dead code and silent fallthrough. `noImplicitReturns` is the one that
+    // earns its place in a ledger: a branch that forgets to return gives
+    // `undefined` where a figure was expected, and `undefined` formats as
+    // nothing rather than failing.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
+    // Configuration is read by bracket, never by dot. `process.env.FOO` on an
+    // index signature is `string` to the compiler and `undefined` at run time;
+    // this forces `process.env["FOO"]`, which `noUncheckedIndexedAccess` then
+    // types honestly as `string | undefined`. §5.3's twenty-odd variables are
+    // exactly where that lie is expensive, and bracket access is greppable.
+    "noPropertyAccessFromIndexSignature": true,
+
+    // These packages export TypeScript source and are consumed by transpilers
+    // that only strip types — they never run a type-directed emit. Enums,
+    // namespaces and parameter properties need real codegen, so banning them
+    // keeps the source honest about how it is actually loaded.
+    "erasableSyntaxOnly": true,
+    "noUncheckedSideEffectImports": true,
+
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,

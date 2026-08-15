@@ -1,0 +1,33 @@
+{
+  // Biome is the formatter and the linter. Committed rather than left to each
+  // machine, so "it formats differently on my laptop" cannot happen — the
+  // pre-commit hook enforces the same result either way, and disagreeing with
+  // it locally only means finding out later.
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+
+  // Use the workspace TypeScript, not the one bundled with the editor. The
+  // strict flags in tsconfig.base.json need the version this repo pins.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Imports are written with explicit .ts specifiers (see tsconfig.base.json).
+  "typescript.preferences.importModuleSpecifierEnding": "js",
+
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/drizzle/meta": true,
+    "pnpm-lock.yaml": true
+  }
+}

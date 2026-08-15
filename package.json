@@ -9,6 +9,12 @@
     "pnpm": ">=10"
   },
   "scripts": {
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "fix": "biome check --write .",
+    "verify": "pnpm check && pnpm -r typecheck",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
@@ -24,6 +30,7 @@
     "db:fx": "pnpm --filter @waltning/db fx"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.8",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.5",
     "typescript": "^5.9.3"

@@ -261,13 +261,69 @@ writes the first file that needs it, which is how a stack becomes an accident.
 | **Charts** | **`victory-native`** + `react-native-svg` | Already flagged as the RN Web friction point (`platform-notes` §11). Line, bar, donut, pie, area and sparkline are fine; **treemap is the one that likely needs a web-only path**, and it is S25-only |
 | **Password hash** | **`@node-rs/argon2`** | Rust napi bindings with prebuilt arm64. The node-gyp `argon2` package builds from source on the Pi, which is slow and fragile |
 | **TOTP** | **`otplib`** | RFC 6238, no surprises |
-| **Logging** | **`pino`** | §15 asks for structured JSON at 30-day retention; pino is the low-overhead answer and the overhead matters on this hardware |
+| **Logging** | **`pino`**, with **`pino-pretty` as a dev-only transport** | §15 asks for structured JSON at 30-day retention; pino is the low-overhead answer and the overhead matters on this hardware. JSON is unreadable while developing, so the pretty transport is wired in dev and **never in the image** — structured output is what the Pi retains and what S30 reads |
 | **Excel export** | **`exceljs`** | §13.3 specifies a *streaming* writer, which rules out building a workbook in memory. SheetJS's community build has a licensing and CVE history worth avoiding |
 | **Image manipulation** | **`expo-image-manipulator`** | Decodes at reduced scale via ImageIO. Full-decode-then-resize is 48.8 MB of bitmap per capture and a jetsam kill at ten (C26) |
 | **Dates and zones** | **`date-fns` + `date-fns-tz`** | Accounting dates are **bare dates** (§7.0a) and must never go through JS `Date` arithmetic. The zone work is `capturedTz` resolution, not general date maths |
 | **Model clients** | **`openai` SDK** for OpenAI *and* OpenRouter (it is OpenAI-compatible) · **`@anthropic-ai/sdk`** if Anthropic is configured | Behind one gateway interface, so §11.4's per-surface provider choice stays configuration |
 | **Migration runner** | **`drizzle-kit migrate`**, in the one-shot `migrate` service | Never `push` — it cannot see triggers, views, grants or generated columns |
 | **Scheduling** | **A `cron` service in Compose** | Nightly dump, invariant checks, FX backfill. In-process scheduling dies with an API restart and gives no record that a run was missed |
+| **Formatting and linting** | **Biome** | One binary replaces Prettier, ESLint, `typescript-eslint`, `eslint-config-prettier` and an import sorter — five packages whose versions must agree, maintained by one person over years. It also has to be fast: the pre-commit gate and the pre-cutover checklist both run it, the second **on the Pi** |
+
+A **sixteenth** layer, found after that audit and in the same shape — nobody had
+chosen how code gets formatted, so the first file written would have decided it.
+
+#### Why not Airbnb, Standard, or a named style guide
+
+Because they are no longer maintained, and the question they answered is no
+longer asked. `eslint-config-airbnb` last shipped **2021-12-25** and its peer
+range stops at ESLint 8; the current ESLint is 10. `eslint-config-standard` last
+shipped 2023 and also caps at 8. Neither installs against a modern toolchain
+without `--force`.
+
+They died for a structural reason worth understanding: most of their rules were
+*formatting* rules, and formatters made those obsolete. What replaced the style
+guide is a division of labour — **a formatter owns formatting and you take its
+defaults; a linter owns correctness only.** There is no modern equivalent of
+"we follow Airbnb", and picking one would be adopting a 2021 answer to a 2021
+problem.
+
+`lineWidth` is the one default this repo overrides, from 80 to 100, and it was
+measured rather than guessed. At 80 Biome shatters Drizzle's index and `check`
+chains across three and four lines each; at 120 it collapses hand-wrapped
+declarations that were readable. At 100 the same file goes the other way and
+puts short enums back on one line. The schema is the bulk of the code and it is
+declarative, so it is what the setting should be tuned against.
+
+**What this gives up:** `eslint-plugin-drizzle`, whose two rules catch an
+`update` or `delete` with no `where` — a real hazard in a ledger. It is a 0.2.x
+package, and pulling ESLint and five companions back in to get it would trade
+the whole argument above for two rules. The compensating controls are that
+every write goes through the operation registry (§11.0) and that the period
+guard trigger blocks edits to filed rows. **If it ever bites, adding ESLint for
+that plugin alone is contained** — Biome keeps formatting, ESLint lints.
+
+#### Strictness, and the only automated gate
+
+`tsconfig.base.json` was already strict; it is now strict in the ways that
+matter for money. Beyond `strict`, `noUncheckedIndexedAccess` and
+`exactOptionalPropertyTypes`, it adds `noImplicitReturns` — a branch that
+forgets to return yields `undefined` where a figure was expected, and
+`undefined` renders as nothing rather than failing — plus
+`noPropertyAccessFromIndexSignature`, so configuration is read by bracket and
+typed honestly as `string | undefined` rather than the compiler's lie that
+`process.env.FOO` is a `string`. All of it passes today with zero errors.
+
+There is no CI, by decision (`07-test-strategy`). That makes **`.githooks/pre-commit`
+the only automated thing between an edit and history**, so it is installed by
+`git config core.hooksPath` from the `prepare` script rather than by a hook
+manager, and it is kept under two seconds so it is never worth skipping. It
+refuses key material and financial-data file types even when force-added, runs
+Biome over staged files without rewriting them, and typechecks the whole
+program. It also sweeps the staged diff against a **gitignored** term list —
+the real names this specification replaced with placeholders — because one bank
+name did creep back in while writing prose, and a lesson that depends on
+remembering is not a control.
 
 **Two are provisional and named as such:**
 

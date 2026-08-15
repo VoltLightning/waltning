@@ -28,6 +28,12 @@ android/app/build/
 .env.*
 !.env.example
 
+# The pre-commit sweep's term list. It holds the real names and institutions
+# that the public specification replaced with placeholders — so the list is
+# itself the private data, and committing it would undo the abstraction it
+# exists to protect. The vault note "Real to abstract mapping" is the source.
+.githooks/private-terms.txt
+
 # Certificates and identities. Caddy writes the Tailscale-issued cert to disk,
 # and the age identity is the one key whose loss makes every B2 backup
 # unreadable — which is indistinguishable from having no backup at all.
@@ -86,4 +92,7 @@ coverage/
 *.orig
 *.rej
 .vscode/*
+# Shared on purpose: the formatter and the workspace TypeScript are project
+# decisions, not personal ones. Everything else under .vscode/ stays local.
 !.vscode/extensions.json
+!.vscode/settings.json

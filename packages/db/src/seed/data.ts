@@ -27,13 +27,66 @@ export type SeedCurrency = {
  * Pinned currencies appear in the header display toggle.
  */
 export const currencies: SeedCurrency[] = [
-  { code: "USD", name: "US Dollar", symbol: "$", symbolPosition: "P", decimals: 2, isPivot: true, pinned: true, rateSource: null },
-  { code: "PLN", name: "Polish Złoty", symbol: "zł", symbolPosition: "S", decimals: 2, pinned: true, rateSource: "nbp" },
-  { code: "EUR", name: "Euro", symbol: "€", symbolPosition: "S", decimals: 2, pinned: true, rateSource: "ecb" },
-  { code: "BYN", name: "Belarusian Ruble", symbol: "Br", symbolPosition: "S", decimals: 2, rateSource: "nbrb" },
-  { code: "GEL", name: "Georgian Lari", symbol: "₾", symbolPosition: "S", decimals: 2, rateSource: "nbg" },
-  { code: "GBP", name: "Pound Sterling", symbol: "£", symbolPosition: "P", decimals: 2, rateSource: "ecb" },
-  { code: "RUB", name: "Russian Ruble", symbol: "₽", symbolPosition: "S", decimals: 2, rateSource: "ecb" },
+  {
+    code: "USD",
+    name: "US Dollar",
+    symbol: "$",
+    symbolPosition: "P",
+    decimals: 2,
+    isPivot: true,
+    pinned: true,
+    rateSource: null,
+  },
+  {
+    code: "PLN",
+    name: "Polish Złoty",
+    symbol: "zł",
+    symbolPosition: "S",
+    decimals: 2,
+    pinned: true,
+    rateSource: "nbp",
+  },
+  {
+    code: "EUR",
+    name: "Euro",
+    symbol: "€",
+    symbolPosition: "S",
+    decimals: 2,
+    pinned: true,
+    rateSource: "ecb",
+  },
+  {
+    code: "BYN",
+    name: "Belarusian Ruble",
+    symbol: "Br",
+    symbolPosition: "S",
+    decimals: 2,
+    rateSource: "nbrb",
+  },
+  {
+    code: "GEL",
+    name: "Georgian Lari",
+    symbol: "₾",
+    symbolPosition: "S",
+    decimals: 2,
+    rateSource: "nbg",
+  },
+  {
+    code: "GBP",
+    name: "Pound Sterling",
+    symbol: "£",
+    symbolPosition: "P",
+    decimals: 2,
+    rateSource: "ecb",
+  },
+  {
+    code: "RUB",
+    name: "Russian Ruble",
+    symbol: "₽",
+    symbolPosition: "S",
+    decimals: 2,
+    rateSource: "ecb",
+  },
 ];
 
 export type SeedGroup = {
@@ -50,7 +103,12 @@ export const incomeTree: SeedGroup[] = [
     name: "Business revenue",
     kind: "income",
     leaves: [
-      { key: "services", name: "Services", isEarnings: true, note: "reportable under ryczałt; carries a rate" },
+      {
+        key: "services",
+        name: "Services",
+        isEarnings: true,
+        note: "reportable under ryczałt; carries a rate",
+      },
       { key: "other-revenue", name: "Other revenue", isEarnings: true },
     ],
   },
@@ -77,10 +135,18 @@ export const incomeTree: SeedGroup[] = [
     name: "Other inflows",
     kind: "income",
     leaves: [
-      { key: "gift-received", name: "Gift received", note: "from anyone — family, friends, birthdays" },
+      {
+        key: "gift-received",
+        name: "Gift received",
+        note: "from anyone — family, friends, birthdays",
+      },
       { key: "refund", name: "Refund" },
       { key: "borrowed", name: "Borrowed", note: "money you will give back — never earnings" },
-      { key: "repayment-received", name: "Repayment received", note: "a debt coming back is not a gain" },
+      {
+        key: "repayment-received",
+        name: "Repayment received",
+        note: "a debt coming back is not a gain",
+      },
       { key: "other-inflow", name: "Other inflow" },
     ],
   },
@@ -92,7 +158,11 @@ export const expenseTree: SeedGroup[] = [
     name: "Home",
     kind: "expense",
     leaves: [
-      { key: "property-purchase", name: "Property purchase", note: "one-off capital — flag is_capital" },
+      {
+        key: "property-purchase",
+        name: "Property purchase",
+        note: "one-off capital — flag is_capital",
+      },
       { key: "rent", name: "Rent" },
       { key: "utilities", name: "Utilities" },
       { key: "furniture-appliances", name: "Furniture & appliances" },

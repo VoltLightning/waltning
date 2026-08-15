@@ -19,13 +19,11 @@ export type Money = string;
 export const dec = (v: Money | number | Decimal): Decimal => new Decimal(v);
 
 /** Serialize for storage: fixed scale, no exponent notation. */
-export const toMoney = (v: Decimal | Money | number, scale = 8): Money =>
-  dec(v).toFixed(scale);
+export const toMoney = (v: Decimal | Money | number, scale = 8): Money => dec(v).toFixed(scale);
 
 export const add = (a: Money, b: Money): Money => toMoney(dec(a).plus(b));
 export const sub = (a: Money, b: Money): Money => toMoney(dec(a).minus(b));
-export const mul = (a: Money, b: Money | number): Money =>
-  toMoney(dec(a).times(b));
+export const mul = (a: Money, b: Money | number): Money => toMoney(dec(a).times(b));
 export const neg = (a: Money): Money => toMoney(dec(a).negated());
 export const abs = (a: Money): Money => toMoney(dec(a).abs());
 
@@ -34,8 +32,7 @@ export const sum = (xs: Money[]): Money =>
 
 export const eq = (a: Money, b: Money): boolean => dec(a).eq(b);
 export const isZero = (a: Money): boolean => dec(a).isZero();
-export const cmp = (a: Money, b: Money): -1 | 0 | 1 =>
-  dec(a).cmp(b) as -1 | 0 | 1;
+export const cmp = (a: Money, b: Money): -1 | 0 | 1 => dec(a).cmp(b) as -1 | 0 | 1;
 
 /**
  * Convert a local amount into the pivot currency. There is no reporting
@@ -44,12 +41,10 @@ export const cmp = (a: Money, b: Money): -1 | 0 | 1 =>
  *
  * `rate` is quoted as: 1 unit of the local currency = `rate` units of pivot.
  */
-export const toPivot = (amount: Money, rate: Money): Money =>
-  toMoney(dec(amount).times(rate));
+export const toPivot = (amount: Money, rate: Money): Money => toMoney(dec(amount).times(rate));
 
 /** Round to a currency's presentation scale — display only, never storage. */
-export const round = (v: Money, decimals: number): Money =>
-  dec(v).toFixed(decimals);
+export const round = (v: Money, decimals: number): Money => dec(v).toFixed(decimals);
 
 export type TxnType = "income" | "expense" | "transfer" | "adjustment";
 
@@ -76,9 +71,7 @@ export const signed = (
     case "transfer":
       if (side === "from") return neg(tx.amountOriginal);
       if (tx.toAmount == null) {
-        throw new Error(
-          "transfer destination leg requires toAmount — see SPEC.md §7.2",
-        );
+        throw new Error("transfer destination leg requires toAmount — see SPEC.md §7.2");
       }
       return tx.toAmount;
   }

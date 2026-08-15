@@ -168,11 +168,23 @@ no balance check can see that.
 
 ## CI
 
-There is no CI (§4.3 — four packages, one developer). The equivalent is a
-pre-cutover checklist that must pass on the Pi:
+There is no CI (§4.3 — four packages, one developer). Two things stand in for
+it, at different distances from the keyboard.
+
+**Per commit,** `.githooks/pre-commit` — installed by `git config
+core.hooksPath` from the `prepare` script, so there is no hook manager to keep
+current. It refuses key material and financial-data file types *even when
+force-added*, sweeps the staged diff against a gitignored list of the real
+names this repository replaced with placeholders, runs Biome over staged files,
+and typechecks the whole program. Budget is under two seconds, because the only
+automated gate there is must never be worth skipping. It deliberately does not
+`--write`: a hook that rewrites files changes what you are committing after you
+have read it.
+
+**Per cutover,** a checklist that must pass on the Pi:
 
 ```
-pnpm -r typecheck
+pnpm verify                           # biome check + typecheck, ~2s
 pnpm -r test                          # properties, contracts, database
 psql -f drizzle/*.sql  → fresh db     # every migration, from empty
 SELECT * FROM verify_t1();            # three trues

@@ -12,8 +12,8 @@ import {
   currencies as currencySeed,
   expenseTree,
   incomeTree,
-  topLevelLeaves,
   type SeedGroup,
+  topLevelLeaves,
 } from "./data.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));

@@ -79,11 +79,20 @@ exports/
 !**/fixtures/**/*.csv
 
 # --- History and local tooling that no image reads ---
+#
+# .githooks matters more than it looks: it holds private-terms.txt, the
+# gitignored list of real names the public specification replaced with
+# placeholders. Gitignoring keeps it out of the repository, but the build
+# context is the working directory — so without this line the one file that
+# must never be published would be copied into an image layer.
 .git
+.githooks
 .gitignore
 .gitattributes
 .github
 .vscode
+.editorconfig
+biome.json
 .idea
 **/.DS_Store
 **/*.log
