@@ -1701,10 +1701,33 @@ the data that failed, and re-running against a corrected backup costs nothing
 
 ### 8.5 Cutover
 
+**The full procedure is `docs/specification/migration-runbook.md`** — eleven
+steps, each with its gate, plus a rollback table and the point beyond which
+rollback stops being practical. It exists because these four lines were the whole
+procedure for the one operation in the system that cannot be comfortably undone.
+
+The shape:
+
 1. Enter the last transactions in Money Manager; export a final `.mmbak`.
-2. Run migration; verification must pass clean.
-3. Money Manager becomes read-only — kept installed, never edited again.
-4. Archive the final `.mmbak` and the `mm-tools` repo alongside the backups.
+2. **Probe** (§8.1a) — re-run on the final export, not just once.
+3. **Reconcile against the bank** — fidelity and completeness are different
+   questions and only one of them can be answered from the export alone (§8.4).
+4. **Type the 52 balances** — the gate cannot fail without them.
+5. Seed reference data; an unseeded currency now throws rather than skipping.
+6. Rehearse into a scratch database. Twice.
+7. Decide the 173 reassignments (§6.6a) — needs you, does not block.
+8. Run it for real, in one transaction, with the invariant set **recorded**.
+9. **Mark the tax position.** `is_business` defaults false and migration sets it
+   nowhere; under ryczałt the damaging direction is omission (C5).
+10. Parallel run for one period — Money Manager stays authoritative.
+11. Money Manager becomes read-only. Archive the export and the tooling.
+
+**Phase 0.5 precedes all of this.** The migration is what puts five years of real
+history on the machine, so the perimeter has to exist before step 8, not after
+week fifteen.
+
+**Step 11 is the practical point of no return** — not technically, since the dump
+restores, but a month of Waltning-only entries would be lost.
 
 ---
 
@@ -3297,6 +3320,7 @@ rather than a special case the agent cannot reach.
 | `revenue_ytd` | M | Period · reads `tax_ledger` |
 | `completeness` | M | Missing NIP, KSeF id, uncategorized, estimated rates |
 | `tax_period_status` | S | Scheme in force, open or closed |
+| `targets` | S · M | Which targets shown, period. §14.7 promised *"one widget, one settings row"* and the catalogue had neither |
 
 **Four presets ship** (S24), each answering one question rather than serving one
 mood: **Standing** (where do I stand), **Flowing** (where is it going),

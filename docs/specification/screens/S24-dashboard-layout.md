@@ -52,6 +52,33 @@ still shows the honest empty state; this warns about intent, not about data.
 Layouts are rows, not constants, which is what makes *"put family spending on my
 dashboard"* an ordinary audited agent write rather than a special case.
 
+
+### Targets are configured here, and this is the settings row §14.7 promised
+
+`computations.md` §11 defines target progress and the registry carries
+`get_targets` / `create_target` / `update_target` / `delete_target` — and until
+now nothing rendered them. §14.7 asks for *"one widget, one settings row"*, and
+this is both: the `targets` widget's config **is** the settings surface. A target
+is one number against one category for one period, which does not earn a screen.
+
+```
+  Targets                                    [+ add]
+  ────────────────────────────────────────────────────
+  Eating out        month     1 200,00 zł    ▸  ●●●●○
+  Groceries         month     2 000,00 zł    ▸  ●●●○○
+  Overall           month    12 000,00 zł    ▸  ●●●●●  over
+```
+
+**Not envelope budgets** (N7). No rollover, no allocation between them, and going
+over is **information rather than an error** — the bar renders over-target
+plainly and nothing is enforced. §14.7's table is the whole distinction and it is
+the reason this stays one widget rather than becoming a system.
+
+Progress is period-to-date against `spend_to_date(p, scope=mine, capital
+excluded)` (`computations.md` §11), converted at each row's own date. Capital is
+excluded for the same reason it is excluded from every comparison — a one-off
+purchase is not a trend.
+
 ## 6. States
 
 | State | Treatment |

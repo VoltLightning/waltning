@@ -118,6 +118,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | Operation | Auto | Notes |
 |---|---|---|
 | `create_account` · `update_account` · `archive_account` · `reorder_accounts` | ❌ | Structural |
+| `create_group` · `update_group` · `reorder_groups` · `archive_group` | ❌ | **Were missing.** `update_group` sets `institution`, which `FX Cost` totals by — a headline figure whose grouping field nothing could set. Several groups may share one institution |
 | `reconcile_account` | ❌ | **Was missing entirely.** Writes one `adjustment` transaction for the difference between the computed balance and one you observed, and updates `expected_balance`. Never a silent balance overwrite — the balance is derived (`computations.md` §2) and there is no field to set. The agent may *notice* a discrepancy; it cannot assert what you counted |
 | `create_category` | ❌ | The agent **proposes**; it never creates silently (§11.5) |
 | `rename_category` · `reparent_category` · `convert_leaf_group` | ❌ | |

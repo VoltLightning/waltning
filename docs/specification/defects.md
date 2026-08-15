@@ -620,9 +620,13 @@ answered, so the reasoning stays attached to the complaint that produced it.
   which model answered, so a threshold stays interpretable across a config
   change.
 - ~~**Targets have no operations, no widget, no screen, and no progress rule.**~~
-  **Fixed** — `computations.md` §11 defines progress as period-to-date, and
-  `get_targets` / `create_target` / `update_target` / `delete_target` are now in
-  the registry. Deliberately **not** envelope budgets (N7): no rollover, no
+  **Fixed, in two passes — the first was incomplete and claimed otherwise.**
+  `computations.md` §11 defines progress as period-to-date and the four
+  operations are in the registry; the **widget and the settings surface were
+  still missing** while this entry said the item was closed. §14.5's catalogue
+  now carries `targets`, and S24's widget config is the *"one settings row"*
+  §14.7 asked for — a target is one number against one category for one period
+  and does not earn a screen. Deliberately **not** envelope budgets (N7): no rollover, no
   allocation, and going over is information rather than an error.
 - ~~**Ageing has no anchor date**~~ **Resolved in `computations.md` §8 and S12**
   — FIFO from the oldest open row, **companies only** (O15), and the label states

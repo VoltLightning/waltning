@@ -83,6 +83,42 @@ otherwise buried in an editor.
 The balance query sums **both legs** of transfers — source by `amount_original`,
 destination by `to_amount` (§7.4). It is not a plain `SUM` over `amount_pivot`.
 
+### Groups, and the field a headline figure depends on
+
+S16 renders a `group` column and groups the list by it — and **nothing in the
+specification created a group, renamed one, or set its institution.** That last
+one is not cosmetic: `FX Cost` (§12.2, `computations.md` §12) totals margin and
+fees **by `account_groups.institution`**, which is the whole point of the figure —
+it tells you which bank is charging you. A consumer with no producer.
+
+Groups are managed here, inline, because they exist to organise this list and
+nowhere else:
+
+| Field | Meaning |
+|---|---|
+| `name` | Display only. Reorderable |
+| **`institution`** | Who actually holds the money. **Several groups may share one** — a bank's PLN account and its business PLN account are two groups at one institution, and `FX Cost` must total them together |
+
+**Institution is not the group name**, and conflating them is the easy mistake.
+The name is how *you* think about the account; the institution is who charges the
+spread. They diverge exactly when you hold several accounts at one bank, which is
+the case the figure exists to illuminate.
+
+An account may have no group — it renders ungrouped, and its FX cost totals under
+*unattributed* rather than being dropped.
+
+### Opening balance and opening date
+
+`opening_balance` is *as of* `opening_date`, and `computations.md` §2 sums every
+row from there. Both are set when the account is created and are ordinarily never
+touched again — after migration they carry nearly all the value (§8.0), which is
+why §8.4's gate exists and why editing one is an audited write with a confirm.
+
+**Changing an opening balance moves every balance from that date forward.** It is
+not a correction tool. Reconciling against an observed balance is the next
+section, and it writes a dated transaction instead — so the discrepancy stays
+visible as an amount rather than disappearing into a starting figure.
+
 ### Reconciling against reality
 
 **`adjustment` existed in the type enum, in `signed()`, and in H5's sign fix —
