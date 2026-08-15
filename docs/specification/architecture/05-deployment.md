@@ -54,9 +54,23 @@ through `0007`, is most of what this schema's guarantees consist of. A push that
 silently drops `assert_period_not_closed` leaves a database that looks correct
 and enforces nothing.
 
-Migrations `0002`–`0007` are **hand-written**. `drizzle-kit generate` needs a TTY
+Migrations `0002`–`0009` are **hand-written**. `drizzle-kit generate` needs a TTY
 for its rename prompts and would need a snapshot rebuild to resume; the journal
-is maintained by hand. Applying them is `drizzle-kit migrate` or `psql` in order.
+is maintained by hand and lists all ten. Applying them is **`pnpm db:migrate`**
+(`drizzle-kit migrate`) or `psql` in order.
+
+**`pnpm db:generate` is a trap in the current state and is kept only for the day
+the snapshots are rebuilt.** `meta/` holds snapshots for `0000` and `0001` only,
+so `generate` diffs the schema against `0001` and would emit a migration
+re-creating everything `0002`–`0009` already built. The journal is the source of
+truth here, not the snapshots.
+
+**Migrations connect as the bootstrap superuser** — `MIGRATE_DATABASE_URL`.
+`0005` creates a role and issues `GRANT`s, which `waltning_app` has no privilege
+to do. This is the only place that connection is correct: the app takes
+`APP_DATABASE_URL` and the tax export takes `EXPORT_DATABASE_URL`, and §13.1's
+separation holds only because everything else refuses the superuser. A single
+URL serving all three would leave T1 unenforceable while every query succeeded.
 
 ---
 

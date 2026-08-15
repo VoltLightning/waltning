@@ -21,10 +21,19 @@ export function createDb(url: string = requireDatabaseUrl()) {
   return drizzle(sql, { schema });
 }
 
+/**
+ * The **app** connection — `waltning_app`, deliberately not the superuser.
+ *
+ * A superuser bypasses every GRANT, so T1 (§13.1) is unenforceable the moment
+ * this returns one: the tax export's REVOKEs stop meaning anything while every
+ * query still succeeds, which is the failure shape that looks like health.
+ * The export path takes `EXPORT_DATABASE_URL` and must pass it to `createDb`
+ * explicitly — the default here is never the right connection for it.
+ */
 export function requireDatabaseUrl(): string {
-  const url = process.env["DATABASE_URL"];
+  const url = process.env["APP_DATABASE_URL"];
   if (!url) {
-    throw new Error("DATABASE_URL is not set. Copy .env.example to .env and fill it in.");
+    throw new Error("APP_DATABASE_URL is not set. Copy .env.example to .env and fill it in.");
   }
   return url;
 }
