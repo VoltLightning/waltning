@@ -245,6 +245,41 @@ move plus an import path.
 to cache); GraphQL (one consumer; tRPC is strictly less machinery); Kubernetes
 (it is one Raspberry Pi).
 
+#### The rest of the stack
+
+The table above is the backbone and stops there. A readiness audit found **fifteen
+layers with no choice recorded** — every one of which gets decided by whoever
+writes the first file that needs it, which is how a stack becomes an accident.
+
+| Layer | Choice | Why this |
+|---|---|---|
+| **Test runner** | **Vitest** | ESM and TS native, no transform config. The database tests need a real Postgres, not a mock, so the runner's job is orchestration |
+| **Device SQLite** | **`expo-sqlite`** | First-party, async API, tracks each SDK, does not fight EAS. `op-sqlite` is genuinely faster via JSI — and for ~450 rows the bottleneck is a Pi over WireGuard, not the driver |
+| **Client cache** | **TanStack Query** (tRPC's client is built on it) | **Memory-only persistence.** Persisting it to disk is the standard Expo pattern and would silently promote arbitrary server responses into the encrypted container, breaking §14.3's enumerated tier list |
+| **List virtualization** | **`@shopify/flash-list`** | The calendar is ~2 100 days and the transactions list reaches ~25 000 rows. `FlatList` does not hold S11's 150 ms budget at that size |
+| **Routing** | **`expo-router`** | File-based, one tree for native and web — which matters because they are one codebase (§14.6) |
+| **Charts** | **`victory-native`** + `react-native-svg` | Already flagged as the RN Web friction point (`platform-notes` §11). Line, bar, donut, pie, area and sparkline are fine; **treemap is the one that likely needs a web-only path**, and it is S25-only |
+| **Password hash** | **`@node-rs/argon2`** | Rust napi bindings with prebuilt arm64. The node-gyp `argon2` package builds from source on the Pi, which is slow and fragile |
+| **TOTP** | **`otplib`** | RFC 6238, no surprises |
+| **Logging** | **`pino`** | §15 asks for structured JSON at 30-day retention; pino is the low-overhead answer and the overhead matters on this hardware |
+| **Excel export** | **`exceljs`** | §13.3 specifies a *streaming* writer, which rules out building a workbook in memory. SheetJS's community build has a licensing and CVE history worth avoiding |
+| **Image manipulation** | **`expo-image-manipulator`** | Decodes at reduced scale via ImageIO. Full-decode-then-resize is 48.8 MB of bitmap per capture and a jetsam kill at ten (C26) |
+| **Dates and zones** | **`date-fns` + `date-fns-tz`** | Accounting dates are **bare dates** (§7.0a) and must never go through JS `Date` arithmetic. The zone work is `capturedTz` resolution, not general date maths |
+| **Model clients** | **`openai` SDK** for OpenAI *and* OpenRouter (it is OpenAI-compatible) · **`@anthropic-ai/sdk`** if Anthropic is configured | Behind one gateway interface, so §11.4's per-surface provider choice stays configuration |
+| **Migration runner** | **`drizzle-kit migrate`**, in the one-shot `migrate` service | Never `push` — it cannot see triggers, views, grants or generated columns |
+| **Scheduling** | **A `cron` service in Compose** | Nightly dump, invariant checks, FX backfill. In-process scheduling dies with an API restart and gives no record that a run was missed |
+
+**Two are provisional and named as such:**
+
+| Layer | Status |
+|---|---|
+| **Push notifications** | `expo-notifications` routes through Expo's push service — a **third party in the path** of a system whose whole argument is physical custody (O17). Direct APNs from the Pi keeps it first-party at the cost of an Apple key and more code. **Decide before S30's push conditions ship**, not after |
+| **Speech recognition** | Pending the `en-*` on-device spike. If it works, `expo-speech-recognition`; if not, S08 stays online-only and the grammar carries offline capture |
+
+**Package names and APIs move.** Verify each against its current docs when you
+add it — this table records *what was chosen and why*, and the why is the part
+that survives a version bump.
+
 ---
 
 ## 5. Security and network design
@@ -305,6 +340,12 @@ Single user, but real. Tailscale is the perimeter; this stands behind it.
 | Model provider key(s) | Pi environment, injected by Compose. One per configured provider (§11.4) | App bundle, git, or a prompt |
 | Postgres password | Docker secret / `.env` (0600, gitignored) | Committed |
 | Session signing key | Generated on first boot, persisted to a mounted volume | Hard-coded |
+| **Three database URLs** | `MIGRATE_` (superuser, migrations only) · `APP_` (DML, not superuser) · `EXPORT_` (SELECT on `tax_ledger`) | Collapsed into one. The separation *is* T1 (§13.1) |
+| MinIO credentials · B2 key and bucket · `age` recipient | Pi environment | Anywhere the phone can reach |
+
+**The full configuration surface is `.env.example`.** This table listed four
+secrets; standing the system up needs about twenty variables, and the three
+database URLs are the ones that carry a guarantee rather than a value.
 | Backup encryption key | `age` key on a hardware token, plus a paper copy off-site | On the Pi alone |
 
 All model calls originate from the API container. The phone never holds an

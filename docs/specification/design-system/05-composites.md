@@ -180,3 +180,28 @@ two rules follow from that:
   `transactions`, so the claim is backed by a database role rather than by a
   query someone remembered to write. A `ManifestCard` that constructed its own
   assurance would be decorating a promise instead of reporting a fact.
+
+---
+
+## Six components the screens invented
+
+Working rule 1 says **a screen never invents a component**, and a readiness audit
+found six that had been invented anyway — named in a screen's §4, defined
+nowhere. Each is small; the reason to define them here rather than let each
+screen carry its own is that five of the six appear on more than one screen, and
+the sixth is a table.
+
+| Component | Used by | Notes |
+|---|---|---|
+| `PeriodHeader` | S04, S11 | `‹ August 2026 ›` with *Today*, stepping by the selected granularity. **Tapping the label opens a period picker**; the arrows step. One component, because the two screens must step identically or the same gesture means different things in different places |
+| `ScaleSwitcher` | S11 | Day · week · month · year. A `SegmentControl` with a persisted selection — the persistence is the reason it is not just a `SegmentControl` |
+| `NavModeToggle` | S11 | Continuous ↔ stepped. Also persisted, and deliberately separate from `ScaleSwitcher`: they are independent choices and combining them into one control implies four modes rather than 4 × 2 |
+| `RefineRequest` | S02, S07 | The *"not quite — it was actually…"* input on a model result. One component, three call sites' worth of reasoning: it carries the original output so a refinement is a **second pass with context**, not a fresh request, which is what makes §10.2's refinable extraction refinable |
+| `AutoModeComposer` | S03 | The composer in its auto-mode state. S03's own decision was that auto mode belongs *in the composer, not on the page* — state where you are already looking, in the one region you cannot avoid before issuing an instruction. It shows the grant's scope and what remains of it |
+| `Table` | S33 | Dense, keyboard-navigable, web-only. **Not a general data grid** — S02 and S25 have their own denser needs and are the case that decides the `apps/web` fork (§14.6). This one is small, fixed-column and undemanding, and building the grid for it would be building the wrong thing first |
+
+**`RefineRequest` is the one worth building carefully.** It is the difference
+between a model surface you can correct and one you can only accept or reject,
+and §10.2's whole *refinable* claim rests on it existing. Building it per-screen
+would produce two subtly different refinement semantics on the two screens where
+being wrong is most expensive.

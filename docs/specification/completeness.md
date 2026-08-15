@@ -182,3 +182,57 @@ open questions        · none unresolved
 findings were exactly that — `is_capital`, `account_groups.institution`,
 `targets`, `income_vs_expense` — and none would have been found by reading, only
 by asking each figure where its inputs come from.
+
+---
+
+## Readiness audit — can we start building?
+
+A second pass, asking a different question: not *is the specification complete*
+but **is there anything an implementer would have to invent on day one?**
+Three things, and the first was the largest.
+
+### The stack was a backbone, not a stack
+
+§4.3 had nine rows — HTTP, contract, ORM, validation, money, mobile, blobs,
+proxy, packages — and stopped. **Fifteen layers had no choice recorded:** test
+runner, device SQLite, client cache, list virtualization, routing, charts,
+password hash, TOTP, logging, Excel writer, image manipulation, dates and zones,
+model clients, migration runner, scheduling.
+
+Every one of those gets decided by whoever writes the first file that needs it,
+which is how a stack becomes an accident rather than a decision. All fifteen are
+now chosen with a reason, plus **two named as provisional**: push notifications
+(because `expo-notifications` puts a third party in the path of a system whose
+argument is physical custody) and speech recognition (pending the `en-*` spike).
+
+### Six components the screens invented
+
+Working rule 1 is *a screen never invents a component*, and six had been invented
+anyway — `PeriodHeader`, `ScaleSwitcher`, `NavModeToggle`, `RefineRequest`,
+`AutoModeComposer`, `Table`. Five appear on more than one screen, which is
+exactly the case the rule exists for: `RefineRequest` carries §10.2's *refinable*
+claim, and building it twice would produce two subtly different refinement
+semantics on the two screens where being wrong costs most.
+
+**97 named components, 97 defined.**
+
+### The configuration surface was four secrets
+
+§5.3 listed model keys, the Postgres password, the session key and the backup
+key. Standing the system up needs about twenty variables — and **three separate
+database URLs**, which is not a detail: the separation between the migration
+superuser, the app role and the export role *is* T1 (§13.1). One URL for all
+three would make the tax guarantee unenforceable while everything appeared to
+work.
+
+### What is genuinely not ready, and is not meant to be
+
+| | |
+|---|---|
+| 52 typed balances | Blocking. About an hour, and the gate cannot fail without them |
+| The 173 reassignment names | Not blocking — unresolved rows import as zero-effect rows |
+| On-device ASR support | A spike, minutes, and it decides whether S08 works offline |
+| Push transport | A decision, needed before S30's push conditions ship |
+| The `apps/web` fork | A decision with a stated trigger, deliberately deferred until S02 and S25 exist to test it against |
+
+Everything else has a choice recorded and a reason attached.
