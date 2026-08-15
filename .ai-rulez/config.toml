@@ -1,0 +1,28 @@
+#:schema https://raw.githubusercontent.com/Goldziher/ai-rulez/v4.11.2/schema/ai-rules.schema.json
+#
+# One source for AI assistant rules.
+#
+# Every tool wants its own file — CLAUDE.md, AGENTS.md, .cursor/rules — and
+# maintaining the same rules in several places guarantees they drift. This
+# directory is the source; the tool-specific files are build output and are
+# gitignored, which is why `gitignore = true` is set below.
+#
+#   npx ai-rulez@latest generate     regenerate after editing anything here
+#   npx ai-rulez@latest verify       check the generated files match the source
+#
+# Keep this minimal. These rules are read on every task, so anything that is
+# merely nice to know costs attention on work it has nothing to do with. If a
+# rule is not something an assistant would get *wrong* by default, it does not
+# belong here — SPEC.md and CONTRIBUTING.md carry the rest.
+
+version = "4.0"
+name = "waltning"
+description = "Self-hosted personal finance system — specification-first, with a Postgres ledger"
+
+# CLAUDE.md and AGENTS.md. Add a preset only when a tool is actually in use;
+# each one is another generated file to keep honest.
+presets = ["claude", "codex"]
+
+# Manage the ignore entries for the generated files rather than hand-writing
+# them, so adding a preset cannot leave its output accidentally committed.
+gitignore = true

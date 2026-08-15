@@ -94,6 +94,11 @@ exports/
 .editorconfig
 biome.json
 .idea
+# AI assistant rules — source and generated output. Nothing at run time reads
+# them, and the generated files repeat the private-data rules verbatim.
+.ai-rulez
+**/.claude
+**/.codex
 **/.DS_Store
 **/*.log
 **/*.orig
