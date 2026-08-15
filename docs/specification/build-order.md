@@ -19,6 +19,12 @@ sequencing is free; its head is entirely risk, so its sequencing is the plan.
 
 ---
 
+**The task-level layer is the board**, in the private vault: 166 cards across 17
+lanes, derived from this specification rather than from memory — 31 screens, 110
+operations, 13 component phases, 15 computations, 11 migration steps, and all 17
+journeys as acceptance gates. This document is *why* and *in what order*; the
+board is *what*, at a size you can pick up on a Tuesday evening.
+
 ## The critical path
 
 Everything else is schedulable around this. These five are strictly serial and
