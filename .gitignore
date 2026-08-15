@@ -8,6 +8,7 @@ dist/
 build/
 .next/
 out/
+.turbo/
 *.tsbuildinfo
 
 # Expo / React Native
@@ -27,6 +28,15 @@ android/app/build/
 .env.*
 !.env.example
 
+# Certificates and identities. Caddy writes the Tailscale-issued cert to disk,
+# and the age identity is the one key whose loss makes every B2 backup
+# unreadable — which is indistinguishable from having no backup at all.
+*.pem
+*.crt
+*.agekey
+age.key
+.tailscale/
+
 # Financial data — never commit.
 #
 # These patterns are deliberately NOT root-anchored. A leading slash anchors to
@@ -45,6 +55,9 @@ backups/
 exports/
 *.dump
 *.sql.gz
+# The nightly dump is age-encrypted before it leaves the Pi. Encrypted or not,
+# a ledger snapshot is not a thing to have in a public repository.
+*.age
 
 # Bank statements and their conversions. The formats every bank exports, in any
 # directory — this is how a statement arrives, and none of it belongs in git.
@@ -70,5 +83,7 @@ coverage/
 .DS_Store
 .idea/
 *.swp
+*.orig
+*.rej
 .vscode/*
 !.vscode/extensions.json
