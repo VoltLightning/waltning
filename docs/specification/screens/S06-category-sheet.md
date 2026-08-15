@@ -105,6 +105,17 @@ choosing to create a category has already decided, and a model has not.
 | Offline | Fully functional from cache. `create_category` queues to the outbox and the leaf is usable immediately with a `pending` marker |
 | Gated | n/a |
 
+
+**One rule, stated the same way in S06 and S19:** *creating a leaf under an
+existing parent queues offline — it can only be referenced by rows you are
+creating now. Renaming, moving, merging or deleting an existing node is refused
+offline, because it changes the meaning of rows that already exist.*
+
+Previously S06 said category creation queues and S19 said structural changes are
+refused, which are the same act described twice. Offline at a market you could
+create `Groceries › Market` from the capture sheet and be refused the identical
+thing from Settings — and a rule that looks arbitrary is how a person stops
+trusting every other refusal.
 ## 7. Interaction
 
 ### Mobile

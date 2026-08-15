@@ -90,8 +90,29 @@ No new components. That is the point of specifying it after `08`.
 | Restore-drill log — date, duration, outcome, rows verified | `run_restore_drill` |
 | FX coverage per currency (`fx_rates` grouped by quote) | `backfill_fx_rates(currency, from, to)` |
 | **Ledger invariant results** (`SPEC.md` §15.1) | `run_invariant_checks` |
-| Disk headroom, container health, API reachability | — |
+| Disk headroom, container health, **`link` state with its specific remedy** (`architecture/09`) | — |
+| **Outbox** — pending count, **oldest entry age**, and every blocked entry with the server's refusal reason | `retry_entry` · `edit_entry` · `discard_entry` |
 | Model token spend per surface (§11.4) | — |
+
+#### The outbox card is local, and renders when nothing else here can
+
+The rest of this screen reports on the Pi, so unreachable means one thing and
+there are no cached values — *absence of contact is the finding*. **The outbox
+card is the exception**, and it must be carved out explicitly: it is device state,
+not a claim about the Pi's health, so it renders in full while offline. That is
+precisely when you have twelve pending entries and want to see them.
+
+Without this the screen H15 designates as the home of blocked entries is
+specified to show a red banner and nothing else at the moment the queue exists.
+
+It shows **age, not just count** — an outbox two weeks old is a different
+situation from one two hours old, and the age is what makes the pressure to
+stand up a weaker sync path legible before it is acted on.
+
+The `link` state names its own remedy rather than saying *offline*: Tailscale not
+running, node key expired, another VPN holding iOS's single tunnel slot, the Pi
+not answering, Postgres down, session expired. This is the one screen you open
+*because* it is broken, so it is the one screen that must name the layer.
 
 **The invariant panel is the reason this screen is not only about
 infrastructure.** §15.1's checks run against the live database on a schedule and

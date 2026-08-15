@@ -1,5 +1,17 @@
 # State matrix
 
+> **Coverage: 13 of 30 screens are listed here.** The other 17 each specify all
+> six states in their own §6; what this table catches is the screens whose state
+> handling is *non-obvious*. Stating both numbers because §8.2 names the
+> alternative failure exactly — *"silent partial success is how a month goes
+> half-imported and nobody notices"* — and a coverage check that presents as
+> complete while covering 43% is that failure applied to itself.
+>
+> S04, S14, S12 and S30 belong here on their own merits and are being added:
+> S04 is the mobile landing surface, S14 can cost real money offline, S12 is the
+> most staleness-sensitive screen in the app, and S30 is where the outbox lives.
+
+
 Every screen specifies **all six** states — loading, populated, empty, error,
 offline, gated (`README.md`, working rule 2). *Populated* is the one every
 screen has by construction, so this matrix tracks the other five, plus conflict
