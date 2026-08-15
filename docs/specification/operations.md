@@ -38,6 +38,8 @@ free, and the two can never drift, because they are the same declaration.
 | **Auto-eligible** | Whether a bounded auto-mode grant may cover it. Most writes: no |
 | **Audit** | Entity, action, actor, before/after — written by the registry, not by each implementation |
 | **Description** | Written for the model to read, not for a developer. This is the tool's documentation |
+| **`offlineEligible`** | Whether this operation may enter a device outbox. `run_import`, `close_period`, `rerate_transactions`, `materialize_occurrence` and every migration operation are **false** — they need server state the device cannot have. A §15.1 contract test asserts no `offlineEligible: false` operation can be constructed as an outbox entry |
+| **`opVersion`** | The payload shape version. Upcasters chain every historical version to current at drain time, and the server accepts N−2 — a phone can be offline across two releases (`architecture/08`) |
 
 **Audit is the registry's job, not the operation's.** An operation that had to
 remember to log itself is an operation that will eventually forget.
@@ -149,6 +151,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 |---|---|---|
 | `create_layout` · `set_active_layout` · `add_widget` · `update_widget_config` · `remove_widget` | ✅ | *"Put family spending on my dashboard"* is an ordinary write (§11.0) |
 | `export_excel` · `record_export` | ✅ | |
+| `settle_debt` | ❌ | **Was missing, and H9's whole resolution depends on it.** Takes the amount that changed hands and the debt it discharges — never the residual, which the server derives from live data and returns. S14 previously called `create_transaction`, which has no notion of a residual and no channel to return a corrected one |
 | `get_targets` · `create_target` · `update_target` · `delete_target` | ❌ | **These were missing entirely** — `computations.md` §11 defines progress and no operation exposed it. Structural, so never auto-eligible. A target is period-to-date against `spend_to_date(p, scope=mine, capital excluded)`; **not** an envelope budget (N7) — no rollover, no allocation, and going over is information rather than an error |
 | `add_scheme_period` · `add_residency_period` · `update_registration` · `set_ryczalt_rate` | ❌ | **Tax scope. Never eligible** (§11.2) |
 | `close_period` · `reopen_period` | ❌ | Freezes or unfreezes a filed period (§13.4) |

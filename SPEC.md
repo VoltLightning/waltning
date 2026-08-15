@@ -337,6 +337,83 @@ host).
 
 ---
 
+### 5.7 Device custody
+
+**§5's threat model is about the network** — *"this ends up reachable from the
+internet and something automated finds it"* — and §5.1 answers it well. §14.3
+introduces a **physical** one, and until this section existed nothing addressed
+it: a review found sixteen mentions of encryption across the specification, none
+of them about the device.
+
+What the phone now holds: every account by name, every counterparty **by name
+with per-currency debt balances**, day-level aggregates over the full history,
+several hundred recent transactions with payee text, and a queue of receipt
+photographs awaiting upload. It is also an enrolled tailnet node, so it sits
+*inside* perimeter ② by construction, and it carries a session token with a
+30-day sliding expiry.
+
+A stolen phone is therefore both the perimeter and the credential.
+
+| Control | Decision |
+|---|---|
+| **Drain never runs while locked** | Foreground, in-foreground network change, user tap, or silent push. See below — this is the decision the others depend on |
+| File protection | `NSFileProtectionCompleteUntilFirstUserAuthentication` on the database, **its `-wal` and `-shm` siblings**, and the receipt spool. The WAL is where recent writes actually live |
+| Keychain class | Session token and any database key at `AFTER_FIRST_UNLOCK`, **`ThisDeviceOnly`** — so neither restores onto a replacement device |
+| **Excluded from cloud backup** | `NSURLIsExcludedFromBackupKey` on the database, its siblings, and `Documents/receipts/`. This is the highest-value single line in the table |
+| App launch | Gated behind `LocalAuthentication` before any database key is unwrapped |
+| Receipt spool | Downscaled at capture, EXIF stripped, written inside the app container — never the shared Photo Library, never a `UIFileSharingEnabled` directory |
+| Lost device | **Two steps, not one:** revoke the tailnet node *and* kill the server-side session row. A *sign out everywhere* control lives on S30 |
+| Replica TTL | If the app has not authenticated in N days, the replica is dropped on next launch — this bounds the phone-in-a-drawer case |
+| Store separation | `replica.db` and `outbox.db` are separate files, so the replica can be dropped unconditionally on logout while the outbox survives |
+| Inference artifacts | No on-device model ships (§14.3), so there is no prompt log to retain. If that changes, logging is off in release builds and any disk spill lives inside the encrypted container |
+
+#### Why drain-while-locked is refused
+
+It is not a performance decision. A background drain needs the database and its
+key readable **while the phone is locked**, which forces the weakest protection
+class and the weakest Keychain accessibility — making every other row in that
+table theatre. Holding a file lock on a protected file at suspension is also the
+sole cause of the `0xdead10cc` watchdog termination.
+
+Nothing in this design needs it. §15 sets no availability target, and §14.3's
+sync control already drains on tap. If a pending count must be visible from a
+notification, a tiny counters file at the weak class carries it — never the
+ledger.
+
+#### On full-database encryption
+
+**Not adopted, and the reasoning is worth recording because two reviewers
+disagreed.** SQLCipher would protect against extraction from a phone seized in
+the after-first-unlock state, which is a real exposure given what the replica
+holds. Against that: it requires `expo prebuild` and a custom dev client, which
+contradicts §4.3's managed-workflow choice; its key must be `AFTER_FIRST_UNLOCK`
+for the app to start reliably, which collapses it to roughly the protection class
+iOS already provides; and it costs about 30% on writes.
+
+The decision is to take **file protection plus backup exclusion plus
+launch-time biometrics**, which addresses the realistic loss path — an
+unencrypted cloud backup of a hundred-odd megabytes of receipt photographs — at a
+fraction of the cost. Revisit if the threat model changes: if device seizure
+becomes a real concern rather than a theoretical one, SQLCipher is the answer and
+the prebuild cost is worth paying.
+
+#### T1 does not extend to the device
+
+§13.1's guarantee is enforced by a Postgres role holding `SELECT` on
+`tax_ledger` and nothing else. **That mechanism has no device equivalent**, and
+the replica holds business and personal rows side by side under no privilege
+boundary at all.
+
+The current design does not breach T1 — tax figures are server-only (§14.3, class
+**S**). The exposure is that the *scope* was never stated, so the next feature
+breaks it by construction: the first phone-side export or share sheet reads
+SQLite directly, is outside T1 by definition, and will look correct because the
+rows carry the right flag while `verify_t1()` passes.
+
+**Stated, therefore: T1 covers the server export path only. The device replica is
+never a source for any tax artifact.** A phone-side export calls the server and
+receives rows already filtered through the view.
+
 ## 6. Data model
 
 ### 6.1 Four departures from Money Manager
@@ -2733,172 +2810,381 @@ Shares the codebase via React Native Web; different information density.
 
 ### 14.3 Offline behaviour
 
-**The phone must work with no connectivity at all.** Not degraded, not
-read-only — you can capture everything you capture on a phone, and it lands
-correctly when you reconnect. An expense tracker that needs a network at the
-till is not an expense tracker.
+**The phone is self-sufficient.** It does not need the backend to do the job a
+phone does: capture. With no connectivity you enter transactions, transfers and
+settlements, capture receipts, read your balances and history, and edit what you
+entered. An expense tracker that needs a network at the till is not an expense
+tracker.
 
-#### The phone captures; the backend reconciles
+What you lose is the agent, and that is stated rather than degraded.
 
-The division that makes offline cheap rather than expensive:
+This section was rewritten after an eight-way adversarial review. Three of its
+previous claims were false and are corrected below: that the phone never
+computes, that offline is a matter of hours, and that the mirror has no eviction
+problem.
+
+#### Offline is days to weeks, not hours
+
+The earlier draft argued that Tailscale makes the Pi reachable wherever there is
+internet, so offline is a plane or a basement. That is wrong for this system, and
+the rest of the specification is the evidence: §7.0 splits time across Poland,
+the United States and Germany, changing several times a year; §1.3 lists active
+accounts in Georgia and Belarus, outside EU roaming; §5.1 deliberately leaves
+Tailscale node-key expiry **on**; and `01-context-and-containers.md` does not
+say Tailscale loss is brief — it says **"Total loss of access — accepted."**
+
+Sync also requires the **Pi** to be reachable, not merely the phone to have
+signal. Add an ISP outage, a power cut, an SD-card failure (R6, rated High over
+years) or a house move, and the honest sizing is **days to weeks**.
+
+The 90-day window in the earlier draft was itself the honest estimate; the prose
+around it was not. Everything below is sized for weeks.
+
+#### The phone captures; the backend reconciles — and the phone may still compute
+
+The division is about **write authority**, not about arithmetic:
 
 | | Phone | Backend |
 |---|---|---|
-| Create a transaction, transfer, settlement | ✅ | ✅ |
-| Capture a receipt | ✅ (extraction deferred) | ✅ |
-| Edit or delete something you just entered | ✅ | ✅ |
-| **Compute a balance, net worth, period spend** | ❌ — displays what it was handed | ✅ |
-| Statement import, migration, bulk review | ❌ | ✅ |
-| Close a tax period, rerate, reclassify | ❌ | ✅ |
+| Create a transaction, transfer, settlement, receipt | ✅ | ✅ |
+| Edit or delete what it created | ✅ | ✅ |
+| **Admit a write against the ledger's invariants** | ❌ | ✅ |
+| Compute figures classified **F** or **R** (below) | ✅ | ✅ |
+| Compute figures classified **S** | ❌ | ✅ |
+| Import, migration, bulk review, period close, rerate | ❌ | ✅ |
 | Agent, receipt extraction, classification | needs a model, so needs a network | ✅ |
 
-**The phone never runs `computations.md`.** It caches the *results* — a balance,
-a counterparty total — as scalars, stamped with when they were true. Every figure
-in this system therefore has exactly one implementation, in SQL, on the server.
+**The phone is never an authoritative writer.** Every guarantee in §6.5 is a
+Postgres mechanism — cross-table triggers, `CHECK`s, an `EXCLUDE` constraint,
+generated columns, role privileges. SQLite has no equivalent, so an authoritative
+phone would either reimplement them (the *asserting is not enforcing* failure
+this specification's register documents twenty times) or be quietly weaker and
+accept rows the server later refuses. A sync-time refusal after days of
+authoritative operation has no clean recovery: the balances shown for those days
+were wrong, and you cannot un-show a number someone acted on.
 
-That is the whole reason offline is affordable here. The alternative — a phone
-that recomputes truth from a local ledger — needs every invariant reimplemented
-in SQLite, which has no `EXCLUDE`, no `pg_trgm`, different trigger semantics and
-no roles. It would mean two implementations of every figure and every guarantee,
-diverging silently, in the one area where divergence is invisible. §15's whole
-argument is that asserting is not enforcing; two enforcers that disagree is
-worse than one.
+**But that argument is about write admission, and it says nothing about
+arithmetic.** `SUM(-amount_original)` over rows the phone holds needs no
+`EXCLUDE` and no trigger. The earlier blanket ban was wrong, and the draft broke
+it two paragraphs later with its own balance formula.
 
-The phone is not weaker for this. It is **capture-complete and derivation-free**,
-which is exactly the shape of what you do on a phone.
+#### The rule: checkpoint-plus-fold
 
-#### What the phone holds
+> The phone may combine a **server-issued checkpoint** with its own
+> **unacknowledged outbox entries**, using the shared functions in `money.ts`.
+> It may also compute figures classified **R** over a range its replica covers
+> completely. It may never compute a figure classified **S**.
 
-A small, bounded mirror — kilobytes, refreshed on sync, and **discardable at any
-time** because nothing in it is a source of truth:
+Every figure in `computations.md` carries a class:
 
-| | Why |
-|---|---|
-| Accounts, category leaves, counterparties | The quick-add pickers |
-| Recent transactions (~90 days) | *Recent*, payee suggestions, and your own pending rows |
-| Last known FX rates | A foreign amount still gets a rate, marked `fx_rate_estimated` |
-| Cached balances and counterparty totals | Displayed, never recomputed |
-| **Open period locks** | Pre-validation — see below |
+| Class | Meaning | Examples |
+|---|---|---|
+| **F** — foldable | A checkpoint plus outbox arithmetic, using `signed()` / `debtDelta()` | Account balance (§2), net worth mine and ours (§3), counterparty balance per currency (§7), clearing balance (§8) |
+| **R** — replica-computable | Derivable from replicated rows, **only over a range the replica covers completely** | Transaction list and detail, calendar day/week/month nets, period spend over a covered range, substring search (§13) |
+| **S** — server-only | Has a documented way to be subtly wrong, or depends on state the device holds staler than it knows | `spend_by_category` (§6), shared-boundary netting (§5), capital-excluded comparisons, FIFO ageing and largest-remainder allocation (§7–8), duplicate detection (§9), confidence (§14), all of §12, **every tax figure** |
 
-It does not grow with the ledger, so there is no pagination or eviction problem
-to design.
+The **S** list is not timidity. Each entry has a defect in the register behind
+it: a `LEFT JOIN` with `COALESCE` counting a four-line transaction four times;
+netting that silently uses the source amount without `to_amount_pivot`; a
+reciprocal rate error of 14.1×. A TypeScript second implementation is a permanent
+drift surface exactly where drift is invisible.
 
-#### Balances offline: a snapshot plus your own pending entries
+#### Fold against a watermark, never against a clock
 
-A cached balance with three unsent expenses behind it is stale in a way you can
-feel, so the phone adjusts it:
+A checkpoint carries `(value, server_seq)`. The fold includes only entries **not
+acknowledged at or below that `server_seq`**.
+
+This matters more than it looks. Drain and checkpoint-refresh are two operations
+with no inherent ordering: refresh first and drop entries after, and the figure
+**double-counts**; drop first and refresh after, and it **under-counts**. A
+wall-clock stamp cannot distinguish either from ordinary staleness — it produces
+a balance wrong by exactly one coffee, wearing an honest-looking timestamp. That
+is the class of failure this register opens by naming.
+
+The clock is for the human; the sequence is for the arithmetic.
+
+The fold covers three entry shapes, not one:
 
 ```
-displayed = cached_balance + Σ signed(entry, side)   over pending outbox entries
+create           → + signed(input, side)
+delete           → − signed(cached_row, side)
+patch (amount)   → + signed(patch, side) − signed(cached_row, side)
 ```
 
-This is **not** reimplementing §2. `signed()` is one shared function in
-`money.ts` — already written, already property-tested on both legs — applied to
-a cached scalar. The distinction that matters: arithmetic on a snapshot, not a
-derivation from a ledger.
+Any entry whose target is **not in the replica** suppresses the adjustment
+entirely: the figure falls back to the bare checkpoint with the pending count
+shown but not applied. An honestly incomplete number beats a confidently wrong
+one.
 
-Rendered as `1 240,50 zł · as of 14:20 · 3 pending`. The timestamp is the honest
-part: it is usually right, and a banner that cries wolf gets dismissed.
+**`blocked` and `sending` entries still count.** The money moved in the world
+regardless of the server's opinion of the row. Excluding them makes a balance
+*rise* by the value of purchases you actually made, at the moment a drain
+finishes — and then you spend against it.
+
+#### What the phone holds — four tiers, budgeted in bytes
+
+The earlier claim, *"kilobytes… no pagination or eviction problem to design"*,
+was wrong twice: the real figure is about 1 MB live and 2–6 MB on disk once WAL
+and free pages are counted, and a 90-day window **is** eviction. It also grows
+with the transaction *rate*, which §15 projects rising from 5.5 to 9.5 a day.
+
+A window is a duration standing in for three unrelated needs. A budget is
+better:
+
+| Tier | Contents | Size | Growth |
+|---|---|---|---|
+| **1 · Reference** — complete, never evicted | Accounts, category leaves, counterparties with last-used category, currencies, **all** period locks, cached checkpoints | ~157 KB | flat |
+| **2 · Day aggregates** — complete history | One row per day since 2020: display-currency net, count, top-4 category codes, projection flag | **~155 KB** | **23 KB/yr** |
+| **3 · Transaction rows** — count-bounded | The most recent 400, ∪ everything in the last 30 days, ∪ every row referenced by a pending entry, ∪ every row opened recently | ~285 KB | flat |
+| **4 · FX** | Last-known per pair, plus daily rates for tier-3 dates only | ~15 KB | flat |
+| | **Total live** | **~612 KB** | **23 KB/yr** |
+
+**Tier 2 is the highest-value 155 KB in the design.** The calendar promises
+virtualized scroll across ~2 100 days; 90 days of transaction rows renders
+**4.3%** of that, and costs 552 KB to do it. Day aggregates render *all* of it —
+every scale, plus S01's category donut and the year sparklines — for less.
+
+The union clauses in tier 3 are what make eviction safe: a row referenced by a
+pending entry can never be evicted out from under its own optimistic display.
+
+Only tier 2 grows, at 23 KB a year. That claim is defensible for a decade.
+
+**Historical FX rates are not mirrored.** Mirroring six pairs across 2 100 days
+costs 1 MB — and is unnecessary, because the replica carries each row's
+**already-converted display amount**, computed server-side. Last-known rates
+remain for their one legitimate use: pricing a *new* capture. Changing display
+currency is an online settings action that bumps the replica epoch.
+
+#### Replication, not caching
+
+The replica syncs by `(updated_at, id)` cursor and **includes soft-deleted rows**,
+so `deleted_at` propagates as a tombstone. Without that, a transaction deleted on
+the laptop lives on the phone forever — in the list, and in every cached day net
+that included it.
+
+A server-side `replica_epoch` is bumped by any bulk operation: rerate, import,
+migration, period close, display-currency change. On mismatch the phone drops and
+refetches. That costs one round trip of a few hundred kilobytes, and it is
+affordable precisely because **nothing in the replica is a source of truth.**
+
+A §15.1 invariant compares a device replica checksum against the server's at the
+same watermark. It is the only check in the system that would catch a sync bug.
+
+**Excluded from the replica**, deliberately: `receipts.ocr_json`,
+`import_rows.raw`, `agent_tool_calls.output`, `agent_memory`, `audit_log`. T1 is
+a guarantee about the *export path* (§13.1) and does not extend to the device —
+so the device must never become a source for a tax artifact. Any phone-side
+export calls the server and receives rows already filtered through `tax_ledger`.
+
+#### The client never stamps a rate
+
+`fx_rate`, `to_fx_rate`, `tax_fx_rate` and `ryczalt_rate` are all resolved
+**server-side at commit**, from the row's own date. The phone's cached rate is
+display only, and an explicitly agreed rate (§7.6 level 1) travels as a separate
+field marked `manual`.
+
+This is not a detail. The earlier design had the client stamping four valuations
+that freeze into `GENERATED` columns and are not re-derivable afterwards:
+
+- A foreign-currency capture was valued at whatever rate the phone last held —
+  and three documents disagreed about whether it would ever be corrected. §14.3
+  promised a firm-up offer, H8 said only a manual rate clears the flag, S18
+  attached the offer solely to `set_manual_rate`. The ordinary path had **no
+  mechanism at all**, and `amount_pivot` materialized the stale figure forever.
+- A cross-currency transfer captured offline pre-filled its destination amount
+  from the cached reference rate, so both legs valued to the same pivot amount
+  and **the margin was identically zero** — the exact failure §7.5 exists to
+  prevent, indistinguishable from a genuinely fee-free transfer.
+- The same stale `to_fx_rate` fed `to_amount_pivot`, corrupting the
+  shared-boundary netting in `computations.md` §5 — a headline figure.
+- A business revenue row landed with `tax_fx_rate` and `ryczalt_rate` unstamped
+  and nothing to stamp them later, so it was permanently unfilable under a scheme
+  whose failure direction is under-declared revenue (C5).
+
+Server-side resolution collapses all four. `fx_rate_estimated` is then set by the
+**server**, if and only if no published rate existed for that date at drain
+time — the only moment the question can be answered correctly. Clearing it when a
+published rate is substituted is a correction of provenance, not a model
+rewriting your data, so §11.2's gate does not apply and it is automatic.
+
+Offline, a cross-currency transfer leaves the destination amount **empty**, with
+the stale reference shown only as a hint. An unedited destination amount is then
+impossible.
 
 #### Validate at entry, not at sync
 
-The phone holds the open period locks, the account currencies and the category
-tree, so it can refuse locally what the server would refuse anyway — a date
-inside a filed period, a non-leaf category, a currency that does not match the
-account.
+The phone holds every period lock, all account currencies and the category tree,
+so it refuses locally what the server would refuse anyway. That is the difference
+between a refusal you can act on while you still remember the purchase and a
+blocked entry found three days later.
 
-This is the difference between a refusal you can act on while you still remember
-the purchase, and a `blocked` entry you discover three days later. It does not
-make the phone authoritative: the server still enforces all of it, and the phone's
-copy is an optimisation for the common case, never the guarantee.
+It is an optimisation, never the guarantee — the server still enforces all of it.
+Two consequences follow from the copy being stale:
 
-#### Sync is visible and can be demanded
+- The mirror holds **every** lock row, not a 90-day slice. They are a handful of
+  rows and they span years.
+- Near a boundary — within 24 h, or when the lock cache is older than the
+  session — the local refusal is a **warning with an override**, not a wall. A
+  1 January purchase mis-dated 31 December must not be unfixable at the till.
 
-Automatic on reconnect and on foreground, and there is a **sync control** showing
-`12 pending · last synced 14:20` that drains on tap. Silent sync is what makes a
-person stop trusting an app when they cannot tell whether the coffee saved.
+**A period closed while the phone was offline is a decision, not an error.**
+`close_period` reads the same unsynced-writes signal `computations.md` §9
+defines, and refuses — or requires explicit acknowledgement — while any device
+reports outstanding writes in the range. Otherwise the lock claims completeness
+it cannot have. When a drain does hit a closed period, the row lands in a
+server-side quarantine and the user chooses: reopen and amend, or record at
+today's date with an audited note. The date is never silently mutated (§7.0a).
 
-| State | Behaviour |
-|---|---|
-| Online | Direct tRPC; optimistic updates; FX sync on foreground (§7.6) |
-| Offline | Reads from the local mirror; writes to the outbox; last-known rates, marked stale |
-| Reconnect | Outbox drains in order; **server is authoritative** |
-| Conflict | Last-write-wins. One user, but **two devices** — see below |
+#### The accounting date, and the timezone that lags the border
 
-**"Single writer" is not true, and the design should not lean on it.** The
-phone and the laptop browser both hold caches and both write; a phone with a
-full outbox is a second writer by definition. Last-write-wins is still the right
-answer — one *person* means conflicting intent is vanishingly rare and
-merge machinery would cost more than it saves — but it is justified by low
-conflict probability, not by there being one writer.
+§7.0a resolves the date once at capture, from the zone you were standing in, and
+makes it immutable. The hole is that the device's timezone is not that zone: land
+in Tbilisi at 01:00 after four hours in airplane mode and the phone still says
+Warsaw, where it is 23:00 the previous day. Every capture in that window is dated
+**yesterday**, permanently. Across a New Year's Eve flight that is a revenue row
+in the wrong tax year — precisely what §7.0a exists to prevent.
 
-Capture-only narrows that further: the phone creates new rows and edits rows it
-created minutes ago. A genuine conflict needs the same row edited on two devices
-inside one sync window.
+So: the entry records `capturedTz`, `capturedOffsetMinutes` and `capturedAtUtc`;
+the resolved date is an **editable field on the capture sheet**; and a drain
+flags any entry whose timezone differs from its predecessor — *"you changed
+timezone — check these 4 dates."*
 
-What that changes:
-
-- **Every outbox entry carries a client-generated UUID and an idempotency key.**
-  The row's `id` is minted on the device, so a retry after a dropped response
-  upserts rather than inserting a second coffee. Without this, a flaky
-  reconnect duplicates transactions — the exact failure a personal ledger is
-  least able to notice.
-- **A drain that fails mid-queue stops rather than skipping.** Order is part of
-  the meaning when a receipt image and its transaction are two operations.
-- **An expired session (§5.2) does not discard the queue.** It re-authenticates
-  and resumes; a 30-day sliding expiry against an outbox filled offline is a
-  routine collision, not an edge case.
-
-#### Capture with no model available — a quality ladder, not a cliff
-
-Offline you lose *quality*, never *capability*. Three tiers, each usable on its
-own, each better than the one below:
+#### Capture with no model — two tiers, not three
 
 | Tier | Needs | Gives you |
 |---|---|---|
-| **1 · Deterministic grammar** | nothing | *"coffee 18 cash"* → amount, account, payee. Instant, no network, no model. **Always available** |
-| **2 · On-device model** *(optional)* | a small local model | Payee → category on the common cases, and looser phrasing than the grammar accepts |
-| **3 · Cloud model** | a network | The conversational loop, receipt extraction, the full trilingual classifier |
+| **1 · Deterministic grammar + on-device memory** | nothing | Amount, account, payee, and a category proposed by fuzzy nearest-neighbour over your own payee history, with a trilingual alias table. **Always available** |
+| **2 · Cloud model** | a network | The conversational loop, receipt extraction, the full trilingual classifier |
 
-Tier 1 is the floor and it is not a consolation prize: it is the **fastest** path
-even when online, which is why S05 makes it the default and the model an explicit
-fallback. J02's under-ten-seconds budget is met by the grammar, not by a model.
+**The on-device generative model tier was assessed and dropped.** Four reasons,
+in descending force:
 
-**Tier 2 is worth trying and is not a commitment.** The tractable task for an
-on-device model is narrow — payee text to a category leaf, given the cached
-tree — not transaction interpretation. Treat it as an accuracy upgrade over the
-grammar that happens to need no network, keep it behind the same registry
-operation, and record `model_id` as usual so a classification made this way is
-distinguishable later. If it does not earn its place, tier 1 already works.
+1. **It has no input.** S05 *mobile* has a keypad, voice, camera and the
+   conversational mode — and **no text field**. The grammar that produces a payee
+   string is the *web* command bar, which reaches the Pi over Tailscale; "offline"
+   there means no server at all. Building tier 2 would first require designing a
+   text-entry mode that does not exist.
+2. **Apple's on-device model does not support Polish or Russian.** Not degraded
+   output — a thrown `unsupportedLanguageOrLocale`. Two of three languages.
+3. **The neighbours are the classifier.** `computations.md` §14 already defines
+   confidence as *agreement among the k retrieved neighbours*, with the model's
+   own figure a tiebreak. Trigram similarity is language-agnostic by
+   construction — which is exactly why §13 chose `pg_trgm` over `tsvector` — and
+   that property is as valuable on the phone as on the Pi.
+4. **It converts a visible gap into a silent error.** A blank category self-heals
+   through the reconnect offer. A wrongly-filled one does not, because
+   re-processing is never automatic (§11.2). That is §11.4's rule — quality
+   matters inversely to how much review the output gets — applied to the weakest
+   model in the system on the path with the least review.
 
-A receipt captured offline queues its image and saves its transaction
-immediately; extraction happens on reconnect against the row that already exists.
-The agent is simply unavailable, which is the correct behaviour for a
-conversational surface with nothing to converse with.
+The addressable slice is roughly 16–70 captures a year, and the saving is at most
+one tap — against S06's finding that a machine-filled chip must be *read*, while
+a stable position is hit from muscle memory.
 
-#### Reconnecting: drain silently, *suggest* the upgrade
+**Tier 1.5 replaces it, with no model:** exact normalised payee → last confirmed
+category; else trigram nearest-neighbour over distinct payees with the modal
+category and neighbour-agreement confidence, computed exactly as §14 defines it;
+plus a hand-written trilingual alias table. This is a genuine improvement over
+the bare grammar and it ships no weights.
 
-Two different things happen on reconnect, and they deserve different treatment.
+**The redirect worth taking: on-device speech recognition.** S08 states that
+transcription requires the network. iOS has had on-device recognition for years
+(`SFSpeechRecognizer.supportsOnDeviceRecognition`, now `SpeechAnalyzer`). If
+`pl-PL` and `ru-RU` are covered on-device, offline **voice** capture is available —
+which delivers far more than a classifier could, ships no model, and gives the
+phone the text input tier 2 lacked. It is a one-line runtime check and it should
+be run before anything else in this area.
 
-**Draining the outbox is automatic.** Losing a capture is the worst outcome in
-the system, entries are idempotent, and requiring a tap to save data you already
-entered would eventually cost you data. It drains, and the sync control shows it
-happened.
+#### Reconnecting
 
-**Re-processing degraded work is suggested, never automatic.** Rows captured at
-tier 1 or 2 may have a thinner category, no receipt extraction, or an estimated
-rate. That is a *quality* gap, not a data-safety one, so it surfaces as an offer:
+Two different things happen, and they deserve opposite treatment.
 
-> *6 captured offline · 2 need a category, 1 receipt to extract, 3 rates to firm up* — **Review**
+**The drain is automatic and is never asked about.** Losing a capture is the
+worst outcome in the system; entries are idempotent; requiring a tap to save data
+you already entered would eventually cost you data. A prompt reading *"you're
+back online — sync?"* either asks permission for something already done, or gates
+the drain and lets a dismissed modal strand real financial data. There is no
+coherent third reading, so there is no prompt.
 
-Automatic re-processing would rewrite rows you already accepted, on the model's
-authority, which §11.2 forbids for exactly this reason. Suggesting it keeps the
-approval gate intact and puts the choice where it belongs.
+What appears instead is a **result**: a passive line on the sync control, and a
+toast — `12 saved · 14:22`, or `11 saved · 1 blocked  [Show]`.
 
-**Estimated rates firm up the same way.** A foreign amount captured offline
-carries `fx_rate_estimated = true` against the last known rate; the offer to
-re-rate the affected range is gated, counted, and never applied inside a closed
-period (S18).
+**Re-processing degraded work is offered and never automatic**, because rewriting
+rows you already accepted on a model's authority is what §11.2 forbids. The offer
+is a **view, not a notification**: a card that persists while its count is
+non-zero, routing to the transactions list pre-filtered to *Needs attention* —
+category is `Uncategorized`, a receipt is attached but unextracted, or a rate is
+still estimated. Dismiss collapses it for the session, not forever.
+
+That filter is also the durable marker the earlier design lacked. Without it, a
+row the grammar guessed at becomes visually identical to one you typed the moment
+the pending dot clears, and the quality debt is invisible three weeks later.
+
+| Automatic, never asked | Offered, never automatic | Asked because it needs credentials |
+|---|---|---|
+| Outbox drain | Re-processing tier-1 captures | Re-authentication (401) |
+| Rate refresh, replica refresh | Re-rating estimated rows | TOTP step-up |
+| | Duplicate resolution (H14) | |
+| | Counterparty merge candidates (H13) | |
+
+#### Freshness is shown on figures, not as a mode
+
+There is no global "offline mode" banner. Three parts of this specification
+already reject one: `design-system/08` §8.3 — *"Offline is a statement about
+freshness, not a failure… `Showing data as of 14:06` beats `Offline`"* — J02's
+success measure of *"the same flow, same timing, no degraded mode"*, and this
+section's own argument that a banner which cries wolf gets dismissed.
+
+Only one capability genuinely disappears, and it says so itself: the agent tab
+and S05's `💬` mode render **disabled, with the reason inline on tap**. One
+disabled surface is not a mode.
+
+What is persistent is a neutral counter in the shell header — `12 pending` — and
+freshness stamps on the figures themselves, whose granularity follows age:
+
+| Age | Rendered |
+|---|---|
+| < 12 h | `1 240,50 zł · includes 3 unsynced · as of 14:20` |
+| < 48 h | `… as of yesterday 14:20` |
+| > 48 h | `… as of Tue 11 Aug`, stamp amber, labelled `unverified` |
+
+A bare clock time is unreadable the next morning: at 09:00, `as of 14:20` reads
+as *this afternoon*. And `3 pending` beside a figure invites reading them as
+excluded, when the fold includes them — hence `includes 3 unsynced`.
+
+**What is never shown is a bare "Offline".** The connectivity state machine
+(`architecture/09-connectivity.md`) distinguishes a dozen conditions with
+different remedies — Tailscale not running, node key expired, another VPN holding
+iOS's single tunnel slot, the Pi not answering, Postgres down, session expired —
+and each names its own. *"Your Tailscale key expired on 3 Aug — reconnect in the
+Tailscale app"* is actionable. *"Offline"* is not, and for that failure it is
+also wrong.
+
+#### Sync state
+
+| State | Behaviour |
+|---|---|
+| Reachable | Direct tRPC; optimistic updates; FX and replica refresh on foreground |
+| Unreachable | Reads from the replica; writes to the outbox; captures continue unchanged |
+| Reconnect | Outbox drains automatically, in `seq` order; **server is authoritative** |
+| Conflict | Last-write-wins, audited. One person, two devices |
+| **Drain trigger** | Foreground, in-foreground network change, user tap, silent push. **Never while locked** — see §5.7 |
+
+**"Single writer" is not true, and the design does not lean on it.** The phone
+and the laptop both write. Last-write-wins is still right — one *person* means
+conflicting intent is vanishingly rare — but it is justified by low conflict
+probability, not by there being one writer. Capture-only narrows it further: a
+genuine conflict needs the same row edited on two devices inside one sync window.
+
+The web client is nonetheless the writer that makes the *largest* changes —
+import, bulk review, rerating, period close — so a checkpoint is marked
+**superseded**, not merely aged, when one of those has landed since it was
+issued.
+
+The transport mechanics — response authentication, the idempotency ledger,
+ordering, entry states and the status-code table — are
+`architecture/08-offline-and-concurrency.md`. Connectivity detection is
+`architecture/09-connectivity.md`.
 
 ### 14.4 Calendar
 

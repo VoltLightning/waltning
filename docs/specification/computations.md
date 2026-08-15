@@ -12,6 +12,41 @@ Every amount is `numeric`; nothing here is ever a JS number (§7.1).
 
 ---
 
+## 0 · Where each figure may be computed
+
+`SPEC.md` §14.3 lets the phone compute some of these and forbids others. The
+class is part of each figure's definition, not a separate table to drift from:
+
+| Class | Meaning |
+|---|---|
+| **F** — foldable | A server-issued checkpoint plus the device's own unacknowledged outbox entries, using `signed()` / `debtDelta()` from `money.ts` |
+| **R** — replica-computable | Derivable from replicated rows, **only over a date range the replica covers completely** |
+| **S** — server-only | Has a documented way to be subtly wrong, or depends on state the device holds staler than it knows |
+
+| Figure | Class | Why |
+|---|---|---|
+| §2 Account balance | **F** | A checkpoint plus signed entries |
+| §3 Net worth, mine and ours | **F** | A sum of account checkpoints |
+| §4 Display conversion | **R** | The replica carries each row's already-converted display amount |
+| §4a FX margin | **S** | Needs both reference rates; a stale one makes the margin identically zero |
+| §5 Period spend | **R** for the base figure · **S** for shared-boundary netting | Netting needs `to_amount_pivot`, and getting it wrong silently uses the source amount |
+| §6 Spend by category | **S** | Two `UNION ALL` branches; a `LEFT JOIN … COALESCE` counts a four-line transaction four times |
+| §7 Counterparty balances | **F** per currency · **S** for ageing | Ageing is FIFO over the full history |
+| §8 Clearing and `find_unsettled` | **F** for the balance · **S** for allocation | Largest-remainder allocation must not be reimplemented |
+| §9 Duplicate and transfer detection | **S** | Runs server-side on commit, for every path |
+| §10 Recurring materialization | **S** | The occurrence date is resolved under a row lock |
+| §11 Targets | **S** | Period-to-date with capital excluded |
+| §12 Headline figures | **S** | Every one |
+| §13 Search | **R** | Substring over the replica, and it says so — SQLite has no `pg_trgm` |
+| §14 Confidence | **S** | Retrieval agreement over the full ledger |
+| Every tax figure (§13.x) | **S**, permanently | Depends on period locks, residency and rates the device may hold staler than it knows |
+
+**The S list is not timidity.** Each entry has a defect in
+[`defects.md`](defects.md) behind it. A second implementation in TypeScript is a
+permanent drift surface in exactly the place where drift is invisible.
+
+---
+
 ## 1 · Signing, and the two legs
 
 ```
