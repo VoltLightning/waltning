@@ -1,0 +1,73 @@
+name: Specification defect
+description: A guarantee the specification states but does not enforce, or a document that cannot be implemented as written.
+title: "[spec] "
+labels: ["specification"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        This repository is mostly specification, so this is the most useful
+        thing you can report. The defect register was built from ten adversarial
+        reviews and its central finding was one sentence repeated in eleven
+        places: **this specification asserts guarantees, and asserting is not
+        enforcing.** If you have found another, it belongs here.
+
+
+        Please check
+        [`defects.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/defects.md)
+        first — it may already be recorded, closed, or accepted deliberately.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: >-
+        The register's own scale. Pick the one that fits; it will be adjusted if
+        it turns out to be wrong, and getting it wrong costs nothing.
+      options:
+        - "C — a stated guarantee is false"
+        - "H — wrong data, silently"
+        - "M — cannot be implemented from the spec"
+        - "L — correct but under-specified"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Where
+      description: Section or file, as precisely as you can. `SPEC.md` §7.5, `screens/S11-…`, `computations.md` §4a.
+      placeholder: "SPEC.md §13.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: claim
+    attributes:
+      label: What the document claims
+      description: Quote it. The words *structurally*, *impossible*, *cannot*, *guaranteed* and *enforced* are the ones worth being suspicious of.
+    validations:
+      required: true
+
+  - type: textarea
+    id: failure
+    attributes:
+      label: The concrete way it fails
+      description: >-
+        A specific sequence with specific values, not a summary. "A transfer
+        between two accounts in different currencies on a day the pivot rate is
+        missing" beats "FX handling looks fragile" — the first can be tested,
+        the second cannot.
+    validations:
+      required: true
+
+  - type: textarea
+    id: enforcement
+    attributes:
+      label: Where enforcement would have to live
+      description: >-
+        Optional, and often the most valuable part. Database constraint,
+        trigger, registry validation, or type — the register's pattern is that
+        anything enforced at the database layer held, and anything asserted in
+        prose did not.

@@ -1,0 +1,25 @@
+# Blank issues stay enabled on purpose. This is a personal system and the issue
+# volume is low; making someone fight a form to say something useful would cost
+# more than the structure is worth.
+blank_issues_enabled: true
+
+contact_links:
+  - name: Read the specification first
+    url: https://github.com/VoltLightning/waltning/blob/main/SPEC.md
+    about: >-
+      Most "why is it like that" questions are answered somewhere in here, and
+      usually with the reasoning attached rather than just the decision.
+
+  - name: Known defects and what is still open
+    url: https://github.com/VoltLightning/waltning/blob/main/docs/specification/defects.md
+    about: >-
+      Eighty-three findings from ten adversarial reviews, with severities and
+      current status. Check here before reporting a design problem — it may
+      already be recorded, closed, or accepted deliberately.
+
+  - name: Before you plan any work
+    url: https://github.com/VoltLightning/waltning/blob/main/CONTRIBUTING.md
+    about: >-
+      The short version — this repository is being actively rewritten, so open
+      an issue before building anything. Contributions are welcome; wasted ones
+      are not.

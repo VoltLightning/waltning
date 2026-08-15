@@ -1,0 +1,31 @@
+name: Question, or an idea
+description: Ask why something is the way it is, or suggest something. No structure required.
+title: "[q] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Questions are welcome and cost nothing to ask.
+
+
+        Two things worth knowing before you write. **The reasoning is usually
+        written down** — `SPEC.md` records why each choice was made rather than
+        only what was chosen, and the answer to "why not X" is often a paragraph
+        explaining that X was tried and rejected. **And the roadmap is the
+        specification**, so feature ideas are read with interest but are
+        unlikely to be built soon; the direction is set and the backlog is
+        already longer than the time available.
+
+  - type: textarea
+    id: body
+    attributes:
+      label: What is on your mind
+    validations:
+      required: true
+
+  - type: input
+    id: context
+    attributes:
+      label: Related section, if there is one
+      placeholder: "SPEC.md §11.4, or docs/specification/flows/J07-…"

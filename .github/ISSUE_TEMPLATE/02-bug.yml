@@ -1,0 +1,70 @@
+name: Bug in the code
+description: Something that exists and does not work — a migration, the seed, the FX backfill, the Money Manager import, or the tooling.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        **The app does not exist yet.** What is built is the data foundation:
+        ten migrations, the schema, the seed, the FX backfill, the Money Manager
+        import tooling, and the repository tooling. A bug report against the API
+        or the mobile app is almost certainly a specification defect instead —
+        please use that template.
+
+
+        ⚠️ **Redact before you paste.** This is a public repository and the
+        subject is a personal ledger. Replace real amounts, payees,
+        counterparties, account numbers and institution names with placeholders
+        the way the specification does — `Bank A · PLN`, invented first names.
+        Row counts and currency codes are fine and are usually the useful part.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - "Migrations (packages/db/drizzle)"
+        - "Schema or money.ts (packages/db/src)"
+        - "Seed (pnpm db:seed)"
+        - "FX backfill (pnpm db:fx)"
+        - "Money Manager import (tools/migrate-mm)"
+        - "Repository tooling — Biome, hooks, Docker, pnpm"
+        - "Documentation build or links"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: What you ran, and what happened
+      description: The exact command and the output. Redacted, per the note above.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+      description: >-
+        If the specification says it should behave differently, cite the
+        section — that turns a bug report into a defect with a reference.
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Node, pnpm, Postgres, platform
+      placeholder: "Node 22.14, pnpm 11.20, Postgres 16.4, macOS arm64"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: "`pnpm verify` passes on an unmodified checkout"
+        - label: I have removed every real name, amount, payee and account from the report
+          required: true
