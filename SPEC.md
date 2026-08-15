@@ -175,7 +175,8 @@ Explicitly out of scope. Each is a decision, not an oversight.
               ┌────────────▼──────────────────────┐
               │  Raspberry Pi · Docker Compose    │
               │                                   │
-              │  caddy ─── api (Hono + tRPC)      │
+              │  caddy ─┬─ api (Hono + tRPC)      │
+              │         └─ web bundle (static)   │
               │              ├── ledger           │
               │              ├── import           │
               │              ├── receipts         │
@@ -192,6 +193,13 @@ Explicitly out of scope. Each is a decision, not an oversight.
                     │  FX rate provider  │
                     └────────────────────┘
 ```
+
+**Caddy serves the web bundle and proxies the API** — `/trpc/*` to `api`,
+everything else to a static export of the same Expo codebase, with an SPA
+fallback. There is no Node process rendering HTML. Routing, cache headers and the
+build-version check are in `architecture/05-deployment.md`; the physical layer —
+what the Pi actually is, and what each part costs when it fails — is in
+`architecture/01-context-and-containers.md`.
 
 ### 4.2 Repository layout
 
