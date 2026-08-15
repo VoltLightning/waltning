@@ -1,23 +1,15 @@
 name: Bug in the code
-description: Something that exists and does not work — a migration, the seed, the FX backfill, the Money Manager import, or the tooling.
+description: Something that exists and doesn't work — migrations, seed, FX backfill, import, tooling.
 title: "[bug] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: >-
-        **The app does not exist yet.** What is built is the data foundation:
-        ten migrations, the schema, the seed, the FX backfill, the Money Manager
-        import tooling, and the repository tooling. A bug report against the API
-        or the mobile app is almost certainly a specification defect instead —
-        please use that template.
-
-
-        ⚠️ **Redact before you paste.** This is a public repository and the
-        subject is a personal ledger. Replace real amounts, payees,
-        counterparties, account numbers and institution names with placeholders
-        the way the specification does — `Bank A · PLN`, invented first names.
-        Row counts and currency codes are fine and are usually the useful part.
+        **The app doesn't exist yet** — what's built is the data foundation. A
+        bug against the API or mobile app is a specification defect; use that
+        template. **Redact before pasting:** no real amounts, payees, accounts
+        or institutions. Row counts and currency codes are fine.
 
   - type: dropdown
     id: area
@@ -29,8 +21,7 @@ body:
         - "Seed (pnpm db:seed)"
         - "FX backfill (pnpm db:fx)"
         - "Money Manager import (tools/migrate-mm)"
-        - "Repository tooling — Biome, hooks, Docker, pnpm"
-        - "Documentation build or links"
+        - "Tooling — Biome, hooks, Docker, pnpm"
         - "Something else"
     validations:
       required: true
@@ -39,7 +30,6 @@ body:
     id: reproduce
     attributes:
       label: What you ran, and what happened
-      description: The exact command and the output. Redacted, per the note above.
       render: shell
     validations:
       required: true
@@ -47,10 +37,8 @@ body:
   - type: textarea
     id: expected
     attributes:
-      label: What you expected instead
-      description: >-
-        If the specification says it should behave differently, cite the
-        section — that turns a bug report into a defect with a reference.
+      label: What you expected
+      description: If the spec says otherwise, cite the section.
     validations:
       required: true
 
@@ -65,6 +53,5 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: "`pnpm verify` passes on an unmodified checkout"
-        - label: I have removed every real name, amount, payee and account from the report
+        - label: No real names, amounts, payees or accounts in this report
           required: true
