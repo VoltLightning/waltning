@@ -9,7 +9,7 @@
   },
   "scripts": {
     "migrate": "drizzle-kit migrate",
-    "generate": "drizzle-kit generate",
+    "generate": "sh scripts/guard-generate.sh",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/seed/run.ts",

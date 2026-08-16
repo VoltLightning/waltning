@@ -122,3 +122,17 @@ fi
 if ! pnpm -r typecheck; then
   fail "typecheck failed."
 fi
+
+# ── 6 · Tests ────────────────────────────────────────────────────────────────
+#
+# There is no CI, so a suite outside this hook is a suite nothing runs. It was
+# outside for two cards, which is exactly long enough for tests to start
+# rotting unnoticed.
+#
+# Database tests need Postgres, so a commit needs Docker up. That is a real
+# cost and it is the honest one: the alternative — skipping tests when the
+# database is unreachable — is a gate that disappears precisely when someone is
+# working in a hurry. The message says how to fix it rather than what failed.
+if ! pnpm test; then
+  fail "tests failed." "if Postgres is not running: pnpm db:up"
+fi
