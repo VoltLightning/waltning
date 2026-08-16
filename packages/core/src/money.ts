@@ -9,10 +9,29 @@
 
 // Named import, not default: under NodeNext the default export resolves to
 // decimal.js's namespace declaration rather than the constructable class.
-import { Decimal } from "decimal.js";
+import { Decimal as GlobalDecimal } from "decimal.js";
 
-// 28 significant digits comfortably covers 8-dp crypto balances.
-Decimal.set({ precision: 28, rounding: Decimal.ROUND_HALF_UP });
+/**
+ * A **private** Decimal constructor, not the global one.
+ *
+ * `Decimal.set(...)` mutates decimal.js's global configuration for the whole
+ * process. Any other module — ours, a dependency, a transitive dependency —
+ * calling `Decimal.set` would silently change the rounding mode of every
+ * amount in the ledger, from anywhere, with nothing to detect it. `clone()`
+ * gives this module a constructor whose configuration cannot be reached from
+ * outside it.
+ *
+ * 28 significant digits comfortably covers 8-dp crypto balances.
+ *
+ * **ROUND_HALF_UP is a decision, recorded in `computations.md` §0a.** It is
+ * not decimal.js's business default being accepted by omission: half-up and
+ * half-even differ systematically over a five-year ledger, and two people
+ * implementing from a spec that omits it would write different code.
+ */
+const Decimal = GlobalDecimal.clone({ precision: 28, rounding: GlobalDecimal.ROUND_HALF_UP });
+
+/** The instance type. `Decimal` above is a value; a clone does not carry one. */
+type Decimal = GlobalDecimal;
 
 export type Money = string;
 

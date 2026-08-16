@@ -48,6 +48,31 @@ permanent drift surface in exactly the place where drift is invisible.
 
 ---
 
+## 0a · Representation and rounding
+
+Every figure below is a **decimal string**, never a JS number, at
+`numeric(20,8)` — scale 8 because crypto balances need it.
+
+**Rounding is half away from zero** (`ROUND_HALF_UP`): `1.005 → 1.01`,
+`−1.005 → −1.01`. Not banker's rounding. The difference is systematic rather
+than random — half-even pulls totals toward even cents across a five-year
+ledger — so it is a decision, and it was implemented before it was written
+down here, which is the wrong order. This document's own test is *"would two
+people write the same function from this alone?"*, and rounding mode is
+precisely where two people diverge.
+
+**Round once, at the boundary.** Intermediate values keep full precision;
+rounding is applied when a figure is stored or displayed, never between steps
+of a sum. Rounding each term and then adding differs from adding and then
+rounding, by up to half a unit per term.
+
+`money.ts` owns this and holds a **private** decimal.js constructor: the
+library's configuration is global and process-wide, so a dependency calling
+`Decimal.set` would otherwise change the rounding of every amount in the
+ledger from outside this module, silently. A test asserts it cannot.
+
+---
+
 ## 1 · Signing, and the two legs
 
 ```

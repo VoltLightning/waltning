@@ -33,11 +33,32 @@ if [ -z "$staged" ]; then
   exit 0
 fi
 
-# ── 1 · Files that must never enter history ──────────────────────────────────
+# ── 1 · Anything force-added past .gitignore ─────────────────────────────────
 #
-# .gitignore already covers these, but `git add -f` bypasses it and this is a
-# public repository. The check is on the staged path list, so it catches the
-# force-add that the ignore file cannot.
+# Ask git rather than re-implementing its rules. The list in the next block is
+# a hand-written subset of .gitignore, and the two drifted the day they were
+# written: `.env.production`, `data/x.db`, `exports/y.xlsx` and
+# `apps/api/receipts/a.jpg` are all gitignored and all sailed past it.
+#
+# A staged file that .gitignore matches can only have got there through
+# `git add -f`, which is exactly the case this hook exists for. Checking it
+# this way inherits every present and future ignore rule and cannot drift.
+forced=$(
+  printf '%s\n' "$staged" | while IFS= read -r f; do
+    # --no-index is load-bearing. `git check-ignore` consults the index, and a
+    # force-added path is *tracked* — so ignore rules stop applying to it and
+    # the check silently returns "not ignored" for precisely the files this
+    # guard exists to catch. Without this flag the whole section is a no-op.
+    if [ -n "$f" ] && git check-ignore -q --no-index -- "$f"; then printf '%s ' "$f"; fi
+  done
+)
+if [ -n "$forced" ]; then
+  fail "these are gitignored and were force-added:" "$forced"
+fi
+
+# ── 2 · Files that must never enter history, ignored or not ──────────────────
+#
+# The second layer, for shapes .gitignore does not cover.
 blocked=$(
   printf '%s\n' "$staged" \
     | grep -Ei '(^|/)\.env$|\.(mmbak|sqlite|sqlite3|db|dump|age|xls|xlsx|ofx|qif|mt940|pem|crt|key|p8|p12|jks|keystore|mobileprovision)$' \
@@ -60,7 +81,7 @@ if [ -n "$blocked_csv" ]; then
   fail "CSV outside docs/ and fixtures/ is a bank statement:" "$(printf '%s' "$blocked_csv" | tr '\n' ' ')"
 fi
 
-# ── 2 · Key material by content ──────────────────────────────────────────────
+# ── 3 · Key material by content ──────────────────────────────────────────────
 #
 # Catches a key pasted into an otherwise innocent file, which the path check
 # above cannot see.
@@ -69,11 +90,11 @@ fi
 # a leaked key. The cost is that a secret pasted into the hook itself is not
 # caught by the hook itself.
 if git diff --cached -- . ':(exclude).githooks/pre-commit' \
-  | grep -qE 'BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY|AGE-SECRET-KEY-1|sk-[A-Za-z0-9_-]{24,}|ghp_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}'; then
-  fail "the staged diff contains something shaped like a private key or token."
+  | grep -qE 'BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY|AGE-SECRET-KEY-1|sk-[A-Za-z0-9_-]{24,}|ghp_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|PostgreSQL database dump'; then
+  fail "the staged diff contains key material, a token, or a database dump."
 fi
 
-# ── 3 · Personal data sweep ──────────────────────────────────────────────────
+# ── 4 · Personal data sweep ──────────────────────────────────────────────────
 #
 # The repository is public and every real name, bank and balance was replaced
 # with a placeholder. A bank name crept back in once while writing prose, which
@@ -106,7 +127,7 @@ else
   printf "${DIM}  pre-commit: no %s — personal-data sweep skipped${OFF}\n" "$terms"
 fi
 
-# ── 4 · Format and lint, staged files only ───────────────────────────────────
+# ── 5 · Format and lint, staged files only ───────────────────────────────────
 #
 # Deliberately does not --write. A hook that silently rewrites files changes
 # what you are committing after you have read it; failing and naming the fix
@@ -115,7 +136,7 @@ if ! pnpm exec biome check --staged --no-errors-on-unmatched; then
   fail "formatting or lint failed." "run: pnpm fix"
 fi
 
-# ── 5 · Types, whole program ─────────────────────────────────────────────────
+# ── 6 · Types, whole program ─────────────────────────────────────────────────
 #
 # Not staged-file-scoped: types are a property of the program, and a staged
 # file can break a file that is not staged.
@@ -123,7 +144,7 @@ if ! pnpm -r typecheck; then
   fail "typecheck failed."
 fi
 
-# ── 6 · Tests ────────────────────────────────────────────────────────────────
+# ── 7 · Tests ────────────────────────────────────────────────────────────────
 #
 # There is no CI, so a suite outside this hook is a suite nothing runs. It was
 # outside for two cards, which is exactly long enough for tests to start
