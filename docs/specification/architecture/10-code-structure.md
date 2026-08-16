@@ -12,85 +12,95 @@ in its own ecosystem rather than something invented here.
 
 ---
 
-## Backend — layered
+## Modules first, layers inside
+
+**The primary axis is the business domain, not the technical role.** A module
+owns its whole vertical slice — declaration, logic, tests — so a change to how
+currencies work is one folder rather than three.
 
 ```
 apps/api/src/
-  index.ts          bootstrap: env, listen. Nothing else
-  config/           every process.env read, in one place
-  common/           errors, envelope, pagination — no domain knowledge
-  middleware/       cross-cutting request concerns
-  http/             the Hono app and the probe endpoints
-  trpc/             tRPC init, context, error formatter, root router
-  routes/           tRPC routers per domain — dispatch only
-  registry/         operation declarations — the controller layer
-  services/         domain logic, one module per aggregate
-  infra/            adapters to outside systems: db, blobs, model providers
+  modules/<domain>/     index.ts · <op>.operation.ts · <domain>.service.ts · tests
+  common/               errors, pagination — no domain knowledge
+  infra/                database, blobs, model providers
+  registry/             the mechanism, and the composition of module operations
+  http/ trpc/ middleware/ config/    composition root
+
+apps/mobile/src/
+  features/<name>/      index.ts · ui/{atoms,molecules,organisms} · model/ · api/
+  shared/               ui/ lib/ hooks/ — used twice, knows no feature
+  app/                  expo-router routes: compose features, own the fetching
+
+packages/
+  core/  contracts (money, operation types, schemas) · db/  schema + client
+  ui/    the cross-app design system
 ```
 
-**Dependencies point one way**, and this is the rule worth enforcing over all
-the others:
+**Only `index.ts` is public**, and no module or feature imports another.
+Composition happens at the registry on the server and in `app/` routes on the
+client. Two modules that need each other are usually one module, or want a
+third that both depend on. `tests/module-boundaries.test.ts` enforces it.
 
-```
-http → trpc → routes → registry → services → infra
-                          ↘ common ↙
-```
+### Layers did not go away
 
-A service never imports from `registry/`, `routes/` or `http/`. It takes plain
-arguments and returns plain values. The moment a service reaches back up, the
-agent — which calls the registry directly and never touches HTTP — silently
-gets different behaviour from the UI, which is the exact drift the registry
-exists to prevent.
-
-### `registry/` is the controller layer
-
-In a conventional stack a controller validates input, applies policy, calls a
-service, shapes a response. That is what an operation does here — it just also
-generates the agent's tool list, so the layer earns a different name (`§11.0`,
-`operations.md`).
+They moved inside the slice. The operation validates, gates and audits; the
+service computes; Postgres enforces; `infra/` talks to the outside. What
+changed is that a module's three layers sit next to each other instead of being
+scattered across three top-level folders that each contain every domain.
 
 | Layer | Does | Never |
 |---|---|---|
-| `routes/` | Authenticate, dispatch, return the envelope | Contains an `if` about domain state |
-| `registry/` | Validate, gate, audit, orchestrate one or more services | Arithmetic, or a business rule |
-| `services/` | Business logic, one aggregate each | Sees a request, header, or tRPC context |
-| `infra/` | Talks to Postgres, MinIO, model providers | Knows what a transaction *means* |
+| operation | Validate, gate, audit, orchestrate | Arithmetic, or a business rule |
+| service | Domain logic, one module each | Sees a request, header, or tRPC context |
+| infra | Talks to Postgres, MinIO, model providers | Knows what a transaction *means* |
 
 **Services compute; Postgres enforces.** Anything phrased as "must never" gets
 both — the service check for a good error message, the constraint for when the
 service is wrong.
 
----
+### Atomic design is a scale, not a filing cabinet
 
-## Frontend — atomic design
+`packages/ui` was three global folders — `atoms/`, `molecules/`, `organisms/` —
+and that is the standard misreading. Those names answer *how big is this
+component* and never *what is it for*, so every feature's pieces end up mixed
+together and nothing can be moved, tested, or deleted as a unit.
 
-Mobile and web are **one Expo codebase** (§4.3), so there is one component
-library rather than one per surface: `packages/ui`.
+The tiers belong **inside** a module that owns UI, where they describe
+composition within one bounded thing:
 
 ```
-packages/ui/src/
-  atoms/        no domain knowledge      Button, Input, Tag, Icon
-  molecules/    domain meaning, no data  Amount, StatTile, TransactionRow
-  organisms/    a whole section          DiffCard, Shell, CalendarGrid
-
-apps/mobile/
-  app/          expo-router tree — the screens, and the only layer that fetches
-  features/     screen-local composition that is not yet shared
+features/transactions/ui/
+  atoms/       only if this feature owns a primitive nothing else needs
+  molecules/   TransactionRow, AmountField
+  organisms/   TransactionList, CaptureSheet
 ```
 
-**The boundary between layers is what a component knows**, not how big it is:
+A common module that touches UI has them too — that is what `packages/ui` is,
+and it is legitimate there because a design system has no features to slice by.
 
-- An **atom** that knows what a transaction is has been misfiled.
-- A **molecule** carries domain meaning — `Amount` knows sign, currency,
-  decimals and P1's rule that every figure renders through it — and knows
-  nothing about where the figure came from.
-- An **organism** composes molecules into a section and still fetches nothing.
-- A **screen** is a route. It owns data fetching, and it is the *only* layer
-  that may.
+The design system's own vocabulary maps onto the tiers rather than competing
+with it: §3 primitives are atoms, §5 composites split across molecules and
+organisms, and screens stay screens.
 
-That last line is the one with teeth. A molecule that calls tRPC cannot be
-rendered in a diff preview, in a test, or offline from the replica — and the
-offline design (§14.3) depends on being able to render from folded local state.
+**A component reaches shared by being used twice, not by looking generic.**
+Promotion is a deliberate move. The design system still says which components
+may exist at all (`design-system/`), and a screen never invents one — atomic
+design says *where a component lives*, the design system says *whether it may
+exist*.
+
+### This is the common shape, not a local invention
+
+| Convention | Primary axis | Where UI tiers live |
+|---|---|---|
+| [Bulletproof React](https://github.com/alan2207/bulletproof-react) | `features/*`, each with `api` `components` `hooks` `stores` `types` | shared `components/` plus per-feature `components/` |
+| [Feature-Sliced Design](https://feature-sliced.design) | slices by domain, segments `ui` `model` `api` `lib` | `shared/ui` **and** each slice's own `ui` |
+| [Bluesky](https://github.com/bluesky-social/social-app) | `features/`, `components/`, `alf` design system | design system separate from feature UI |
+| Modular monolith (backend) | modules by business capability, vertical slices within | n/a — the module's public API is the boundary |
+
+Bulletproof React states the rule this repository now enforces with a test:
+*"it might not be a good idea to import across the features — instead, compose
+different features at the application level."* Feature-Sliced Design puts it as
+a layer rule: a slice cannot use another slice on the same layer.
 
 ### Types: parameters, not escape hatches
 
@@ -181,35 +191,12 @@ production RN Web app ships a single native-biased `moduleSuffixes` and lives
 with the same gap. Add a second typecheck projection only if platform files
 ever become common, which in production RN Web codebases they are not.
 
-### This is not a second vocabulary
-
-The design system already names 97 components across
-`docs/specification/design-system/`. Atomic design is a **filing rule** for
-them, not a re-classification:
-
-| Design system | Atomic layer |
-|---|---|
-| §3 Primitives | `atoms/` |
-| §5 Composites — rows, tiles, messaging | `molecules/` |
-| §5 Composites — gate, dashboard, tax, data surfaces | `organisms/` |
-| `screens/S01`–`S34` | `apps/mobile/app/` |
-
-**Screens still never invent components** (working rule 1). Atomic design says
-where a component lives; the design system says whether it may exist.
-
----
-
-## Shared
-
-```
-packages/core/   contracts: money.ts, shared types, Zod schemas, F/R/S classes
-packages/db/     Drizzle schema, migrations, seed — depends on core
-packages/ui/     the component library — depends on core
-```
+## The dependency floor
 
 `core` is the bottom of the graph and must run identically on phone, web and
 server: decimal.js and zod only, no Node APIs, no database driver. **`mobile`
 never imports `db`** — that would drag the Postgres driver into a phone bundle.
+`db` depends on `core`; `ui` depends on `core`; neither depends on an app.
 
 ---
 

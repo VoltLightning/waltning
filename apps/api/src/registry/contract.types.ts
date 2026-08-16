@@ -22,7 +22,7 @@
 
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import type { AnyOperation } from "@waltning/core";
-import type { CurrencySummary } from "../services/currencies.ts";
+import type { CurrencySummary } from "../modules/currencies/index.ts";
 import type { AppRouter } from "../trpc/router.ts";
 import type { OperationContext } from "./context.ts";
 

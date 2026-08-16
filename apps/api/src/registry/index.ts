@@ -11,9 +11,9 @@
  */
 
 import type { Registry } from "@waltning/core";
+import { createCounterparty } from "../modules/counterparties/index.ts";
+import { getCurrencies } from "../modules/currencies/index.ts";
 import type { OperationContext } from "./context.ts";
-import { createCounterparty } from "./counterparties/create-counterparty.ts";
-import { getCurrencies } from "./currencies/get-currencies.ts";
 
 /**
  * Keys are written out rather than computed from `op.name`. A computed key is
