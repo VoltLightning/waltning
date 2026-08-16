@@ -4,29 +4,34 @@ priority: critical
 
 # Waltning
 
-Mostly specification, deliberately. Built so far: migrations, schema,
-`money.ts`, seed, FX backfill, MM import. No API or app yet — tasks that sound
-like app work usually mean changing the spec. Reasons for past decisions are in
-`SPEC.md`; known problems in `docs/specification/defects.md`; build sequence in
-`docs/specification/build-order.md`.
+Spec-first. Implement from: `docs/specification/operations.md` (the registry —
+every write in the system), `computations.md` (every derived figure, classed
+F/R/S for offline), `screens/` + `flows/` (behavior), `architecture/01–09`
+(containers, offline/sync, connectivity), `SPEC.md` (data model, FX, security,
+tax — with the reasoning). When code must diverge from spec, change the spec in
+the same PR — never silently.
 
-**Correctness**
+Conventions that hold everywhere:
 
-- Money is decimal strings end to end (`numeric(20,8)`, decimal.js). Never JS
-  numbers.
-- Accounting dates are bare dates. No `Date` arithmetic on them.
-- A claim like "cannot happen" needs an enforcing layer — constraint, trigger,
-  role, type. Prose isn't enforcement. Verify by running, not reading; if you
-  add a check, make it fail once on purpose.
+- Money is `numeric(20,8)` **strings** end to end; arithmetic only via
+  `money.ts` (decimal.js). A JS number holding an amount is a bug.
+- Accounting dates are bare `YYYY-MM-DD` strings. No `Date` arithmetic, no
+  timezone conversion on them; `capturedTz` is a separate field.
+- Every write is a registry operation: named, Zod-validated, audited,
+  `offlineEligible` declared. No ad-hoc mutations from screens or the agent.
+- Guarantees are enforced in Postgres — CHECK, trigger, role grant — not only
+  in app code. New guarantee → new constraint, and break it once to prove it
+  fires.
+- Database tests run against real Postgres (`pnpm db:up`), never mocks.
+- Gate: `pnpm verify` (~2s) before work is done. Never `--no-verify`; there is
+  no CI, the hook is it.
 
-**Traps**
+Traps:
 
-- Three DB URLs. `MIGRATE_` (superuser) is for migrations only; app code uses
-  `APP_`, tax export uses `EXPORT_`. Never fix a privilege error by using a more
-  privileged URL — that silently voids the tax guarantee (§13.1).
-- Never run `pnpm db:generate`: drizzle snapshots stop at `0001`, migrations at
-  `0009`. Journal is truth; migrations are hand-written.
-- Public repo, private ledger. No real names, payees, amounts, institutions —
-  anywhere, including commit messages. Placeholders like `Bank A · PLN`.
-- Never `git commit --no-verify`. `pnpm verify` (~2s) before saying work is
-  done.
+- Three DB URLs: `MIGRATE_` (superuser — migrations only), `APP_` (everything
+  else), `EXPORT_` (tax view only). A privilege error usually means the design
+  is working; switching to a stronger URL silently voids the tax guarantee.
+- Never `pnpm db:generate` — drizzle snapshots stop at `0001`, migrations are
+  hand-written through `0009`, the journal is the source of truth.
+- Public repo, private ledger: placeholders only (`Bank A · PLN`, invented
+  names) — in code, examples, commits, and logs.
