@@ -30,7 +30,19 @@ export type AuditSpec = {
 
 export type OperationKind = "read" | "write";
 
-export type Operation<Input extends z.ZodTypeAny, Output, Ctx> = {
+export type Operation<
+  Input extends z.ZodTypeAny,
+  Output,
+  Ctx,
+  /**
+   * Carried as a type parameter, not just a field, so the *literal* `"read"`
+   * or `"write"` survives to whoever derives from the registry. Without it the
+   * field widens to the union and a router generator cannot tell a query from
+   * a mutation at the type level — which is how the client ended up with no
+   * types at all.
+   */
+  Kind extends OperationKind = OperationKind,
+> = {
   /** `verb_noun`, stable. Appears in `agent_tool_calls.tool` and in audit rows. */
   name: string;
 
@@ -41,7 +53,7 @@ export type Operation<Input extends z.ZodTypeAny, Output, Ctx> = {
    * Reads auto-run; writes render a `DiffCard` and wait for approval (§11.2).
    * This is what decides the gate, so it is not optional and not inferred.
    */
-  kind: OperationKind;
+  kind: Kind;
 
   /** Whether a bounded auto-mode grant may cover it. Most writes: false. */
   autoEligible: boolean;
@@ -112,9 +124,12 @@ export type Operation<Input extends z.ZodTypeAny, Output, Ctx> = {
  * the input type — and to refuse the two declarations that are always
  * mistakes rather than choices.
  */
-export function defineOperation<Input extends z.ZodTypeAny, Output, Ctx>(
-  op: Omit<Operation<Input, Output, Ctx>, "invoke">,
-): Operation<Input, Output, Ctx> {
+export function defineOperation<
+  Input extends z.ZodTypeAny,
+  Output,
+  Ctx,
+  Kind extends OperationKind,
+>(op: Omit<Operation<Input, Output, Ctx, Kind>, "invoke">): Operation<Input, Output, Ctx, Kind> {
   if (op.kind === "write" && !op.audit) {
     throw new Error(`operation "${op.name}": a write must declare its audit spec`);
   }

@@ -23,8 +23,14 @@ import { registry } from "./index.ts";
 
 const names = (r: object) => Object.keys(r).sort();
 
-/** The procedure names tRPC actually exposes under `op.*`. */
-function routerProcedures(router: ReturnType<typeof routerFromRegistry>): string[] {
+/**
+ * The procedure names tRPC actually exposes.
+ *
+ * `_def.procedures` is tRPC's runtime map; reading it needs a structural type
+ * rather than the router's precise one, because the point here is to inspect
+ * what was built at run time, not what the compiler believes.
+ */
+function routerProcedures(router: { _def: { procedures: object } }): string[] {
   return Object.keys(router._def.procedures).sort();
 }
 
@@ -126,7 +132,9 @@ describe("every declaration is complete", () => {
   it("derives the tRPC verb from kind — reads query, writes mutate", () => {
     const r = routerFromRegistry(registry);
     for (const op of ops) {
-      const proc = r._def.procedures[op.name] as { _def: { type: string } };
+      const procs = r._def.procedures as Record<string, { _def: { type: string } }>;
+      const proc = procs[op.name];
+      if (!proc) throw new Error(`no procedure for ${op.name}`);
       expect(proc._def.type, op.name).toBe(op.kind === "read" ? "query" : "mutation");
     }
   });

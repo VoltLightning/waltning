@@ -12,12 +12,16 @@
  * directly and never travels this path.
  */
 
-import type { AnyRouter } from "@trpc/server";
-import type { AnyOperation, Registry } from "@waltning/core";
+import type { AnyOperation, Operation, Registry } from "@waltning/core";
+import type { z } from "zod";
 import type { OperationContext } from "../registry/context.ts";
 import type { Context } from "./index.ts";
 import { publicProcedure, router } from "./index.ts";
 
+/**
+ * The procedure a single declaration becomes. Reads are queries and writes are
+ * mutations, derived from `kind` rather than declared twice.
+ */
 /**
  * Handlers need a database; the HTTP context may not have one, because
  * `/healthz` must answer when Postgres is down. Failing here rather than
@@ -30,13 +34,54 @@ function operationContext(ctx: Context): OperationContext {
   return { db: ctx.db, actor: "user", requestId: ctx.requestId, now: ctx.now };
 }
 
+function makeQuery<Input extends z.ZodTypeAny, Output>(
+  op: Operation<Input, Output, OperationContext, "read">,
+) {
+  return publicProcedure
+    .input(op.input)
+    .query(({ input, ctx }) => op.invoke(input, operationContext(ctx)));
+}
+
+function makeMutation<Input extends z.ZodTypeAny, Output>(
+  op: Operation<Input, Output, OperationContext, "write">,
+) {
+  return publicProcedure
+    .input(op.input)
+    .mutation(({ input, ctx }) => op.invoke(input, operationContext(ctx)));
+}
+
+/**
+ * Derived from the builders above rather than from tRPC's procedure types,
+ * which are not part of its public surface — the exported names are the erased
+ * `Any*` ones. Asking the builder what it returns keeps this on supported
+ * ground and cannot drift from what the loop below actually constructs.
+ */
+type ProcedureFor<Op> =
+  Op extends Operation<infer Input, infer Output, OperationContext, "read">
+    ? ReturnType<typeof makeQuery<Input, Output>>
+    : Op extends Operation<infer Input, infer Output, OperationContext, "write">
+      ? ReturnType<typeof makeMutation<Input, Output>>
+      : never;
+
+/**
+ * The router type a whole registry becomes.
+ *
+ * This exists because the function returned `AnyRouter` — tRPC's erased type.
+ * The router worked at run time and the client saw nothing:
+ * `inferRouterOutputs<AppRouter>["op"]["get_currencies"]` accepted
+ * `[{ code: "USD" }]`, a `CurrencySummary[]` missing every other field, and the
+ * input accepted a string where a boolean was required. §11.0 promises types
+ * survive to the client, and they did not.
+ */
+export type RouterFor<R> = { [K in keyof R]: ProcedureFor<R[K]> };
+
 /**
  * The shape tRPC's `router()` accepts. Named rather than inlined as
  * `Record<string, unknown>`, which said nothing and forced a cast at the end.
  */
-type ProcedureMap = Parameters<typeof router>[0];
+type ProcedureMap = Record<string, unknown>;
 
-export function routerFromRegistry(registry: Registry<OperationContext>): AnyRouter {
+export function routerFromRegistry<R extends Registry<OperationContext>>(registry: R) {
   const procedures: ProcedureMap = {};
 
   for (const op of Object.values(registry) as AnyOperation<OperationContext>[]) {
@@ -51,5 +96,9 @@ export function routerFromRegistry(registry: Registry<OperationContext>): AnyRou
         : base.mutation(({ input, ctx }) => op.invoke(input, operationContext(ctx)));
   }
 
-  return router(procedures);
+  // The one cast, and it is the point of the file: the record is built by a
+  // loop, which no inference can follow, so the *type* is computed from the
+  // registry instead. Type-level tests assert the result matches each
+  // declaration rather than taking this assertion's word for it.
+  return router(procedures as RouterFor<R>);
 }

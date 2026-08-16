@@ -29,6 +29,10 @@ Conventions that hold everywhere:
   Narrow legitimate uses, each worth a comment: `catch` bindings (the language
   gives no choice), JSON off the wire, `unknown` in a *constraint* position for
   a deliberately heterogeneous collection, `never` for exhaustiveness.
+- **A loose type at a seam is where contracts leak.** Concrete declarations are
+  usually fine; the generic collection that holds them is where `unknown`
+  creeps in and validation gets skippable. Pin those with compile-time
+  assertions (`contract.types.ts`) and break them once to prove they fail.
 - Gate: `pnpm verify` before work is done. Never `--no-verify`; there is no CI,
   the hook is it.
 

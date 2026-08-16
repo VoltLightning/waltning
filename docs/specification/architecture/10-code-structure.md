@@ -129,6 +129,18 @@ without validation — enforced by the type rather than by both call sites
 remembering. Seven deliberate violations were written against the registry;
 six failed to compile before this, and this is the seventh.
 
+**Contracts are pinned by compile-time assertions, not by care.**
+`apps/api/src/registry/contract.types.ts` asserts that client inputs and
+outputs are the declared types, that no client type is `any`, that every
+operation reaches the client, and that the widened form hides `handler` and
+exposes `invoke`. It runs in `pnpm -r typecheck`, which the pre-commit hook
+gates on — so weakening the contract fails to *compile*, deterministically and
+offline, rather than failing a review.
+
+Each assertion is there because the property was once broken, and each was
+verified to fail: reverting the router to `AnyRouter` breaks eight of them,
+re-exposing `handler` on `AnyOperation` breaks one.
+
 One consequence worth knowing, because it looks like a style choice and is not:
 `Operation.handler` is declared with **method syntax**, not as an arrow
 property. Under `strictFunctionTypes` a property-form function is
