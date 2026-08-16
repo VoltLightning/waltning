@@ -206,8 +206,8 @@ what the Pi actually is, and what each part costs when it fails — is in
 ```
 waltning/
 ├── packages/
-│   ├── db/           Drizzle schema, client, money helpers
-│   └── core/         shared domain types, Zod schemas    [extract at Phase 2]
+│   ├── core/         contracts: money.ts, shared types, Zod schemas, registry defs
+│   ├── db/           Drizzle schema and client — depends on core
 ├── apps/
 │   ├── api/          Hono + tRPC server
 │   └── mobile/       Expo — iOS and web from one codebase
@@ -223,9 +223,14 @@ workspace source natively. `tsc` runs as a typechecker, not a build
 orchestrator. This removes an edit-rebuild-run cycle from every change, and an
 entire class of stale-build bug with it.
 
-`packages/core` is created when a second consumer exists (Phase 2), not before.
-Until then its contents live in `packages/db`, and hoisting them out is a file
-move plus an import path.
+`packages/core` exists from day one, and it is the **bottom** of the dependency
+graph: `api → db → core ← mobile`. The earlier plan — create it when a second
+consumer appears — was reversed, because deferral is a trap for whoever writes
+the first mobile code: `money.ts` would be imported from `packages/db`, which
+drags the Postgres driver into a phone bundle, and the "file move plus an import
+path" lands on someone else's task. `core` must run identically on phone, web
+and server: decimal.js and zod only, no Node APIs, no database driver.
+`mobile` never imports `db`.
 
 ### 4.3 Stack and rationale
 
