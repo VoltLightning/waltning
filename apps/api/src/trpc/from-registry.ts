@@ -76,13 +76,17 @@ type ProcedureFor<Op> =
 export type RouterFor<R> = { [K in keyof R]: ProcedureFor<R[K]> };
 
 /**
- * The shape tRPC's `router()` accepts. Named rather than inlined as
- * `Record<string, unknown>`, which said nothing and forced a cast at the end.
+ * What the loop below actually accumulates: procedures, of one kind or the
+ * other. It was `Record<string, unknown>`, which said only "some object" —
+ * a value that is not a procedure at all would have been accepted right up to
+ * the cast at the end.
  */
-type ProcedureMap = Record<string, unknown>;
+type BuiltProcedure =
+  | ReturnType<typeof makeQuery<z.ZodTypeAny, unknown>>
+  | ReturnType<typeof makeMutation<z.ZodTypeAny, unknown>>;
 
 export function routerFromRegistry<R extends Registry<OperationContext>>(registry: R) {
-  const procedures: ProcedureMap = {};
+  const procedures: Record<string, BuiltProcedure> = {};
 
   for (const op of Object.values(registry) as AnyOperation<OperationContext>[]) {
     const base = publicProcedure.input(op.input);

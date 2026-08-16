@@ -19,7 +19,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { createDb } from "@waltning/db";
+import { createDb, requireRow } from "@waltning/db";
 import {
   accountGroups,
   accountKind,
@@ -115,6 +115,10 @@ async function main() {
       .limit(1)
   )[0]?.code;
   if (!pivot) throw new Error("no pivot currency — run the seed first");
+  // Captured after the guard because narrowing does not follow `pivot` into
+  // the nested `pivotRate` closure below — which is why both uses there had
+  // grown a `!`. One named constant answers it once instead.
+  const pivotCode: string = pivot;
 
   const known = new Set(
     (await db.select({ code: currencies.code }).from(currencies)).map((c) => c.code),
@@ -130,11 +134,11 @@ async function main() {
       .limit(1);
     if (found[0]) groupIds.set(name, found[0].id);
     else {
-      const [row] = await db
+      const rows = await db
         .insert(accountGroups)
         .values({ name })
         .returning({ id: accountGroups.id });
-      groupIds.set(name, row!.id);
+      groupIds.set(name, requireRow(rows, `account group "${name}"`).id);
     }
   }
 
@@ -176,8 +180,8 @@ async function main() {
       await db.update(accounts).set(values).where(eq(accounts.id, existing[0].id));
       accountIds.set(a.external_id, existing[0].id);
     } else {
-      const [row] = await db.insert(accounts).values(values).returning({ id: accounts.id });
-      accountIds.set(a.external_id, row!.id);
+      const rows = await db.insert(accounts).values(values).returning({ id: accounts.id });
+      accountIds.set(a.external_id, requireRow(rows, `account "${a.name}"`).id);
     }
   }
 
@@ -217,7 +221,7 @@ async function main() {
       await db
         .select({ rate: fxRates.rate })
         .from(fxRates)
-        .where(and(eq(fxRates.base, pivot!), eq(fxRates.quote, ccy), eq(fxRates.date, date)))
+        .where(and(eq(fxRates.base, pivotCode), eq(fxRates.quote, ccy), eq(fxRates.date, date)))
         .limit(1)
     )[0];
 
@@ -229,7 +233,7 @@ async function main() {
         await db
           .select({ rate: fxRates.rate })
           .from(fxRates)
-          .where(and(eq(fxRates.base, pivot!), eq(fxRates.quote, ccy)))
+          .where(and(eq(fxRates.base, pivotCode), eq(fxRates.quote, ccy)))
           .orderBy(sql`abs(${fxRates.date} - ${date}::date)`)
           .limit(1)
       )[0];
@@ -252,7 +256,11 @@ async function main() {
   let driftMax = new Decimal(0);
 
   for (const t of data.income) {
-    const head = t.category_path.split(">")[0]!.trim();
+    // Destructured with a default rather than asserted: `split` always yields
+    // at least one element, but saying so with `!` is a claim the compiler
+    // cannot check, and an empty path should read as unmapped rather than crash.
+    const [rawHead = ""] = t.category_path.split(">");
+    const head = rawHead.trim();
     if (!(head in INCOME_MAP)) {
       console.warn(`  ! unmapped income category "${head}" — skipped`);
       skippedCategory++;
@@ -268,7 +276,11 @@ async function main() {
     const accountId = accountIds.get(t.account);
     if (!accountId) continue;
 
-    const acct = data.accounts.find((a) => a.external_id === t.account)!;
+    // `accountIds` was built from `data.accounts`, so a match must exist — but
+    // "must" is the word this codebase has learned to distrust. If the two ever
+    // disagree, say so with the id rather than crashing on a missing property.
+    const acct = data.accounts.find((a) => a.external_id === t.account);
+    if (!acct) throw new Error(`income row references unknown account ${t.account}`);
     const fx = await pivotRate(acct.currency, t.date);
     // Only reachable when a currency has no rate at all — nothing to estimate
     // from. Reported rather than swallowed.
@@ -290,11 +302,14 @@ async function main() {
       if (drift.gt(driftMax)) driftMax = drift;
     }
 
+    const categoryId = catIds.get(key);
+    if (!categoryId) throw new Error(`no seeded category for "${key}" — run the seed`);
+
     const values = {
       date: t.date,
       type: "income" as const,
       accountId,
-      categoryId: catIds.get(key)!,
+      categoryId,
       amountOriginal: amount.toFixed(8),
       currency: acct.currency,
       fxRate: fx.rate,

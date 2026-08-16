@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import { createDb } from "../client.ts";
+import { requireRow } from "../rows.ts";
 import { categories, currencies as currenciesTable } from "../schema.ts";
 import {
   currencies as currencySeed,
@@ -80,7 +81,7 @@ async function upsertCategory(v: {
     return existing[0].id;
   }
 
-  const [row] = await db
+  const rows = await db
     .insert(categories)
     .values({
       name: v.name,
@@ -92,7 +93,7 @@ async function upsertCategory(v: {
       externalId,
     })
     .returning({ id: categories.id });
-  return row!.id;
+  return requireRow(rows, "seed category").id;
 }
 
 async function seedTree(tree: SeedGroup[], startSort: number) {

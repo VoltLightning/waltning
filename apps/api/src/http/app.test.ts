@@ -8,6 +8,21 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { ErrorEnvelope } from "../common/errors.ts";
+import type { Health, Readiness } from "./health.ts";
+
+/**
+ * One typed boundary instead of a cast per assertion.
+ *
+ * A response body is JSON and therefore untyped until someone asserts a shape —
+ * but asserting it *here*, once, against the real exported types is what makes
+ * these tests catch a contract change. Casting inline to `Record<string,
+ * unknown>` reads as caution and is the opposite: it lets the shape drift.
+ */
+async function json<T>(res: Response): Promise<T> {
+  return (await res.json()) as T;
+}
+
 import { WALTNING_HEADER } from "../config/build.ts";
 import { createApp } from "./app.ts";
 
@@ -37,7 +52,6 @@ describe("GET /healthz", () => {
    */
   it("answers without a database", async () => {
     const saved = process.env["APP_DATABASE_URL"];
-    process.env["APP_DATABASE_URL"] = undefined as unknown as string;
     delete process.env["APP_DATABASE_URL"];
     try {
       const res = await app().request("/healthz");
@@ -54,10 +68,10 @@ describe("GET /readyz", () => {
     delete process.env["APP_DATABASE_URL"];
     try {
       const res = await app().request("/readyz");
-      const body = (await res.json()) as Record<string, unknown>;
+      const body = await json<Readiness>(res);
       expect(res.status).toBe(503);
-      expect(body["ok"]).toBe(false);
-      expect(body["db"]).toBe("down");
+      expect(body.ok).toBe(false);
+      expect(body.db).toBe("down");
       expect(res.headers.get(WALTNING_HEADER)).toBeTruthy();
     } finally {
       if (saved !== undefined) process.env["APP_DATABASE_URL"] = saved;
@@ -81,9 +95,9 @@ describe("tRPC", () => {
   it("answers ping in the tRPC envelope — Rule 0's second condition", async () => {
     const res = await app().request("/trpc/ping");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { result?: { data?: Record<string, unknown> } };
-    expect(body.result?.data?.["ok"]).toBe(true);
-    expect(body.result?.data?.["build"]).toBe("dev");
+    const body = await json<{ result: { data: Health & { requestId: string } } }>(res);
+    expect(body.result.data.ok).toBe(true);
+    expect(body.result.data.build).toBe("dev");
     expect(res.headers.get(WALTNING_HEADER)).toBeTruthy();
   });
 
@@ -103,16 +117,16 @@ describe("tRPC", () => {
     const text = await res.text();
     expect(text).not.toMatch(/\bstack\b/i);
     expect(text).not.toContain("at Object.");
-    const body = JSON.parse(text) as { error: { code: string; data: { httpStatus: number } } };
+    const body = JSON.parse(text) as ErrorEnvelope & { error: { data: { httpStatus: number } } };
     expect(body.error.code).toBe("not_found");
     expect(body.error.data.httpStatus).toBe(404);
   });
 
   it("shapes an unknown procedure as an enveloped domain error", async () => {
     const res = await app().request("/trpc/nope");
-    const body = (await res.json()) as { error?: { code?: unknown; message?: unknown } };
+    const body = await json<ErrorEnvelope>(res);
     expect(body.error).toBeDefined();
-    expect(body.error?.code).toBe("not_found");
-    expect(typeof body.error?.message).toBe("string");
+    expect(body.error.code).toBe("not_found");
+    expect(typeof body.error.message).toBe("string");
   });
 });
