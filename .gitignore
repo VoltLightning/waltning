@@ -104,3 +104,7 @@ coverage/
 AGENTS.md
 CLAUDE.md
 # END ai-rulez
+
+# Expo build artifacts and generated types
+apps/*/.expo/
+apps/*/dist/
