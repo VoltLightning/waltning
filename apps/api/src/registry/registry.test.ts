@@ -182,14 +182,18 @@ describe("defineOperation refuses declarations that are always mistakes", () => 
         ...base,
         name: "audited_read",
         kind: "read",
-        audit: { entity: "x", action: "read" },
+        audit: { entity: "x", action: "read", entityId: () => "id" },
       }),
     ).toThrow(/nothing to audit/);
   });
 
   it("refuses a name that is not lower_snake_case", () => {
     expect(() =>
-      defineOperation({ ...base, name: "createCounterparty", audit: { entity: "x", action: "y" } }),
+      defineOperation({
+        ...base,
+        name: "createCounterparty",
+        audit: { entity: "x", action: "y", entityId: () => "id" },
+      }),
     ).toThrow(/lower_snake_case/);
   });
 });
@@ -204,6 +208,38 @@ describe("offline eligibility", () => {
     for (const op of Object.values(registry)) {
       expect(typeof op.offlineEligible, op.name).toBe("boolean");
       expect(op.opVersion, op.name).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  /**
+   * §14.3 and `architecture/09`: an operation needing server state the device
+   * cannot have must never enter an outbox. The outbox itself does not exist
+   * yet, so this asserts the property the drain will read — that the flag is
+   * declared, and that the operations the specification names as ineligible
+   * are declared that way rather than by accident.
+   */
+  it("refuses to queue an operation that is not offline-eligible", () => {
+    // The check the drain will perform, written against today's registry so
+    // that adding an ineligible operation to an outbox becomes a test failure
+    // rather than a data-loss bug found on a train.
+    const queueable = (name: string): boolean =>
+      Object.values(registry).find((op) => op.name === name)?.offlineEligible === true;
+
+    expect(queueable("get_currencies")).toBe(true);
+    expect(queueable("create_counterparty")).toBe(false);
+
+    // `operations.md` names these as permanently ineligible. They are not
+    // declared yet; when they are, this list is what fails if one is marked
+    // queueable.
+    const mustNeverQueue = [
+      "run_import",
+      "close_period",
+      "rerate_transactions",
+      "materialize_occurrence",
+    ];
+    for (const name of mustNeverQueue) {
+      const op = Object.values(registry).find((o) => o.name === name);
+      if (op) expect(op.offlineEligible, name).toBe(false);
     }
   });
 

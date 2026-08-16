@@ -6,10 +6,10 @@
  * to say about it.
  */
 
-import { defineOperation } from "@waltning/core";
 import { z } from "zod";
 import { listCurrencies } from "../../services/currencies.ts";
 import type { OperationContext } from "../context.ts";
+import { defineOperation } from "../define.ts";
 
 export const getCurrencies = defineOperation({
   name: "get_currencies",

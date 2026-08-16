@@ -16,16 +16,28 @@
  */
 
 import type { z } from "zod";
+import type { JsonValue } from "../json.ts";
 
 /**
  * What a write touches, for the audit row the registry writes on the
  * handler's behalf. If a handler could write it, one eventually would forget.
  */
-export type AuditSpec = {
+export type AuditSpec<Input extends z.ZodTypeAny, Output> = {
   /** Table the row belongs to, e.g. `counterparties`. */
   entity: string;
   /** Past-tense verb stored in `audit_log.action`, e.g. `created`. */
   action: string;
+  /**
+   * The affected row's id. Declared as an extractor rather than guessed from
+   * `output.id`, because an operation may return a summary, a list, or nothing
+   * that resembles the row it changed — and a wrong `entity_id` makes the audit
+   * trail worse than absent, since it points confidently at the wrong row.
+   */
+  entityId(input: z.output<Input>, output: Output): string;
+  /** State before the change, for an update or delete. */
+  before?(input: z.output<Input>, output: Output): JsonValue | null;
+  /** State after. Omitted for a delete. */
+  after?(input: z.output<Input>, output: Output): JsonValue | null;
 };
 
 export type OperationKind = "read" | "write";
@@ -83,7 +95,7 @@ export type Operation<
   taxSensitiveFields?: readonly string[] | undefined;
 
   /** Required on writes: the registry emits the audit row, not the handler. */
-  audit?: AuditSpec | undefined;
+  audit?: AuditSpec<Input, Output> | undefined;
 
   /**
    * Written **for the model to read**, not for a developer. This is the tool's

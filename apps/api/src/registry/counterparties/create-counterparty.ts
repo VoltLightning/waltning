@@ -10,10 +10,10 @@
  * and expensive to merge.
  */
 
-import { defineOperation } from "@waltning/core";
 import { z } from "zod";
-import { insertCounterparty } from "../../services/counterparties.ts";
+import { type CounterpartyRow, insertCounterparty } from "../../services/counterparties.ts";
 import type { OperationContext } from "../context.ts";
+import { defineOperation } from "../define.ts";
 
 export const createCounterparty = defineOperation({
   name: "create_counterparty",
@@ -21,7 +21,19 @@ export const createCounterparty = defineOperation({
   autoEligible: false,
   offlineEligible: false,
   opVersion: 1,
-  audit: { entity: "counterparties", action: "created" },
+  audit: {
+    entity: "counterparties",
+    action: "created",
+    // Annotated rather than inferred: the extractors sit in the same object
+    // literal as `handler`, so `Output` is still being inferred *from* that
+    // handler when these are checked, and TypeScript has nothing to go on yet.
+    entityId: (_input, output: CounterpartyRow) => output.id,
+    after: (_input, output: CounterpartyRow) => ({
+      id: output.id,
+      name: output.name,
+      kind: output.kind,
+    }),
+  },
   description:
     "Create a person or company you transact with — someone you lend to, borrow from, " +
     "or who contributes to a shared account. Use this only when no existing counterparty " +

@@ -11,7 +11,7 @@
  * than a unit test with a mocked database.
  */
 
-import { currencies } from "@waltning/db";
+import { auditLog, currencies } from "@waltning/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../packages/db/src/test/scratch.ts";
 import type { OperationContext } from "./context.ts";
@@ -102,6 +102,51 @@ describe("create_counterparty", () => {
   it("validates input at the schema, before any handler runs", async () => {
     const result = createCounterparty.input.safeParse({ name: "   ", kind: "person" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("the registry emits the audit row, not the handler", () => {
+  /**
+   * `operations.md`: audit is written by the registry, because a handler that
+   * *can* forget eventually will. The row is attached when the operation is
+   * declared, so there is no version of it without one — which is what makes
+   * this true for the agent, which never goes through the router.
+   */
+  it("writes an audit row for a write, with the affected row's id", async () => {
+    const before = await s.sql`SELECT count(*)::int AS n FROM audit_log`;
+    const row = (await createCounterparty.invoke({ name: "Piotr", kind: "person" }, ctx)) as {
+      id: string;
+    };
+
+    const rows = await s.db.select().from(auditLog);
+    expect(rows).toHaveLength(Number(before[0]?.["n"] ?? 0) + 1);
+
+    const entry = rows.at(-1);
+    expect(entry?.entity).toBe("counterparties");
+    expect(entry?.action).toBe("created");
+    expect(entry?.entityId).toBe(row.id);
+    expect(entry?.actor).toBe("user");
+    expect(entry?.after).toMatchObject({ name: "Piotr", kind: "person" });
+  });
+
+  it("writes nothing when the write fails", async () => {
+    await createCounterparty.invoke({ name: "Ola", kind: "person" }, ctx);
+    const before = await s.db.select().from(auditLog);
+
+    await expect(
+      createCounterparty.invoke({ name: "  ola  ", kind: "person" }, ctx),
+    ).rejects.toThrow(/already exists/);
+
+    // An audit row claiming a change that did not happen is worse than none:
+    // it is the record you would trust while reconstructing what went wrong.
+    const after = await s.db.select().from(auditLog);
+    expect(after).toHaveLength(before.length);
+  });
+
+  it("writes no audit row for a read", async () => {
+    const before = await s.db.select().from(auditLog);
+    await getCurrencies.invoke({}, ctx);
+    expect(await s.db.select().from(auditLog)).toHaveLength(before.length);
   });
 });
 
