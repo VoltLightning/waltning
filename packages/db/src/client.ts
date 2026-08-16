@@ -38,4 +38,20 @@ export function requireDatabaseUrl(): string {
   return url;
 }
 
+/**
+ * A real round trip, for `/readyz`.
+ *
+ * Lives here because the driver does: an app asking "is the database up" must
+ * not have to import `postgres` to ask it. `SELECT 1` proves the connection
+ * rather than the pool's opinion of the connection.
+ */
+export async function ping(db: Database): Promise<boolean> {
+  try {
+    await db.$client`SELECT 1`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export { schema };

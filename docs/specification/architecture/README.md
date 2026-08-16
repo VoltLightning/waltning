@@ -18,6 +18,7 @@ first module, and the boundaries that must not be crossed while writing the rest
 | 7 | [`07-test-strategy.md`](07-test-strategy.md) | What to test, at which layer, and what this project learned about tests that do not work |
 | 8 | [`08-offline-and-concurrency.md`](08-offline-and-concurrency.md) | What an outbox entry *is*, idempotency, ordering, and surviving an app update |
 | 9 | [`09-connectivity.md`](09-connectivity.md) | That "online" is not a boolean — twelve states, a probe contract, and why a 200 is not a success |
+| 10 | [`10-code-structure.md`](10-code-structure.md) | Where a file goes: layers on the backend, atomic design on the frontend, and which way dependencies point |
 
 **Sequence of work** is [`../build-order.md`](../build-order.md) — the single
 plan reconciling `SPEC.md` §16 with the component order, including the Phase 0.5
