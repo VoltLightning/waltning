@@ -85,6 +85,10 @@ The three database URLs are deliberate: `MIGRATE_` is the superuser (migrations
 only), `APP_` is what the API runs as, `EXPORT_` can read a single tax view.
 The separation *is* the tax guarantee — don't collapse them.
 
+`pnpm test` runs the suite against a real Postgres — each test file gets its own
+database, cloned from a migrated template, and dropped afterwards. There are no
+database mocks.
+
 `pnpm verify` (Biome + strict TypeScript, ~2 s) is the gate; the pre-commit
 hook runs it for you.
 

@@ -32,6 +32,7 @@ pnpm db:up
 pnpm db:migrate
 pnpm db:seed
 pnpm verify         # biome + typecheck, ~2s — run before every push
+pnpm test           # suite against a real Postgres; no database mocks
 ```
 
 Three database URLs, on purpose: `MIGRATE_` is the superuser (migrations only —
