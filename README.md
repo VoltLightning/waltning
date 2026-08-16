@@ -1,85 +1,127 @@
 # Waltning
 
-Self-hosted personal finance system — React Native app, web dashboard, receipt
-scanner, statement import, and an LLM agent over a Postgres ledger you own.
+Self-hosted personal finance: a mobile app that works offline, a web dashboard,
+receipt scanning, bank-statement import, and an LLM agent with typed tools —
+over a multi-currency Postgres ledger that runs on your own hardware and is
+reachable only through your own VPN.
 
-Built to replace [RealByte Money Manager](https://www.realbyteapps.com/), which
-has no API, no bulk editing, and limited export — and the file-based Python
-pipeline that grew up around it.
+Built to replace [Money Manager](https://www.realbyteapps.com/) (no API, no
+bulk editing, limited export) and the file-based pipeline that grew around it.
 
-## Documents
+## Why it exists
 
-| | |
+Commercial finance apps put five years of your money on someone else's server
+and give you a subscription and an export button. Waltning inverts that:
+
+- **You own the ledger.** PostgreSQL on a Raspberry Pi at home. No public
+  ingress — every device connects over Tailscale, so there is no login page on
+  the internet to find.
+- **Multi-currency done right.** Every transaction stores its amount *and* the
+  FX rate on its own date. Transfers store both sides, so the realized rate is
+  a fact and the spread against the reference rate becomes a visible `FX Cost`.
+- **The phone works offline, indefinitely.** Capture queues into a local
+  outbox; a server checkpoint plus the outbox reconstructs your figures without
+  the server. Sync is explicit and bidirectional.
+- **AI where it helps, gated where it matters.** The agent gets typed tools,
+  not SQL. Reads are free; every write shows a diff card you approve. Receipt
+  extraction and voice capture use small per-surface models.
+- **Tax isolation is structural.** Exports run under a database role that can
+  read one business-only view and nothing else — a personal expense reaching a
+  tax report fails loudly instead of slipping through.
+
+## Architecture
+
+```mermaid
+graph LR
+    subgraph tailnet["Tailscale — the only way in"]
+        PHONE["mobile<br/><small>Expo · SQLite outbox</small>"]
+        WEB["web dashboard<br/><small>same codebase, static export</small>"]
+        subgraph pi["Raspberry Pi · Docker Compose"]
+            CADDY["caddy"]
+            API["api<br/><small>Hono + tRPC</small>"]
+            PG[("postgres 16")]
+            MINIO[("minio<br/><small>receipts</small>")]
+        end
+    end
+    FX["FX rates<br/><small>ECB · NBP · …</small>"]
+    LLM["model providers"]
+    B2["Backblaze B2<br/><small>encrypted backups</small>"]
+
+    PHONE & WEB -->|tRPC| CADDY --> API
+    API --> PG & MINIO
+    API -->|outbound only| FX & LLM
+    pi -->|nightly| B2
+```
+
+Every external arrow is outbound. The API is the only writer to Postgres, and
+every write in the system is a named, validated, audited **operation** in one
+registry — the screens and the agent are two consumers of the same registry.
+Invariants live in the database (constraints, triggers, role grants), so they
+hold even when application code is wrong.
+
+| Piece | What it does |
 |---|---|
-| **[SPEC.md](SPEC.md)** | Architecture, data model, FX semantics, security, migration, tax layer, phasing |
-| **[docs/specification/](docs/specification/)** | The interface: principles, design system, 15 journeys, 29 screens |
-| **[TAXONOMY.md](TAXONOMY.md)** | Proposed category tree, derived from five years of transaction data |
+| `apps/mobile` | Expo/React Native — iOS and web from one codebase. Offline capture, outbox, replica |
+| `apps/api` | Hono + tRPC. Operation registry, agent runtime, import pipelines, FX sync, exports |
+| `packages/core` | The contract: `money.ts`, shared types, Zod schemas. Runs identically on phone and server |
+| `packages/db` | Drizzle schema, hand-written migrations, seed, FX backfill |
+| `tools/migrate-mm` | One-shot Money Manager importer with verification gates |
 
-## Status
+## Getting started
 
-Specification, with the data foundation built.
+Node ≥ 22, pnpm ≥ 10, Docker.
 
-**Done** — schema applied to Postgres and its invariants verified; taxonomy
-seeded (57 leaves live, 59 in the seed pending a re-run); FX backfilled against
-a USD pivot from 2020-11 — 8,803 rate-days, complete for PLN, EUR, GBP and BYN.
+```sh
+git clone https://github.com/VoltLightning/waltning && cd waltning
+pnpm install                 # also installs the git hooks
+cp .env.example .env         # fill it in — note the three database URLs
+pnpm db:up                   # postgres on 127.0.0.1, loopback only
+pnpm db:migrate              # ten migrations, in order
+pnpm db:seed                 # currencies + category tree
+pnpm dev                     # api + web
+```
 
-**Known gaps** — GEL holds 11 of 2,080 days (NBG rate-limits aggressively); RUB
-stops at 2022-03-11, where ECB delisted it. The Money Manager import has been
-written but not yet run, so there are no accounts or transactions.
+The three database URLs are deliberate: `MIGRATE_` is the superuser (migrations
+only), `APP_` is what the API runs as, `EXPORT_` can read a single tax view.
+The separation *is* the tax guarantee — don't collapse them.
 
-**Next** — specifying the interface (`docs/specification/`), then the API and
-the app. Specification comes first deliberately: the pass that produced this
-spec found twenty defects in the model, and every one was cheaper to fix as
-prose than as a migration.
+`pnpm verify` (Biome + strict TypeScript, ~2 s) is the gate; the pre-commit
+hook runs it for you.
 
-## What makes it different
-
-- **Multi-currency done properly.** Every transaction stores its local amount
-  plus the FX rate *on its own date*, rather than one global rate applied
-  retroactively across years of history.
-- **Transfers are a single row**, not two rows that have to be re-paired.
-- **Tax reporting is a pluggable adapter layer.** The ledger stays
-  jurisdiction-neutral; Poland (KPiR), the US (Schedule C), and Germany
-  (Anlage EÜR) are projections over it, versioned by effective date.
-- **Personal expenses are structurally unreportable.** Tax adapters read a
-  business-only view under a database role with no privilege on the underlying
-  table, so a personal row reaching a tax output fails loudly rather than
-  slipping through.
-- **The agent gets typed tools, not SQL.** Reads run freely; every write
-  renders a diff card that must be approved, and every tool call is audited.
+**Deploying to a Pi** — Compose, Tailscale, Caddy with tailnet certs, nightly
+encrypted dumps to B2: see
+[`docs/specification/architecture/05-deployment.md`](docs/specification/architecture/05-deployment.md).
 
 ## Stack
 
-TypeScript throughout. Hono, tRPC, and Drizzle over PostgreSQL 16 on the
-server; Expo for mobile, with the web dashboard built from the same codebase
-via React Native Web. Deployed as Docker Compose on a Raspberry Pi, reachable
-only over Tailscale — no public ingress. Receipt extraction and the agent run
-on small vision-capable models, chosen per surface (`SPEC.md` §11.4).
+TypeScript throughout. Hono + tRPC + Drizzle over PostgreSQL 16; Expo for
+mobile and web from one codebase; Docker Compose on a Raspberry Pi behind
+Tailscale. Money is `numeric(20,8)` decimal strings end to end — never floats.
+Every layer choice, and every refusal, has its reasoning recorded in
+[`SPEC.md` §4.3](SPEC.md).
 
-Biome formats and lints, TypeScript runs strict enough that configuration is
-read by bracket and every array index is `T | undefined`, and a pre-commit hook
-enforces both — plus a refusal to commit key material or financial-data file
-types. `pnpm verify` is the whole gate, and it takes about two seconds.
+## Documentation
+
+| | |
+|---|---|
+| [`SPEC.md`](SPEC.md) | Architecture, data model, FX semantics, security, tax layer — with reasoning |
+| [`docs/specification/`](docs/specification/) | Operations registry, computations, 17 journeys, 31 screens, design system |
+| [`docs/specification/defects.md`](docs/specification/defects.md) | 101 findings from ten adversarial reviews, and their status |
+| [`TAXONOMY.md`](TAXONOMY.md) | The category tree, derived from five years of data |
 
 ## Data handling
 
-This repository contains no financial data. Ledger contents, receipt images,
-database dumps, bank statements and app backups are excluded by `.gitignore` and
-stay out of version control — the patterns are un-anchored, so they match
-wherever the application writes rather than only at the repository root.
+This repository contains no financial data. Ledger contents, statements, dumps
+and backups are excluded by `.gitignore` and refused by the pre-commit hook
+even when force-added. People and institutions in examples are placeholders
+(`Bank A · PLN`, invented names); structural facts — row counts, currencies,
+tax scheme — are real.
 
-**Institutions, accounts and people are referred to by role or by a fictional
-placeholder** — `Bank A · PLN`, `Clearing · PLN`, and invented first names —
-throughout the specification and the migrations.
+## Contributing
 
-The examples keep the *shape* of a real five-year ledger, because the design
-reasoning only holds if they are realistic: a debt reassigned between three
-people, a bank description in another language, a clearing account that never quite
-settles. The identities in them are not real.
-
-Structural facts are real and describe the problem rather than the person: row
-counts, the number of accounts, the currency list, and the tax scheme.
+Actively developed, changes fast — read [CONTRIBUTING.md](CONTRIBUTING.md) and
+open an issue before building anything.
 
 ## License
 
-[Apache License 2.0](LICENSE) — © 2026 Vitaliy Pankov.
+[Apache 2.0](LICENSE) — © 2026 Vitaliy Pankov.
