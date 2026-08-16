@@ -7,9 +7,9 @@
  */
 
 import { z } from "zod";
-import { listCurrencies } from "../../services/currencies.ts";
-import type { OperationContext } from "../context.ts";
-import { defineOperation } from "../define.ts";
+import type { OperationContext } from "../../registry/context.ts";
+import { defineOperation } from "../../registry/define.ts";
+import { listCurrencies } from "./currencies.service.ts";
 
 export const getCurrencies = defineOperation({
   name: "get_currencies",

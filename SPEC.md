@@ -210,11 +210,12 @@ waltning/
 │   ├── db/           Drizzle schema and client — depends on core
 │   └── ui/           component library — atoms · molecules · organisms
 ├── apps/
-│   ├── api/          Hono + tRPC server, layered:
-│   │                   config · common · middleware · http · trpc
-│   │                   routes → registry → services → infra
+│   ├── api/          Hono + tRPC server
+│   │                   modules/<domain>/ = operation + service + tests
+│   │                   common · infra · registry · http · trpc (composition)
 │   └── mobile/       Expo — iOS and web from one codebase
-│                       app/ = expo-router screens, the only layer that fetches
+│                       src/features/<name>/ = ui · model · api
+│                       app/ = expo-router routes, the only layer that fetches
 ├── tools/
 │   └── migrate-mm/   one-shot Money Manager importer
 ├── docker/           Compose files, Caddyfile, Pi deployment

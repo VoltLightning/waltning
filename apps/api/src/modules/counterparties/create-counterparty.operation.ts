@@ -11,9 +11,9 @@
  */
 
 import { z } from "zod";
-import { type CounterpartyRow, insertCounterparty } from "../../services/counterparties.ts";
-import type { OperationContext } from "../context.ts";
-import { defineOperation } from "../define.ts";
+import type { OperationContext } from "../../registry/context.ts";
+import { defineOperation } from "../../registry/define.ts";
+import { type CounterpartyRow, insertCounterparty } from "./counterparties.service.ts";
 
 export const createCounterparty = defineOperation({
   name: "create_counterparty",

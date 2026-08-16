@@ -8,7 +8,7 @@
  */
 
 import { counterparties, type Database } from "@waltning/db";
-import { DomainError } from "../common/errors.ts";
+import { DomainError } from "../../common/errors.ts";
 
 export type NewCounterparty = {
   name: string;

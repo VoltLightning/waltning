@@ -14,8 +14,8 @@
 import { auditLog, currencies } from "@waltning/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../packages/db/src/test/scratch.ts";
-import type { OperationContext } from "./context.ts";
-import { registry } from "./index.ts";
+import type { OperationContext } from "../registry/context.ts";
+import { registry } from "../registry/index.ts";
 
 let s: Scratch;
 let ctx: OperationContext;
