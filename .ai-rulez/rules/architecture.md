@@ -35,6 +35,11 @@ build): `atoms/` no domain knowledge · `molecules/` domain meaning, no data ·
 routes and are **the only layer that fetches** — a molecule calling tRPC can't
 render in a diff preview, a test, or offline from the replica.
 
+Imports use explicit `.ts` specifiers (verified: Metro resolves them on web and
+iOS) — **except any file with a platform variant**, which must be
+extension-less. `./Button.tsx` silently ignores `Button.web.tsx`; `./Button`
+picks it up. Nothing errors, so this one is caught only by knowing it.
+
 **A feature is a vertical slice, built in this order — hard requirement:**
 
 1. Schema change + migration (if data changes)

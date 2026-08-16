@@ -92,6 +92,38 @@ That last line is the one with teeth. A molecule that calls tRPC cannot be
 rendered in a diff preview, in a test, or offline from the replica — and the
 offline design (§14.3) depends on being able to render from folded local state.
 
+### Import specifiers, and the one rule that is not obvious
+
+§4.2 has always claimed that source-only packages import each other by real
+path — `./money.ts`, extension included — and that Metro handles it. **Verified
+by spike**, against a throwaway Expo app: an explicit `.ts` specifier resolves
+for both `web` and `ios`, relative *and* inside a linked package with an
+`exports` map, with the marker strings present in both the web bundle and the
+Hermes bytecode. A deliberately broken specifier fails the build loudly, so the
+successes are real rather than silently skipped.
+
+**But an explicit extension defeats platform resolution, silently.** Measured
+in the same spike:
+
+| Import | `…web.ts` sibling present | What web bundled |
+|---|---|---|
+| `./lib/rel.ts` | yes | **the base file** — override ignored |
+| `./lib/noext` | yes | the `.web.ts` override |
+
+Nothing errors. The web build simply keeps the native implementation, which is
+the worst shape a build problem can have.
+
+**So: any file that has — or may later gain — a platform variant must be
+imported extension-less.** In practice that is components in `packages/ui` and
+`apps/mobile`; nothing under `packages/core`, `packages/db`, `apps/api` or
+`tools/` has a platform variant, so the explicit-specifier convention stays.
+
+`tsc` does not know about platform extensions either, so a `.web.tsx` is only
+typechecked as a standalone file. That is the accepted cost — Bluesky's
+production RN Web app ships a single native-biased `moduleSuffixes` and lives
+with the same gap. Add a second typecheck projection only if platform files
+ever become common, which in production RN Web codebases they are not.
+
 ### This is not a second vocabulary
 
 The design system already names 97 components across
