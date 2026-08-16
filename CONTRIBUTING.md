@@ -8,10 +8,9 @@ whether the area you're touching is about to move.
 
 ## Worth doing
 
+- **Correctness bugs** — wrong money, wrong dates, wrong FX, silent failures.
 - **Specification defects** — a claimed guarantee with nothing enforcing it.
   The register (`docs/specification/defects.md`) is full of these; find another.
-- **Correctness bugs in what exists** — migrations, `money.ts`, FX backfill,
-  the Money Manager import.
 - **Checks that make silent failures loud.**
 
 ## Unlikely to merge

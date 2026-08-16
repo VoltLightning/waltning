@@ -1,26 +1,24 @@
-name: Bug in the code
-description: Something that exists and doesn't work — migrations, seed, FX backfill, import, tooling.
+name: Bug
+description: Something doesn't work as specified.
 title: "[bug] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: >-
-        **The app doesn't exist yet** — what's built is the data foundation. A
-        bug against the API or mobile app is a specification defect; use that
-        template. **Redact before pasting:** no real amounts, payees, accounts
-        or institutions. Row counts and currency codes are fine.
+        **Redact before pasting:** no real amounts, payees, accounts or
+        institutions. Row counts and currency codes are fine.
 
   - type: dropdown
     id: area
     attributes:
       label: Where
       options:
-        - "Migrations (packages/db/drizzle)"
-        - "Schema or money.ts (packages/db/src)"
-        - "Seed (pnpm db:seed)"
-        - "FX backfill (pnpm db:fx)"
-        - "Money Manager import (tools/migrate-mm)"
+        - "Database — migrations, schema, money.ts (packages/db)"
+        - "API (apps/api)"
+        - "Mobile app (apps/mobile)"
+        - "Web dashboard"
+        - "Import — statements or Money Manager (tools)"
         - "Tooling — Biome, hooks, Docker, pnpm"
         - "Something else"
     validations:
