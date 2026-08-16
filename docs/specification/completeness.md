@@ -167,7 +167,20 @@ the check is worth re-running rather than trusting once.
 
 ## Re-running this
 
-The checks are queries, not judgement. Run them after any structural change:
+**Four of them now run themselves** — `tests/docs-consistency.test.ts`, in the
+suite the pre-commit hook gates on: dangling screen references, orphan screens,
+the nine template sections, and unresolved markers. `packages/db` adds journal
+parity, because a `.sql` file missing from the journal is not an error but a
+silent skip.
+
+That change was earned. Running the reachability check by hand produced three
+false orphans in under a minute: flows reference sub-steps — `S02a`, `S29b` —
+and `\bS02\b` does not match `S02a`. A check that lives as prose gets run by
+someone improvising a regex under time pressure, and the improvised regex is
+wrong in exactly the way that makes a real problem look absent.
+
+The remainder are still by hand, and still worth running after a structural
+change:
 
 ```
 screens vs flows      · every screen reachable from ≥1 journey
