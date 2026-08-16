@@ -12,11 +12,13 @@
  * introducing a divergence *fails*.
  */
 
+import type { AnyOperation } from "@waltning/core";
 import { defineOperation, toolSchemas } from "@waltning/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { routerFromRegistry } from "../trpc/from-registry.ts";
 import { appRouter } from "../trpc/router.ts";
+import type { OperationContext } from "./context.ts";
 import { registry } from "./index.ts";
 
 const names = (r: object) => Object.keys(r).sort();
@@ -68,6 +70,49 @@ describe("the registry is the single source", () => {
   it("mounts the operations on the real application router", () => {
     const mounted = Object.keys(appRouter._def.procedures).filter((p) => p.startsWith("op."));
     expect(mounted.sort()).toEqual(names(registry).map((n) => `op.${n}`));
+  });
+});
+
+describe("the widened form cannot skip validation", () => {
+  /**
+   * The contract this enforces, tested because a type nobody attacks is a
+   * type nobody has checked.
+   *
+   * A generic consumer — the router, the agent runtime — holds operations as
+   * `AnyOperation<Ctx>`, where the input type is necessarily loose. If
+   * `handler` were reachable there, `handler("garbage", ctx)` would compile,
+   * and the only thing standing between a model's tool call and the database
+   * would be both call sites remembering to parse. `AnyOperation` omits
+   * `handler`; `invoke` is the only way in, and it parses first.
+   */
+  it("rejects input that does not match the schema", async () => {
+    const widened: AnyOperation<OperationContext> = registry.get_currencies;
+    await expect(
+      widened.invoke({ includeArchived: "yes" }, {} as OperationContext),
+    ).rejects.toThrow();
+    await expect(widened.invoke("garbage", {} as OperationContext)).rejects.toThrow();
+  });
+
+  it("applies schema defaults on the way through", async () => {
+    // The agent calls with `{}`. Defaults must arrive from the schema, not
+    // from a handler, or the two callers diverge on the first optional field.
+    let seen: unknown;
+    const probe = defineOperation({
+      name: "probe_defaults",
+      kind: "read",
+      autoEligible: true,
+      offlineEligible: true,
+      opVersion: 1,
+      description: "Records the parsed input so the test can assert defaults were applied.",
+      input: z.object({ flag: z.boolean().default(true) }),
+      handler: (input, _ctx: OperationContext) => {
+        seen = input;
+        return Promise.resolve(null);
+      },
+    });
+
+    await probe.invoke({}, {} as OperationContext);
+    expect(seen).toEqual({ flag: true });
   });
 });
 

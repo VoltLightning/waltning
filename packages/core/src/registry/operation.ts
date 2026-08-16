@@ -91,6 +91,18 @@ export type Operation<Input extends z.ZodTypeAny, Output, Ctx> = {
    * from the schema.
    */
   handler(input: z.output<Input>, ctx: Ctx): Promise<Output>;
+
+  /**
+   * Validate raw input against the declared schema, then run the handler.
+   *
+   * **The only entry point a generic caller has**, and that is the point.
+   * `AnyOperation` omits `handler`, so the router and the agent runtime cannot
+   * reach past validation even by accident — the type refuses, rather than
+   * relying on both call sites remembering to parse.
+   *
+   * Built by `defineOperation`; never written by hand.
+   */
+  invoke(raw: unknown, ctx: Ctx): Promise<Output>;
 };
 
 /**
@@ -101,7 +113,7 @@ export type Operation<Input extends z.ZodTypeAny, Output, Ctx> = {
  * mistakes rather than choices.
  */
 export function defineOperation<Input extends z.ZodTypeAny, Output, Ctx>(
-  op: Operation<Input, Output, Ctx>,
+  op: Omit<Operation<Input, Output, Ctx>, "invoke">,
 ): Operation<Input, Output, Ctx> {
   if (op.kind === "write" && !op.audit) {
     throw new Error(`operation "${op.name}": a write must declare its audit spec`);
@@ -112,7 +124,18 @@ export function defineOperation<Input extends z.ZodTypeAny, Output, Ctx>(
   if (!/^[a-z][a-z0-9_]*$/.test(op.name)) {
     throw new Error(`operation "${op.name}": name must be lower_snake_case`);
   }
-  return op;
+  return {
+    ...op,
+    // Parsing here rather than trusting the caller is what makes the widened
+    // type safe: a generic consumer holds an operation it cannot invoke
+    // without a schema check running first.
+    // `async` so a schema failure *rejects* rather than throwing
+    // synchronously. The signature promises a Promise; `parse` throws inline,
+    // so without this a caller writing `op.invoke(x, ctx).catch(handle)` gets
+    // an uncaught exception instead — the failure mode a return type is
+    // supposed to rule out.
+    invoke: async (raw, ctx) => op.handler(op.input.parse(raw), ctx),
+  };
 }
 
 /**
@@ -125,7 +148,7 @@ export function defineOperation<Input extends z.ZodTypeAny, Output, Ctx>(
  * value — every concrete declaration keeps its real output type through
  * `defineOperation`, and `as const satisfies` preserves it at the call site.
  */
-export type AnyOperation<Ctx> = Operation<z.ZodTypeAny, unknown, Ctx>;
+export type AnyOperation<Ctx> = Omit<Operation<z.ZodTypeAny, unknown, Ctx>, "handler">;
 
 /**
  * A registry: operations keyed by name, all sharing one context type.

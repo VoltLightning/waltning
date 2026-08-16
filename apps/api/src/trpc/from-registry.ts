@@ -47,8 +47,8 @@ export function routerFromRegistry(registry: Registry<OperationContext>): AnyRou
     // the same flag the approval gate reads.
     procedures[op.name] =
       op.kind === "read"
-        ? base.query(({ input, ctx }) => op.handler(input, operationContext(ctx)))
-        : base.mutation(({ input, ctx }) => op.handler(input, operationContext(ctx)));
+        ? base.query(({ input, ctx }) => op.invoke(input, operationContext(ctx)))
+        : base.mutation(({ input, ctx }) => op.invoke(input, operationContext(ctx)));
   }
 
   return router(procedures);
