@@ -28,12 +28,15 @@
     "mm:all": "pnpm mm:extract && pnpm mm:import && pnpm mm:verify",
     "typecheck": "pnpm -r typecheck",
     "db:seed": "pnpm --filter @waltning/db seed",
-    "db:fx": "pnpm --filter @waltning/db fx"
+    "db:fx": "pnpm --filter @waltning/db fx",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   }
 }

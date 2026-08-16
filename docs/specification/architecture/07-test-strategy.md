@@ -185,7 +185,7 @@ have read it.
 
 ```
 pnpm verify                           # biome check + typecheck, ~2s
-pnpm -r test                          # properties, contracts, database
+pnpm test                             # properties, contracts, database
 psql -f drizzle/*.sql  → fresh db     # every migration, from empty
 SELECT * FROM verify_t1();            # three trues
 SELECT * FROM verify_no_omitted_revenue();
