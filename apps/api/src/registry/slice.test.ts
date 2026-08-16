@@ -46,10 +46,10 @@ const createCounterparty = registry.create_counterparty;
 
 describe("get_currencies", () => {
   it("returns the seeded currencies with the pivot marked", async () => {
-    const rows = (await getCurrencies.handler({ includeArchived: false }, ctx)) as {
-      code: string;
-      isPivot: boolean;
-    }[];
+    // No cast: `handler` is typed `Promise<CurrencySummary[]>`, and asserting
+    // that here is half the point — a cast would let the return type drift
+    // without this test noticing.
+    const rows = await getCurrencies.handler({ includeArchived: false }, ctx);
 
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.filter((r) => r.isPivot)).toHaveLength(1);
@@ -60,9 +60,7 @@ describe("get_currencies", () => {
   });
 
   it("includes archived currencies when asked", async () => {
-    const rows = (await getCurrencies.handler({ includeArchived: true }, ctx)) as {
-      code: string;
-    }[];
+    const rows = await getCurrencies.handler({ includeArchived: true }, ctx);
     expect(rows.map((r) => r.code)).toContain("XTS");
   });
 
@@ -76,10 +74,7 @@ describe("get_currencies", () => {
 
 describe("create_counterparty", () => {
   it("writes a row and returns it", async () => {
-    const row = (await createCounterparty.handler(
-      { name: "Marek", kind: "person", note: "" },
-      ctx,
-    )) as { id: string; name: string };
+    const row = await createCounterparty.handler({ name: "Marek", kind: "person", note: "" }, ctx);
 
     expect(row.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(row.name).toBe("Marek");
@@ -114,9 +109,9 @@ describe("the registry emits the audit row, not the handler", () => {
    */
   it("writes an audit row for a write, with the affected row's id", async () => {
     const before = await s.sql`SELECT count(*)::int AS n FROM audit_log`;
-    const row = (await createCounterparty.invoke({ name: "Piotr", kind: "person" }, ctx)) as {
-      id: string;
-    };
+    // `invoke` returns the operation's declared Output — typed even here,
+    // where the input arrived raw.
+    const row = await createCounterparty.invoke({ name: "Piotr", kind: "person" }, ctx);
 
     const rows = await s.db.select().from(auditLog);
     expect(rows).toHaveLength(Number(before[0]?.["n"] ?? 0) + 1);

@@ -36,10 +36,16 @@ const UNIQUE_VIOLATION = "23505";
  */
 type CausedError = { code?: string; cause?: CausedError };
 
-function pgErrorCode(e: CausedError): string | undefined {
-  for (let cur: CausedError | undefined = e, depth = 0; cur && depth < 5; depth++) {
+/** Narrows rather than casting: `catch` gives `unknown`, and this is the check. */
+function isCausedError(e: unknown): e is CausedError {
+  return typeof e === "object" && e !== null;
+}
+
+function pgErrorCode(e: unknown): string | undefined {
+  let cur = isCausedError(e) ? e : undefined;
+  for (let depth = 0; cur && depth < 5; depth++) {
     if (typeof cur.code === "string") return cur.code;
-    cur = cur.cause;
+    cur = isCausedError(cur.cause) ? cur.cause : undefined;
   }
   return undefined;
 }
@@ -67,9 +73,7 @@ export async function insertCounterparty(
     if (!row) throw new Error("insert returned no row");
     return row;
   } catch (e) {
-    // `catch` binds `unknown` — the one place the language leaves no choice.
-    // Narrowed here, once, so nothing downstream deals in it.
-    if (pgErrorCode(e as CausedError) === UNIQUE_VIOLATION) {
+    if (pgErrorCode(e) === UNIQUE_VIOLATION) {
       throw new DomainError(
         "validation",
         `a counterparty named "${input.name}" already exists`,

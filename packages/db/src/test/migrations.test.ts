@@ -27,7 +27,7 @@ describe("migrations apply from empty", () => {
     // asserting is agreement between the two, not a number.
     const journal = JSON.parse(
       readFileSync(new URL("../../drizzle/meta/_journal.json", import.meta.url), "utf8"),
-    ) as { entries: unknown[] };
+    ) as { entries: { idx: number; tag: string }[] };
     const rows = await s.sql<{ count: string }[]>`
       SELECT count(*)::text AS count FROM drizzle.__drizzle_migrations`;
     expect(Number(rows[0]?.count)).toBe(journal.entries.length);

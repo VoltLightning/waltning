@@ -24,6 +24,14 @@ import { registry } from "./index.ts";
 const names = (r: object) => Object.keys(r).sort();
 
 /**
+ * A context these tests never reach into: every case here fails at validation,
+ * before the handler runs. Named so that is explicit — `{} as OperationContext`
+ * scattered inline reads like an oversight rather than a statement that the
+ * handler is not the thing under test.
+ */
+const unusedContext = {} as OperationContext;
+
+/**
  * The procedure names tRPC actually exposes.
  *
  * `_def.procedures` is tRPC's runtime map; reading it needs a structural type
@@ -93,16 +101,14 @@ describe("the widened form cannot skip validation", () => {
    */
   it("rejects input that does not match the schema", async () => {
     const widened: AnyOperation<OperationContext> = registry.get_currencies;
-    await expect(
-      widened.invoke({ includeArchived: "yes" }, {} as OperationContext),
-    ).rejects.toThrow();
-    await expect(widened.invoke("garbage", {} as OperationContext)).rejects.toThrow();
+    await expect(widened.invoke({ includeArchived: "yes" }, unusedContext)).rejects.toThrow();
+    await expect(widened.invoke("garbage", unusedContext)).rejects.toThrow();
   });
 
   it("applies schema defaults on the way through", async () => {
     // The agent calls with `{}`. Defaults must arrive from the schema, not
     // from a handler, or the two callers diverge on the first optional field.
-    let seen: unknown;
+    let seen: { flag: boolean } | undefined;
     const probe = defineOperation({
       name: "probe_defaults",
       kind: "read",
@@ -117,7 +123,7 @@ describe("the widened form cannot skip validation", () => {
       },
     });
 
-    await probe.invoke({}, {} as OperationContext);
+    await probe.invoke({}, unusedContext);
     expect(seen).toEqual({ flag: true });
   });
 });

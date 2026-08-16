@@ -23,7 +23,8 @@ Conventions that hold everywhere:
   in app code. New guarantee → new constraint, and break it once to prove it
   fires.
 - Database tests run against real Postgres (`pnpm db:up`), never mocks.
-- **Type parameters before `unknown`, `any`, `never`.** `any` is a lint error.
+- **Type parameters before `unknown`, `any`, `never`.** `any` and `!` (non-null
+  assertion) are lint errors and fail the gate.
   `unknown`/`never` as placeholders are a design smell — they push a cast to
   every call site and discard the type the caller had. Make it generic instead.
   Narrow legitimate uses, each worth a comment: `catch` bindings (the language

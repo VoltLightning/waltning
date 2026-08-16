@@ -2,4 +2,5 @@
 // @waltning/core, which clients import directly (they never depend on db).
 export { money } from "@waltning/core";
 export { createDb, type Database, ping, requireDatabaseUrl, schema } from "./client.ts";
+export { requireRow } from "./rows.ts";
 export * from "./schema.ts";
