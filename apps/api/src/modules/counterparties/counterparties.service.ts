@@ -7,7 +7,7 @@
  * another writer.
  */
 
-import { counterparties, type Database } from "@waltning/db";
+import { counterparties, type DbHandle } from "@waltning/db";
 import { DomainError } from "../../common/errors.ts";
 
 export type NewCounterparty = {
@@ -51,7 +51,7 @@ function pgErrorCode(e: unknown): string | undefined {
 }
 
 export async function insertCounterparty(
-  db: Database,
+  db: DbHandle,
   input: NewCounterparty,
 ): Promise<CounterpartyRow> {
   try {

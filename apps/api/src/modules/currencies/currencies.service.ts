@@ -6,7 +6,7 @@
  * UI reach identical behaviour through the registry.
  */
 
-import { currencies, type Database } from "@waltning/db";
+import { currencies, type DbHandle } from "@waltning/db";
 import { asc, eq } from "drizzle-orm";
 
 export type CurrencySummary = {
@@ -20,7 +20,7 @@ export type CurrencySummary = {
 };
 
 export async function listCurrencies(
-  db: Database,
+  db: DbHandle,
   includeArchived: boolean,
 ): Promise<CurrencySummary[]> {
   const columns = {

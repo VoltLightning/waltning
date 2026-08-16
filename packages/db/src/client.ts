@@ -4,6 +4,20 @@ import * as schema from "./schema.ts";
 
 export type Database = ReturnType<typeof createDb>;
 
+/** The handle inside `db.transaction(...)`. Not a `Database` — it has no pool. */
+export type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * Anything queries can run on: the pool, or a transaction on it.
+ *
+ * Services take this rather than `Database`, so the same function works
+ * standalone and inside a transaction. Typing them as `Database` forced a cast
+ * at every transaction boundary — and a cast at a boundary is how a handle
+ * that is *not* in the transaction gets passed to a handler whose effects are
+ * then supposed to be atomic with it.
+ */
+export type DbHandle = Database | Transaction;
+
 export function createDb(url: string = requireDatabaseUrl()) {
   const sql = postgres(url, {
     max: 10,
