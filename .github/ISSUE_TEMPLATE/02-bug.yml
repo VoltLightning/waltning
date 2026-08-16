@@ -1,0 +1,55 @@
+name: Bug
+description: Something doesn't work as specified.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        **Redact before pasting:** no real amounts, payees, accounts or
+        institutions. Row counts and currency codes are fine.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - "Database — migrations, schema, money.ts (packages/db)"
+        - "API (apps/api)"
+        - "Mobile app (apps/mobile)"
+        - "Web dashboard"
+        - "Import — statements or Money Manager (tools)"
+        - "Tooling — Biome, hooks, Docker, pnpm"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: What you ran, and what happened
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If the spec says otherwise, cite the section.
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Node, pnpm, Postgres, platform
+      placeholder: "Node 22.14, pnpm 11.20, Postgres 16.4, macOS arm64"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: No real names, amounts, payees or accounts in this report
+          required: true
