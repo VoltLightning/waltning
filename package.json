@@ -15,7 +15,7 @@
     "format": "biome format --write .",
     "check": "biome check .",
     "fix": "biome check --write .",
-    "verify": "pnpm check && pnpm -r typecheck",
+    "verify": "pnpm check && pnpm -r typecheck && pnpm test",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
@@ -31,7 +31,8 @@
     "db:seed": "pnpm --filter @waltning/db seed",
     "db:fx": "pnpm --filter @waltning/db fx",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:reset": "pnpm --filter @waltning/db recreate && pnpm db:migrate && pnpm --filter @waltning/db grant && pnpm db:seed"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

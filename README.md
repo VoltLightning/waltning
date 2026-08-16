@@ -81,6 +81,10 @@ pnpm db:seed                 # currencies + category tree
 pnpm dev                     # api + web
 ```
 
+**`pnpm db:reset` does all four database steps in one** — drop, migrate, grant,
+seed. Nothing is permanent yet, so changing the schema should never mean
+hesitating: edit `schema.ts`, `pnpm db:generate`, reset.
+
 The three database URLs are deliberate: `MIGRATE_` is the superuser (migrations
 only), `APP_` is what the API runs as, `EXPORT_` can read a single tax view.
 The separation *is* the tax guarantee — don't collapse them.

@@ -6,6 +6,7 @@
  * by hand. This is the version that stays true.
  */
 
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "./scratch.ts";
 
@@ -20,10 +21,16 @@ afterAll(async () => {
 });
 
 describe("migrations apply from empty", () => {
-  it("records all ten in the journal table", async () => {
+  it("applies exactly what the journal lists", async () => {
+    // Compared against the journal, not a hardcoded count: a literal would
+    // fail on the next migration for the wrong reason, and the thing worth
+    // asserting is agreement between the two, not a number.
+    const journal = JSON.parse(
+      readFileSync(new URL("../../drizzle/meta/_journal.json", import.meta.url), "utf8"),
+    ) as { entries: unknown[] };
     const rows = await s.sql<{ count: string }[]>`
       SELECT count(*)::text AS count FROM drizzle.__drizzle_migrations`;
-    expect(Number(rows[0]?.count)).toBe(10);
+    expect(Number(rows[0]?.count)).toBe(journal.entries.length);
   });
 
   it("creates the tables the schema declares", async () => {

@@ -993,7 +993,14 @@ export const agentMemory = pgTable(
      */
     check(
       "agent_memory_no_figures",
-      sql`${t.body} !~ '(?i)([0-9][0-9  ]*([.,][0-9]{2})?\s*(pln|usd|eur|byn|gel|rub|gbp|zł|zl|\$|€|₾|₽|£))|((pln|usd|eur|byn|gel|rub|gbp|zł|zl|\$|€|₾|₽|£)\s*[0-9])|([0-9]{4,})|([0-9]+[.,][0-9]{2}\M)'`,
+      // Backslashes are DOUBLED because this is a template literal: JavaScript
+      // consumes `\s`, `\$` and `\M` before Postgres ever sees them, so the
+      // single-escaped version silently compiled to `s*`, `$` and a literal
+      // `M`. That killed the `\M` word-boundary alternative outright — "12.50"
+      // stopped being rejected — and it went unnoticed only because nothing
+      // had ever generated SQL from this file. The applied migration was
+      // correct; this was the weaker twin.
+      sql`${t.body} !~ '(?i)([0-9][0-9  ]*([.,][0-9]{2})?\\s*(pln|usd|eur|byn|gel|rub|gbp|zł|zl|\\$|€|₾|₽|£))|((pln|usd|eur|byn|gel|rub|gbp|zł|zl|\\$|€|₾|₽|£)\\s*[0-9])|([0-9]{4,})|([0-9]+[.,][0-9]{2}\\M)'`,
     ),
   ],
 );

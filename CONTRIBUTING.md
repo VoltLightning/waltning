@@ -41,8 +41,9 @@ Pointing everything at the superuser makes every command work and silently
 voids the tax guarantee (§13.1) — a superuser bypasses every `GRANT`. The app
 roles exist only after `0005` runs.
 
-**Don't run `pnpm db:generate`.** Snapshots stop at `0001`, migrations run to
-`0009`; it would regenerate everything. The journal is the source of truth.
+`pnpm db:reset` rebuilds from nothing — drop, migrate, grant, seed. Change the
+table layer in `schema.ts` and run `pnpm db:generate`; change a trigger, view,
+role or grant by editing `0001_database_objects.sql` by hand.
 
 ## Hard rules
 

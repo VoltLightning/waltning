@@ -26,6 +26,9 @@ android/app/build/
 # Secrets and local config
 .env
 .env.*
+# Any *.env, not only the exact name: secrets.env and config/prod.env
+# were caught by neither .gitignore nor the hook.
+*.env
 !.env.example
 
 # The pre-commit sweep's term list. It holds the real names and institutions

@@ -13,7 +13,9 @@
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/seed/run.ts",
-    "fx": "tsx src/fx/backfill.ts"
+    "fx": "tsx src/fx/backfill.ts",
+    "recreate": "tsx src/reset.ts",
+    "grant": "tsx src/reset.ts --grant-only"
   },
   "dependencies": {
     "@waltning/core": "workspace:*",
