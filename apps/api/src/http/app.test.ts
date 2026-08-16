@@ -92,6 +92,22 @@ describe("tRPC", () => {
    * vocabulary. If this ever returns tRPC's numeric code, the drain cannot
    * tell a permanent refusal from a proxy's 403.
    */
+  /**
+   * A stack trace rode along in `shape.data` outside production, and the
+   * httpStatus beside it came from tRPC's code rather than ours — so a
+   * duplicate name returned `validation` in the envelope and `500` with a
+   * stack next to it. Both are pinned here.
+   */
+  it("never returns a stack trace, and its httpStatus agrees with the envelope", async () => {
+    const res = await app().request("/trpc/nope");
+    const text = await res.text();
+    expect(text).not.toMatch(/\bstack\b/i);
+    expect(text).not.toContain("at Object.");
+    const body = JSON.parse(text) as { error: { code: string; data: { httpStatus: number } } };
+    expect(body.error.code).toBe("not_found");
+    expect(body.error.data.httpStatus).toBe(404);
+  });
+
   it("shapes an unknown procedure as an enveloped domain error", async () => {
     const res = await app().request("/trpc/nope");
     const body = (await res.json()) as { error?: { code?: unknown; message?: unknown } };

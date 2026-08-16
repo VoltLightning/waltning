@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
-import * as schema from "../schema.ts";
+import { createDb, type Database } from "../client.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
@@ -112,7 +112,13 @@ export async function dropTemplate(): Promise<void> {
 }
 
 export type Scratch = {
-  db: ReturnType<typeof drizzle<typeof schema>>;
+  /**
+   * Built by `createDb()`, not by a second `drizzle()` call here. A separate
+   * instance would omit the numeric-as-string type configuration, so tests
+   * would exercise a different client from production — in a ledger where the
+   * whole point is that amounts never become JS numbers.
+   */
+  db: Database;
   /** Raw handle, for the SQL a query builder should not express. */
   sql: postgres.Sql;
   name: string;
@@ -142,9 +148,14 @@ export async function scratchDatabase(label = "t"): Promise<Scratch> {
     await sqlAdmin.end();
   }
 
-  const sql = postgres(urlFor(name), { max: 2, onnotice: quiet });
+  // One pool, reached two ways. Opening a second `postgres()` alongside
+  // `createDb` would leave a live connection at teardown, and `DROP DATABASE`
+  // refuses while anything is connected — so the leak would surface as a
+  // flaky drop rather than as an obvious mistake.
+  const db = createDb(urlFor(name));
+  const sql = db.$client;
   return {
-    db: drizzle(sql, { schema }),
+    db,
     sql,
     name,
     drop: async () => {

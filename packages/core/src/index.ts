@@ -9,3 +9,11 @@
  * classifications (`computations.md` §0).
  */
 export * as money from "./money.ts";
+export {
+  type AuditSpec,
+  defineOperation,
+  type Operation,
+  type OperationKind,
+  type Registry,
+} from "./registry/operation.ts";
+export { type ToolSchema, toolSchemaFor, toolSchemas } from "./registry/tools.ts";
