@@ -31,7 +31,8 @@
     "db:seed": "pnpm --filter @waltning/db seed",
     "db:fx": "pnpm --filter @waltning/db fx",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:reset": "pnpm --filter @waltning/db recreate && pnpm db:migrate && pnpm --filter @waltning/db grant && pnpm db:seed"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

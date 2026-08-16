@@ -54,16 +54,40 @@ through `0007`, is most of what this schema's guarantees consist of. A push that
 silently drops `assert_period_not_closed` leaves a database that looks correct
 and enforces nothing.
 
-Migrations `0002`–`0009` are **hand-written**. `drizzle-kit generate` needs a TTY
-for its rename prompts and would need a snapshot rebuild to resume; the journal
-is maintained by hand and lists all ten. Applying them is **`pnpm db:migrate`**
-(`drizzle-kit migrate`) or `psql` in order.
+**Two migrations, and the split is deliberate.**
 
-**`pnpm db:generate` is a trap in the current state and is kept only for the day
-the snapshots are rebuilt.** `meta/` holds snapshots for `0000` and `0001` only,
-so `generate` diffs the schema against `0001` and would emit a migration
-re-creating everything `0002`–`0009` already built. The journal is the source of
-truth here, not the snapshots.
+```
+0000_schema.sql             generated from schema.ts by drizzle-kit
+0001_database_objects.sql   hand-written: everything the ORM cannot express
+```
+
+The ten hand-written migrations that preceded these were squashed into this
+pair while nothing was deployed and no data existed — the only window in which
+squashing is free, and the reason to take it was that `drizzle-kit generate`
+had become unusable: the snapshots stopped at `0001` while the migrations ran
+to `0009`, so it would have emitted a migration re-creating everything. The
+answer was to make `generate` work again rather than to forbid it.
+
+`0000` is now regenerable at any time. `0001` holds the triggers, the functions
+behind them, the views, the two roles and their grants, the exclusion
+constraint, and the five CHECK predicates Drizzle has no syntax for — which is
+to say, most of this system's guarantees. **When the table layer changes, run
+`pnpm db:generate`; when a guarantee changes, edit `0001` by hand.**
+
+The squash was verified rather than trusted: a database built from the old ten
+and one built from the new two were compared object by object — 33 tables, 320
+column definitions, 10 triggers, 5 views, 31 CHECK constraints, 1 exclusion
+constraint, 2 roles, and the `agent_memory` predicate byte-for-byte. The only
+differences are constraint *names*, where Drizzle's generated names are longer
+than the hand-written ones.
+
+That comparison earned its keep twice. It caught a composite foreign key —
+`category_tax_map(tax_line_id, scheme_id) → tax_lines(id, scheme_id)`, which
+stops a category mapping to a line from a different tax scheme — that Drizzle
+cannot express and that a naive squash would have dropped silently. And it
+caught `schema.ts`'s `agent_memory_no_figures` predicate being *weaker* than
+the applied one, because the regex lives in a template literal and JavaScript
+had eaten `\s`, `\$` and `\M` before Postgres ever saw them.
 
 **Migrations connect as the bootstrap superuser** — `MIGRATE_DATABASE_URL`.
 `0005` creates a role and issues `GRANT`s, which `waltning_app` has no privilege
