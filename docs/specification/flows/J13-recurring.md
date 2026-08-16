@@ -1,7 +1,7 @@
 # J13 · Recurring
 
 **Frequency** monthly review · **Surface** both
-**Screens** S21, S11, S09, S05
+**Screens** S21, S34, S11, S09, S05
 **Status** specified
 
 ---
@@ -50,6 +50,7 @@ S21 Settings · Recurring
 
 | At | Condition | Goes to |
 |---|---|---|
+| S21 | Rule is a paid service | Marked `is_subscription` — proposed automatically on a catalog match, confirmed by you. It then appears on **S34 Subscriptions**: the same rules viewed as costs (icon, per-month ≈ figure, next charge) rather than as schedules. Pause, price drift and editing are S21's machinery unchanged (§14.4a) |
 | S21 | Rule is cross-currency | Both amounts stored, realized rate derived — same shape as any transfer (§7.5) |
 | S21 | Rule has a counterparty | The role is part of the rule, not asked at post time |
 | S21 | End date reached | Stops projecting; the rule stays for its history |

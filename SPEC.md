@@ -273,6 +273,7 @@ writes the first file that needs it, which is how a stack becomes an accident.
 | **Model clients** | **`openai` SDK** for OpenAI *and* OpenRouter (it is OpenAI-compatible) · **`@anthropic-ai/sdk`** if Anthropic is configured | Behind one gateway interface, so §11.4's per-surface provider choice stays configuration |
 | **Migration runner** | **`drizzle-kit migrate`**, in the one-shot `migrate` service | Never `push` — it cannot see triggers, views, grants or generated columns |
 | **Scheduling** | **A `cron` service in Compose** | Nightly dump, invariant checks, FX backfill. In-process scheduling dies with an API restart and gives no record that a run was missed |
+| **Brand icons** | **`simple-icons`, bundled** | S34's service icons (§14.4a). A logo CDN is rejected on principle: fetching `netflix.com`'s logo per render tells a third party you pay for Netflix, and it breaks offline rendering. Brands are occasionally *removed* from simple-icons for legal reasons, so a contract test asserts every catalog slug resolves in the installed version — the upgrade fails loudly instead of rendering blanks |
 | **Formatting and linting** | **Biome** | One binary replaces Prettier, ESLint, `typescript-eslint`, `eslint-config-prettier` and an import sorter — five packages whose versions must agree, maintained by one person over years. It also has to be fast: the pre-commit gate and the pre-cutover checklist both run it, the second **on the Pi** |
 
 A **sixteenth** layer, found after that audit and in the same shape — nobody had
@@ -3400,6 +3401,35 @@ resolve this ambiguity without you, and it has no basis on which to.
 its net in the current display currency, and opening the day reveals each entry with its
 own `local · rate · display` (§7).
 
+### 14.4a Subscriptions
+
+One page (S34) answering *"what am I actually paying for?"* — every paid
+service with its brand icon, cost normalized to per-month, next charge, and
+price-rise detection.
+
+**A subscription is a recurring rule, not a new entity.** Migration `0010` adds
+two independent columns to `recurring_transactions`:
+
+| Column | Meaning |
+|---|---|
+| `is_subscription boolean not null default false` | Puts the rule on S34 and into the ≈ totals |
+| `service text` (nullable, free text) | Slug into the bundled catalog → brand icon. Legal on any rule — a utility may carry an icon without being a subscription. Free text deliberately: the catalog is versioned code, and a `CHECK` against it would turn adding a service into a migration |
+
+Everything else is S21's machinery unchanged: pause is `disable_recurring`, a
+price rise is the existing `amount drifted` health state surfacing beside the
+figure you pay, and the editor is the same rule editor — one entity, two views,
+no second write path.
+
+**Icons ship in the bundle, never from a logo CDN.** The catalog lives in
+`packages/core`: `slug → name, simple-icons slug, matching aliases`. A logo API
+(Clearbit, logo.dev) would broadcast the subscription list to a third party on
+every render — precisely the leak this system exists to avoid — and would break
+offline rendering, which S34 otherwise has for free since rules and catalog are
+both in the replica (`computations.md` §16 is class **R**). Unknown or missing
+slug → deterministic monogram avatar; never blank, never a fetch, never an
+error. Matching against payee/counterparty **proposes** — never sets — the
+service and flag, the same consent model as amount drift.
+
 ### 14.5 Dashboard layout
 
 The dashboard is a **configurable grid of widgets**, not a fixed page.
@@ -3431,6 +3461,7 @@ rather than a special case the agent cannot reach.
 | `completeness` | M | Missing NIP, KSeF id, uncategorized, estimated rates |
 | `tax_period_status` | S | Scheme in force, open or closed |
 | `targets` | S · M | Which targets shown, period. §14.7 promised *"one widget, one settings row"* and the catalogue had neither |
+| `subscriptions` | S · M | Monthly ≈ total; M adds the next three charges with icons (§14.4a). Tap-through to S34 |
 
 **Four presets ship** (S24), each answering one question rather than serving one
 mood: **Standing** (where do I stand), **Flowing** (where is it going),

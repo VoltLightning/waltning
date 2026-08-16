@@ -39,6 +39,7 @@ class is part of each figure's definition, not a separate table to drift from:
 | §12 Headline figures | **S** | Every one |
 | §13 Search | **R** | Substring over the replica, and it says so — SQLite has no `pg_trgm` |
 | §14 Confidence | **S** | Retrieval agreement over the full ledger |
+| §16 Subscription costs | **R** | Enabled rules plus today's rates, both in the replica; totals are ≈ estimates by definition |
 | Every tax figure (§13.x) | **S**, permanently | Depends on period locks, residency and rates the device may hold staler than it knows |
 
 **The S list is not timidity.** Each entry has a defect in
@@ -410,3 +411,27 @@ balance. **Envelope budgets do not exist** (N7); §11's targets are the whole of
 it.
 
 Each is a decision recorded so its absence reads as intent.
+
+## 16 · Subscription costs
+
+Over enabled rules with `is_subscription` (S34, §14.4a). Class **R** — inputs
+are the rules and today's rates, both in the replica.
+
+**Monthly equivalent** of a rule, from its RRULE — exact rationals, rounding
+only at display:
+
+| FREQ | monthly equivalent |
+|---|---|
+| `MONTHLY;INTERVAL=n` | `amount / n` |
+| `YEARLY;INTERVAL=n` | `amount / (12 × n)` |
+| `WEEKLY;INTERVAL=n` | `amount × 52 / (12 × n)` |
+| `DAILY;INTERVAL=n` | `amount × 365 / (12 × n)` |
+
+**Totals** sum monthly equivalents converted to the display currency at
+**today's** rate (§4 triangulation), and are therefore estimates — rendered
+with **≈**, like every cross-currency aggregate. Annual total is the monthly
+total × 12, never an independent sum: two formulas for one figure is how the
+margin got defined twice (§4a), and this figure gets one.
+
+A paused rule contributes nothing. A rule whose currency has only a
+carried-forward rate today still converts — the ≈ already covers it.

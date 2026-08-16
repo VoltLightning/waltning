@@ -56,7 +56,7 @@ remember to log itself is an operation that will eventually forget.
 | Analysis | `spend_by_category` · `spend_by_period` · `compare_periods` · `income_vs_expense` |
 | Debt | `counterparty_balances` · `find_unsettled` |
 | Import | `get_import_batch` · `get_import_rows` · `get_rules` |
-| Recurring | `get_recurring_rules` · `get_projections` |
+| Recurring | `get_recurring_rules` · `get_projections` · `get_subscriptions` — subscription rules with monthly equivalents and the two ≈ totals (`computations.md` §16), for S34 and the `subscriptions` widget |
 | FX | `get_currencies` · `get_fx_rates` · `get_fx_coverage` |
 | Dashboard | `get_active_layout` · `get_widget_catalogue` |
 | Agent | `get_agent_sessions` · `get_messages` |
@@ -143,7 +143,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 |---|---|---|
 | `run_import` · `accept_row` · `skip_row` | ✅ | Undoable as one unit (§8.4) |
 | `propose_rule` · `create_rule` · `update_rule` · `disable_rule` · `reorder_rules` | ❌ | A rule changes future classification |
-| `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | |
+| `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | Inputs include `is_subscription` and `service` (§14.4a) — rule fields, not a separate operation, so S34 adds no second write path. When payee or counterparty matches the catalog's aliases, the editor **proposes** both; never set silently (same policy as amount drift) |
 | `materialize_occurrence` | ✅ | Posts an occurrence. The unique index on `(recurring_id, occurrence_date)` stops **this rule** firing twice — it does **not** stop a hand-entered duplicate, whose `recurring_id` is NULL and which is therefore not in the index at all (C8, §14.4) |
 | `link_occurrence` | ❌ | The other half of C8's fix, and it was missing. Stamps `recurring_id` and `occurrence_date` onto a row **you already entered by hand**, which both satisfies the occurrence and puts the row into the index so the question cannot be asked twice. Offered instead of *Post* when an unlinked row matches within ±3 days and ±1% on the same account and currency |
 | `reclassify` | ❌ | **Was referenced in four documents and defined in none.** Re-runs classification against **today's** ledger, so it is expected to differ from the original — which is exactly why it is not called "replay". Replay pins `model_id`, `rule_snapshot` and `retrieved_ids` and reproduces the recorded answer (C10); this does not. Never auto: it rewrites rows you already accepted |

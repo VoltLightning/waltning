@@ -110,6 +110,8 @@ person can owe you in one currency while you owe them in another.
 | Component | Notes |
 |---|---|
 | `CounterpartyRow` | Avatar or monogram · name · kind icon (person / company) · net position in **their** currency, with the display-currency equivalent beneath |
+| `ServiceIcon` | Brand mark for a recurring rule's `service` slug, resolved from the **bundled** catalog (§14.4a) — never a network fetch. Unknown or absent slug → deterministic monogram (first letter, color hashed from the name), same treatment as `CounterpartyRow`'s fallback. Sizes: row (24) and widget (20) |
+| `SubscriptionRow` | `ServiceIcon` · name · native amount + cadence · monthly ≈ equivalent when cadence ≠ monthly · next charge · `RuleHealthTag`. S34 and the `subscriptions` widget share it — the widget renders the same row smaller, not a second component |
 | `CounterpartyCard` | Full position: one row per currency, then both derived totals |
 | `BalanceLedger` | Per-currency table. Positive = they owe you, negative = you owe them — the **negation** of the ledger's cash-flow sign (`SPEC.md` §6.6), computed once here so no screen has to remember it. Direction stated in words, never by sign alone (P5) |
 | `SettleSheet` | Amount, currency, which balance it discharges, rate (editable), **residual shown before commit** |
