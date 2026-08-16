@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+
+contact_links:
+  - name: The specification
+    url: https://github.com/VoltLightning/waltning/blob/main/SPEC.md
+    about: Most "why is it like that" questions are answered here, with the reasoning.
+
+  - name: Known defects
+    url: https://github.com/VoltLightning/waltning/blob/main/docs/specification/defects.md
+    about: Check before reporting a design problem — it may already be recorded or closed.
+
+  - name: Contributing
+    url: https://github.com/VoltLightning/waltning/blob/main/CONTRIBUTING.md
+    about: "Short version: open an issue before building anything."

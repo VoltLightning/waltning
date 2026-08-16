@@ -1,0 +1,53 @@
+name: Specification defect
+description: A guarantee the spec states but doesn't enforce, or a section that can't be implemented as written.
+title: "[spec] "
+labels: ["specification"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Check [`defects.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/defects.md)
+        first — it may already be recorded, closed, or accepted deliberately.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "C — a stated guarantee is false"
+        - "H — wrong data, silently"
+        - "M — cannot be implemented from the spec"
+        - "L — correct but under-specified"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Where
+      placeholder: "SPEC.md §13.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: claim
+    attributes:
+      label: What the document claims
+      description: Quote it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: failure
+    attributes:
+      label: How it fails, concretely
+      description: A specific sequence with specific values — something testable, not "looks fragile".
+    validations:
+      required: true
+
+  - type: textarea
+    id: enforcement
+    attributes:
+      label: Where enforcement would have to live
+      description: "Optional but the most useful part: constraint, trigger, role privilege, registry validation, or type."
