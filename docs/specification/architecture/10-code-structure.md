@@ -92,6 +92,63 @@ That last line is the one with teeth. A molecule that calls tRPC cannot be
 rendered in a diff preview, in a test, or offline from the replica — and the
 offline design (§14.3) depends on being able to render from folded local state.
 
+### Types: parameters, not escape hatches
+
+**Reach for a type parameter before `unknown`, `any` or `never`.** `any` is a
+lint error and fails the gate. The other two are legal and usually wrong.
+
+The tell is a cast at the call site. `unknown` and `never` used as placeholders
+do not remove a type problem, they relocate it: every consumer casts to get
+back the type the producer already knew. `Registry` was declared with its
+context fixed to `never` — not a type so much as an admission — and every use
+needed a cast until it became `Registry<Ctx>`. `ToolSchema.inputSchema` was
+`Record<string, unknown>`, which accepts a `Date` and a function as readily as
+JSON; it is now a `JsonSchema`. The importer forced a string into an enum
+column with `as never`, which is a way of telling the compiler to stop asking —
+it now narrows against `accountKind.enumValues` and names the offending value.
+
+Legitimate uses are narrow, and each is worth a comment saying which one it is:
+
+| Where | Why it is not a placeholder |
+|---|---|
+| `catch (e)` | The language binds `unknown`. Narrow once, at the boundary |
+| JSON off the wire | Genuinely untyped until someone asserts a shape |
+| A constraint over a heterogeneous collection | TypeScript has no existential type for "returns *something*" — see `AnyOperation` |
+| `never` for exhaustiveness | The value really cannot occur, and the compiler proves it |
+
+**A loose type at a seam is where this gets tested.** A registry is held
+generically by the router and the agent runtime, so its element type cannot
+know each operation's input. That made `widened.handler("garbage", ctx)`
+compile — the concrete declarations were airtight and the seam was not, which
+is the shape worth hunting because it is the shape that survives review.
+
+The fix is not a better cast. `AnyOperation` **omits `handler`**, and
+`defineOperation` builds an `invoke(raw, ctx)` that parses against the declared
+schema first. A generic consumer therefore holds something it cannot run
+without validation — enforced by the type rather than by both call sites
+remembering. Seven deliberate violations were written against the registry;
+six failed to compile before this, and this is the seventh.
+
+**Contracts are pinned by compile-time assertions, not by care.**
+`apps/api/src/registry/contract.types.ts` asserts that client inputs and
+outputs are the declared types, that no client type is `any`, that every
+operation reaches the client, and that the widened form hides `handler` and
+exposes `invoke`. It runs in `pnpm -r typecheck`, which the pre-commit hook
+gates on — so weakening the contract fails to *compile*, deterministically and
+offline, rather than failing a review.
+
+Each assertion is there because the property was once broken, and each was
+verified to fail: reverting the router to `AnyRouter` breaks eight of them,
+re-exposing `handler` on `AnyOperation` breaks one.
+
+One consequence worth knowing, because it looks like a style choice and is not:
+`Operation.handler` is declared with **method syntax**, not as an arrow
+property. Under `strictFunctionTypes` a property-form function is
+contravariant in its parameters, so a handler accepting a specific input is not
+assignable to one accepting a looser input — and a registry holding many
+operations needs exactly that. Method syntax is bivariant, which is the case it
+exists for.
+
 ### Import specifiers, and the one rule that is not obvious
 
 §4.2 has always claimed that source-only packages import each other by real

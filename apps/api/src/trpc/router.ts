@@ -8,9 +8,18 @@
  */
 
 import { BUILD } from "../config/build.ts";
+import { registry } from "../registry/index.ts";
+import { routerFromRegistry } from "./from-registry.ts";
 import { publicProcedure, router } from "./index.ts";
 
+/**
+ * Every operation, mounted under `op.*`, derived rather than listed.
+ *
+ * Adding an operation to the registry adds it here and to the agent's tools at
+ * the same instant; there is no second place to forget.
+ */
 export const appRouter = router({
+  op: routerFromRegistry(registry),
   /**
    * The tRPC-shaped twin of `/healthz`.
    *

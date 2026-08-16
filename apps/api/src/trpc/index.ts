@@ -11,7 +11,7 @@
 
 import { initTRPC } from "@trpc/server";
 import type { Database } from "@waltning/db";
-import { DomainError, type ErrorCode } from "../common/errors.ts";
+import { DomainError, type ErrorCode, STATUS_BY_CODE } from "../common/errors.ts";
 
 export type Context = {
   /** Resolved lazily; absent when the database is unreachable. */
@@ -36,9 +36,21 @@ const t = initTRPC.context<Context>().create({
     return {
       code,
       message: error.message,
-      // tRPC's own metadata is kept, one level down, so nothing that depends
-      // on it breaks — but it is never what the drain switches on.
-      data: shape.data,
+      /**
+       * Rebuilt rather than passed through.
+       *
+       * `shape.data` carries a **stack trace** outside production and an
+       * `httpStatus` derived from tRPC's own code — so a duplicate name came
+       * back as `validation` in the envelope and `500` with a stack beside it.
+       * The status contradicted the envelope, and the stack is exactly the
+       * kind of internal detail a response about a *payee name* should never
+       * carry on a system whose whole argument is that the data stays yours.
+       */
+      data: {
+        code,
+        httpStatus: STATUS_BY_CODE[code],
+        path: shape.data.path,
+      },
       ...(details === undefined ? {} : { details }),
     };
   },

@@ -65,7 +65,11 @@ async function* chunkRanges(from: string, to: string, days: number) {
  * transient failure is close to certain, and losing the whole run to one
  * dropped connection is not acceptable.
  */
-async function getJson(url: string, attempt = 0): Promise<unknown> {
+/**
+ * Typed by the caller, which knows the provider's payload shape. Returning
+ * `unknown` pushed a cast to all four adapters instead of one type argument.
+ */
+async function getJson<Payload>(url: string, attempt = 0): Promise<Payload | null> {
   const MAX = 4;
   try {
     const res = await fetch(url, {
@@ -82,7 +86,9 @@ async function getJson(url: string, attempt = 0): Promise<unknown> {
       throw new Error(`${res.status} ${res.statusText}`);
     }
     if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
-    return await res.json();
+    // The one honest cast: JSON off the wire has no type until someone
+    // asserts one, and the caller is what knows this provider's shape.
+    return (await res.json()) as Payload;
   } catch (e) {
     if (attempt >= MAX) throw e;
     await new Promise((r) => setTimeout(r, 2 ** attempt * 400));

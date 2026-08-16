@@ -8,4 +8,14 @@
  * Grows with the registry: operation definitions, shared Zod schemas, F/R/S
  * classifications (`computations.md` §0).
  */
+export type { JsonObject, JsonPrimitive, JsonSchema, JsonValue } from "./json.ts";
 export * as money from "./money.ts";
+export {
+  type AnyOperation,
+  type AuditSpec,
+  defineOperation,
+  type Operation,
+  type OperationKind,
+  type Registry,
+} from "./registry/operation.ts";
+export { type ToolSchema, toolSchemaFor, toolSchemas } from "./registry/tools.ts";
