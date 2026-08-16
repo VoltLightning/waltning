@@ -5,8 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema.ts",
-    "./money": "./src/money.ts"
+    "./schema": "./src/schema.ts"
   },
   "scripts": {
     "migrate": "drizzle-kit migrate",
@@ -17,6 +16,7 @@
     "fx": "tsx src/fx/backfill.ts"
   },
   "dependencies": {
+    "@waltning/core": "workspace:*",
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
