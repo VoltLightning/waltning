@@ -7,11 +7,11 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { ping } from "@waltning/db";
 import { Hono } from "hono";
-import { BUILD, WALTNING_HEADER } from "./build.ts";
-import { db, dbUnavailableReason } from "./db.ts";
+import { db, dbUnavailableReason } from "../infra/db.ts";
+import { waltningHeader } from "../middleware/waltning-header.ts";
+import type { Context } from "../trpc/index.ts";
+import { appRouter } from "../trpc/router.ts";
 import { type DependencyState, health, readiness } from "./health.ts";
-import { appRouter } from "./router.ts";
-import type { Context } from "./trpc.ts";
 
 export type AppOptions = {
   /** Injected so tests can drive time and dependency state. */
@@ -29,22 +29,7 @@ export function createApp(options: AppOptions = {}) {
 
   const app = new Hono();
 
-  /**
-   * Rule 0's first condition, on every response including errors.
-   *
-   * A captive portal answers 200 with HTML to anything. The client must be
-   * able to reject that before it looks at the status code, and this header is
-   * the cheapest of the three signals it checks.
-   */
-  app.use("*", async (c, next) => {
-    await next();
-    // **After** the handler, not before. The tRPC adapter returns a Response it
-    // constructed itself, which replaces anything set on the way in — so
-    // setting the header first left it missing on exactly the responses the
-    // outbox drain inspects. Rule 0 fails open in the worst possible place if
-    // this regresses, which is why there is a test per route.
-    c.header(WALTNING_HEADER, BUILD);
-  });
+  app.use("*", waltningHeader);
 
   /** Unauthenticated, touches nothing. Reachable vs not. */
   app.get("/healthz", (c) => c.json(health(now())));

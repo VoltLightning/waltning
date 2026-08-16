@@ -13,7 +13,7 @@
  * wrong one loses the distinction the whole state machine is built on.
  */
 
-import { BUILD } from "./build.ts";
+import { BUILD } from "../config/build.ts";
 
 export type Health = {
   ok: true;

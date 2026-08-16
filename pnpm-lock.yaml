@@ -73,6 +73,12 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  packages/ui:
+    dependencies:
+      '@waltning/core':
+        specifier: workspace:*
+        version: link:../core
+
   tools/migrate-mm:
     dependencies:
       '@waltning/db':

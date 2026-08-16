@@ -208,9 +208,13 @@ waltning/
 ├── packages/
 │   ├── core/         contracts: money.ts, shared types, Zod schemas, registry defs
 │   ├── db/           Drizzle schema and client — depends on core
+│   └── ui/           component library — atoms · molecules · organisms
 ├── apps/
-│   ├── api/          Hono + tRPC server
+│   ├── api/          Hono + tRPC server, layered:
+│   │                   config · common · middleware · http · trpc
+│   │                   routes → registry → services → infra
 │   └── mobile/       Expo — iOS and web from one codebase
+│                       app/ = expo-router screens, the only layer that fetches
 ├── tools/
 │   └── migrate-mm/   one-shot Money Manager importer
 ├── docker/           Compose files, Caddyfile, Pi deployment

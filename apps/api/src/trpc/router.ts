@@ -7,8 +7,8 @@
  * mount point and the one procedure a client needs before it has a session.
  */
 
-import { BUILD } from "./build.ts";
-import { publicProcedure, router } from "./trpc.ts";
+import { BUILD } from "../config/build.ts";
+import { publicProcedure, router } from "./index.ts";
 
 export const appRouter = router({
   /**

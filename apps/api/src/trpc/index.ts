@@ -11,7 +11,7 @@
 
 import { initTRPC } from "@trpc/server";
 import type { Database } from "@waltning/db";
-import { DomainError, type ErrorCode } from "./errors.ts";
+import { DomainError, type ErrorCode } from "../common/errors.ts";
 
 export type Context = {
   /** Resolved lazily; absent when the database is unreachable. */

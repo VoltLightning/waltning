@@ -8,8 +8,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { WALTNING_HEADER } from "../config/build.ts";
 import { createApp } from "./app.ts";
-import { WALTNING_HEADER } from "./build.ts";
 
 const at = new Date("2026-08-16T10:00:00.000Z");
 const app = () => createApp({ now: () => at, requestId: () => "req-test" });

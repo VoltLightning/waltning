@@ -16,6 +16,25 @@ server — decimal.js and zod only, no Node APIs, no db driver. `db` is schema +
 Drizzle. **`mobile` never imports `db`.** A wrong-direction import is an
 architecture change, not a feature.
 
+**Where files go** (`architecture/10`). Backend layers, dependencies one way:
+
+```
+apps/api/src/  index · config · common · middleware · http · trpc
+               routes → registry → services → infra
+```
+
+`routes/` dispatch only · `registry/` = the controller layer: validate, gate,
+audit, orchestrate · `services/` domain logic, one aggregate each, never sees a
+request · `infra/` talks to Postgres/MinIO/models. A service importing from
+`registry/` or `http/` is a bug: the agent calls the registry directly, so
+logic above it is logic the agent silently doesn't get.
+
+Frontend is atomic, in `packages/ui` (one library — mobile and web are one Expo
+build): `atoms/` no domain knowledge · `molecules/` domain meaning, no data ·
+`organisms/` a whole section. Screens live in `apps/mobile/app` as expo-router
+routes and are **the only layer that fetches** — a molecule calling tRPC can't
+render in a diff preview, a test, or offline from the replica.
+
 **A feature is a vertical slice, built in this order — hard requirement:**
 
 1. Schema change + migration (if data changes)

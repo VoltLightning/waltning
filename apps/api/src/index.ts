@@ -9,8 +9,8 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.ts";
-import { BUILD } from "./build.ts";
+import { BUILD } from "./config/build.ts";
+import { createApp } from "./http/app.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
