@@ -13,7 +13,7 @@
  */
 
 import type { AnyRouter } from "@trpc/server";
-import type { Operation, Registry } from "@waltning/core";
+import type { AnyOperation, Registry } from "@waltning/core";
 import type { OperationContext } from "../registry/context.ts";
 import type { Context } from "./index.ts";
 import { publicProcedure, router } from "./index.ts";
@@ -30,10 +30,16 @@ function operationContext(ctx: Context): OperationContext {
   return { db: ctx.db, actor: "user", requestId: ctx.requestId, now: ctx.now };
 }
 
-export function routerFromRegistry(registry: Registry): AnyRouter {
-  const procedures: Record<string, unknown> = {};
+/**
+ * The shape tRPC's `router()` accepts. Named rather than inlined as
+ * `Record<string, unknown>`, which said nothing and forced a cast at the end.
+ */
+type ProcedureMap = Parameters<typeof router>[0];
 
-  for (const op of Object.values(registry) as Operation[]) {
+export function routerFromRegistry(registry: Registry<OperationContext>): AnyRouter {
+  const procedures: ProcedureMap = {};
+
+  for (const op of Object.values(registry) as AnyOperation<OperationContext>[]) {
     const base = publicProcedure.input(op.input);
 
     // A read is a query and a write is a mutation. Deriving this rather than
@@ -45,5 +51,5 @@ export function routerFromRegistry(registry: Registry): AnyRouter {
         : base.mutation(({ input, ctx }) => op.handler(input, operationContext(ctx)));
   }
 
-  return router(procedures as Parameters<typeof router>[0]);
+  return router(procedures);
 }

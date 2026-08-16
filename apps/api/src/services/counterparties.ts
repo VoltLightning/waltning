@@ -34,11 +34,12 @@ const UNIQUE_VIOLATION = "23505";
  * which is what happened here until a test asked for the duplicate case.
  * Walking the chain is what makes the mapping actually fire.
  */
-function pgErrorCode(e: unknown): string | undefined {
-  for (let cur = e, depth = 0; cur && depth < 5; depth++) {
-    const code = (cur as { code?: unknown }).code;
-    if (typeof code === "string") return code;
-    cur = (cur as { cause?: unknown }).cause;
+type CausedError = { code?: string; cause?: CausedError };
+
+function pgErrorCode(e: CausedError): string | undefined {
+  for (let cur: CausedError | undefined = e, depth = 0; cur && depth < 5; depth++) {
+    if (typeof cur.code === "string") return cur.code;
+    cur = cur.cause;
   }
   return undefined;
 }
@@ -66,7 +67,9 @@ export async function insertCounterparty(
     if (!row) throw new Error("insert returned no row");
     return row;
   } catch (e) {
-    if (pgErrorCode(e) === UNIQUE_VIOLATION) {
+    // `catch` binds `unknown` — the one place the language leaves no choice.
+    // Narrowed here, once, so nothing downstream deals in it.
+    if (pgErrorCode(e as CausedError) === UNIQUE_VIOLATION) {
       throw new DomainError(
         "validation",
         `a counterparty named "${input.name}" already exists`,

@@ -100,6 +100,11 @@ coverage/
 !.vscode/extensions.json
 !.vscode/settings.json
 
+
+# Expo build artifacts and generated types
+apps/*/.expo/
+apps/*/dist/
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .ai-rulez/.generated-manifest.json
 .claude/
@@ -107,7 +112,3 @@ coverage/
 AGENTS.md
 CLAUDE.md
 # END ai-rulez
-
-# Expo build artifacts and generated types
-apps/*/.expo/
-apps/*/dist/

@@ -11,6 +11,7 @@
  */
 
 import type { Registry } from "@waltning/core";
+import type { OperationContext } from "./context.ts";
 import { createCounterparty } from "./counterparties/create-counterparty.ts";
 import { getCurrencies } from "./currencies/get-currencies.ts";
 
@@ -24,6 +25,6 @@ import { getCurrencies } from "./currencies/get-currencies.ts";
 export const registry = {
   get_currencies: getCurrencies,
   create_counterparty: createCounterparty,
-} as const satisfies Registry;
+} as const satisfies Registry<OperationContext>;
 
 export type AppRegistry = typeof registry;

@@ -30,25 +30,44 @@ export const ERROR_CODES = [
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
-export type ErrorEnvelope = {
+/**
+ * Field-level detail. Typed rather than free-form: the client renders these,
+ * and `unknown` here meant every consumer cast before it could show anything.
+ */
+export type ErrorDetails = {
+  /** The input field at fault, for `validation`. */
+  field?: string;
+  /** The database constraint that refused it, when one did. */
+  constraint?: string;
+  /** The period that is closed, for `period_closed`. */
+  period?: string;
+  /** Versions involved, for `stale_version` and `unsupported_version`. */
+  expected?: string | number;
+  actual?: string | number;
+};
+
+export type ErrorEnvelope<Details extends ErrorDetails = ErrorDetails> = {
   error: {
     code: ErrorCode;
     message: string;
-    /** Field-level detail for `validation`; free-form otherwise. */
-    details?: unknown;
+    details?: Details;
   };
 };
 
-export function envelope(code: ErrorCode, message: string, details?: unknown): ErrorEnvelope {
+export function envelope<Details extends ErrorDetails>(
+  code: ErrorCode,
+  message: string,
+  details?: Details,
+): ErrorEnvelope<Details> {
   return { error: details === undefined ? { code, message } : { code, message, details } };
 }
 
 /** Domain refusals. Anything thrown that is not one of these is `internal`. */
-export class DomainError extends Error {
+export class DomainError<Details extends ErrorDetails = ErrorDetails> extends Error {
   readonly code: ErrorCode;
-  readonly details: unknown;
+  readonly details: Details | undefined;
 
-  constructor(code: ErrorCode, message: string, details?: unknown) {
+  constructor(code: ErrorCode, message: string, details?: Details) {
     super(message);
     this.name = "DomainError";
     this.code = code;

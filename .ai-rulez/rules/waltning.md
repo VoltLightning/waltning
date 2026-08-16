@@ -23,15 +23,23 @@ Conventions that hold everywhere:
   in app code. New guarantee → new constraint, and break it once to prove it
   fires.
 - Database tests run against real Postgres (`pnpm db:up`), never mocks.
-- Gate: `pnpm verify` (~2s) before work is done. Never `--no-verify`; there is
-  no CI, the hook is it.
+- **Type parameters before `unknown`, `any`, `never`.** `any` is a lint error.
+  `unknown`/`never` as placeholders are a design smell — they push a cast to
+  every call site and discard the type the caller had. Make it generic instead.
+  Narrow legitimate uses, each worth a comment: `catch` bindings (the language
+  gives no choice), JSON off the wire, `unknown` in a *constraint* position for
+  a deliberately heterogeneous collection, `never` for exhaustiveness.
+- Gate: `pnpm verify` before work is done. Never `--no-verify`; there is no CI,
+  the hook is it.
 
 Traps:
 
 - Three DB URLs: `MIGRATE_` (superuser — migrations only), `APP_` (everything
   else), `EXPORT_` (tax view only). A privilege error usually means the design
   is working; switching to a stronger URL silently voids the tax guarantee.
-- Never `pnpm db:generate` — drizzle snapshots stop at `0001`, migrations are
-  hand-written through `0009`, the journal is the source of truth.
+- Migrations are two files: `0000_schema.sql` (generated — change `schema.ts`,
+  run `pnpm db:generate`) and `0001_database_objects.sql` (hand-written —
+  triggers, views, roles, grants, the CHECKs Drizzle can't state). `pnpm
+  db:reset` rebuilds from nothing.
 - Public repo, private ledger: placeholders only (`Bank A · PLN`, invented
   names) — in code, examples, commits, and logs.

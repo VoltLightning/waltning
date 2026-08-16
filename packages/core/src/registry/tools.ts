@@ -12,36 +12,37 @@
  */
 
 import { z } from "zod";
-import type { Operation, Registry } from "./operation.ts";
+import type { JsonSchema } from "../json.ts";
+import type { AnyOperation, OperationKind, Registry } from "./operation.ts";
 
 /** The provider-neutral shape. Adapters map this to each SDK's own format. */
 export type ToolSchema = {
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
+  inputSchema: JsonSchema;
   /**
    * Surfaced so the agent runtime can gate before calling rather than after.
    * A tool the model may run unattended is a different thing from one that
    * renders a diff and waits, and the model is not the right place to decide
    * which — but the runtime needs to know without a second lookup.
    */
-  kind: Operation["kind"];
+  kind: OperationKind;
   autoEligible: boolean;
 };
 
-export function toolSchemaFor(op: Operation): ToolSchema {
+export function toolSchemaFor<Ctx>(op: AnyOperation<Ctx>): ToolSchema {
   return {
     name: op.name,
     description: op.description,
     // JSON Schema, because that is what every provider's tool API speaks.
-    inputSchema: z.toJSONSchema(op.input, { io: "input" }) as Record<string, unknown>,
+    inputSchema: z.toJSONSchema(op.input, { io: "input" }) as JsonSchema,
     kind: op.kind,
     autoEligible: op.autoEligible,
   };
 }
 
-export function toolSchemas(registry: Registry): ToolSchema[] {
+export function toolSchemas<Ctx>(registry: Registry<Ctx>): ToolSchema[] {
   return Object.values(registry)
-    .map((op) => toolSchemaFor(op as Operation))
+    .map((op) => toolSchemaFor(op))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

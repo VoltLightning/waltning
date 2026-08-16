@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { createDb } from "@waltning/db";
 import {
   accountGroups,
+  accountKind,
   accounts,
   categories,
   currencies,
@@ -76,6 +77,31 @@ type Export = {
     note: string;
   }[];
 };
+
+/**
+ * The extractor reads `kind` out of JSON, where everything is a string. It was
+ * forced into the enum column with `as never`, which is not a narrowing so much
+ * as a way of telling the compiler to stop asking — an unrecognised kind went
+ * straight to Postgres and failed there, or worse, matched something.
+ *
+ * Deriving the union from `accountKind.enumValues` means adding a kind to the
+ * schema updates this automatically, and a kind the schema has never heard of
+ * stops the import with the value named. H31 established the principle for
+ * currencies: throw rather than skip, because skipping produced a wrong balance
+ * that reconciled.
+ */
+type AccountKind = (typeof accountKind.enumValues)[number];
+
+function toAccountKind(value: string): AccountKind {
+  const kinds: readonly string[] = accountKind.enumValues;
+  if (!kinds.includes(value)) {
+    throw new Error(
+      `unknown account kind "${value}" — the extractor's map and the schema disagree. ` +
+        `Known kinds: ${kinds.join(", ")}`,
+    );
+  }
+  return value as AccountKind;
+}
 
 async function main() {
   const path = process.argv[2] ?? "/tmp/mm-export.json";
@@ -137,7 +163,7 @@ async function main() {
 
     const values = {
       name: a.name,
-      kind: a.kind as never,
+      kind: toAccountKind(a.kind),
       currency: a.currency,
       groupId: a.group ? (groupIds.get(a.group) ?? null) : null,
       ownership: a.ownership,

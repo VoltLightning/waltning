@@ -30,11 +30,7 @@ export type AuditSpec = {
 
 export type OperationKind = "read" | "write";
 
-export type Operation<
-  Input extends z.ZodTypeAny = z.ZodTypeAny,
-  Output = unknown,
-  Ctx = unknown,
-> = {
+export type Operation<Input extends z.ZodTypeAny, Output, Ctx> = {
   /** `verb_noun`, stable. Appears in `agent_tool_calls.tool` and in audit rows. */
   name: string;
 
@@ -69,10 +65,13 @@ export type Operation<
    * the case this exists for: `update_transaction` is both *recategorise* and
    * the only way to write it, so gating by operation would be too coarse.
    */
-  taxSensitiveFields?: readonly string[];
+  // `| undefined` written out because `exactOptionalPropertyTypes` treats an
+  // absent property and one set to undefined as different types, and a
+  // declaration that omits this must still satisfy the registry's constraint.
+  taxSensitiveFields?: readonly string[] | undefined;
 
   /** Required on writes: the registry emits the audit row, not the handler. */
-  audit?: AuditSpec;
+  audit?: AuditSpec | undefined;
 
   /**
    * Written **for the model to read**, not for a developer. This is the tool's
@@ -81,7 +80,17 @@ export type Operation<
    */
   description: string;
 
-  handler: (input: z.output<Input>, ctx: Ctx) => Promise<Output>;
+  /**
+   * Declared with method syntax, not as an arrow property, and the difference
+   * is load-bearing. Under `strictFunctionTypes` a property-form handler is
+   * contravariant in its parameters, so a handler accepting
+   * `{ includeArchived: boolean }` is *not* assignable to one accepting a
+   * looser input — and a registry holding many operations needs exactly that.
+   * Method syntax is bivariant, which is the case it exists for. Inference at
+   * the declaration site is unaffected: `defineOperation` still types `input`
+   * from the schema.
+   */
+  handler(input: z.output<Input>, ctx: Ctx): Promise<Output>;
 };
 
 /**
@@ -106,5 +115,23 @@ export function defineOperation<Input extends z.ZodTypeAny, Output, Ctx>(
   return op;
 }
 
-/** A registry is a map keyed by name; the key and `name` must agree. */
-export type Registry = Readonly<Record<string, Operation<z.ZodTypeAny, unknown, never>>>;
+/**
+ * The loosest operation a registry may hold, for a given context type.
+ *
+ * `Output` is genuinely unbounded: a registry is heterogeneous by definition,
+ * and TypeScript has no existential type for "returns *something*". This is
+ * the one place the escape hatch is the language's limit rather than ours, so
+ * it is written once, here, in a constraint position where it cannot widen a
+ * value — every concrete declaration keeps its real output type through
+ * `defineOperation`, and `as const satisfies` preserves it at the call site.
+ */
+export type AnyOperation<Ctx> = Operation<z.ZodTypeAny, unknown, Ctx>;
+
+/**
+ * A registry: operations keyed by name, all sharing one context type.
+ *
+ * Parameterised by `Ctx` rather than pinned. It was `never`, which is not a
+ * type so much as an admission — it made every entry unassignable and pushed
+ * a cast to each call site.
+ */
+export type Registry<Ctx> = Readonly<Record<string, AnyOperation<Ctx>>>;
