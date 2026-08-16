@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Waltning",
+    "slug": "waltning",
+    "scheme": "waltning",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": false, "bundleIdentifier": "app.waltning.ios" },
+    "web": { "bundler": "metro", "output": "single" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}

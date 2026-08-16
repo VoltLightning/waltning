@@ -245,7 +245,7 @@ and server: decimal.js and zod only, no Node APIs, no database driver.
 | ORM | Drizzle | SQL you can read, migrations you can review. Prisma's engine binary is a liability on ARM |
 | Validation | Zod | Shared client/server; tRPC-native |
 | Money | `numeric(20,8)` + decimal.js | Floats are wrong in a ledger. Scale 8 covers crypto |
-| Mobile | Expo | Managed workflow, EAS builds; camera and secure-store solved |
+| Mobile | Expo | Managed workflow, EAS builds; camera and secure-store solved. **Install its packages with `expo install`, never the npm latest** — SDK 57 wants React Native 0.86.2, and pinning 0.87.0 breaks the web bundler with an error that names a missing file rather than a version mismatch |
 | Blobs | MinIO | S3 API locally; swap to real S3 for offsite without code change |
 | Reverse proxy | Caddy | Automatic TLS, trivial config |
 | Packages | pnpm | Strict deps catch phantom imports before the Pi does; `pnpm deploy --filter` emits a self-contained API image |
