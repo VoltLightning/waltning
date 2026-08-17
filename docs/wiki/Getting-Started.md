@@ -9,11 +9,18 @@ Node ≥ 22, pnpm ≥ 10, Docker.
 
 ```sh
 git clone https://github.com/VoltLightning/waltning && cd waltning
-pnpm install                 # also installs the git hooks
-cp .env.example .env         # fill it in — note the three database URLs
-pnpm db:reset                # drop, migrate, grant, seed — one command
-pnpm dev:api
+make setup                   # install, create .env, build the database
+make dev                     # api + web, from source
 ```
+
+`make doctor` says what is installed, what is missing, and what to run about it.
+`make help` lists everything.
+
+**Make orchestrates; pnpm implements.** No target reimplements a pnpm script —
+`make verify` runs `pnpm verify`. Two places that both know how to run this
+project is two places that drift, and the one nobody is looking at is always
+the stale one. A test runs `make help` and asserts every declared target
+appears in it, and that every pnpm script Make names exists.
 
 `pnpm db:reset` is the one to reach for. Nothing in the database design is
 settled yet, so changing it should never involve hesitation: edit the schema
@@ -53,9 +60,9 @@ One Expo codebase serves the phone and the browser, and the API is a separate
 process — so it is three terminals rather than one.
 
 ```sh
-pnpm dev:api    # the API           127.0.0.1:3000
-pnpm dev:web    # React Native Web  localhost:8081
-pnpm dev:ios    # the same app, iOS simulator
+make dev        # the API and the web app together, Ctrl-C stops both
+make dev-web    # just Metro, when you want its interactive key commands
+make dev-ios    # the same app, iOS simulator
 ```
 
 ```mermaid
@@ -69,7 +76,7 @@ graph LR
     API -->|"<i>as waltning_app</i>"| PG["<b>Postgres</b><br/><i>in Docker<br/>127.0.0.1:5442</i>"]
 ```
 
-`pnpm e2e` then checks that chain against what is actually running — the probes,
+`make e2e` then checks that chain against what is actually running — the probes,
 [[Offline and Sync|Rule 0]] authenticating a real response, a read returning
 seeded rows with its declared fields, and a refusal arriving as a domain error
 rather than a transport failure. Read-only unless you pass `--write`.

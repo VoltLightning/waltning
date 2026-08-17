@@ -73,12 +73,24 @@ Node ≥ 22, pnpm ≥ 10, Docker.
 
 ```sh
 git clone https://github.com/VoltLightning/waltning && cd waltning
-pnpm install                 # also installs the git hooks
-cp .env.example .env         # fill it in — note the three database URLs
-pnpm db:up                   # postgres on 127.0.0.1, loopback only
-pnpm db:migrate              # ten migrations, in order
-pnpm db:seed                 # currencies + category tree
-pnpm dev:api                 # the API on 127.0.0.1:3000
+make setup                   # install, create .env, build the database
+make dev                     # api + web, from source
+```
+
+`make` is the front door; **pnpm scripts are still the implementation** and Make
+never reimplements one — `make verify` runs `pnpm verify`. Two places that both
+know how to run the tests is two places that drift, and the one you are not
+looking at is always the stale one. `tests/makefile.test.ts` holds them
+together: it runs `make help` and asserts every declared target appears, and
+that every pnpm script Make names actually exists.
+
+```
+make help        every target, with a description
+make doctor      what is installed, what is missing, what to run about it
+make dev         api + web together, from source
+make up          the whole stack as it ships, on :8080
+make e2e         check whatever is running, end to end
+make verify      the gate
 ```
 
 **`pnpm db:reset` does all four database steps in one** — drop, migrate, grant,
@@ -87,20 +99,22 @@ hesitating: edit `schema.ts`, `pnpm db:generate`, reset.
 
 ### Running all three surfaces
 
-One Expo codebase serves the phone and the browser, and the API is a separate
-process — so this is three terminals, not one:
+`make dev` starts the API and the web app together and stops both on Ctrl-C.
+The simulator is a third process, and Metro's interactive key commands only
+work when it owns a terminal:
 
 ```sh
-pnpm dev:api    # the API           127.0.0.1:3000
-pnpm dev:web    # React Native Web  localhost:8081
-pnpm dev:ios    # the same app in the iOS simulator
+make dev        # api :3000 + web :8081
+make dev-web    # just Metro, interactive
+make dev-ios    # the same app in the simulator
 ```
 
-Then `pnpm e2e` checks the whole chain against what is actually running: the
+Then `make e2e` checks the whole chain against what is actually running: the
 probes, that a response authenticates under Rule 0, that a read returns seeded
 rows with its declared fields, and that a refusal comes back as a domain error
 rather than a transport failure. It is read-only; `pnpm e2e --write` also
 creates one placeholder row and tells you its id.
+`make appliance-e2e` runs the identical check against the containers.
 
 **The web surface needs one setting the others do not.** Metro serves the bundle
 on `:8081` and the API answers on `:3000`, which a browser treats as two
@@ -135,10 +149,15 @@ The appliance is three containers: Postgres, the API, and Caddy serving the web
 bundle and proxying `/trpc` on **one host name**.
 
 ```sh
-BUILD_SHA=$(git rev-parse --short HEAD) docker compose build
-BUILD_SHA=$(git rev-parse --short HEAD) docker compose up -d
-open http://127.0.0.1:8080
+make up          # build, start, wait for health, print /readyz
+make ps          # what is running
+make down        # stop it, keep the development database
 ```
+
+Six services: Postgres, a one-shot `migrate`, the API, MinIO, a one-shot bucket
+init, and Caddy. **`migrate` is separate on purpose** — the API does not start
+unless it exits 0, so a failed migration stops the deploy instead of leaving an
+API serving against a schema it does not match.
 
 That single origin is why `DEV_CORS_ORIGIN` exists only in development — there
 is no second origin here to allow, and the compose stack deliberately does not

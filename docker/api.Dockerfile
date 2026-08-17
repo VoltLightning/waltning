@@ -32,7 +32,10 @@ RUN pnpm install --frozen-lockfile --filter @waltning/api...
 
 FROM node:22-alpine AS runtime
 
-RUN corepack enable
+# No corepack here on purpose. Nothing at run time invokes pnpm — the API starts
+# with `node`, and the migration container calls drizzle-kit's binary directly.
+# A package manager in a running image is a download and a write path that the
+# process has no use for.
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules

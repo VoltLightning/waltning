@@ -31,6 +31,81 @@ services:
   #   docker compose build --build-arg BUILD_SHA=$(git rev-parse --short HEAD)
   #   docker compose up -d
 
+  # ── Migrations, once, before anything reads the database ────────────────────
+  #
+  # A separate one-shot service rather than a step inside the API's start-up:
+  # a failed migration must **stop the deploy**, not leave an API serving
+  # against a schema it does not match. `service_completed_successfully` below
+  # is what makes that true — the API does not start unless this exits 0.
+  #
+  # Runs as the bootstrap superuser, which is the one context where that is
+  # correct (§13.1): `0001` creates a ROLE and issues GRANTs that `waltning_app`
+  # has no privilege to perform. Composed from the pieces already above rather
+  # than taking a fourth URL — one less credential to keep in step.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MIGRATE_DATABASE_URL: postgresql://${POSTGRES_USER:-waltning}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-waltning}
+    # drizzle-kit directly, not `pnpm --filter … migrate`. pnpm's run wrapper
+    # does a dependency-status check that shells out to `pnpm install`, which
+    # fails in an image whose modules are already installed and whose user
+    # cannot write the store. A container should run the program, not a package
+    # manager.
+    working_dir: /app/packages/db
+    command: ["node_modules/.bin/drizzle-kit", "migrate"]
+    restart: "no"
+
+  # ── Receipt storage (§10) ───────────────────────────────────────────────────
+  #
+  # Nothing reads or writes objects yet. It is here because `/readyz` now
+  # *measures* blob reachability instead of asserting it, and a dependency the
+  # probe reports must be a dependency that exists.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?set MINIO_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Loopback only, like Postgres. Receipts are images of what you bought.
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+
+  # One-shot: create the bucket if it is not there. Idempotent, so it is safe on
+  # every boot — and it means the first receipt write does not have to be the
+  # thing that discovers the bucket is missing.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?}
+      MINIO_BUCKET: ${MINIO_BUCKET:-receipts}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ACCESS_KEY $$MINIO_SECRET_KEY &&
+      mc mb --ignore-existing local/$$MINIO_BUCKET &&
+      echo 'bucket ready: '$$MINIO_BUCKET
+      "
+    restart: "no"
+
   api:
     build:
       context: .
@@ -44,6 +119,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Not merely started — *finished, successfully*. An API serving against a
+      # half-migrated schema is the failure this ordering exists to prevent.
+      migrate:
+        condition: service_completed_successfully
     environment:
       # The same credential as `APP_DATABASE_URL`, addressed by service name
       # rather than by loopback — inside the network `127.0.0.1` is this
@@ -52,6 +131,9 @@ services:
       APP_DATABASE_URL: ${APP_DATABASE_URL_CONTAINER:?set APP_DATABASE_URL_CONTAINER in .env}
       # Deliberately absent: DEV_CORS_ORIGIN. Caddy fronts both the bundle and
       # the API on one host name, so there is no second origin to allow.
+      # Now a real measurement rather than a constant: `/readyz` contacts this
+      # and reports what it finds, or omits the field when unset.
+      MINIO_ENDPOINT: http://minio:9000
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: production
     # No published port. Caddy reaches it over the compose network; nothing else
@@ -82,4 +164,5 @@ services:
 
 volumes:
   pgdata:
+  miniodata:
   caddydata:

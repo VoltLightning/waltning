@@ -7,6 +7,7 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { ping } from "@waltning/db";
 import { Hono } from "hono";
+import { pingBlobs } from "../infra/blobs.ts";
 import { db, dbUnavailableReason } from "../infra/db.ts";
 import { waltningHeader } from "../middleware/waltning-header.ts";
 import type { Context } from "../trpc/index.ts";
@@ -17,7 +18,7 @@ import { type DependencyState, health, readiness } from "./health.ts";
 export type AppOptions = {
   /** Injected so tests can drive time and dependency state. */
   now?: () => Date;
-  blobs?: () => DependencyState;
+  blobs?: () => Promise<DependencyState | undefined>;
   requestId?: () => string;
   /**
    * Local-development cross-origin allowance (`dev-cors.ts`). Read from the
@@ -31,9 +32,9 @@ let counter = 0;
 
 export function createApp(options: AppOptions = {}) {
   const now = options.now ?? (() => new Date());
-  // No default. There is no blob-store client to ask, so an unset `blobs`
-  // means the field is omitted rather than asserted — see `health.ts`.
-  const blobs = options.blobs;
+  // Defaults to the real check, which returns `undefined` when no blob store
+  // is configured — so the field is measured or absent, never asserted.
+  const blobs = options.blobs ?? pingBlobs;
   const requestId = options.requestId ?? (() => `r${++counter}`);
 
   const app = new Hono();
@@ -63,7 +64,7 @@ export function createApp(options: AppOptions = {}) {
     const up = handle ? await ping(handle) : false;
     const reason = handle ? "database unreachable" : (dbUnavailableReason() ?? "unavailable");
 
-    const state = readiness(now(), up ? "up" : "down", blobs?.(), reason);
+    const state = readiness(now(), up ? "up" : "down", await blobs(), reason);
     return c.json(state, state.ok ? 200 : 503);
   });
 
