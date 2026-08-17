@@ -11,8 +11,10 @@
  */
 
 import type { Registry } from "@waltning/core";
+import { getAccounts } from "../modules/accounts/index.ts";
 import { createCounterparty } from "../modules/counterparties/index.ts";
 import { getCurrencies } from "../modules/currencies/index.ts";
+import { listTransactionsOperation } from "../modules/transactions/index.ts";
 import type { OperationContext } from "./context.ts";
 
 /**
@@ -24,6 +26,8 @@ import type { OperationContext } from "./context.ts";
  */
 export const registry = {
   get_currencies: getCurrencies,
+  get_accounts: getAccounts,
+  list_transactions: listTransactionsOperation,
   create_counterparty: createCounterparty,
 } as const satisfies Registry<OperationContext>;
 

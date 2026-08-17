@@ -90,14 +90,45 @@ type and only that type.
 
 ---
 
+**`T` is `transactions WHERE deleted_at IS NULL`.** Every formula below reads
+it and none of them said so — it appeared in §2 and §6 as though it had been
+defined somewhere. A reader implementing §2 has to guess whether a soft-deleted
+row still counts toward a balance, and the two answers differ by however much
+was deleted.
+
+---
+
 ## 2 · Account balance
 
 ```sql
 balance(a) =
     a.opening_balance
-  + (SELECT coalesce(sum(-t.amount_original), 0) FROM T t WHERE t.account_id    = a.id)
-  + (SELECT coalesce(sum( t.to_amount),       0) FROM T t WHERE t.to_account_id = a.id)
+  + (SELECT coalesce(sum(
+        CASE t.type
+          WHEN 'expense'  THEN -t.amount_original
+          WHEN 'transfer' THEN -t.amount_original
+          ELSE                  t.amount_original
+        END), 0)
+     FROM T t WHERE t.account_id    = a.id)
+  + (SELECT coalesce(sum(t.to_amount), 0)
+     FROM T t WHERE t.to_account_id = a.id)
 ```
+
+**The source leg is signed by type, not negated wholesale.** This read
+`sum(-t.amount_original)` — negating every row on the account, income included.
+Against §1 one line above it, which says `signed(t,'from')` is `+amount_original`
+for income and adjustment. An account with an opening balance of zero, one
+income of 1 000,00 and one expense of 200,00 came to **−1 200,00** where §1 gives
+**800,00**: not a rounding difference, the wrong sign on every income row in the
+system.
+
+`income` and `adjustment` share the `ELSE` branch deliberately — an adjustment
+carries its own sign (§1), so negating it would invert the correction it exists
+to make.
+
+Account balance is class **F**, so the phone folds this too. Both surfaces would
+have been wrong identically, agreed with each other, and reconciled against the
+server perfectly.
 
 In the **account's own currency**, always — the currency trigger (§6.5)
 guarantees every contributing row is denominated in it, which is what makes this

@@ -32,6 +32,7 @@
     "mm:all": "pnpm mm:extract && pnpm mm:import && pnpm mm:verify",
     "typecheck": "pnpm -r typecheck",
     "db:seed": "pnpm --filter @waltning/db seed",
+    "db:fixture": "pnpm --filter @waltning/db fixture",
     "db:fx": "pnpm --filter @waltning/db fx",
     "test": "vitest run",
     "test:watch": "vitest",

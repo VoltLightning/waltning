@@ -1,15 +1,15 @@
 /**
- * Home route — still S01's placeholder, now reading from the server.
+ * The dashboard — accounts, their balances, and the recent ledger.
  *
- * It renders three things, and each is a claim that was previously untested on
- * this side: that the client can reach the API from this surface, that a
- * response authenticates under Rule 0, and that an operation's declared output
- * type survives all the way to a component.
+ * A first usable slice of S01. It is not S01: the real one has the dual total,
+ * the scope switch, per-widget freshness and a configurable layout (§14.7,
+ * S24). What is here is the part that can be honest today — figures the server
+ * computes, rendered without a second implementation of anything.
  *
  * **The connection block is a readout, not the `link` state machine.**
- * `architecture/09` specifies ten states, corroboration, and a probe schedule.
- * Showing "reached / not reached" here is honest; calling it `link` would not
- * be, and a half-built state machine is harder to replace than none.
+ * `architecture/09` specifies ten states, corroboration and a probe schedule.
+ * Showing "reached / not reached" is honest; calling it `link` would not be, and
+ * a half-built state machine is harder to replace than none.
  *
  * A route composes features and owns data fetching; it holds no components of
  * its own.
@@ -17,8 +17,8 @@
 
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { CurrencyList, useCurrencies } from "../src/features/currencies/index.ts";
-import { NetPosition } from "../src/features/dashboard/index.ts";
+import { AccountList, useAccounts } from "../src/features/accounts/index.ts";
+import { TransactionList, useTransactions } from "../src/features/transactions/index.ts";
 import { API_BASE_URL, api, CaptiveResponseError, isStaleBundle } from "../src/shared/api/index.ts";
 
 type Probe =
@@ -38,8 +38,7 @@ function useProbe(): Probe {
       .catch((error: unknown) => {
         if (!live) return;
         // The distinction Rule 0 exists to make: something answered and it was
-        // not us, versus nothing answered at all. Collapsing them here would
-        // undo the check one layer above.
+        // not us, versus nothing answered at all.
         setProbe(
           error instanceof CaptiveResponseError
             ? { status: "not-ours", reason: error.reason }
@@ -57,36 +56,65 @@ function useProbe(): Probe {
   return probe;
 }
 
-export default function Home() {
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.label}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+export default function Dashboard() {
   const probe = useProbe();
-  const currencies = useCurrencies(api);
+  const accounts = useAccounts(api);
+  const transactions = useTransactions(api, 20);
 
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <Text style={styles.title}>Waltning</Text>
 
-      {/*
-        Still fed constants, and still worth rendering: it is `money.ts` —
-        decimal.js, not floats — executing on this surface. §4.1's claim is
-        that the phone and the server compute money with the same code, and
-        this is the client half of it running.
-      */}
-      <NetPosition amounts={["1200.50000000", "-349.99000000", "0.49000000"]} />
-
-      <View style={styles.block}>
-        <Text style={styles.label}>API</Text>
-        <Text style={styles.value}>{API_BASE_URL || "this origin"}</Text>
-        <Text style={styles.detail}>{describe(probe)}</Text>
-      </View>
-
-      <View style={styles.block}>
-        <Text style={styles.label}>Currencies</Text>
-        {currencies.status === "loading" ? <Text style={styles.detail}>Loading…</Text> : null}
-        {currencies.status === "failed" ? (
-          <Text style={styles.detail}>{currencies.error.message}</Text>
+      <Section label="Accounts">
+        {accounts.status === "loading" ? <Text style={styles.detail}>Loading…</Text> : null}
+        {accounts.status === "failed" ? (
+          <Text style={styles.detail}>{accounts.error.message}</Text>
         ) : null}
-        {currencies.status === "ready" ? <CurrencyList currencies={currencies.currencies} /> : null}
-      </View>
+        {accounts.status === "ready" ? (
+          <>
+            <AccountList accounts={accounts.accounts} />
+            {/*
+              Stated rather than shown as a total. §3's net worth converts every
+              balance to a display currency first; adding these would put złoty
+              and dollars into one number and call it net worth.
+            */}
+            <Text style={styles.note}>
+              Each balance is in its own account's currency — not a total.
+            </Text>
+          </>
+        ) : null}
+      </Section>
+
+      <Section label="Recent">
+        {transactions.status === "loading" ? <Text style={styles.detail}>Loading…</Text> : null}
+        {transactions.status === "failed" ? (
+          <Text style={styles.detail}>{transactions.error.message}</Text>
+        ) : null}
+        {transactions.status === "ready" ? (
+          <>
+            <TransactionList transactions={transactions.transactions} />
+            {transactions.hasMore ? (
+              // Said plainly. A list that silently shows only the first page
+              // reads as the whole ledger, and a short ledger is a wrong one.
+              <Text style={styles.note}>More transactions exist — paging is not built yet.</Text>
+            ) : null}
+          </>
+        ) : null}
+      </Section>
+
+      <Section label="Connection">
+        <Text style={styles.detail}>{API_BASE_URL || "this origin"}</Text>
+        <Text style={styles.detail}>{describe(probe)}</Text>
+      </Section>
     </ScrollView>
   );
 }
@@ -96,10 +124,8 @@ function describe(probe: Probe): string {
     case "probing":
       return "probing…";
     case "reached":
-      // The build is compared, not merely shown. It was displayed and
-      // discarded, which reads exactly like the check being present.
       return isStaleBundle(probe.build)
-        ? `reached · server is on build ${probe.build} — this page is stale, reload`
+        ? `server is on build ${probe.build} — this page is stale, reload`
         : `reached · build ${probe.build}`;
     case "not-ours":
       // Deliberately not "offline". Something is answering; it is not the API.
@@ -110,10 +136,10 @@ function describe(probe: Probe): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { padding: 24, gap: 24, maxWidth: 520, width: "100%", alignSelf: "center" },
+  screen: { padding: 24, gap: 28, maxWidth: 640, width: "100%", alignSelf: "center" },
   title: { fontSize: 28, fontWeight: "600" },
-  block: { gap: 4 },
+  section: { gap: 8 },
   label: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.5 },
-  value: { fontSize: 16 },
   detail: { fontSize: 13, opacity: 0.7 },
+  note: { fontSize: 11, opacity: 0.5, fontStyle: "italic" },
 });

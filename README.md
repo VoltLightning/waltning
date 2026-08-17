@@ -81,6 +81,13 @@ pnpm db:seed                 # currencies + category tree
 pnpm dev:api                 # the API on 127.0.0.1:3000
 ```
 
+`make setup` leaves you with reference data — currencies and the category tree
+— and an empty ledger. **`pnpm db:fixture` adds placeholder accounts and
+transactions** so the screens have something to show; `pnpm db:fixture --drop`
+removes them again. It is deliberately not part of `db:reset`: a fixture that
+arrives automatically is a fixture someone eventually mistakes for their own
+data.
+
 **`pnpm db:reset` does all four database steps in one** — drop, migrate, grant,
 seed. Nothing is permanent yet, so changing the schema should never mean
 hesitating: edit `schema.ts`, `pnpm db:generate`, reset.

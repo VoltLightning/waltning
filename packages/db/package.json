@@ -15,7 +15,8 @@
     "seed": "tsx src/seed/run.ts",
     "fx": "tsx src/fx/backfill.ts",
     "recreate": "tsx src/reset.ts",
-    "grant": "tsx src/reset.ts --grant-only"
+    "grant": "tsx src/reset.ts --grant-only",
+    "fixture": "tsx src/seed/fixture.ts"
   },
   "dependencies": {
     "@waltning/core": "workspace:*",

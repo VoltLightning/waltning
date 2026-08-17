@@ -58,10 +58,32 @@ export type WriteOutputIsTyped = Expect<
   Equals<Out["op"]["create_counterparty"], { id: string; name: string; kind: "person" | "company" }>
 >;
 
+/**
+ * A balance is a **string**, and this is the assertion that keeps it one.
+ *
+ * `numeric(20,8)` through a driver that returned numbers would type as `number`
+ * here, and the failure is silent: 0,1 + 0,2 renders as 0,30 at two decimal
+ * places and is wrong at the eighth. Money in this system is decimal strings end
+ * to end, and this is where that stops being a convention and becomes checked.
+ */
+export type BalanceIsAString = Expect<Equals<Out["op"]["get_accounts"][number]["balance"], string>>;
+
+export type TransactionAmountIsAString = Expect<
+  Equals<Out["op"]["list_transactions"]["rows"][number]["amount"], string>
+>;
+
+/** The cursor survives to the client as a shape it can feed back, not `unknown`. */
+export type CursorIsTyped = Expect<
+  Equals<Out["op"]["list_transactions"]["nextCursor"], { date: string; id: string } | null>
+>;
+
 /* ── 2 · every operation reaches the client ─────────────────────────────── */
 
 export type EveryOperationIsExposed = Expect<
-  Equals<keyof Out["op"], "get_currencies" | "create_counterparty">
+  Equals<
+    keyof Out["op"],
+    "get_currencies" | "get_accounts" | "list_transactions" | "create_counterparty"
+  >
 >;
 
 /* ── 3 · the widened form cannot skip validation ────────────────────────── */
