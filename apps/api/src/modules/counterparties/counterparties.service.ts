@@ -5,10 +5,17 @@
  * for the error message, not for the guarantee — `counterparties_name_uq` is
  * on the *normalized* name and is what actually holds when this check races
  * another writer.
+ *
+ * `defineOperation` already translates any Postgres refusal into a domain
+ * error, so this `catch` is not what makes the failure survive — without it the
+ * duplicate would still arrive as `validation`, just carrying Postgres's own
+ * wording. It exists because the useful sentence here mentions case and
+ * whitespace, and the shared translator has no way to know that.
  */
 
 import { counterparties, type DbHandle } from "@waltning/db";
 import { DomainError } from "../../common/errors.ts";
+import { pgErrorCode, UNIQUE_VIOLATION } from "../../common/pg-errors.ts";
 
 export type NewCounterparty = {
   name: string;
@@ -23,32 +30,6 @@ export type CounterpartyRow = {
   name: string;
   kind: "person" | "company";
 };
-
-/** Postgres error code for a unique-constraint violation. */
-const UNIQUE_VIOLATION = "23505";
-
-/**
- * Drizzle wraps driver errors in a `DrizzleQueryError` whose message is the
- * SQL, putting the driver's `code` on `.cause`. Reading `e.code` therefore
- * finds nothing and every constraint violation falls through as `internal` —
- * which is what happened here until a test asked for the duplicate case.
- * Walking the chain is what makes the mapping actually fire.
- */
-type CausedError = { code?: string; cause?: CausedError };
-
-/** Narrows rather than casting: `catch` gives `unknown`, and this is the check. */
-function isCausedError(e: unknown): e is CausedError {
-  return typeof e === "object" && e !== null;
-}
-
-function pgErrorCode(e: unknown): string | undefined {
-  let cur = isCausedError(e) ? e : undefined;
-  for (let depth = 0; cur && depth < 5; depth++) {
-    if (typeof cur.code === "string") return cur.code;
-    cur = isCausedError(cur.cause) ? cur.cause : undefined;
-  }
-  return undefined;
-}
 
 export async function insertCounterparty(
   db: DbHandle,

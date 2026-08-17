@@ -72,11 +72,9 @@ folklore.
   not built.
 - **`packages/ui` is declared and imported by nothing.** Zero components; it
   compiles an empty file.
-- **`pnpm dev` starts the API only**, not the app.
 - **The build identifier has no way of being set**, so the health endpoint always
-  reports `dev`. It needs a Dockerfile that does not exist yet.
-- **Two exchange-rate checks are not in the test suite.** They encode real
-  reasoning and are still not executable. The money module itself is covered.
+  reports `dev`. It needs a Dockerfile that does not exist yet — and the client
+  reads the field without comparing it, so version skew cannot be detected.
 
 ## Not yet decided
 

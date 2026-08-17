@@ -78,6 +78,30 @@ describe("GET /readyz", () => {
     }
   });
 
+  /**
+   * The probe must not claim what it has not measured.
+   *
+   * `blobs` used to come from a default that returned `"up"`, and there is no
+   * blob-store client in the system — so MinIO could be off, receipt capture
+   * broken, and this endpoint would answer `{"ok":true,"blobs":"up"}`. The
+   * whole purpose of `/readyz` is per-dependency degradation, and one of its
+   * two dependencies was a constant.
+   */
+  it("omits blobs entirely when nothing checks them", async () => {
+    const res = await app().request("/readyz");
+    const body = await json<Readiness>(res);
+    expect("blobs" in body, "blobs must be absent, not asserted").toBe(false);
+  });
+
+  it("reports blobs once something does check them", async () => {
+    // The field is not gone — it returns the moment there is a measurement to
+    // report, and a failing one does not fail readiness (Postgres alone
+    // decides `ok`), which is the degradation story `01-context` promises.
+    const res = await createApp({ now: () => at, blobs: () => "down" }).request("/readyz");
+    const body = await json<Readiness>(res);
+    expect(body.blobs).toBe("down");
+  });
+
   it("never leaks a connection string in the reason", async () => {
     const saved = process.env["APP_DATABASE_URL"];
     process.env["APP_DATABASE_URL"] = "postgresql://user:hunter2@127.0.0.1:5442/x";

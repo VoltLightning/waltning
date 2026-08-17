@@ -14,6 +14,41 @@
 --
 -- Hand-written on purpose. When the table layer changes, run `pnpm db:generate`
 -- and it produces a new numbered migration; when a guarantee changes, edit here.
+--
+-- ── Every guard raises its own SQLSTATE ──────────────────────────────────────
+--
+-- All fifteen RAISEs below used `check_violation` (23514). Fifteen different
+-- guarantees, one code: nothing reading the error could tell "this period is
+-- filed" from "that category has children", and the only thing left to key on
+-- was English message text.
+--
+-- That is not cosmetic. `architecture/09` retries a 5xx and never retries a
+-- `period_closed`, so a queued edit into a filed period came back as `internal`
+-- and the outbox would retry a permanently-refused write forever — the period
+-- does not reopen on its own.
+--
+-- Class `WA` is ours: PostgreSQL reserves the classes listed in Appendix A and
+-- `WA` is not among them, so these cannot collide with a future server code.
+-- `apps/api/src/common/pg-errors.ts` maps them, and a test drives every guard
+-- against real Postgres to prove the code that comes back is the one here.
+--
+--   WA001  a closed tax period                 → period_closed
+--   WA002  exactly one pivot currency          → validation
+--   WA003  transaction currency ≠ account      → validation
+--   WA004  transfer currency ≠ destination     → validation
+--   WA005  category is a group, not a leaf     → validation
+--   WA006  category has children, not a leaf   → validation
+--   WA007  category under a leaf               → validation
+--   WA008  category still holds transactions   → validation
+--   WA009  category kind ≠ parent kind         → validation
+--   WA010  children of a different kind        → validation
+--   WA011  business row in a shared account    → validation
+--   WA012  business row into a shared account  → validation
+--   WA013  account currency change with rows   → validation
+--   WA014  account made shared with business   → validation
+--
+-- Only WA001 maps to something other than `validation`, and that is the whole
+-- point: it is the one whose handling differs.
 
 -- ═══ from 0002_adversarial_review_fixes.sql ═══════════════════
 --> statement-breakpoint
@@ -31,7 +66,7 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF (SELECT count(*) FROM currencies WHERE is_pivot) <> 1 THEN
     RAISE EXCEPTION 'exactly one currency must be the pivot (SPEC.md §7.0)'
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA002';
   END IF;
   RETURN NULL;
 END $$;
@@ -76,7 +111,7 @@ BEGIN
     RAISE EXCEPTION
       'transaction currency % does not match account currency % (account %)',
       NEW.currency, account_ccy, NEW.account_id
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA003';
   END IF;
 
   IF NEW.to_account_id IS NOT NULL THEN
@@ -85,7 +120,7 @@ BEGIN
       RAISE EXCEPTION
         'transfer to_currency % does not match destination account currency % (account %)',
         NEW.to_currency, target_ccy, NEW.to_account_id
-        USING ERRCODE = 'check_violation';
+        USING ERRCODE = 'WA004';
     END IF;
   END IF;
 
@@ -117,7 +152,7 @@ BEGIN
     RAISE EXCEPTION
       'category % is a group, not a leaf — only leaves are assignable (TAXONOMY.md R1)',
       NEW.category_id
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA005';
   END IF;
 
   RETURN NEW;
@@ -141,7 +176,7 @@ BEGIN
     SELECT 1 FROM categories WHERE parent_id = NEW.id
   ) THEN
     RAISE EXCEPTION 'category % has children and cannot be a leaf', NEW.id
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA006';
   END IF;
 
   -- The other direction. Without this, inserting a child under a LEAF that
@@ -152,7 +187,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION
       'category % cannot be a child of leaf %', NEW.id, NEW.parent_id
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA007';
   END IF;
 
   IF NOT NEW.is_leaf AND EXISTS (
@@ -161,7 +196,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION
       'category % still has transactions and cannot become a group', NEW.id
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA008';
   END IF;
 
   -- A child must share its parent's kind: an income leaf under an expense
@@ -172,7 +207,7 @@ BEGIN
     WHERE p.id = NEW.parent_id AND p.kind <> NEW.kind
   ) THEN
     RAISE EXCEPTION 'category % kind does not match its parent', NEW.id
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA009';
   END IF;
 
   RETURN NEW;
@@ -192,7 +227,7 @@ BEGIN
     SELECT 1 FROM categories WHERE parent_id = NEW.id AND kind <> NEW.kind
   ) THEN
     RAISE EXCEPTION 'category % has children of a different kind', NEW.id
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA010';
   END IF;
   RETURN NEW;
 END $$;
@@ -217,7 +252,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION
       'a business transaction cannot sit in a shared account (SPEC.md §6.7, §13.1)'
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA011';
   END IF;
 
   RETURN NEW;
@@ -237,7 +272,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION
       'a business transaction cannot move into a shared account (SPEC.md §6.7)'
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA012';
   END IF;
   RETURN NEW;
 END $$;
@@ -265,7 +300,7 @@ BEGIN
       RAISE EXCEPTION
         'cannot change the currency of account % — % transactions are denominated in %',
         NEW.id, n, OLD.currency
-        USING ERRCODE = 'check_violation';
+        USING ERRCODE = 'WA013';
     END IF;
   END IF;
 
@@ -277,7 +312,7 @@ BEGIN
       RAISE EXCEPTION
         'cannot make account % shared — it holds % business transactions (SPEC.md §6.7)',
         NEW.id, n
-        USING ERRCODE = 'check_violation';
+        USING ERRCODE = 'WA014';
     END IF;
   END IF;
 
@@ -309,7 +344,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION
       'transaction dated % falls in a closed tax period — reopen it first (SPEC.md §13.4)', d
-      USING ERRCODE = 'check_violation';
+      USING ERRCODE = 'WA001';
   END IF;
   RETURN NEW;
 END $$;
@@ -504,7 +539,7 @@ BEGIN
     ) THEN
       RAISE EXCEPTION
         'transaction dated % falls in a closed tax period — reopen it first (SPEC.md §13.4)', d
-        USING ERRCODE = 'check_violation';
+        USING ERRCODE = 'WA001';
     END IF;
   END LOOP;
 

@@ -32,7 +32,19 @@ export type Readiness = {
   build: string;
   serverTime: string;
   db: DependencyState;
-  blobs: DependencyState;
+  /**
+   * **Absent until something actually checks it.**
+   *
+   * This field was `DependencyState` and was filled from a default that
+   * returned `"up"` — there is no blob-store client anywhere in the system, so
+   * the probe reported a dependency it had never contacted. MinIO off, receipt
+   * capture broken, and `/readyz` answering `{"ok":true,"blobs":"up"}`.
+   *
+   * A constant dressed as a measurement is worse than no measurement, because
+   * only one of the two can be trusted at a glance. It comes back when a
+   * checker exists.
+   */
+  blobs?: DependencyState;
   /** Present only when something is down. Never a connection string. */
   reason?: string;
 };
@@ -46,7 +58,7 @@ export type Readiness = {
 export function readiness(
   now: Date,
   db: DependencyState,
-  blobs: DependencyState,
+  blobs: DependencyState | undefined,
   reason?: string,
 ): Readiness {
   const base: Readiness = {
@@ -54,7 +66,10 @@ export function readiness(
     build: BUILD,
     serverTime: now.toISOString(),
     db,
-    blobs,
+    // Reported only when measured. `undefined` here means "nothing checks this
+    // yet", which is a different statement from "it is down" and must not be
+    // rendered as either.
+    ...(blobs === undefined ? {} : { blobs }),
   };
   return reason && db === "down" ? { ...base, reason } : base;
 }
