@@ -72,7 +72,7 @@ sequenceDiagram
     App-->>You: shown as recorded, instantly
     Note over Q: no network needed to get this far
 
-    rect rgb(240,240,240)
+    rect rgba(128,128,128,0.2)
         Note over Q,DB: later, when a network appears
         Q->>API: send the queued write
         API->>API: check the response is really ours

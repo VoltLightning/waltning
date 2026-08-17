@@ -44,7 +44,7 @@ graph TB
     VIEW -.->|"reads from"| TABLES
     EXP -.->|"<b>revoked</b>"| TABLES
 
-    classDef danger stroke:#c33,stroke-width:2px,stroke-dasharray: 4 3
+    classDef danger fill:#8f3f3f,stroke:#5c2020,color:#fff
     class TABLES danger
 ```
 

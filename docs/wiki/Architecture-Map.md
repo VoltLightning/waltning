@@ -54,7 +54,7 @@ graph TB
 
     MOBILE -.->|"never"| DB
 
-    classDef floor fill:#eef,stroke:#88a,stroke-width:2px
+    classDef floor fill:#2f5fa8,stroke:#1a3a6b,color:#fff
     class CORE floor
 ```
 

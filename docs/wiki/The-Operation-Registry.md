@@ -69,7 +69,7 @@ sequenceDiagram
         C-->>G: you approve
     end
 
-    rect rgb(238,244,255)
+    rect rgba(128,128,128,0.2)
         Note over R,DB: one transaction — all of it, or none of it
         R->>DB: have we already done this exact request?
         DB-->>R: no
