@@ -88,7 +88,9 @@ describe("GET /readyz", () => {
    * two dependencies was a constant.
    */
   it("omits blobs entirely when nothing checks them", async () => {
-    const res = await app().request("/readyz");
+    // `blobs: async () => undefined` is what an unconfigured stack produces —
+    // no MINIO_ENDPOINT, nothing to ask, so nothing claimed.
+    const res = await createApp({ now: () => at, blobs: async () => undefined }).request("/readyz");
     const body = await json<Readiness>(res);
     expect("blobs" in body, "blobs must be absent, not asserted").toBe(false);
   });
@@ -97,7 +99,7 @@ describe("GET /readyz", () => {
     // The field is not gone — it returns the moment there is a measurement to
     // report, and a failing one does not fail readiness (Postgres alone
     // decides `ok`), which is the degradation story `01-context` promises.
-    const res = await createApp({ now: () => at, blobs: () => "down" }).request("/readyz");
+    const res = await createApp({ now: () => at, blobs: async () => "down" }).request("/readyz");
     const body = await json<Readiness>(res);
     expect(body.blobs).toBe("down");
   });
