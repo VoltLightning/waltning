@@ -78,12 +78,45 @@ cp .env.example .env         # fill it in — note the three database URLs
 pnpm db:up                   # postgres on 127.0.0.1, loopback only
 pnpm db:migrate              # ten migrations, in order
 pnpm db:seed                 # currencies + category tree
-pnpm dev                     # api + web
+pnpm dev:api                 # the API on 127.0.0.1:3000
 ```
 
 **`pnpm db:reset` does all four database steps in one** — drop, migrate, grant,
 seed. Nothing is permanent yet, so changing the schema should never mean
 hesitating: edit `schema.ts`, `pnpm db:generate`, reset.
+
+### Running all three surfaces
+
+One Expo codebase serves the phone and the browser, and the API is a separate
+process — so this is three terminals, not one:
+
+```sh
+pnpm dev:api    # the API           127.0.0.1:3000
+pnpm dev:web    # React Native Web  localhost:8081
+pnpm dev:ios    # the same app in the iOS simulator
+```
+
+Then `pnpm e2e` checks the whole chain against what is actually running: the
+probes, that a response authenticates under Rule 0, that a read returns seeded
+rows with its declared fields, and that a refusal comes back as a domain error
+rather than a transport failure. It is read-only; `pnpm e2e --write` also
+creates one placeholder row and tells you its id.
+
+**The web surface needs one setting the others do not.** Metro serves the bundle
+on `:8081` and the API answers on `:3000`, which a browser treats as two
+origins. Set `DEV_CORS_ORIGIN=http://localhost:8081` in `.env` for the browser;
+without it the page loads and every request fails as *no answer*. Nothing else
+needs it — the simulator sends no `Origin`, and in production Caddy serves the
+bundle and proxies `/trpc` on one host name, so there is no second origin to
+allow. The setting is off unless set, refuses `*`, and refuses anything that is
+not loopback.
+
+**The simulator needs Xcode proper**, not just the command-line tools:
+`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then
+`xcodebuild -downloadPlatform iOS` for a runtime. A real device is different
+again — loopback on a phone is the phone — so it needs
+`EXPO_PUBLIC_API_URL` pointing at the tailnet host. The app refuses to guess
+rather than failing every request in a way that looks like a server outage.
 
 The three database URLs are deliberate: `MIGRATE_` is the superuser (migrations
 only), `APP_` is what the API runs as, `EXPORT_` can read a single tax view.

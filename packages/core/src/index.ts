@@ -11,6 +11,14 @@
 export type { JsonObject, JsonPrimitive, JsonSchema, JsonValue } from "./json.ts";
 export * as money from "./money.ts";
 export {
+  type AuthenticationFailure,
+  authenticateResponse,
+  isTrpcEnvelope,
+  NONCE_HEADER,
+  type ResponseAuthentication,
+  WALTNING_HEADER,
+} from "./protocol.ts";
+export {
   type AutoGrant,
   type GateDecision,
   gateDecision,
@@ -27,3 +35,10 @@ export {
   type Registry,
 } from "./registry/operation.ts";
 export { type ToolSchema, toolSchemaFor, toolSchemas } from "./registry/tools.ts";
+export {
+  CaptiveResponseError,
+  type FetchInit,
+  type FetchLike,
+  type RuleZeroOptions,
+  ruleZeroFetch,
+} from "./rule-zero-fetch.ts";

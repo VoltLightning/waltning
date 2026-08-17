@@ -12,7 +12,7 @@ git clone https://github.com/VoltLightning/waltning && cd waltning
 pnpm install                 # also installs the git hooks
 cp .env.example .env         # fill it in — note the three database URLs
 pnpm db:reset                # drop, migrate, grant, seed — one command
-pnpm dev
+pnpm dev:api
 ```
 
 `pnpm db:reset` is the one to reach for. Nothing in the database design is
@@ -46,6 +46,45 @@ quietly voids [[Tax Isolation]], and nothing will tell you.
 The API's user is deliberately not a superuser, because a superuser ignores
 every permission in the database. Running as one makes every query succeed and
 every boundary decorative, while the whole test suite still passes.
+
+### All three surfaces at once
+
+One Expo codebase serves the phone and the browser, and the API is a separate
+process — so it is three terminals rather than one.
+
+```sh
+pnpm dev:api    # the API           127.0.0.1:3000
+pnpm dev:web    # React Native Web  localhost:8081
+pnpm dev:ios    # the same app, iOS simulator
+```
+
+```mermaid
+graph LR
+    subgraph surfaces["<b>surfaces</b>"]
+        WEB["<b>browser</b><br/><i>React Native Web<br/>localhost:8081</i>"]
+        IOS["<b>iOS simulator</b><br/><i>the same bundle,<br/>Hermes bytecode</i>"]
+    end
+    WEB -->|"<i>tRPC over HTTP<br/>needs DEV_CORS_ORIGIN</i>"| API["<b>API</b><br/><i>Hono + tRPC<br/>127.0.0.1:3000</i>"]
+    IOS -->|"<i>tRPC over HTTP<br/>loopback is the Mac</i>"| API
+    API -->|"<i>as waltning_app</i>"| PG["<b>Postgres</b><br/><i>in Docker<br/>127.0.0.1:5442</i>"]
+```
+
+`pnpm e2e` then checks that chain against what is actually running — the probes,
+[[Offline and Sync|Rule 0]] authenticating a real response, a read returning
+seeded rows with its declared fields, and a refusal arriving as a domain error
+rather than a transport failure. Read-only unless you pass `--write`.
+
+**Two settings, each for one surface only.** The browser needs
+`DEV_CORS_ORIGIN=http://localhost:8081`, because Metro and the API are two
+origins in development and one behind Caddy in production; without it the page
+loads and every request fails as *no answer*. A **real device** needs
+`EXPO_PUBLIC_API_URL`, because loopback on a phone is the phone — the app
+refuses to guess rather than failing in a way that looks like an outage. The
+simulator needs neither.
+
+The simulator itself needs Xcode proper rather than the command-line tools:
+`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then
+`xcodebuild -downloadPlatform iOS`.
 
 ### Running the tests
 

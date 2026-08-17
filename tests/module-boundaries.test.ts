@@ -113,6 +113,40 @@ describe("mobile features", () => {
   });
 
   /**
+   * The client knows the server's *types* and none of its code.
+   *
+   * §11.0 promises an operation's input and output types reach the client, so
+   * `apps/mobile` imports `AppRouter` from `@waltning/api` — an edge the
+   * dependency floor does not have. It is safe only while it stays type-only:
+   * a value import would compile, run in dev, and pull Hono, Drizzle and the
+   * Postgres driver into a phone bundle.
+   *
+   * Verified once against real builds — no server symbol appears in either the
+   * web bundle or the Hermes bytecode — but a build is far too slow to gate on,
+   * and this catches the regression at its source. `@waltning/db` is not
+   * type-only-allowed at all: the client has no business naming the schema.
+   */
+  it("imports the server for types and never for code", () => {
+    const TYPE_ONLY = /^\s*import\s+type\s/;
+    const violations: string[] = [];
+
+    for (const file of sourceFiles(join(repoRoot, "apps/mobile"))) {
+      const text = readFileSync(file, "utf8");
+      for (const line of text.split("\n")) {
+        const server = /["'](@waltning\/(?:api|db))(?:\/[^"']*)?["']/.exec(line);
+        if (!server) continue;
+        if (server[1] === "@waltning/db") {
+          violations.push(`${relative(repoRoot, file)} imports @waltning/db at all`);
+        } else if (!TYPE_ONLY.test(line)) {
+          violations.push(`${relative(repoRoot, file)}: ${line.trim().slice(0, 70)}`);
+        }
+      }
+    }
+
+    expect(violations, "mobile must import the server as types only").toEqual([]);
+  });
+
+  /**
    * `packages/ui` and `packages/core` are consumed by both apps, so a domain
    * import there would tie the design system to one app's features.
    */

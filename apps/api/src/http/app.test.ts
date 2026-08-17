@@ -23,7 +23,7 @@ async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-import { WALTNING_HEADER } from "../config/build.ts";
+import { WALTNING_HEADER } from "@waltning/core";
 import { createApp } from "./app.ts";
 
 const at = new Date("2026-08-16T10:00:00.000Z");
@@ -102,11 +102,6 @@ describe("tRPC", () => {
   });
 
   /**
-   * Rule 1: a domain refusal must arrive as `{error:{code,…}}` with *our*
-   * vocabulary. If this ever returns tRPC's numeric code, the drain cannot
-   * tell a permanent refusal from a proxy's 403.
-   */
-  /**
    * A stack trace rode along in `shape.data` outside production, and the
    * httpStatus beside it came from tRPC's code rather than ours — so a
    * duplicate name returned `validation` in the envelope and `500` with a
@@ -117,8 +112,8 @@ describe("tRPC", () => {
     const text = await res.text();
     expect(text).not.toMatch(/\bstack\b/i);
     expect(text).not.toContain("at Object.");
-    const body = JSON.parse(text) as ErrorEnvelope & { error: { data: { httpStatus: number } } };
-    expect(body.error.code).toBe("not_found");
+    const body = JSON.parse(text) as ErrorEnvelope;
+    expect(body.error.data.code).toBe("not_found");
     expect(body.error.data.httpStatus).toBe(404);
   });
 
@@ -126,7 +121,26 @@ describe("tRPC", () => {
     const res = await app().request("/trpc/nope");
     const body = await json<ErrorEnvelope>(res);
     expect(body.error).toBeDefined();
-    expect(body.error.code).toBe("not_found");
+    expect(body.error.data.code).toBe("not_found");
     expect(typeof body.error.message).toBe("string");
+  });
+
+  /**
+   * **The one that was missed, and the reason `pnpm e2e` exists.**
+   *
+   * The domain code used to sit at `error.code`, replacing tRPC's numeric one.
+   * That reads better, matched Rule 1's wording literally, and made every error
+   * in the system unusable: tRPC's client rejects an error response whose
+   * `error.code` is not a number, discards the body, and throws "Unable to
+   * transform response from server" — no code, no details, no path.
+   *
+   * Every assertion above still passed. The body was well-formed and the
+   * status was right; the failure existed only in a client that parses it. So
+   * this asserts the *type*, which is the part no reader would think to check.
+   */
+  it("keeps a numeric code at the top level, or no client can read the error", async () => {
+    const res = await app().request("/trpc/nope");
+    const body = await json<ErrorEnvelope>(res);
+    expect(typeof body.error.code).toBe("number");
   });
 });

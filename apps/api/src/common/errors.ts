@@ -46,21 +46,36 @@ export type ErrorDetails = {
   actual?: string | number;
 };
 
+/**
+ * The envelope **as it appears on the wire**, which is not where the domain
+ * code first lived.
+ *
+ * `error.code` is tRPC's numeric JSON-RPC code and has to stay that way: its
+ * client validates the type and discards the entire error response otherwise.
+ * The domain code — the one Rule 1 and the outbox drain switch on — is at
+ * `error.data.code`.
+ *
+ * This type previously declared `error.code: ErrorCode`, describing a response
+ * the server does not send, and there was a constructor beside it building
+ * that shape for nobody: nothing in the system called it, and anything that
+ * had would have produced an envelope no client could read. Deleted rather
+ * than corrected, because a second way to build an envelope is a second shape
+ * to keep in step, and the formatter in `trpc/index.ts` is the only one that
+ * reaches a client.
+ */
 export type ErrorEnvelope<Details extends ErrorDetails = ErrorDetails> = {
   error: {
-    code: ErrorCode;
+    /** tRPC's numeric code. Not the domain vocabulary — see `data.code`. */
+    code: number;
     message: string;
+    data: {
+      code: ErrorCode;
+      httpStatus: number;
+      path?: string;
+    };
     details?: Details;
   };
 };
-
-export function envelope<Details extends ErrorDetails>(
-  code: ErrorCode,
-  message: string,
-  details?: Details,
-): ErrorEnvelope<Details> {
-  return { error: details === undefined ? { code, message } : { code, message, details } };
-}
 
 /** Domain refusals. Anything thrown that is not one of these is `internal`. */
 export class DomainError<Details extends ErrorDetails = ErrorDetails> extends Error {
