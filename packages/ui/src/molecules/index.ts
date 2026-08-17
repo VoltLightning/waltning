@@ -11,4 +11,10 @@
 
 export { Amount, type AmountEmphasis, type AmountProps, type AmountSize } from "./amount.tsx";
 export { FxAmount, type FxAmountProps, type FxProvenance } from "./fx-amount.tsx";
+export {
+  BalanceRow,
+  type BalanceRowProps,
+  TransactionRow,
+  type TransactionRowProps,
+} from "./rows.tsx";
 export { TransferAmount, type TransferAmountProps } from "./transfer-amount.tsx";
