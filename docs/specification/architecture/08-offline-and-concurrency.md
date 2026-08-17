@@ -87,6 +87,40 @@ interface OutboxEntry {
 }
 ```
 
+And it moves like this:
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: enqueued
+    pending --> sending: drain begins<br/>(sentAt set)
+    sending --> pending: anything unproven —<br/>captive, timeout, crash
+    sending --> done: server admitted it
+    sending --> blocked: our error envelope<br/>said no
+    sending --> stalled: 5xx, retry budget spent
+    blocked --> pending: repairable cause cleared
+    stalled --> pending: retried from S30
+    done --> [*]
+
+    note right of sending
+        Rule 0 governs this edge.
+        No response advances the
+        queue until it authenticates
+        as ours — 09-connectivity.
+    end note
+
+    note right of blocked
+        Asserts futility, so it must
+        say why and offer a way out.
+        `stalled` asserts only that
+        retries ran out.
+    end note
+```
+
+**The transition that is absent is the specification.** There is no edge from
+`sending` to `done` on an unauthenticated response, and that single missing
+arrow is what stops a captive portal deleting a week of captures while
+reporting a successful sync.
+
 ### Idempotency is a server-side ledger, not an index
 
 The earlier draft grounded its whole idempotency claim in the partial unique

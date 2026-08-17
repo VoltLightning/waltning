@@ -106,6 +106,92 @@ describe("wiki pages link out absolutely", () => {
   });
 });
 
+/**
+ * Mermaid diagrams, checked for shape rather than meaning.
+ *
+ * A diagram that does not parse renders as a red error box on a public page,
+ * and it looks perfectly fine in the source. Actually parsing mermaid needs a
+ * DOM, which is a browser-sized dependency inside a two-second gate — so this
+ * checks the three things that are cheap and certain, and claims nothing more.
+ * A semantically wrong diagram still renders, and no test here will say so.
+ */
+describe("mermaid diagrams are at least well-formed", () => {
+  const KINDS = [
+    "graph",
+    "flowchart",
+    "sequenceDiagram",
+    "stateDiagram-v2",
+    "erDiagram",
+    "classDiagram",
+    "gantt",
+    "journey",
+    "pie",
+  ];
+
+  /** Each fenced mermaid block, as `{ page, body }`. */
+  const blocks: { page: string; body: string }[] = [];
+  for (const [file, t] of text) {
+    for (const m of t.matchAll(/```mermaid\n([\s\S]*?)```/g)) {
+      blocks.push({ page: file, body: m[1] ?? "" });
+    }
+  }
+
+  it("closes every mermaid fence", () => {
+    const unclosed: string[] = [];
+    for (const [file, t] of text) {
+      const opens = (t.match(/```mermaid/g) ?? []).length;
+      const closes = (t.match(/```/g) ?? []).length;
+      // Every fence, mermaid or not, needs a partner.
+      if (closes % 2 !== 0) unclosed.push(`${file}: ${closes} fence markers`);
+      if (opens > closes / 2) unclosed.push(`${file}: unclosed mermaid block`);
+    }
+    expect(unclosed, "unbalanced code fences").toEqual([]);
+  });
+
+  it("opens each diagram with a known type", () => {
+    const bad: string[] = [];
+    for (const { page, body } of blocks) {
+      const first =
+        body
+          .split("\n")
+          .find((l) => l.trim())
+          ?.trim() ?? "";
+      if (!KINDS.some((k) => first.startsWith(k))) bad.push(`${page}: "${first}"`);
+    }
+    expect(bad, "unrecognised mermaid diagram type — a typo here renders as an error box").toEqual(
+      [],
+    );
+  });
+
+  it("balances quotes inside labels", () => {
+    // An unclosed quote in a node label is the single most common way a
+    // hand-written diagram breaks, and it swallows the rest of the diagram.
+    const bad: string[] = [];
+    for (const { page, body } of blocks) {
+      for (const line of body.split("\n")) {
+        if ((line.match(/"/g) ?? []).length % 2 !== 0) bad.push(`${page}: ${line.trim()}`);
+      }
+    }
+    expect(bad, "odd number of quotes on a line").toEqual([]);
+  });
+
+  it("closes every subgraph in a flowchart", () => {
+    const bad: string[] = [];
+    for (const { page, body } of blocks) {
+      const lines = body.split("\n").map((l) => l.trim());
+      const first = lines.find(Boolean) ?? "";
+      // Only flowcharts, where `end` closes a subgraph and nothing else.
+      // `alt`/`rect`/`loop` also end in sequence diagrams, so counting there
+      // would be wrong rather than merely noisy.
+      if (!first.startsWith("graph") && !first.startsWith("flowchart")) continue;
+      const opened = lines.filter((l) => l.startsWith("subgraph")).length;
+      const closed = lines.filter((l) => l === "end").length;
+      if (opened !== closed) bad.push(`${page}: ${opened} subgraph, ${closed} end`);
+    }
+    expect(bad, "a subgraph with no end swallows the rest of the diagram").toEqual([]);
+  });
+});
+
 describe("the checks above are not vacuous", () => {
   /** Each assertion here would go quietly true if an extractor broke. */
   it("finds pages, wiki links and markdown targets", () => {
@@ -121,5 +207,11 @@ describe("the checks above are not vacuous", () => {
     // above cannot pass by finding nothing.
     expect(wikiLinksIn(text.get("Home.md") ?? "").length).toBeGreaterThan(5);
     expect(mdTargetsIn(text.get("Home.md") ?? "").length).toBeGreaterThan(0);
+  });
+
+  it("finds the diagrams it claims to be checking", () => {
+    // The diagram checks iterate a list. An empty list passes all of them.
+    const found = [...text.values()].reduce((n, t) => n + (t.match(/```mermaid/g) ?? []).length, 0);
+    expect(found, "mermaid blocks located").toBeGreaterThan(15);
   });
 });
