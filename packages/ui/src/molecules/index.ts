@@ -2,10 +2,13 @@
  * Molecules — small compositions that carry domain meaning but still fetch
  * nothing. `design-system/05-composites.md` §5.1–5.2, §5.4.
  *
- * `Amount` is the canonical one: it knows money — sign, currency, decimals,
- * P1's rule that every figure renders through it — and knows nothing about
- * where the figure came from.
+ * `Amount` and `FxAmount` are D0 (`12-build-order.md`): **every screen depends
+ * on them, and P1 is enforced here or nowhere.**
  *
- * Amount · StatTile · Tag rows · TransactionRow · TransferRow · ServiceIcon
+ * Amount · FxAmount · TransferAmount — then StatTile, TransactionRow,
+ * BalanceRow, ServiceIcon as the screens that need them arrive.
  */
-export {};
+
+export { Amount, type AmountEmphasis, type AmountProps, type AmountSize } from "./amount.tsx";
+export { FxAmount, type FxAmountProps, type FxProvenance } from "./fx-amount.tsx";
+export { TransferAmount, type TransferAmountProps } from "./transfer-amount.tsx";

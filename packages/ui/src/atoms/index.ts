@@ -4,6 +4,7 @@
  * No domain knowledge, no data fetching, no tRPC. An atom that knows what a
  * transaction is has been misfiled: it belongs one layer up.
  *
- * Button · Input · Tag · Icon · Toggle · SegmentControl · Skeleton · Banner
+ * Tag — then Button, Pill, Chip, SegmentControl and the inputs, as D1 lands.
  */
-export {};
+
+export { Tag, type TagProps, type TagVariant } from "./tag.tsx";

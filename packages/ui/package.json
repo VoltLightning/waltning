@@ -7,12 +7,18 @@
     ".": "./src/index.ts",
     "./atoms": "./src/atoms/index.ts",
     "./molecules": "./src/molecules/index.ts",
-    "./organisms": "./src/organisms/index.ts"
+    "./organisms": "./src/organisms/index.ts",
+    "./tokens": "./src/tokens.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@waltning/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "react": "19.2.3",
+    "react-native": "0.86.2"
   }
 }
