@@ -24,9 +24,24 @@ export type Context = {
 const t = initTRPC.context<Context>().create({
   /**
    * tRPC serializes whatever this returns as `{"error": <shape>}`, so the
-   * shape *is* the envelope's interior. Returning `code` as our domain string
-   * — not tRPC's numeric code — is what makes `{error:{code,…}}` literally
-   * true on the wire, which is what Rule 1 reads.
+   * shape *is* the envelope's interior — and the domain code lives at
+   * `error.data.code`, which is what Rule 1 reads.
+   *
+   * **The top-level `code` stays tRPC's number, and that is not a style
+   * choice.** It was our domain string, which read better and made
+   * `{error:{code,…}}` literally true — and it made every error in the system
+   * unreadable by any tRPC client. `transformResult` rejects an error response
+   * whose `error.code` is not a `number`, discarding the whole body and
+   * throwing a bare "Unable to transform response from server": no code, no
+   * details, no path.
+   *
+   * Nothing on this side could see it. The response was well-formed, the HTTP
+   * status was right, and the suite asserted the body — which was correct. The
+   * failure existed only in a client that parses it, so it took an end-to-end
+   * check against a running server to surface at all, and it would have taken
+   * down Rule 1 the moment anything tried to implement it: an error that
+   * cannot be identified cannot be told from a proxy's, so a permanent refusal
+   * would retry forever.
    */
   errorFormatter({ shape, error }) {
     const cause = error.cause;
@@ -34,7 +49,7 @@ const t = initTRPC.context<Context>().create({
     const details = cause instanceof DomainError ? cause.details : undefined;
 
     return {
-      code,
+      code: shape.code,
       message: error.message,
       /**
        * Rebuilt rather than passed through.

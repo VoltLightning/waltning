@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 28 — **all closed** |
+| **C** | A stated guarantee is false | 29 — **all closed** |
 | **H** | Wrong data, silently | 31 — **all closed** |
 | **M** | Cannot be implemented from the spec | 24 — **all closed** |
 | **L** | Correct but under-specified | 18 |
@@ -396,6 +396,29 @@ scope*. `update_transaction` is ✅ auto-eligible and can write `is_business`,
 which is exactly what decides `tax_ledger` membership. `categorize_batch` is ✅
 and unbounded in rows. `accept_row` and `materialize_occurrence` are ✅ and both
 mint ledger rows, defeating the ❌ on `create_transaction` by synonym.
+
+### C29 — Rule 1's envelope reached no client; every domain error arrived empty
+**Fixed** — the error formatter returns tRPC's numeric code at `error.code` and
+the domain code at `error.data.code`, where Rule 1 now reads it.
+
+The formatter had replaced the top-level `code` with our own vocabulary, which
+made Rule 1's `{error:{code,…}}` literally true on the wire and read better than
+a JSON-RPC number. tRPC's client validates that field's *type*: an error
+response whose `error.code` is not a number is discarded whole, and the caller
+gets `Unable to transform response from server` — no code, no details, no path,
+for every refusal in the system.
+
+So Rule 1 was unimplementable. Its entire job is telling a domain refusal from a
+proxy's 403, and the signal it reads never survived the client. A permanent
+refusal — a closed period, a duplicate name — would have been indistinguishable
+from a transport blip and retried forever.
+
+**Nothing on the server could have caught it.** The response was well-formed, the
+status was right, and the suite asserted the body — correctly, and it passed.
+The defect existed only in a client parsing it, so it needed a real client
+against a running server: found by `pnpm e2e` the first time it ran, on a code
+path four tests already covered. The regression is now pinned by asserting the
+*type* of `error.code`, which is the part no reader thinks to check.
 
 ---
 

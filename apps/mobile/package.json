@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@trpc/client": "^11.18.0",
     "@waltning/core": "workspace:*",
     "@waltning/ui": "workspace:*",
     "expo": "~57.0.13",
@@ -21,5 +22,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.2",
     "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@waltning/api": "workspace:*"
   }
 }

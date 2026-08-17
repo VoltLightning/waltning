@@ -11,6 +11,10 @@
   "scripts": {
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "dev": "pnpm --filter @waltning/api dev",
+    "dev:api": "pnpm --filter @waltning/api dev",
+    "dev:web": "pnpm --filter @waltning/mobile web",
+    "dev:ios": "pnpm --filter @waltning/mobile exec expo start --ios",
+    "e2e": "pnpm --filter @waltning/e2e smoke",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",

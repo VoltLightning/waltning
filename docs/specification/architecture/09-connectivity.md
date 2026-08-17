@@ -131,9 +131,30 @@ So, before status is consulted at all, every response must authenticate as ours:
 Failing any of those ⇒ `link = captive`, **the queue does not advance**, and no
 entry changes state, whatever the status code said.
 
-**Rule 1:** only errors carrying our `{error:{code,…}}` envelope may set
-`blocked`. A bare 403 from Caddy or a 404 from a proxy is a *transport* event,
-not a domain refusal.
+**The nonce is a signal in the *response*, which makes it a server obligation.**
+Sending it and not checking it back would authenticate nothing — a portal
+happily accepts any header it is given. So the API echoes the request's
+`x-waltning-nonce` on every response, errors included, exactly as it stamps
+`x-waltning`. This is stated here because the order of work makes it easy to
+miss: the client check is implemented and tested (`rule-zero-fetch.ts`) and is
+fed `null` until §5.2 exists, so **the first session issued without the echo
+middleware in place would classify every response in the system as captive** —
+total, immediate, and looking exactly like a network failure.
+
+**Rule 1:** only errors carrying our envelope may set `blocked`. A bare 403 from
+Caddy or a 404 from a proxy is a *transport* event, not a domain refusal.
+
+**The domain code is at `error.data.code`, not `error.code`.** This rule read
+`{error:{code,…}}` and the server obliged, putting `validation` or
+`period_closed` where tRPC keeps its numeric JSON-RPC code. tRPC's client
+validates that field's type and **discards the entire error response** when it
+is not a number — so the signal this rule depends on reached no client at all,
+and a permanent refusal was indistinguishable from a proxy's 403. See C29. The
+envelope is now:
+
+```json
+{"error":{"code":-32600,"message":"…","data":{"code":"validation","httpStatus":400,"path":"op.create_counterparty"}}}
+```
 
 ---
 

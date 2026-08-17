@@ -11,6 +11,3 @@
  * the case inside the container.
  */
 export const BUILD: string = process.env["BUILD_SHA"] ?? "dev";
-
-/** Sent on every response so the client can tell our answer from a portal's. */
-export const WALTNING_HEADER = "x-waltning";

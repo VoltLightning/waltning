@@ -11,6 +11,7 @@ import { db, dbUnavailableReason } from "../infra/db.ts";
 import { waltningHeader } from "../middleware/waltning-header.ts";
 import type { Context } from "../trpc/index.ts";
 import { appRouter } from "../trpc/router.ts";
+import { devCors } from "./dev-cors.ts";
 import { type DependencyState, health, readiness } from "./health.ts";
 
 export type AppOptions = {
@@ -18,6 +19,12 @@ export type AppOptions = {
   now?: () => Date;
   blobs?: () => DependencyState;
   requestId?: () => string;
+  /**
+   * Local-development cross-origin allowance (`dev-cors.ts`). Read from the
+   * environment by default, and **absent means no CORS at all** — production
+   * is same-origin behind Caddy and has nothing to allow.
+   */
+  devCorsOrigin?: string | undefined;
 };
 
 let counter = 0;
@@ -28,6 +35,14 @@ export function createApp(options: AppOptions = {}) {
   const requestId = options.requestId ?? (() => `r${++counter}`);
 
   const app = new Hono();
+
+  // Before everything, so a preflight is answered rather than falling through
+  // to a route that does not exist. Mounted only when configured — see
+  // `dev-cors.ts` for why this is opt-in rather than a default to override.
+  const corsMiddleware = devCors(
+    "devCorsOrigin" in options ? options.devCorsOrigin : process.env["DEV_CORS_ORIGIN"],
+  );
+  if (corsMiddleware) app.use("*", corsMiddleware);
 
   app.use("*", waltningHeader);
 
