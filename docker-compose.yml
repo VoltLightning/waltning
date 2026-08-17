@@ -20,5 +20,66 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── The appliance ──────────────────────────────────────────────────────────
+  #
+  # `pnpm db:up` names `postgres` explicitly, so day-to-day development brings
+  # up the database alone and runs the API from source. These three are what
+  # runs on the Pi, and they exist here rather than in a separate file so the
+  # thing that ships is described in the same place as the thing being
+  # developed against.
+  #
+  #   docker compose build --build-arg BUILD_SHA=$(git rev-parse --short HEAD)
+  #   docker compose up -d
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      args:
+        # Both images take the same value, and they must: the client compares
+        # its own build against the one `/healthz` reports, so two sources would
+        # produce a permanent false mismatch.
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # The same credential as `APP_DATABASE_URL`, addressed by service name
+      # rather than by loopback — inside the network `127.0.0.1` is this
+      # container. Still `waltning_app`: not a superuser, which is what keeps
+      # T1 enforceable (§5.7).
+      APP_DATABASE_URL: ${APP_DATABASE_URL_CONTAINER:?set APP_DATABASE_URL_CONTAINER in .env}
+      # Deliberately absent: DEV_CORS_ORIGIN. Caddy fronts both the bundle and
+      # the API on one host name, so there is no second origin to allow.
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+    # No published port. Caddy reaches it over the compose network; nothing else
+    # can reach it at all.
+    expose:
+      - "3000"
+
+  caddy:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        BUILD_SHA: ${BUILD_SHA:-unknown}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # The tailnet name on the Pi, which is what makes Caddy fetch and renew
+      # the Tailscale-issued certificate. `:8080` locally, so the routing can be
+      # verified on a machine with no tailnet.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:8080}
+    volumes:
+      - caddydata:/data
+    ports:
+      # Bound to loopback here. On the Pi this is the tailnet interface — never
+      # `0.0.0.0`, which is one `docker run -p` away from being public (§5.1).
+      - "127.0.0.1:${CADDY_PORT:-8080}:8080"
+
 volumes:
   pgdata:
+  caddydata:

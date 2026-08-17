@@ -21,6 +21,7 @@
  */
 
 import { createTRPCClient, httpLink, TRPCClientError } from "@trpc/client";
+import type { ErrorCode } from "@waltning/api/errors";
 import type { AppRouter } from "@waltning/api/router-type";
 import { ruleZeroFetch, WALTNING_HEADER } from "@waltning/core";
 
@@ -111,7 +112,10 @@ async function probes(): Promise<void> {
     const res = await fetch(`${API}/readyz`);
     const body = (await res.json()) as { db?: string; blobs?: string; reason?: string };
     if (body.db === "up") {
-      pass("/readyz", `db up, blobs ${body.blobs ?? "?"}`);
+      // `blobs` is absent until something actually measures it — reported as
+      // "not checked" rather than as a state, because a probe that names a
+      // dependency it never contacted is worse than one that stays quiet.
+      pass("/readyz", `db up, blobs ${body.blobs ?? "not checked"}`);
     } else {
       // Degraded, not down: this is the distinction the whole link state
       // machine rests on, so the message keeps them apart.
@@ -190,11 +194,15 @@ async function refusal(): Promise<void> {
       return;
     }
     // The envelope's interior, which is what `architecture/09` Rule 1 reads.
-    const data = error.data as { code?: string; httpStatus?: number } | undefined;
-    if (data?.code === "validation") {
+    // Typed as `ErrorCode` rather than `string`, so the comparison below is
+    // checked against the vocabulary instead of being a literal that could
+    // quietly stop matching after a rename.
+    const data = error.data as { code?: ErrorCode; httpStatus?: number } | undefined;
+    const expected: ErrorCode = "validation";
+    if (data?.code === expected) {
       pass("refused with our envelope", `code ${data.code}, status ${data.httpStatus ?? "?"}`);
     } else {
-      fail("refused with our envelope", `code was ${String(data?.code)}, expected 'validation'`);
+      fail("refused with our envelope", `code was ${String(data?.code)}, expected '${expected}'`);
     }
   }
 }

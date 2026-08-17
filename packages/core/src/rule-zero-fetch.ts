@@ -83,8 +83,20 @@ export type FetchLike = (input: Parameters<typeof fetch>[0], init?: FetchInit) =
 
 export type RuleZeroOptions = {
   /**
-   * The session nonce, or `null` while §5.2 does not exist. Read per request
-   * rather than captured, so a login does not require a new client.
+   * The nonce this client was issued at login, or `null` while §5.2 does not
+   * exist. Read per request rather than captured, so signing in does not
+   * require a new client.
+   *
+   * **It is never sent.** The first version of this put it in a request header
+   * for the server to echo, which authenticates nothing: anything able to
+   * answer the request was able to read it, so a captive portal could echo it
+   * back exactly as well as the API could. Worse, it turned a shared secret
+   * into a bearer token transmitted on every single call.
+   *
+   * The nonce is established *at login* and held by both ends. The server
+   * stamps it on responses; this compares. A portal never saw the login, so it
+   * cannot produce the value — which is the only reason the check is worth
+   * anything.
    */
   nonce?: () => string | null;
   /** Observability hook — the link indicator subscribes here later. */
@@ -103,7 +115,7 @@ export function ruleZeroFetch(options: RuleZeroOptions = {}): FetchLike {
   return async (input, init) => {
     const nonce = nonceOf();
 
-    const response = await inner(input, outgoing(init, nonce));
+    const response = await inner(input, outgoing(init));
 
     // Read once. A `Response` body is a stream and can only be consumed once,
     // so the text is re-wrapped below rather than the response being passed on
@@ -133,19 +145,20 @@ export function ruleZeroFetch(options: RuleZeroOptions = {}): FetchLike {
 }
 
 /**
- * The request as the platform `fetch` wants it: the nonce header added when
- * there is a session, and every optional property either present with a value
- * or **absent**, never present holding `undefined`.
+ * The request as the platform `fetch` wants it: every optional property either
+ * present with a value or **absent**, never present holding `undefined`.
  *
- * That is why this is four named properties rather than `{...init}`. Under
+ * That is why this is three named properties rather than `{...init}`. Under
  * `exactOptionalPropertyTypes` those two states are different types, and a
  * spread carries the second one through — so the properties are rebuilt one at
  * a time. Adding a field to `FetchInit` and forgetting it here drops it
  * silently, which is what the tests below are for.
+ *
+ * Nothing is added here. The nonce is deliberately not sent — see
+ * `RuleZeroOptions.nonce`.
  */
-function outgoing(init: FetchInit | undefined, nonce: string | null): RequestInit {
+function outgoing(init: FetchInit | undefined): RequestInit {
   const headers = new Headers(init?.headers);
-  if (nonce !== null) headers.set(NONCE_HEADER, nonce);
 
   return {
     headers,

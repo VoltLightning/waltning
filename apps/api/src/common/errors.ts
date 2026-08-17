@@ -22,6 +22,13 @@ export const ERROR_CODES = [
   "unsupported_version",
   /** Authenticated, but not permitted. */
   "forbidden",
+  /**
+   * An agent write that §11.2 gates. **Not** the same as `forbidden`: the call
+   * is legitimate and would succeed once a person approves it, so a client
+   * shows an approval card rather than an error. Never retried unchanged — a
+   * retry without approval is the same refusal.
+   */
+  "approval_required",
   /** Nothing matched. */
   "not_found",
   /** Everything else. Retryable only if the client knows the write is idempotent. */
@@ -44,6 +51,13 @@ export type ErrorDetails = {
   /** Versions involved, for `stale_version` and `unsupported_version`. */
   expected?: string | number;
   actual?: string | number;
+  /** Why §11.2 gated this call, for `approval_required`. */
+  reason?: string;
+  /**
+   * The tax-sensitive fields this call writes, for `approval_required`. §11.2
+   * says the approval card shows **only** these, with the rest already applied.
+   */
+  fields?: readonly string[];
 };
 
 /**
@@ -101,6 +115,10 @@ export const STATUS_BY_CODE: Record<ErrorCode, number> = {
   stale_version: 409,
   unsupported_version: 426,
   forbidden: 403,
+  // Not 403. The call is permitted; it is waiting on a person, which is what
+  // 428 says. A client that showed "forbidden" here would be telling the user
+  // the opposite of what is true.
+  approval_required: 428,
   not_found: 404,
   internal: 500,
 };

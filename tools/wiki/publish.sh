@@ -73,11 +73,6 @@ fi
 
 printf "${GREEN}✓${OFF} sweep and link checks passed\n"
 
-if [ "$dry" = yes ]; then
-  printf "${DIM}  dry run — not publishing to %s${OFF}\n" "$remote"
-  exit 0
-fi
-
 # ── 3 · Mirror ───────────────────────────────────────────────────────────────
 #
 # Clone, replace the page set wholesale, commit. Replacing rather than copying
@@ -87,6 +82,13 @@ work=$(mktemp -d)
 trap 'rm -f "$cleaned"; rm -rf "$work"' EXIT
 
 if ! git clone --quiet --depth 1 "$remote" "$work/wiki" 2>/dev/null; then
+  # In a dry run this is not fatal: the sweep and the link checks still ran and
+  # still mean something. Say plainly that drift is *unknown* rather than
+  # letting a green tick imply the published wiki is current.
+  if [ "$dry" = yes ]; then
+    printf "${DIM}  could not reach %s — drift not checked${OFF}\n" "$remote"
+    exit 0
+  fi
   fail "cannot clone $remote" \
        "the wiki repository does not exist until the first page is created in the web UI."
 fi
@@ -94,10 +96,20 @@ fi
 find "$work/wiki" -maxdepth 1 -name '*.md' -delete
 cp "$src"/*.md "$work/wiki/"
 
-if git -C "$work/wiki" diff --quiet --exit-code && \
-   [ -z "$(git -C "$work/wiki" status --porcelain)" ]; then
-  printf "${DIM}  wiki is already up to date${OFF}\n"
+# Nothing else notices a stale wiki. The published copy is the one no test can
+# reach, so a page edited in docs/wiki and never published stays wrong where
+# people actually read it — indefinitely, and silently. `--dry-run` therefore
+# reports drift rather than only validating the source.
+if [ -z "$(git -C "$work/wiki" status --porcelain)" ]; then
+  printf "${GREEN}✓${OFF} published wiki matches docs/wiki\n"
   exit 0
+fi
+
+if [ "$dry" = yes ]; then
+  printf "\n${RED}✗ the published wiki is out of date${OFF}\n" >&2
+  git -C "$work/wiki" status --porcelain | sed 's/^/    /' >&2
+  printf "${DIM}  run: pnpm wiki:publish${OFF}\n" >&2
+  exit 1
 fi
 
 sha=$(git -C "$root" rev-parse --short HEAD)

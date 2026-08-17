@@ -7,6 +7,7 @@
  * operation on both paths, which is the drift §11.0 exists to prevent.
  */
 
+import type { AutoGrant } from "@waltning/core";
 import type { DbHandle } from "@waltning/db";
 import type { Idempotency } from "./idempotency.ts";
 
@@ -25,4 +26,13 @@ export type OperationContext = {
    * user is watching the result, and a second tap is a second intention.
    */
   idempotency?: Idempotency | undefined;
+  /**
+   * The bounded auto-mode grant in force (§11.2), for agent calls.
+   *
+   * `null` or absent means the default — every write gates. It is read only
+   * when `actor` is `"agent"`: a user pressing save is direct intent and has
+   * nothing to approve. Passing a grant on a user call changes nothing, which
+   * is deliberate — the gate must not become a way to *lift* a check.
+   */
+  grant?: AutoGrant;
 };

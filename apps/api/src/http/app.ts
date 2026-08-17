@@ -31,7 +31,9 @@ let counter = 0;
 
 export function createApp(options: AppOptions = {}) {
   const now = options.now ?? (() => new Date());
-  const blobs = options.blobs ?? (() => "up" as const);
+  // No default. There is no blob-store client to ask, so an unset `blobs`
+  // means the field is omitted rather than asserted — see `health.ts`.
+  const blobs = options.blobs;
   const requestId = options.requestId ?? (() => `r${++counter}`);
 
   const app = new Hono();
@@ -61,7 +63,7 @@ export function createApp(options: AppOptions = {}) {
     const up = handle ? await ping(handle) : false;
     const reason = handle ? "database unreachable" : (dbUnavailableReason() ?? "unavailable");
 
-    const state = readiness(now(), up ? "up" : "down", blobs(), reason);
+    const state = readiness(now(), up ? "up" : "down", blobs?.(), reason);
     return c.json(state, state.ok ? 200 : 503);
   });
 

@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const SEARCH_ROOTS = ["apps", "packages", "tools"];
-const SKIP_DIRS = new Set(["node_modules", "dist", ".expo", "drizzle", "__checks__"]);
+const SKIP_DIRS = new Set(["node_modules", "dist", ".expo", "drizzle"]);
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   let entries: string[];

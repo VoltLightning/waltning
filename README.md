@@ -129,8 +129,31 @@ database mocks.
 `pnpm verify` (Biome + strict TypeScript, ~2 s) is the gate; the pre-commit
 hook runs it for you.
 
-**Deploying to a Pi** — Compose, Tailscale, Caddy with tailnet certs, nightly
-encrypted dumps to B2: see
+### Running it as it ships
+
+The appliance is three containers: Postgres, the API, and Caddy serving the web
+bundle and proxying `/trpc` on **one host name**.
+
+```sh
+BUILD_SHA=$(git rev-parse --short HEAD) docker compose build
+BUILD_SHA=$(git rev-parse --short HEAD) docker compose up -d
+open http://127.0.0.1:8080
+```
+
+That single origin is why `DEV_CORS_ORIGIN` exists only in development — there
+is no second origin here to allow, and the compose stack deliberately does not
+set it. `BUILD_SHA` reaches both images from the same command, because the
+client compares its own build against the one `/healthz` reports; two sources
+would produce a permanent false mismatch.
+
+On the Pi, `SITE_ADDRESS` is the tailnet name, which is what makes Caddy fetch
+and renew the Tailscale-issued certificate. There is no public name and no
+public certificate. Locally it defaults to `:8080` over plain HTTP so the
+routing can be checked on a machine with no tailnet — the only difference
+between the two, which is the point.
+
+**Deploying to a Pi** — Tailscale, nightly encrypted dumps to B2, the restore
+runbook: see
 [`docs/specification/architecture/05-deployment.md`](docs/specification/architecture/05-deployment.md).
 
 ## Stack

@@ -28,3 +28,33 @@ export const API_BASE_URL: string = resolveApiBaseUrl({
  * that "no session" never reads the same as "nobody wired the check".
  */
 export const api = createApiClient(API_BASE_URL, { nonce: () => null });
+
+/**
+ * This bundle's own build, injected at image build time by `web.Dockerfile`
+ * from the same `git rev-parse` the API image gets.
+ *
+ * `"dev"` from Metro, where there is no image and no skew to detect.
+ */
+export const CLIENT_BUILD: string = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev";
+
+/**
+ * Whether the server is running different code from this bundle.
+ *
+ * `architecture/05`: a browser holds an `index.html` from before a deploy and
+ * keeps a bundle whose `opVersion` the server no longer accepts. The failure
+ * surfaces as an unexplained rejection, at a moment when nothing suggests the
+ * page is stale.
+ *
+ * `/healthz` has reported `build` since the probe was written and **nothing
+ * compared it** — the value was displayed and discarded, which looks exactly
+ * like the check existing.
+ *
+ * Either side reading `"dev"` means no image was involved, so there is nothing
+ * to compare: in development the bundle and the server change independently by
+ * design, and reporting skew there would be noise that teaches people to
+ * ignore it.
+ */
+export function isStaleBundle(serverBuild: string): boolean {
+  if (CLIENT_BUILD === "dev" || serverBuild === "dev") return false;
+  return CLIENT_BUILD !== serverBuild;
+}

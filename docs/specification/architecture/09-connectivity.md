@@ -131,15 +131,23 @@ So, before status is consulted at all, every response must authenticate as ours:
 Failing any of those ⇒ `link = captive`, **the queue does not advance**, and no
 entry changes state, whatever the status code said.
 
-**The nonce is a signal in the *response*, which makes it a server obligation.**
-Sending it and not checking it back would authenticate nothing — a portal
-happily accepts any header it is given. So the API echoes the request's
-`x-waltning-nonce` on every response, errors included, exactly as it stamps
-`x-waltning`. This is stated here because the order of work makes it easy to
-miss: the client check is implemented and tested (`rule-zero-fetch.ts`) and is
-fed `null` until §5.2 exists, so **the first session issued without the echo
-middleware in place would classify every response in the system as captive** —
-total, immediate, and looking exactly like a network failure.
+**The nonce is a signal in the *response*, and the client must never send it.**
+
+It is established at login and held by both ends. The API stamps the session's
+own nonce as `x-waltning-nonce` on every response, errors included, exactly as
+it stamps `x-waltning`; the client compares it against what it was issued.
+
+Putting it in the *request* for the server to echo is the obvious design and it
+authenticates nothing. Anything able to answer the request was able to read it,
+so a captive portal can echo it back exactly as well as the API can — and the
+secret is now transmitted on every call rather than once at login. **A portal
+never saw the login**, which is the only reason this check is worth anything.
+
+Stated here because the order of work makes it easy to get wrong twice: the
+client half is implemented and tested (`rule-zero-fetch.ts`), fed `null` until
+§5.2 exists, so **the first session issued without the server stamping its
+nonce would classify every response in the system as captive** — total,
+immediate, and looking exactly like a network failure.
 
 **Rule 1:** only errors carrying our envelope may set `blocked`. A bare 403 from
 Caddy or a 404 from a proxy is a *transport* event, not a domain refusal.

@@ -9,16 +9,21 @@
  * server, and looks like the server returning nothing.
  */
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
+import { NONCE_HEADER, WALTNING_HEADER } from "./protocol.ts";
 import { CaptiveResponseError, type FetchInit, ruleZeroFetch } from "./rule-zero-fetch.ts";
 
+const BUILD = "dev";
+/** What the server stamps once §5.2 issues one. */
+const SESSION_NONCE = "n-7";
 const OK_BODY = '{"result":{"data":{"ok":true}}}';
 
 /** A response the way the server sends it: header stamped, envelope body. */
 function ours(body = OK_BODY, status = 200): Response {
   return new Response(body, {
     status,
-    headers: { "x-waltning": "dev", "content-type": "application/json" },
+    headers: { [WALTNING_HEADER]: BUILD, "content-type": "application/json" },
   });
 }
 
@@ -86,7 +91,7 @@ describe("a response that is not ours", () => {
   });
 
   it("rejects our header on someone else's body", async () => {
-    const withHeader = new Response("<html>hi</html>", { headers: { "x-waltning": "dev" } });
+    const withHeader = new Response("<html>hi</html>", { headers: { [WALTNING_HEADER]: BUILD } });
     const f = ruleZeroFetch({ inner: fetchReturning(withHeader) });
     const error = await f("http://localhost:3000/trpc/ping").catch((e: unknown) => e);
     expect((error as CaptiveResponseError).reason).toBe("not-an-envelope");
@@ -95,51 +100,66 @@ describe("a response that is not ours", () => {
 
 describe("the outgoing request", () => {
   /**
-   * Captures what the wrapper handed to the platform fetch — and **echoes the
-   * nonce back**, which is a statement about the server, not a test detail.
+   * Captures what the wrapper handed to the platform fetch, and answers with a
+   * response carrying `SESSION_NONCE` — which is what the server does once
+   * §5.2 exists, from the session it issued.
    *
-   * Rule 0's third signal only authenticates a response if the response
-   * carries it: a portal cannot know a nonce, and that is the whole value of
-   * the check. So when §5.2 issues nonces, the API must echo the request's
-   * `x-waltning-nonce` on every response — including errors, exactly like
-   * `x-waltning`. Without that middleware the client would send a nonce, get
-   * nothing back, and classify every single response as captive.
+   * It does **not** echo the request's nonce, and that distinction is the whole
+   * value of the check: a captive portal reads the request too, so echoing
+   * would let it produce a valid-looking answer. Only something that took part
+   * in the login knows this value.
    */
   function capturing() {
     const seen: { input: unknown; init: RequestInit | undefined }[] = [];
     const inner = vi.fn(async (input: unknown, init?: RequestInit) => {
       seen.push({ input, init });
-      const nonce = new Headers(init?.headers).get("x-waltning-nonce");
       const response = ours();
-      if (nonce !== null) response.headers.set("x-waltning-nonce", nonce);
+      response.headers.set(NONCE_HEADER, SESSION_NONCE);
       return response;
     });
     return { seen, inner: inner as unknown as typeof fetch };
   }
 
-  it("carries no nonce header when there is no session", async () => {
-    const { seen, inner } = capturing();
-    await ruleZeroFetch({ inner })("http://localhost:3000/trpc/ping");
-    expect(new Headers(seen[0]?.init?.headers).get("x-waltning-nonce")).toBeNull();
+  it("never puts the nonce on the request", () => {
+    // The correction. Sending it made every call carry the shared secret to
+    // whatever was able to answer — including the portal the check exists to
+    // catch, which could then echo it back perfectly.
+    const source = readFileSync(new URL("./rule-zero-fetch.ts", import.meta.url), "utf8");
+    const sendsIt = /headers\.set\(\s*NONCE_HEADER/.test(source);
+    expect(sendsIt, "the nonce must never be added to an outgoing request").toBe(false);
   });
 
-  it("carries the nonce once there is one", async () => {
-    const { seen, inner } = capturing();
-    await ruleZeroFetch({ inner, nonce: () => "n-7" })("http://localhost:3000/trpc/ping");
-    expect(new Headers(seen[0]?.init?.headers).get("x-waltning-nonce")).toBe("n-7");
+  it("accepts a response carrying the session nonce", async () => {
+    const { inner } = capturing();
+    const f = ruleZeroFetch({ inner, nonce: () => SESSION_NONCE });
+    await expect(f("http://localhost:3000/trpc/ping")).resolves.toBeInstanceOf(Response);
+  });
+
+  it("rejects a response carrying someone else's nonce", async () => {
+    const inner = vi.fn(async () => {
+      const response = ours();
+      response.headers.set(NONCE_HEADER, "a-different-session");
+      return response;
+    });
+    const f = ruleZeroFetch({
+      inner: inner as unknown as typeof fetch,
+      nonce: () => SESSION_NONCE,
+    });
+    const error = await f("http://localhost:3000/trpc/ping").catch((e: unknown) => e);
+    expect((error as CaptiveResponseError).reason).toBe("nonce-mismatch");
   });
 
   it("reads the nonce per request, not once at construction", async () => {
-    // A login must not require rebuilding the client. If this ever captures,
-    // the first request after signing in is the one that fails.
-    const { seen, inner } = capturing();
+    // Signing in must not require rebuilding the client. If this ever captures,
+    // the first request after login is the one that fails.
+    const { inner } = capturing();
     let current: string | null = null;
     const f = ruleZeroFetch({ inner, nonce: () => current });
-    await f("http://localhost:3000/trpc/ping");
-    current = "n-8";
-    await f("http://localhost:3000/trpc/ping");
-    expect(new Headers(seen[0]?.init?.headers).get("x-waltning-nonce")).toBeNull();
-    expect(new Headers(seen[1]?.init?.headers).get("x-waltning-nonce")).toBe("n-8");
+
+    // No session: the response's nonce is ignored entirely.
+    await expect(f("http://localhost:3000/trpc/ping")).resolves.toBeInstanceOf(Response);
+    current = SESSION_NONCE;
+    await expect(f("http://localhost:3000/trpc/ping")).resolves.toBeInstanceOf(Response);
   });
 
   it("preserves method, body, headers and signal", async () => {

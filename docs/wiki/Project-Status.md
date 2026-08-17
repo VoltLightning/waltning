@@ -11,18 +11,18 @@ graph TB
         T["test harness<br/><i>a real database per test file</i>"]
         REG["registry mechanism<br/><i>validate · gate · audit ·<br/>transaction · safe replay</i>"]
         ROLE["non-superuser app role<br/><i>without it, permissions mean nothing</i>"]
+        SHIP["the appliance<br/><i>api · caddy · one origin</i>"]
     end
 
     subgraph part["proven, but barely used"]
         OPS["2 of ~110 actions"]
-        GATE["the gate decides —<br/>nothing calls it yet"]
+        GATE["the gate, now enforced<br/><i>on agent writes</i>"]
     end
 
     subgraph todo["not started"]
         AGENT["AI runtime"]
         SCREENS["screens"]
         EXPORT["tax export path"]
-        DEPLOY["Dockerfile and deployment"]
     end
 
     done --> part --> todo
@@ -70,13 +70,9 @@ folklore.
   would consume them do not exist.
 - **`EXPORT_DATABASE_URL` is declared and never read** — the tax export path is
   not built.
-- **`packages/ui` is declared and imported by nothing.** Zero components; it
-  compiles an empty file.
-- **`pnpm dev` starts the API only**, not the app.
-- **The build identifier has no way of being set**, so the health endpoint always
-  reports `dev`. It needs a Dockerfile that does not exist yet.
-- **Two exchange-rate checks are not in the test suite.** They encode real
-  reasoning and are still not executable. The money module itself is covered.
+- **`packages/ui` holds no components yet.** The design system names 97; the
+  package compiles three empty index files. A component moves there when a
+  *second* feature uses it, so this stays empty until there is a second feature.
 
 ## Not yet decided
 

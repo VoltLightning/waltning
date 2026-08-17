@@ -14,7 +14,7 @@
  * `instanceof` that quietly stops matching.
  */
 export { CaptiveResponseError } from "@waltning/core";
-export { API_BASE_URL, api } from "./api.ts";
+export { API_BASE_URL, api, CLIENT_BUILD, isStaleBundle } from "./api.ts";
 export {
   ApiBaseUrlError,
   type BaseUrlInputs,
