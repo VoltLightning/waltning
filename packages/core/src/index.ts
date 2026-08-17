@@ -11,6 +11,14 @@
 export type { JsonObject, JsonPrimitive, JsonSchema, JsonValue } from "./json.ts";
 export * as money from "./money.ts";
 export {
+  type AutoGrant,
+  type GateDecision,
+  gateDecision,
+  sensitiveFieldsWritten,
+  TAX_SENSITIVE_FIELDS,
+  type TaxSensitiveField,
+} from "./registry/gate.ts";
+export {
   type AnyOperation,
   type AuditSpec,
   defineOperation,
