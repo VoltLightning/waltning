@@ -105,6 +105,13 @@ coverage/
 apps/*/.expo/
 apps/*/dist/
 
+# Local agent config. Every docs/agents/<name>.md is a committed default that
+# works on a fresh clone; <name>.local.md is a personal override that stays on
+# one machine. This is where a workflow that depends on tooling nobody else has
+# — a private notes vault, a company tracker — goes, so the committed default
+# never assumes it. tests/agent-docs.test.ts proves this pattern ignores.
+docs/agents/*.local.md
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .ai-rulez/.generated-manifest.json
 .claude/
