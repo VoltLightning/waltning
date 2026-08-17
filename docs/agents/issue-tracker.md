@@ -39,6 +39,34 @@ The same convention applies to the other files here: any
 a pull request, an issue, or the wiki.** It is local because it is nobody
 else's business, and the repository is public.
 
+## Known: two trackers, and nothing reconciles them
+
+**Carried deliberately. Read this before assuming either tracker is complete.**
+
+`CONTRIBUTING.md` tells anyone outside to open a GitHub issue, and
+`.github/ISSUE_TEMPLATE/` has three forms ready for them. So GitHub Issues is a
+real front door, not a placeholder — while the maintainer's working queue is
+whatever the local override points at. Nothing syncs the two, and nothing will.
+
+Today that costs nothing: there is no external traffic, so the GitHub side is
+empty and the override is the whole picture.
+
+**The decision is forced the first time someone outside files an issue.** At
+that moment there are two live inboxes, and the failure is quiet — work gets
+planned against a queue that is missing whatever arrived in the other one.
+
+Three ways out, none of them chosen yet:
+
+| | |
+|---|---|
+| **Triage across, plan in one** | GitHub stays the inbox for outside; anything real is copied to the working queue as a card and the issue closed with a pointer. One planning surface, one manual step per external issue |
+| **Drop the override** | Move to GitHub Issues outright. One tracker, no reconciliation, and the working queue becomes public — including the parts that are currently private for good reason |
+| **Close the door** | Turn GitHub Issues off and say so in `CONTRIBUTING.md`. Honest, and gives up the only channel anyone outside has |
+
+**Whichever is chosen, say so here and in `CONTRIBUTING.md` in the same
+change.** A contributor told to open an issue that nobody reads is worse than
+one told not to bother.
+
 ### Writing one
 
 Copy the shape, not the content:
