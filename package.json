@@ -32,7 +32,9 @@
     "db:fx": "pnpm --filter @waltning/db fx",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:reset": "pnpm --filter @waltning/db recreate && pnpm db:migrate && pnpm --filter @waltning/db grant && pnpm db:seed"
+    "db:reset": "pnpm --filter @waltning/db recreate && pnpm db:migrate && pnpm --filter @waltning/db grant && pnpm db:seed",
+    "wiki:check": "sh tools/wiki/publish.sh --dry-run",
+    "wiki:publish": "sh tools/wiki/publish.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

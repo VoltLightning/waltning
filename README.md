@@ -116,6 +116,12 @@ Every layer choice, and every refusal, has its reasoning recorded in
 | [`docs/specification/`](docs/specification/) | Operations registry, computations, 17 journeys, 31 screens, design system |
 | [`docs/specification/defects.md`](docs/specification/defects.md) | 101 findings from ten adversarial reviews, and their status |
 | [`TAXONOMY.md`](TAXONOMY.md) | The category tree, derived from five years of data |
+| [Wiki](https://github.com/VoltLightning/waltning/wiki) | Orientation — where to start, and the reasoning behind the choices |
+
+The wiki is published from [`docs/wiki/`](docs/wiki/), not edited in place: a
+GitHub wiki is a separate repository the pre-commit hook cannot reach, and this
+one is public. `pnpm wiki:check` runs the sweep and the link checks;
+`pnpm wiki:publish` mirrors.
 
 ## Data handling
 
