@@ -15,6 +15,13 @@
       "when": 1786888914315,
       "tag": "0001_database_objects",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786919723740,
+      "tag": "0002_outbox_receipts",
+      "breakpoints": true
     }
   ]
 }

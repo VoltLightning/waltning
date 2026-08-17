@@ -1173,6 +1173,41 @@ export const auditLog = pgTable(
 );
 
 /* ------------------------------------------------------------------ *
+ * Outbox receipts — C22
+ * ------------------------------------------------------------------ */
+
+/**
+ * Server-side replay protection for outbox entries (`architecture/08`).
+ *
+ * The old claim rested on the partial unique index on `external_id`, which
+ * fires **only on INSERT** — so every `update_*`, `delete_*`, `categorize_batch`
+ * and `merge_counterparties` had no protection at all. Edit a synced row's
+ * `is_business` offline, lose the connection before the 200, and the retry
+ * carries the `updated_at` its own first application already advanced: the
+ * entry is permanently blocked by a conflict with itself, and the interface
+ * reports that another device changed it. Nothing did. On `settle_debt`, whose
+ * residual is derived from live data, the same replay settles twice.
+ *
+ * Checked first for every write and written in the same transaction as the
+ * effects, so a receipt cannot exist for work that rolled back.
+ */
+export const outboxReceipts = pgTable("outbox_receipts", {
+  /** The client-minted entry id. The idempotency key. */
+  entryId: uuid("entry_id").primaryKey(),
+  /** Operation name, for reading the ledger without joining anything. */
+  op: text("op").notNull(),
+  /**
+   * Hash of the request payload. A repeat with the same hash returns the
+   * stored response; a repeat with a *different* hash is a genuine violation —
+   * two different intentions cannot share one id — and is refused.
+   */
+  requestHash: text("request_hash").notNull(),
+  /** Returned verbatim on replay, so a retry is indistinguishable from the first call. */
+  response: jsonb("response").notNull(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ *
  * Inferred types
  * ------------------------------------------------------------------ */
 
