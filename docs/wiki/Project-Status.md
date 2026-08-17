@@ -8,9 +8,9 @@ things, and this page exists so the first is not mistaken for the second.
 ```mermaid
 graph TB
     subgraph done["done"]
-        T["test harness<br/><small>a real database per test file</small>"]
-        REG["registry mechanism<br/><small>validate · gate · audit ·<br/>transaction · safe replay</small>"]
-        ROLE["non-superuser app role<br/><small>without it, permissions mean nothing</small>"]
+        T["test harness<br/><i>a real database per test file</i>"]
+        REG["registry mechanism<br/><i>validate · gate · audit ·<br/>transaction · safe replay</i>"]
+        ROLE["non-superuser app role<br/><i>without it, permissions mean nothing</i>"]
     end
 
     subgraph part["proven, but barely used"]

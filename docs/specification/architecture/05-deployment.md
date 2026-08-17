@@ -30,7 +30,7 @@ half a day, and the alternative is a laptop on a café network one
 
 ```mermaid
 graph LR
-    A["postgres<br/><small>healthcheck: pg_isready</small>"] --> B["migrate<br/><small>run-once, exits 0</small>"]
+    A["postgres<br/><i>healthcheck: pg_isready</i>"] --> B["migrate<br/><i>run-once, exits 0</i>"]
     B --> C["api"]
     A --> D["minio"]
     D --> C
@@ -167,9 +167,9 @@ bundle behind the same Caddy routes.
 
 ```mermaid
 graph TB
-    SU["POSTGRES_USER<br/><b>superuser</b><br/><small>bootstrap + migrate only</small>"]
-    APP["waltning_app<br/><small>DML, no DDL</small>"]
-    EXP["waltning_export<br/><small>SELECT on tax_ledger</small>"]
+    SU["POSTGRES_USER<br/><b>superuser</b><br/><i>bootstrap + migrate only</i>"]
+    APP["waltning_app<br/><i>DML, no DDL</i>"]
+    EXP["waltning_export<br/><i>SELECT on tax_ledger</i>"]
     SU -->|creates| APP
     SU -->|creates| EXP
     API["api container"] --> APP
@@ -237,9 +237,9 @@ silently for a while first.
 
 ```mermaid
 graph LR
-    P1["probe.py<br/><small>✅ Reading A confirmed</small>"] --> P2["type 52 balances"]
+    P1["probe.py<br/><i>✅ Reading A confirmed</i>"] --> P2["type 52 balances"]
     P2 --> P3["migrate + both gates"]
-    P3 --> P4["parallel run<br/><small>Waltning + Money Manager</small>"]
+    P3 --> P4["parallel run<br/><i>Waltning + Money Manager</i>"]
     P4 --> P5["Money Manager read-only"]
 ```
 

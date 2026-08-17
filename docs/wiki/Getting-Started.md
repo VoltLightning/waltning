@@ -21,7 +21,7 @@ file, regenerate, reset.
 
 ```mermaid
 graph LR
-    A["<b>recreate</b><br/><small>drop and create<br/>an empty database</small>"] --> B["<b>migrate</b><br/><small>tables, then triggers,<br/>views, roles, grants</small>"] --> C["<b>grant</b><br/><small>hand out permissions<br/>to each role</small>"] --> D["<b>seed</b><br/><small>currencies and<br/>the category tree</small>"]
+    A["<b>recreate</b><br/><i>drop and create<br/>an empty database</i>"] --> B["<b>migrate</b><br/><i>tables, then triggers,<br/>views, roles, grants</i>"] --> C["<b>grant</b><br/><i>hand out permissions<br/>to each role</i>"] --> D["<b>seed</b><br/><i>currencies and<br/>the category tree</i>"]
 ```
 
 The four steps exist separately for when you want to watch one of them; `db:reset`
@@ -59,9 +59,9 @@ an already-migrated template and thrown away afterwards.
 
 ```mermaid
 graph LR
-    T["<b>template db</b><br/><small>migrated once</small>"] --> A["test file A<br/><small>own copy</small>"]
-    T --> B["test file B<br/><small>own copy</small>"]
-    T --> C["test file C<br/><small>own copy</small>"]
+    T["<b>template db</b><br/><i>migrated once</i>"] --> A["test file A<br/><i>own copy</i>"]
+    T --> B["test file B<br/><i>own copy</i>"]
+    T --> C["test file C<br/><i>own copy</i>"]
     A --> X["dropped"]
     B --> X
     C --> X
@@ -82,12 +82,12 @@ graph TB
     subgraph tailnet["Tailscale"]
         DEV["your phone<br/>and laptop"]
         subgraph pi["Raspberry Pi"]
-            CADDY["<b>caddy</b><br/><small>HTTPS with tailnet certificates</small>"]
+            CADDY["<b>caddy</b><br/><i>HTTPS with tailnet certificates</i>"]
             API["<b>api</b>"]
-            MIG["<b>migrate</b><br/><small>runs once, then exits</small>"]
-            PG[("<b>postgres</b><br/><small>bound to localhost only</small>")]
-            MINIO[("<b>minio</b><br/><small>receipt images</small>")]
-            CRON["<b>cron</b><br/><small>nightly dump · rate sync ·<br/>invariant checks</small>"]
+            MIG["<b>migrate</b><br/><i>runs once, then exits</i>"]
+            PG[("<b>postgres</b><br/><i>bound to localhost only</i>")]
+            MINIO[("<b>minio</b><br/><i>receipt images</i>")]
+            CRON["<b>cron</b><br/><i>nightly dump · rate sync ·<br/>invariant checks</i>"]
         end
     end
     B2["Backblaze B2"]
@@ -135,7 +135,7 @@ the point past which rollback stops being practical is in
 
 ```mermaid
 graph LR
-    A["<b>probe</b><br/><small>confirm the export<br/>can even be read</small>"] --> B["<b>type in the<br/>real balances</b>"] --> C["<b>import</b><br/><small>+ both gates</small>"] --> D["<b>parallel run</b><br/><small>both apps, side by side</small>"] --> E["<b>old app<br/>read-only</b>"]
+    A["<b>probe</b><br/><i>confirm the export<br/>can even be read</i>"] --> B["<b>type in the<br/>real balances</b>"] --> C["<b>import</b><br/><i>+ both gates</i>"] --> D["<b>parallel run</b><br/><i>both apps, side by side</i>"] --> E["<b>old app<br/>read-only</b>"]
 ```
 
 The gate that matters is the one comparing calculated balances against balances

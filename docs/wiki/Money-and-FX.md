@@ -64,10 +64,10 @@ recorded fact rather than something inferred later.
 graph LR
     A["<b>Bank A · PLN</b><br/>−1 000.00 PLN"] -->|"one transfer,<br/>two stored legs"| B["<b>Bank B · EUR</b><br/>+228.50 EUR"]
 
-    A -.-> R1["your rate<br/><small>1 000 ÷ 228.50<br/>= 4.3764</small>"]
-    B -.-> R2["published rate that day<br/><small>4.3200</small>"]
+    A -.-> R1["your rate<br/><i>1 000 ÷ 228.50<br/>= 4.3764</i>"]
+    B -.-> R2["published rate that day<br/><i>4.3200</i>"]
 
-    R1 --> COST["<b>FX Cost</b><br/><small>the gap — what the<br/>bank charged you</small>"]
+    R1 --> COST["<b>FX Cost</b><br/><i>the gap — what the<br/>bank charged you</i>"]
     R2 --> COST
 ```
 
@@ -95,9 +95,9 @@ phone does not always have the data.
 
 ```mermaid
 graph TB
-    F["<b>F — foldable</b><br/><small>from what the phone already holds</small>"] --> FO["works offline, always"]
-    R["<b>R — replica</b><br/><small>needs the phone's copy of server data,<br/>and only for a range that copy fully covers</small>"] --> RO["works offline if the copy reaches back far enough"]
-    S["<b>S — server</b><br/><small>needs the server</small>"] --> SO["shown as unavailable offline —<br/>never as a stale number"]
+    F["<b>F — foldable</b><br/><i>from what the phone already holds</i>"] --> FO["works offline, always"]
+    R["<b>R — replica</b><br/><i>needs the phone's copy of server data,<br/>and only for a range that copy fully covers</i>"] --> RO["works offline if the copy reaches back far enough"]
+    S["<b>S — server</b><br/><i>needs the server</i>"] --> SO["shown as unavailable offline —<br/>never as a stale number"]
 ```
 
 Getting a label wrong is another failure that looks like health. The figure

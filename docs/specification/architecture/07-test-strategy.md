@@ -38,11 +38,11 @@ The second, from the same register:
 
 ```mermaid
 graph BT
-    P["<b>Property tests</b><br/>money · signing · debt<br/><small>generated inputs, 7 currencies</small>"]
-    D["<b>Database tests</b><br/>every trigger, CHECK, view, grant<br/><small>each driven to REFUSE</small>"]
+    P["<b>Property tests</b><br/>money · signing · debt<br/><i>generated inputs, 7 currencies</i>"]
+    D["<b>Database tests</b><br/>every trigger, CHECK, view, grant<br/><i>each driven to REFUSE</i>"]
     C["<b>Contract tests</b><br/>registry ↔ tRPC ↔ agent tools"]
-    F["<b>Fixture scoring</b><br/>classification, extraction<br/><small>a number that moves</small>"]
-    E["<b>Journey tests</b><br/>the 5 sequences in 04</small>"]
+    F["<b>Fixture scoring</b><br/>classification, extraction<br/><i>a number that moves</i>"]
+    E["<b>Journey tests</b><br/>the 5 sequences in 04</i>"]
     P --> D --> C --> F --> E
 ```
 

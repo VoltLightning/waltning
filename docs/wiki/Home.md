@@ -20,18 +20,18 @@ that joins your own devices together and refuses everyone else.
 ```mermaid
 graph LR
     subgraph tailnet["Tailscale — a private network only your devices join"]
-        PHONE["mobile app<br/><small>Expo · offline queue</small>"]
-        WEB["web dashboard<br/><small>same code, larger screen</small>"]
+        PHONE["mobile app<br/><i>Expo · offline queue</i>"]
+        WEB["web dashboard<br/><i>same code, larger screen</i>"]
         subgraph pi["Raspberry Pi at home · Docker Compose"]
-            CADDY["caddy<br/><small>terminates HTTPS</small>"]
-            API["api<br/><small>Hono + tRPC</small>"]
-            PG[("postgres 16<br/><small>the ledger</small>")]
-            MINIO[("minio<br/><small>receipt images</small>")]
+            CADDY["caddy<br/><i>terminates HTTPS</i>"]
+            API["api<br/><i>Hono + tRPC</i>"]
+            PG[("postgres 16<br/><i>the ledger</i>")]
+            MINIO[("minio<br/><i>receipt images</i>")]
         end
     end
-    FX["exchange-rate feeds<br/><small>ECB · NBP · …</small>"]
+    FX["exchange-rate feeds<br/><i>ECB · NBP · …</i>"]
     LLM["AI model providers"]
-    B2["Backblaze B2<br/><small>encrypted backups</small>"]
+    B2["Backblaze B2<br/><i>encrypted backups</i>"]
 
     PHONE & WEB -->|tRPC| CADDY --> API
     API --> PG & MINIO

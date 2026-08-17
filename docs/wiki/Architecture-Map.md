@@ -38,12 +38,12 @@ points back up.
 
 ```mermaid
 graph TB
-    MOBILE["<b>apps/mobile</b><br/><small>Expo — the phone app and the web dashboard</small>"]
-    API["<b>apps/api</b><br/><small>Hono + tRPC — the only thing that writes</small>"]
-    UI["<b>packages/ui</b><br/><small>components a second feature needed</small>"]
-    DB["<b>packages/db</b><br/><small>Drizzle schema, migrations, seed</small>"]
-    CORE["<b>packages/core</b><br/><small>money · shared types · the registry contract</small>"]
-    MM["<b>tools/migrate-mm</b><br/><small>one-shot importer</small>"]
+    MOBILE["<b>apps/mobile</b><br/><i>Expo — the phone app and the web dashboard</i>"]
+    API["<b>apps/api</b><br/><i>Hono + tRPC — the only thing that writes</i>"]
+    UI["<b>packages/ui</b><br/><i>components a second feature needed</i>"]
+    DB["<b>packages/db</b><br/><i>Drizzle schema, migrations, seed</i>"]
+    CORE["<b>packages/core</b><br/><i>money · shared types · the registry contract</i>"]
+    MM["<b>tools/migrate-mm</b><br/><i>one-shot importer</i>"]
 
     MOBILE --> UI
     MOBILE --> CORE
@@ -90,13 +90,13 @@ than beside it.
 ```mermaid
 graph TB
     subgraph edge["Ways in"]
-        HTTP["Hono HTTP<br/><small>auth · rate limit · session</small>"]
+        HTTP["Hono HTTP<br/><i>auth · rate limit · session</i>"]
         TRPC["tRPC procedures<br/><i>generated from the registry</i>"]
         TOOLS["AI tools<br/><i>generated from the registry</i>"]
     end
 
-    REG["<b>operation registry</b><br/><small>every allowed change, declared once</small>"]
-    GATE{"approval gate<br/><small>does this need a human?</small>"}
+    REG["<b>operation registry</b><br/><i>every allowed change, declared once</i>"]
+    GATE{"approval gate<br/><i>does this need a human?</i>"}
 
     subgraph services["Domain services — where the thinking happens"]
         LEDGER["ledger"]
@@ -105,12 +105,12 @@ graph TB
         TAX["tax"]
     end
 
-    PG[("postgres<br/><small>constraints · triggers · role grants</small>")]
+    PG[("postgres<br/><i>constraints · triggers · role grants</i>")]
 
     HTTP --> TRPC --> REG
     HTTP --> TOOLS --> GATE --> REG
     REG --> services --> PG
-    REG --> AUDIT["audit row<br/><small>written in the same transaction</small>"] --> PG
+    REG --> AUDIT["audit row<br/><i>written in the same transaction</i>"] --> PG
 ```
 
 Three rules keep those boxes from blurring into each other:
@@ -135,13 +135,13 @@ stops one feature reaching into another's internals.
 graph LR
     subgraph api["apps/api/src/modules/"]
         direction TB
-        T["<b>transactions/</b><br/><small>index.ts — the only public part</small><br/>create.operation.ts<br/>update.operation.ts<br/>transactions.service.ts<br/>transactions.test.ts"]
-        C["<b>counterparties/</b><br/><small>same shape</small>"]
+        T["<b>transactions/</b><br/><i>index.ts — the only public part</i><br/>create.operation.ts<br/>update.operation.ts<br/>transactions.service.ts<br/>transactions.test.ts"]
+        C["<b>counterparties/</b><br/><i>same shape</i>"]
     end
 
     subgraph mob["apps/mobile/src/features/"]
         direction TB
-        F["<b>quick-add/</b><br/><small>index.ts</small><br/>ui/atoms · molecules · organisms<br/>model/<br/>api/"]
+        F["<b>quick-add/</b><br/><i>index.ts</i><br/>ui/atoms · molecules · organisms<br/>model/<br/>api/"]
     end
 
     T -.->|"forbidden"| C

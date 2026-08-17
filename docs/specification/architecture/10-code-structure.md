@@ -43,16 +43,16 @@ third that both depend on. `tests/module-boundaries.test.ts` enforces it.
 
 ```mermaid
 graph TB
-    REG["<b>registry/</b><br/><small>composition root</small>"]
+    REG["<b>registry/</b><br/><i>composition root</i>"]
 
     subgraph mods["modules/"]
         direction LR
-        TX["<b>transactions/</b><br/><small>index.ts</small>"]
-        FX["<b>fx/</b><br/><small>index.ts</small>"]
-        CP["<b>counterparties/</b><br/><small>index.ts</small>"]
+        TX["<b>transactions/</b><br/><i>index.ts</i>"]
+        FX["<b>fx/</b><br/><i>index.ts</i>"]
+        CP["<b>counterparties/</b><br/><i>index.ts</i>"]
     end
 
-    COMMON["<b>common/</b> · <b>infra/</b><br/><small>no domain knowledge</small>"]
+    COMMON["<b>common/</b> · <b>infra/</b><br/><i>no domain knowledge</i>"]
 
     REG --> TX & FX & CP
     TX --> COMMON
@@ -80,10 +80,10 @@ scattered across three top-level folders that each contain every domain.
 
 ```mermaid
 graph LR
-    IN(["a call arrives"]) --> OP["<b>operation</b><br/><small>validate · gate · audit</small>"]
-    OP --> SVC["<b>service</b><br/><small>domain logic</small>"]
-    SVC --> INFRA["<b>infra</b><br/><small>drivers, clients</small>"]
-    INFRA --> PG[("<b>postgres</b><br/><small>constraints · triggers · grants</small>")]
+    IN(["a call arrives"]) --> OP["<b>operation</b><br/><i>validate · gate · audit</i>"]
+    OP --> SVC["<b>service</b><br/><i>domain logic</i>"]
+    SVC --> INFRA["<b>infra</b><br/><i>drivers, clients</i>"]
+    INFRA --> PG[("<b>postgres</b><br/><i>constraints · triggers · grants</i>")]
 ```
 
 The three layers of the table, in one slice rather than three folders.

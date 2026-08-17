@@ -119,9 +119,9 @@ inside it (C17). Test triggers by running them.
 
 ```mermaid
 graph LR
-    T[("transactions<br/><small>+ 7 other tables with personal rows</small>")]
-    V["tax_ledger (view)<br/><small>is_business ∧ ¬deleted ∧ ownership='own'</small>"]
-    R(["waltning_export<br/><small>SELECT on the view only</small>"])
+    T[("transactions<br/><i>+ 7 other tables with personal rows</i>")]
+    V["tax_ledger (view)<br/><i>is_business ∧ ¬deleted ∧ ownership='own'</i>"]
+    R(["waltning_export<br/><i>SELECT on the view only</i>"])
     A["tax adapters<br/>PL · US · DE"]
     T --> V --> R --> A
     T -.->|"REVOKE ALL"| R

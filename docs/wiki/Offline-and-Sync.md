@@ -18,8 +18,8 @@ sitting in the queue.
 ```mermaid
 graph LR
     subgraph phone["on the phone"]
-        Q["<b>queue</b><br/><small>what you have done<br/>and the server has not seen</small>"]
-        REP["<b>local copy</b><br/><small>the server's data<br/>as of the last sync</small>"]
+        Q["<b>queue</b><br/><i>what you have done<br/>and the server has not seen</i>"]
+        REP["<b>local copy</b><br/><i>the server's data<br/>as of the last sync</i>"]
     end
 
     Q --> CALC["what you see"]

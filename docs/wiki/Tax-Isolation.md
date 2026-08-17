@@ -26,14 +26,14 @@ different role. This is the whole mechanism.
 ```mermaid
 graph TB
     subgraph app["the application"]
-        MIG["migrations<br/><small>MIGRATE_DATABASE_URL</small>"]
-        API["the api<br/><small>APP_DATABASE_URL</small>"]
-        EXP["tax export<br/><small>EXPORT_DATABASE_URL</small>"]
+        MIG["migrations<br/><i>MIGRATE_DATABASE_URL</i>"]
+        API["the api<br/><i>APP_DATABASE_URL</i>"]
+        EXP["tax export<br/><i>EXPORT_DATABASE_URL</i>"]
     end
 
     subgraph pg["postgres"]
-        VIEW["<b>tax_ledger</b><br/><small>a view — business rows only</small>"]
-        TABLES[("transactions · accounts<br/>counterparties · receipts<br/><small>everything, personal included</small>")]
+        VIEW["<b>tax_ledger</b><br/><i>a view — business rows only</i>"]
+        TABLES[("transactions · accounts<br/>counterparties · receipts<br/><i>everything, personal included</i>")]
         OBJ["triggers · constraints<br/>roles · grants"]
     end
 
@@ -114,10 +114,10 @@ projects it into that country's forms.
 
 ```mermaid
 graph LR
-    TABLES[("the ledger")] --> VIEW["<b>tax_ledger</b><br/><small>business rows only</small>"]
-    VIEW --> PL["Poland adapter<br/><small>KPiR, or the revenue<br/>register under ryczałt</small>"]
-    VIEW --> US["US adapter<br/><small>Schedule C</small>"]
-    VIEW --> DE["Germany adapter<br/><small>Anlage EÜR</small>"]
+    TABLES[("the ledger")] --> VIEW["<b>tax_ledger</b><br/><i>business rows only</i>"]
+    VIEW --> PL["Poland adapter<br/><i>KPiR, or the revenue<br/>register under ryczałt</i>"]
+    VIEW --> US["US adapter<br/><i>Schedule C</i>"]
+    VIEW --> DE["Germany adapter<br/><i>Anlage EÜR</i>"]
     PL --> S1["PL_KPIR v2026"]
     US --> S2["US_SCHED_C v2026"]
     DE --> S3["DE_EUR v2026"]

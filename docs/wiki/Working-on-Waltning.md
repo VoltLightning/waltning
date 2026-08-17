@@ -22,12 +22,12 @@ Here is what it actually does, in order. Everything must pass.
 
 ```mermaid
 graph TB
-    S(["you commit"]) --> A["<b>1 · force-added files</b><br/><small>anything that ignore rules exclude<br/>and someone added anyway</small>"]
-    A --> B["<b>2 · dangerous file types</b><br/><small>keys, database dumps, spreadsheets,<br/>bank statement formats</small>"]
-    B --> C["<b>3 · key material by content</b><br/><small>a private key pasted into<br/>an otherwise ordinary file</small>"]
-    C --> D["<b>4 · personal-data sweep</b><br/><small>real names this repo replaced<br/>with placeholders</small>"]
-    D --> E["<b>5 · format and lint</b><br/><small>staged files, never rewritten for you</small>"]
-    E --> F["<b>6 · types</b><br/><small>the whole project, not just what changed</small>"]
+    S(["you commit"]) --> A["<b>1 · force-added files</b><br/><i>anything that ignore rules exclude<br/>and someone added anyway</i>"]
+    A --> B["<b>2 · dangerous file types</b><br/><i>keys, database dumps, spreadsheets,<br/>bank statement formats</i>"]
+    B --> C["<b>3 · key material by content</b><br/><i>a private key pasted into<br/>an otherwise ordinary file</i>"]
+    C --> D["<b>4 · personal-data sweep</b><br/><i>real names this repo replaced<br/>with placeholders</i>"]
+    D --> E["<b>5 · format and lint</b><br/><i>staged files, never rewritten for you</i>"]
+    E --> F["<b>6 · types</b><br/><i>the whole project, not just what changed</i>"]
     F --> G["<b>7 · tests</b>"]
     G --> OK(["committed"])
 
@@ -57,7 +57,7 @@ when someone is in a hurry is worse than no gate at all.
 
 ```mermaid
 graph LR
-    A["<b>1 · schema<br/>+ migration</b><br/><small>what can be true</small>"] --> B["<b>2 · registry<br/>operation</b><br/><small>what may change it</small>"] --> C["<b>3 · service</b><br/><small>how</small>"] --> D["<b>4 · tRPC<br/>procedure</b><br/><small>dispatch only</small>"] --> E["<b>5 · screen</b><br/><small>what you see</small>"]
+    A["<b>1 · schema<br/>+ migration</b><br/><i>what can be true</i>"] --> B["<b>2 · registry<br/>operation</b><br/><i>what may change it</i>"] --> C["<b>3 · service</b><br/><i>how</i>"] --> D["<b>4 · tRPC<br/>procedure</b><br/><i>dispatch only</i>"] --> E["<b>5 · screen</b><br/><i>what you see</i>"]
 ```
 
 In that order. It is a hard requirement, not a style note — **never start at the

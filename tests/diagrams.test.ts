@@ -115,6 +115,23 @@ describe("diagrams survive both colour themes", () => {
     expect(bad, "a fill without a color is unreadable in one theme or the other").toEqual([]);
   });
 
+  it("uses no <small> in a node label", () => {
+    // Found by looking at the rendered pages, not the source. `<small>` makes
+    // mermaid size a node too narrowly for its own text, and the overflow is
+    // *clipped* rather than wrapped — so "constraints · triggers · role grants"
+    // rendered as "constraints · triggers · role". Every diagram in this
+    // repository was quietly losing the end of its labels, and each one looked
+    // completely fine.
+    //
+    // `<i>` and plain text wrap correctly. Verified by changing one node and
+    // comparing the two renders.
+    const bad: string[] = [];
+    for (const { file, body } of blocks) {
+      if (body.includes("<small>")) bad.push(file);
+    }
+    expect([...new Set(bad)], "<small> is silently truncated — use <i>").toEqual([]);
+  });
+
   it("shades sequence blocks with a translucent colour, never an opaque one", () => {
     // `rect rgb(240,240,240)` paints a light box that the dark theme then
     // writes light text onto. `rgba(...)` tints whatever is behind it instead,
