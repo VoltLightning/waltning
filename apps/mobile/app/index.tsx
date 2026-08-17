@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { CurrencyList, useCurrencies } from "../src/features/currencies/index.ts";
 import { NetPosition } from "../src/features/dashboard/index.ts";
-import { API_BASE_URL, api, CaptiveResponseError } from "../src/shared/api/index.ts";
+import { API_BASE_URL, api, CaptiveResponseError, isStaleBundle } from "../src/shared/api/index.ts";
 
 type Probe =
   | { status: "probing" }
@@ -96,7 +96,11 @@ function describe(probe: Probe): string {
     case "probing":
       return "probing…";
     case "reached":
-      return `reached · build ${probe.build}`;
+      // The build is compared, not merely shown. It was displayed and
+      // discarded, which reads exactly like the check being present.
+      return isStaleBundle(probe.build)
+        ? `reached · server is on build ${probe.build} — this page is stale, reload`
+        : `reached · build ${probe.build}`;
     case "not-ours":
       // Deliberately not "offline". Something is answering; it is not the API.
       return `response was not ours (${probe.reason}) — status not consulted`;

@@ -41,7 +41,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.2",
+    "jsdom": "^30.0.1",
     "tsx": "^4.23.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"

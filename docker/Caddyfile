@@ -1,0 +1,59 @@
+# Caddy: one origin for the bundle and the API.
+#
+# This is what makes the browser see a single host, and it is why `DEV_CORS_ORIGIN`
+# exists only in development. If this file ever stopped fronting both paths,
+# that development-only setting would quietly become load-bearing in production
+# — on the one surface whose entire security argument is that nothing is public.
+#
+# `SITE_ADDRESS` is the tailnet name on the Pi (`waltning.<tailnet>.ts.net`),
+# which is what makes Caddy request the Tailscale-issued certificate and renew
+# it. There is no public name and no public certificate: the tailnet is the only
+# path in (§5.1).
+#
+# Locally it is `:8080` — plain HTTP, no certificate — so the routing can be
+# verified on a machine with no tailnet. That is the only difference between the
+# two, which is the point: the thing being tested is the thing that ships.
+
+{
+	admin off
+	# Caddy would otherwise try to solve an ACME challenge for a name that has
+	# no public DNS, retry forever, and log an error every minute.
+	auto_https off
+}
+
+{$SITE_ADDRESS::8080} {
+	encode zstd gzip
+
+	# ── The API ──────────────────────────────────────────────────────────────
+	#
+	# Listed before the file server so these never fall through to the SPA
+	# handler, which would answer a failed probe with `index.html` and a 200 —
+	# the exact shape Rule 0 exists to reject, produced by our own proxy.
+	@api path /trpc/* /healthz /readyz
+	handle @api {
+		# The probes must not be cached: a cached `/healthz` reports the build of
+		# whatever was deployed when the cache was filled, which is precisely the
+		# question being asked.
+		header /healthz Cache-Control "no-store"
+		header /readyz Cache-Control "no-store"
+		reverse_proxy api:3000
+	}
+
+	# ── The bundle ───────────────────────────────────────────────────────────
+	handle {
+		root * /srv
+
+		# Content-hashed by Metro, so the name changes when the content does.
+		header /_expo/static/* Cache-Control "public, max-age=31536000, immutable"
+
+		# **Never cached.** `index.html` names the hashed asset files; a cached
+		# copy points at assets a later deploy has deleted, and the app fails to
+		# load with no way for the user to fix it.
+		header /index.html Cache-Control "no-cache"
+
+		# SPA fallback: expo-router owns the paths, so anything not on disk is a
+		# route rather than a missing file.
+		try_files {path} /index.html
+		file_server
+	}
+}
