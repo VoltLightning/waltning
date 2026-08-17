@@ -26,7 +26,8 @@ import type { AppRouter } from "@waltning/api/router-type";
 import { ruleZeroFetch, WALTNING_HEADER } from "@waltning/core";
 
 const API = process.env["E2E_API_URL"] ?? "http://127.0.0.1:3000";
-const METRO = process.env["E2E_WEB_URL"] ?? "http://localhost:8081";
+/** Metro in development, Caddy in the appliance — the check is the same. */
+const WEB = process.env["E2E_WEB_URL"] ?? "http://localhost:8081";
 const WRITE = process.argv.includes("--write");
 
 /* ── reporting ──────────────────────────────────────────────────────────── */
@@ -229,17 +230,21 @@ async function write(): Promise<void> {
 }
 
 async function web(): Promise<void> {
-  section(`Web bundle  ${METRO}`);
+  section(`Web bundle  ${WEB}`);
 
   try {
-    const res = await fetch(METRO, { signal: AbortSignal.timeout(3000) });
-    if (res.ok) pass("Metro is serving", `status ${res.status}`);
-    else fail("Metro is serving", `status ${res.status}`);
+    // Deliberately not named after Metro. This same check runs against the
+    // appliance, where Caddy serves the bundle and Metro is not involved at
+    // all — reporting "Metro is serving" there would be a confident false
+    // statement about which half of the system just answered.
+    const res = await fetch(WEB, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) pass("the bundle is being served", `status ${res.status}`);
+    else fail("the bundle is being served", `status ${res.status}`);
   } catch {
     // Not a failure: the API half is independently useful, and the web leg is
     // often simply not started. Counting it as a failure would train people to
     // ignore a red result.
-    note(`not running — start it with pnpm dev:web (checked ${METRO})`);
+    note(`not running — start it with pnpm dev:web (checked ${WEB})`);
   }
 }
 
