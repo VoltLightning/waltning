@@ -1,74 +1,97 @@
 # Project Status
 
 **The specification is complete. The build is early.** Those are two different
-things, and this page exists so the first does not get mistaken for the second.
+things, and this page exists so the first is not mistaken for the second.
 
-## Specified
+## Where the build actually is
 
-Seventeen journeys and thirty-two screens, each written against its template
-with no section missing. All **75** numbered open questions across screens and
-flows are closed, with each decision recorded next to the question it answers
-rather than collected elsewhere, so the reasoning stays beside the thing it
-governs. The design system's own eleven are closed too.
+```mermaid
+graph TB
+    subgraph done["done"]
+        T["test harness<br/><i>a real database per test file</i>"]
+        REG["registry mechanism<br/><i>validate · gate · audit ·<br/>transaction · safe replay</i>"]
+        ROLE["non-superuser app role<br/><i>without it, permissions mean nothing</i>"]
+    end
 
-Three mechanical audits back that rather than resting on it: every screen and
-flow conforms to its template, every operation a screen references exists in the
-registry, and no `TODO`, `TBD` or unresolved marker remains outside the
-templates. Those audits run as tests, because a documented check that depends on
-someone remembering is not a check.
+    subgraph part["proven, but barely used"]
+        OPS["2 of ~110 actions"]
+        GATE["the gate decides —<br/>nothing calls it yet"]
+    end
 
-Depth is **declared, not uniform**. Every screen gets all nine sections; prose
-depth is tiered, and a tier-3 screen is not a stub — it is a screen whose open
-questions are worth more than its prose.
+    subgraph todo["not started"]
+        AGENT["AI runtime"]
+        SCREENS["screens"]
+        EXPORT["tax export path"]
+        DEPLOY["Dockerfile and deployment"]
+    end
 
-Ten adversarial reviews produced 101 findings, tracked with status in
+    done --> part --> todo
+```
+
+Foundations are in place: the test harness, the registry mechanism, and the
+non-superuser database role. The registry is proven end to end — declaring an
+action, validating its input, deciding whether it needs approval, doing the
+work, recording it, and surviving being sent twice. Each of those has a test
+that was **broken on purpose first**, to confirm it actually fails when it
+should.
+
+What does not exist yet is most of the surface.
+
+## What is specified
+
+Seventeen user journeys and thirty-two screens, each written against a template
+so a missing section is visible rather than merely absent. All **75** numbered
+open questions across the screens and journeys are decided, and each decision is
+recorded beside the question it answers rather than collected somewhere else —
+so the reasoning stays next to the thing it governs.
+
+Three mechanical audits back that up rather than resting on it: every screen and
+journey matches its template, every action a screen references exists in the
+registry, and no unresolved markers remain. Those audits run as **tests**,
+because a documented check that depends on someone remembering to run it is not
+a check.
+
+Depth is **declared, not uniform.** Every screen has all nine sections; how much
+prose each gets is tiered deliberately. A thin screen is not a stub — it is one
+whose open questions are worth more than its prose would be.
+
+Ten adversarial reviews produced 101 findings, tracked with their status in
 [`defects.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/defects.md).
-
-## Built
-
-Foundations are in place: the test harness, the operation registry mechanism,
-and the non-superuser application role. The registry is proven end to end —
-declaration, validation, audit, transaction, idempotent replay, and per-field
-gating, each with tests that were broken on purpose before being trusted.
-
-The work is organised into fifteen lanes of **kinds of work**, not a sequence;
-[`build-order.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/build-order.md)
-carries the ordering and the phase reasoning, including the three things
-deliberately *not* built.
 
 ## Known gaps — carried, not forgotten
 
-True at the time of writing. This list exists so that none of them becomes
+True at the time of writing. This list exists so none of them quietly becomes
 folklore.
 
-- **Two operations exist of about 110.** The mechanism is proven; the surface is
-  not.
-- **The gate decides, but nothing calls it yet.** The decision function and its
-  declaration check are tested; the agent runtime and the approval card that
-  consume them do not exist.
-- **`EXPORT_DATABASE_URL` is declared and never read** — the export path is not
-  built.
+- **Two actions exist out of roughly 110.** The mechanism is proven; the surface
+  is not.
+- **The approval gate decides, but nothing calls it yet.** The decision logic and
+  its declaration check are tested. The AI runtime and the approval card that
+  would consume them do not exist.
+- **`EXPORT_DATABASE_URL` is declared and never read** — the tax export path is
+  not built.
 - **`packages/ui` is declared and imported by nothing.** Zero components; it
-  typechecks an empty barrel.
-- **`pnpm dev` runs the API only**, not the app.
-- **`BUILD_SHA` has no injection path**, so the health endpoint always reports
-  `dev`. It needs a Dockerfile that does not exist yet.
-- **The FX carry and DST checks are not in the suite.** They encode real
-  reasoning and are still not executable as tests. `money.ts` itself is covered.
+  compiles an empty file.
+- **`pnpm dev` starts the API only**, not the app.
+- **The build identifier has no way of being set**, so the health endpoint always
+  reports `dev`. It needs a Dockerfile that does not exist yet.
+- **Two exchange-rate checks are not in the test suite.** They encode real
+  reasoning and are still not executable. The money module itself is covered.
 
 ## Not yet decided
 
-**On-device speech recognition** needs minutes on real hardware. It decides
-whether voice capture works offline; nothing earlier depends on it, so the
-registry, the API, the screens and the sync all proceed without knowing.
+**Speech recognition on the device** needs a few minutes on real hardware. It
+decides whether voice capture works with no signal. Nothing earlier depends on
+it, so the registry, the API, the screens and the sync all proceed without
+knowing the answer.
 
-**Push notifications** route through a third party under the current choice, in
-a system whose whole argument is physical custody. To be decided before push
-conditions ship — see [[Decisions]].
+**Push notifications** currently route through a third party's service, in a
+system whose entire argument is that you hold your own data. To be decided
+before push ships — see [[Decisions]].
 
 ## How to read this against the repository
 
 The specification describes the finished system in the present tense, because
 that is what a specification is for. **This page is where you find out what
-actually runs.** When the two disagree, this page is wrong and should be fixed —
-the repository is the record.
+actually runs.** When the two disagree, this page is the one that is wrong and
+should be fixed — the repository is the record.

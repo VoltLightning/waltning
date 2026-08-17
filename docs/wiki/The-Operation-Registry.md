@@ -1,110 +1,189 @@
 # The Operation Registry
 
-**Every write in the system is a named, validated, audited operation in one
-registry.** Screens and the agent are two consumers of the same declarations.
-There is no second path to the ledger, and in particular the agent does not get
-a weaker one.
+**Every change to your data is a named entry in one list.** Not "should be" — is.
+The screens and the AI assistant are two users of the same list, and there is no
+other way to write to the ledger.
 
 Specified in `SPEC.md` §11.0 and enumerated in
 [`operations.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/operations.md).
 
-## Why a registry at all
+## Why a list at all
 
-An LLM with database access is an LLM that can write any statement it can
-compose. The alternative most systems reach for is to generate SQL and review
-it, which asks a human to spot a wrong `WHERE` clause in a query they did not
-write — a review that looks like a control and functions as a rubber stamp.
+An AI model with database access can write any statement it can compose. The
+usual answer is to let it write SQL and have a human approve the query — which
+asks you to spot a wrong `WHERE` clause in a query you did not write, at the
+moment you are trying to get something done. That is a review that looks like a
+control and works like a rubber stamp.
 
-Here the agent gets **typed tools, not SQL** (§11.1). It cannot express an
-operation that does not exist, so the question stops being "is this query
-safe?" and becomes "should this operation exist?" — asked once, at design time,
-by someone with the whole system in view.
+Here the assistant gets **a fixed set of typed tools instead of SQL**. It cannot
+express an action that is not on the list. The question stops being "is this
+query safe?" and becomes "should this action exist?" — asked once, at design
+time, by someone with the whole system in view.
 
-The registry is also the reason the two consumers cannot drift. One declaration
-produces both the tRPC procedure and the agent tool schema. A write that a
-screen can perform and the agent cannot is not a thing you can accidentally
-build.
+The list is also why the two paths cannot drift apart. One declaration generates
+both the app's API call and the assistant's tool. An action the app can perform
+and the assistant cannot is not something you can build by accident.
 
-## What a declaration carries
+## What one entry declares
 
 ```ts
 {
-  name, input, kind,              // Zod schema; read or write
-  autoEligible, offlineEligible,  // may it auto-run? may it queue offline?
-  opVersion,                      // the outbox replays across app versions
-  taxSensitiveFields,             // fields that always need approval
-  audit,                          // entity, action, before/after
-  description,                    // what the agent is told it does
-  handler,
+  name,                 // "create_transaction"
+  input,                // the exact shape of acceptable input (a Zod schema)
+  kind,                 // read, or write
+  autoEligible,         // may this ever run without asking?
+  offlineEligible,      // may the phone queue this with no signal?
+  opVersion,            // which version of this action the queued write meant
+  taxSensitiveFields,   // fields that always need approval, whatever else is true
+  audit,                // what to record: entity, action, before, after
+  description,          // what the assistant is told this does
+  handler,              // the actual work
 }
 ```
 
-`offlineEligible` and `opVersion` exist because the phone's outbox can hold a
-write for days across an app update — see [[Offline and Sync]].
+**Zod** is a validation library: the schema is a value the code can inspect, not
+just a type that disappears when it compiles. That matters twice over — it
+checks input at runtime, *and* it can be read to generate the assistant's tool
+definition and to check declarations against each other.
 
-## Three things attached at declaration time
+`offlineEligible` and `opVersion` exist because the phone's queue can hold a
+write for days, across an app update. See [[Offline and Sync]].
 
-Each of these was, at some point, in the wrong place. The pattern in all three
-is the same: a control that depends on every future caller remembering is not a
-control.
+## What actually happens on a write
 
-**The audit row.** Not written by the router, because the agent calls the
-registry directly and never travels that path — it would have produced no audit
-trail, silently. Not written by each handler, because one eventually forgets.
-It is attached when the operation is *declared*, so there is no version of the
-operation without it.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as screen or assistant
+    participant R as registry entry
+    participant G as approval gate
+    participant DB as postgres
 
-**The transaction.** The handler, the audit row and the idempotency receipt
-share one transaction. This was enforced by types rather than by care: the
-receipt functions take a `Transaction`, not a database handle, so writing a
-receipt outside the transaction **fails to compile**. Before that change, a
-receipt written outside the transaction passed all nine of the tests written to
-cover it.
+    C->>R: invoke(raw input)
+    R->>R: validate against the schema
+    Note right of R: bad input is rejected here,<br/>before anything is touched
 
-**Idempotency.** An outbox entry can arrive twice — the phone lost the response,
-not the write. Replay is keyed on the entry plus a hash of the request, so a
-retry returns the original response and a *different* payload under a reused key
-is rejected rather than silently applied.
+    R->>G: is approval needed?
+    alt approval needed
+        G-->>C: show a diff card
+        C-->>G: you approve
+    end
 
-## The gate: why the tax boundary is a field boundary
+    rect rgba(128,128,128,0.2)
+        Note over R,DB: one transaction — all of it, or none of it
+        R->>DB: have we already done this exact request?
+        DB-->>R: no
+        R->>DB: do the work
+        R->>DB: write the audit row
+        R->>DB: write the replay receipt
+    end
+    DB-->>C: result
+```
 
-Writes gate by default. A bounded, opt-in grant can lift that for named
-operations — never permanently, never for deletes or configuration.
+The shaded block is one database transaction. If any line inside it fails,
+every line inside it is undone — you cannot end up with the change applied and
+the audit row missing, or the receipt written for work that did not happen.
 
-The subtlety is that **the grant is an operation boundary and the tax boundary
-is a field boundary**, and they do not line up. `update_transaction` is
-recategorisation — the obvious thing to auto-grant — and it is also the only way
-to write `is_business`. Grant recategorisation for a session and one tool call
-could move rows out of the tax view with no approval and no distinguishing
-mark. Under ryczałt the damaging direction is *out*.
+## Three things attached where they cannot be forgotten
 
-So eligibility is evaluated against **the fields a call actually writes**. Same
-operation, same grant: `{category_id}` runs; `{category_id, is_business}` stops
-for approval, and the card shows only the sensitive field with the rest already
-applied.
+Each of these was, at some point, in the wrong place. The pattern is identical
+in all three: **a control that depends on every future caller remembering is not
+a control.**
 
-The sensitive-field check runs *before* the grant check, so the recorded reason
-is why the call was really gated. An audit trail saying `write-by-default` for a
-tax-sensitive write reads wrong six months later.
+**The audit row.** Not written by the API layer, because the assistant calls the
+registry directly and never passes through it — that path would have produced no
+audit trail at all, silently. Not written by each individual handler, because
+one of them eventually forgets. It is attached when the action is *declared*, so
+there is no version of the action that lacks it.
 
-**The check that earns its place guards an operation that does not exist yet.**
-Any operation whose input schema accepts a tax-sensitive field must declare it,
-and forgetting fails the build — because whoever writes `update_transaction`
-will be thinking about categories, not about `is_business`. The converse is
-checked too: you cannot declare a field you cannot write, which catches the
-copy-paste that would otherwise look like caution.
+**The transaction.** The work, the audit row and the replay receipt share one.
+This is enforced by the type system rather than by care: the receipt functions
+accept only a transaction, not a plain database connection, so writing a receipt
+outside the transaction **fails to compile**. Before that change, a receipt
+written outside the transaction passed all nine of the tests written to cover
+it.
 
-## What is deliberately not an operation
+**Replay safety.** The phone can send the same queued write twice — it lost the
+*response*, not the write. Each attempt carries the queue entry's id plus a
+fingerprint of the request. Sending it again returns the original answer instead
+of doing the work twice; sending *different* content under the same id is
+rejected rather than quietly applied.
 
-Reads. They auto-run and are never gated — the agent is expected to look around
-freely, and a confirmation prompt on every query trains you to click through
-prompts.
+## The approval gate
 
-Also not operations: anything that is a *report* rather than a write. A category
-change can move tax scope indirectly, and it is deliberately absent from the
-sensitive list — that surfaces at period close as a report (§13.4). The point of
-the list is that nothing silently changes a filed figure, not that no figure may
-ever move.
+Writes need approval by default. You can grant the assistant permission to run
+specific actions without asking — always scoped to named actions, always
+expiring, never covering deletions or settings.
 
-`operations.md` closes with the two inconsistencies that compiling the list
-caught, which is the argument for having compiled it.
+```mermaid
+graph TB
+    START(["a write is requested"]) --> READ{"is it a read?"}
+    READ -->|yes| RUN(["run it — reads are never gated"])
+    READ -->|no| SENS{"does this call write<br/>a tax-sensitive field?"}
+    SENS -->|yes| ASK(["ask — and show only<br/>those fields on the card"])
+    SENS -->|no| AUTO{"is this action ever<br/>allowed to auto-run?"}
+    AUTO -->|no| ASK2(["ask"])
+    AUTO -->|yes| GRANT{"is there a live grant<br/>naming this action?"}
+    GRANT -->|no| ASK3(["ask"])
+    GRANT -->|expired| ASK4(["ask"])
+    GRANT -->|yes| RUN2(["run it"])
+```
+
+### Why the tax check comes first
+
+Notice that the tax-sensitive question is asked **before** anything about
+permission. That ordering is not cosmetic. With it reversed, a call with no
+permission at all would be recorded as "stopped because writes need approval" —
+and six months later the audit trail would give the wrong reason for the most
+important decision it recorded.
+
+### Why it checks fields and not just actions
+
+**Your permission grant covers actions. The tax boundary runs through fields.
+They do not line up.**
+
+Recategorising a transaction is the obvious thing to let the assistant do
+unattended — it is tedious, frequent, and low-stakes. But recategorising is
+`update_transaction`, and `update_transaction` is also the only way to set
+`is_business`, the flag that decides whether a transaction is inside your tax
+scope at all.
+
+Grant it for a session and a single tool call could move forty transactions out
+of your tax view with no approval and nothing marking them as changed. Under
+ryczałt — the Polish lump-sum scheme this ledger files under, where tax is owed
+on revenue with no deduction for costs — the damaging direction is *out*.
+
+So permission is decided against **the fields a call actually writes**, not the
+action it belongs to. Same action, same grant:
+
+| The call writes | What happens |
+|---|---|
+| `{ category_id }` | Runs. This is the case the grant was for |
+| `{ category_id, is_business }` | Stops. The card shows only `is_business`; the category change is already applied |
+
+### The check that guards code nobody has written
+
+The most valuable test on this page protects an action **that does not exist
+yet.** Any action whose input accepts a tax-sensitive field must declare it, and
+forgetting fails the build — because whoever eventually writes
+`update_transaction` will be thinking about categories, not about a tax flag
+they have never had to consider.
+
+The reverse is checked too: you cannot declare a field your action cannot
+actually write. That catches the copy-paste that would otherwise look like
+caution and quietly mean nothing.
+
+## What is deliberately not on the list
+
+**Reads.** They run freely and are never gated. The assistant is meant to look
+around, and a confirmation prompt on every question trains you to click through
+prompts — which is how the prompts that matter stop being read.
+
+**Reports, as opposed to changes.** Changing a category *can* shift tax scope
+indirectly, and it is deliberately absent from the sensitive-field list. That
+case surfaces as a report when you close a tax period, not as a block on
+everyday work. The point of the list is that nothing silently alters a figure
+you have already filed — not that no figure may ever move.
+
+`operations.md` ends with the two contradictions that compiling the list
+uncovered, which is the argument for having compiled it.

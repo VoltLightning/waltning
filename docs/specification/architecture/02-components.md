@@ -15,29 +15,29 @@ hop.
 ```mermaid
 graph TB
     subgraph edge["Edge"]
-        HTTP["Hono HTTP<br/><small>auth §5.2 · rate limit · session</small>"]
+        HTTP["Hono HTTP<br/><i>auth §5.2 · rate limit · session</i>"]
         TRPC["tRPC router<br/><i>generated</i>"]
         TOOLS["Agent tools<br/><i>generated</i>"]
     end
 
-    REG["<b>operation registry</b><br/>~70 operations<br/><small>name · Zod input · write flag ·<br/>auto-eligible · audit spec · model description</small>"]
+    REG["<b>operation registry</b><br/>~70 operations<br/><i>name · Zod input · write flag ·<br/>auto-eligible · audit spec · model description</i>"]
 
     subgraph domain["Domain services"]
-        LEDGER["<b>ledger</b><br/><small>transactions, lines, balances</small>"]
-        FXS["<b>fx</b><br/><small>sync, coverage, override</small>"]
-        IMPORT["<b>import</b><br/><small>parse → classify → review</small>"]
-        RECEIPT["<b>receipts</b><br/><small>capture → extract → split</small>"]
-        AGENT["<b>agent</b><br/><small>loop, memory, gates</small>"]
-        TAX["<b>tax</b><br/><small>periods, schemes, export</small>"]
-        RECUR["<b>recurring</b><br/><small>projection, materialization</small>"]
+        LEDGER["<b>ledger</b><br/><i>transactions, lines, balances</i>"]
+        FXS["<b>fx</b><br/><i>sync, coverage, override</i>"]
+        IMPORT["<b>import</b><br/><i>parse → classify → review</i>"]
+        RECEIPT["<b>receipts</b><br/><i>capture → extract → split</i>"]
+        AGENT["<b>agent</b><br/><i>loop, memory, gates</i>"]
+        TAX["<b>tax</b><br/><i>periods, schemes, export</i>"]
+        RECUR["<b>recurring</b><br/><i>projection, materialization</i>"]
     end
 
     subgraph infra["Infrastructure"]
-        DB["db · Drizzle<br/><small>app role</small>"]
-        DBX["db · export<br/><small>waltning_export role</small>"]
+        DB["db · Drizzle<br/><i>app role</i>"]
+        DBX["db · export<br/><i>waltning_export role</i>"]
         BLOB["blobs · MinIO"]
-        MODELS["model gateway<br/><small>per-surface config §11.4</small>"]
-        RATES["rate adapters<br/><small>ECB · NBP · NBRB · NBG</small>"]
+        MODELS["model gateway<br/><i>per-surface config §11.4</i>"]
+        RATES["rate adapters<br/><i>ECB · NBP · NBRB · NBG</i>"]
     end
 
     HTTP --> TRPC
@@ -141,7 +141,7 @@ differ.
 graph LR
     IN["turn"] --> CTX
     subgraph CTX["context assembly"]
-        MEM["agent_memory<br/><small>behaviour, never facts</small>"]
+        MEM["agent_memory<br/><i>behaviour, never facts</i>"]
         SUM["running summary"]
         HIST["recent messages"]
     end
@@ -172,8 +172,8 @@ so the user can see exactly what the agent believes about how to work.
 ```mermaid
 graph TB
     UI["screens (30)"] --> COMP["design-system components"]
-    UI --> Q["query layer<br/><small>tRPC client + cache</small>"]
-    Q --> OUTBOX["SQLite outbox<br/><small>mobile only</small>"]
+    UI --> Q["query layer<br/><i>tRPC client + cache</i>"]
+    Q --> OUTBOX["SQLite outbox<br/><i>mobile only</i>"]
     OUTBOX -->|"on reconnect"| API["api"]
     Q -->|online| API
 ```

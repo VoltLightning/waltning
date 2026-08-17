@@ -41,6 +41,30 @@ Composition happens at the registry on the server and in `app/` routes on the
 client. Two modules that need each other are usually one module, or want a
 third that both depend on. `tests/module-boundaries.test.ts` enforces it.
 
+```mermaid
+graph TB
+    REG["<b>registry/</b><br/><i>composition root</i>"]
+
+    subgraph mods["modules/"]
+        direction LR
+        TX["<b>transactions/</b><br/><i>index.ts</i>"]
+        FX["<b>fx/</b><br/><i>index.ts</i>"]
+        CP["<b>counterparties/</b><br/><i>index.ts</i>"]
+    end
+
+    COMMON["<b>common/</b> · <b>infra/</b><br/><i>no domain knowledge</i>"]
+
+    REG --> TX & FX & CP
+    TX --> COMMON
+    FX --> COMMON
+    CP --> COMMON
+    TX -.->|"forbidden"| FX
+    FX -.->|"forbidden"| CP
+```
+
+The dotted edges are what the boundary test refuses. They are the edges that
+appear first under deadline, and the ones least visible in a diff.
+
 ### Layers did not go away
 
 They moved inside the slice. The operation validates, gates and audits; the
@@ -53,6 +77,16 @@ scattered across three top-level folders that each contain every domain.
 | operation | Validate, gate, audit, orchestrate | Arithmetic, or a business rule |
 | service | Domain logic, one module each | Sees a request, header, or tRPC context |
 | infra | Talks to Postgres, MinIO, model providers | Knows what a transaction *means* |
+
+```mermaid
+graph LR
+    IN(["a call arrives"]) --> OP["<b>operation</b><br/><i>validate · gate · audit</i>"]
+    OP --> SVC["<b>service</b><br/><i>domain logic</i>"]
+    SVC --> INFRA["<b>infra</b><br/><i>drivers, clients</i>"]
+    INFRA --> PG[("<b>postgres</b><br/><i>constraints · triggers · grants</i>")]
+```
+
+The three layers of the table, in one slice rather than three folders.
 
 **Services compute; Postgres enforces.** Anything phrased as "must never" gets
 both — the service check for a good error message, the constraint for when the

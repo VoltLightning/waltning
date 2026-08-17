@@ -1,147 +1,171 @@
 # Decisions
 
-The full stack table with a *why* against every row is `SPEC.md` §4.3, and it is
-the authority. This page holds the ones that surprise people, the ones that were
-refused, and the ones that were reached during the build rather than before it.
+The full table, with a reason against every row, is `SPEC.md` §4.3 and it is the
+authority. This page holds the ones that surprise people, the ones that were
+refused, and the ones reached during the build rather than before it.
 
 ## Refusals
 
-**No Turborepo or Nx.** Four packages and no CI — there is nothing to cache.
+**No monorepo build tool** (Turborepo, Nx). Those exist to cache work across
+many packages and many CI runs. There are four packages here and no CI — there
+is nothing to cache.
 
-**No GraphQL.** One consumer. tRPC is strictly less machinery for the same
-end-to-end types.
+**No GraphQL.** It solves the problem of many different clients each wanting a
+different shape of data. There is one client. tRPC gives the same end-to-end
+types with far less machinery.
 
 **No Kubernetes.** It is one Raspberry Pi.
 
-**No Prisma.** Its engine binary is a liability on ARM. Drizzle produces SQL you
-can read and migrations you can review, which matters when the migrations carry
-triggers and grants.
+**No Prisma.** Its query engine ships as a compiled binary, which is a liability
+on ARM hardware. Drizzle produces SQL you can read and migrations you can
+review — which matters when the migrations carry triggers and permissions.
 
-**No logo CDN for service icons.** Fetching `netflix.com`'s logo at render time
-tells a third party what you subscribe to, and breaks offline rendering. Icons
-are bundled. Brands do occasionally get removed from the icon set for legal
-reasons, so a contract test asserts every catalog slug still resolves — the
-upgrade fails loudly rather than rendering blanks.
+**No logo service for subscription icons.** Fetching Netflix's logo from a CDN
+at render time tells a third party that you pay for Netflix, and breaks when
+you are offline. Icons are bundled with the app instead. Brands do occasionally
+get removed from icon sets for legal reasons, so a test checks every icon in the
+catalogue still resolves — an upgrade that drops one fails loudly instead of
+rendering blanks.
 
-**No persisted client cache.** Persisting TanStack Query to disk is the standard
-Expo pattern, and it would silently promote arbitrary server responses into the
-encrypted container, breaking the enumerated tier list in §14.3.
+**No saving the client's data cache to disk.** Storing it is the standard
+pattern for this stack, and it would quietly copy arbitrary server responses
+into the phone's encrypted storage — breaking the explicit list of what is
+allowed to live there.
 
-**No `drizzle-kit push`, ever.** It cannot see triggers, views, grants or
-generated columns — precisely the objects that carry the guarantees.
+**Never `drizzle-kit push`.** It compares your schema file to the database and
+applies the difference, but it cannot see triggers, views, permissions or
+generated columns. Those are precisely the objects carrying the guarantees, so
+it would report success while removing them.
 
 ## No CI, and what that costs
 
 Recorded in
 [`architecture/07`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/07-test-strategy.md).
-Four packages, one developer.
+Four packages, one developer, no automated build running on push.
 
-The consequence is the important part: **`.githooks/pre-commit` is the only
-automated thing between an edit and history**, which raises its importance
-rather than lowering it. It is installed by `git config core.hooksPath` from
-`prepare`, so there is no hook-manager dependency to keep current, and it is
-budgeted under two seconds so it is never worth skipping — a gate people skip is
-not a gate.
+The consequence is the important part. **The pre-commit hook is the only
+automated thing between an edit and the project's history**, which raises its
+importance rather than lowering it. It is installed by pointing git's hooks
+directory at a folder in the repository, so there is no hook-manager dependency
+to keep current, and it is kept under two seconds so it is never worth skipping.
+A gate people skip is not a gate.
 
-It refuses key material and financial-data file types **even when force-added**,
-sweeps the staged diff against a gitignored list of real terms, formats and
-lints staged files without rewriting them, typechecks the whole program, and
-runs the tests.
+Two lessons are baked into it, and both are the same shape:
 
-Two lessons are baked into it:
+**It asks git what is ignored instead of guessing.** The check for "files
+someone force-added past the ignore rules" originally re-implemented a subset of
+those rules by hand. The two copies drifted the day it was written, and several
+kinds of sensitive file sailed straight through. Asking git directly inherits
+every present and future rule.
 
-- The force-add check originally re-implemented a subset of `.gitignore` by
-  hand, and the two drifted the day it was written. Asking `git check-ignore`
-  instead inherits every present and future rule.
-- That fix was itself broken. `git check-ignore` consults the index, and a
-  force-added path is *tracked* — so ignore rules stop applying and it returns
-  "not ignored" for exactly the files the guard exists to catch. `--no-index` is
-  load-bearing; without it the entire section is a no-op that looks like a
-  control.
+**That fix was itself broken.** `git check-ignore` consults the index, and a
+force-added file is *already tracked* — so ignore rules stop applying to it, and
+the command cheerfully returns "not ignored" for exactly the files the check
+exists to catch. One flag, `--no-index`, is load-bearing. Without it the entire
+section was a no-op that looked like a control, and only re-running the original
+attack found it.
 
-## Biome, and why no named style guide
+## One tool for formatting and linting
 
-Airbnb's config last shipped in 2021 and caps at ESLint 8; Standard caps at 8
-too. Neither installs against a modern toolchain without `--force`.
+**Biome**, replacing Prettier, ESLint and three companion packages whose
+versions all have to agree with each other.
 
-They died for a reason worth understanding: most of their rules were
-*formatting* rules, and formatters made those obsolete. What replaced the style
-guide is a division of labour — **the formatter owns formatting and you take its
-defaults; the linter owns correctness only.** There is no modern equivalent of
-"we follow Airbnb", and adopting one would be a 2021 answer to a 2021 problem.
+### Why no named style guide
 
-Biome is one binary in place of five packages whose versions must agree, and it
-is fast enough to sit inside a two-second gate that also runs on the Pi.
+Airbnb's config last shipped in 2021 and supports up to ESLint 8; Standard's
+caps at 8 as well. The current ESLint is 10. Neither installs against a modern
+toolchain without forcing it.
 
-What this gives up is named rather than hidden: `eslint-plugin-drizzle`, whose
-two rules catch an `update` or `delete` with no `WHERE` — a real hazard in a
-ledger. The compensating controls are the operation registry and the period
-guard trigger, and if it ever bites, adding ESLint for that one plugin is
-contained.
+They died for a reason worth understanding. Most of their rules were
+**formatting** rules, and automatic formatters made those obsolete. What
+replaced the style guide is a division of labour:
+
+> **The formatter owns formatting, and you take its defaults.**
+> **The linter owns correctness, and nothing else.**
+
+There is no modern equivalent of "we follow Airbnb". Adopting one would be a
+2021 answer to a 2021 problem.
+
+Speed mattered too: this runs inside a two-second commit gate, and again on the
+Pi before cutover.
+
+**What this gives up is named rather than hidden.** There is an ESLint plugin
+whose two rules catch an `UPDATE` or `DELETE` with no `WHERE` clause — a real
+hazard in a ledger. The compensating controls are that every write goes through
+the registry and that a database trigger blocks edits to already-filed rows. If
+it ever bites, adding ESLint back for that one plugin is contained: Biome keeps
+formatting, ESLint lints.
 
 ## `unknown`, `any` and `never` are discouraged
 
-`any` and non-null assertion are lint **errors** and fail the gate. Beyond that:
-**type parameters before `unknown`, `any` or `never`.**
+`any` and the non-null assertion `!` are **errors** that fail the gate. Beyond
+that, the rule is: **reach for a type parameter before reaching for `unknown`,
+`any` or `never`.**
 
-`unknown` as a placeholder is a design smell rather than a safe default. It
-pushes a cast to every call site and discards the type the caller already had —
-so it does not remove the risk, it relocates it to wherever the code is least
-reviewed. Make it generic instead.
+Using `unknown` as a placeholder looks like the safe choice and is not. It does
+not remove the risk — it moves it. The caller had a real type; `unknown`
+discards it and forces a cast at every call site, which is to say it relocates
+the danger to wherever the code is least reviewed. A type parameter keeps the
+caller's type and lets the compiler carry it through.
 
-Legitimate uses exist and each is worth a comment: `catch` bindings, where the
-language gives no choice; JSON off the wire; `unknown` in a *constraint*
-position for a deliberately heterogeneous collection; `never` for exhaustiveness.
+Legitimate uses exist, and each is worth a comment explaining itself: catching
+an error, where the language gives no choice; JSON arriving from outside; a
+deliberately mixed collection where `unknown` appears as a *constraint*; and
+`never` to prove a switch handled every case.
 
-**A loose type at a seam is where contracts leak.** Concrete declarations are
-usually fine — it is the generic collection that holds them where `unknown`
-creeps in and validation quietly becomes skippable. Those seams are pinned with
-compile-time assertions in `contract.types.ts`, and each assertion was broken
-once on purpose to prove it fails.
+**Loose types leak at the seams.** The individual declarations are usually fine.
+It is the generic container holding them where `unknown` creeps in and
+validation quietly becomes optional. Those seams are pinned with
+compile-time assertions in a dedicated file, and each assertion was broken once
+on purpose to confirm it fails.
 
 ## One codebase for iOS and web
 
-Expo with React Native Web, one `expo-router` tree, rather than a React Native
-app plus a separate React site. The reasoning and the friction points are in
+Expo with React Native Web and a single file-based route tree, rather than a
+React Native app plus a separate React website. The reasoning and the friction
+points are in
 [`platform-notes`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/design-system/11-platform-notes.md);
-charts are the known rough edge, and treemap is the one component likely to need
-a web-only path.
+charts are the known rough edge, and one chart type will probably need a
+web-only version.
 
-One trap that costs an afternoon: **files with platform variants must be
-imported without an extension.** `./Button.tsx` silently ignores `Button.web.tsx`
-and nothing errors. Everywhere else, explicit `.ts` specifiers.
+Two traps that each cost an afternoon:
 
-Another: **install Expo packages with `expo install`, never npm latest.** SDK 57
-wants React Native 0.86.2; pinning 0.87.0 breaks the web bundler with an error
-that names a missing polyfill file rather than a version mismatch.
+**Files with platform-specific versions must be imported without an extension.**
+Writing `./Button.tsx` silently ignores `Button.web.tsx`, and nothing errors —
+you just get the wrong component on the web. Everywhere else, extensions are
+explicit.
 
-## Modules first, layers inside them
+**Install Expo packages with `expo install`, not the latest from npm.** The SDK
+pins a specific React Native version. Installing a newer one breaks the web
+bundler with an error naming a missing internal file, which points nowhere near
+the actual cause.
 
-Not `controllers/`, `services/`, `models/` as three global folders. A change to
-one feature would touch all three and read as three unrelated edits, and nothing
-would stop feature A reaching into feature B.
+## Features first, layers inside them
 
-Modules own their whole vertical slice, only `index.ts` is public, and no module
-imports another — composition happens at the registry or in routes. A boundary
-test enforces it, because a forbidden import is invisible in review and obvious
-to a script.
+Not global `controllers/`, `services/`, `models/` folders. One change would
+touch all three and read as three unrelated edits, and nothing would stop one
+feature reaching into another's internals.
 
-Atomic design applies as a **scale inside a UI module**, not as three global
-folders. A component moves to `packages/ui` when a *second* feature uses it —
-not when it looks generic.
+Each feature owns its whole vertical slice, only its entry file is public, and
+no feature imports another — they are composed at the registry or in the route
+tree. A test enforces it, because a forbidden import is easy to miss in review
+and trivial for a script to find.
 
-**No abstraction before the third use.** No repositories over Drizzle, no
-generic helpers, no event bus, no managers.
+Atomic design — atoms, molecules, organisms — is a **scale inside one feature**,
+not three global folders. A component moves to the shared package when a
+*second* feature uses it, not when it looks reusable.
+
+**No abstraction before the third use.** Two similar things are a coincidence.
 
 ## Provisional, and named as such
 
 | Decision | Status |
 |---|---|
-| **Push notifications** | `expo-notifications` routes through Expo's push service — a third party in the path of a system whose whole argument is physical custody. Direct APNs keeps it first-party at the cost of an Apple key and more code. Decide before S30's push conditions ship |
-| **Speech recognition** | Pending an on-device `en-*` spike on real hardware. If it works, `expo-speech-recognition`; if not, S08 voice capture stays online-only and the capture grammar carries offline entry |
+| **Push notifications** | The standard Expo route sends notifications through Expo's own service — a third party in the path of a system whose whole argument is that you hold your own data. Talking to Apple directly keeps it first-party, at the cost of a signing key and more code. Decide before push ships |
+| **Speech recognition** | Waiting on a test with real hardware. If on-device recognition works, voice capture works offline; if not, it stays online-only and the typed capture grammar covers the offline case |
 
 ## Package names and APIs move
 
 §4.3 records **what was chosen and why**. The *why* is the part that survives a
-version bump; verify the package against its current documentation when you add
+version bump — check the package against its current documentation when you add
 it.

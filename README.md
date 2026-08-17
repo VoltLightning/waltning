@@ -34,18 +34,18 @@ and give you a subscription and an export button. Waltning inverts that:
 ```mermaid
 graph LR
     subgraph tailnet["Tailscale — the only way in"]
-        PHONE["mobile<br/><small>Expo · SQLite outbox</small>"]
-        WEB["web dashboard<br/><small>same codebase, static export</small>"]
+        PHONE["mobile<br/><i>Expo · SQLite outbox</i>"]
+        WEB["web dashboard<br/><i>same codebase, static export</i>"]
         subgraph pi["Raspberry Pi · Docker Compose"]
             CADDY["caddy"]
-            API["api<br/><small>Hono + tRPC</small>"]
+            API["api<br/><i>Hono + tRPC</i>"]
             PG[("postgres 16")]
-            MINIO[("minio<br/><small>receipts</small>")]
+            MINIO[("minio<br/><i>receipts</i>")]
         end
     end
-    FX["FX rates<br/><small>ECB · NBP · …</small>"]
+    FX["FX rates<br/><i>ECB · NBP · …</i>"]
     LLM["model providers"]
-    B2["Backblaze B2<br/><small>encrypted backups</small>"]
+    B2["Backblaze B2<br/><i>encrypted backups</i>"]
 
     PHONE & WEB -->|tRPC| CADDY --> API
     API --> PG & MINIO

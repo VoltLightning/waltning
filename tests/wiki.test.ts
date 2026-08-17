@@ -122,4 +122,13 @@ describe("the checks above are not vacuous", () => {
     expect(wikiLinksIn(text.get("Home.md") ?? "").length).toBeGreaterThan(5);
     expect(mdTargetsIn(text.get("Home.md") ?? "").length).toBeGreaterThan(0);
   });
+
+  it("closes every code fence", () => {
+    // An unclosed fence turns the rest of a page into one code block. The
+    // diagrams themselves are checked in `diagrams.test.ts`.
+    const unbalanced = [...text]
+      .filter(([, t]) => (t.match(/```/g) ?? []).length % 2 !== 0)
+      .map(([file]) => file);
+    expect(unbalanced, "unbalanced code fences").toEqual([]);
+  });
 });

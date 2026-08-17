@@ -19,12 +19,12 @@ graph TB
         W["<b>Waltning</b><br/>self-hosted personal finance<br/>7 currencies · 5 yrs history"]
     end
 
-    MM["Money Manager<br/><i>.mmbak</i> exports<br/><small>read-only, one direction</small>"]
-    BANK["Banks<br/><i>.xls / .csv</i> statements<br/><small>manual download</small>"]
-    FX["FX rate providers<br/>ECB · NBP · NBRB · NBG<br/><small>free, unauthenticated</small>"]
-    LLM["Model providers<br/>OpenRouter · OpenAI<br/><small>per surface (§11.4)</small>"]
-    B2["Backblaze B2<br/><small>age-encrypted backups</small>"]
-    KSEF["KSeF<br/><small>PL e-invoicing — read-only ref</small>"]
+    MM["Money Manager<br/><i>.mmbak</i> exports<br/><i>read-only, one direction</i>"]
+    BANK["Banks<br/><i>.xls / .csv</i> statements<br/><i>manual download</i>"]
+    FX["FX rate providers<br/>ECB · NBP · NBRB · NBG<br/><i>free, unauthenticated</i>"]
+    LLM["Model providers<br/>OpenRouter · OpenAI<br/><i>per surface (§11.4)</i>"]
+    B2["Backblaze B2<br/><i>age-encrypted backups</i>"]
+    KSEF["KSeF<br/><i>PL e-invoicing — read-only ref</i>"]
 
     V -->|"iPhone, laptop"| W
     MM -.->|"one-off migration<br/>+ periodic sync"| W
@@ -70,18 +70,18 @@ authoritative for filing as out of scope.
 ```mermaid
 graph TB
     subgraph clients["Clients"]
-        IOS["<b>mobile</b> — Expo/RN<br/>iOS + web from one codebase<br/><small>SQLite outbox · expo-secure-store</small>"]
-        WEB["<b>web</b> — same Expo build<br/><small>dashboard · import review · reports</small>"]
+        IOS["<b>mobile</b> — Expo/RN<br/>iOS + web from one codebase<br/><i>SQLite outbox · expo-secure-store</i>"]
+        WEB["<b>web</b> — same Expo build<br/><i>dashboard · import review · reports</i>"]
     end
 
     subgraph pi["Raspberry Pi 4 · Docker Compose · boot from SSD"]
-        CADDY["<b>caddy</b><br/><small>TLS from Tailscale certs</small>"]
-        API["<b>api</b> — Hono + tRPC<br/><small>the only writer to Postgres</small>"]
-        PG[("<b>postgres:16</b><br/><small>33 tables · triggers · views</small>")]
-        MINIO[("<b>minio</b><br/><small>receipt images, age-encrypted</small>")]
+        CADDY["<b>caddy</b><br/><i>TLS from Tailscale certs</i>"]
+        API["<b>api</b> — Hono + tRPC<br/><i>the only writer to Postgres</i>"]
+        PG[("<b>postgres:16</b><br/><i>33 tables · triggers · views</i>")]
+        MINIO[("<b>minio</b><br/><i>receipt images, age-encrypted</i>")]
     end
 
-    EXPORT["<b>export role</b><br/>waltning_export<br/><small>SELECT on tax_ledger only</small>"]
+    EXPORT["<b>export role</b><br/>waltning_export<br/><i>SELECT on tax_ledger only</i>"]
 
     IOS -->|tRPC/HTTPS| CADDY
     WEB -->|tRPC/HTTPS| CADDY
@@ -145,23 +145,23 @@ custody (§1.3, O17) and because the hardware has exactly one of everything.
 ```mermaid
 graph TB
     subgraph home["Home"]
-        ROUTER["Router<br/><small>ISP · DHCP reservation for the Pi</small>"]
+        ROUTER["Router<br/><i>ISP · DHCP reservation for the Pi</i>"]
         subgraph pi["<b>Raspberry Pi 4 · 4 GB</b>"]
-            SSD[("<b>USB 3 SSD</b><br/><small>boot + data<br/>NOT an SD card</small>")]
-            OS["Raspberry Pi OS 64-bit<br/><small>Docker Compose · Tailscale</small>"]
+            SSD[("<b>USB 3 SSD</b><br/><i>boot + data<br/>NOT an SD card</i>")]
+            OS["Raspberry Pi OS 64-bit<br/><i>Docker Compose · Tailscale</i>"]
             OS --- SSD
         end
         ROUTER --- pi
     end
 
     subgraph devices["Devices — each an enrolled tailnet node"]
-        PHONE["iPhone<br/><small>Expo app · outbox · replica</small>"]
-        LAPTOP["Laptop<br/><small>browser · dev machine</small>"]
+        PHONE["iPhone<br/><i>Expo app · outbox · replica</i>"]
+        LAPTOP["Laptop<br/><i>browser · dev machine</i>"]
     end
 
     subgraph off["Off-site"]
-        B2[("Backblaze B2<br/><small>age-encrypted</small>")]
-        KEY["age key<br/><small>hardware token + paper</small>"]
+        B2[("Backblaze B2<br/><i>age-encrypted</i>")]
+        KEY["age key<br/><i>hardware token + paper</i>"]
     end
 
     PHONE -.->|WireGuard| TS(("Tailscale<br/>coordination"))
@@ -232,7 +232,7 @@ graph LR
         A["Auth §5.2 · operation registry<br/>approval gates §11.2"]
     end
     subgraph tb4["④ Database"]
-        DB["Triggers · CHECKs · role privileges<br/><small>the layer that holds when code is wrong</small>"]
+        DB["Triggers · CHECKs · role privileges<br/><i>the layer that holds when code is wrong</i>"]
     end
 
     D --> T --> A --> DB
