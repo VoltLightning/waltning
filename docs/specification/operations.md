@@ -181,6 +181,23 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 - **Raw SQL.** Text-to-SQL over a financial ledger trades unbounded blast radius
   for marginal flexibility (§11.1).
 - **The display currency.** A client preference; it writes nothing (§7.0).
+- **`retry_entry` · `edit_entry` · `discard_entry`.** S30's outbox controls, and
+  the reason they are excluded is not bookkeeping. **The outbox is device
+  state** (`architecture/08`): it lives on one phone, the server has no such
+  table, and there is nothing for an API operation to execute. `retry_entry`
+  does not even name an action of its own — it re-sends whatever operation the
+  entry already holds.
+
+  The consequence of getting this wrong runs the other way. Registry operations
+  generate agent tools (§11.0), so a registered `discard_entry` would let the
+  agent drop queued writes — and a queued write is precisely one the server has
+  never seen, so there is no audit row, no `before`, and nothing to notice it
+  by. The one class of write whose loss is invisible is the one this would hand
+  over.
+
+  S30's own §5 says *"every write goes through the operation registry, so the
+  agent inherits them"* about the paragraph's other writes. These three sit in
+  the same column and are the exception.
 
 ## Auto-mode, restated as a rule
 

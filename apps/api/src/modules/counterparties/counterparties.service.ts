@@ -60,7 +60,10 @@ export async function insertCounterparty(
         `a counterparty named "${input.name}" already exists`,
         // Names match ignoring case and surrounding whitespace, so the
         // conflicting row may not look identical to what was typed.
-        { field: "name", constraint: "counterparties_name_uq" },
+        {
+          fieldErrors: [{ path: "name", message: "that name is already taken" }],
+          constraint: "counterparties_name_uq",
+        },
       );
     }
     throw e;

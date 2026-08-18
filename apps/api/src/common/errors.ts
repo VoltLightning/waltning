@@ -42,8 +42,21 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
  * and `unknown` here meant every consumer cast before it could show anything.
  */
 export type ErrorDetails = {
-  /** The input field at fault, for `validation`. */
-  field?: string;
+  /**
+   * Field-level validation failures, for `validation` only
+   * (`architecture/12`).
+   *
+   * A list rather than `Record<string, string>` because two issues on one
+   * field is ordinary — *required* and *must be positive* — and a record
+   * silently keeps the last one. `path` is dotted and may index, because Zod
+   * issue paths are `PropertyKey[]` and `set_transaction_lines` genuinely
+   * produces `lines.2.amount`.
+   *
+   * **Not `fields`.** That key is taken, four lines down, by §11.2's
+   * tax-sensitive field list — and a client that confused the two would render
+   * an approval card's disclosure as a form error.
+   */
+  fieldErrors?: readonly { path: string; message: string }[];
   /** The database constraint that refused it, when one did. */
   constraint?: string;
   /** The period that is closed, for `period_closed`. */
@@ -111,7 +124,11 @@ export class DomainError<Details extends ErrorDetails = ErrorDetails> extends Er
  */
 export const STATUS_BY_CODE: Record<ErrorCode, number> = {
   period_closed: 409,
-  validation: 400,
+  // 422, not 400: the body parsed and the values were wrong, which is the only
+  // condition under which `fieldErrors` can name anything. A body that never
+  // parsed has no fields to name and is not this code at all — see
+  // `mapTrpcCode`.
+  validation: 422,
   stale_version: 409,
   unsupported_version: 426,
   forbidden: 403,

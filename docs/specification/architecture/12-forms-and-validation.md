@@ -20,18 +20,32 @@ Three findings, from reading the code rather than the spec.
 is singular. A form with two bad fields can report one of them, and the person
 fixes it, submits, and discovers the second. Forms need a map.
 
-**Nothing produces field errors and nothing consumes them.** There is no
-`flatten()`, no `fieldErrors`, and no reader of `details.field` anywhere in
-`apps/` or `packages/`. A Zod failure inside a registry operation becomes a bare
-`validation` with the ZodError discarded before it reaches the envelope. So
-`field` is a declared type that has never been written and never been read —
-the same vacuous shape as a test that scans a deleted directory, and invisible
-for the same reason.
+**Field errors are produced twice and read nowhere.**
+`counterparties.service.ts` sets `field: "name"` on a duplicate name and
+`idempotency.ts` sets `field: "entryId"` on a reused entry id — and **no reader
+of `details.field` exists anywhere** in `apps/` or `packages/`. Two services
+carefully name the field at fault and the information is thrown away at the
+other end.
 
-**`PARSE_ERROR` is folded into `validation`, and `validation` means never
-retry.** `mapTrpcCode` maps both `BAD_REQUEST` and `PARSE_ERROR` to
-`validation`, which `errors.ts` documents as *"Input failed its Zod schema. Never
-retry unchanged."*
+Zod fares worse: a schema failure inside a registry operation becomes a bare
+`validation` with the ZodError discarded before it reaches the envelope, so the
+one place that knows every bad field names none of them.
+
+A write-only field is the same vacuous shape as a test that scans a deleted
+directory. It is worse in one way — it reads as though the plumbing exists, so
+the next person to want a field error assumes they are consuming something
+rather than building it.
+
+**A body that never parsed is reported as a permanent input error.**
+`mapTrpcCode` maps `BAD_REQUEST` to `validation`, which `errors.ts` documents as
+*"Input failed its Zod schema. Never retry unchanged."*
+
+The label is not the one you would guess. A truncated body arrives as
+**`BAD_REQUEST` carrying a `SyntaxError`**, not as `PARSE_ERROR` — nothing
+reaches `PARSE_ERROR` on this path at all. A first attempt at this fix keyed on
+`PARSE_ERROR`, typechecked, passed, and changed nothing; the probe against the
+running app is what said so. **The code cannot discriminate here**, because one
+code covers both meanings.
 
 That last one is a data-loss bug waiting for its consumer. A write leaves the
 phone, the connection drops mid-body, the server receives truncated JSON and
@@ -43,12 +57,19 @@ defusing it now costs one `case` label.
 
 ## 12.2 The contract
 
-**Schema failures are 422. Malformed bodies are not schema failures.**
+**Schema failures are 422. Malformed bodies are not schema failures — and the
+cause is what tells them apart.**
 
 ```
-PARSE_ERROR    → internal    retryable    the body never parsed
-BAD_REQUEST    → validation  422          the body parsed, the values are wrong
+BAD_REQUEST + ZodError cause   → validation  422    values failed the schema
+BAD_REQUEST, any other cause   → internal    500    the body never parsed
+PARSE_ERROR                    → internal    500    (unreached in practice)
 ```
+
+A `ZodError` cause is the only *positive* evidence that the body parsed and the
+values were wrong. Everything else is an absence of evidence, and absence of
+evidence must not be classified as a permanent refusal — that is the direction
+that loses writes.
 
 422 then means exactly one thing: *your request was well-formed and your values
 were not.* That is the only condition under which field errors can exist, since
@@ -60,6 +81,12 @@ operation never ran, so a retry is safe whether or not the write is idempotent,
 which is stronger than `internal` promises. A dedicated `malformed` code would
 say that precisely, at the cost of a contract change every consumer must learn.
 Open, and deliberately deferred until the drain exists to have an opinion.
+
+**The cost of being wrong in this direction is bounded, and that is the
+argument.** A genuinely malformed request — a client bug rather than a dropped
+connection — now retries against its budget and ends `stalled`, which
+`architecture/08` makes visible on S30. Visible and bounded beats silently
+discarded; the reverse mistake has no such floor.
 
 **Field errors are a list, not a map.**
 

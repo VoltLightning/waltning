@@ -170,3 +170,99 @@ describe("tRPC", () => {
     expect(typeof body.error.code).toBe("number");
   });
 });
+
+/**
+ * `architecture/12`, against the real app.
+ *
+ * The rule these pin is that **the cause discriminates, not the code**.
+ * `BAD_REQUEST` covers a body whose values failed the schema *and* a body that
+ * is not JSON at all — a truncated request from a dropped connection arrives as
+ * `BAD_REQUEST` with a `SyntaxError`, never as `PARSE_ERROR`. That was found by
+ * running it: the first fix keyed on `PARSE_ERROR` and changed nothing, because
+ * nothing reaches that label.
+ *
+ * These are input-parsing failures, so they resolve before any handler runs and
+ * need no database.
+ */
+describe("validation reaches a field", () => {
+  const post = (body: string) =>
+    app().request("/trpc/op.create_counterparty", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+  it("reports every bad field, not the first one", async () => {
+    // The singular `field` this replaced could carry one. You fixed it,
+    // resubmitted, and met the second — which is the whole reason a form needs
+    // a list.
+    const res = await post(JSON.stringify({ name: "", kind: "alien" }));
+    const body = await json<ErrorEnvelope>(res);
+
+    expect(body.error.data.code).toBe("validation");
+    const paths = body.error.details?.fieldErrors?.map((f) => f.path);
+    expect(paths).toContain("name");
+    expect(paths).toContain("kind");
+  });
+
+  it("is 422, because the body parsed and the values were wrong", async () => {
+    const res = await post(JSON.stringify({ name: "" }));
+    expect(res.status).toBe(422);
+    expect((await json<ErrorEnvelope>(res)).error.data.httpStatus).toBe(422);
+  });
+
+  it("dots a nested path so a form can find the input", async () => {
+    // `list_transactions.cursor` is an object, so this is not hypothetical:
+    // Zod's path is `["cursor","date"]` and a form keyed on `date` alone would
+    // put the error on the wrong field, or on none.
+    const input = encodeURIComponent(JSON.stringify({ cursor: { date: "nope", id: "nope" } }));
+    const res = await app().request(`/trpc/op.list_transactions?input=${input}`);
+    const paths = (await json<ErrorEnvelope>(res)).error.details?.fieldErrors?.map((f) => f.path);
+
+    expect(paths).toContain("cursor.date");
+    expect(paths).toContain("cursor.id");
+  });
+
+  it("carries a message per field, not only a path", async () => {
+    const res = await post(JSON.stringify({ name: "" }));
+    const first = (await json<ErrorEnvelope>(res)).error.details?.fieldErrors?.[0];
+    expect(first?.message).toBeTruthy();
+    expect(typeof first?.message).toBe("string");
+  });
+
+  /**
+   * **The one that loses writes.**
+   *
+   * A connection drops mid-request and the server receives truncated JSON.
+   * Classified as `validation` — documented *never retry unchanged* — the
+   * outbox drain concludes the input is permanently wrong and discards a write
+   * that never reached an operation. Nothing about the input was wrong; the
+   * bytes did not all arrive.
+   *
+   * Not live yet: the drain does not exist. This is the assertion that makes it
+   * safe to build one.
+   */
+  it("does not call a truncated body a permanent input error", async () => {
+    const res = await post('{"name": "trunc');
+    const body = await json<ErrorEnvelope>(res);
+
+    expect(body.error.data.code).not.toBe("validation");
+    expect(body.error.data.code).toBe("internal");
+    // And it names no field, because a body that never parsed has none.
+    expect(body.error.details?.fieldErrors).toBeUndefined();
+  });
+
+  it("still refuses a well-formed body with bad values, so the split is real", async () => {
+    // Guards the guard above: if everything became `internal`, that test would
+    // pass while validation had stopped working entirely.
+    const res = await post(JSON.stringify({ name: "", kind: "alien" }));
+    expect((await json<ErrorEnvelope>(res)).error.data.code).toBe("validation");
+  });
+
+  it("leaks no ledger content in the message", async () => {
+    // The message carries Zod's issue list. §5.3's posture is that a refusal
+    // about a payee must not become a place the payee is echoed.
+    const res = await post(JSON.stringify({ name: "Placeholder Ltd", kind: "alien" }));
+    expect(await res.text()).not.toContain("Placeholder Ltd");
+  });
+});
