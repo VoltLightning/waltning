@@ -18,6 +18,9 @@ export default defineConfig({
   test: {
     include: [
       "packages/*/src/**/*.test.ts",
+      // `packages/ui` is components. Without this the design system's render
+      // tests match nothing and the suite goes green having run none of them.
+      "packages/*/src/**/*.test.tsx",
       "apps/*/src/**/*.test.ts",
       // Components are `.tsx`. Without this the render tests match nothing and
       // the suite goes green having run none of them.
