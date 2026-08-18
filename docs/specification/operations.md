@@ -38,6 +38,7 @@ free, and the two can never drift, because they are the same declaration.
 | **Auto-eligible** | Whether a bounded auto-mode grant may cover it. Most writes: no |
 | **Audit** | Entity, action, actor, before/after — written by the registry, not by each implementation |
 | **Description** | Written for the model to read, not for a developer. This is the tool's documentation |
+| **`agentVisible`** | Whether `toolSchemas()` generates a tool for it. **Defaults to `true`** — the exception is written at the declaration, never at a call site. Its entire intended population is S33: operations that configure the agent itself (§11.0). Every `false` is a small hole in "one registry, two consumers", so a second reason to use it needs an argument in §11.0, not a judgement call |
 | **`offlineEligible`** | Whether this operation may enter a device outbox. `run_import`, `close_period`, `rerate_transactions`, `materialize_occurrence` and every migration operation are **false** — they need server state the device cannot have. A §15.1 contract test asserts no `offlineEligible: false` operation can be constructed as an outbox entry |
 | **`opVersion`** | The payload shape version. Upcasters chain every historical version to current at drain time, and the server accepts N−2 — a phone can be offline across two releases (`architecture/08`) |
 
@@ -63,6 +64,7 @@ remember to log itself is an operation that will eventually forget.
 | Introspection | `get_operation_catalogue` |
 | Memory | `get_memory` (§11.6) |
 | Verification | `get_invariant_results` (§15.1) |
+| Models | `get_assists` · `get_provider_status` · `list_models` — **all three were missing.** S33 named them in its §5 and none reached this file |
 
 `get_operation_catalogue` is not decoration. **An agent that cannot enumerate
 its own capabilities cannot be asked open questions about them** (§11.0), so the
@@ -164,6 +166,8 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `run_invariant_checks` | ✅ | Read-only against the ledger; writes only its own result rows (§15.1) |
 | `run_migration` | ❌ | Runs in one transaction; rolls back entirely on failure (§8.4) |
 | `send_message` · `grant_auto_mode` | ❌ | A grant that could be granted automatically is not a grant |
+| `set_assist_model` · `set_assist_enabled` · `set_all_assists_enabled` | ❌ | **Configuration of the agent itself, and the only `agentVisible: false` operations in the registry** (§11.0). `set_assist_model` was `set_surface_model`; "surface" already means web-or-mobile, so the concept is an **assist** — one of `quick_add · agent · classify · receipt · voice`. The master switch **overrides** rather than clears: per-assist settings survive it |
+| `test_provider` · `run_fixture_score` | ❌ | Both cost money and reach outside the Pi, so neither is auto-eligible. `test_provider` sends a fixed trivial prompt and **never ledger content** — a connectivity check must not be the thing that leaks a payee (S33) |
 | `write_memory` · `forget_memory` | **n/a** | **The documented exception to the gate** (§11.6). Not ledger state — moves no balance, reaches no tax output. Accountable by being legible on S32 rather than by gating |
 | `consolidate_memory` | ❌ | Rewrites many entries at once; the only way to lose several at a stroke, so it shows its diff |
 
@@ -190,7 +194,7 @@ so *auto mode is on* is never an open-ended state.
 
 ---
 
-## Two inconsistencies this compilation caught
+## Three inconsistencies this compilation caught
 
 **`split_transaction` is stale.** It appears in `SPEC.md` §11.1's illustrative
 table and in S09's data section, but §6.10 replaced splitting with
@@ -201,3 +205,16 @@ what happens, because a split does not produce a second transaction.
 coverage and none of them named the operation behind it. It is the read that
 would have surfaced GEL at 0.5%, and it existed in three screens as a
 description rather than as a capability.
+
+**S33's operations were absent entirely** — found later, on the pass that added
+assist enablement. `set_surface_model`, `test_provider` and `run_fixture_score`
+were named in that screen's §5 and reached this file in no form, while
+`architecture/README.md` reported *"operations referenced by a screen but
+missing from the registry: 0"*.
+
+The number was not measured. It was asserted, which is the failure mode
+`defects.md` reduces the whole register to — and a count that nothing computes
+is worse than no count, because it reads as verification. **If that figure is to
+stay in the README it needs a test that derives it**, walking every screen's §5
+and diffing against this file. Until then it is a claim about a thing nobody
+checked.
