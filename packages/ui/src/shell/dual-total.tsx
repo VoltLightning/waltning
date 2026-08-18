@@ -19,7 +19,7 @@
 
 import type { money } from "@waltning/core";
 import { StyleSheet, Text, View } from "react-native";
-import { Amount } from "../molecules/amount";
+import { Amount } from "../fx/amount";
 import { color, space, type } from "../tokens.ts";
 
 export type DualTotalProps = {

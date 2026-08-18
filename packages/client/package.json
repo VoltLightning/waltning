@@ -5,7 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./hooks": "./src/hooks/index.ts"
+    "./query": "./src/query/index.ts",
+    "./accounts": "./src/accounts/index.ts",
+    "./transactions": "./src/transactions/index.ts",
+    "./currencies": "./src/currencies/index.ts",
+    "./connectivity": "./src/connectivity/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

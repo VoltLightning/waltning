@@ -25,7 +25,7 @@
 
 import { money } from "@waltning/core";
 import { StyleSheet, Text, View } from "react-native";
-import { Tag } from "../atoms/tag";
+import { Tag } from "../primitives/tag";
 import { color, fontFamily, tabularNums, type } from "../tokens.ts";
 import { Amount } from "./amount";
 

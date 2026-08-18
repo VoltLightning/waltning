@@ -17,8 +17,8 @@
  */
 
 import { CaptiveResponseError } from "@waltning/core";
-import type { ApiClient } from "../client.ts";
-import { useQuery } from "./use-query.ts";
+import { useQuery } from "../query/index.ts";
+import type { ApiClient } from "../transport/index.ts";
 
 export type Probe =
   | { status: "probing" }
