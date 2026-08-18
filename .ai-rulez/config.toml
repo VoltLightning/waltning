@@ -7,8 +7,18 @@
 # directory is the source; the tool-specific files are build output and are
 # gitignored, which is why `gitignore = true` is set below.
 #
-#   npx ai-rulez@latest generate     regenerate after editing anything here
-#   npx ai-rulez@latest verify       check the generated files match the source
+#   make rules              regenerate after editing anything here
+#   pnpm rules:validate     check this config is well-formed
+#
+# Pinned to 4.11.2 in package.json, matching the `#:schema` line above. `@latest`
+# would eventually generate against a schema this config does not declare, and
+# the failure mode is a rule that silently stops being carried into CLAUDE.md.
+#
+# There is no "are the generated files current" check, and there cannot usefully
+# be one: they are gitignored, so nothing tracks them and nothing can drift into
+# a commit. A stale local copy is fixed by running `make rules`. (`ai-rulez
+# verify` is for plugin artifacts and requires `--plugin`; an earlier version of
+# this comment claimed it checked the generated files. It does not.)
 #
 # Keep this minimal. These rules are read on every task, so anything that is
 # merely nice to know costs attention on work it has nothing to do with. If a

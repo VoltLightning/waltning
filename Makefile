@@ -30,7 +30,7 @@ WEB_URL ?= http://localhost:8081
 APPLIANCE_URL ?= http://127.0.0.1:8080
 
 .PHONY: help setup dev dev-api dev-web dev-ios e2e verify test db db-reset psql \
-        up down logs ps rebuild appliance-e2e wiki clean doctor
+        up down logs ps rebuild appliance-e2e wiki rules clean doctor
 
 help: ## Show this help
 	@echo ""
@@ -157,6 +157,13 @@ appliance-e2e: ## The same check, against the appliance on :8080
 
 wiki: ## Check the published wiki against docs/wiki
 	pnpm wiki:check
+
+rules: ## Regenerate CLAUDE.md and AGENTS.md from .ai-rulez/rules/
+	@# Both files are generated and gitignored, and both say "NEVER edit this
+	@# file" at the top. The source is .ai-rulez/rules/*.md — edit there, run
+	@# this. There is no "is it current" check and there need not be: nothing
+	@# tracks the output, so it cannot drift into a commit.
+	pnpm rules
 
 # ── Housekeeping ─────────────────────────────────────────────────────────────
 
