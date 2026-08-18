@@ -189,7 +189,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
                               │ outbound only
                     ┌─────────▼──────────┐
                     │  model provider(s) │
-                    │  per surface (§11.4)│
+                    │  per assist (§11.4) │
                     │  FX rate provider  │
                     └────────────────────┘
 ```
@@ -275,7 +275,7 @@ writes the first file that needs it, which is how a stack becomes an accident.
 | **Excel export** | **`exceljs`** | §13.3 specifies a *streaming* writer, which rules out building a workbook in memory. SheetJS's community build has a licensing and CVE history worth avoiding |
 | **Image manipulation** | **`expo-image-manipulator`** | Decodes at reduced scale via ImageIO. Full-decode-then-resize is 48.8 MB of bitmap per capture and a jetsam kill at ten (C26) |
 | **Dates and zones** | **`date-fns` + `date-fns-tz`** | Accounting dates are **bare dates** (§7.0a) and must never go through JS `Date` arithmetic. The zone work is `capturedTz` resolution, not general date maths |
-| **Model clients** | **`openai` SDK** for OpenAI *and* OpenRouter (it is OpenAI-compatible) · **`@anthropic-ai/sdk`** if Anthropic is configured | Behind one gateway interface, so §11.4's per-surface provider choice stays configuration |
+| **Model clients** | **`openai` SDK** for OpenAI *and* OpenRouter (it is OpenAI-compatible) · **`@anthropic-ai/sdk`** if Anthropic is configured | Behind one gateway interface, so §11.4's per-assist provider choice stays configuration |
 | **Migration runner** | **`drizzle-kit migrate`**, in the one-shot `migrate` service | Never `push` — it cannot see triggers, views, grants or generated columns |
 | **Scheduling** | **A `cron` service in Compose** | Nightly dump, invariant checks, FX backfill. In-process scheduling dies with an API restart and gives no record that a run was missed |
 | **Brand icons** | **`simple-icons`, bundled** | S34's service icons (§14.4a). A logo CDN is rejected on principle: fetching `netflix.com`'s logo per render tells a third party you pay for Netflix, and it breaks offline rendering. Brands are occasionally *removed* from simple-icons for legal reasons, so a contract test asserts every catalog slug resolves in the installed version — the upgrade fails loudly instead of rendering blanks |
@@ -2076,7 +2076,33 @@ dashboard configuration. *"Put family spending on my dashboard"* is a write to
 case. **Reach is not authority:** every write still gates (§11.2).
 
 Each operation carries: typed input (Zod), validation, an audit entry with
-actor, a write flag, and a description written for the model to read.
+actor, a write flag, a description written for the model to read, and
+`agentVisible`.
+
+**`agentVisible` is the one seam in "reach is everything the UI can do".** It
+defaults to `true` and `toolSchemas()` filters on it, so an operation is
+agent-reachable unless its declaration says otherwise — the default stays the
+rule and the exception has to be written down where the operation is defined.
+
+It exists for a narrow class: **operations that configure the agent itself.**
+Every write on S33 is `agentVisible: false` — whether an assist runs at all,
+which provider and model it runs on, its effort and its token budget. Choosing
+whether it runs and choosing what it runs on are the same shape of decision, and
+the gate is not sufficient protection against it: the agent can propose the
+change, and the approval card then arrives carrying the agent's own account of
+why it needs a more capable model. A person approving that is reading an
+argument written by the thing it benefits.
+
+This is not a second authority mechanism. §11.2's gate answers *may this run
+without a person?*; `agentVisible` answers *may the model see this exists?* The
+first is about authority over the ledger. The second is about the model's reach
+over its own configuration, and the two are not the same question.
+
+**It is deliberately not a general-purpose hiding mechanism.** Anything hidden
+here is invisible to a system whose whole design is one registry with two
+consumers, so every `false` is a small hole in §11.0's guarantee. One screen's
+worth is the whole intended population; a second reason to use it needs its own
+argument in this section, not a judgement call at a call site.
 
 **Introspection.** The agent needs to know what exists, so the registry is
 self-describing: the operation catalogue, the category tree, the account list,
@@ -2186,13 +2212,13 @@ The dividing line is **not** read-versus-write, and it is not extraction versus
 conversation. It is whether a person is sitting inside the interaction while it
 happens.
 
-| Surface | Shape | Reproducible | Why |
+| Assist | Shape | Reproducible | Why |
 |---|---|---|---|
-| **Quick add — conversational** (S05) | **Agentic loop**, read tools | No | You are present, working on **one** transaction, and correcting as you go |
-| **Agent** (S03) | **Agentic loop**, read + write | No | Conversational by definition |
-| Receipt (§10.2) | Pipeline, one pass · refinable | Per pass | Queued and extracted in the background |
-| **Classification** (§9.2) | **Deterministic pipeline** | **Yes** | Hundreds of rows, reviewed in bulk |
-| Voice (S08) | One pass · refinable | Yes | J2 targets **under 10 seconds** at a till |
+| `quick_add` — **Quick add, conversational** (S05) | **Agentic loop**, read tools | No | You are present, working on **one** transaction, and correcting as you go |
+| `agent` — **Agent** (S03) | **Agentic loop**, read + write | No | Conversational by definition |
+| `receipt` — Receipt (§10.2) | Pipeline, one pass · refinable | Per pass | Queued and extracted in the background |
+| `classify` — **Classification** (§9.2) | **Deterministic pipeline** | **Yes** | Hundreds of rows, reviewed in bulk |
+| `voice` — Voice (S08) | One pass · refinable | Yes | J2 targets **under 10 seconds** at a till |
 
 #### Retrieval is not agency
 
@@ -2228,9 +2254,8 @@ function either.** Three things move underneath it independently of the row: the
 model version behind a floating alias; the retrieved neighbours, which come from
 the *live* ledger and therefore change as you keep using the system; and batch
 co-tenancy, since row 37 shares a context with rows 1–36 and a different batch
-boundary gives it different company. Nothing here pins temperature or a seed,
-and §11.4 states plainly that nothing records which model answered. A claim of
-bit-identical reruns would be false in three independent ways.
+boundary gives it different company. Nothing here pins temperature or a seed. A
+claim of bit-identical reruns would be false in three independent ways.
 
 What is actually guaranteed is that **every classification can be explained and
 re-derived from its recorded inputs.** `import_rows` stores `model_id`, the rule
@@ -2313,16 +2338,46 @@ Giving the extractors tools does not soften this — it sharpens it. A model tha
 can look up prior decisions is a model whose mistakes are better-informed and
 therefore more plausible, which is exactly the kind that survives a bulk accept.
 
-#### The model is configuration, per surface
+#### The model is configuration, per assist
+
+**Assist**, not surface. Everywhere else in this system a surface is web or
+mobile (`architecture/11`), and one word carrying two meanings is how a column
+ends up meaning whichever one the reader arrived with. The five rows above are
+the assists.
 
 ```
-models   surface (receipt | classify | voice | agent)
-         provider, model_id, effort, max_tokens
+models     assist (quick_add | agent | classify | receipt | voice)
+           enabled, provider, model_id, effort, max_tokens
+
+settings   assists_enabled            the master switch
 ```
 
-Nothing in the ledger, the registry or the UI knows which model answered. Four
-independent choices, changeable without a migration, and comparable by
-swapping one row.
+**Five, not four.** The table above has always named five and the schema listed
+four — `quick_add` was missing, silently, because nothing cross-checked the two.
+S33 is where that surfaced.
+
+**`enabled`, and a master switch above it.** Every assist can be turned off
+individually, and one switch stops all model calls at once. The master switch
+**overrides** rather than clears: the five per-assist settings survive it and
+come back when it is turned on. Off means degraded behaviour, not a broken
+feature — the deterministic path underneath each assist still runs, and the UI
+says the assist is off rather than pretending it worked. S33 specifies this.
+
+**A provider is configuration *and* an adapter.** The row is configuration —
+which assist points where, changeable without a migration and comparable by
+swapping one value. Reaching a provider at all is code: one gateway interface
+with an implementation per vendor, carrying `listModels()` so the catalogue comes
+from the provider rather than from a list in this repo that would be wrong within
+a month. Treating the provider name as pure configuration would mean a string
+nobody can speak to.
+
+**What is recorded, and what is not.** The ledger, the registry and the UI carry
+no ambient knowledge of which model is configured. That is not the same as
+recording nothing: `import_rows.model_id` stores which model answered each
+classified row (§9.4, C10, migration `0004`), because the replayability
+guarantee above depends on it. An earlier version of this paragraph said nothing
+records which model answered — that was true before `0004` and contradicts the
+replayability argument a hundred lines up.
 
 #### Cost is not the constraint at this volume
 
@@ -3528,7 +3583,7 @@ shapes do not correspond.
 | Latency | **Full budget table: `docs/specification/architecture/06-quality-attributes.md`.** Headlines: a simple ledger query < 100 ms; an *aggregate* < 200 ms warm and < 400 ms cold, since grouping over 25k rows is a different class of work and only stays fast because every index carries `WHERE deleted_at IS NULL`; receipt extraction 2–5 s (model-bound); agent turns 3–15 s; **voice capture end-to-end < 10 s (J02)** — the one budget where missing it changes behaviour rather than perception |
 | Availability | Best-effort. It is one Pi in a flat; offline-capable mobile covers outages |
 | Backups | §5.4. The quarterly restore drill is mandatory |
-| Observability | Structured JSON logs, 30-day retention. Health endpoint. **Model spend tracked per surface**, not per feature — §11.4 configures a model per surface and may point them at different providers, so per-feature totals would not add up. No metrics stack: S30 is the operational surface, and it exists to make the four *silent* failures loud — stale backups, FX coverage, invariant results, spend |
+| Observability | Structured JSON logs, 30-day retention. Health endpoint. **Model spend tracked per assist**, not per feature — §11.4 configures a model per assist and may point them at different providers, so per-feature totals would not add up. No metrics stack: S30 is the operational surface, and it exists to make the four *silent* failures loud — stale backups, FX coverage, invariant results, spend |
 | Testing | §15.1 — four layers, weighted by what actually goes wrong |
 | Upgrades | `docker compose pull && up -d`. Drizzle migrations reviewed before applying — never auto-applied on boot |
 | Hardware | **Raspberry Pi 4**, 4 GB+. Comfortable here — 8k rows is nothing, and receipt extraction is model-bound rather than CPU-bound |
