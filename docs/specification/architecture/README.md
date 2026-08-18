@@ -62,7 +62,7 @@ from getting that one definition right.
 |---|---|
 | Open questions across 30 screens and 15 flows | **0** — all decided, decisions recorded in place |
 | Template conformance | 30/30 screens, 15/15 flows |
-| Operations referenced by a screen but missing from the registry | **0** |
+| Operations referenced by a screen but missing from the registry | **0, and now derived** — `tests/registry-coverage.test.ts` walks every screen's §5 and diffs it against `operations.md`. The figure sat here as a written-down number while S33's eight operations were missing from the registry entirely; a count nobody computes reads as verification and is not |
 | Defects | **C 20 · H 31 · M 24 — all closed.** L triaged, two items remain as scheduled implementation work |
 | Migrations | 10, all verified to apply cleanly from empty |
 | Database guarantees driven to refusal in test | period lock (7 cases), T1 (3 breaches), memory `CHECK`, reassignment invariant |
