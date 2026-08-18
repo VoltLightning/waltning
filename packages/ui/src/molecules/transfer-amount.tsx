@@ -26,7 +26,7 @@
 import { money } from "@waltning/core";
 import { StyleSheet, Text, View } from "react-native";
 import { color, fontFamily, space, tabularNums, type } from "../tokens.ts";
-import { Amount } from "./amount.tsx";
+import { Amount } from "./amount";
 
 export type TransferAmountProps = {
   from: { account: string; currency: string; amount: money.Money; decimals?: number };

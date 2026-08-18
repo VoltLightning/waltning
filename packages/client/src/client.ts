@@ -1,10 +1,16 @@
 /**
  * The tRPC client.
  *
- * Takes its base URL rather than resolving one, for two reasons: `base-url.ts`
- * imports `react-native`, which a Node test cannot, and a client that reads
- * configuration during construction is a client no test can point somewhere
- * else. `app/` passes the resolved URL in.
+ * Takes its base URL rather than resolving one. A client that read
+ * configuration during construction would be a client no test could point
+ * somewhere else, and — the reason that matters now — resolving the URL means
+ * reading `Platform.OS`, `__DEV__` or `import.meta.env`, which are the three
+ * things this package may not name (`architecture/11`). Each app resolves its
+ * own and passes it in.
+ *
+ * An earlier version of this note claimed `base-url.ts` imports `react-native`.
+ * It never did — it had no imports at all, which is precisely why it belonged
+ * beside this file in a package rather than inside the iOS app.
  *
  * **Not batched.** `httpLink`, not `httpBatchLink`. Batching would merge
  * unrelated calls into one HTTP request, and Rule 0's verdict is per *response*

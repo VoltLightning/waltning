@@ -12,10 +12,10 @@
 
 import type { money } from "@waltning/core";
 import { StyleSheet, Text, View } from "react-native";
-import { Tag } from "../atoms/tag.tsx";
+import { Tag } from "../atoms/tag";
 import { color, hairline, space, tabularNums, type } from "../tokens.ts";
-import { Amount } from "./amount.tsx";
-import { FxAmount, type FxProvenance } from "./fx-amount.tsx";
+import { Amount } from "./amount";
+import { FxAmount, type FxProvenance } from "./fx-amount";
 
 export type TransactionRowProps = {
   /** Bare `YYYY-MM-DD`. Rendered as given — never through a `Date` (C28). */

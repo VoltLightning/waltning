@@ -7,7 +7,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { TransferAmount } from "./transfer-amount.tsx";
+import { TransferAmount } from "./transfer-amount";
 
 const example = {
   from: { account: "Household", currency: "USD", amount: "150.00000000" },

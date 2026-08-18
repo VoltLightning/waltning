@@ -9,7 +9,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FxAmount } from "./fx-amount.tsx";
+import { FxAmount } from "./fx-amount";
 
 const base = { value: "62.40000000", currency: "USD", displayCurrency: "PLN" } as const;
 

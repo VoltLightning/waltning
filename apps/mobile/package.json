@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@trpc/client": "^11.18.0",
+    "@waltning/client": "workspace:*",
     "@waltning/core": "workspace:*",
     "@waltning/ui": "workspace:*",
     "expo": "~57.0.13",
