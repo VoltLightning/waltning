@@ -25,9 +25,9 @@
 
 import { money } from "@waltning/core";
 import { StyleSheet, Text, View } from "react-native";
-import { Tag } from "../atoms/tag.tsx";
+import { Tag } from "../atoms/tag";
 import { color, fontFamily, tabularNums, type } from "../tokens.ts";
-import { Amount } from "./amount.tsx";
+import { Amount } from "./amount";
 
 /**
  * Where the rate came from, and what the row therefore has to say about it.

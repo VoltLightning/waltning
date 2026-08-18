@@ -10,12 +10,12 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { AmountField, parseAmount } from "./amount-field.tsx";
-import { Button } from "./button.tsx";
-import { Chip } from "./chip.tsx";
-import { IconButton } from "./icon-button.tsx";
-import { Pill } from "./pill.tsx";
-import { SegmentControl } from "./segment-control.tsx";
+import { AmountField, parseAmount } from "./amount-field";
+import { Button } from "./button";
+import { Chip } from "./chip";
+import { IconButton } from "./icon-button";
+import { Pill } from "./pill";
+import { SegmentControl } from "./segment-control";
 
 describe("accessible names", () => {
   it("an icon button announces itself", () => {

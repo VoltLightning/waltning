@@ -10,7 +10,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Amount } from "./amount.tsx";
+import { Amount } from "./amount";
 
 describe("Amount", () => {
   it("renders at the currency's own precision", () => {

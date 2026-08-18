@@ -1,0 +1,263 @@
+/**
+ * `architecture/11` — the manifesto, as tests.
+ *
+ * Every rule in that document is here, and the ones that are not here are not
+ * rules. This repository has the evidence for why that matters: `packages/ui`
+ * shipped a conformance suite banning hardcoded colours, and the app hardcoded
+ * the exact colour the token file names as its motivating defect — because the
+ * suite rooted itself at `packages/ui/src` and could not see `apps/`.
+ *
+ * **A rule whose scope is narrower than the behaviour it governs is not a rule.
+ * It is a rule about one directory.** So every check here roots at the
+ * repository, and every one carries a non-vacuity guard: a renamed folder must
+ * turn a check red, not silently green.
+ */
+
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const SKIP = new Set(["node_modules", "dist", ".expo", "drizzle", "coverage"]);
+
+function sourceFiles(dir: string, out: string[] = []): string[] {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    if (SKIP.has(entry)) continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) sourceFiles(full, out);
+    else if (/\.(ts|tsx)$/.test(entry)) out.push(full);
+  }
+  return out;
+}
+
+const IMPORT = /(?:from|import)\s+["']([^"']+)["']/g;
+
+/**
+ * Comments stripped first, and this is not fastidiousness.
+ *
+ * The first version of this scanned raw text and reported `node:fs` and a
+ * sentence — `from "that was not the server"` — as dependencies of
+ * `packages/core`. Prose in this repository quotes code constantly, so a naive
+ * import scanner reads the documentation as source. That direction is a false
+ * positive and merely annoying; the same sloppiness in the other direction is a
+ * check that misses the real thing.
+ */
+function importsOf(file: string): string[] {
+  const code = readFileSync(file, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+  return [...code.matchAll(IMPORT)].map((m) => m[1] ?? "");
+}
+
+const rel = (f: string) => relative(repoRoot, f);
+const isTest = (f: string) => /\.(test|type-test)\.tsx?$/.test(f);
+/** `expo-env.d.ts` and friends are generated ambient types, not authored code. */
+const isAmbient = (f: string) => f.endsWith(".d.ts");
+
+/* ── §2 · The floor ──────────────────────────────────────────────────────── */
+
+describe("packages/client is React, never React Native", () => {
+  /**
+   * The single line the whole design rests on. React is platform-neutral and
+   * React Native is a renderer — so a hook written against React alone runs
+   * unchanged under Expo and under Vite, and every piece of client *behaviour*
+   * is shared by construction.
+   *
+   * One `react-native` import here forks the second app before it exists.
+   */
+  const FORBIDDEN = /^(react-native|react-dom|expo|expo-.*|@react-navigation\/.*)$/;
+
+  it("imports no renderer and no platform package", () => {
+    const files = sourceFiles(join(repoRoot, "packages/client/src"));
+    const offenders: string[] = [];
+    for (const file of files) {
+      for (const spec of importsOf(file)) {
+        if (FORBIDDEN.test(spec)) offenders.push(`${rel(file)} → ${spec}`);
+      }
+    }
+    expect(offenders, "packages/client must name no platform").toEqual([]);
+    expect(files.length, "client source files found").toBeGreaterThan(5);
+  });
+});
+
+describe("packages/core runs on a phone", () => {
+  /**
+   * "No Node APIs" was prose, and provably unenforced: `packages/core` inherits
+   * every `@types/*` visible from the root, so a production file importing
+   * `node:fs` or `node:crypto` compiles, passes the gate, works on the server
+   * and crashes on the phone.
+   */
+  it("imports no Node builtin outside its tests", () => {
+    const files = sourceFiles(join(repoRoot, "packages/core/src")).filter((f) => !isTest(f));
+    const offenders: string[] = [];
+    for (const file of files) {
+      for (const spec of importsOf(file)) {
+        if (spec.startsWith("node:")) offenders.push(`${rel(file)} → ${spec}`);
+      }
+    }
+    expect(offenders, "core must run identically on phone and server").toEqual([]);
+    expect(files.length, "core production files found").toBeGreaterThan(5);
+  });
+
+  it("depends on decimal.js and zod, and nothing else", () => {
+    // The floor stated as a set rather than a sentence. A bare specifier that
+    // is not relative, not a Node builtin and not on this list is a new
+    // dependency for the layer whose whole promise is that it has almost none.
+    const allowed = new Set(["decimal.js", "zod"]);
+    const files = sourceFiles(join(repoRoot, "packages/core/src")).filter((f) => !isTest(f));
+    const offenders: string[] = [];
+    for (const file of files) {
+      for (const spec of importsOf(file)) {
+        if (spec.startsWith(".") || spec.startsWith("node:")) continue;
+        if (!allowed.has(spec)) offenders.push(`${rel(file)} → ${spec}`);
+      }
+    }
+    expect(offenders, "core's dependency floor").toEqual([]);
+  });
+});
+
+describe("the database never reaches a client", () => {
+  /**
+   * "`mobile` never imports `db`" was enforced for one specifier in one
+   * directory. It was defeated two ways: a relative reach into
+   * `../../packages/db/src`, and transitively — nothing stopped `packages/ui`
+   * or `packages/core` importing it, and mobile depends on both. One line would
+   * have put the Postgres driver in a phone bundle with a green suite.
+   */
+  const CLIENT_ROOTS = ["apps/mobile", "packages/client", "packages/ui", "packages/core"];
+
+  it("no client package or app names @waltning/db, by any path", () => {
+    const offenders: string[] = [];
+    for (const root of CLIENT_ROOTS) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        for (const spec of importsOf(file)) {
+          const reachesDb =
+            spec === "@waltning/db" ||
+            spec.startsWith("@waltning/db/") ||
+            /packages\/db\//.test(spec);
+          if (reachesDb) offenders.push(`${rel(file)} → ${spec}`);
+        }
+      }
+    }
+    expect(offenders, "the Postgres driver must not reach a client bundle").toEqual([]);
+  });
+});
+
+/* ── §1 · The seam ───────────────────────────────────────────────────────── */
+
+describe("apps hold only what names a platform", () => {
+  /**
+   * The seam: *does this file name a platform?* Of 22 client files, three did.
+   * The other nineteen were duplication waiting for a second app — two of them
+   * carrying docstrings explaining they were written platform-free on purpose.
+   *
+   * A file "names a platform" if it imports a renderer, a router or an SDK, or
+   * reads a build-time global that only one bundler defines.
+   */
+  const NAMES_PLATFORM =
+    /from\s+["'](react-native|expo|expo-.*|@react-navigation\/.*)["']|Platform\.OS|__DEV__|EXPO_PUBLIC_|import\.meta\.env/;
+
+  it("every app source file is platform-bound, a test, or a route", () => {
+    const offenders: string[] = [];
+    for (const app of ["apps/mobile"]) {
+      for (const file of sourceFiles(join(repoRoot, app))) {
+        if (isTest(file) || isAmbient(file)) continue;
+        // `app/` is the route tree — composition is its job by definition.
+        if (rel(file).startsWith(`${app}/app/`)) continue;
+        if (!NAMES_PLATFORM.test(readFileSync(file, "utf8"))) offenders.push(rel(file));
+      }
+    }
+    expect(
+      offenders,
+      "shareable code in an app — move it to packages/client or packages/ui",
+    ).toEqual([]);
+  });
+
+  it("a route composes and does not define hooks", () => {
+    // A hook in a route file is invisible to the runner (`app/` is a sibling of
+    // `src/`, not a child) and closes over a singleton instead of taking a
+    // client, so no test can point it at a stub. Both are properties of where
+    // it was written.
+    const offenders: string[] = [];
+    for (const file of sourceFiles(join(repoRoot, "apps/mobile/app"))) {
+      const text = readFileSync(file, "utf8");
+      if (/\bfunction\s+use[A-Z]/.test(text) || /\bconst\s+use[A-Z]\w*\s*=/.test(text)) {
+        offenders.push(rel(file));
+      }
+    }
+    expect(offenders, "hooks belong in packages/client, not in a route").toEqual([]);
+  });
+});
+
+/* ── §6 · Design conformance, at repository scope ────────────────────────── */
+
+describe("design conformance covers every ui folder", () => {
+  /**
+   * The rule that failed. `packages/ui/src/conformance.test.ts` banned
+   * hardcoded colours and rooted at `packages/ui/src`, so when the app wrote
+   * `#b3261e` — the very colour `tokens.ts` names as the defect that motivated
+   * it — nothing saw. Scope is the whole point of this check.
+   */
+  function componentFiles(): string[] {
+    const roots = [
+      join(repoRoot, "packages/ui/src"),
+      ...["apps/mobile", "apps/web"].map((a) => join(repoRoot, a)),
+    ];
+    return roots.flatMap((r) => sourceFiles(r)).filter((f) => /\.tsx$/.test(f) && !isTest(f));
+  }
+
+  it("no component anywhere hardcodes a colour", () => {
+    const offenders: string[] = [];
+    for (const file of componentFiles()) {
+      for (const line of readFileSync(file, "utf8").split("\n")) {
+        if (/^\s*(\*|\/\/)/.test(line)) continue;
+        if (/#[0-9a-fA-F]{3,8}\b/.test(line)) offenders.push(`${rel(file)}: ${line.trim()}`);
+      }
+    }
+    expect(offenders, "use a token from packages/ui/src/tokens.ts").toEqual([]);
+    expect(componentFiles().length, "component files found").toBeGreaterThan(10);
+  });
+
+  it("no component outside the design system formats money", () => {
+    // `money.toMoney` outside `packages/ui` is a figure with no guarantee of
+    // tabular numerals — §2.2's "most common omission" — and a second
+    // implementation of the sign rules in `computations.md` §1.
+    const offenders = componentFiles()
+      .filter((f) => !rel(f).startsWith("packages/ui/"))
+      .filter((f) => /money\.(toMoney|cmp|sum)\(/.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(offenders, "render figures through <Amount>, not by hand").toEqual([]);
+  });
+});
+
+/* ── §4 · Import specifiers ──────────────────────────────────────────────── */
+
+describe("platform-variant files are imported extension-less", () => {
+  /**
+   * `architecture/10`, verified by spike: an explicit extension defeats platform
+   * resolution **silently** — `./Button.tsx` keeps the native implementation in
+   * the web bundle and nothing errors. The doc calls it "the worst shape a build
+   * problem can have"; nothing checked it, and it was already broken.
+   */
+  it("no relative import of a component carries .tsx", () => {
+    const roots = ["packages/ui/src", "apps/mobile"];
+    const offenders: string[] = [];
+    for (const root of roots) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        for (const spec of importsOf(file)) {
+          if (spec.startsWith(".") && spec.endsWith(".tsx")) {
+            offenders.push(`${rel(file)} → ${spec}`);
+          }
+        }
+      }
+    }
+    expect(offenders, "drop the .tsx — a .web.tsx override would be ignored").toEqual([]);
+  });
+});

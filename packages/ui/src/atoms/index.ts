@@ -16,10 +16,10 @@
  * now would be inventing three-quarters of an interaction.
  */
 
-export { AmountField, type AmountFieldProps, parseAmount } from "./amount-field.tsx";
-export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./button.tsx";
-export { Chip, type ChipProps } from "./chip.tsx";
-export { IconButton, type IconButtonProps, type IconButtonSize } from "./icon-button.tsx";
-export { Pill, type PillTier } from "./pill.tsx";
-export { type Segment, SegmentControl, type SegmentControlProps } from "./segment-control.tsx";
-export { Tag, type TagProps, type TagVariant } from "./tag.tsx";
+export { AmountField, type AmountFieldProps, parseAmount } from "./amount-field";
+export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./button";
+export { Chip, type ChipProps } from "./chip";
+export { IconButton, type IconButtonProps, type IconButtonSize } from "./icon-button";
+export { Pill, type PillTier } from "./pill";
+export { type Segment, SegmentControl, type SegmentControlProps } from "./segment-control";
+export { Tag, type TagProps, type TagVariant } from "./tag";

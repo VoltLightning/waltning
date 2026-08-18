@@ -1,28 +1,26 @@
 {
-  "name": "@waltning/ui",
+  "name": "@waltning/client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./atoms": "./src/atoms/index.ts",
-    "./molecules": "./src/molecules/index.ts",
-    "./organisms": "./src/organisms/index.ts",
-    "./tokens": "./src/tokens.ts"
+    "./hooks": "./src/hooks/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@trpc/client": "^11.18.0",
     "@waltning/core": "workspace:*"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.18",
-    "react": "19.2.3",
-    "react-native": "0.86.2"
+    "@waltning/api": "workspace:*",
+    "react": "19.2.3"
   },
   "peerDependencies": {
-    "react": ">=19",
-    "react-native": ">=0.86"
+    "react": ">=19"
   }
 }

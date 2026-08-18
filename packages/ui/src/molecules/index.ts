@@ -9,12 +9,12 @@
  * BalanceRow, ServiceIcon as the screens that need them arrive.
  */
 
-export { Amount, type AmountEmphasis, type AmountProps, type AmountSize } from "./amount.tsx";
-export { FxAmount, type FxAmountProps, type FxProvenance } from "./fx-amount.tsx";
+export { Amount, type AmountEmphasis, type AmountProps, type AmountSize } from "./amount";
+export { FxAmount, type FxAmountProps, type FxProvenance } from "./fx-amount";
 export {
   BalanceRow,
   type BalanceRowProps,
   TransactionRow,
   type TransactionRowProps,
-} from "./rows.tsx";
-export { TransferAmount, type TransferAmountProps } from "./transfer-amount.tsx";
+} from "./rows";
+export { TransferAmount, type TransferAmountProps } from "./transfer-amount";

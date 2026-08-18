@@ -22,5 +22,5 @@
  *
  * Shell · DiffCard · CalendarGrid · SubscriptionRow · ComparisonTable · Table
  */
-export { Card, type CardProps, GroundPanel } from "./card.tsx";
-export { DualTotal, type DualTotalProps } from "./dual-total.tsx";
+export { Card, type CardProps, GroundPanel } from "./card";
+export { DualTotal, type DualTotalProps } from "./dual-total";

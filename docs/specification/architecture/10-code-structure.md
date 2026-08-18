@@ -227,10 +227,24 @@ ever become common, which in production RN Web codebases they are not.
 
 ## The dependency floor
 
+**Superseded in one respect by `11-client-architecture.md`, which adds the layer
+this section was missing.** The floor stated here — `api → db → core ← mobile` —
+had no slot for shared client logic, so hooks, the transport and the base-URL
+resolver went into `apps/mobile` because there was nowhere else. Nineteen of
+twenty-two client files ended up app-private by accident. `packages/client` is
+that missing layer; see §2 of the manifesto for the corrected graph.
+
 `core` is the bottom of the graph and must run identically on phone, web and
-server: decimal.js and zod only, no Node APIs, no database driver. **`mobile`
-never imports `db`** — that would drag the Postgres driver into a phone bundle.
-`db` depends on `core`; `ui` depends on `core`; neither depends on an app.
+server: decimal.js and zod only, no Node APIs, no database driver. **No client
+package or app imports `db`** — that would drag the Postgres driver into a phone
+bundle, and it is reachable transitively through `ui` as well as directly.
+`db` depends on `core`; `client` and `ui` depend on `core` and on each other
+never; none of them depends on an app.
+
+The one edge this document long omitted: `packages/client` imports
+`@waltning/api/router-type`, **type-only**, which is how an operation's types
+reach the client (§11.0). It is erased before any bundler sees it and
+`tests/module-boundaries.test.ts` refuses a value import.
 
 ---
 

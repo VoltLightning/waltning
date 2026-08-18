@@ -7,9 +7,9 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { BalanceRow, TransactionRow } from "../molecules/rows.tsx";
-import { Card } from "./card.tsx";
-import { DualTotal } from "./dual-total.tsx";
+import { BalanceRow, TransactionRow } from "../molecules/rows";
+import { Card } from "./card";
+import { DualTotal } from "./dual-total";
 
 describe("DualTotal", () => {
   it("shows both figures at once", () => {

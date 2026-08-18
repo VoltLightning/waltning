@@ -16,7 +16,7 @@
  * holds.
  */
 
-import type { FxAmountProps, FxProvenance } from "./fx-amount.tsx";
+import type { FxAmountProps, FxProvenance } from "./fx-amount";
 
 type Expect<T extends true> = T;
 type Not<T extends boolean> = T extends true ? false : true;
