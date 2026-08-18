@@ -11,7 +11,9 @@
  * of which the test runner could see.
  */
 
-import { describeProbe, useAccounts, useProbe, useTransactions } from "@waltning/client/hooks";
+import { useAccounts } from "@waltning/client/accounts";
+import { describeProbe, useProbe } from "@waltning/client/connectivity";
+import { useTransactions } from "@waltning/client/transactions";
 import { BalanceRow, Card, GroundPanel, TransactionRow } from "@waltning/ui";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { API_BASE_URL, api, isStaleBundle } from "../src/platform.ts";

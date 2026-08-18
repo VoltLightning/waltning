@@ -13,7 +13,7 @@
  * turn a check red, not silently green.
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -57,6 +57,22 @@ function importsOf(file: string): string[] {
 }
 
 const rel = (f: string) => relative(repoRoot, f);
+
+/**
+ * The apps that exist, read from disk rather than listed.
+ *
+ * A hardcoded `["apps/mobile", "apps/web"]` contributes nothing for the app
+ * that is not there yet — the same silent-empty shape that let two boundary
+ * tests scan deleted directories for a whole PR. Reading the filesystem means
+ * `apps/web` is covered the day it appears, and nothing pretends to cover it
+ * before then.
+ */
+function appRoots(): string[] {
+  return readdirSync(join(repoRoot, "apps"))
+    .filter((name) => name !== "api")
+    .map((name) => join(repoRoot, "apps", name))
+    .filter((dir) => statSync(dir).isDirectory());
+}
 const isTest = (f: string) => /\.(test|type-test)\.tsx?$/.test(f);
 /** `expo-env.d.ts` and friends are generated ambient types, not authored code. */
 const isAmbient = (f: string) => f.endsWith(".d.ts");
@@ -166,11 +182,13 @@ describe("apps hold only what names a platform", () => {
 
   it("every app source file is platform-bound, a test, or a route", () => {
     const offenders: string[] = [];
-    for (const app of ["apps/mobile"]) {
-      for (const file of sourceFiles(join(repoRoot, app))) {
+    const roots = appRoots();
+    expect(roots.length, "client apps found").toBeGreaterThan(0);
+    for (const app of roots) {
+      for (const file of sourceFiles(app)) {
         if (isTest(file) || isAmbient(file)) continue;
         // `app/` is the route tree — composition is its job by definition.
-        if (rel(file).startsWith(`${app}/app/`)) continue;
+        if (/^apps\/[^/]+\/app\//.test(rel(file))) continue;
         if (!NAMES_PLATFORM.test(readFileSync(file, "utf8"))) offenders.push(rel(file));
       }
     }
@@ -186,7 +204,12 @@ describe("apps hold only what names a platform", () => {
     // client, so no test can point it at a stub. Both are properties of where
     // it was written.
     const offenders: string[] = [];
-    for (const file of sourceFiles(join(repoRoot, "apps/mobile/app"))) {
+    const routeDirs = appRoots().map((a) => join(a, "app"));
+    expect(
+      routeDirs.some((d) => statSync(d).isDirectory()),
+      "route trees found",
+    ).toBe(true);
+    for (const file of routeDirs.flatMap((d) => sourceFiles(d))) {
       const text = readFileSync(file, "utf8");
       if (/\bfunction\s+use[A-Z]/.test(text) || /\bconst\s+use[A-Z]\w*\s*=/.test(text)) {
         offenders.push(rel(file));
@@ -206,10 +229,7 @@ describe("design conformance covers every ui folder", () => {
    * it — nothing saw. Scope is the whole point of this check.
    */
   function componentFiles(): string[] {
-    const roots = [
-      join(repoRoot, "packages/ui/src"),
-      ...["apps/mobile", "apps/web"].map((a) => join(repoRoot, a)),
-    ];
+    const roots = [join(repoRoot, "packages/ui/src"), ...appRoots()];
     return roots.flatMap((r) => sourceFiles(r)).filter((f) => /\.tsx$/.test(f) && !isTest(f));
   }
 
@@ -259,5 +279,108 @@ describe("platform-variant files are imported extension-less", () => {
       }
     }
     expect(offenders, "drop the .tsx — a .web.tsx override would be ignored").toEqual([]);
+  });
+});
+
+/* ── §3 · Structure: modules first, layers inside them ───────────────────── */
+
+describe("every src/ is organised by domain, not by layer", () => {
+  /**
+   * **The axis nothing checked.** Every other rule in this file governs what may
+   * *import* what; none governed layout — and the philosophy rests on layout.
+   *
+   * `packages/ui` was `atoms/`, `molecules/`, `organisms/`: the three global
+   * folders the rule bans, six lines below the line that specified them. The FX
+   * concept spanned all three tiers and five files, and one file held
+   * `TransactionRow` and `BalanceRow` together because they are the same *shape*
+   * while belonging to different domains.
+   *
+   * An **allowlist**, not a blocklist of forbidden names. A blocklist is always
+   * one novel name behind — ban `utils/` and `helpers/` arrives, ban that and
+   * `handlers/` does. Set equality means adding a folder is a decision someone
+   * makes here, in the open, rather than a drift nobody sees.
+   */
+  const ALLOWED: Record<string, readonly string[]> = {
+    "apps/api/src": [
+      "common",
+      "config",
+      "http",
+      "infra",
+      "middleware",
+      "modules",
+      "registry",
+      "trpc",
+    ],
+    "packages/core/src": ["registry"],
+    // Foundation (`transport`, `query`) plus one folder per domain.
+    "packages/client/src": [
+      "accounts",
+      "connectivity",
+      "currencies",
+      "query",
+      "transactions",
+      "transport",
+    ],
+    // Foundation (`primitives`, `fx`) plus one folder per domain. The full
+    // target is thirteen; six exist because six have components.
+    "packages/ui/src": ["accounts", "fx", "primitives", "review", "shell", "transactions"],
+    "packages/db/src": ["fx", "seed", "test"],
+  };
+
+  it("has exactly the folders it declares", () => {
+    for (const [root, allowed] of Object.entries(ALLOWED)) {
+      const full = join(repoRoot, root);
+      expect(existsSync(full), `${root} must exist — a scan over a missing root is vacuous`).toBe(
+        true,
+      );
+      const actual = readdirSync(full)
+        .filter((e) => statSync(join(full, e)).isDirectory())
+        .sort();
+      expect(actual, `unexpected folder in ${root} — add it here or move the code`).toEqual([
+        ...allowed,
+      ]);
+    }
+  });
+
+  it("uses no tier name as a folder, anywhere", () => {
+    /**
+     * "Atomic tiers are a scale *inside* a UI module, never three global
+     * folders." A tier may appear at `<domain>/<tier>/` when one domain grows
+     * enough to need the scale — never as a direct child of `src/`, which is
+     * the form that files by size across the whole system.
+     */
+    const TIERS = new Set(["atoms", "molecules", "organisms"]);
+    const LAYERS = new Set(["hooks", "components", "utils", "helpers", "services", "containers"]);
+
+    const offenders: string[] = [];
+    function walk(dir: string, depth: number) {
+      for (const entry of readdirSync(dir)) {
+        if (SKIP.has(entry)) continue;
+        const full = join(dir, entry);
+        if (!statSync(full).isDirectory()) continue;
+        // Directly under a `src/` root is where filing-by-layer does its damage.
+        if (depth === 0 && (TIERS.has(entry) || LAYERS.has(entry))) offenders.push(rel(full));
+        walk(full, depth + 1);
+      }
+    }
+    for (const root of Object.keys(ALLOWED)) walk(join(repoRoot, root), 0);
+
+    expect(offenders, "a layer name as a top-level folder — organise by domain").toEqual([]);
+  });
+
+  it("keeps api modules flat — layers are file suffixes, not folders", () => {
+    // `.operation.ts` and `.service.ts` inside one slice. A `modules/accounts/
+    // services/` folder is the same mistake one level down.
+    const modules = join(repoRoot, "apps/api/src/modules");
+    const nested: string[] = [];
+    for (const mod of readdirSync(modules)) {
+      const dir = join(modules, mod);
+      if (!statSync(dir).isDirectory()) continue;
+      for (const entry of readdirSync(dir)) {
+        if (statSync(join(dir, entry)).isDirectory()) nested.push(`${mod}/${entry}`);
+      }
+    }
+    expect(nested, "a module must be one flat slice").toEqual([]);
+    expect(readdirSync(modules).length, "api modules found").toBeGreaterThan(2);
   });
 });

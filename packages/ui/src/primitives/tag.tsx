@@ -1,6 +1,16 @@
 /**
  * `<Tag>` — `design-system/03` §3.3. Static, non-interactive.
  *
+ * **Filed here, and the `biz` variant is why it was briefly not.** §3.3 gives
+ * `Tag` a variant that marks a business row, which reads like transactions
+ * knowledge — so it moved to `transactions/`, and `FxAmount` immediately had to
+ * reach across a domain boundary to render its amber marker.
+ *
+ * The second consumer settled it: `Tag` is a *shape* — a pill-shaped label with
+ * four inks — and `biz` is one caller's use of it. A variant naming a domain
+ * does not make the component belong to that domain, or `Button` would live
+ * wherever its first `Approve` was written.
+ *
  * **Text is always present; never tint alone (P5).** A colour-only marker is
  * invisible to anyone who cannot distinguish the two colours, and amber carries
  * four different meanings in this system — all of them "asserted or aged rather

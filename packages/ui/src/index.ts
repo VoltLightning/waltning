@@ -1,24 +1,33 @@
 /**
- * The component library, shared by mobile and web — which are **one Expo
- * build** (§4.3), so there is one library rather than one per surface.
+ * The component library, shared by every surface — which are **one Expo build**
+ * today (§4.3), so there is one library rather than one per surface.
  *
- * Three layers, and the boundary between them is *what a component knows*:
+ * **Organised by domain, not by size.** It was `atoms/`, `molecules/` and
+ * `organisms/` — the three global folders `architecture/11` bans — on the
+ * premise that "a design system has no features to slice by". It has: the FX
+ * concept alone spanned all three tiers and five files, and one file held
+ * `TransactionRow` and `BalanceRow` together because they are the same *shape*
+ * while belonging to different domains.
  *
- *   atoms      no domain knowledge      Button, Input, Tag, Icon
- *   molecules  domain meaning, no data  Amount, StatTile, TransactionRow
- *   organisms  a whole section          DiffCard, Shell, CalendarGrid
+ * The full target is thirteen domains, derived from the ~100 components the
+ * design system names:
  *
- * **Screens are not here.** They live in `apps/mobile/app` as expo-router
- * routes, because a screen is a route and owns data fetching — the one thing
- * nothing in this package is allowed to do.
+ *   primitives · shell · states · fx · transactions · accounts ·
+ *   counterparties · recurring · review · calendar · reports · dashboard · tax
  *
- * The design system is the source of truth for what exists:
- * `docs/specification/design-system/` — §3 primitives are atoms, §5 composites
- * are molecules and organisms. 97 components are named there. A screen never
- * invents one (working rule 1).
+ * Six exist, because six have components. The rest are named here so the next
+ * component has a home before it is written, which is the whole argument of
+ * `12-build-order.md`. Adding a folder outside that list is a decision —
+ * `tests/architecture.test.ts` holds the allowlist.
+ *
+ * Atomic tiers may still live **inside** a domain when one grows enough to need
+ * them. That is what "a scale inside a module" means.
  */
 
-export * from "./atoms/index.ts";
-export * from "./molecules/index.ts";
-export * from "./organisms/index.ts";
+export * from "./accounts/index.ts";
+export * from "./fx/index.ts";
+export * from "./primitives/index.ts";
+export * from "./review/index.ts";
+export * from "./shell/index.ts";
 export * as tokens from "./tokens.ts";
+export * from "./transactions/index.ts";

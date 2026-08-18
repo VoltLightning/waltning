@@ -52,12 +52,32 @@ sharing is how the second app becomes expensive.
 ## Modules
 
 ```
-apps/api/src/modules/<domain>/    operation + service + tests, one slice
-packages/client/src/hooks/        one hook per file, named for what it returns
-packages/ui/src/{atoms,molecules,organisms}/
+apps/api/src/modules/<domain>/    operation + service + tests, one flat slice
+packages/client/src/<domain>/     the hooks and models for one domain
+packages/ui/src/<domain>/         the components that domain needs
+packages/*/src/<foundation>/      primitives · fx · transport · query — domain-free
 apps/<surface>/app/               routes; compose only
 apps/<surface>/src/platform.ts    THE forced file — every platform read
 ```
+
+**Every `src/` has an allowlist of top-level folders in
+`tests/architecture.test.ts`.** Adding one is a decision made there, in the open.
+An allowlist rather than a blocklist of bad names: ban `utils/` and `helpers/`
+arrives, ban that and `handlers/` does.
+
+**Never a tier or a layer as a top-level folder** — `atoms/`, `molecules/`,
+`organisms/`, `hooks/`, `components/`, `services/`. Those file by size or by
+kind, which puts one concept in three places: `packages/ui` was three tiers and
+the FX concept spanned all of them across five files, while one file held
+`TransactionRow` and `BalanceRow` because they are the same *shape* and
+different domains. A tier may live **inside** a domain that grows enough to need
+the scale; that is what "a scale inside a module" means.
+
+**The foundation is domain-free by property, not by tier.** `primitives/` earns
+its place because a `Button` means the same thing in a ledger or a chat client;
+`fx/` because `design-system/04` requires every figure to render through
+`<Amount>`, so money is this product's cross-cutting vocabulary. The direction is
+one-way and tested: a domain may import the foundation, never the reverse.
 
 Only `index.ts` is public and **no module or feature imports another** — compose
 at the registry (api) or in `app/` routes. Atomic tiers are a scale *inside* a

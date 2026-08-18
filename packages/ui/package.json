@@ -5,10 +5,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./atoms": "./src/atoms/index.ts",
-    "./molecules": "./src/molecules/index.ts",
-    "./organisms": "./src/organisms/index.ts",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./primitives": "./src/primitives/index.ts",
+    "./fx": "./src/fx/index.ts",
+    "./transactions": "./src/transactions/index.ts",
+    "./accounts": "./src/accounts/index.ts",
+    "./shell": "./src/shell/index.ts",
+    "./review": "./src/review/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
