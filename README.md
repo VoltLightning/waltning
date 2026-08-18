@@ -93,6 +93,13 @@ make e2e         check whatever is running, end to end
 make verify      the gate
 ```
 
+`make setup` leaves you with reference data — currencies and the category tree
+— and an empty ledger. **`pnpm db:fixture` adds placeholder accounts and
+transactions** so the screens have something to show; `pnpm db:fixture --drop`
+removes them again. It is deliberately not part of `db:reset`: a fixture that
+arrives automatically is a fixture someone eventually mistakes for their own
+data.
+
 **`pnpm db:reset` does all four database steps in one** — drop, migrate, grant,
 seed. Nothing is permanent yet, so changing the schema should never mean
 hesitating: edit `schema.ts`, `pnpm db:generate`, reset.

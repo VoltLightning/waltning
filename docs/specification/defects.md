@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 29 — **all closed** |
+| **C** | A stated guarantee is false | 30 — **all closed** |
 | **H** | Wrong data, silently | 31 — **all closed** |
 | **M** | Cannot be implemented from the spec | 24 — **all closed** |
 | **L** | Correct but under-specified | 18 |
@@ -419,6 +419,37 @@ The defect existed only in a client parsing it, so it needed a real client
 against a running server: found by `pnpm e2e` the first time it ran, on a code
 path four tests already covered. The regression is now pinned by asserting the
 *type* of `error.code`, which is the part no reader thinks to check.
+
+### C30 — §2's balance formula subtracted every income
+**Fixed.** The source leg is now signed by type, matching §1 one paragraph
+above it, and `T` — used by §2 and §6 and defined nowhere — is defined as
+`transactions WHERE deleted_at IS NULL`.
+
+`balance(a)` read `sum(-t.amount_original)` over every row on the account.
+§1 defines `signed(t,'from')` as `−amount_original` for expense and the source
+leg of a transfer, and **`+amount_original` for income and adjustment**. The two
+definitions sat one paragraph apart and disagreed.
+
+Concretely: an account opening at zero, one income of 1 000,00, one expense of
+200,00. §1 gives **800,00**. §2's SQL gives **−1 200,00**. Every income row in
+the system, inverted — and an `adjustment`, which carries its own sign, would
+have had its correction reversed.
+
+**Account balance is class F**, so the phone folds the same definition. Both
+surfaces would have been wrong in exactly the same way, agreed with each other,
+and reconciled against the server without a discrepancy — the only shape of
+error that no consistency check can see.
+
+**`money.signed()` in `packages/core` was correct the whole time** — income and
+adjustment return the amount unchanged, expense negates, a transfer negates the
+source and returns `to_amount` for the destination. Exactly §1. So the code
+agreed with the prose and only the *formula* disagreed with both, which is what
+made this latent: it would have been introduced by the first person to implement
+§2 by copying it, and that person would have been reading the authoritative
+document.
+
+Found by building against it rather than reading it: the first screen that
+wanted a balance had to be told what a balance is.
 
 ---
 
