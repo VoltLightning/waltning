@@ -671,6 +671,24 @@ reasoning that retired them is void there and the question is genuinely open
 again. It is not reopened here because public mode is not yet built; it must be
 before it is.
 
+**Multi-tenancy — deferred rather than rejected.** The entries above are
+permanent; this one is a *not yet*.
+
+It is worth stating precisely **because §5.2 has just made the wrong answer look
+easy.** With a public URL and real authentication in place, sharing this with
+another person reads like a one-liner: issue them a passkey. It is not. What has
+no answer is row ownership, tax scope per person, and whose session a write
+belongs to — and *"single user, but real"* is assumed by every table, not only
+by the auth design. Adding a second credential to a single-tenant schema does
+not produce two users; it produces two people sharing one person's ledger.
+
+The irony is that the ledger already models people who owe each other money —
+`counterparties`, debt, settlement. What it does not model is two people who
+both *own* rows.
+
+So if it arrives it starts at the data model and §13's tax isolation, not at the
+perimeter and not at the login.
+
 ---
 
 ### 5.7 Device custody
