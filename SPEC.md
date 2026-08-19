@@ -416,11 +416,35 @@ means the login route is permanently exposed to background scanning and every
 dependency in the stack becomes internet-facing; one authentication bypass
 anywhere in that tree exfiltrates the most sensitive data a person holds, and
 **nightly encrypted backups do not help — they protect against loss, not
-against copying.** The escape hatch, if the constraint ever becomes real, is a
-Cloudflare Tunnel with Zero Trust in front: a real URL, real TLS, no open ports,
-and an identity gate ahead of the app. Added deliberately, and documented as
-putting a third party in the path of a system whose argument is physical
-custody.
+against copying.** #### If a public URL ever earns its place
+
+Two ways to get one without forwarding a port. **They are not ranked, because
+they give up different things** — and the intuitive ranking is backwards, which
+is why this is written down rather than re-derived.
+
+| | Who can read the dashboard in plaintext | What reaches the app unauthenticated |
+|---|---|---|
+| **Tailscale Funnel** | Only you | Waltning's own login page, publicly |
+| **Cloudflare Tunnel + Access** | Cloudflare | Nothing — the identity gate sits in front |
+
+**Funnel does not decrypt.** TLS terminates on the node; the relays forward
+encrypted bytes — *"Funnel relay servers do not decrypt the traffic between
+public devices and your device."* **Cloudflare Tunnel with a public hostname
+does** terminate TLS at the edge, because that is what serving a public HTTPS
+site through a proxy network means.
+
+So the first instinct — that Cloudflare is the safe grown-up option and Funnel
+is the hacky one — has it the wrong way round on the axis this project cares
+about most. Cloudflare puts a third party in the path of a system whose first
+paragraph objects to exactly that. Funnel keeps every byte yours and instead
+makes the login page the perimeter, which is what §5.1 opens by arguing
+against — and **a Funnel hostname is published in certificate transparency
+logs**, so it is a public URL, not an obscure one.
+
+Either is defensible with mandatory TOTP, Argon2id and login rate limiting
+actually built and tested. Neither is free. If one is adopted it arrives as a
+third mode in the table above, with its column stated, and **not** as a quiet
+convenience.
 
 | Property | How |
 |---|---|
