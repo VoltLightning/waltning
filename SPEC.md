@@ -451,6 +451,23 @@ is redundant complexity), a WAF (no public traffic to filter), intrusion
 detection (nothing to detect on a closed network), Vault (four secrets, one
 host).
 
+**Multi-tenancy — deferred rather than rejected.** The four above are permanent;
+this one is a *not yet*. Access is VPN-only to your own devices: no shared
+tailnet nodes, no invited users, no public read-only view. That settles §5.1
+rather than straining it — the reading that would have needed an escape hatch is
+not wanted.
+
+Worth stating because the obvious assumption is wrong: **sharing this with
+another person is not a networking change.** Tailscale would hand them a route
+in twenty minutes. What has no answer is row ownership, tax scope per person,
+and whose session a write belongs to — and §5.2's *single user, but real* is
+assumed by every table, not just by the auth design. The ledger already models
+people who owe each other money (`counterparties`, debt, settlement); what it
+does not model is two people who both *own* rows.
+
+So if it arrives, it starts at the data model and §13's tax isolation, not at
+the perimeter.
+
 ---
 
 ### 5.7 Device custody
