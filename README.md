@@ -2,8 +2,8 @@
 
 Self-hosted personal finance: a mobile app that works offline, a web dashboard,
 receipt scanning, bank-statement import, and an LLM agent with typed tools —
-over a multi-currency Postgres ledger that runs on your own hardware, reachable
-however you like — and never through a forwarded port.
+over a multi-currency Postgres ledger that runs on your own hardware. Passkeys
+at the front door, no password anywhere, and never a forwarded port.
 
 Built to replace [Money Manager](https://www.realbyteapps.com/) (no API, no
 bulk editing, limited export) and the file-based pipeline that grew around it.
@@ -13,13 +13,15 @@ bulk editing, limited export) and the file-based pipeline that grew around it.
 Commercial finance apps put five years of your money on someone else's server
 and give you a subscription and an export button. Waltning inverts that:
 
-- **You own the ledger.** PostgreSQL on a Raspberry Pi at home, reachable three
-  ways: over Tailscale from anywhere, over your own LAN at home, or — if you
-  would rather not install a VPN client — at a public URL behind a password and
-  a mandatory second factor. **No port is ever forwarded in any of them**; the
-  public option is an outbound-only tunnel the Pi opens itself.
-  §5.1 ranks them honestly: the public one is the weakest, because
-  authentication is then the only perimeter rather than the second one.
+- **You own the ledger.** PostgreSQL on a Raspberry Pi at home. **No port is
+  ever forwarded** — reach it over Tailscale from anywhere, over your own LAN,
+  or through an outbound-only tunnel the Pi opens itself.
+- **You sign in with a passkey, and there is no password to steal.** Face ID or
+  a hardware key, `userVerification` required, so it is two factors in one
+  gesture. 1Password, Bitwarden and hardware keys all work — nothing is
+  restricted to platform authenticators. Recovery is a command on your own
+  machine, so there is no code to print and no channel to phish.
+  See [`architecture/13`](docs/specification/architecture/13-identity-and-access.md).
 - **Multi-currency done right.** Every transaction stores its amount *and* the
   FX rate on its own date. Transfers store both sides, so the realized rate is
   a fact and the spread against the reference rate becomes a visible `FX Cost`.

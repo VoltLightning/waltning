@@ -128,7 +128,21 @@ second factor, and it is the weakest of the three because that password becomes
 the only thing in the way.
 
 The phone uses Tailscale, because the whole point of the phone is that it leaves
-the house.
+the house — though it is the one client that does not mind how it gets there,
+for the reason below.
+
+**Signing in.** The dashboard asks for a passkey — Face ID, Touch ID, a security
+key, or a password manager. The phone does not ask for anything: it opens the
+same sign-in page in a browser window, and once you have proved who you are it
+receives its own credential, which you can revoke for that phone alone. This is
+why the phone can reach the server at any address and the dashboard needs a
+fixed one — a passkey is tied to a web address, and the phone's credential is
+not.
+
+**Passkeys need a real domain name and a real certificate.** A server reachable
+only at something like `192.168.1.50` cannot use them, because browsers refuse
+to create a passkey for a bare address. That installation signs in with a
+one-time code instead, and the wiki says plainly that it is the weaker option.
 
 ```mermaid
 graph TB

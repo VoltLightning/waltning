@@ -20,10 +20,15 @@ your own home network, which is simplest and stops at your front door; or a
 public web address behind a password and a mandatory second factor, for people
 who would rather not install a VPN.
 
-The third is the weakest and is labelled that way — with it, your password is
-the only thing between the internet and your ledger, where the other two put a
-whole network in the way first. Even so the Pi opens the connection outward; it
-never waits for one to arrive.
+The third is the weakest and is labelled that way: the other two put a whole
+network in the way before anyone reaches the front door. Even so, the Pi opens
+the connection outward — it never waits for one to arrive.
+
+**You sign in with a passkey.** Face ID, a security key, or a password manager
+like 1Password — whichever you already use. There is no password, so there is
+nothing to guess, reuse or steal, and nothing to type. If you lose every device
+that could sign you in, you recover with one command on the machine in your own
+house, which is a door only someone standing in your house can knock on.
 
 ```mermaid
 graph LR

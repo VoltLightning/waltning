@@ -21,6 +21,7 @@ first module, and the boundaries that must not be crossed while writing the rest
 | 10 | [`10-code-structure.md`](10-code-structure.md) | Where a file goes: layers on the backend, and which way dependencies point |
 | 11 | [`11-client-architecture.md`](11-client-architecture.md) | **An app is a delivery mechanism, not a place where logic lives** — what `packages/client` may import, and why a tier is never a top-level folder |
 | 12 | [`12-forms-and-validation.md`](12-forms-and-validation.md) | Two-layer validation: the client is a courtesy, the server decides, and how a field error reaches a field |
+| 13 | [`13-identity-and-access.md`](13-identity-and-access.md) | **Authentication is the perimeter, not the network** — passkeys, why the app authenticates through a browser it does not own, and how a client finds its server |
 
 **Sequence of work** is [`../build-order.md`](../build-order.md) — the single
 plan reconciling `SPEC.md` §16 with the component order, including the Phase 0.5

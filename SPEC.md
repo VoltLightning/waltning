@@ -425,7 +425,9 @@ means the login route is permanently exposed to background scanning and every
 dependency in the stack becomes internet-facing; one authentication bypass
 anywhere in that tree exfiltrates the most sensitive data a person holds, and
 **nightly encrypted backups do not help — they protect against loss, not
-against copying.** #### If a public URL ever earns its place
+against copying.**
+
+#### If a public URL ever earns its place
 
 Two ways to get one without forwarding a port. **They are not ranked, because
 they give up different things** — and the intuitive ranking is backwards, which
@@ -485,12 +487,19 @@ publishes the ledger. This ordering is not advice.
   exponentially; never lock permanently.
 - **No account enumeration** — the same message *and the same timing* for an
   unknown user as for a wrong password.
-- **No version disclosure.** `/healthz` publishes the build SHA, and against a
-  public repository that names the exact commit and therefore the exact known
-  issues. It cannot simply move behind auth: Rule 0 needs a probe callable
-  *before* sign-in, and three `link` states become unreachable without one. So
-  **`build` becomes a short hash of the SHA** — `isStaleBundle()` only ever
-  compares it, so version-skew detection and Rule 0 both survive intact.
+- **No version disclosure — and hashing the SHA is not how.** `/healthz`
+  publishes the build SHA, which against a public repository names the exact
+  commit and therefore the exact known issues. An earlier draft proposed
+  replacing it with a short hash of that SHA. **That was wrong and was
+  demonstrated wrong:** a keyless digest of a value drawn from an enumerable
+  public set is an identity function to anyone holding the set — a table over
+  the repository's own history reversed it in under a millisecond. It also
+  addressed one emitter of four; the SHA is stamped on **every** response header
+  by Rule 0's own middleware, returned by `ping`, and inlined into the web
+  bundle. The build identity must therefore be **a per-deploy random token,
+  generated at deploy time and unrelated to the commit**, injected into both
+  images from one place. `isStaleBundle()` only ever compares two values, so
+  skew detection is unaffected.
 - **`/readyz` requires authentication**, since it reports which dependency is
   down. `degraded` is then only observable while signed in, which is acceptable:
   `unauthenticated` is already its own state.
@@ -503,6 +512,13 @@ breath as offering it.** Someone choosing convenience should know what they
 bought; someone who wants the strong version should not have to infer that the
 default exists for a reason.
 
+#### Tailscale mode, in detail
+
+Everything below describes **Tailscale mode only**. It sat unlabelled beneath
+the public-mode paragraph for one revision, where it read as a description of
+public mode — promising node revocation and tailnet ACLs to a configuration that
+has neither.
+
 | Property | How |
 |---|---|
 | Transport | WireGuard, mutually authenticated; keys never leave devices |
@@ -512,10 +528,13 @@ default exists for a reason.
 | Key rotation | Node key expiry left **on**, forcing periodic re-auth |
 | Lost device | Revoke that node in the admin console — no password reset, no re-issue |
 
-**Consequence to accept:** the phone runs Tailscale permanently, and any device
-that wants access from outside the house runs it too. A laptop at home does not
-— that is what LAN mode is for — but a borrowed laptop anywhere gets nothing in
-either mode, by design.
+**Consequence to accept in this mode:** the phone runs Tailscale permanently,
+and so does any device that wants access from outside the house. A laptop at
+home does not — that is what LAN mode is for.
+
+An earlier draft ended this paragraph with *"a borrowed laptop anywhere gets
+nothing in either mode, by design"*, which stopped being true thirty-five lines
+above it: a borrowed laptop is exactly what public mode exists to serve.
 
 **Worth doing before deployment:** audit what else on the LAN publishes ports.
 Development stacks routinely bind `0.0.0.0` rather than loopback, which makes
@@ -525,53 +544,74 @@ tolerates.
 
 ### 5.2 Authentication
 
-Single user, but real. §5.1 is the perimeter; this stands behind it — and in
-LAN mode it stands behind rather less, since anything already on the home
-network reaches the login page. That is the argument for it being real.
+Single user, but real — **and this is the perimeter now, not §5.1.**
 
-#### The web client — what you know
+That inversion is deliberate. A network decides who may open a socket, which is
+not the same question as who you are, and making it the perimeter meant a VPN
+client was a prerequisite for anyone else running this at all. §5.1 is a
+deployment choice; this section is the security boundary, and it has to be
+strong enough to stand alone in the mode where it does.
 
-- Argon2id password hash, memory-hard parameters **tuned on the Pi** to ~250 ms.
-  Tuned on a laptop they are either too weak there or unusable here.
-- **TOTP second factor, mandatory.** Recovery codes generated once, stored offline.
-- Sessions: HTTP-only, `Secure`, `SameSite=Strict` cookies; 30-day sliding
-  expiry; server-side session table so a session can be killed.
-- Rate limiting on the login route regardless — cheap, and the perimeter is not
-  the only thing that can fail.
+**The full design, with its evidence, is
+[`architecture/13-identity-and-access.md`](docs/specification/architecture/13-identity-and-access.md).**
 
-#### The mobile client — what you have, then what you are
+#### Passkeys, and no password at all
 
-Two controls that are constantly confused, so they are named separately:
+- **A passkey with `userVerification: "required"` is the multi-factor.** Two
+  factors in one gesture: the authenticator you hold, and the biometric or PIN
+  that unlocks it. Without UV required the server accepts a credential that was
+  never unlocked, and it silently becomes one factor.
+- **`residentKey: "required"`**, so login needs no username.
+- **`authenticatorAttachment` unset**, which is what lets 1Password, Bitwarden
+  and hardware keys register at all. Restricting to `platform` would exclude
+  every one of them, and the symptom would look like a broken password manager
+  rather than a server setting.
+- **No password exists in the system.** Argon2id, its tuning on the Pi, and
+  timing-equality between unknown-user and wrong-password all leave with it.
 
-| | Protects | Mechanism | When |
-|---|---|---|---|
-| **Server session** | Reaching the API | Token in `expo-secure-store` (iOS Keychain), `AFTER_FIRST_UNLOCK`, **`ThisDeviceOnly`** | Issued once at enrolment by full web-grade auth; 30-day sliding |
-| **App unlock** | The replica *already on the phone* | `LocalAuthentication` — Face ID, falling back to the **device passcode** | Every launch, before any database key is unwrapped (§5.7) |
+#### TOTP is an additional factor, never an alternative one
 
-**The unlock is not a login, and this is the distinction that matters.** The
-session token governs whether the phone may talk to the Pi. Face ID governs
-whether the person holding the phone may read what it already has — and what it
-already has is every account by name, every counterparty with balances, and
-several hundred transactions with payee text. A stolen unlocked phone with no
-app unlock is a total disclosure that never touches the network, so the
-perimeter is irrelevant to it.
+An account's strength is `min(login, recovery)`, so a second path to a full
+session is a weaker path rather than a spare one. Phishing kits already exploit
+this directly, rewriting the login page to hide the passkey option.
 
-**No app-specific PIN.** The fallback is the device passcode, not a second
-secret. An app PIN is one more thing to forget, is typed in public more often
-than a passcode, and is almost always weaker than the one iOS already enforces —
-while adding a recovery path that is itself an attack surface.
+So TOTP lives in exactly two places: **step-up** on operations that deserve a
+fresh proof of intent — the §11.2 tax-sensitive set, closing a period, enrolling
+a device — and as the **only** factor on a deployment with no domain, where
+WebAuthn is impossible and the weakness is stated rather than hidden. It is
+never a *"trouble with your passkey?"* link.
 
-**Enrolment is the one moment mobile does full auth**: password and TOTP, once,
-producing the token. Thereafter the phone is *what you have* and Face ID is
-*what you are*. When the session expires, or `sign out everywhere` is used from
-S30, enrolment happens again — which is the intended cost, because it is also
-the revocation path.
+#### The app authenticates through a browser it does not own
 
-**Two orthogonal expiries, deliberately.** The session's 30 days bounds server
-access; §5.7's replica TTL drops the local copy if the app has not authenticated
-in N days, bounding the phone-in-a-drawer case. Neither implies the other, and
-collapsing them would mean a phone that cannot sync quietly keeping a full
-ledger forever.
+A native iOS app **cannot** use passkeys against a domain unknown at build time
+— the entitlement is inside the code signature and the association file is
+fetched by Apple's CDN. So the app opens the user's own server's login page in
+`ASWebAuthenticationSession` and receives a per-device credential. It has no
+password field, no TOTP entry and no WebAuthn call, which is what keeps
+self-hosting possible and what lets the server change how it authenticates
+without touching the client.
+
+#### Recovery is a CLI on the box
+
+`waltning enrol` mints a short-TTL single-use token over SSH. No endpoint to
+phish, nothing to print, nothing to lose. The recovery channel is harder to
+compromise than the login, which is the test a printed code fails.
+
+#### Sessions
+
+- **Opaque and database-backed**, shaped `id.secret` — the id is safe in an
+  audit row, a log line and a *your devices* screen; the secret is not. ≥128
+  bits, SHA-256 at rest, constant-time compare.
+- **Bearer on native, cookie on web.** Not a preference: React Native shares one
+  process-wide cookie store, `credentials: "omit"` does not work, and
+  `Set-Cookie` on a 302 is broken.
+- **Refresh rotation with reuse detection**, revoking the whole family on replay.
+- **Never bound to an IP**, which changes constantly on mobile.
+- **30-day sliding, and the deviation is argued rather than assumed.** NIST AAL2
+  is 24 hours absolute and 1 hour inactive; the justification is §14.3's offline
+  design, where a session expiring mid-trip strands the outbox.
+- Rate limiting keyed on the **account**. Per-IP is decorative once a /64 can
+  rotate.
 
 ### 5.3 Secrets
 
@@ -619,10 +659,17 @@ they fail silently for a while first.
 
 ### 5.6 Deliberately not done
 
-Client certificates (Tailscale already does mutual authentication; mTLS on top
-is redundant complexity), a WAF (no public traffic to filter), intrusion
-detection (nothing to detect on a closed network), Vault (four secrets, one
-host).
+Vault (four secrets, one host). And, **in Tailscale and LAN modes only**:
+client certificates (Tailscale already does mutual authentication), a WAF (no
+public traffic to filter), intrusion detection (nothing to detect on a closed
+network).
+
+**Those three justifications do not survive public mode**, and saying so is the
+point of qualifying them. A deployment with a public URL has public traffic, is
+not a closed network, and has no tailnet mutual authentication — so the
+reasoning that retired them is void there and the question is genuinely open
+again. It is not reopened here because public mode is not yet built; it must be
+before it is.
 
 ---
 
