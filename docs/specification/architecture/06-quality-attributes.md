@@ -103,8 +103,8 @@ What *is* required is that unavailability never costs data:
 
 | Attribute | Position |
 |---|---|
-| Attack surface | No public ingress. Nothing on the internet can initiate a connection |
-| Authentication | Argon2id (~250 ms on the Pi) + **mandatory** TOTP, behind Tailscale |
+| Attack surface | **No forwarded port in any mode.** Two of the three modes accept no inbound connection at all; the third is an outbound-only tunnel |
+| Authentication | **Passkeys, `userVerification: "required"` — no password exists.** TOTP is a step-up factor and never an alternative path to a session. Recovery is a CLI on the box, so there is no phishable channel (`architecture/13`) |
 | Authorization | Single user. The only privilege boundary is `waltning_export` |
 | Secrets | Never in the app bundle; all model calls originate server-side |
 | Data at rest | Receipt images age-encrypted before leaving the Pi; backups age-encrypted |

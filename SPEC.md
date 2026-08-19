@@ -137,7 +137,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Hosting | Raspberry Pi in the flat, Docker Compose | Physical custody of the data |
-| Network access | **Tailscale only** — no public ingress | §5 |
+| Network access | **Three modes — Tailscale, LAN, public.** No port is ever forwarded in any of them | §5 |
 | Database | PostgreSQL 16 | Exact numerics, real constraints, one dependency |
 | Language | TypeScript end to end | One language across API, web, mobile |
 | Repo | Monorepo, pnpm workspaces | Shared types; `pnpm deploy --filter` for lean Pi images |
@@ -169,7 +169,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
             └──────────────┬─────────────┘
                            │
               ╔════════════▼═════════════╗
-              ║   Tailscale (WireGuard)  ║   no public ingress
+              ║   Tailscale (WireGuard)  ║   default of three modes
               ╚════════════┬═════════════╝
                            │
               ┌────────────▼──────────────────────┐
@@ -355,17 +355,169 @@ Five years of complete financial history, plus business records. The threat
 model is not "a determined attacker targets me" — it is "this ends up reachable
 from the internet and something automated finds it."
 
-### 5.1 Access model — Tailscale only
+### 5.1 Access model — three modes, and one invariant
 
-The Pi has **no public ingress**. No port forwarding, no dynamic DNS, no
-tunnel. Devices join a private WireGuard mesh; anything not enrolled cannot
-route to the service at all.
+**The invariant is that no port is ever forwarded.** Not "no public ingress" —
+one of the three modes is deliberately public, and pretending otherwise would
+be the kind of claim this specification exists to stop making. What holds in all
+three is that the Pi never accepts an inbound connection from a router: every
+mode is either private or reached through an **outbound-only** tunnel the Pi
+itself establishes.
 
-This is categorically stronger than ngrok with good authentication, not
-incrementally. A public URL means the login page is the entire perimeter and is
-exposed to background scanning permanently. With Tailscale there is no login
-page to find, and authentication becomes defense in depth rather than the only
-line.
+That distinction is worth being precise about, because a forwarded port is the
+one arrangement where an unpatched service is discovered by mass scanning
+regardless of whether anybody knows the address.
+
+#### The three modes
+
+| Mode | Reaches it | TLS | Perimeter | Costs |
+|---|---|---|---|---|
+| **Tailscale** (default) | Anywhere | Tailscale cert for `waltning.<tailnet>.ts.net` | The mesh | Every device runs a VPN client |
+| **LAN** | Home only | A **real** cert via DNS-01 for a name whose `A` record is the private IP | Your home network | Does not follow you out of the house |
+| **Public** | Anywhere, any browser | Funnel or Cloudflare (below) | **Authentication alone** | §5.2 must be right, not merely written |
+
+**The first two are not ranked against each other; the third is ranked below
+both, explicitly.** LAN mode is not a degraded Tailscale — it exposes strictly
+less, because there is no mesh to join and no node to revoke. Public mode is
+genuinely weaker than either, and is offered anyway because requiring a VPN
+client is a real barrier and password-plus-TOTP is what a great deal of serious
+self-hosted software ships behind.
+
+In the first two modes a flaw in authentication is survivable, because nothing
+unenrolled can reach it. That is why §5.2 is described there as defence in
+depth. In the third it is the only line.
+
+**LAN mode needs a real certificate, and that is not cosmetic.** §5.2's session
+cookie is `Secure`, and browsers do not send `Secure` cookies over plain HTTP.
+Serving the dashboard on `http://192.168.x.x` therefore does not produce a
+slightly-less-private system; it produces one where **you are logged out on
+every request**. A self-signed certificate replaces that with a click-through
+warning trained into muscle memory, which is its own cost. DNS-01 against a
+domain you control issues a valid certificate for a name resolving to a private
+address, with nothing exposed to obtain it.
+
+#### The clients do not have the same requirement
+
+| Client | Modes | Why |
+|---|---|---|
+| **Web** | LAN **or** Tailscale | A browser at a desk. LAN covers the common case; Tailscale covers the rest |
+| **Mobile** | Tailscale | It has to work away from home, and it is the client that already carries a session token and a replica |
+
+**Mobile's bar is lower than it looks, because the app is offline-first.**
+`architecture/08` gives it a replica and an outbox, and §5.7 refuses to drain
+while locked at all — the sync control drains on tap. So *"reach the backend
+when I am not home"* means **sync when it can**, not hold a connection. A
+transport that works most of the time satisfies it completely, which is why
+Tailscale needs no companion.
+
+**The one real risk is iOS's single VPN slot.** A work VPN or a privacy VPN
+displaces Tailscale, and the app then looks offline while the phone plainly has
+internet. This is already a named `link` state with its own remedy (§14.3) —
+*"another VPN holding iOS's single tunnel slot"* — and it stays a named state
+rather than a thing to engineer around. The outbox is what makes it survivable:
+the queue waits, and nothing is lost.
+
+#### What is deliberately not a mode
+
+**A forwarded port, with or without dynamic DNS.** The asset here is five years
+of complete financial history and the records behind a tax filing. A public port
+means the login route is permanently exposed to background scanning and every
+dependency in the stack becomes internet-facing; one authentication bypass
+anywhere in that tree exfiltrates the most sensitive data a person holds, and
+**nightly encrypted backups do not help — they protect against loss, not
+against copying.**
+
+#### If a public URL ever earns its place
+
+Two ways to get one without forwarding a port. **They are not ranked, because
+they give up different things** — and the intuitive ranking is backwards, which
+is why this is written down rather than re-derived.
+
+| | Who can read the dashboard in plaintext | What reaches the app unauthenticated |
+|---|---|---|
+| **Tailscale Funnel** | Only you | Waltning's own login page, publicly |
+| **Cloudflare Tunnel + Access** | Cloudflare | Nothing — the identity gate sits in front |
+
+**Funnel does not decrypt.** TLS terminates on the node; the relays forward
+encrypted bytes — *"Funnel relay servers do not decrypt the traffic between
+public devices and your device."* **Cloudflare Tunnel with a public hostname
+does** terminate TLS at the edge, because that is what serving a public HTTPS
+site through a proxy network means.
+
+So the first instinct — that Cloudflare is the safe grown-up option and Funnel
+is the hacky one — has it the wrong way round on the axis this project cares
+about most. Cloudflare puts a third party in the path of a system whose first
+paragraph objects to exactly that. Funnel keeps every byte yours and instead
+makes the login page the perimeter, which is what §5.1 opens by arguing
+against — and **a Funnel hostname is published in certificate transparency
+logs**, so it is a public URL, not an obscure one.
+
+Either is defensible with mandatory TOTP, Argon2id and login rate limiting
+actually built and tested. Neither is free.
+
+#### Public mode — supported, and the weakest of the three
+
+**Adopted as a third mode**, because requiring a VPN client is a real barrier
+for anyone self-hosting this, and password-plus-TOTP in front of a personal
+service is what a great deal of serious software ships. It is offered with its
+cost stated rather than withheld.
+
+| Mode | Reaches it | Perimeter |
+|---|---|---|
+| Tailscale | Anywhere | The mesh. Auth is defence in depth |
+| LAN | Home only | Your home network. Auth is defence in depth |
+| **Public** | Anywhere, any browser | **Auth, and nothing else** |
+
+That last row is the whole difference. In the first two modes a flaw in
+authentication is survivable because nothing unenrolled can reach it. In the
+third there is no second line, so every promise §5.2 makes has to be true rather
+than merely written.
+
+**Hard prerequisite: §5.2 ships first.** The API is currently open by
+construction — *"authentication arrives with the session card; until then this
+is open."* Enabling public mode before then does not weaken the perimeter, it
+publishes the ledger. This ordering is not advice.
+
+**What public mode additionally requires**, none of which matters behind a VPN:
+
+- **Rate limiting per account as well as per IP.** IPv6 rotation makes per-IP
+  limiting close to decorative on its own.
+- **Lockout that cannot be weaponised.** Locking an account on failed attempts
+  hands an attacker a denial-of-service against the only user. Throttle
+  exponentially; never lock permanently.
+- **No account enumeration** — the same message *and the same timing* for an
+  unknown user as for a wrong password.
+- **No version disclosure — and hashing the SHA is not how.** `/healthz`
+  publishes the build SHA, which against a public repository names the exact
+  commit and therefore the exact known issues. An earlier draft proposed
+  replacing it with a short hash of that SHA. **That was wrong and was
+  demonstrated wrong:** a keyless digest of a value drawn from an enumerable
+  public set is an identity function to anyone holding the set — a table over
+  the repository's own history reversed it in under a millisecond. It also
+  addressed one emitter of four; the SHA is stamped on **every** response header
+  by Rule 0's own middleware, returned by `ping`, and inlined into the web
+  bundle. The build identity must therefore be **a per-deploy random token,
+  generated at deploy time and unrelated to the commit**, injected into both
+  images from one place. `isStaleBundle()` only ever compares two values, so
+  skew detection is unaffected.
+- **`/readyz` requires authentication**, since it reports which dependency is
+  down. `degraded` is then only observable while signed in, which is acceptable:
+  `unauthenticated` is already its own state.
+- **HSTS**, and the security headers a browser-facing origin needs.
+- **Recovery codes generated and stored offline before it is enabled**, because
+  a locked-out account is now a locked-out system with no LAN path in.
+
+**It is documented as the weakest option, and the docs say so in the same
+breath as offering it.** Someone choosing convenience should know what they
+bought; someone who wants the strong version should not have to infer that the
+default exists for a reason.
+
+#### Tailscale mode, in detail
+
+Everything below describes **Tailscale mode only**. It sat unlabelled beneath
+the public-mode paragraph for one revision, where it read as a description of
+public mode — promising node revocation and tailnet ACLs to a configuration that
+has neither.
 
 | Property | How |
 |---|---|
@@ -376,10 +528,13 @@ line.
 | Key rotation | Node key expiry left **on**, forcing periodic re-auth |
 | Lost device | Revoke that node in the admin console — no password reset, no re-issue |
 
-**Consequence to accept:** every device that uses Waltning must run Tailscale.
-No borrowing an unenrolled laptop. If that becomes a real constraint, the
-escape hatch is a Cloudflare Tunnel with Zero Trust in front — added
-deliberately, not as a default.
+**Consequence to accept in this mode:** the phone runs Tailscale permanently,
+and so does any device that wants access from outside the house. A laptop at
+home does not — that is what LAN mode is for.
+
+An earlier draft ended this paragraph with *"a borrowed laptop anywhere gets
+nothing in either mode, by design"*, which stopped being true thirty-five lines
+above it: a borrowed laptop is exactly what public mode exists to serve.
 
 **Worth doing before deployment:** audit what else on the LAN publishes ports.
 Development stacks routinely bind `0.0.0.0` rather than loopback, which makes
@@ -389,16 +544,74 @@ tolerates.
 
 ### 5.2 Authentication
 
-Single user, but real. Tailscale is the perimeter; this stands behind it.
+Single user, but real — **and this is the perimeter now, not §5.1.**
 
-- Argon2id password hash, memory-hard parameters tuned to the Pi (~250 ms).
-- **TOTP second factor, mandatory.** Recovery codes generated once, stored offline.
-- Sessions: HTTP-only, `Secure`, `SameSite=Strict` cookies; 30-day sliding
-  expiry; server-side session table so a session can be killed.
-- Mobile stores its session token in `expo-secure-store` (iOS Keychain), never
-  `AsyncStorage`.
-- Rate limiting on the login route regardless — cheap, and the perimeter is not
-  the only thing that can fail.
+That inversion is deliberate. A network decides who may open a socket, which is
+not the same question as who you are, and making it the perimeter meant a VPN
+client was a prerequisite for anyone else running this at all. §5.1 is a
+deployment choice; this section is the security boundary, and it has to be
+strong enough to stand alone in the mode where it does.
+
+**The full design, with its evidence, is
+[`architecture/13-identity-and-access.md`](docs/specification/architecture/13-identity-and-access.md).**
+
+#### Passkeys, and no password at all
+
+- **A passkey with `userVerification: "required"` is the multi-factor.** Two
+  factors in one gesture: the authenticator you hold, and the biometric or PIN
+  that unlocks it. Without UV required the server accepts a credential that was
+  never unlocked, and it silently becomes one factor.
+- **`residentKey: "required"`**, so login needs no username.
+- **`authenticatorAttachment` unset**, which is what lets 1Password, Bitwarden
+  and hardware keys register at all. Restricting to `platform` would exclude
+  every one of them, and the symptom would look like a broken password manager
+  rather than a server setting.
+- **No password exists in the system.** Argon2id, its tuning on the Pi, and
+  timing-equality between unknown-user and wrong-password all leave with it.
+
+#### TOTP is an additional factor, never an alternative one
+
+An account's strength is `min(login, recovery)`, so a second path to a full
+session is a weaker path rather than a spare one. Phishing kits already exploit
+this directly, rewriting the login page to hide the passkey option.
+
+So TOTP lives in exactly two places: **step-up** on operations that deserve a
+fresh proof of intent — the §11.2 tax-sensitive set, closing a period, enrolling
+a device — and as the **only** factor on a deployment with no domain, where
+WebAuthn is impossible and the weakness is stated rather than hidden. It is
+never a *"trouble with your passkey?"* link.
+
+#### The app authenticates through a browser it does not own
+
+A native iOS app **cannot** use passkeys against a domain unknown at build time
+— the entitlement is inside the code signature and the association file is
+fetched by Apple's CDN. So the app opens the user's own server's login page in
+`ASWebAuthenticationSession` and receives a per-device credential. It has no
+password field, no TOTP entry and no WebAuthn call, which is what keeps
+self-hosting possible and what lets the server change how it authenticates
+without touching the client.
+
+#### Recovery is a CLI on the box
+
+`waltning enrol` mints a short-TTL single-use token over SSH. No endpoint to
+phish, nothing to print, nothing to lose. The recovery channel is harder to
+compromise than the login, which is the test a printed code fails.
+
+#### Sessions
+
+- **Opaque and database-backed**, shaped `id.secret` — the id is safe in an
+  audit row, a log line and a *your devices* screen; the secret is not. ≥128
+  bits, SHA-256 at rest, constant-time compare.
+- **Bearer on native, cookie on web.** Not a preference: React Native shares one
+  process-wide cookie store, `credentials: "omit"` does not work, and
+  `Set-Cookie` on a 302 is broken.
+- **Refresh rotation with reuse detection**, revoking the whole family on replay.
+- **Never bound to an IP**, which changes constantly on mobile.
+- **30-day sliding, and the deviation is argued rather than assumed.** NIST AAL2
+  is 24 hours absolute and 1 hour inactive; the justification is §14.3's offline
+  design, where a session expiring mid-trip strands the outbox.
+- Rate limiting keyed on the **account**. Per-IP is decorative once a /64 can
+  rotate.
 
 ### 5.3 Secrets
 
@@ -446,10 +659,35 @@ they fail silently for a while first.
 
 ### 5.6 Deliberately not done
 
-Client certificates (Tailscale already does mutual authentication; mTLS on top
-is redundant complexity), a WAF (no public traffic to filter), intrusion
-detection (nothing to detect on a closed network), Vault (four secrets, one
-host).
+Vault (four secrets, one host). And, **in Tailscale and LAN modes only**:
+client certificates (Tailscale already does mutual authentication), a WAF (no
+public traffic to filter), intrusion detection (nothing to detect on a closed
+network).
+
+**Those three justifications do not survive public mode**, and saying so is the
+point of qualifying them. A deployment with a public URL has public traffic, is
+not a closed network, and has no tailnet mutual authentication — so the
+reasoning that retired them is void there and the question is genuinely open
+again. It is not reopened here because public mode is not yet built; it must be
+before it is.
+
+**Multi-tenancy — deferred rather than rejected.** The entries above are
+permanent; this one is a *not yet*.
+
+It is worth stating precisely **because §5.2 has just made the wrong answer look
+easy.** With a public URL and real authentication in place, sharing this with
+another person reads like a one-liner: issue them a passkey. It is not. What has
+no answer is row ownership, tax scope per person, and whose session a write
+belongs to — and *"single user, but real"* is assumed by every table, not only
+by the auth design. Adding a second credential to a single-tenant schema does
+not produce two users; it produces two people sharing one person's ledger.
+
+The irony is that the ledger already models people who owe each other money —
+`counterparties`, debt, settlement. What it does not model is two people who
+both *own* rows.
+
+So if it arrives it starts at the data model and §13's tax isolation, not at the
+perimeter and not at the login.
 
 ---
 

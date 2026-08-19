@@ -13,9 +13,22 @@ next to code.
 
 ## What is where
 
-Everything runs on one Raspberry Pi in your home. Nothing on the public
-internet accepts a connection — the only way in is Tailscale, a private network
-that joins your own devices together and refuses everyone else.
+Everything runs on one Raspberry Pi in your home, and **no port on your router
+is ever opened.** There are three ways to reach it: Tailscale, a private network
+joining your own devices and refusing everyone else, which works from anywhere;
+your own home network, which is simplest and stops at your front door; or a
+public web address behind a password and a mandatory second factor, for people
+who would rather not install a VPN.
+
+The third is the weakest and is labelled that way: the other two put a whole
+network in the way before anyone reaches the front door. Even so, the Pi opens
+the connection outward — it never waits for one to arrive.
+
+**You sign in with a passkey.** Face ID, a security key, or a password manager
+like 1Password — whichever you already use. There is no password, so there is
+nothing to guess, reuse or steal, and nothing to type. If you lose every device
+that could sign you in, you recover with one command on the machine in your own
+house, which is a door only someone standing in your house can knock on.
 
 ```mermaid
 graph LR

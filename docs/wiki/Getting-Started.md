@@ -120,8 +120,29 @@ else would be testing the wrong thing.
 ## On a Raspberry Pi
 
 The real deployment. Everything runs as containers under Docker Compose, and
-the only route in is Tailscale — a private network that connects your own
-devices to each other and nothing else.
+there are three routes in — **none of which opens a port on your router.**
+Tailscale is a private network connecting your own devices and nothing else, and
+works wherever you are. Your own home network is simpler and stops at your front
+door. A public web address is the third, behind a password and a mandatory
+second factor, and it is the weakest of the three because that password becomes
+the only thing in the way.
+
+The phone uses Tailscale, because the whole point of the phone is that it leaves
+the house — though it is the one client that does not mind how it gets there,
+for the reason below.
+
+**Signing in.** The dashboard asks for a passkey — Face ID, Touch ID, a security
+key, or a password manager. The phone does not ask for anything: it opens the
+same sign-in page in a browser window, and once you have proved who you are it
+receives its own credential, which you can revoke for that phone alone. This is
+why the phone can reach the server at any address and the dashboard needs a
+fixed one — a passkey is tied to a web address, and the phone's credential is
+not.
+
+**Passkeys need a real domain name and a real certificate.** A server reachable
+only at something like `192.168.1.50` cannot use them, because browsers refuse
+to create a passkey for a bare address. That installation signs in with a
+one-time code instead, and the wiki says plainly that it is the weaker option.
 
 ```mermaid
 graph TB
@@ -155,8 +176,13 @@ and permissions, which the API's own user does not have (and should not have)
 the rights to apply.
 
 **PostgreSQL listens only on the machine itself.** Devices reach the API over
-Tailscale; nothing is forwarded from your router, and there is no public address
-to scan.
+Tailscale or over your own LAN; nothing is forwarded from your router, and there
+is no public address to scan in either case.
+
+**On the LAN, use a real certificate rather than plain HTTP.** This is not
+tidiness: the session cookie is marked `Secure`, browsers refuse to send those
+over an unencrypted connection, and the visible symptom is being logged out on
+every single request rather than anything that looks like a security setting.
 
 **Backups are encrypted before they leave the Pi**, and restoring is part of the
 written procedure. A backup nobody has ever restored is a hypothesis.
