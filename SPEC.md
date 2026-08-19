@@ -137,7 +137,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Hosting | Raspberry Pi in the flat, Docker Compose | Physical custody of the data |
-| Network access | **Tailscale only** — no public ingress | §5 |
+| Network access | **Three modes — Tailscale, LAN, public.** No port is ever forwarded in any of them | §5 |
 | Database | PostgreSQL 16 | Exact numerics, real constraints, one dependency |
 | Language | TypeScript end to end | One language across API, web, mobile |
 | Repo | Monorepo, pnpm workspaces | Shared types; `pnpm deploy --filter` for lean Pi images |
@@ -169,7 +169,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
             └──────────────┬─────────────┘
                            │
               ╔════════════▼═════════════╗
-              ║   Tailscale (WireGuard)  ║   no public ingress
+              ║   Tailscale (WireGuard)  ║   default of three modes
               ╚════════════┬═════════════╝
                            │
               ┌────────────▼──────────────────────┐
@@ -355,28 +355,37 @@ Five years of complete financial history, plus business records. The threat
 model is not "a determined attacker targets me" — it is "this ends up reachable
 from the internet and something automated finds it."
 
-### 5.1 Access model — no public ingress, in two supported modes
+### 5.1 Access model — three modes, and one invariant
 
-The Pi has **no public ingress** in any mode. No port forwarding, no dynamic
-DNS, no tunnel. That is the invariant; how you reach it inside that constraint
-is a deployment choice with two supported answers.
+**The invariant is that no port is ever forwarded.** Not "no public ingress" —
+one of the three modes is deliberately public, and pretending otherwise would
+be the kind of claim this specification exists to stop making. What holds in all
+three is that the Pi never accepts an inbound connection from a router: every
+mode is either private or reached through an **outbound-only** tunnel the Pi
+itself establishes.
 
-This is categorically stronger than ngrok with good authentication, not
-incrementally. A public URL means the login page is the entire perimeter and is
-exposed to background scanning permanently. With no public name there is no
-login page to find, and authentication becomes defense in depth rather than the
-only line.
+That distinction is worth being precise about, because a forwarded port is the
+one arrangement where an unpatched service is discovered by mass scanning
+regardless of whether anybody knows the address.
 
-#### The two modes
+#### The three modes
 
-| Mode | Reaches it | TLS | Costs |
-|---|---|---|---|
-| **Tailscale** (default) | Anywhere | Tailscale-issued cert for `waltning.<tailnet>.ts.net` | Every device runs a VPN client |
-| **LAN** | Home network only | A **real** certificate for a name whose `A` record is the private IP, issued by DNS-01 | No access away from home |
+| Mode | Reaches it | TLS | Perimeter | Costs |
+|---|---|---|---|---|
+| **Tailscale** (default) | Anywhere | Tailscale cert for `waltning.<tailnet>.ts.net` | The mesh | Every device runs a VPN client |
+| **LAN** | Home only | A **real** cert via DNS-01 for a name whose `A` record is the private IP | Your home network | Does not follow you out of the house |
+| **Public** | Anywhere, any browser | Funnel or Cloudflare (below) | **Authentication alone** | §5.2 must be right, not merely written |
 
-**Both are honest options; neither is a fallback for the other.** LAN mode is
-not a degraded Tailscale — it exposes strictly less, because there is no mesh
-to join and no node to revoke. What it cannot do is follow you out of the house.
+**The first two are not ranked against each other; the third is ranked below
+both, explicitly.** LAN mode is not a degraded Tailscale — it exposes strictly
+less, because there is no mesh to join and no node to revoke. Public mode is
+genuinely weaker than either, and is offered anyway because requiring a VPN
+client is a real barrier and password-plus-TOTP is what a great deal of serious
+self-hosted software ships behind.
+
+In the first two modes a flaw in authentication is survivable, because nothing
+unenrolled can reach it. That is why §5.2 is described there as defence in
+depth. In the third it is the only line.
 
 **LAN mode needs a real certificate, and that is not cosmetic.** §5.2's session
 cookie is `Secure`, and browsers do not send `Secure` cookies over plain HTTP.
@@ -442,9 +451,57 @@ against — and **a Funnel hostname is published in certificate transparency
 logs**, so it is a public URL, not an obscure one.
 
 Either is defensible with mandatory TOTP, Argon2id and login rate limiting
-actually built and tested. Neither is free. If one is adopted it arrives as a
-third mode in the table above, with its column stated, and **not** as a quiet
-convenience.
+actually built and tested. Neither is free.
+
+#### Public mode — supported, and the weakest of the three
+
+**Adopted as a third mode**, because requiring a VPN client is a real barrier
+for anyone self-hosting this, and password-plus-TOTP in front of a personal
+service is what a great deal of serious software ships. It is offered with its
+cost stated rather than withheld.
+
+| Mode | Reaches it | Perimeter |
+|---|---|---|
+| Tailscale | Anywhere | The mesh. Auth is defence in depth |
+| LAN | Home only | Your home network. Auth is defence in depth |
+| **Public** | Anywhere, any browser | **Auth, and nothing else** |
+
+That last row is the whole difference. In the first two modes a flaw in
+authentication is survivable because nothing unenrolled can reach it. In the
+third there is no second line, so every promise §5.2 makes has to be true rather
+than merely written.
+
+**Hard prerequisite: §5.2 ships first.** The API is currently open by
+construction — *"authentication arrives with the session card; until then this
+is open."* Enabling public mode before then does not weaken the perimeter, it
+publishes the ledger. This ordering is not advice.
+
+**What public mode additionally requires**, none of which matters behind a VPN:
+
+- **Rate limiting per account as well as per IP.** IPv6 rotation makes per-IP
+  limiting close to decorative on its own.
+- **Lockout that cannot be weaponised.** Locking an account on failed attempts
+  hands an attacker a denial-of-service against the only user. Throttle
+  exponentially; never lock permanently.
+- **No account enumeration** — the same message *and the same timing* for an
+  unknown user as for a wrong password.
+- **No version disclosure.** `/healthz` publishes the build SHA, and against a
+  public repository that names the exact commit and therefore the exact known
+  issues. It cannot simply move behind auth: Rule 0 needs a probe callable
+  *before* sign-in, and three `link` states become unreachable without one. So
+  **`build` becomes a short hash of the SHA** — `isStaleBundle()` only ever
+  compares it, so version-skew detection and Rule 0 both survive intact.
+- **`/readyz` requires authentication**, since it reports which dependency is
+  down. `degraded` is then only observable while signed in, which is acceptable:
+  `unauthenticated` is already its own state.
+- **HSTS**, and the security headers a browser-facing origin needs.
+- **Recovery codes generated and stored offline before it is enabled**, because
+  a locked-out account is now a locked-out system with no LAN path in.
+
+**It is documented as the weakest option, and the docs say so in the same
+breath as offering it.** Someone choosing convenience should know what they
+bought; someone who wants the strong version should not have to infer that the
+default exists for a reason.
 
 | Property | How |
 |---|---|

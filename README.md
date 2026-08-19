@@ -2,8 +2,8 @@
 
 Self-hosted personal finance: a mobile app that works offline, a web dashboard,
 receipt scanning, bank-statement import, and an LLM agent with typed tools —
-over a multi-currency Postgres ledger that runs on your own hardware, with no
-public ingress in any configuration.
+over a multi-currency Postgres ledger that runs on your own hardware, reachable
+however you like — and never through a forwarded port.
 
 Built to replace [Money Manager](https://www.realbyteapps.com/) (no API, no
 bulk editing, limited export) and the file-based pipeline that grew around it.
@@ -13,11 +13,13 @@ bulk editing, limited export) and the file-based pipeline that grew around it.
 Commercial finance apps put five years of your money on someone else's server
 and give you a subscription and an export button. Waltning inverts that:
 
-- **You own the ledger.** PostgreSQL on a Raspberry Pi at home. **No public
-  ingress in either supported mode** — reach it over Tailscale from anywhere, or
-  over your own LAN at home. There is no login page on the internet to find,
-  because there is no public name. A forwarded port is deliberately not an
-  option; §5.1 says why, and it is about exfiltration rather than tidiness.
+- **You own the ledger.** PostgreSQL on a Raspberry Pi at home, reachable three
+  ways: over Tailscale from anywhere, over your own LAN at home, or — if you
+  would rather not install a VPN client — at a public URL behind a password and
+  a mandatory second factor. **No port is ever forwarded in any of them**; the
+  public option is an outbound-only tunnel the Pi opens itself.
+  §5.1 ranks them honestly: the public one is the weakest, because
+  authentication is then the only perimeter rather than the second one.
 - **Multi-currency done right.** Every transaction stores its amount *and* the
   FX rate on its own date. Transfers store both sides, so the realized rate is
   a fact and the spread against the reference rate becomes a visible `FX Cost`.

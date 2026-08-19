@@ -120,11 +120,15 @@ else would be testing the wrong thing.
 ## On a Raspberry Pi
 
 The real deployment. Everything runs as containers under Docker Compose, and
-there are two routes in — **neither of which puts anything on the public
-internet.** Tailscale is a private network connecting your own devices to each
-other and nothing else, and it works wherever you are; the alternative is your
-own home network, which is simpler and stops at your front door. The phone uses
-Tailscale, because the whole point of the phone is that it leaves the house.
+there are three routes in — **none of which opens a port on your router.**
+Tailscale is a private network connecting your own devices and nothing else, and
+works wherever you are. Your own home network is simpler and stops at your front
+door. A public web address is the third, behind a password and a mandatory
+second factor, and it is the weakest of the three because that password becomes
+the only thing in the way.
+
+The phone uses Tailscale, because the whole point of the phone is that it leaves
+the house.
 
 ```mermaid
 graph TB

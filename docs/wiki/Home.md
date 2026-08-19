@@ -13,12 +13,17 @@ next to code.
 
 ## What is where
 
-Everything runs on one Raspberry Pi in your home. **Nothing on the public
-internet accepts a connection, in any configuration.** There are two ways in and
-both stay inside that: Tailscale, a private network joining your own devices and
-refusing everyone else, which works from anywhere; or your own home network,
-which does not follow you out of the house. A forwarded port is deliberately not
-offered.
+Everything runs on one Raspberry Pi in your home, and **no port on your router
+is ever opened.** There are three ways to reach it: Tailscale, a private network
+joining your own devices and refusing everyone else, which works from anywhere;
+your own home network, which is simplest and stops at your front door; or a
+public web address behind a password and a mandatory second factor, for people
+who would rather not install a VPN.
+
+The third is the weakest and is labelled that way — with it, your password is
+the only thing between the internet and your ledger, where the other two put a
+whole network in the way first. Even so the Pi opens the connection outward; it
+never waits for one to arrive.
 
 ```mermaid
 graph LR
