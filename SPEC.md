@@ -716,10 +716,47 @@ A stolen phone is therefore both the perimeter and the credential.
 | **Excluded from cloud backup** | `NSURLIsExcludedFromBackupKey` on the database, its siblings, and `Documents/receipts/`. This is the highest-value single line in the table |
 | App launch | Gated behind `LocalAuthentication` before any database key is unwrapped |
 | Receipt spool | Downscaled at capture, EXIF stripped, written inside the app container — never the shared Photo Library, never a `UIFileSharingEnabled` directory |
-| Lost device | **Two steps, not one:** revoke the tailnet node *and* kill the server-side session row. A *sign out everywhere* control lives on S30 |
-| Replica TTL | If the app has not authenticated in N days, the replica is dropped on next launch — this bounds the phone-in-a-drawer case |
+| Lost device | **Revoke that device's credential** — §5.2 issues one per device, so this signs out the phone and nothing else. In Tailscale mode, revoke the tailnet node as well; that step does not exist in the other two modes, which is why it is no longer the primary one. A *sign out everywhere* control lives on S30 |
+| Replica TTL | **90 days since the last successful unlock** — not since the last sync. See below; the trigger was wrong and the number was never written |
 | Store separation | `replica.db` and `outbox.db` are separate files, so the replica can be dropped unconditionally on logout while the outbox survives |
 | Inference artifacts | No on-device model ships (§14.3), so there is no prompt log to retain. If that changes, logging is off in release builds and any disk spill lives inside the encrypted container |
+
+#### The replica TTL, and the trigger that was wrong
+
+The row above used to read *"if the app has not **authenticated** in **N**
+days"*, with `N` left as a literal `N` in the only place it appeared. Both halves
+were defects, and together they were worse than either.
+
+**The number was never written**, so nobody could see that it collided with
+§14.3 — which sizes offline at *days to weeks* and keeps 90 days as the honest
+estimate, citing accounts in Georgia and Belarus outside EU roaming. A TTL
+shorter than that window deletes the ledger during exactly the trip the system
+was sized to survive.
+
+**The trigger was measuring the wrong thing.** The case this control exists for
+is a phone that is lost, stolen or in a drawer — and that phone **is not being
+unlocked**. A phone in daily offline use is not that phone, but under the old
+trigger it was indistinguishable from one, because capturing transactions
+offline never authenticates. So: **last successful unlock**, which only the
+owner can produce. The two cases separate cleanly, and the security property is
+unchanged — an attacker holding the device cannot unlock it, so the clock keeps
+running for them and stops for you.
+
+Three consequences worth stating rather than leaving to be discovered:
+
+- **The outbox is never dropped.** `replica.db` and `outbox.db` are separate
+  files precisely so this is structural rather than remembered. The replica is a
+  cache of the server's truth and can always be refetched; the outbox is the
+  **only** copy of intent you have not yet sent, and losing it is silent.
+- **It must warn before it fires**, while there is still a connection to act on.
+  A ledger that empties itself on launch with no prior notice is
+  indistinguishable from data loss, and the person's first move — reinstall —
+  is the one that destroys the outbox too.
+- **The empty state must say what happened.** Not a blank dashboard: *"local
+  copy cleared after 90 days without unlocking — reconnect to restore."* Every
+  F-class figure is a checkpoint plus outbox arithmetic (§14.3), so a dropped
+  replica blanks every balance at once, and a blank balance that does not
+  explain itself reads as a wrong balance.
 
 #### Why drain-while-locked is refused
 
