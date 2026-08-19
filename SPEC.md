@@ -355,17 +355,72 @@ Five years of complete financial history, plus business records. The threat
 model is not "a determined attacker targets me" — it is "this ends up reachable
 from the internet and something automated finds it."
 
-### 5.1 Access model — Tailscale only
+### 5.1 Access model — no public ingress, in two supported modes
 
-The Pi has **no public ingress**. No port forwarding, no dynamic DNS, no
-tunnel. Devices join a private WireGuard mesh; anything not enrolled cannot
-route to the service at all.
+The Pi has **no public ingress** in any mode. No port forwarding, no dynamic
+DNS, no tunnel. That is the invariant; how you reach it inside that constraint
+is a deployment choice with two supported answers.
 
 This is categorically stronger than ngrok with good authentication, not
 incrementally. A public URL means the login page is the entire perimeter and is
-exposed to background scanning permanently. With Tailscale there is no login
-page to find, and authentication becomes defense in depth rather than the only
-line.
+exposed to background scanning permanently. With no public name there is no
+login page to find, and authentication becomes defense in depth rather than the
+only line.
+
+#### The two modes
+
+| Mode | Reaches it | TLS | Costs |
+|---|---|---|---|
+| **Tailscale** (default) | Anywhere | Tailscale-issued cert for `waltning.<tailnet>.ts.net` | Every device runs a VPN client |
+| **LAN** | Home network only | A **real** certificate for a name whose `A` record is the private IP, issued by DNS-01 | No access away from home |
+
+**Both are honest options; neither is a fallback for the other.** LAN mode is
+not a degraded Tailscale — it exposes strictly less, because there is no mesh
+to join and no node to revoke. What it cannot do is follow you out of the house.
+
+**LAN mode needs a real certificate, and that is not cosmetic.** §5.2's session
+cookie is `Secure`, and browsers do not send `Secure` cookies over plain HTTP.
+Serving the dashboard on `http://192.168.x.x` therefore does not produce a
+slightly-less-private system; it produces one where **you are logged out on
+every request**. A self-signed certificate replaces that with a click-through
+warning trained into muscle memory, which is its own cost. DNS-01 against a
+domain you control issues a valid certificate for a name resolving to a private
+address, with nothing exposed to obtain it.
+
+#### The clients do not have the same requirement
+
+| Client | Modes | Why |
+|---|---|---|
+| **Web** | LAN **or** Tailscale | A browser at a desk. LAN covers the common case; Tailscale covers the rest |
+| **Mobile** | Tailscale | It has to work away from home, and it is the client that already carries a session token and a replica |
+
+**Mobile's bar is lower than it looks, because the app is offline-first.**
+`architecture/08` gives it a replica and an outbox, and §5.7 refuses to drain
+while locked at all — the sync control drains on tap. So *"reach the backend
+when I am not home"* means **sync when it can**, not hold a connection. A
+transport that works most of the time satisfies it completely, which is why
+Tailscale needs no companion.
+
+**The one real risk is iOS's single VPN slot.** A work VPN or a privacy VPN
+displaces Tailscale, and the app then looks offline while the phone plainly has
+internet. This is already a named `link` state with its own remedy (§14.3) —
+*"another VPN holding iOS's single tunnel slot"* — and it stays a named state
+rather than a thing to engineer around. The outbox is what makes it survivable:
+the queue waits, and nothing is lost.
+
+#### What is deliberately not a mode
+
+**A forwarded port, with or without dynamic DNS.** The asset here is five years
+of complete financial history and the records behind a tax filing. A public port
+means the login route is permanently exposed to background scanning and every
+dependency in the stack becomes internet-facing; one authentication bypass
+anywhere in that tree exfiltrates the most sensitive data a person holds, and
+**nightly encrypted backups do not help — they protect against loss, not
+against copying.** The escape hatch, if the constraint ever becomes real, is a
+Cloudflare Tunnel with Zero Trust in front: a real URL, real TLS, no open ports,
+and an identity gate ahead of the app. Added deliberately, and documented as
+putting a third party in the path of a system whose argument is physical
+custody.
 
 | Property | How |
 |---|---|
@@ -376,10 +431,10 @@ line.
 | Key rotation | Node key expiry left **on**, forcing periodic re-auth |
 | Lost device | Revoke that node in the admin console — no password reset, no re-issue |
 
-**Consequence to accept:** every device that uses Waltning must run Tailscale.
-No borrowing an unenrolled laptop. If that becomes a real constraint, the
-escape hatch is a Cloudflare Tunnel with Zero Trust in front — added
-deliberately, not as a default.
+**Consequence to accept:** the phone runs Tailscale permanently, and any device
+that wants access from outside the house runs it too. A laptop at home does not
+— that is what LAN mode is for — but a borrowed laptop anywhere gets nothing in
+either mode, by design.
 
 **Worth doing before deployment:** audit what else on the LAN publishes ports.
 Development stacks routinely bind `0.0.0.0` rather than loopback, which makes
@@ -389,16 +444,53 @@ tolerates.
 
 ### 5.2 Authentication
 
-Single user, but real. Tailscale is the perimeter; this stands behind it.
+Single user, but real. §5.1 is the perimeter; this stands behind it — and in
+LAN mode it stands behind rather less, since anything already on the home
+network reaches the login page. That is the argument for it being real.
 
-- Argon2id password hash, memory-hard parameters tuned to the Pi (~250 ms).
+#### The web client — what you know
+
+- Argon2id password hash, memory-hard parameters **tuned on the Pi** to ~250 ms.
+  Tuned on a laptop they are either too weak there or unusable here.
 - **TOTP second factor, mandatory.** Recovery codes generated once, stored offline.
 - Sessions: HTTP-only, `Secure`, `SameSite=Strict` cookies; 30-day sliding
   expiry; server-side session table so a session can be killed.
-- Mobile stores its session token in `expo-secure-store` (iOS Keychain), never
-  `AsyncStorage`.
 - Rate limiting on the login route regardless — cheap, and the perimeter is not
   the only thing that can fail.
+
+#### The mobile client — what you have, then what you are
+
+Two controls that are constantly confused, so they are named separately:
+
+| | Protects | Mechanism | When |
+|---|---|---|---|
+| **Server session** | Reaching the API | Token in `expo-secure-store` (iOS Keychain), `AFTER_FIRST_UNLOCK`, **`ThisDeviceOnly`** | Issued once at enrolment by full web-grade auth; 30-day sliding |
+| **App unlock** | The replica *already on the phone* | `LocalAuthentication` — Face ID, falling back to the **device passcode** | Every launch, before any database key is unwrapped (§5.7) |
+
+**The unlock is not a login, and this is the distinction that matters.** The
+session token governs whether the phone may talk to the Pi. Face ID governs
+whether the person holding the phone may read what it already has — and what it
+already has is every account by name, every counterparty with balances, and
+several hundred transactions with payee text. A stolen unlocked phone with no
+app unlock is a total disclosure that never touches the network, so the
+perimeter is irrelevant to it.
+
+**No app-specific PIN.** The fallback is the device passcode, not a second
+secret. An app PIN is one more thing to forget, is typed in public more often
+than a passcode, and is almost always weaker than the one iOS already enforces —
+while adding a recovery path that is itself an attack surface.
+
+**Enrolment is the one moment mobile does full auth**: password and TOTP, once,
+producing the token. Thereafter the phone is *what you have* and Face ID is
+*what you are*. When the session expires, or `sign out everywhere` is used from
+S30, enrolment happens again — which is the intended cost, because it is also
+the revocation path.
+
+**Two orthogonal expiries, deliberately.** The session's 30 days bounds server
+access; §5.7's replica TTL drops the local copy if the app has not authenticated
+in N days, bounding the phone-in-a-drawer case. Neither implies the other, and
+collapsing them would mean a phone that cannot sync quietly keeping a full
+ledger forever.
 
 ### 5.3 Secrets
 

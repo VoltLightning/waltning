@@ -2,8 +2,8 @@
 
 Self-hosted personal finance: a mobile app that works offline, a web dashboard,
 receipt scanning, bank-statement import, and an LLM agent with typed tools —
-over a multi-currency Postgres ledger that runs on your own hardware and is
-reachable only through your own VPN.
+over a multi-currency Postgres ledger that runs on your own hardware, with no
+public ingress in any configuration.
 
 Built to replace [Money Manager](https://www.realbyteapps.com/) (no API, no
 bulk editing, limited export) and the file-based pipeline that grew around it.
@@ -13,9 +13,11 @@ bulk editing, limited export) and the file-based pipeline that grew around it.
 Commercial finance apps put five years of your money on someone else's server
 and give you a subscription and an export button. Waltning inverts that:
 
-- **You own the ledger.** PostgreSQL on a Raspberry Pi at home. No public
-  ingress — every device connects over Tailscale, so there is no login page on
-  the internet to find.
+- **You own the ledger.** PostgreSQL on a Raspberry Pi at home. **No public
+  ingress in either supported mode** — reach it over Tailscale from anywhere, or
+  over your own LAN at home. There is no login page on the internet to find,
+  because there is no public name. A forwarded port is deliberately not an
+  option; §5.1 says why, and it is about exfiltration rather than tidiness.
 - **Multi-currency done right.** Every transaction stores its amount *and* the
   FX rate on its own date. Transfers store both sides, so the realized rate is
   a fact and the spread against the reference rate becomes a visible `FX Cost`.
@@ -177,6 +179,13 @@ and renew the Tailscale-issued certificate. There is no public name and no
 public certificate. Locally it defaults to `:8080` over plain HTTP so the
 routing can be checked on a machine with no tailnet — the only difference
 between the two, which is the point.
+
+**LAN mode needs a real certificate, not plain HTTP**, and that is a correctness
+requirement rather than a preference: the session cookie is `Secure`, browsers
+do not send `Secure` cookies over HTTP, and the result is being logged out on
+every request rather than a system that is merely less private. A DNS-01
+certificate for a name resolving to the private address costs nothing and
+exposes nothing.
 
 **Deploying to a Pi** — Tailscale, nightly encrypted dumps to B2, the restore
 runbook: see

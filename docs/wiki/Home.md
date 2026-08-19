@@ -13,9 +13,12 @@ next to code.
 
 ## What is where
 
-Everything runs on one Raspberry Pi in your home. Nothing on the public
-internet accepts a connection — the only way in is Tailscale, a private network
-that joins your own devices together and refuses everyone else.
+Everything runs on one Raspberry Pi in your home. **Nothing on the public
+internet accepts a connection, in any configuration.** There are two ways in and
+both stay inside that: Tailscale, a private network joining your own devices and
+refusing everyone else, which works from anywhere; or your own home network,
+which does not follow you out of the house. A forwarded port is deliberately not
+offered.
 
 ```mermaid
 graph LR

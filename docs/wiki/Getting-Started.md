@@ -120,8 +120,11 @@ else would be testing the wrong thing.
 ## On a Raspberry Pi
 
 The real deployment. Everything runs as containers under Docker Compose, and
-the only route in is Tailscale — a private network that connects your own
-devices to each other and nothing else.
+there are two routes in — **neither of which puts anything on the public
+internet.** Tailscale is a private network connecting your own devices to each
+other and nothing else, and it works wherever you are; the alternative is your
+own home network, which is simpler and stops at your front door. The phone uses
+Tailscale, because the whole point of the phone is that it leaves the house.
 
 ```mermaid
 graph TB
@@ -155,8 +158,13 @@ and permissions, which the API's own user does not have (and should not have)
 the rights to apply.
 
 **PostgreSQL listens only on the machine itself.** Devices reach the API over
-Tailscale; nothing is forwarded from your router, and there is no public address
-to scan.
+Tailscale or over your own LAN; nothing is forwarded from your router, and there
+is no public address to scan in either case.
+
+**On the LAN, use a real certificate rather than plain HTTP.** This is not
+tidiness: the session cookie is marked `Secure`, browsers refuse to send those
+over an unencrypted connection, and the visible symptom is being logged out on
+every single request rather than anything that looks like a security setting.
 
 **Backups are encrypted before they leave the Pi**, and restoring is part of the
 written procedure. A backup nobody has ever restored is a hypothesis.
