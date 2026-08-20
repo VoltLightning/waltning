@@ -1,6 +1,6 @@
 # S01 · Dashboard
 
-**Surface** web · **Journeys** J6, J4, J8, J11 · **Frequency** daily
+**Surface** wide (RN Web / DeX / iPad) · **Journeys** J6, J4, J8, J11 · **Frequency** daily
 **Design** Claude Design project
 **Status** specified · tier 1
 
@@ -14,7 +14,7 @@ Where do I stand, and what needs action — with the canvas to actually look.
 
 | From | Via | Back to |
 |---|---|---|
-| Browser | Default route | — |
+| Any surface at width | Default route | — |
 | Any screen | Brand mark in the shell | — |
 | S24 | Layout saved | S01, new arrangement live |
 
@@ -25,9 +25,11 @@ unsettled banner → the unallocated transaction · S24 to rearrange.
 
 ### Mobile — 390pt
 
-**S01 does not exist on mobile.** S04 Today answers the same question at
+**S01 does not exist at phone width.** S04 Today answers the same question at
 thumb scale. Two landing surfaces competing for the same job is how both get
-half-designed.
+half-designed. This is a density limit, not a platform one — the same phone
+renders S01 once it has the width to give it (RN Web, DeX, an external
+display), the same way it would on a laptop (`architecture/14` §14.4).
 
 ### Web — ≥1024px
 

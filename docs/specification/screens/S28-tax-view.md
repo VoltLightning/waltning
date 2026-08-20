@@ -1,6 +1,6 @@
 # S28 · Tax view
 
-**Surface** web · **Journeys** J11 · **Frequency** monthly to annually
+**Surface** wide; close and export need the backend · **Journeys** J11 · **Frequency** monthly to annually
 **Design** none
 **Status** specified · tier 2 · **build early** — revenue is live (`SPEC.md` §13.6)
 
@@ -25,7 +25,13 @@ warning cleared · S27 to export.
 ## 3. Layout
 
 ### Mobile
-Not supported. This is an annual, high-stakes, sitting-down screen.
+Not supported at phone width — a reconciliation table, a completeness list
+and a close action together need the room. Given the width (RN Web, DeX, an
+iPad), the phone renders this screen too, but without a backend the figures
+it shows are **estimates**, not the T1-guaranteed exclusion: SQLite has no
+equivalent to the export role's Postgres grant (`architecture/14` §14.1).
+`Close period` and `Export` stay backend-only regardless of width — closing
+needs the T1 role, and S27's export needs it too.
 
 ### Web — ≥1024px
 
@@ -69,6 +75,15 @@ implying it was clean. Reopening is possible and audited.
 **The cost side is removed with a stated reason, never blanked.** An empty
 expense table reads as a bug or as missing data. Saying *why* it is absent is
 the difference between a system that is correct and one that looks broken.
+
+**On a backendless phone (Brick 1), this whole screen is labelled estimate.**
+`tax_ledger`'s exclusion of personal rows is asserted by a Postgres role grant
+(§13.1); a device with no Postgres has no equivalent to assert it with, so a
+figure computed locally carries the same caveat Brick 1 puts on every tax
+figure (`architecture/14` §14.1). The header's *reconciliation view, not a
+filing* line stays; on Brick 1 it reads *estimate, not a filing* instead, and
+`Close period` and `Export` are absent rather than disabled — there is nothing
+behind them to gate.
 
 ## 4. Components
 

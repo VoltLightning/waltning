@@ -9,7 +9,10 @@
 ## 1. Why this journey exists
 
 The only journey where nothing exists yet — no accounts, no history, no
-balances. Every other journey assumes its output.
+balances. Every other journey assumes its output. It runs standalone, on the
+phone alone (Brick 1, `architecture/14` §14.1) — no account, no login, no
+network. Adding a backend is a separate, later, optional step, not a
+precondition of getting started.
 
 It also carries the project's single highest-stakes moment. Step 4 runs the
 migration, and `SPEC.md` §8.4 makes balance reconciliation the go/no-go gate for
@@ -21,10 +24,14 @@ thing worth showing.
 
 | Must be true | Why |
 |---|---|
-| Device enrolled in the tailnet | There is no public ingress; an unenrolled device cannot route to the server at all (`SPEC.md` §5.1) |
-| Authenticated, including TOTP | Setup runs behind login, not before it (§5.2) |
-| Server reachable | Every step writes; there is no offline first-run |
-| Currencies and taxonomy seeded | Shipped by the seed, not created here — 7 currencies, 59 leaves, 15 groups |
+| The app is installed | Nothing else. Brick 1 needs no account, no tailnet, no server (`architecture/14` §14.0) |
+| Currencies and taxonomy seeded | Shipped with the app, not created here — 7 currencies, 59 leaves, 15 groups |
+
+**Adding a backend is a later, separate step, with its own preconditions when
+it happens** — device enrolled in the tailnet and authenticated with TOTP,
+because there is no public ingress (§5.1, §5.2). Nothing in this journey
+requires it: every step here writes to the phone's own replica, which is
+complete from the first account.
 
 **The pivot is already USD and is never mentioned.** It is a technical hub for
 rate storage, chosen once and invisible in every screen (`SPEC.md` §7.0). A
@@ -34,7 +41,7 @@ has no user-visible consequence.
 ## 3. The path
 
 ```
-login ──first launch, no accounts──→ S29a Setup wizard
+first launch, no accounts ──→ S29a Setup wizard
 
   1  Display currency          pin from PLN · USD · EUR · …
      └─ a preference, changeable from any header afterwards
@@ -73,7 +80,7 @@ VERIFICATION GATE         per-account balance comparison, to the cent
 
 | At | Condition | Goes to |
 |---|---|---|
-| 1 | Wants a currency not in the seeded 7 | S17, add by ISO code — triggers a backfill (§5) |
+| 1 | Wants a currency not in the seeded 7 | S17, add by ISO code. **Historical backfill is backend work (§14.1)** — standalone the currency is usable immediately with rates from each entry's date forward, and prior amounts render `estimated` until a backend fills the history |
 | 3 | Account currency is archived | Re-pins it silently; an account's currency cannot be hidden |
 | 4 | Declines import | Skips 4 entirely; the importer is idempotent, so this closes no doors (§8.3) |
 | 4 | Import passes | Counterparty proposals — a **review list**, never an automatic write (§6.6) |
@@ -88,7 +95,7 @@ VERIFICATION GATE         per-account balance comparison, to the cent
 | Unmatched transfer legs (R2 — OUT 1,734 ≠ IN 1,754) | Not a failure. Listed as an explicit exception list in the normalization report and carried forward |
 | **FX backfill incomplete for a currency** | Stated per currency with its coverage, not hidden. GEL currently returns 11 of 2,080 days (`SPEC.md` §7.7) — the wizard must say so rather than reporting success, because every later GEL amount will render `estimated` |
 | Network drops mid-import | Import is idempotent on `external_id`; re-running resumes rather than duplicating |
-| Server unreachable at step 1 | Setup cannot proceed offline. Stated plainly with a retry — not queued, because there is no local schema to queue into yet |
+| No backend, or one is unreachable | Not a failure. This journey never needed one; Brick 1 finishes standalone and a backend can be added at any later point (`architecture/14` §14.1) |
 
 ## 6. Rules
 

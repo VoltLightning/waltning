@@ -1,9 +1,12 @@
 # Waltning
 
-Self-hosted personal finance: a mobile app that works offline, a web dashboard,
-receipt scanning, bank-statement import, and an LLM agent with typed tools —
-over a multi-currency Postgres ledger that runs on your own hardware. Passkeys
-at the front door, no password anywhere, and never a forwarded port.
+A phone app that is a complete personal finance app on its own — your whole
+multi-currency ledger, offline indefinitely, nothing else required to use it.
+Add a home backend when you want one (PostgreSQL on a Raspberry Pi you own)
+and it becomes the durable copy and record of truth, takes on the heavy work
+(bank-statement import, classification, exchange rates), and unlocks a web
+dashboard and an LLM agent with typed tools. Passkeys at the front door, no
+password anywhere, and never a forwarded port.
 
 Built to replace [Money Manager](https://www.realbyteapps.com/) (no API, no
 bulk editing, limited export) and the file-based pipeline that grew around it.
@@ -13,7 +16,15 @@ bulk editing, limited export) and the file-based pipeline that grew around it.
 Commercial finance apps put five years of your money on someone else's server
 and give you a subscription and an export button. Waltning inverts that:
 
-- **You own the ledger.** PostgreSQL on a Raspberry Pi at home. **No port is
+- **The phone is a complete finance app, by itself.** Your whole ledger lives
+  on the device — every transaction, not a recent window — and it works
+  offline indefinitely, from the first time you open it. Nothing else is
+  required.
+- **A home backend is optional, and it's a real upgrade when you want one.**
+  PostgreSQL on a Raspberry Pi becomes the durable copy and the record of
+  truth: it does the heavy work (importing statements, classification,
+  exchange rates) and unlocks the web dashboard. Adding it is a one-time step
+  — your phone's data flows into it, not the other way round. **No port is
   ever forwarded** — reach it over Tailscale from anywhere, over your own LAN,
   or through an outbound-only tunnel the Pi opens itself.
 - **You sign in with a passkey, and there is no password to steal.** Face ID or
@@ -25,9 +36,16 @@ and give you a subscription and an export button. Waltning inverts that:
 - **Multi-currency done right.** Every transaction stores its amount *and* the
   FX rate on its own date. Transfers store both sides, so the realized rate is
   a fact and the spread against the reference rate becomes a visible `FX Cost`.
-- **The phone works offline, indefinitely.** Capture queues into a local
-  outbox; a server checkpoint plus the outbox reconstructs your figures without
-  the server. Sync is explicit and bidirectional.
+- **Sync is safe, and not something you have to trigger.** Once you have a
+  backend, your own captures drain to it automatically — no sync button, and
+  the server is the record of truth, so there's no two-way merge to get wrong:
+  a write is one-way intent, and the server admits it or refuses it. Only a
+  genuine conflict — the same field changed on two devices — asks which value
+  to keep, and tax-relevant fields always ask.
+- **Durability graduates, honestly.** On the phone alone, backing up is your
+  job: an encrypted export you control. Add the backend and it becomes
+  continuous and automatic. This is a real cost, not a footnote — filing-grade
+  tax needs the backend too; the phone alone shows tax figures as estimates.
 - **AI where it helps, gated where it matters.** The agent gets typed tools,
   not SQL. Reads are free; every write shows a diff card you approve. Receipt
   extraction and voice capture use small per-surface models.
@@ -36,6 +54,9 @@ and give you a subscription and an export button. Waltning inverts that:
   tax report fails loudly instead of slipping through.
 
 ## Architecture
+
+This is the shape once you've added the optional backend. The phone alone
+needs none of it — it's the same app with the sync arrows removed.
 
 ```mermaid
 graph LR

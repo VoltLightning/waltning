@@ -2,9 +2,10 @@
 
 Eight defects in [`../defects.md`](../defects.md) — H7, H9, H10, H12, H13, H14,
 H15, H16 — are the same gap seen from eight angles. `SPEC.md` §11 settles the
-*policy* in one line: single user, two devices, **last-write-wins**, an outbox
-rather than CRDTs. What it never settles is what an outbox entry *is*, and every
-one of those defects lives in that space.
+*policy* in one line: single user, two devices, an outbox rather than CRDTs,
+with **conflicts resolved by version, never by a clock** (§14.2). What it never
+settles is what an outbox entry *is*, and every one of those defects lives in
+that space.
 
 This closes it.
 
@@ -17,7 +18,14 @@ This closes it.
 >
 > **2 · An outbox entry is one user intention, not one row change.**
 
-The first bounds the problem before the second solves it.
+The first bounds the problem before the second solves it. It is also
+vindicated, not merely retained: [`14-local-first.md`](14-local-first.md)
+drew the line this whole document sits on one side of — **complete is not
+authoritative** — and settled that the phone stays on the "not authoritative"
+side permanently. What changed is the other half: the phone holds the
+**whole ledger**, not a window of it. Nothing below reduces write admission —
+that is still Postgres, still one-way intent through the outbox — but reads
+no longer wait on the network to be complete.
 
 Every guarantee in §6.5 is a Postgres mechanism — cross-table triggers, `CHECK`s,
 an `EXCLUDE` constraint, generated columns, role privileges. SQLite has no
@@ -33,12 +41,16 @@ it. Write *admission* needs `EXCLUDE` and triggers; `SUM(-amount_original)` over
 rows the phone already holds needs neither. The draft also broke its own rule two
 paragraphs later, with a balance formula that is plainly a computation.
 
-The rule is now **checkpoint-plus-fold**, and every figure in `computations.md`
-carries a class — foldable, replica-computable, or server-only. `SPEC.md` §14.3
-holds the definitions; the short version is that the phone may fold its own
-unacknowledged entries into a server-issued checkpoint, may compute over a range
-its replica covers completely, and may never compute a figure with a documented
-way of being subtly wrong.
+Every figure in `computations.md` carries a class — foldable,
+replica-computable, or server-only. `SPEC.md` §14.3 holds the definitions, and
+`14-local-first.md` is why the first two classes cover more than they used to:
+the replica is not a partial window a checkpoint used to fill in behind, it is
+the whole ledger, so a plain sum over it is enough on its own. The phone may
+fold its own unacknowledged outbox entries on top of that sum — a
+server-issued checkpoint can still speed the fold up, but is no longer what
+makes it *possible* — and it may compute over the replica, full stop, with no
+partial-range caveat left to state. What the phone may never do is unchanged:
+compute a figure with a documented way of being subtly wrong.
 
 **Offline capability is not reduced by any of this.** Everything you do on a
 phone works with no network: manual entry, the grammar, transfers, settling a
@@ -230,8 +242,13 @@ The event-sourcing pattern is the right one, because the payload *is* a recorded
 intention:
 
 1. **Two independent version counters.** `PRAGMA user_version` for the replica —
-   mismatch means drop and refetch, which is free. A separate, forward-only,
-   never-destructive chain for the outbox.
+   mismatch means drop and refetch. The replica is now the whole ledger, not a
+   window (`14-local-first.md`), so this is a full resync — single-digit
+   megabytes, cheap but not instant, and it needs connectivity — rather than
+   the free operation it was when there was little to refetch. It is still
+   safe to drop for exactly the reason the outbox below is not: the replica is
+   a copy, and the outbox is the only place an unsent intention exists. A
+   separate, forward-only, never-destructive chain for the outbox.
 2. **The outbox table's shape never changes with the domain.** The payload is
    opaque to it, so domain changes change *payloads*, not tables.
 3. **Upcasters, not migrations.** Pure functions `upcast(op, v, payload)` chained
@@ -407,9 +424,10 @@ inspected to know its semantics.
 Patch semantics alone still lose an edit when two devices touch the *same* field,
 so the input also carries the `updated_at` the client last saw:
 
-- Same field, different values → **last-write-wins** per §11, but the overwrite
-  is recorded in `audit_log` with both values, so it is visible rather than
-  merely lost.
+- Same field, different values → a **real conflict**, detected by the version
+  the input carries — never a clock race. It follows the conflict setting
+  (latest-applied-wins or *ask*, §14.2), and either way the outcome is recorded
+  in `audit_log` with both values, so nothing is silently lost.
 - Different fields → both land. This is the common case and the one full-entity
   replace got wrong.
 - A `tax_sensitive` field with a stale version → **blocked**, not overwritten.

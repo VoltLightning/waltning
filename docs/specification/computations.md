@@ -14,24 +14,29 @@ Every amount is `numeric`; nothing here is ever a JS number (§7.1).
 
 ## 0 · Where each figure may be computed
 
-`SPEC.md` §14.3 lets the phone compute some of these and forbids others. The
-class is part of each figure's definition, not a separate table to drift from:
+`SPEC.md` §14.3 lets the phone compute some of these and forbids others, and
+[`architecture/14-local-first.md`](architecture/14-local-first.md) is why the
+line sits where it does: the phone holds the **whole ledger**, not a window,
+so missing rows are never the reason a figure is server-only — only a
+documented correctness risk or state the phone holds staler than it knows is.
+The class is part of each figure's definition, not a separate table to drift
+from:
 
 | Class | Meaning |
 |---|---|
-| **F** — foldable | A server-issued checkpoint plus the device's own unacknowledged outbox entries, using `signed()` / `debtDelta()` from `money.ts` |
-| **R** — replica-computable | Derivable from replicated rows, **only over a date range the replica covers completely** |
-| **S** — server-only | Has a documented way to be subtly wrong, or depends on state the device holds staler than it knows |
+| **F** — foldable | A plain sum over the complete replica, using `signed()` / `debtDelta()` from `money.ts`, folding in the device's own unacknowledged outbox entries. A server-issued checkpoint may still speed this up — it is an optimization now, not the basis |
+| **R** — replica-computable | Derivable from replicated rows. The replica holds the whole ledger, so this holds unconditionally — there is no partial range left to be missing |
+| **S** — server-only | Has a documented way to be subtly wrong, or depends on state the device holds staler than it knows (rates, period locks, residency) — never a matter of rows the phone doesn't have |
 
 | Figure | Class | Why |
 |---|---|---|
-| §2 Account balance | **F** | A checkpoint plus signed entries |
-| §3 Net worth, mine and ours | **F** | A sum of account checkpoints |
+| §2 Account balance | **F** | Signed entries summed over the complete replica |
+| §3 Net worth, mine and ours | **F** | A sum of account balances |
 | §4 Display conversion | **R** | The replica carries each row's already-converted display amount |
 | §4a FX margin | **S** | Needs both reference rates; a stale one makes the margin identically zero |
 | §5 Period spend | **R** for the base figure · **S** for shared-boundary netting | Netting needs `to_amount_pivot`, and getting it wrong silently uses the source amount |
 | §6 Spend by category | **S** | Two `UNION ALL` branches; a `LEFT JOIN … COALESCE` counts a four-line transaction four times |
-| §7 Counterparty balances | **F** per currency · **S** for ageing | Ageing is FIFO over the full history |
+| §7 Counterparty balances | **F** per currency · **R** for ageing | Ageing is FIFO over the full history — reclassified from **S**: that reasoning was the pre-`14-local-first.md` replica not holding the full history, and now it does |
 | §8 Clearing and `find_unsettled` | **F** for the balance · **S** for allocation | Largest-remainder allocation must not be reimplemented |
 | §9 Duplicate and transfer detection | **S** | Runs server-side on commit, for every path |
 | §10 Recurring materialization | **S** | The occurrence date is resolved under a row lock |
@@ -400,9 +405,38 @@ Converted at each row's own date into `target.currency`. Over-target goes
 | `FX cost` | margin + fee, **as two lines** (§7.5) |
 
 ```
-margin_dest  = (reference_rate − realized_rate) × amount_original   -- destination currency
-fee          = transactions.fee                                     -- stated by the bank
+reference_rate = fx_rate ÷ to_fx_rate                                -- dest-currency units per source-currency unit
+margin_dest    = (reference_rate − realized_rate) × amount_original  -- destination currency
+fee            = transactions.fee                                    -- stated by the bank
 ```
+
+**`reference_rate` is defined here, not read off a column, and that is
+deliberate.** Same hazard shape as §4a's reciprocal-pair warning: §4a calls
+`to_fx_rate` "the reference rate for `to_currency`," but that is in the
+pivot-per-unit direction — it is not dest-per-source, which is what
+`realized_rate` is and what this subtraction needs. Reaching for the column
+literally named "reference" and computing `(to_fx_rate − realized_rate) ×
+amount_original` mixes two different directions and is not merely off, it is
+the wrong shape of number entirely. Concretely, on a 1 000 USD → 3 900 PLN
+transfer at `fx_rate 1.0`, `to_fx_rate 0.25`, `realized_rate 3.9`, that
+mistake reports a **912.50 USD "gain"** on a transfer whose real margin is a
+25 USD cost. Build `reference_rate` from both legs — `fx_rate ÷ to_fx_rate` —
+every time.
+
+**Worked example**, same transfer:
+
+```
+realized_rate  = to_amount ÷ amount_original = 3900 ÷ 1000  = 3.9   -- PLN per USD
+reference_rate = fx_rate ÷ to_fx_rate        = 1.0 ÷ 0.25   = 4.0   -- PLN per USD
+margin_dest    = (4.0 − 3.9) × 1000          = 100                  -- PLN
+margin_pivot   = amount_original × to_fx_rate × (reference_rate − realized_rate)
+               = 1000 × 0.25 × 0.1           = 25                   -- pivot (= USD here, fx_rate = 1.0)
+```
+
+Cross-checked against §4a's own definition, which never mentions
+`reference_rate` at all: `amount_pivot = 1000 × 1.0 = 1000`,
+`to_amount_pivot = 3900 × 0.25 = 975`, `margin_pivot = 1000 − 975 = 25`. Same
+25 USD, two routes — which is the whole point of the identity below.
 
 **This is §4a's figure in a different unit, not a second definition.** The
 register's M-class list recorded *"the margin formula is never written down and

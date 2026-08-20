@@ -264,8 +264,8 @@ writes the first file that needs it, which is how a stack becomes an accident.
 | Layer | Choice | Why this |
 |---|---|---|
 | **Test runner** | **Vitest** | ESM and TS native, no transform config. The database tests need a real Postgres, not a mock, so the runner's job is orchestration |
-| **Device SQLite** | **`expo-sqlite`** | First-party, async API, tracks each SDK, does not fight EAS. `op-sqlite` is genuinely faster via JSI — and for ~450 rows the bottleneck is a Pi over WireGuard, not the driver |
-| **Client cache** | **TanStack Query** (tRPC's client is built on it) | **Memory-only persistence.** Persisting it to disk is the standard Expo pattern and would silently promote arbitrary server responses into the encrypted container, breaking §14.3's enumerated tier list |
+| **Device SQLite** | **`expo-sqlite`** | First-party, async API, tracks each SDK, does not fight EAS. `op-sqlite` is genuinely faster via JSI — and for the whole ledger (~8,000 rows, single-digit megabytes — §14.0) the bottleneck is a Pi over WireGuard, not the driver |
+| **Client cache** | **TanStack Query** (tRPC's client is built on it) | **Memory-only persistence.** Persisting it to disk is the standard Expo pattern and would silently promote arbitrary server responses into the encrypted container, breaking §14.3's account of what the replica holds |
 | **List virtualization** | **`@shopify/flash-list`** | The calendar is ~2 100 days and the transactions list reaches ~25 000 rows. `FlatList` does not hold S11's 150 ms budget at that size |
 | **Routing** | **`expo-router`** | File-based, one tree for native and web — which matters because they are one codebase (§14.6) |
 | **Charts** | **`victory-native`** + `react-native-svg` | Already flagged as the RN Web friction point (`platform-notes` §11). Line, bar, donut, pie, area and sparkline are fine; **treemap is the one that likely needs a web-only path**, and it is S25-only |
@@ -627,6 +627,7 @@ compromise than the login, which is the test a printed code fails.
 secrets; standing the system up needs about twenty variables, and the three
 database URLs are the ones that carry a guarantee rather than a value.
 | Backup encryption key | `age` key on a hardware token, plus a paper copy off-site | On the Pi alone |
+| Brick-1 export key (the phone alone, before a backend exists) | `age` key escrowed in **iCloud Keychain** (Apple's HSM-backed escrow); the ciphertext export goes somewhere Apple is **not** — a Mac, a NAS, later the backend (`architecture/14-local-first.md` §14.3) | Both halves — key and ciphertext — in the same vendor's custody |
 
 All model calls originate from the API container. The phone never holds an
 Anthropic key.
@@ -700,9 +701,10 @@ it: a review found sixteen mentions of encryption across the specification, none
 of them about the device.
 
 What the phone now holds: every account by name, every counterparty **by name
-with per-currency debt balances**, day-level aggregates over the full history,
-several hundred recent transactions with payee text, and a queue of receipt
-photographs awaiting upload. It is also an enrolled tailnet node, so it sits
+with per-currency debt balances**, the **whole ledger** — every transaction,
+with payee text, not a recent window (`architecture/14-local-first.md` §14.0)
+— and a queue of receipt photographs awaiting upload. It is also an enrolled
+tailnet node, so it sits
 *inside* perimeter ② by construction, and it carries a session token with a
 30-day sliding expiry.
 
@@ -711,14 +713,15 @@ A stolen phone is therefore both the perimeter and the credential.
 | Control | Decision |
 |---|---|
 | **Drain never runs while locked** | Foreground, in-foreground network change, user tap, or silent push. See below — this is the decision the others depend on |
-| File protection | `NSFileProtectionCompleteUntilFirstUserAuthentication` on the database, **its `-wal` and `-shm` siblings**, and the receipt spool. The WAL is where recent writes actually live |
-| Keychain class | Session token and any database key at `AFTER_FIRST_UNLOCK`, **`ThisDeviceOnly`** — so neither restores onto a replacement device |
+| File protection | **`NSFileProtectionComplete`** — class A, key evicted on lock — on the database, **its `-wal` and `-shm` siblings**, and the receipt spool. The WAL is where recent writes actually live. Not `…UntilFirstUserAuthentication`: the drain-while-locked argument below already establishes that nothing needs the database while the phone is locked, so nothing needs the key resident past lock either (`architecture/14-local-first.md` §14.4) |
+| Keychain class | Session token at `AFTER_FIRST_UNLOCK`, **`ThisDeviceOnly`** — so it does not restore onto a replacement device. There is no database key to place alongside it: SQLCipher was assessed and not adopted (below), so the file's own class-A protection is the guarantee, not a Keychain-held key |
 | **Excluded from cloud backup** | `NSURLIsExcludedFromBackupKey` on the database, its siblings, and `Documents/receipts/`. This is the highest-value single line in the table |
-| App launch | Gated behind `LocalAuthentication` before any database key is unwrapped |
+| Backup (Brick 1) | An app-owned, `age`-encrypted export the owner controls. The key lives in **iCloud Keychain**; the ciphertext goes somewhere Apple is **not**. One vendor never holds both halves (§5.3, `architecture/14-local-first.md` §14.3) |
+| App launch | The app UI is gated behind `LocalAuthentication`. There is no database key to unwrap — the file is protected by class A (above) |
 | Receipt spool | Downscaled at capture, EXIF stripped, written inside the app container — never the shared Photo Library, never a `UIFileSharingEnabled` directory |
 | Lost device | **Two steps, not one:** revoke the tailnet node *and* kill the server-side session row. A *sign out everywhere* control lives on S30 |
-| Replica TTL | If the app has not authenticated in N days, the replica is dropped on next launch — this bounds the phone-in-a-drawer case |
-| Store separation | `replica.db` and `outbox.db` are separate files, so the replica can be dropped unconditionally on logout while the outbox survives |
+| Replica | A **complete copy of the whole ledger** (§14.0). It is not evicted, and there is no TTL that drops it — the phone-in-a-drawer case is handled by the session and tailnet expiries above, not by deleting the record the phone holds |
+| Store separation | `replica.db` and `outbox.db` are separate files, so a replica refetch — epoch mismatch, an explicit reset — never touches the outbox, which must survive independently of the replica's state |
 | Inference artifacts | No on-device model ships (§14.3), so there is no prompt log to retain. If that changes, logging is off in release builds and any disk spill lives inside the encrypted container |
 
 #### Why drain-while-locked is refused
@@ -738,11 +741,14 @@ ledger.
 
 **Not adopted, and the reasoning is worth recording because two reviewers
 disagreed.** SQLCipher would protect against extraction from a phone seized in
-the after-first-unlock state, which is a real exposure given what the replica
-holds. Against that: it requires `expo prebuild` and a custom dev client, which
-contradicts §4.3's managed-workflow choice; its key must be `AFTER_FIRST_UNLOCK`
-for the app to start reliably, which collapses it to roughly the protection class
-iOS already provides; and it costs about 30% on writes.
+the after-first-unlock state — a real exposure when the baseline was
+`AFTER_FIRST_UNLOCK`. It no longer is: the class A file protection adopted
+above already evicts the key at lock, so a locked phone is unreadable with or
+without SQLCipher. Against what's left of the case: it requires `expo prebuild`
+and a custom dev client, which contradicts §4.3's managed-workflow choice; its
+own key would need `AFTER_FIRST_UNLOCK` for the app to start reliably, which is
+now *weaker* than the class A protection the file already has; and it costs
+about 30% on writes.
 
 The decision is to take **file protection plus backup exclusion plus
 launch-time biometrics**, which addresses the realistic loss path — an
@@ -2274,8 +2280,9 @@ mis-summed breakdown can never move a balance.
 
 Capture must work in a shop with no signal. Images queue locally in SQLite with
 the pending transaction; the queue drains on reconnect. Conflict handling is an
-outbox, not CRDTs — single user, single writer, so last-write-wins on the server
-is correct and enormously simpler.
+outbox, not CRDTs — the server is the single writer of record, so a conflict is
+resolved by **version on the server** (§14.2) rather than merged, which is
+enormously simpler.
 
 ---
 
@@ -3253,6 +3260,11 @@ Shares the codebase via React Native Web; different information density.
 
 ### 14.3 Offline behaviour
 
+**The canonical statement of this design is `architecture/14-local-first.md`;
+this section applies it to the mobile client.** The phone is complete — it
+holds the whole ledger — and not authoritative — every write is still one-way
+intent, admitted or refused by the server.
+
 **The phone is self-sufficient.** It does not need the backend to do the job a
 phone does: capture. With no connectivity you enter transactions, transfers and
 settlements, capture receipts, read your balances and history, and edit what you
@@ -3263,8 +3275,11 @@ What you lose is the agent, and that is stated rather than degraded.
 
 This section was rewritten after an eight-way adversarial review. Three of its
 previous claims were false and are corrected below: that the phone never
-computes, that offline is a matter of hours, and that the mirror has no eviction
-problem.
+computes, that offline is a matter of hours, and that the mirror has no
+eviction problem — the last of these was itself later superseded again: the
+local-first reframe (`architecture/14-local-first.md`) doesn't budget the
+eviction problem more carefully, it deletes it, by making the replica the
+whole ledger.
 
 #### Offline is days to weeks, not hours
 
@@ -3280,8 +3295,12 @@ Sync also requires the **Pi** to be reachable, not merely the phone to have
 signal. Add an ISP outage, a power cut, an SD-card failure (R6, rated High over
 years) or a house move, and the honest sizing is **days to weeks**.
 
-The 90-day window in the earlier draft was itself the honest estimate; the prose
-around it was not. Everything below is sized for weeks.
+The 90-day window in the earlier draft correctly estimated how long offline can
+run; the prose around it was what was wrong. Storage no longer needs to track
+that estimate at all — the replica holds the whole ledger regardless of how
+long the phone stays offline (`architecture/14-local-first.md` §14.0) — but the
+days-to-weeks sizing below still governs everything about *reconnecting*: the
+outbox, the fold, and how stale a figure is allowed to look.
 
 #### The phone captures; the backend reconciles — and the phone may still compute
 
@@ -3317,6 +3336,10 @@ it two paragraphs later with its own balance formula.
 > **unacknowledged outbox entries**, using the shared functions in `money.ts`.
 > It may also compute figures classified **R** over a range its replica covers
 > completely. It may never compute a figure classified **S**.
+
+Since the replica is now the **whole ledger**, not a recent window, "a range
+its replica covers completely" is in practice the entire history back to 2020
+— the mechanism is unchanged, only what it ranges over has grown.
 
 Every figure in `computations.md` carries a class:
 
@@ -3364,33 +3387,33 @@ regardless of the server's opinion of the row. Excluding them makes a balance
 *rise* by the value of purchases you actually made, at the moment a drain
 finishes — and then you spend against it.
 
-#### What the phone holds — four tiers, budgeted in bytes
+#### What the phone holds — the whole ledger, budgeted in bytes
 
 The earlier claim, *"kilobytes… no pagination or eviction problem to design"*,
-was wrong twice: the real figure is about 1 MB live and 2–6 MB on disk once WAL
-and free pages are counted, and a 90-day window **is** eviction. It also grows
-with the transaction *rate*, which §15 projects rising from 5.5 to 9.5 a day.
+was wrong about the number. It was corrected once already, to a **90-day
+window budgeted across four tiers** — and that correction is itself
+superseded. `architecture/14-local-first.md` (§14.0) settles the question a
+different way: the replica holds the **whole ledger**, not a window, so there
+is no size compromise to budget and no eviction to make safe. ~8,000 rows
+costs single-digit megabytes, which the hardware and the network both have to
+spare.
 
-A window is a duration standing in for three unrelated needs. A budget is
-better:
-
-| Tier | Contents | Size | Growth |
+| What | Contents | Size | Growth |
 |---|---|---|---|
-| **1 · Reference** — complete, never evicted | Accounts, category leaves, counterparties with last-used category, currencies, **all** period locks, cached checkpoints | ~157 KB | flat |
-| **2 · Day aggregates** — complete history | One row per day since 2020: display-currency net, count, top-4 category codes, projection flag | **~155 KB** | **23 KB/yr** |
-| **3 · Transaction rows** — count-bounded | The most recent 400, ∪ everything in the last 30 days, ∪ every row referenced by a pending entry, ∪ every row opened recently | ~285 KB | flat |
-| **4 · FX** | Last-known per pair, plus daily rates for tier-3 dates only | ~15 KB | flat |
-| | **Total live** | **~612 KB** | **23 KB/yr** |
+| **Reference** — complete, never evicted | Accounts, category leaves, counterparties with last-used category, currencies, **all** period locks, cached checkpoints | ~157 KB | flat |
+| **Transaction rows** — the whole ledger, complete | Every transaction, transfer and settlement the replica may hold, soft-deleted rows included as tombstones (below) | ~5–6 MB | tracks the ledger — §15 projects the rate rising from 5.5 to 9.5 a day |
+| **FX** | Last-known rate per currency pair, for pricing a *new* capture | ~15 KB | flat |
+| | **Total live** | **~5–6 MB** (§14.0's "single-digit megabytes") | tracks the ledger |
 
-**Tier 2 is the highest-value 155 KB in the design.** The calendar promises
-virtualized scroll across ~2 100 days; 90 days of transaction rows renders
-**4.3%** of that, and costs 552 KB to do it. Day aggregates render *all* of it —
-every scale, plus S01's category donut and the year sparklines — for less.
+**There is no day-aggregate tier, and none is needed.** The calendar promises
+virtualized scroll across ~2 100 days; with the whole ledger resident, its day,
+week, month and year nets are **R**-class figures (below), computed directly
+from the transaction rows the replica always covers completely — a property
+that used to hold for 90 days and now holds for the whole history since 2020.
 
-The union clauses in tier 3 are what make eviction safe: a row referenced by a
-pending entry can never be evicted out from under its own optimistic display.
-
-Only tier 2 grows, at 23 KB a year. That claim is defensible for a decade.
+**There is nothing left to bound.** The earlier tiers protected a row
+referenced by a pending outbox entry with a union clause against its own
+eviction; a complete replica has no eviction for that clause to guard against.
 
 **Historical FX rates are not mirrored.** Mirroring six pairs across 2 100 days
 costs 1 MB — and is unnecessary, because the replica carries each row's
@@ -3402,13 +3425,14 @@ currency is an online settings action that bumps the replica epoch.
 
 The replica syncs by `(updated_at, id)` cursor and **includes soft-deleted rows**,
 so `deleted_at` propagates as a tombstone. Without that, a transaction deleted on
-the laptop lives on the phone forever — in the list, and in every cached day net
-that included it.
+the laptop lives on the phone forever — in the list, and in every locally
+computed total that included it.
 
 A server-side `replica_epoch` is bumped by any bulk operation: rerate, import,
 migration, period close, display-currency change. On mismatch the phone drops and
-refetches. That costs one round trip of a few hundred kilobytes, and it is
-affordable precisely because **nothing in the replica is a source of truth.**
+refetches. That now costs one round trip of a few megabytes — the whole ledger,
+not a window (§14.0) — and it is affordable precisely because **nothing in the
+replica is a source of truth.**
 
 A §15.1 invariant compares a device replica checksum against the server's at the
 same watermark. It is the only check in the system that would catch a sync bug.
@@ -3622,14 +3646,18 @@ also wrong.
 | Reachable | Direct tRPC; optimistic updates; FX and replica refresh on foreground |
 | Unreachable | Reads from the replica; writes to the outbox; captures continue unchanged |
 | Reconnect | Outbox drains automatically, in `seq` order; **server is authoritative** |
-| Conflict | Last-write-wins, audited. One person, two devices |
+| Conflict | Resolved by **version, not clock** — the write carries the `updated_at` it last read, audited. A same-field divergence follows the conflict setting (latest-applied-wins or ask); the tax-sensitive set always asks (§14.2). One person, two devices |
 | **Drain trigger** | Foreground, in-foreground network change, user tap, silent push. **Never while locked** — see §5.7 |
 
 **"Single writer" is not true, and the design does not lean on it.** The phone
-and the laptop both write. Last-write-wins is still right — one *person* means
-conflicting intent is vanishingly rare — but it is justified by low conflict
-probability, not by there being one writer. Capture-only narrows it further: a
-genuine conflict needs the same row edited on two devices inside one sync window.
+and the laptop both write. Conflicts are resolved by comparing the version each
+write last read, never "whichever landed last" — `architecture/14-local-first.md`
+§14.2 states why: a phone offline for days can otherwise land an older edit
+over a newer correction, wearing an honest-looking timestamp. That is not a
+substitute for low conflict probability; it is what makes relying on low
+conflict probability safe. One *person* still means conflicting intent is
+vanishingly rare, and capture-only narrows it further: a genuine conflict needs
+the same row edited on two devices inside one sync window.
 
 The web client is nonetheless the writer that makes the *largest* changes —
 import, bulk review, rerating, period close — so a checkpoint is marked

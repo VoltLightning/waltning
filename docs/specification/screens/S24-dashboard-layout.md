@@ -1,6 +1,6 @@
 # S24 · Dashboard layout
 
-**Surface** web · **Journeys** J6 · **Frequency** rare
+**Surface** wide · **Journeys** J6 · **Frequency** rare
 **Design** none
 **Status** specified · tier 3
 
@@ -20,7 +20,9 @@ Choose what the dashboard shows, and where.
 ## 3. Layout
 
 ### Mobile
-Not supported. S01 is web-only, so its configuration is too.
+Not supported at phone width — S01 doesn't render there either (§3), so
+there is nothing to preview into. Both come along together once there is
+width to give them (RN Web, DeX, an iPad; `architecture/14` §14.4).
 
 ### Web — ≥1024px
 

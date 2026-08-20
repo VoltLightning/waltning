@@ -85,6 +85,19 @@ knowing the answer.
 system whose entire argument is that you hold your own data. To be decided
 before push ships — see [[Decisions]].
 
+## The local-first reframe
+
+[`architecture/14`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/14-local-first.md)
+changed what "offline" and "replica" target, ahead of the build reaching them.
+The phone's local database is now specified to hold the **whole ledger**, not
+a recent window — complete, but not authoritative; the server stays the
+record of truth and the only writer. This is a change to the specification,
+not a claim that more has shipped: the sync mechanism, the version-based
+conflict handling, and the screens that would show any of it are still in
+**not started**, above. Treat any older text describing a partial
+"replica window" or a phone that needs a server before it works as
+superseded by `architecture/14`.
+
 ## How to read this against the repository
 
 The specification describes the finished system in the present tense, because

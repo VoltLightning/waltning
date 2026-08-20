@@ -1,6 +1,6 @@
 # S20 · Settings · Rules
 
-**Surface** web · **Journeys** J4 · **Frequency** monthly, alongside import
+**Surface** wide · **Journeys** J4 · **Frequency** monthly, alongside import
 **Design** none
 **Status** specified · tier 3
 
@@ -21,7 +21,10 @@ explainable.
 ## 3. Layout
 
 ### Mobile
-Not supported. Rules are written while importing, which is a desktop act.
+Not supported at phone width. Rule list, editor and test panel side by side
+need the room — the phone renders this screen once given it (RN Web, DeX, an
+iPad), same as S02 (`architecture/14` §14.4). Maintaining a rule needs no
+backend on its own; it is almost always done mid-import, which does (S02).
 
 ### Web — ≥1024px
 

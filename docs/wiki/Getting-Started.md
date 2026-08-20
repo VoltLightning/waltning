@@ -1,7 +1,20 @@
 # Getting Started
 
-Two paths: a laptop, where you want it running in five minutes, and a Raspberry
-Pi, which is what it is actually for.
+The phone app is a complete finance app on its own — install it and you have
+your whole ledger, offline-first, no server required. This page is about the
+two optional pieces: a laptop, for running the whole stack in five minutes
+while you develop, and a Raspberry Pi, for standing up the home backend that
+makes your data durable and unlocks the web dashboard.
+
+## Backing up, before you add anything
+
+Durability graduates rather than being all-or-nothing. **On the phone alone**,
+backing up is your job: an app-owned, encrypted export, with its key held in
+iCloud Keychain and its ciphertext kept somewhere Apple is not — a Mac, a NAS,
+later the backend. One vendor never holds both halves. **Once you add a
+backend** (below), that stops being your job — see "Backups are encrypted
+before they leave the Pi" further down. Filing-grade tax reporting needs the
+backend too; the phone alone shows tax figures as estimates.
 
 ## On a laptop
 
@@ -119,8 +132,9 @@ else would be testing the wrong thing.
 
 ## On a Raspberry Pi
 
-The real deployment. Everything runs as containers under Docker Compose, and
-there are three routes in — **none of which opens a port on your router.**
+The optional home backend — the phone works fully without it. Add one and
+everything runs as containers under Docker Compose, and there are three
+routes in — **none of which opens a port on your router.**
 Tailscale is a private network connecting your own devices and nothing else, and
 works wherever you are. Your own home network is simpler and stops at your front
 door. A public web address is the third, behind a password and a mandatory
@@ -137,7 +151,9 @@ same sign-in page in a browser window, and once you have proved who you are it
 receives its own credential, which you can revoke for that phone alone. This is
 why the phone can reach the server at any address and the dashboard needs a
 fixed one — a passkey is tied to a web address, and the phone's credential is
-not.
+not. This first sign-in is also the one-time step that adds the backend: your
+phone's ledger seeds the server, and the phone then keeps a complete replica
+plus its outbox rather than being the only copy.
 
 **Passkeys need a real domain name and a real certificate.** A server reachable
 only at something like `192.168.1.50` cannot use them, because browsers refuse

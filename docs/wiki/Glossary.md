@@ -13,7 +13,7 @@ it.
 | **Gate** | The decision about whether a change needs your approval. Changes need it by default |
 | **Grant** | Permission you give the assistant to run named operations without asking. Always expires, never covers deletions or settings |
 | **Queue** (outbox) | Where the phone keeps what you have done but the server has not seen yet. Drains when a network appears |
-| **Local copy** (replica) | The phone's copy of the server's data, so your figures still work with no signal |
+| **Local copy** (replica) | The phone's own complete copy of your whole ledger — the app works fully with no signal and no backend. Once a backend exists it is the authoritative copy the phone stays in step with (`architecture/14`) |
 | **F / R / S** | Where a figure is allowed to be calculated — from the phone's own data, from its local copy, or only on the server. Declared per figure |
 | **`opVersion`** | Which version of an operation a queued change meant, so a write that waited through an app update is never reinterpreted as something else |
 | **Receipt** *(replay)* | The server's record that it already handled a given request, so sending it twice does the work once |

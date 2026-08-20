@@ -1,19 +1,24 @@
 # Offline and Sync
 
 The phone works with no server, indefinitely — not for the few minutes while a
-lift moves. Specified in
+lift moves, and not only after it has once met a server. It holds your whole
+history from the first time you open it, not a recent window, so there is
+nothing it needs to fetch before daily use works. Specified in
 [`architecture/08`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/08-offline-and-concurrency.md)
 and
 [`architecture/09`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/09-connectivity.md),
-and reviewed adversarially — several claims in the first draft were shown to be
+reframed by
+[`architecture/14`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/14-local-first.md)
+to make that completeness the point rather than a side effect, and reviewed
+adversarially throughout — several claims in early drafts were shown to be
 wrong and are now recorded as such.
 
 ## The two halves
 
 Anything you record goes into a **queue on the phone** — a local database that
-survives being closed, killed or restarted. Anything you *read* comes from a
-**copy of the server's data** that the phone keeps, plus whatever is still
-sitting in the queue.
+survives being closed, killed or restarted. Anything you *read* comes from the
+phone's own copy of your ledger — your whole history, not a recent window —
+plus whatever is still sitting in the queue.
 
 ```mermaid
 graph LR
@@ -29,12 +34,24 @@ graph LR
     API -->|"a fresh copy"| REP
 ```
 
+With no backend, `local copy` is simply your ledger — there is nothing to sync
+it against, so it never falls behind and nothing here is provisional. Add a
+backend later and the same box starts refreshing from the server on top of
+whatever you already captured; the balance math underneath does not change.
+
 **Your balance is the copy plus the queue.** That is why a figure stays correct
 while you are offline instead of freezing at whatever it was when the signal
 dropped — the phone folds in what it knows you have done.
 
-Sync is explicit and goes both ways. It is not a background process you have to
-take on faith.
+Draining your queue to the server is **automatic** once you have a backend —
+there is no sync button, and nothing you have to remember to trigger. That is
+not something you take on faith: Rule 0, below, is what proves a response
+really came from your server before anything is marked done. What sync is
+*not* is a two-way merge you have to referee — a write is one-way intent,
+replayed to the server, which admits it or refuses it; reading back is a plain
+refresh from the server's data. The only moment sync asks you anything is a
+genuine conflict — see "When two devices really disagree", below — and
+tax-relevant fields always ask, regardless of anything else.
 
 Which numbers can be shown offline is a **declared property of each number**,
 not something you find out when a screen renders blank on a train — see the
@@ -122,6 +139,31 @@ stateDiagram-v2
 **The transition that is missing is the point.** There is no path from `sending`
 straight to `done` on a response that has not proved itself — which is the one
 arrow standing between a café Wi-Fi and a week of deleted captures.
+
+## When two devices really disagree
+
+A write does not race the wall clock. It carries **the version it last
+read** — a token on the row, not a timestamp to rank — and the server asks one
+question: *did this field change under you since you read it?*
+
+- **No** → the write lands. No prompt.
+- **Yes** → that is a real conflict. Different fields on the two sides still
+  merge with no prompt at all — split lines sync with their parent as one
+  unit, and the several fields that make up a transfer's two currency legs
+  count as one field for this purpose, or a merge could produce a plausible
+  number that neither device actually held. Only when the *same* field
+  diverged does the app ask which value to keep, and the tax-sensitive fields
+  (`is_business`, the ryczałt rate and activity, a counterparty's tax id, the
+  date, account ownership, whether a currency is the pivot) **always ask**,
+  whatever else is set.
+
+**Why not "whichever arrived last wins":** a phone offline for nine days can
+land an edit that is *older* than a correction another device already synced.
+Ranking by arrival time would silently overwrite the newer value with the
+stale one. Comparing versions instead means a newer edit is never lost to an
+older one, no matter which device's clock is right or which one reached the
+server first. This is the clock-merge `architecture/08` spends a section
+refusing.
 
 ## Sending twice is safe
 
