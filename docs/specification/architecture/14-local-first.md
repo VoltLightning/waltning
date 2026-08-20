@@ -231,15 +231,32 @@ Where the definition lives:
 | `packages/db` | the Postgres kit, plus the server-only tables, views, triggers and roles |
 | `packages/ledger` | the SQLite kit, plus the phone's queries, outbox and migrator |
 
-**How the shared set is written is not yet settled.** A single definition
-parameterised over a column kit is the goal — add a column once and both engines
-get it — but Drizzle's builder types are deep and may not survive the
-indirection. A half-day spike on `transactions` and `currencies` decides it. The
-fallback, if the types fight back, is the two definitions written side by side
-with a compile-time assertion that their row types are identical: the
-`contract.types.ts` pattern this repository already uses and already proves by
-breaking. **Either way divergence must be unable to reach a commit**, not merely
-detectable afterwards.
+**Settled by spike: the tables are written twice, and drift is a compile
+error.** A single definition parameterised over a column kit was tried first and
+does not work, for a reason that is structural rather than fixable — TypeScript
+typechecks a generic function's body against the *constraint*, not against each
+instantiation, so inside `function t<K extends Kit>(k: K)` the expression
+`k.text` is a union of incompatible signatures and is not callable. Loosening
+the constraint until the body compiles is worse: the return type is computed
+from the same loose types, `$inferSelect` collapses, and the thing keeps
+compiling while proving nothing. It needs higher-kinded types, which the
+language does not have.
+
+So `currencies.pg.ts` sits beside `currencies.sqlite.ts`, and
+`parity.type-test.ts` asserts — once, mapped over both modules rather than
+restated per table — that every shared table's `$inferSelect` **and**
+`$inferInsert` are identical. Both are needed: a column missing on one engine
+moves both, while a `.default()` on one side only moves `$inferInsert` alone,
+because the row type is `string` either way and only the insert becomes
+optional. A third assertion pins the *set*, so two modules cannot agree on the
+tables they happen to share while each omitting a different one.
+
+What the kit still removes is the part worth removing: the type decisions. That
+money is a string on both engines, that a SQLite boolean is an integer in
+`boolean` mode, that the conflict token is a `bigint` here and an integer there
+— each decided once rather than in thirteen pairs of files. **Divergence cannot
+reach a commit**, which was the requirement; "written once" was only ever the
+means.
 
 Two implementations of every foldable figure follow from this — SQL on the
 server, `money.ts` on the phone — which `computations.md` already implies for

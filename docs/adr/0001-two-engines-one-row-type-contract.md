@@ -1,4 +1,4 @@
-# Two database engines, one schema definition
+# Two database engines, one row-type contract
 
 **Status:** accepted · 2026-08-20
 
@@ -54,9 +54,15 @@ the phone can hold everything and still not be where the guarantees live.
   on the phone — held together by a differential test over one fixture, equal to
   eight decimal places.
 - Divergence must be unable to *reach a commit*, not merely detectable
-  afterwards. Whether that is one definition over a column kit or two
-  definitions under a compile-time row-type assertion is unsettled; a spike on
-  `transactions` and `currencies` decides it.
+  afterwards. **Settled by spike:** one definition over a column kit is
+  impossible — a generic function's body typechecks against its constraint, so
+  the kit's builders are a union of incompatible signatures and are not
+  callable; loosening the constraint collapses `$inferSelect` while still
+  compiling. The tables are therefore written per dialect with a compile-time
+  assertion that `$inferSelect`, `$inferInsert` and the table set all match.
+  Verified by breaking it six ways — a missing table, a table outside the
+  declared set, a changed column type, a changed nullability, a renamed column,
+  and a `.default()` on one side only.
 - Brick 1 accepts weaker enforcement than Brick 2, stated rather than hidden:
   the phone mirrors every invariant SQLite can express, and role grants and
   cross-table triggers stay on the server. The Brick 1 → Brick 2 migration is

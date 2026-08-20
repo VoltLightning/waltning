@@ -325,6 +325,15 @@ describe("every src/ is organised by domain, not by layer", () => {
     // target is thirteen; six exist because six have components.
     "packages/ui/src": ["accounts", "fx", "primitives", "review", "shell", "transactions"],
     "packages/db/src": ["fx", "seed", "test"],
+    /**
+     * **Flat, and that is the decision.** The two dialects are file suffixes —
+     * `currencies.pg.ts` beside `currencies.sqlite.ts` — not `pg/` and
+     * `sqlite/` folders. Folders here would file by *engine*, which puts one
+     * table in two places and is the same mistake as filing by tier: the thing
+     * you reason about is the table, and its two halves must be adjacent or
+     * they drift. `architecture/10` makes the same call for the api's layers.
+     */
+    "packages/schema/src": [],
   };
 
   it("has exactly the folders it declares", () => {
@@ -340,6 +349,36 @@ describe("every src/ is organised by domain, not by layer", () => {
         ...allowed,
       ]);
     }
+  });
+
+  /**
+   * **The allowlist is opt-in per root, which made it silently incomplete.**
+   *
+   * `ALLOWED` is a map keyed by root, and the assertion above iterates *its*
+   * entries — so a package with no entry is not checked, it is skipped. Adding
+   * `packages/schema` demonstrated it: a whole new package took its place in
+   * the workspace with no folder discipline applied and a green suite, which is
+   * the failure this file exists to make impossible.
+   *
+   * The fix is the inversion: the workspace decides what must be covered, and
+   * the allowlist has to keep up.
+   */
+  it("declares an allowlist for every package that has a src/", () => {
+    const packages = readdirSync(join(repoRoot, "packages"))
+      .filter((e) => statSync(join(repoRoot, "packages", e)).isDirectory())
+      .filter((e) => existsSync(join(repoRoot, "packages", e, "src")))
+      .map((e) => `packages/${e}/src`)
+      .sort();
+
+    // Vacuity guard: an empty scan would make the comparison below trivially
+    // true, which is precisely the shape of the hole being closed.
+    expect(packages.length, "packages with a src/ found").toBeGreaterThan(3);
+
+    const declared = Object.keys(ALLOWED).filter((r) => r.startsWith("packages/"));
+    expect(
+      packages.filter((p) => !declared.includes(p)),
+      "package with no allowlist entry — it is skipped, not checked",
+    ).toEqual([]);
   });
 
   it("uses no tier name as a folder, anywhere", () => {
