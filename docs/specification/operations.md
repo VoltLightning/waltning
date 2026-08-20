@@ -209,6 +209,21 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
   agent would inherit it. **The decision is a person's; the write is the
   registry's.**
 
+  The agent is not shut out of the subject, only out of the verb: conflicts are
+  readable, so it may explain what diverged and propose which value looks right.
+  That is the read / propose / approve shape §11.2 uses for every write.
+
+- **`conflict_detected`.** Not an operation either — an `audit_log.action`
+  value. The server writes it when it refuses a drained write whose fields moved
+  underneath it, carrying both values. That is a real event the server observed,
+  so it needs no verb of its own, and it is what makes *keep theirs* auditable
+  without sending a write that never happened: the detection row with no
+  following update **is** the record of the discard.
+
+  An earlier draft of S35 had *keep theirs* send a no-op write purely to
+  manufacture an audit row. It advanced `version` on an untouched row and left
+  every future reader unable to tell a marker from an edit.
+
 ## Auto-mode, restated as a rule
 
 Reading down the Auto column, the eligible set has one shape: **operations that

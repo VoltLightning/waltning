@@ -105,7 +105,11 @@ trail being complete forever: a prune would silently turn conflicts into
 merges, which is the direction that loses data.
 
 - **No** → the write lands.
-- **Yes** → it is a real conflict. A same-field divergence follows a setting —
+- **Yes** → it is a real conflict, and the server records the *detection* —
+  an `audit_log` row carrying both values, written at the moment it refused.
+  That, not the resolution, is what satisfies "nothing is silently lost":
+  choosing *theirs* sends no write at all, so a detection row with no following
+  update is the whole record of the discard. A same-field divergence follows a setting —
   *latest applied wins* or *ask* — and the **tax-sensitive set always asks**
   (`is_business`, `ryczalt_rate`, `ryczalt_activity`, `counterparty_tax_id`,
   `date`, `accounts.ownership`, `currencies.is_pivot`).

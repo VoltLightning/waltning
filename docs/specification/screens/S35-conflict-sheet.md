@@ -107,6 +107,7 @@ property this surface cannot give up.
 | `minedAt`, `theirsAt` | `capturedAt` (display only) and the server's `updated_at` |
 | `taxSensitive` | `conflictDecision()` |
 | `entryId` | The blocked outbox entry |
+| `detectionId` | The `conflict_detected` audit row, so the sheet and the trail name the same event |
 
 ## 6. States
 
@@ -118,6 +119,7 @@ property this surface cannot give up.
 | All resolved | Sheet closes, marker clears, blocked entries re-drain |
 | Value no longer applicable | The row was deleted server-side since detection — offer *discard my edit* alone, and say why |
 | Offline | Fully usable. The decision is recorded locally and applied on the next drain, because deciding needs no network |
+| Reached from a blocked close or export | Opened from S28/S27 with the blocking conflicts filtered to those alone, and a return path to what you were trying to do |
 
 ## 7. Interaction
 
@@ -147,17 +149,33 @@ Centred modal, focus trapped, `Esc` closes without resolving.
   (`architecture/08`). Entries behind it keep draining unless they depend on it.
 - **Nothing auto-resolves after a timeout.** A tax-sensitive field decided by a
   timer is exactly what §11.2 forbids, and a stall is the cheaper failure.
-- **The chosen value and the discarded one both reach `audit_log`.** §14.2
-  requires the outcome recorded with both values either way. *Keep mine*
-  re-sends the queued write; *keep theirs* sends the same operation setting the
-  field to the server's value — a no-op in effect, but it carries the discarded
-  value into its audit row, which is the only way a discard leaves a trace at
-  all. It advances `version`, which is correct: choosing is a decision about
-  the row.
+- **An unresolved tax-sensitive conflict blocks the period close and the tax
+  export**, and they name it. The interruption is tied to *consequence*, not to
+  elapsed time: you are never stopped while capturing, and you are always
+  stopped where the wrong answer would cost something. A timer would instead
+  guess at how long is too long and eventually become furniture. The server has
+  what it needs in `tax_period_locks`.
+- **The server audits the *detection*, not the resolution.** When the drain's
+  write is refused, the server writes one `audit_log` row —
+  `action = 'conflict_detected'`, `before` the server's value, `after` the
+  client's — because that event genuinely happened. §14.2's "recorded with both
+  values" is satisfied there, at the moment it was true.
+
+  *Keep mine* then re-sends the write and is audited as the ordinary update it
+  is. **_Keep theirs_ sends nothing at all**: the detection row with no
+  following update *is* the record of the discard. An earlier draft had it send
+  a no-op write to manufacture an audit row — a fiction that advanced `version`
+  and made an untouched row look edited, and left every future reader of that
+  row unable to tell a marker from an edit.
 - **Money renders through `<Amount>`/`<FxAmount>`** — a conflict between two
   amounts formatted by hand is a second implementation of `computations.md` §1.
 - **The screen fetches; components do not.** The sheet takes its conflict as a
   parameter (`architecture/11`).
+- **The agent may read a conflict and propose; only a person resolves it.**
+  Conflicts are readable, so the agent can explain what diverged and say which
+  value looks right — the read / propose / approve shape §11.2 already uses for
+  every write. It cannot discard and cannot resolve, which is the line the
+  exclusion below draws.
 - **Resolution is not a new operation.** It re-sends the write the entry
   already holds, with the conflict outcome attached for the audit row.
   `operations.md`'s *What is never an operation* covers exactly this shape:
@@ -169,13 +187,19 @@ Centred modal, focus trapped, `Esc` closes without resolving.
 
 ## 9. Open questions
 
-- **Does the discarded value stay recoverable beyond `audit_log`?** The audit
-  row holds it, but nothing surfaces it. If you pick wrong at 11pm, the recovery
-  path today is reading an audit trail no screen renders.
+- **Nothing surfaces the `conflict_detected` row.** The discarded value is now
+  recoverable — it is `before`/`after` on that audit row, kept forever — but no
+  screen renders it, so picking wrong at 11pm has a recovery path that exists
+  and cannot be walked. S30 is the likely home.
 - **What does the marker look like when the app is opened days later?** The
-  badge is specified; whether a week-old unresolved conflict escalates its
-  presentation is not.
-- **Is `date` too coarse for the tax-sensitive warning?** It is in the set
-  because it decides which period a row belongs to — but only when the period is
-  closed or near closing. Warning on every date conflict may be the noise that
-  devalues the warning.
+  badge is specified, and the close/export block gives it teeth where it counts.
+  Whether a month-old *non*-tax conflict deserves more than a badge is not
+  decided.
+
+**Decided, and worth stating because it looks like an oversight:** `date` warns
+as tax-sensitive **always**, not only when a period is closed or near closing.
+Narrowing it would keep the warning sharper, and the accepted cost is the
+reverse — a mistyped date corrected on two devices raises a tax warning that
+does not apply. Chosen deliberately: warning too often costs annoyance, and the
+narrow rule costs a filed figure moving with no visual distinction at the moment
+of choosing.
