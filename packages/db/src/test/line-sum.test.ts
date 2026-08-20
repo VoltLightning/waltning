@@ -179,6 +179,76 @@ describe("split lines sum to their parent", () => {
   });
 
   /**
+   * **A defect found by attacking this migration, not by writing it.**
+   *
+   * The trigger read `COALESCE(NEW.transaction_id, OLD.transaction_id)`, which
+   * is right for an INSERT and a DELETE and quietly wrong for the UPDATE that
+   * moves a line between parents: only the *new* parent was re-checked. So a
+   * 40.00 line moved off a 100.00 split onto a transaction that could absorb it
+   * left the original summing to 60.00 against a 100.00 parent — accepted,
+   * silent, and exactly the disagreement this whole invariant exists to stop.
+   *
+   * The obvious first attempt at this test does not find it. Moving the line
+   * onto a parent that *cannot* absorb it is refused for the wrong reason —
+   * the new parent goes over — and reads as a pass. The destination has to end
+   * up valid for the source's shortfall to be the only thing wrong.
+   */
+  it("refuses moving a line even when the destination ends up valid", async () => {
+    const from = await transaction("100.00"); // will be split 60 + 40
+    const to = await transaction("40.00"); // unsplit, and exactly the moved amount
+
+    let moved = "";
+    await s.sql.begin(async (tx) => {
+      const [row] = await tx.unsafe<{ id: string }[]>(`
+        INSERT INTO transaction_lines (transaction_id, description, amount)
+        VALUES ('${from}', 'a', 60.00), ('${from}', 'b', 40.00)
+        RETURNING id`);
+      // The 40.00 line, whichever id it got.
+      const [forty] = await tx.unsafe<{ id: string }[]>(`
+        SELECT id FROM transaction_lines
+        WHERE transaction_id = '${from}' AND amount = 40.00`);
+      moved = String(forty?.id ?? row?.id);
+    });
+
+    const code = await refusal(() =>
+      s.sql.begin(async (tx) => {
+        await tx.unsafe(`
+          UPDATE transaction_lines SET transaction_id = '${to}' WHERE id = '${moved}'`);
+      }),
+    );
+
+    expect(code, "the source parent is left short by 40.00").toBe("WA015");
+
+    const [left] = await s.sql<{ total: string }[]>`
+      SELECT COALESCE(sum(amount), 0)::text AS total
+      FROM transaction_lines WHERE transaction_id = ${from}`;
+    expect(left?.total, "and the move must not have landed").toBe("100.00000000");
+  });
+
+  /**
+   * **Deferred to COMMIT means a split must be written inside one transaction.**
+   *
+   * Under autocommit every statement is its own transaction, so a caller
+   * inserting the lines of a split one at a time is refused on the first one.
+   * That is correct — 30.00 against a 100.00 parent really is wrong at that
+   * commit — and it is the kind of correct that reads as a bug to whoever hits
+   * it. Pinned so the constraint is a documented property rather than a
+   * surprise, and so a service that forgets to wrap a split has a test naming
+   * the reason.
+   */
+  it("refuses a split written one autocommitted statement at a time", async () => {
+    const txn = await transaction();
+
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO transaction_lines (transaction_id, description, amount)
+        VALUES ('${txn}', 'first of two', 30.00)`),
+    );
+
+    expect(code).toBe("WA015");
+  });
+
+  /**
    * **Broken once, to prove the trigger is what holds it.**
    *
    * Every test above would pass unchanged against a database where the split

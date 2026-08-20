@@ -92,6 +92,13 @@ CREATE TRIGGER debt_reassignments_touch
 -- two-line split with a three-line one is legal and passes through states
 -- where the sum is wrong. `currencies_exactly_one_pivot` is deferred for the
 -- same reason and is the precedent.
+--
+-- **Deferred to COMMIT means a split must be written inside one transaction.**
+-- Under autocommit each statement is its own transaction, so inserting the
+-- lines of a split one statement at a time refuses the first one — correctly,
+-- and confusingly if the caller did not expect it. Any service writing a split
+-- wraps it; `08`'s "an outbox entry is one user intention" says the same thing
+-- from the other end, since a split is one intention.
 
 CREATE OR REPLACE FUNCTION assert_lines_sum(txn uuid)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -123,10 +130,20 @@ BEGIN
 END $$;
 --> statement-breakpoint
 
+-- **Both sides of a move**, which the first version of this got wrong.
+--
+-- It read `COALESCE(NEW.transaction_id, OLD.transaction_id)` — correct for an
+-- INSERT and a DELETE, and quietly wrong for the UPDATE that changes a line's
+-- parent. Only the *new* parent was re-checked, so moving a 40.00 line off a
+-- 100.00 transaction onto one that could absorb it left the original split
+-- summing to 60.00 against a 100.00 parent, and the write was accepted. The
+-- adversarial pass on this migration found it; the case is pinned in
+-- `line-sum.test.ts`.
 CREATE OR REPLACE FUNCTION assert_lines_sum_for_line()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM assert_lines_sum(COALESCE(NEW.transaction_id, OLD.transaction_id));
+  IF TG_OP <> 'INSERT' THEN PERFORM assert_lines_sum(OLD.transaction_id); END IF;
+  IF TG_OP <> 'DELETE' THEN PERFORM assert_lines_sum(NEW.transaction_id); END IF;
   RETURN NULL;
 END $$;
 --> statement-breakpoint

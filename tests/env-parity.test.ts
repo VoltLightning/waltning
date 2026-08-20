@@ -142,6 +142,15 @@ describe("no usable credential ships in .env.example", () => {
     expect(guarded.size, "compose-guarded variables found").toBeGreaterThan(3);
     expect(guarded).toContain("POSTGRES_PASSWORD");
 
+    // **Absence must not read as safety.** `values.get(name) ?? ""` would score
+    // a variable compose refuses to start without, and `.env.example` never
+    // mentions, as "safely empty" — when it is in fact undocumented, and the
+    // person deploying this has no way to learn it exists. The parity test
+    // above only covers variables the *code* reads, so compose-only names fall
+    // through it.
+    const undeclared = [...guarded].filter((name) => !values.has(name));
+    expect(undeclared, "compose-guarded but absent from .env.example").toEqual([]);
+
     const shipped = [...guarded]
       .map((name) => [name, values.get(name) ?? ""] as const)
       // A guarded *URL* must still ship — it carries the host, role and
