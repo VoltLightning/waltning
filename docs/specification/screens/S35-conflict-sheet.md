@@ -32,6 +32,7 @@ buttons.
 | S30 · System | Outbox badge → conflicts | S30 |
 | S09 · Transaction detail | The affected row's conflict marker | S09, resolved |
 | Global | Sync banner, when the drain reports conflicts | Wherever you were |
+| S28 · Tax view · S27 · Export | A blocked close or export names its conflicts | Back to the close or export |
 
 **Never opened by the drain itself.** The drain fires on foreground and on
 reconnect — precisely when you have just opened the app to do something else —
@@ -187,10 +188,14 @@ Centred modal, focus trapped, `Esc` closes without resolving.
 
 ## 9. Open questions
 
-- **Nothing surfaces the `conflict_detected` row.** The discarded value is now
-  recoverable — it is `before`/`after` on that audit row, kept forever — but no
-  screen renders it, so picking wrong at 11pm has a recovery path that exists
-  and cannot be walked. S30 is the likely home.
+- **Recovery is retyping, and that is the accepted cost.** The discarded value
+  is on the `conflict_detected` audit row, kept forever, and **S09's
+  `AuditHistory` renders it** — struck through, marked as refused rather than
+  applied. There is deliberately no *restore* control: it would be one tap that
+  overwrites a current value with an old one, and on a tax-sensitive field that
+  is the exact move §11.2 exists to slow down. For a few-times-a-year event, a
+  minute of typing is the better trade. What is unproven is whether that reads
+  as recovery or as a dead end when you are actually in it.
 - **What does the marker look like when the app is opened days later?** The
   badge is specified, and the close/export block gives it teeth where it counts.
   Whether a month-old *non*-tax conflict deserves more than a badge is not
