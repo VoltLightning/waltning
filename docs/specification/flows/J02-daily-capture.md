@@ -104,6 +104,7 @@ All four states designed — `design/gaps.dc.html` G3.
 | **Duplicate at save** | Caught on Save, showing the row it matched with its date and amount. Both actions are live — the honest answer is usually *"yes, I bought coffee twice"* |
 | **No FX rate for the date** | Saves anyway. `fx_rate_estimated` is set, the amount renders `<FxAmount variant="estimated">` in amber, and the row joins the *resting on an estimate* filter. A missing rate must never cost you the transaction (`SPEC.md` §7.6) |
 | **Server unreachable** | Writes to the outbox with a client-generated UUID. Save reads as done, because it is |
+| **The edit collided while you were offline** | Only when the *same field* moved on another device inside the sync window — a different field on the same row merges with no prompt (`architecture/14` §14.2). The drain marks it and **does not interrupt**; the marker leads to **S35 · Conflict sheet** when you choose. Tax-sensitive fields always ask, whatever the setting |
 | Category picker with no match | Offers *Create "…"* under the currently selected group, never at top level |
 
 ## 6. Rules

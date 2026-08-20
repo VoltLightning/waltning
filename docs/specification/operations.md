@@ -199,6 +199,16 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
   agent inherits them"* about the paragraph's other writes. These three sit in
   the same column and are the exception.
 
+- **`resolve_conflict`.** S35's choice is not a fourth verb. *Keep mine*
+  re-sends the write the entry already holds; *keep theirs* sends the same
+  operation with the server's value, carrying the discarded one into the audit
+  row. Both are `update_*` calls that already exist.
+
+  Registering it would reintroduce the hazard directly above by another name: a
+  conflict resolver that can pick *theirs* is a queued-write discarder, and the
+  agent would inherit it. **The decision is a person's; the write is the
+  registry's.**
+
 ## Auto-mode, restated as a rule
 
 Reading down the Auto column, the eligible set has one shape: **operations that

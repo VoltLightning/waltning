@@ -31,7 +31,7 @@ gate exists here" is a decision, and an undocumented one reads as an oversight.
 | Dashboard | skeleton tiles | `first-run` | rate sync failed | ✅ per-widget cache + age; never a zero (§8.3) | n/a | n/a |
 | Import review | parsing progress | ✅ queue clear | `partial` — states both counts | queue locally | n/a | n/a |
 | Agent | ✅ `ThinkingIndicator`, 3 phases (§8.5) | no sessions | model failed · ✅ `RefusalCard` (§8.7) | disabled, stated | auto-mode grant (§11.2) | n/a |
-| Quick add | — | — | ✅ four states, `gaps.dc.html` G3 | ✅ outbox | n/a | **setting-driven; *ask* is unbuilt** |
+| Quick add | — | — | ✅ four states, `gaps.dc.html` G3 | ✅ outbox | n/a | ✅ **S35 · Conflict sheet** (specified, unbuilt) |
 | Receipt | ✅ extracting 2.4 s | queue empty | ✅ `terminal`, image retained | ✅ queue | n/a | n/a |
 | Transactions list | skeleton rows | ✅ `filtered` names the excluding filter | query failed | cached + age | n/a | n/a |
 | Calendar | skeleton grid | ✅ `range` offers nearest period | query failed | cached + age | n/a | n/a |
@@ -44,16 +44,20 @@ gate exists here" is a decision, and an undocumented one reads as an oversight.
 
 ## What remains
 
-**One row, and it is a real one.** Quick add's conflict behaviour has no
-screen. `architecture/14` §14.2 replaced silent last-write-wins with a setting —
-*latest applied wins* or *ask* — and made the tax-sensitive set **always** ask,
-so what is missing is no longer a decision to live with but a component to
-build: one divergence, two values, a choice. Under *latest applied wins* the
-overwrite is still silent and still audited, which is the acceptable half; under
-*ask*, and for every tax-sensitive field regardless of the setting, there is
-currently nothing to show. Detection is sound already — the write carries the
-`version` it last read, and the client-generated UUID stops a retry becoming a
-duplicate.
+**One row, and it moved from missing to unbuilt.** `architecture/14` §14.2
+replaced silent last-write-wins with a setting — *latest applied wins* or *ask*
+— and made the tax-sensitive set **always** ask. That turned an accepted
+limitation into a component, and **S35 · Conflict sheet** now specifies it: one
+divergence, two values, a choice, stepped when a sync produces several.
+
+Detection is sound. The write carries the `version` it last read *and* the prior
+value of every field it sets, so disjoint edits merge with no prompt rather
+than colliding; the client-generated UUID stops a retry becoming a duplicate.
+What does not exist is the sheet, and `BottomSheet` under it (D2) — the same
+shape as S33's master switch forcing `Toggle`.
+
+Under *latest applied wins* a same-field overwrite is still silent and still
+audited, which is the acceptable half and needs no screen.
 
 Everything else in this table was `gap` before the flow pass. The fourteen are
 enumerated in §8.6.
