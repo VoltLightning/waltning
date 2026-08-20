@@ -3424,6 +3424,8 @@ currency is an online settings action that bumps the replica epoch.
 #### Replication, not caching
 
 The replica syncs by `(updated_at, id)` cursor and **includes soft-deleted rows**,
+(the cursor is a *watermark over the server's own clock*, which is a different
+job from the per-row conflict token and correctly stays a timestamp),
 so `deleted_at` propagates as a tombstone. Without that, a transaction deleted on
 the laptop lives on the phone forever — in the list, and in every locally
 computed total that included it.
@@ -3646,7 +3648,7 @@ also wrong.
 | Reachable | Direct tRPC; optimistic updates; FX and replica refresh on foreground |
 | Unreachable | Reads from the replica; writes to the outbox; captures continue unchanged |
 | Reconnect | Outbox drains automatically, in `seq` order; **server is authoritative** |
-| Conflict | Resolved by **version, not clock** — the write carries the `updated_at` it last read, audited. A same-field divergence follows the conflict setting (latest-applied-wins or ask); the tax-sensitive set always asks (§14.2). One person, two devices |
+| Conflict | Resolved by **version, not clock** — the write carries the `version` it last read, a `bigint` the database advances rather than a timestamp anything may rank, audited. A same-field divergence follows the conflict setting (latest-applied-wins or ask); the tax-sensitive set always asks (§14.2). One person, two devices |
 | **Drain trigger** | Foreground, in-foreground network change, user tap, silent push. **Never while locked** — see §5.7 |
 
 **"Single writer" is not true, and the design does not lean on it.** The phone

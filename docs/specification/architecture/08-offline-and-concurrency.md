@@ -142,7 +142,7 @@ INSERT.** Every `update_*`, `delete_*`, `categorize_batch`, `attach_receipt` and
 
 The failure is not theoretical and it is nasty. Edit a synced row's
 `is_business` offline. The drain commits; the connection drops before the 200
-arrives; the entry retries. It carries the `updated_at` it was minted with —
+arrives; the entry retries. It carries the `version` it was minted with —
 which its own first application already advanced. `is_business` is
 `tax_sensitive`, so H16 blocks rather than overwrites. **The entry is permanently
 blocked by a conflict with itself**, and S30 reports that another device changed
@@ -422,7 +422,8 @@ are written. This is the registry-wide convention, so no operation has to be
 inspected to know its semantics.
 
 Patch semantics alone still lose an edit when two devices touch the *same* field,
-so the input also carries the `updated_at` the client last saw:
+so the input also carries the `version` the client last read — a `bigint`
+the database advances, never a timestamp to rank (`14-local-first.md` §14.2):
 
 - Same field, different values → a **real conflict**, detected by the version
   the input carries — never a clock race. It follows the conflict setting
@@ -442,11 +443,26 @@ so the input also carries the `updated_at` the client last saw:
 devices editing the same field within a sync window is rare, and the cost of
 being wrong is one audited overwrite. The machinery would exceed the ledger.
 
-**No offline reads of derived tax figures.** They depend on rates, period locks
-and residency, all of which the device may hold staler than it knows. S28 is
-online-only, and that is a smaller loss than a tax figure computed from a stale
-lock.
+**No offline reads of derived tax figures — on Brick 2.** They depend on rates,
+period locks and residency, all of which the device may hold staler than it
+knows. Once a backend exists, S28 is online-only, and that is a smaller loss
+than a tax figure computed from a stale lock.
 
-**No conflict resolution UI.** Last-write-wins with an audit entry, plus
-`blocked` for the cases that must not resolve silently. A merge UI for a
-single-user system is a screen you would have to learn to use twice a year.
+**On Brick 1 the phone shows them as labelled estimates** (`14-local-first.md`
+§14.1), and that is not a contradiction: the objection above is *staleness
+relative to a server*, and with no server there is nothing to be stale against.
+The tax tables are server-only, so what the phone computes is visibly an
+estimate from what it holds. Filing-grade figures still need the backend,
+because T1 is a role grant and a phone has no equivalent.
+
+**~~No conflict resolution UI.~~ Superseded.** This predates the conflict
+setting. `14-local-first.md` §14.2 makes a same-field divergence follow a
+choice — *latest applied wins* or *ask* — and **the tax-sensitive set always
+asks**. *Ask* is a conflict resolution UI; declining to build one would delete
+the setting rather than simplify it.
+
+What survives is the sizing argument, and it still binds: this is a screen for
+a single user who sees it a few times a year, so it presents **one divergence,
+two values, and a choice** — not a merge tool. Different fields on the two
+sides still merge with no prompt, and `blocked` still covers what must not
+resolve silently.

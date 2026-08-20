@@ -38,15 +38,27 @@ history is complete; nothing daily needs a network.
 Independent, and each one improves the experience without the next:
 
 - **Brick 1 — the phone alone.** A complete finance app: whole ledger, offline
-  indefinitely, scales to any screen. Captures into an outbox. Durability is an
-  **app-owned encrypted export** (§14.4). Tax figures are read-only *estimates*,
-  labelled as such — filing-grade tax needs the server, because T1 is a Postgres
-  role and has no device equivalent.
+  indefinitely, scales to any screen. **A write materialises into the local
+  tables and records its intent in the outbox** — it does not sit in a queue
+  waiting to become real. Durability is an **app-owned encrypted export**
+  (§14.4). Tax figures are read-only *estimates*, labelled as such —
+  filing-grade tax needs the server, because T1 is a Postgres role and has no
+  device equivalent.
+
+  An earlier reading of this document had Brick 1 *only* capturing into an
+  outbox, with reads folding the queue over the replica. That works while the
+  queue is a handful of entries awaiting a drain. **With no server the outbox
+  never drains**, so every transaction ever entered would stay unacknowledged
+  and every read would fold five years of log onto an empty base. See §14.6.
 - **Brick 2 — add a backend, over Tailscale.** It becomes the writer of record
   and the durable copy. The phone's outbox drains into it; the phone reverts to a
   *complete replica plus outbox*. Filing-grade tax, continuous backup, and the
   heavy work (import, classification, FX, scheduled analysis) arrive together.
-  Adding it is a **one-time seed-from-phone migration**, not a merge.
+  Adding it is a **one-time seed-from-phone migration**, not a merge — and the
+  migration is **validate-then-apply**: a dry run reports every row Postgres
+  would refuse before anything is written. A straight replay of five years of
+  phone-authored history into a database that may refuse some of it is a
+  migration that fails halfway through the ledger.
 - **Brick 3 — the web dashboard, on the backend.** Full read/write, because the
   backend is the writer of record. No contradiction: the dashboard writes because
   the backend admits writes.
@@ -56,9 +68,18 @@ but weaker; Brick 2 is where durability stops being the owner's job.
 
 ## 14.2 Conflicts: version, never clock
 
-A write does not race a wall clock. It carries **the version it last read**
-(`updated_at` as a token, not a timestamp to rank), and the server asks a single
-question: *did this field change under you since you read it?*
+A write does not race a wall clock. It carries **the version it last read** —
+`version`, a `bigint` the database advances on every update — and the server
+asks a single question: *did this field change under you since you read it?*
+
+**Why a column and not `updated_at`.** The token is compared for *equality* and
+must never be ranked, and a timestamp answers the right question while inviting
+the wrong one: two rows' `updated_at` **can** be ordered, so eventually someone
+orders them. A bigint cannot be misread as a time. The database sets it from
+`OLD.version`, never from the payload, so a client carries a version back and
+cannot mint one. `updated_at` survives beside it for display — "last edited" is
+the job it is actually good at — and now advances, which for five tables it
+never did.
 
 - **No** → the write lands.
 - **Yes** → it is a real conflict. A same-field divergence follows a setting —
@@ -116,3 +137,113 @@ grant on the server, passkeys as the perimeter, and "no forwarded port in any
 mode." The reframe is a *correction of scope*, not a new architecture: it
 enlarges the replica, separates complete from authoritative, and deletes the
 mechanisms that only made sense for a cache.
+
+---
+
+## 14.6 The write path, on both bricks
+
+**The phone always materialises. What the brick decides is whether that
+materialisation is provisional.**
+
+- **Brick 1** — final. Nothing will ever correct it, because there is nothing
+  else that writes.
+- **Brick 2** — provisional until the server admits the write, then reconciled
+  to the row the server returns.
+
+One code path, one flag. This is not a retreat from §14.0: the phone is still
+not authoritative, because the server still admits every write and may refuse
+one the phone already showed. What changes is that a refusal *corrects* a
+visible row rather than *releasing* an invisible one.
+
+**Provisional is derived, never stored.** A row is provisional exactly when an
+unacknowledged outbox entry names it. A `provisional` column would be a second
+place holding one fact, and the two would disagree — the failure this register
+has found more times than any other. The lookup is cheap by construction:
+materialising is what keeps the outbox small.
+
+**The phone refuses what the server would refuse, at capture time.** Every
+invariant SQLite can express is mirrored into the local schema — foreign keys,
+`CHECK`s, the split-line sum, one-pivot as a partial unique index — so a bad row
+is rejected while the person who typed it is still looking at it, rather than
+days later as a `blocked` outbox entry. What has no device equivalent is stated
+rather than approximated: **role grants (T1) and cross-table triggers stay on
+the server.** T1 in particular is not portable *in principle* — it works because
+the export runs as a separate OS process holding a connection string it cannot
+change, and on a phone one app process owns the file and every credential in it.
+There is no adversary a role would exclude.
+
+**A migration must not be able to destroy the ledger.** On Brick 1 the phone's
+database is the only copy, and unlike the server there is nothing to reset from
+— no seed, no second copy, no `db:reset`. So every schema migration copies the
+file first, runs inside a transaction, and keeps the pre-migration copy until
+the app has opened cleanly once. A transaction alone covers an error; it does
+not cover a crash, a kill, or a corrupt write, which is the case that matters
+when there is no second copy.
+
+---
+
+## 14.7 Two engines, one definition
+
+Postgres is authoritative; the phone runs SQLite. **One engine everywhere was
+considered and rejected**, in both directions:
+
+- **SQLite everywhere** buys one dialect, one migration set, no Postgres
+  container, tests without Docker, and a backup that is a file copy. It costs
+  T1 (SQLite has no users, roles or grants — there is no mechanism), exact
+  decimal money (`numeric(20,8)` becomes TEXT, so the generated pivot columns
+  cannot exist), and the `EXCLUDE`/deferred constructs, which become
+  application-level overlap queries — the thing the design exists to avoid.
+- **Postgres everywhere** would need an embedded Postgres on iOS. Even granting
+  one, the roles it brought would be theatre for the reason above.
+
+So the divergence is bounded instead of eliminated, along one rule:
+
+> **Postgres adds power *around* the shared tables — views, triggers, roles,
+> server-only tables — never *inside* them.**
+
+The immediate consequence: `transactions.amount_pivot` and `to_amount_pivot`
+stop being stored generated columns and become columns on a
+`transactions_valued` view. The two tax views read from it, and
+`computations.md`'s formulae are unchanged. The base table is then the same
+concept in both engines.
+
+**Roughly thirteen tables are shared** — `accounts` `account_groups`
+`categories` `counterparties` `currencies` `fx_rates` `transactions`
+`transaction_lines` `tags` `transaction_tags` `recurring_transactions`
+`dashboard_layouts` `dashboard_widgets`. Everything else is server-only: all
+seven tax tables, all five agent tables, `audit_log`, import, `receipts`,
+`outbox_receipts`, and the two migration artefacts. **Server-only tables cannot
+diverge, because there is nothing to diverge from** — which is why moving tax
+entirely to the backend removes almost every hard-to-port construct at once: the
+`EXCLUDE USING gist` is on `tax_residency`, the twelve GRANT/REVOKE lines are the
+`tax_ledger` view, and the closed-period trigger reads `tax_period_locks`.
+
+**Storage types may differ; the row type may not.** Money is `numeric(20,8)` on
+Postgres and TEXT on SQLite — and it is a *string end to end* either way, which
+the driver already guarantees. The TypeScript row type is therefore identical on
+both engines, and that identity is the thing worth pinning.
+
+Where the definition lives:
+
+| Package | Holds |
+|---|---|
+| `packages/schema` | the neutral table definitions and the dialect kit, and nothing else |
+| `packages/db` | the Postgres kit, plus the server-only tables, views, triggers and roles |
+| `packages/ledger` | the SQLite kit, plus the phone's queries, outbox and migrator |
+
+**How the shared set is written is not yet settled.** A single definition
+parameterised over a column kit is the goal — add a column once and both engines
+get it — but Drizzle's builder types are deep and may not survive the
+indirection. A half-day spike on `transactions` and `currencies` decides it. The
+fallback, if the types fight back, is the two definitions written side by side
+with a compile-time assertion that their row types are identical: the
+`contract.types.ts` pattern this repository already uses and already proves by
+breaking. **Either way divergence must be unable to reach a commit**, not merely
+detectable afterwards.
+
+Two implementations of every foldable figure follow from this — SQL on the
+server, `money.ts` on the phone — which `computations.md` already implies for
+class **F**. They are held together by a **differential test**: one fixture,
+every class-F figure computed both ways, asserted equal to all eight decimal
+places. That covers the three ways two sums silently disagree — rounding order,
+sign convention, and NULL-versus-zero.

@@ -28,6 +28,7 @@
 import { type SQL, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   check,
   date,
@@ -58,6 +59,27 @@ const normalized = (col: AnyPgColumn): SQL => sql`lower(btrim(${col}))`;
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
+
+/**
+ * The conflict token (`architecture/14` §14.2).
+ *
+ * **Not `updated_at`.** §14.2 requires the token be compared for *equality* —
+ * "did this field change under you since you read it?" — and never ranked. A
+ * timestamp answers that question correctly and invites the wrong one: two
+ * rows' `updated_at` can be ordered, so someone eventually orders them, and a
+ * phone offline for nine days lands an edit older than a correction another
+ * device already synced. That is the clock-merge `08` spends a section
+ * refusing. A bigint cannot be misread as a time.
+ *
+ * Advanced by `touch_row_versioned()` from `OLD.version`, never from `NEW` — a
+ * client cannot set it, only carry back the one it last read. `updated_at`
+ * survives alongside it for display ("last edited"), which is the job it is
+ * actually good at.
+ *
+ * `mode: "number"` because 2^53 row updates is not a reachable number and a
+ * `bigint` here would push `BigInt` into every client that reads a row.
+ */
+const version = () => bigint("version", { mode: "number" }).notNull().default(1);
 
 /* ------------------------------------------------------------------ *
  * Enums
@@ -153,6 +175,8 @@ export const currencies = pgTable(
     rateSource: fxSource("rate_source"),
     archived: boolean("archived").notNull().default(false),
     sort: integer("sort").notNull().default(0),
+    updatedAt: updatedAt(),
+    version: version(),
   },
   (t) => [
     // Exactly one pivot. There is deliberately no equivalent constraint on a
@@ -253,6 +277,7 @@ export const accounts = pgTable(
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    version: version(),
   },
   (t) => [
     uniqueIndex("accounts_name_uq").on(normalized(t.name)),
@@ -303,6 +328,7 @@ export const categories = pgTable(
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    version: version(),
   },
   (t) => [
     /**
@@ -356,6 +382,8 @@ export const counterparties = pgTable(
     archived: boolean("archived").notNull().default(false),
     sort: integer("sort").notNull().default(0),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
   },
   (t) => [uniqueIndex("counterparties_name_uq").on(normalized(t.name))],
 );
@@ -504,6 +532,7 @@ export const transactions = pgTable(
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    version: version(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
@@ -622,6 +651,7 @@ export const recurringTransactions = pgTable("recurring_transactions", {
   externalId: text("external_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+  version: version(),
 });
 
 /* ------------------------------------------------------------------ *
@@ -1183,7 +1213,7 @@ export const auditLog = pgTable(
  * fires **only on INSERT** — so every `update_*`, `delete_*`, `categorize_batch`
  * and `merge_counterparties` had no protection at all. Edit a synced row's
  * `is_business` offline, lose the connection before the 200, and the retry
- * carries the `updated_at` its own first application already advanced: the
+ * carries the `version` its own first application already advanced: the
  * entry is permanently blocked by a conflict with itself, and the interface
  * reports that another device changed it. Nothing did. On `settle_debt`, whose
  * residual is derived from live data, the same replay settles twice.

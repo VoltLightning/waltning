@@ -293,7 +293,7 @@ on INSERT. Every `update_*`, `delete_*`, `categorize_batch`, `attach_receipt` an
 `merge_counterparties` had no replay protection.
 
 Edit a synced row's `is_business` offline; the drain commits; the connection
-drops before the 200; the entry retries carrying the `updated_at` its own first
+drops before the 200; the entry retries carrying the `version` its own first
 application already advanced. `is_business` is `tax_sensitive`, so H16 blocks
 rather than overwrites — **the entry is permanently blocked by a conflict with
 itself**, and S30 reports another device changed it. Nothing did. On
@@ -521,7 +521,7 @@ ledger" — a ledger missing the other writer.
 `outbox blocked` state anywhere in the state matrix. The user sees pending
 markers that never clear, indistinguishable from a slow network.
 
-**H16 · `update_transaction` is undefined as patch-or-replace. Resolved** — every `update_*` is a patch, registry-wide, and carries the `updated_at` the client last saw. Different fields both land; the same field is last-write-wins with both values audited; a stale `tax_sensitive` field is blocked rather than overwritten. Originally: If it carries
+**H16 · `update_transaction` is undefined as patch-or-replace. Resolved** — every `update_*` is a patch, registry-wide, and carries the `version` the client last read (`architecture/14` §14.2 — a bigint, never a timestamp to rank). Different fields both land; the same field follows the conflict setting, *latest applied wins* or *ask*, with both values audited either way; a stale `tax_sensitive` field always asks and is blocked rather than overwritten. Originally: If it carries
 the whole entity, a phone's category edit reverts a laptop's `is_business` and
 `ryczalt_rate`, and the row leaves `tax_ledger`.
 

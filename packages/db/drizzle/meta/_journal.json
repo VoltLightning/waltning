@@ -22,6 +22,20 @@
       "when": 1786919723740,
       "tag": "0002_outbox_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787238417323,
+      "tag": "0003_row_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787238417324,
+      "tag": "0004_row_touch_and_line_sum",
+      "breakpoints": true
     }
   ]
 }
