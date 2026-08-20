@@ -23,6 +23,7 @@ promises.
 | What can the AI assistant do, and what needs my approval? | `SPEC.md` §11 → [[The Operation Registry]] |
 | What runs where, and how is it deployed? | [`architecture/01`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/01-context-and-containers.md), [`05`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/05-deployment.md) |
 | What happens with no network? | [`architecture/08`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/08-offline-and-concurrency.md), [`09`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/09-connectivity.md) → [[Offline and Sync]] |
+| What does the phone hold, and what does the server hold — complete versus authoritative? | [`architecture/14`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/14-local-first.md) → [[Offline and Sync]], [[Home]] |
 | Where does a new file go? | [`architecture/10`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/10-code-structure.md) |
 | How is any given figure calculated? | [`computations.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/computations.md) |
 | What changes to my data are possible at all? | [`operations.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/operations.md) |
@@ -67,6 +68,14 @@ That constraint is doing real work. It is what makes a balance calculated on
 your phone with no signal and the same balance calculated on the server *the
 same number*, rather than two implementations that agree most of the time and
 diverge on the case nobody tested.
+
+One thing this diagram doesn't show: `core` running on both ends is what makes
+the phone and the server *agree*, not what makes the phone a thin client. The
+phone's own database holds the whole ledger — every transaction, not a cache
+of recent ones. The server is authoritative because it hosts the guarantees
+(the triggers, constraints and role grants in `packages/db`) and admits every
+write, not because it holds more data than the phone does. See
+[`architecture/14`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/architecture/14-local-first.md).
 
 **`mobile` never imports `db`.** The phone has no business holding database
 credentials or migration files, and "we would notice in review" is not a

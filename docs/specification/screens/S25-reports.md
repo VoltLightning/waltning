@@ -1,6 +1,6 @@
 # S25 · Reports
 
-**Surface** web · **Journeys** J6, J11 · **Frequency** weekly to monthly
+**Surface** wide · **Journeys** J6, J11 · **Frequency** weekly to monthly
 **Design** none
 **Status** specified · tier 2
 
@@ -23,9 +23,11 @@ Compare periods and drill into categories, without exporting anything.
 ## 3. Layout
 
 ### Mobile
-Not supported. Charts at 390pt reduce to a single donut and a total, which S01's
-widgets already give at thumb scale. A dense comparison surface on a phone would
-be a worse version of both.
+Not supported at phone width. Charts at 390pt reduce to a single donut and a
+total, which S01's widgets already give at thumb scale. A dense comparison
+surface crammed into a phone would be a worse version of both — a density
+limit, not a backend one. Given the width (RN Web, DeX, an iPad), the same
+phone renders the same reports screen (`architecture/14` §14.4).
 
 ### Web — ≥1024px
 

@@ -1,24 +1,42 @@
 # Waltning
 
-Personal finance software you run yourself. A phone app that keeps working with
-no signal, a web dashboard for the sitting-down work, receipt scanning,
-bank-statement import, and an AI assistant that can only take actions you have
-defined for it. Underneath is a PostgreSQL database on hardware you own,
-reachable only over your own private network.
+Personal finance software you run yourself. The phone app is a **complete
+finance app on its own** — your whole history, computed on the device,
+working with no signal indefinitely. Nothing else is required to use it.
+
+Add a home backend when you want one: it becomes the durable copy and record
+of truth, takes on the heavy work (bank-statement import, classification,
+exchange rates), and unlocks a web dashboard for the sitting-down work and an
+AI assistant that can only take actions you have defined for it. Each piece is
+useful alone and adds something when you bring in the next; none of it is
+required to make the last one work.
 
 This wiki is the **orientation layer**. The specification itself lives in the
 repository and stays there; these pages exist to get you to the right document
 with enough context to read it, and to hold the reasoning that does not belong
 next to code.
 
-## What is where
+## Backing up: honest about the cost
 
-Everything runs on one Raspberry Pi in your home, and **no port on your router
-is ever opened.** There are three ways to reach it: Tailscale, a private network
-joining your own devices and refusing everyone else, which works from anywhere;
-your own home network, which is simplest and stops at your front door; or a
-public web address behind a password and a mandatory second factor, for people
-who would rather not install a VPN.
+Durability is not optional — it just graduates. **With the phone alone**,
+backing up is your job: an app-owned, encrypted export you control, with its
+key held in iCloud Keychain and its ciphertext kept somewhere Apple is not (a
+Mac, a NAS) — one vendor never holds both halves. **Once you add a backend**,
+that stops being your job: the server keeps a continuously updated, encrypted,
+offsite copy, restored on a drill. Filing-grade tax reporting needs the
+backend too — the phone alone shows tax figures as read-only estimates,
+labelled as such.
+
+## Adding a backend — optional, and where it pays for itself
+
+Everything below is about the backend, not the phone — the phone already works
+without any of it. When you do add one, everything runs on one Raspberry Pi in
+your home, and **no port on your router is ever opened.** There are three ways
+to reach it: Tailscale, a private network joining your own devices and
+refusing everyone else, which works from anywhere; your own home network,
+which is simplest and stops at your front door; or a public web address behind
+a password and a mandatory second factor, for people who would rather not
+install a VPN.
 
 The third is the weakest and is labelled that way: the other two put a whole
 network in the way before anyone reaches the front door. Even so, the Pi opens
@@ -38,7 +56,7 @@ graph LR
         subgraph pi["Raspberry Pi at home · Docker Compose"]
             CADDY["caddy<br/><i>terminates HTTPS</i>"]
             API["api<br/><i>Hono + tRPC</i>"]
-            PG[("postgres 16<br/><i>the ledger</i>")]
+            PG[("postgres 16<br/><i>the authoritative ledger</i>")]
             MINIO[("minio<br/><i>receipt images</i>")]
         end
     end
@@ -68,8 +86,10 @@ Three names in that diagram, in plain terms:
 
 ## What happens when you record a coffee
 
-The whole system in one path. This is the same sequence whether you tap it in
-or the assistant does it for you.
+The whole system in one path, once you have a backend. This is the same
+sequence whether you tap it in or the assistant does it for you. On the phone
+alone, it's the top half only — the entry lands in your ledger and stays
+there, complete, whether or not you ever add the rest.
 
 ```mermaid
 sequenceDiagram

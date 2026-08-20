@@ -1,6 +1,6 @@
 # S02 · Import
 
-**Surface** web · **Journeys** J4 · **Frequency** monthly, per institution
+**Surface** web (backend) · **Journeys** J4 · **Frequency** monthly, per institution
 **Design** Claude Design project
 **Status** specified · tier 1
 
@@ -29,9 +29,13 @@ S01 when the queue clears.
 
 ### Mobile — 390pt
 
-**Not supported.** This screen is dense, keyboard-driven and done sitting down;
-a swipe-through-forty-rows version would be slower and less accurate than
-waiting for a laptop. The mobile app links here with *open on desktop*.
+**Not supported without a backend, regardless of width.** Statement parsing,
+the classification cascade and the commit itself are Brick 2 work — the
+"heavy work" that arrives with a backend (`architecture/14` §14.1) — so a
+backendless phone has nothing here to render. Given a backend, the queue is
+also dense and keyboard-driven, and a swipe-through-forty-rows version would
+be slower and less accurate than waiting for the width. The mobile app links
+here with *open the backend's import*.
 
 ### Web — ≥1024px
 

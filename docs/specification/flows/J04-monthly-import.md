@@ -28,7 +28,9 @@ Accounts exist and their currencies are set. Rules may be empty — the cascade
 degrades to the model tier, which is the expected state for the first few
 months (`SPEC.md` §8.0: "rules cold-start").
 
-Web only. This screen is dense, keyboard-driven, and reviewed sitting down.
+Needs a backend, not merely a browser. Statement parsing, the classification
+cascade and the commit are Brick 2 work (`architecture/14` §14.1); the
+review queue is also dense and keyboard-driven, reviewed sitting down.
 
 ## 3. The path
 

@@ -1,6 +1,6 @@
 # S27 · Export
 
-**Surface** web · **Journeys** J11, J6, J9 · **Frequency** monthly to annually
+**Surface** web (backend) · **Journeys** J11, J6, J9 · **Frequency** monthly to annually
 **Design** none
 **Status** specified · tier 2
 
@@ -22,8 +22,12 @@ Build a workbook — and, for a tax period, prove what is not in it.
 ## 3. Layout
 
 ### Mobile
-Not supported. Building a workbook is a desktop act, and the file lands on a
-desktop. The mobile app links here.
+Not supported without a backend, at any width. The Business sheet reads
+through the export role's `SELECT` privilege on `tax_ledger` (§5) — a
+Postgres grant with no device equivalent, filing-grade tax needs the server
+(`architecture/14` §14.1) — and even a general workbook is built server-side
+(§6). This is a backend limit, not a desktop one; the mobile app links here
+to the backend's export.
 
 ### Web — ≥1024px
 

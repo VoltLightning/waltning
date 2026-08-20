@@ -96,7 +96,7 @@ phone does not always have the data.
 ```mermaid
 graph TB
     F["<b>F — foldable</b><br/><i>from what the phone already holds</i>"] --> FO["works offline, always"]
-    R["<b>R — replica</b><br/><i>needs the phone's copy of server data,<br/>and only for a range that copy fully covers</i>"] --> RO["works offline if the copy reaches back far enough"]
+    R["<b>R — replica</b><br/><i>needs data that only reaches the phone<br/>by syncing from the server</i>"] --> RO["works offline once synced at least once —<br/>the phone's copy is the whole ledger, not a window"]
     S["<b>S — server</b><br/><i>needs the server</i>"] --> SO["shown as unavailable offline —<br/>never as a stale number"]
 ```
 
