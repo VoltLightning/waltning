@@ -199,6 +199,31 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
   agent inherits them"* about the paragraph's other writes. These three sit in
   the same column and are the exception.
 
+- **`resolve_conflict`.** S35's choice is not a fourth verb. *Keep mine*
+  re-sends the write the entry already holds; *keep theirs* sends the same
+  operation with the server's value, carrying the discarded one into the audit
+  row. Both are `update_*` calls that already exist.
+
+  Registering it would reintroduce the hazard directly above by another name: a
+  conflict resolver that can pick *theirs* is a queued-write discarder, and the
+  agent would inherit it. **The decision is a person's; the write is the
+  registry's.**
+
+  The agent is not shut out of the subject, only out of the verb: conflicts are
+  readable, so it may explain what diverged and propose which value looks right.
+  That is the read / propose / approve shape §11.2 uses for every write.
+
+- **`conflict_detected`.** Not an operation either — an `audit_log.action`
+  value. The server writes it when it refuses a drained write whose fields moved
+  underneath it, carrying both values. That is a real event the server observed,
+  so it needs no verb of its own, and it is what makes *keep theirs* auditable
+  without sending a write that never happened: the detection row with no
+  following update **is** the record of the discard.
+
+  An earlier draft of S35 had *keep theirs* send a no-op write purely to
+  manufacture an audit row. It advanced `version` on an untouched row and left
+  every future reader unable to tell a marker from an edit.
+
 ## Auto-mode, restated as a rule
 
 Reading down the Auto column, the eligible set has one shape: **operations that

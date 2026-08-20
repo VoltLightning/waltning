@@ -188,6 +188,20 @@ teaches people to click through the ones that matter.
   other — the failure mode of backups is that nobody goes looking, which is why
   `system_health` sits on the dashboard at all.
 
+### Unresolved conflicts
+
+The badge that leads to S35 lives here, beside the outbox it belongs to — an
+unresolved conflict *is* a blocked entry, and this screen already owns those.
+
+**Unresolved only.** Resolved conflicts are history and live on the row they
+belong to (S09's `AuditHistory`), where you have a reason to be looking. A
+second list of settled conflicts would be a screen that is empty almost always
+and consulted almost never — and the one question it answers, *what did I
+discard last week*, is answered on the row itself once you are there.
+
+Each entry names the transaction, the field, and whether it blocks a tax close
+(§13). Tapping opens S35 at that conflict.
+
 ## 9. Open questions
 
 1. ~~**Does a failed nightly backup warrant a push notification?**~~ **Decided:

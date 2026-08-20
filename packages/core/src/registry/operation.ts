@@ -17,6 +17,7 @@
 
 import type { z } from "zod";
 import type { JsonValue } from "../json.ts";
+import type { ConflictGroups } from "./conflict.ts";
 
 /**
  * What a write touches, for the audit row the registry writes on the
@@ -93,6 +94,19 @@ export type Operation<
   // absent property and one set to undefined as different types, and a
   // declaration that omits this must still satisfy the registry's constraint.
   taxSensitiveFields?: readonly string[] | undefined;
+
+  /**
+   * Fields that move as a unit when a conflict is decided (`conflict.ts`).
+   *
+   * §14.2: *"Non-independent fields are not independent conflicts."* The four
+   * faces of a cross-currency transfer are the case — merging `amount_original`
+   * from one device with `fx_rate` from another yields a plausible number
+   * neither device ever held, and two of the four feed generated values.
+   *
+   * Declared here beside `taxSensitiveFields` because it is the same kind of
+   * statement: a property of the operation the resolver must not have to guess.
+   */
+  conflictGroups?: ConflictGroups | undefined;
 
   /** Required on writes: the registry emits the audit row, not the handler. */
   audit?: AuditSpec<Input, Output> | undefined;

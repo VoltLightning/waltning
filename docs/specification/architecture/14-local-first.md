@@ -81,8 +81,35 @@ cannot mint one. `updated_at` survives beside it for display — "last edited" i
 the job it is actually good at — and now advances, which for five tables it
 never did.
 
+**`version` is the gate, not the answer.** It is per *row*, and the question
+above is per *field*. A row counter can only say that something moved, so on its
+own it collides disjoint edits: a laptop fixing a payee bumps the row, and a
+phone's queued `category` edit then arrives "stale" and is reported as a
+conflict this section promises to merge. On a tax-sensitive field it is worse
+than a misfire — `08`'s H16 **blocks** a stale tax-sensitive field, so a payee
+typo corrected elsewhere permanently blocks an unrelated queued edit while
+reporting that another device changed `is_business`. Nothing did.
+
+So **a write carries the prior value of every field it sets**, and the server
+compares field by field — plain compare-and-swap, which answers the question
+literally. `version` stays as the fast path: equal versions mean nothing moved
+and the per-field work is skipped entirely. The failure it replaces was
+one-directional and therefore safe — every update bumps the version, so the old
+check manufactured conflicts and never missed one — and the replacement keeps
+that property.
+
+Deriving the changed fields from `audit_log` was considered and rejected. It
+stores `before` and `after` and could answer this, but it has no `version` to
+correlate against, and it would make conflict detection depend on the audit
+trail being complete forever: a prune would silently turn conflicts into
+merges, which is the direction that loses data.
+
 - **No** → the write lands.
-- **Yes** → it is a real conflict. A same-field divergence follows a setting —
+- **Yes** → it is a real conflict, and the server records the *detection* —
+  an `audit_log` row carrying both values, written at the moment it refused.
+  That, not the resolution, is what satisfies "nothing is silently lost":
+  choosing *theirs* sends no write at all, so a detection row with no following
+  update is the whole record of the discard. A same-field divergence follows a setting —
   *latest applied wins* or *ask* — and the **tax-sensitive set always asks**
   (`is_business`, `ryczalt_rate`, `ryczalt_activity`, `counterparty_tax_id`,
   `date`, `accounts.ownership`, `currencies.is_pivot`).
@@ -231,15 +258,32 @@ Where the definition lives:
 | `packages/db` | the Postgres kit, plus the server-only tables, views, triggers and roles |
 | `packages/ledger` | the SQLite kit, plus the phone's queries, outbox and migrator |
 
-**How the shared set is written is not yet settled.** A single definition
-parameterised over a column kit is the goal — add a column once and both engines
-get it — but Drizzle's builder types are deep and may not survive the
-indirection. A half-day spike on `transactions` and `currencies` decides it. The
-fallback, if the types fight back, is the two definitions written side by side
-with a compile-time assertion that their row types are identical: the
-`contract.types.ts` pattern this repository already uses and already proves by
-breaking. **Either way divergence must be unable to reach a commit**, not merely
-detectable afterwards.
+**Settled by spike: the tables are written twice, and drift is a compile
+error.** A single definition parameterised over a column kit was tried first and
+does not work, for a reason that is structural rather than fixable — TypeScript
+typechecks a generic function's body against the *constraint*, not against each
+instantiation, so inside `function t<K extends Kit>(k: K)` the expression
+`k.text` is a union of incompatible signatures and is not callable. Loosening
+the constraint until the body compiles is worse: the return type is computed
+from the same loose types, `$inferSelect` collapses, and the thing keeps
+compiling while proving nothing. It needs higher-kinded types, which the
+language does not have.
+
+So `currencies.pg.ts` sits beside `currencies.sqlite.ts`, and
+`parity.type-test.ts` asserts — once, mapped over both modules rather than
+restated per table — that every shared table's `$inferSelect` **and**
+`$inferInsert` are identical. Both are needed: a column missing on one engine
+moves both, while a `.default()` on one side only moves `$inferInsert` alone,
+because the row type is `string` either way and only the insert becomes
+optional. A third assertion pins the *set*, so two modules cannot agree on the
+tables they happen to share while each omitting a different one.
+
+What the kit still removes is the part worth removing: the type decisions. That
+money is a string on both engines, that a SQLite boolean is an integer in
+`boolean` mode, that the conflict token is a `bigint` here and an integer there
+— each decided once rather than in thirteen pairs of files. **Divergence cannot
+reach a commit**, which was the requirement; "written once" was only ever the
+means.
 
 Two implementations of every foldable figure follow from this — SQL on the
 server, `money.ts` on the phone — which `computations.md` already implies for
