@@ -1,62 +1,68 @@
 # Waltning
 
-A phone app that is a complete personal finance app on its own — your whole
-multi-currency ledger, offline indefinitely, nothing else required to use it.
-Add a home backend when you want one (PostgreSQL on a Raspberry Pi you own)
-and it becomes the durable copy and record of truth, takes on the heavy work
-(bank-statement import, classification, exchange rates), and unlocks a web
-dashboard and an LLM agent with typed tools. Passkeys at the front door, no
-password anywhere, and never a forwarded port.
+A personal finance app for your phone that works completely on its own — your
+whole multi-currency history, offline, with no account and no server required.
 
-Built to replace [Money Manager](https://www.realbyteapps.com/) (no API, no
-bulk editing, limited export) and the file-based pipeline that grew around it.
+When you want more, you add a small backend you run yourself (PostgreSQL on a
+Raspberry Pi). It becomes your durable backup, runs a web dashboard, and takes
+over the slow work like importing bank statements. It's optional: the phone app
+is the product, and the backend makes it better.
 
-## Why it exists
+## What problem it solves
 
-Commercial finance apps put five years of your money on someone else's server
-and give you a subscription and an export button. Waltning inverts that:
+Commercial finance apps keep years of your money on their servers and hand you
+a subscription and an export button. The obvious alternative — a local app like
+[Money Manager](https://www.realbyteapps.com/) — has no API, no bulk editing,
+and weak export, so anything beyond typing in single transactions turns into a
+pile of scripts.
 
-- **The phone is a complete finance app, by itself.** Your whole ledger lives
-  on the device — every transaction, not a recent window — and it works
-  offline indefinitely, from the first time you open it. Nothing else is
-  required.
-- **A home backend is optional, and it's a real upgrade when you want one.**
-  PostgreSQL on a Raspberry Pi becomes the durable copy and the record of
-  truth: it does the heavy work (importing statements, classification,
-  exchange rates) and unlocks the web dashboard. Adding it is a one-time step
-  — your phone's data flows into it, not the other way round. **No port is
-  ever forwarded** — reach it over Tailscale from anywhere, over your own LAN,
-  or through an outbound-only tunnel the Pi opens itself.
-- **You sign in with a passkey, and there is no password to steal.** Face ID or
-  a hardware key, `userVerification` required, so it is two factors in one
-  gesture. 1Password, Bitwarden and hardware keys all work — nothing is
-  restricted to platform authenticators. Recovery is a command on your own
-  machine, so there is no code to print and no channel to phish.
-  See [`architecture/13`](docs/specification/architecture/13-identity-and-access.md).
-- **Multi-currency done right.** Every transaction stores its amount *and* the
-  FX rate on its own date. Transfers store both sides, so the realized rate is
-  a fact and the spread against the reference rate becomes a visible `FX Cost`.
-- **Sync is safe, and not something you have to trigger.** Once you have a
-  backend, your own captures drain to it automatically — no sync button, and
-  the server is the record of truth, so there's no two-way merge to get wrong:
-  a write is one-way intent, and the server admits it or refuses it. Only a
-  genuine conflict — the same field changed on two devices — asks which value
-  to keep, and tax-relevant fields always ask.
-- **Durability graduates, honestly.** On the phone alone, backing up is your
-  job: an encrypted export you control. Add the backend and it becomes
-  continuous and automatic. This is a real cost, not a footnote — filing-grade
-  tax needs the backend too; the phone alone shows tax figures as estimates.
-- **AI where it helps, gated where it matters.** The agent gets typed tools,
-  not SQL. Reads are free; every write shows a diff card you approve. Receipt
-  extraction and voice capture use small per-surface models.
-- **Tax isolation is structural.** Exports run under a database role that can
-  read one business-only view and nothing else — a personal expense reaching a
-  tax report fails loudly instead of slipping through.
+Waltning is the finance app you fully own, without giving up the things that
+made the commercial one convenient: it syncs, it has a web dashboard, it can
+import your statements, and it does not phone home to anyone.
 
-## Architecture
+## How it's built
 
-This is the shape once you've added the optional backend. The phone alone
-needs none of it — it's the same app with the sync arrows removed.
+The core idea is one line: **the phone is complete, the server is
+authoritative.** Those are two different jobs.
+
+- The **phone** holds your entire ledger and does everything you do day to day —
+  add, edit, search, see balances — with no network. It is complete.
+- The **server**, when you add one, is the source of truth. It admits every
+  write, holds the guarantees that have to be enforced (like keeping business
+  and personal money separate for tax), and does the heavy lifting.
+
+You never get two copies fighting, because there is only ever one record of
+truth. Your phone captures offline, and when you next open the app with a
+connection it sends what you wrote — no sync button, no messy two-way merge. If
+the same field really was changed in two places, the app asks which to keep;
+for anything tax-related, it always asks.
+
+A few principles hold the whole thing together:
+
+- **One list of operations.** Every write in the system — from a screen or from
+  the AI agent — is a named, validated, audited operation in a single registry.
+  The screens and the agent are just two users of the same list, so they can't
+  drift apart.
+- **The database enforces the rules.** Money constraints, tax isolation, closed
+  periods — these are Postgres constraints, triggers, and role grants, not app
+  code. They hold even when the code has a bug.
+- **Nothing is exposed to the internet.** No port is ever forwarded. You reach
+  your backend over Tailscale (a private network of your own devices), over your
+  home wifi, or through an outbound-only tunnel the Pi opens itself.
+- **You sign in with a passkey — there's no password.** Face ID or a hardware
+  key, and it works with 1Password, Bitwarden, or any authenticator. Recovery is
+  a command you run on your own machine, so there's nothing to phish.
+- **Multi-currency is done properly.** Every transaction stores its amount and
+  the exchange rate on its own date; transfers store both sides, so what a
+  currency swap really cost you is a visible number, not an estimate.
+- **AI is on tap where it helps, gated where it matters.** The agent gets typed
+  tools, not raw database access. It can read freely; every write it proposes
+  shows you a card to approve first.
+
+### The shape, once you've added a backend
+
+The phone alone needs none of this — it's the same app with the sync arrows
+removed.
 
 ```mermaid
 graph LR
@@ -80,178 +86,165 @@ graph LR
     pi -->|nightly| B2
 ```
 
-Every external arrow is outbound. The API is the only writer to Postgres, and
-every write in the system is a named, validated, audited **operation** in one
-registry — the screens and the agent are two consumers of the same registry.
-Invariants live in the database (constraints, triggers, role grants), so they
-hold even when application code is wrong.
-
 | Piece | What it does |
 |---|---|
-| `apps/mobile` | Expo/React Native — iOS and web from one codebase. Offline capture, outbox, replica |
-| `apps/api` | Hono + tRPC. Operation registry, agent runtime, import pipelines, FX sync, exports |
-| `packages/core` | The contract: `money.ts`, shared types, Zod schemas. Runs identically on phone and server |
-| `packages/db` | Drizzle schema, hand-written migrations, seed, FX backfill |
-| `tools/migrate-mm` | One-shot Money Manager importer with verification gates |
+| `apps/mobile` | Expo / React Native — iOS and web from one codebase. Offline capture, the local ledger, and the outbox |
+| `apps/api` | Hono + tRPC. The operation registry, the agent, statement import, FX sync, exports |
+| `packages/core` | The shared contract: money math, types, validation. Runs identically on phone and server |
+| `packages/db` | The Postgres schema, migrations, seed data, and FX backfill |
+| `tools/migrate-mm` | A one-shot importer that brings a Money Manager backup in and checks it landed correctly |
 
-## Getting started
+The whole design, and the reasoning behind every choice, is in
+[`SPEC.md`](SPEC.md) and [`docs/specification/`](docs/specification/).
 
-Node ≥ 22, pnpm ≥ 10, Docker.
+## Setting up the repo
+
+You need **Node 22 or newer, pnpm 10 or newer, and Docker**.
 
 ```sh
 git clone https://github.com/VoltLightning/waltning && cd waltning
-make setup                   # install, create .env, build the database
-make dev                     # api + web, from source
+make setup      # installs everything, creates your .env, builds the database
+make dev        # runs the API and the web app together
 ```
 
-`make` is the front door; **pnpm scripts are still the implementation** and Make
-never reimplements one — `make verify` runs `pnpm verify`. Two places that both
-know how to run the tests is two places that drift, and the one you are not
-looking at is always the stale one. `tests/makefile.test.ts` holds them
-together: it runs `make help` and asserts every declared target appears, and
-that every pnpm script Make names actually exists.
+`make` is the front door. Behind it, the real work lives in `pnpm` scripts, and
+`make` only ever calls them (`make verify` runs `pnpm verify`, and so on) — so
+there's one place that knows how to do each thing, not two that can disagree.
+
+Run `make help` any time to see every command with a one-line description. The
+ones you'll use most:
 
 ```
-make help        every target, with a description
-make doctor      what is installed, what is missing, what to run about it
-make dev         api + web together, from source
-make up          the whole stack as it ships, on :8080
-make e2e         check whatever is running, end to end
-make verify      the gate
+make dev        API + web together, from source (Ctrl-C stops both)
+make doctor     checks what's installed and tells you what to fix
+make up         the whole thing as it ships, in containers, on :8080
+make e2e        checks whatever is currently running, end to end
+make verify     the gate: formatting, types, and tests
 ```
 
-`make setup` leaves you with reference data — currencies and the category tree
-— and an empty ledger. **`pnpm db:fixture` adds placeholder accounts and
-transactions** so the screens have something to show; `pnpm db:fixture --drop`
-removes them again. It is deliberately not part of `db:reset`: a fixture that
-arrives automatically is a fixture someone eventually mistakes for their own
-data.
+### Getting data on the screen
 
-**`pnpm db:reset` does all four database steps in one** — drop, migrate, grant,
-seed. Nothing is permanent yet, so changing the schema should never mean
-hesitating: edit `schema.ts`, `pnpm db:generate`, reset.
+`make setup` gives you the reference data (currencies, the category tree) and an
+**empty ledger** — so the app runs, but there's nothing to look at yet.
 
-### Running all three surfaces
+- `pnpm db:fixture` adds placeholder accounts and transactions so the screens
+  have content; `pnpm db:fixture --drop` removes them. This is separate from
+  setup on purpose, so fake data never quietly shows up looking real.
+- `pnpm db:reset` rebuilds the database from scratch in one step (drop, migrate,
+  set up roles, seed). Nothing is permanent yet, so changing the schema is
+  cheap: edit `schema.ts`, run `pnpm db:generate`, then reset.
 
-`make dev` starts the API and the web app together and stops both on Ctrl-C.
-The simulator is a third process, and Metro's interactive key commands only
-work when it owns a terminal:
+### Running all three surfaces at once
+
+`make dev` starts the API and the web app and stops both with Ctrl-C. The iOS
+simulator is a separate process, because Metro needs its own terminal:
 
 ```sh
-make dev        # api :3000 + web :8081
-make dev-web    # just Metro, interactive
-make dev-ios    # the same app in the simulator
+make dev        # API on :3000, web on :8081
+make dev-web    # just the web app (keeps Metro's keyboard controls)
+make dev-ios    # the same app in the iOS simulator
 ```
 
-Then `make e2e` checks the whole chain against what is actually running: the
-probes, that a response authenticates under Rule 0, that a read returns seeded
-rows with its declared fields, and that a refusal comes back as a domain error
-rather than a transport failure. It is read-only; `pnpm e2e --write` also
-creates one placeholder row and tells you its id.
-`make appliance-e2e` runs the identical check against the containers.
+Two things need a bit of setup the first time:
 
-**The web surface needs one setting the others do not.** Metro serves the bundle
-on `:8081` and the API answers on `:3000`, which a browser treats as two
-origins. Set `DEV_CORS_ORIGIN=http://localhost:8081` in `.env` for the browser;
-without it the page loads and every request fails as *no answer*. Nothing else
-needs it — the simulator sends no `Origin`, and in production Caddy serves the
-bundle and proxies `/trpc` on one host name, so there is no second origin to
-allow. The setting is off unless set, refuses `*`, and refuses anything that is
-not loopback.
+- **The web app needs one line in `.env`.** Metro serves the page on `:8081` and
+  the API answers on `:3000`, and a browser treats those as two different sites.
+  Add `DEV_CORS_ORIGIN=http://localhost:8081` and the browser can talk to the
+  API. Without it the page loads but every request silently fails. Only the
+  browser needs this — the simulator and production don't.
+- **The simulator needs full Xcode**, not just the command-line tools. Run
+  `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then
+  `xcodebuild -downloadPlatform iOS` to get a runtime. A real phone is different
+  again: it can't reach your Mac's `localhost`, so point it at your machine with
+  `EXPO_PUBLIC_API_URL`.
 
-**The simulator needs Xcode proper**, not just the command-line tools:
-`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then
-`xcodebuild -downloadPlatform iOS` for a runtime. A real device is different
-again — loopback on a phone is the phone — so it needs
-`EXPO_PUBLIC_API_URL` pointing at the tailnet host. The app refuses to guess
-rather than failing every request in a way that looks like a server outage.
-
-The three database URLs are deliberate: `MIGRATE_` is the superuser (migrations
-only), `APP_` is what the API runs as, `EXPORT_` can read a single tax view.
-The separation *is* the tax guarantee — don't collapse them.
-
-`pnpm test` runs the suite against a real Postgres — each test file gets its own
-database, cloned from a migrated template, and dropped afterwards. There are no
-database mocks.
-
-`pnpm verify` (Biome + strict TypeScript, ~2 s) is the gate; the pre-commit
-hook runs it for you.
-
-### Running it as it ships
-
-The appliance is three containers: Postgres, the API, and Caddy serving the web
-bundle and proxying `/trpc` on **one host name**.
+### Checking it works
 
 ```sh
-make up          # build, start, wait for health, print /readyz
-make ps          # what is running
-make down        # stop it, keep the development database
+make e2e             # against whatever you're running from source
+make appliance-e2e   # against the containers
+pnpm test            # the full suite, against a real Postgres
+pnpm verify          # the gate the pre-commit hook runs for you
 ```
 
-Six services: Postgres, a one-shot `migrate`, the API, MinIO, a one-shot bucket
-init, and Caddy. **`migrate` is separate on purpose** — the API does not start
-unless it exits 0, so a failed migration stops the deploy instead of leaving an
-API serving against a schema it does not match.
+`make e2e` exercises the whole chain against a live server: the health checks, a
+real read returning seeded rows, and a rejected write coming back as a proper
+error rather than a network failure. It's read-only unless you pass `--write`.
 
-That single origin is why `DEV_CORS_ORIGIN` exists only in development — there
-is no second origin here to allow, and the compose stack deliberately does not
-set it. `BUILD_SHA` reaches both images from the same command, because the
-client compares its own build against the one `/healthz` reports; two sources
-would produce a permanent false mismatch.
+`pnpm test` runs against a real Postgres — each test file gets its own database
+cloned from a migrated template, then dropped. There are no database mocks.
 
-On the Pi, `SITE_ADDRESS` is the tailnet name, which is what makes Caddy fetch
-and renew the Tailscale-issued certificate. There is no public name and no
-public certificate. Locally it defaults to `:8080` over plain HTTP so the
-routing can be checked on a machine with no tailnet — the only difference
-between the two, which is the point.
+### One thing not to change: the three database URLs
 
-**LAN mode needs a real certificate, not plain HTTP**, and that is a correctness
-requirement rather than a preference: the session cookie is `Secure`, browsers
-do not send `Secure` cookies over HTTP, and the result is being logged out on
-every request rather than a system that is merely less private. A DNS-01
-certificate for a name resolving to the private address costs nothing and
-exposes nothing.
+The `.env` file has three connection strings, and they are deliberate:
 
-**Deploying to a Pi** — Tailscale, nightly encrypted dumps to B2, the restore
-runbook: see
+- `MIGRATE_` is the superuser, used only for migrations.
+- `APP_` is what the API runs as day to day.
+- `EXPORT_` can read a single tax-only view and nothing else.
+
+That separation is how the tax guarantee is actually enforced — a personal
+expense physically cannot reach a tax export. Don't collapse them into one.
+
+### Running it the way it ships
+
+The real deployment is a handful of containers behind Caddy:
+
+```sh
+make up      # build, start, wait for health, print status
+make ps      # what's running
+make down    # stop it, keep your dev database
+```
+
+Migrations run as a separate one-shot container, and the API refuses to start
+until they succeed — so a broken migration stops the deploy instead of leaving
+the API running against a schema it doesn't match. The full Pi deployment
+(Tailscale, encrypted nightly backups, the restore steps) is in
 [`docs/specification/architecture/05-deployment.md`](docs/specification/architecture/05-deployment.md).
 
-## Stack
+## The compromises we're making
 
-TypeScript throughout. Hono + tRPC + Drizzle over PostgreSQL 16; Expo for
-mobile and web from one codebase; Docker Compose on a Raspberry Pi behind
-Tailscale. Money is `numeric(20,8)` decimal strings end to end — never floats.
-Every layer choice, and every refusal, has its reasoning recorded in
-[`SPEC.md` §4.3](SPEC.md).
+This design trades some things away on purpose. They're worth knowing before you
+decide it fits you.
 
-## Documentation
+- **Backup on the phone alone is your job.** With no backend, the app keeps your
+  data safe with an encrypted export you control — but you have to make it
+  happen. Add the backend and backups become automatic. There's no free
+  durability without a second copy somewhere.
+- **Real tax filing needs the backend.** The phone shows tax figures, but as
+  estimates. The guarantee that keeps personal money out of a tax return is a
+  database role, and a phone has no equivalent — so filing-grade numbers only
+  come from the server.
+- **No editing the same record on two offline phones at once.** There is one
+  writer of record, and conflicts are resolved by asking you, not by a clever
+  automatic merge. This is a single-person finance app, not real-time
+  collaboration.
+- **Reaching it from outside your home means running Tailscale** on that device.
+  There's a public-URL option, but it's the weakest of the three and needs a
+  real domain — so passkeys and secure sign-in work. It's offered honestly, as
+  the weaker choice.
+- **One user.** There's no multi-tenant, multi-person mode. Sharing a ledger
+  with someone else is a data-model question we haven't answered, not a setting.
+- **It's early.** The design is far ahead of the code, and both move fast. Read
+  [CONTRIBUTING.md](CONTRIBUTING.md) and open an issue before building anything.
+
+## Reference
 
 | | |
 |---|---|
-| [`SPEC.md`](SPEC.md) | Architecture, data model, FX semantics, security, tax layer — with reasoning |
-| [`docs/specification/`](docs/specification/) | Operations registry, computations, 17 journeys, 31 screens, design system |
-| [`docs/specification/defects.md`](docs/specification/defects.md) | 101 findings from ten adversarial reviews, and their status |
-| [`TAXONOMY.md`](TAXONOMY.md) | The category tree, derived from five years of data |
-| [Wiki](https://github.com/VoltLightning/waltning/wiki) | Orientation — where to start, and the reasoning behind the choices |
+| [`SPEC.md`](SPEC.md) | The full design: architecture, data model, FX, security, tax — with the reasoning |
+| [`docs/specification/`](docs/specification/) | Operations, computations, the journeys, the screens, the design system |
+| [`docs/specification/defects.md`](docs/specification/defects.md) | Findings from the adversarial reviews, and their status |
+| [`TAXONOMY.md`](TAXONOMY.md) | The category tree, built from five years of real data |
+| [Wiki](https://github.com/VoltLightning/waltning/wiki) | A gentler orientation — where to start and why things are the way they are |
 
-The wiki is published from [`docs/wiki/`](docs/wiki/), not edited in place: a
-GitHub wiki is a separate repository the pre-commit hook cannot reach, and this
-one is public. `pnpm wiki:check` runs the sweep and the link checks;
-`pnpm wiki:publish` mirrors.
+The stack is TypeScript throughout: Hono, tRPC, and Drizzle over PostgreSQL 16;
+Expo for phone and web from one codebase; Docker Compose on a Raspberry Pi
+behind Tailscale. Money is stored as exact decimal strings, never floating-point
+numbers.
 
-## Data handling
-
-This repository contains no financial data. Ledger contents, statements, dumps
-and backups are excluded by `.gitignore` and refused by the pre-commit hook
-even when force-added. People and institutions in examples are placeholders
-(`Bank A · PLN`, invented names); structural facts — row counts, currencies,
-tax scheme — are real.
-
-## Contributing
-
-Actively developed, changes fast — read [CONTRIBUTING.md](CONTRIBUTING.md) and
-open an issue before building anything.
-
-## License
+**This repository contains no financial data.** Real ledger contents are
+excluded by `.gitignore` and blocked by the pre-commit hook. People and banks in
+examples are placeholders (`Bank A · PLN`, invented names); only structural
+facts like row counts and currencies are real.
 
 [Apache 2.0](LICENSE) — © 2026 Vitaliy Pankov.
