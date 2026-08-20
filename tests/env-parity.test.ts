@@ -92,3 +92,90 @@ describe("environment contract", () => {
     expect(names).toContain("MIGRATE_DATABASE_URL");
   });
 });
+
+/**
+ * `.env.example` must not ship a credential that works.
+ *
+ * compose guards its secrets with `${VAR:?message}`, which fires when a
+ * variable is unset **or empty** — and not when it holds a placeholder.
+ * `.env.example` shipped `POSTGRES_PASSWORD=change-me`, so `make setup` copied
+ * a non-empty value into `.env` and the guard passed. The whole appliance then
+ * booted on a password published in a public repository, with every check
+ * reporting success: the loudest possible design, defeated by the quietest
+ * possible input.
+ *
+ * Empty is the only value that makes the guard already in `docker-compose.yml`
+ * do its job, so the rule is derived from compose rather than listed here — a
+ * hand-kept list of secrets is one secret behind the day someone adds one.
+ */
+describe("no usable credential ships in .env.example", () => {
+  /** Every variable compose refuses to start without: `${NAME:?...}` or `${NAME:?}`. */
+  function guardedByCompose(): Set<string> {
+    const text = readFileSync(join(repoRoot, "docker-compose.yml"), "utf8");
+    const names = new Set<string>();
+    for (const m of text.matchAll(/\$\{([A-Z0-9_]+):\?/g)) if (m[1]) names.add(m[1]);
+    return names;
+  }
+
+  /** Declared name → its literal value, comments and blank lines discarded. */
+  function declaredValues(): Map<string, string> {
+    const text = readFileSync(join(repoRoot, ".env.example"), "utf8");
+    const out = new Map<string, string>();
+    for (const line of text.split("\n")) {
+      const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
+      // Strip a trailing `# comment`, which several entries carry.
+      if (m?.[1]) out.set(m[1], (m[2] ?? "").replace(/\s+#.*$/, "").trim());
+    }
+    return out;
+  }
+
+  /** A connection string is structure, not a secret — the next test owns those. */
+  const isConnectionString = (value: string) => /^postgres(?:ql)?:\/\//.test(value);
+
+  it("leaves every compose-guarded secret empty", () => {
+    const values = declaredValues();
+    const guarded = guardedByCompose();
+
+    // Vacuity guard, first: a regex that stopped matching would turn the
+    // assertion below into `expect([]).toEqual([])` — the exact failure
+    // `module-boundaries.test.ts` documents as worse than having no test.
+    expect(guarded.size, "compose-guarded variables found").toBeGreaterThan(3);
+    expect(guarded).toContain("POSTGRES_PASSWORD");
+
+    // **Absence must not read as safety.** `values.get(name) ?? ""` would score
+    // a variable compose refuses to start without, and `.env.example` never
+    // mentions, as "safely empty" — when it is in fact undocumented, and the
+    // person deploying this has no way to learn it exists. The parity test
+    // above only covers variables the *code* reads, so compose-only names fall
+    // through it.
+    const undeclared = [...guarded].filter((name) => !values.has(name));
+    expect(undeclared, "compose-guarded but absent from .env.example").toEqual([]);
+
+    const shipped = [...guarded]
+      .map((name) => [name, values.get(name) ?? ""] as const)
+      // A guarded *URL* must still ship — it carries the host, role and
+      // database that the person deploying this has no other source for.
+      // Emptying it would delete documentation to protect a secret that is
+      // not in it. What must not survive is the password inside it, which is
+      // a different assertion with a different fix.
+      .filter(([, value]) => value !== "" && !isConnectionString(value))
+      .map(([name, value]) => `${name}=${value} — compose guards this; a value defeats the guard`);
+
+    expect(shipped, "credentials with a value in .env.example").toEqual([]);
+  });
+
+  /**
+   * The same secret is also embedded in four connection strings, where emptying
+   * the variable does not reach it. Left as a placeholder they invite the
+   * repair that reintroduces the bug — setting `POSTGRES_PASSWORD` back to
+   * `change-me` so the two agree.
+   */
+  it("carries no password inside a connection string", () => {
+    const withPassword: string[] = [];
+    for (const [name, value] of declaredValues()) {
+      const m = /^postgres(?:ql)?:\/\/[^:/@]+:([^@]*)@/.exec(value);
+      if (m && (m[1] ?? "") !== "") withPassword.push(`${name} carries "${m[1]}"`);
+    }
+    expect(withPassword, "connection strings with a baked-in password").toEqual([]);
+  });
+});

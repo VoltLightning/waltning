@@ -59,6 +59,7 @@ export const SQLSTATE = {
   BUSINESS_INTO_SHARED: "WA012",
   ACCOUNT_CURRENCY_CHANGE: "WA013",
   ACCOUNT_MADE_SHARED: "WA014",
+  LINES_SUM: "WA015",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -83,6 +84,7 @@ export const TRIGGER = {
   BUSINESS_NOT_SHARED: "transactions_business_not_shared",
   BUSINESS_NOT_SHARED_TARGET: "transactions_business_not_shared_target",
   ACCOUNT_CHANGE_SAFE: "accounts_change_safe",
+  LINES_SUM: "transaction_lines_sum_matches",
 } as const;
 
 /**
@@ -121,6 +123,11 @@ export const GUARDS: Record<GuardState, Guard> = {
     constraint: TRIGGER.ACCOUNT_CHANGE_SAFE,
   },
   [SQLSTATE.ACCOUNT_MADE_SHARED]: { code: "validation", constraint: TRIGGER.ACCOUNT_CHANGE_SAFE },
+
+  // Deferred, so it surfaces at COMMIT rather than at the offending statement.
+  // The client still sees one refusal for one intention, because the whole
+  // split is one operation.
+  [SQLSTATE.LINES_SUM]: { code: "validation", constraint: TRIGGER.LINES_SUM },
 };
 
 /**
