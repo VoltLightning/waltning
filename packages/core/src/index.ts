@@ -19,6 +19,13 @@ export {
   WALTNING_HEADER,
 } from "./protocol.ts";
 export {
+  type ConflictGroups,
+  type ConflictOutcome,
+  conflictDecision,
+  type FieldPatch,
+  versionUnchanged,
+} from "./registry/conflict.ts";
+export {
   type AutoGrant,
   type GateDecision,
   gateDecision,

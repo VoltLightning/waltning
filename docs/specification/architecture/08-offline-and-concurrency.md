@@ -422,8 +422,11 @@ are written. This is the registry-wide convention, so no operation has to be
 inspected to know its semantics.
 
 Patch semantics alone still lose an edit when two devices touch the *same* field,
-so the input also carries the `version` the client last read — a `bigint`
-the database advances, never a timestamp to rank (`14-local-first.md` §14.2):
+so the input also carries the `version` the client last read — a `bigint` the
+database advances, never a timestamp to rank — **and the prior value of every
+field it sets.** The version is only the fast path; it is per row, and the
+question is per field, so on its own it reports a laptop's payee fix as a
+conflict with a phone's queued category edit (`14-local-first.md` §14.2):
 
 - Same field, different values → a **real conflict**, detected by the version
   the input carries — never a clock race. It follows the conflict setting

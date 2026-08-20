@@ -81,6 +81,29 @@ cannot mint one. `updated_at` survives beside it for display — "last edited" i
 the job it is actually good at — and now advances, which for five tables it
 never did.
 
+**`version` is the gate, not the answer.** It is per *row*, and the question
+above is per *field*. A row counter can only say that something moved, so on its
+own it collides disjoint edits: a laptop fixing a payee bumps the row, and a
+phone's queued `category` edit then arrives "stale" and is reported as a
+conflict this section promises to merge. On a tax-sensitive field it is worse
+than a misfire — `08`'s H16 **blocks** a stale tax-sensitive field, so a payee
+typo corrected elsewhere permanently blocks an unrelated queued edit while
+reporting that another device changed `is_business`. Nothing did.
+
+So **a write carries the prior value of every field it sets**, and the server
+compares field by field — plain compare-and-swap, which answers the question
+literally. `version` stays as the fast path: equal versions mean nothing moved
+and the per-field work is skipped entirely. The failure it replaces was
+one-directional and therefore safe — every update bumps the version, so the old
+check manufactured conflicts and never missed one — and the replacement keeps
+that property.
+
+Deriving the changed fields from `audit_log` was considered and rejected. It
+stores `before` and `after` and could answer this, but it has no `version` to
+correlate against, and it would make conflict detection depend on the audit
+trail being complete forever: a prune would silently turn conflicts into
+merges, which is the direction that loses data.
+
 - **No** → the write lands.
 - **Yes** → it is a real conflict. A same-field divergence follows a setting —
   *latest applied wins* or *ask* — and the **tax-sensitive set always asks**
