@@ -16,6 +16,27 @@ changes your identity.
 
 ---
 
+## 13.0 What this document is not about
+
+**Everything here is Brick 2 and later.** It was written before
+[`14-local-first.md`](14-local-first.md) and assumes throughout that a server
+exists to authenticate to. On **Brick 1 — the phone alone — none of it
+applies**: no session, no passkey, no TOTP, no server to discover. There is
+nobody to prove yourself to.
+
+What the phone-alone app has instead is **device custody**, which is a
+different mechanism answering a different question. A session token decides
+whether the phone may talk to the Pi. Face ID decides whether the person
+holding the phone may read what it already has — every account by name, every
+counterparty with balances, the whole ledger. A stolen unlocked phone is a
+total disclosure that never touches the network, so the perimeter this document
+describes does nothing about it. `SPEC.md` §5.7 owns that, and it is a
+prerequisite for Brick 1 while everything below is a prerequisite for Brick 2.
+
+Stating the boundary because the absence of it is load-bearing: read
+straight through, this document implies you must log in to use the product.
+You must not.
+
 ## 13.1 The constraint that shapes everything
 
 **A native iOS app cannot use passkeys against a domain it did not know at
@@ -170,9 +191,11 @@ Consequences, stated so they are chosen rather than discovered:
   wrong-password take the same time, and credential stuffing as a threat.
 - **Losing every passkey costs you shell access, not your ledger** — the right
   price for a system whose whole argument is physical custody.
-- **The CLI is also first-run.** The same command enrols the first passkey on a
-  fresh install, so there is no bootstrap password and no default credential to
-  forget to change.
+- **The CLI is also the server's first run.** The same command enrols the first
+  passkey on a fresh install, so there is no bootstrap password and no default
+  credential to forget to change. Not to be confused with the *app's* first run,
+  which involves no server at all (§13.6) — this one happens on the Pi, when a
+  Pi is added.
 
 **If you would rather have a remote recovery path**, the shape to copy is
 1Password's rather than GitHub's: a recovery secret that is **reusable rather
@@ -215,10 +238,23 @@ token in `localStorage` is not an option.
 
 **The 30-day sliding window needs its argument written down.** NIST AAL2 is 24
 hours absolute and 1 hour inactivity; ASVS permits deviating *provided the
-justification is documented*. The justification here is §14.3's offline design —
-a phone is expected to go days or weeks without reaching the Pi, and a session
-that expires mid-trip strands the outbox. That is a real argument and it belongs
-beside the number.
+justification is documented*. The justification is the offline design: a phone
+is expected to go days or weeks without reaching the Pi, and a session expiring
+mid-trip stalls the drain for the rest of the trip.
+
+**"Strands the outbox" was too strong, and the reframe is why.** Under
+`14-local-first.md` the phone is *complete*: an expired session costs you the
+**drain**, not the app. Reading, searching, balances and capture all continue
+against the local ledger, and the queue resumes when you next authenticate.
+That weakens the argument for a long window rather than strengthening it — the
+window is a convenience, and it should be defended as one.
+
+**So "logged out" means the session is gone and nothing else.** §14.4 is
+explicit: a phone that has met a backend keeps a complete copy, and logout
+drops **nothing but the session** — not the replica, not the outbox. The
+90-day TTL and drop-on-logout were priced against a *cache*; against a record
+they are a deletion of the record. A logout screen that offers to "clear local
+data" is offering to destroy unsent writes.
 
 ---
 
@@ -248,7 +284,14 @@ redirect-hijack.
 **`EXPO_PUBLIC_API_URL` must stop being the answer.** It is inlined at build
 time, so today the app can only ever talk to the server it was compiled for —
 which makes self-hosting by anyone else impossible, and makes moving the Pi a
-rebuild. The address becomes a first-run field and a setting.
+rebuild. The address becomes a **setting**, editable at any time.
+
+**Not a first-run field, and that is the reframe's doing.** Brick 1 has no
+server, so first run must complete with the address unset and the app fully
+usable — a launch that demands a URL before it will show you anything is a
+launch that cannot happen on the brick most people start from. Adding a backend
+is a later, deliberate act: enter an address, validate it, seed from the phone
+(§14.1). The field belongs beside that act, not in front of the product.
 
 Two rules taken from products that learned them the hard way:
 
@@ -328,9 +371,11 @@ distributed:
 - **A push relay.** The APNs key belongs to whoever owns the bundle ID, never
   the server operator, so a self-hosted backend cannot push to an App Store app
   without one. Home Assistant runs exactly this. Immich ships no push at all,
-  which is defensible for a ledger — but **§14.3 currently depends on push** for
-  node-key-expiry warnings and S30's alarms, and that dependency has to be
-  resolved rather than inherited.
+  which is defensible for a ledger — but **`SPEC.md` §14.3 currently depends on
+  push** for node-key-expiry warnings and S30's alarms, and that dependency has
+  to be resolved rather than inherited. (Qualified because
+  `14-local-first.md` now has a §14.3 of its own — durability — and the two are
+  unrelated.)
 - **A public demo instance.** App Store review requires working credentials, and
   a self-hosted-only app has been rejected under Guideline 2.1 for having none.
 
