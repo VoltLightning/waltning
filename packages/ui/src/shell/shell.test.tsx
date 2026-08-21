@@ -5,6 +5,7 @@
  */
 
 import { render, screen } from "@testing-library/react";
+import { money } from "@waltning/core";
 import { describe, expect, it } from "vitest";
 import { Card } from "./card";
 import { DualTotal } from "./dual-total";
@@ -14,7 +15,13 @@ describe("DualTotal", () => {
     // §5: **never a toggle.** The two answer different questions and look
     // identical, so a control that swaps them guarantees someone eventually
     // reads *ours* believing it is *mine*.
-    render(<DualTotal mine="1000.00000000" ours="1600.00000000" currency="PLN" />);
+    render(
+      <DualTotal
+        mine={money.toMoney("1000.00000000")}
+        ours={money.toMoney("1600.00000000")}
+        currency="PLN"
+      />,
+    );
     expect(screen.getByText("1000.00")).toBeDefined();
     expect(screen.getByText("1600.00")).toBeDefined();
   });
@@ -29,7 +36,9 @@ describe("DualTotal", () => {
   it("degrades to one figure when nothing is shared", () => {
     // A household total identical to the personal one, printed underneath,
     // teaches the reader that the second line carries no information.
-    const { container } = render(<DualTotal mine="1000.00000000" ours={null} currency="PLN" />);
+    const { container } = render(
+      <DualTotal mine={money.toMoney("1000.00000000")} ours={null} currency="PLN" />,
+    );
     expect(container.textContent).toContain("mine");
     expect(container.textContent).not.toContain("ours");
   });

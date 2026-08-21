@@ -21,7 +21,7 @@
  */
 
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import type { AnyOperation } from "@waltning/core";
+import type { AnyOperation, money } from "@waltning/core";
 import type { CurrencySummary } from "../modules/currencies/index.ts";
 import type { AppRouter } from "../trpc/router.ts";
 import type { OperationContext } from "./context.ts";
@@ -36,6 +36,9 @@ type Equals<A, B> =
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type Not<T extends boolean> = T extends true ? false : true;
+
+/** Assignability, which is a weaker question than `Equals` and the right one here. */
+type Extends<A, B> = A extends B ? true : false;
 type Has<T, K extends PropertyKey> = K extends keyof T ? true : false;
 
 type Out = inferRouterOutputs<AppRouter>;
@@ -59,18 +62,39 @@ export type WriteOutputIsTyped = Expect<
 >;
 
 /**
- * A balance is a **string**, and this is the assertion that keeps it one.
+ * A balance is **`Money`**, and this assertion is what keeps it one.
  *
- * `numeric(20,8)` through a driver that returned numbers would type as `number`
- * here, and the failure is silent: 0,1 + 0,2 renders as 0,30 at two decimal
- * places and is wrong at the eighth. Money in this system is decimal strings end
- * to end, and this is where that stops being a convention and becomes checked.
+ * It used to assert `string`, which caught the failure that mattered then:
+ * `numeric(20,8)` through a driver returning numbers types as `number` here,
+ * and that failure is silent — 0,1 + 0,2 renders as 0,30 at two decimal places
+ * and is wrong at the eighth.
+ *
+ * `Money` catches that *and* the one `string` never could. A balance and an
+ * account name were the same type, so passing one where the other belonged
+ * compiled — in the operation the phone reads to draw every figure on the
+ * screen.
  */
-export type BalanceIsAString = Expect<Equals<Out["op"]["get_accounts"][number]["balance"], string>>;
-
-export type TransactionAmountIsAString = Expect<
-  Equals<Out["op"]["list_transactions"]["rows"][number]["amount"], string>
+export type BalanceIsMoney = Expect<
+  Equals<Out["op"]["get_accounts"][number]["balance"], money.Money>
 >;
+
+export type TransactionAmountIsMoney = Expect<
+  Equals<Out["op"]["list_transactions"]["rows"][number]["amount"], money.Money>
+>;
+
+/**
+ * The brand is one-way, and both directions are the point.
+ *
+ * A `Money` **is** a string, so it crosses the wire, lands in a JSON body and
+ * renders without conversion — the brand is a phantom property that exists only
+ * in the type system.
+ *
+ * A `string` is **not** a `Money`, which is the half that does the work: it is
+ * what makes `add(payee, note)` fail to compile. If this ever inverts, the brand
+ * has been widened to an alias and every guarantee above it is decoration.
+ */
+export type MoneyIsAString = Expect<Extends<money.Money, string>>;
+export type StringIsNotMoney = Expect<Not<Extends<string, money.Money>>>;
 
 /** The cursor survives to the client as a shape it can feed back, not `unknown`. */
 export type CursorIsTyped = Expect<

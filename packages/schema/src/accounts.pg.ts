@@ -1,3 +1,4 @@
+import { money } from "@waltning/core";
 import { accountGroups } from "./account-groups.pg.ts";
 import { currencies } from "./currencies.pg.ts";
 import { accountKind, ownership } from "./enums.pg.ts";
@@ -20,7 +21,7 @@ export const accountsColumns = () => ({
     .references(() => currencies.code),
   groupId: k.uuid("group_id").references(() => accountGroups.id),
   ownership: ownership("ownership").notNull().default("own"),
-  openingBalance: k.money("opening_balance").notNull().default("0"),
+  openingBalance: k.money("opening_balance").notNull().default(money.toMoney("0")),
   openingDate: k.date("opening_date"),
   expectedBalance: k.money("expected_balance"),
   memo: k.text("memo").notNull().default(""),

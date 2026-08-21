@@ -18,6 +18,7 @@
  * fixture that is the difference between +37 931,70 and −47 268,30.
  */
 
+import type { money } from "@waltning/core";
 import { accounts, currencies, type DbHandle, transactions } from "@waltning/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
@@ -28,7 +29,12 @@ export type AccountSummary = {
   /** The account's own currency. The balance is denominated in it, always. */
   currency: string;
   /** `numeric(20,8)` as a decimal string. A JS number holding this is a bug. */
-  balance: string;
+  /**
+   * `Money`, not `string`. The brand is what stops this being interchangeable
+   * with the `name` two fields up — and it survives all the way to the phone,
+   * because the client's `Account` type is inferred from this declaration.
+   */
+  balance: money.Money;
   /**
    * The currency's decimal places, carried with the balance rather than assumed
    * to be 2. A screen that hardcodes two is correct for every currency in this
@@ -87,7 +93,7 @@ export async function listAccounts(
       currency: accounts.currency,
       archived: accounts.archived,
       decimals: currencies.decimals,
-      balance: sql<string>`(${accounts.openingBalance} + ${sourceLeg} + ${destinationLeg})`,
+      balance: sql<money.Money>`(${accounts.openingBalance} + ${sourceLeg} + ${destinationLeg})`,
     })
     .from(accounts)
     .innerJoin(currencies, eq(currencies.code, accounts.currency))

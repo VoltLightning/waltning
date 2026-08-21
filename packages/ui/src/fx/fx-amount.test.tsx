@@ -8,17 +8,18 @@
  */
 
 import { render, screen } from "@testing-library/react";
+import { money } from "@waltning/core";
 import { describe, expect, it } from "vitest";
 import { FxAmount } from "./fx-amount";
 
-const base = { value: "62.40000000", currency: "USD", displayCurrency: "PLN" } as const;
+const base = { value: money.toMoney("62.40"), currency: "USD", displayCurrency: "PLN" } as const;
 
 describe("FxAmount", () => {
   it("shows local, rate and converted — all three, always", () => {
     // The rate is not an implementation detail of the conversion; it is part of
     // the figure. A converted amount without its rate is a number the reader
     // has to trust rather than check.
-    render(<FxAmount {...base} rate="4.02310000" />);
+    render(<FxAmount {...base} rate={money.toMoney("4.02310000")} />);
     expect(screen.getByText("62.40")).toBeDefined();
     expect(screen.getByText("4.0231")).toBeDefined();
     expect(screen.getByText("251.04")).toBeDefined();
@@ -28,8 +29,8 @@ describe("FxAmount", () => {
     // The defect P1 exists to prevent: a figure silently converted at today's
     // rate is wrong by exactly the market's movement and looks entirely
     // reasonable. Two different rates on the same amount must differ.
-    const { container: atOne } = render(<FxAmount {...base} rate="4.00000000" />);
-    const { container: atTwo } = render(<FxAmount {...base} rate="5.00000000" />);
+    const { container: atOne } = render(<FxAmount {...base} rate={money.toMoney("4.00000000")} />);
+    const { container: atTwo } = render(<FxAmount {...base} rate={money.toMoney("5.00000000")} />);
     expect(atOne.textContent).toContain("249.60");
     expect(atTwo.textContent).toContain("312.00");
   });
@@ -37,14 +38,18 @@ describe("FxAmount", () => {
   it("marks a manual override with text, not tint alone", () => {
     // P5: a colour-only marker is invisible to anyone who cannot distinguish
     // the two colours — and amber carries four meanings in this system.
-    render(<FxAmount {...base} rate="4.02310000" provenance={{ kind: "override" }} />);
+    render(
+      <FxAmount {...base} rate={money.toMoney("4.02310000")} provenance={{ kind: "override" }} />,
+    );
     // Lowercase in the DOM: the capitals are `textTransform`, which is
     // presentation. Asserting on them would be asserting on CSS.
     expect(screen.getByText("manual")).toBeDefined();
   });
 
   it("marks an estimated rate", () => {
-    render(<FxAmount {...base} rate="4.02310000" provenance={{ kind: "estimated" }} />);
+    render(
+      <FxAmount {...base} rate={money.toMoney("4.02310000")} provenance={{ kind: "estimated" }} />,
+    );
     expect(screen.getByText("estimated")).toBeDefined();
   });
 
@@ -52,13 +57,19 @@ describe("FxAmount", () => {
     // "Stale" alone says something is wrong and nothing about whether it
     // matters. Eleven days and eleven months are the same word and different
     // decisions.
-    render(<FxAmount {...base} rate="4.02310000" provenance={{ kind: "stale", ageDays: 11 }} />);
+    render(
+      <FxAmount
+        {...base}
+        rate={money.toMoney("4.02310000")}
+        provenance={{ kind: "stale", ageDays: 11 }}
+      />,
+    );
     expect(screen.getByText("stale 11d")).toBeDefined();
   });
 
   it("marks a synced rate with nothing at all", () => {
     // The default must be quiet, or the marker means nothing when it appears.
-    const { container } = render(<FxAmount {...base} rate="4.02310000" />);
+    const { container } = render(<FxAmount {...base} rate={money.toMoney("4.02310000")} />);
     expect(container.textContent).not.toMatch(/manual|stale|estimated/i);
   });
 });

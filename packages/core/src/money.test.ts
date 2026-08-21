@@ -13,11 +13,13 @@ import * as money from "./money.ts";
 
 describe("exactness", () => {
   it("does not lose the classic float case", () => {
-    expect(money.add("0.10000000", "0.20000000")).toBe("0.30000000");
+    expect(money.add(money.toMoney("0.10000000"), money.toMoney("0.20000000"))).toBe("0.30000000");
   });
 
   it("stays exact well past 8 decimal places of magnitude", () => {
-    expect(money.add("99999999999.99999999", "0.00000001")).toBe("100000000000.00000000");
+    expect(money.add(money.toMoney("99999999999.99999999"), money.toMoney("0.00000001"))).toBe(
+      "100000000000.00000000",
+    );
   });
 
   it("sums an empty ledger to zero rather than throwing", () => {
@@ -25,7 +27,7 @@ describe("exactness", () => {
   });
 
   it("sums a large batch without drift", () => {
-    const cents = Array.from({ length: 10_000 }, () => "0.01000000");
+    const cents = Array.from({ length: 10_000 }, () => money.toMoney("0.01"));
     expect(money.sum(cents)).toBe("100.00000000");
   });
 });
@@ -61,15 +63,15 @@ describe("rounding", () => {
 
 describe("signs", () => {
   it("normalises negative zero — a balance is never '-0'", () => {
-    expect(money.sub("1.00000000", "1.00000000")).toBe("0.00000000");
-    expect(money.neg("0.00000000")).toBe("0.00000000");
-    expect(money.isZero("-0.00000000")).toBe(true);
-    expect(money.cmp("-0.00000000", "0.00000000")).toBe(0);
+    expect(money.sub(money.toMoney("1.00000000"), money.toMoney("1.00000000"))).toBe("0.00000000");
+    expect(money.neg(money.toMoney("0.00000000"))).toBe("0.00000000");
+    expect(money.isZero(money.toMoney("-0.00000000"))).toBe(true);
+    expect(money.cmp(money.toMoney("-0.00000000"), money.toMoney("0.00000000"))).toBe(0);
   });
 
   it("keeps sign through abs and neg", () => {
-    expect(money.abs("-42.50000000")).toBe("42.50000000");
-    expect(money.neg("-42.50000000")).toBe("42.50000000");
+    expect(money.abs(money.toMoney("-42.50000000"))).toBe("42.50000000");
+    expect(money.neg(money.toMoney("-42.50000000"))).toBe("42.50000000");
   });
 });
 

@@ -50,7 +50,7 @@ export function Amount({
   // `cmp` rather than inspecting the string: `-0.00000000` is not a negative
   // balance, and `startsWith("-")` says it is — showing a cleared account in
   // the ink of an overdraft.
-  const negative = money.cmp(value, "0") < 0;
+  const negative = money.cmp(value, money.toMoney("0")) < 0;
   const text = money.toMoney(value, decimals);
   const prefix = signed && !negative && !money.isZero(value) ? "+" : "";
 

@@ -16,6 +16,7 @@
  * failure between them leaves nothing.
  */
 
+import { money } from "@waltning/core";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { outbox, transactions } from "../schema.ts";
@@ -49,7 +50,7 @@ function insertTransaction(id: string) {
         date: "2026-03-12",
         type: "expense",
         accountId: "acc-1",
-        amountOriginal: "18.00000000",
+        amountOriginal: money.toMoney("18.00"),
         currency: "PLN",
         fxRate: "1.000000000000",
       })

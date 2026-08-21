@@ -18,6 +18,7 @@
 
 // Type-only: this file must not pull either dialect's runtime onto anything's
 // import graph, least of all both at once.
+import { money } from "@waltning/core";
 import type * as pg from "./pg.ts";
 import type { SharedTable } from "./shared.ts";
 import type * as sqlite from "./sqlite.ts";
@@ -55,4 +56,4 @@ export const notVacuous: [
   Selects<typeof pg>["transactions"]["amountOriginal"],
   Selects<typeof sqlite>["transactions"]["amountOriginal"],
   Selects<typeof pg>["currencies"]["isPivot"],
-] = ["12.34", "12.34", true];
+] = [money.toMoney("12.34"), money.toMoney("12.34"), true];

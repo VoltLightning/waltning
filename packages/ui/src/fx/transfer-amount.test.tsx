@@ -6,13 +6,14 @@
  */
 
 import { render, screen } from "@testing-library/react";
+import { money } from "@waltning/core";
 import { describe, expect, it } from "vitest";
 import { TransferAmount } from "./transfer-amount";
 
 const example = {
-  from: { account: "Household", currency: "USD", amount: "150.00000000" },
-  to: { account: "Cash", currency: "PLN", amount: "565.20000000" },
-  referenceRate: "3.81000000",
+  from: { account: "Household", currency: "USD", amount: money.toMoney("150.00000000") },
+  to: { account: "Cash", currency: "PLN", amount: money.toMoney("565.20000000") },
+  referenceRate: money.toMoney("3.81000000"),
 } as const;
 
 describe("TransferAmount", () => {
@@ -40,9 +41,9 @@ describe("TransferAmount", () => {
     // then the one that is not zero reads the same as the ones that were.
     const { container } = render(
       <TransferAmount
-        from={{ account: "A", currency: "USD", amount: "100.00000000" }}
-        to={{ account: "B", currency: "PLN", amount: "400.00000000" }}
-        referenceRate="4.00000000"
+        from={{ account: "A", currency: "USD", amount: money.toMoney("100.00000000") }}
+        to={{ account: "B", currency: "PLN", amount: money.toMoney("400.00000000") }}
+        referenceRate={money.toMoney("4.00000000")}
       />,
     );
     expect(container.textContent).not.toContain("spread");
@@ -52,9 +53,9 @@ describe("TransferAmount", () => {
     // A transfer of zero has no realized rate. Saying so beats `Infinity`.
     const { container } = render(
       <TransferAmount
-        from={{ account: "A", currency: "USD", amount: "0.00000000" }}
-        to={{ account: "B", currency: "PLN", amount: "0.00000000" }}
-        referenceRate="4.00000000"
+        from={{ account: "A", currency: "USD", amount: money.toMoney("0.00000000") }}
+        to={{ account: "B", currency: "PLN", amount: money.toMoney("0.00000000") }}
+        referenceRate={money.toMoney("4.00000000")}
       />,
     );
     expect(container.textContent).toContain("realized —");

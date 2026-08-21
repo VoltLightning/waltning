@@ -9,6 +9,9 @@
  * classifications (`computations.md` §0).
  */
 export type { JsonObject, JsonPrimitive, JsonSchema, JsonValue } from "./json.ts";
+// The branded amount type, importable without the namespace — it appears in
+// every row type in  and in every component that renders one.
+export type { Money, TxnType } from "./money.ts";
 export * as money from "./money.ts";
 export {
   type AuthenticationFailure,

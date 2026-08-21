@@ -12,6 +12,7 @@
  * would disagree on `adjustment` — which carries its own sign.
  */
 
+import type { money } from "@waltning/core";
 import { accounts, categories, type DbHandle, transactions } from "@waltning/db";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
@@ -22,7 +23,7 @@ export type TransactionRow = {
   type: "income" | "expense" | "transfer" | "adjustment";
   payee: string;
   /** Signed per §1, as a decimal string in the account's currency. */
-  amount: string;
+  amount: money.Money;
   currency: string;
   accountName: string;
   categoryName: string | null;
@@ -35,7 +36,7 @@ export type TransactionPage = {
 };
 
 /** §1's `signed(t,'from')`, in SQL so there is one implementation of it. */
-const signedAmount = sql<string>`
+const signedAmount = sql<money.Money>`
   CASE ${transactions.type}
     WHEN 'expense'  THEN -${transactions.amountOriginal}
     WHEN 'transfer' THEN -${transactions.amountOriginal}
