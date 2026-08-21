@@ -185,6 +185,9 @@ importers:
 
   packages/schema:
     dependencies:
+      '@waltning/core':
+        specifier: workspace:*
+        version: link:../core
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(postgres@3.4.9)
@@ -219,6 +222,9 @@ importers:
 
   tools/migrate-mm:
     dependencies:
+      '@waltning/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@waltning/db':
         specifier: workspace:*
         version: link:../../packages/db

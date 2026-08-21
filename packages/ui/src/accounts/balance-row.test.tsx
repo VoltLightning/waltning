@@ -5,12 +5,20 @@
  */
 
 import { render, screen } from "@testing-library/react";
+import { money } from "@waltning/core";
 import { describe, expect, it } from "vitest";
 import { BalanceRow } from "./balance-row";
 
 describe("BalanceRow", () => {
   it("renders a home-currency balance as a plain amount", () => {
-    render(<BalanceRow account="Bank A" kind="bank" balance="100.00000000" currency="PLN" />);
+    render(
+      <BalanceRow
+        account="Bank A"
+        kind="bank"
+        balance={money.toMoney("100.00000000")}
+        currency="PLN"
+      />,
+    );
     expect(screen.getByText("100.00")).toBeDefined();
   });
 
@@ -21,9 +29,9 @@ describe("BalanceRow", () => {
       <BalanceRow
         account="Bank B"
         kind="deposit"
-        balance="100.00000000"
+        balance={money.toMoney("100.00000000")}
         currency="USD"
-        conversion={{ rate: "4.00000000", displayCurrency: "PLN" }}
+        conversion={{ rate: money.toMoney("4.00000000"), displayCurrency: "PLN" }}
       />,
     );
     expect(screen.getByText("4.0000")).toBeDefined();

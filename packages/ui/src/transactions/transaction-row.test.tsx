@@ -5,6 +5,7 @@
  */
 
 import { render, screen } from "@testing-library/react";
+import { money } from "@waltning/core";
 import { describe, expect, it } from "vitest";
 import { TransactionRow } from "./transaction-row";
 
@@ -13,13 +14,25 @@ describe("TransactionRow", () => {
     // §1 is computed once, in SQL. A row deciding the sign from the type would
     // be a second implementation, and the two disagree on `adjustment`.
     render(
-      <TransactionRow date="2026-08-16" payee="Grocer" amount="-184.30000000" currency="PLN" />,
+      <TransactionRow
+        date="2026-08-16"
+        payee="Grocer"
+        amount={money.toMoney("-184.30000000")}
+        currency="PLN"
+      />,
     );
     expect(screen.getByText("-184.30")).toBeDefined();
   });
 
   it("shows the bare accounting date, never through a Date", () => {
-    render(<TransactionRow date="2026-01-01" payee="X" amount="1.00000000" currency="PLN" />);
+    render(
+      <TransactionRow
+        date="2026-01-01"
+        payee="X"
+        amount={money.toMoney("1.00000000")}
+        currency="PLN"
+      />,
+    );
     expect(screen.getByText("01-01")).toBeDefined();
   });
 
@@ -31,7 +44,7 @@ describe("TransactionRow", () => {
       <TransactionRow
         date="2026-08-16"
         payee="Client"
-        amount="100.00000000"
+        amount={money.toMoney("100.00000000")}
         currency="PLN"
         isBusiness
       />,
@@ -40,7 +53,14 @@ describe("TransactionRow", () => {
   });
 
   it("falls back rather than rendering a blank payee", () => {
-    render(<TransactionRow date="2026-08-16" payee="" amount="1.00000000" currency="PLN" />);
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        payee=""
+        amount={money.toMoney("1.00000000")}
+        currency="PLN"
+      />,
+    );
     expect(screen.getByText("—")).toBeDefined();
   });
 });

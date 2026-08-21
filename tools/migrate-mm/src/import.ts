@@ -19,6 +19,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { money } from "@waltning/core";
 import { createDb, requireRow } from "@waltning/db";
 import {
   accountGroups,
@@ -310,7 +311,7 @@ async function main() {
       type: "income" as const,
       accountId,
       categoryId,
-      amountOriginal: amount.toFixed(8),
+      amountOriginal: money.toMoney(amount.toFixed(8)),
       currency: acct.currency,
       fxRate: fx.rate,
       fxRateEstimated: fx.estimated,
@@ -347,7 +348,7 @@ async function main() {
     await db
       .update(accounts)
       .set({
-        openingBalance: opening.toFixed(8),
+        openingBalance: money.toMoney(opening.toFixed(8)),
         openingDate: "2020-11-24", // the day before the first transaction
       })
       .where(eq(accounts.id, id));

@@ -22,6 +22,7 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { money } from "@waltning/core";
 import { eq, isNotNull, like, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { accounts, categories, transactions } from "../schema.ts";
@@ -171,7 +172,7 @@ async function apply(today: string): Promise<void> {
         name: a.name,
         currency: a.currency,
         kind: a.kind,
-        openingBalance: a.openingBalance,
+        openingBalance: money.toMoney(a.openingBalance),
       })
       .onConflictDoUpdate({
         target: accounts.externalId,
@@ -180,7 +181,11 @@ async function apply(today: string): Promise<void> {
         // conflict target to it — "no unique or exclusion constraint matching
         // the ON CONFLICT specification", which reads like a missing index.
         targetWhere: isNotNull(accounts.externalId),
-        set: { name: a.name, currency: a.currency, openingBalance: a.openingBalance },
+        set: {
+          name: a.name,
+          currency: a.currency,
+          openingBalance: money.toMoney(a.openingBalance),
+        },
       })
       .returning({ id: accounts.id });
 
@@ -213,7 +218,7 @@ async function apply(today: string): Promise<void> {
             type: pattern.type,
             accountId,
             categoryId,
-            amountOriginal: amount,
+            amountOriginal: money.toMoney(amount),
             currency: account.currency,
             fxRate: TO_PIVOT[account.currency] ?? "1.000000000000",
             payee: pattern.payee,
@@ -229,7 +234,7 @@ async function apply(today: string): Promise<void> {
             // undefined — and `targetWhere` will not take an optional under
             // `exactOptionalPropertyTypes`.
             targetWhere: sql`${transactions.externalId} is not null and ${transactions.deletedAt} is null`,
-            set: { amountOriginal: amount, date: dayBefore(today, day) },
+            set: { amountOriginal: money.toMoney(amount), date: dayBefore(today, day) },
           });
         written += 1;
       }

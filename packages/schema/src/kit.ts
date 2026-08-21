@@ -40,6 +40,7 @@
  * layered around the shared tables rather than inside them — §14.7's rule.
  */
 
+import type { Money } from "@waltning/core";
 import {
   bigint as pgBigint,
   boolean as pgBoolean,
@@ -88,7 +89,7 @@ export const pgKit = {
    * other and never against `packages/db` — so a shared column that did not
    * match the shipped table was exactly as green as one that did.
    */
-  money: (name: string) => pgNumeric(name, { precision: 20, scale: 8 }),
+  money: (name: string) => pgNumeric(name, { precision: 20, scale: 8 }).$type<Money>(),
   /** `numeric(24,12)` — rates carry more places than money (§7.6). */
   rate: (name: string) => pgNumeric(name, { precision: 24, scale: 12 }),
   /** `numeric(12,3)` — a receipt line's quantity. Three places, not money's eight. */
@@ -140,7 +141,7 @@ export const sqliteKit = {
   integer: sqliteInteger,
   boolean: (name: string) => sqliteInteger(name, { mode: "boolean" }),
   /** TEXT. SQLite has no exact decimal type at all — see the header. */
-  money: (name: string) => sqliteText(name),
+  money: (name: string) => sqliteText(name).$type<Money>(),
   rate: (name: string) => sqliteText(name),
   /** A bare `YYYY-MM-DD` string, which is what Postgres `date` produces too. */
   date: (name: string) => sqliteText(name),

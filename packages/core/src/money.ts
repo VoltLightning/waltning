@@ -33,12 +33,47 @@ const Decimal = GlobalDecimal.clone({ precision: 28, rounding: GlobalDecimal.ROU
 /** The instance type. `Decimal` above is a value; a clone does not carry one. */
 type Decimal = GlobalDecimal;
 
-export type Money = string;
+declare const MONEY: unique symbol;
 
-export const dec = (v: Money | number | Decimal): Decimal => new Decimal(v);
+/**
+ * A decimal amount, as a string — and **a brand, not an alias**.
+ *
+ * It was `type Money = string`, which documented the intent and enforced none
+ * of it: `add(payee, note)` compiled, in a ledger. Every argument this file
+ * makes about rounding modes and half-up-versus-half-even was defended by a
+ * type that permitted passing a note where an amount goes.
+ *
+ * The brand is a phantom property that exists only in the type system —
+ * `erasableSyntaxOnly` is on, and this compiles to nothing. At run time a
+ * `Money` is exactly the string it always was.
+ *
+ * **`toMoney` is the constructor.** A raw string becomes `Money` by being
+ * parsed and re-serialised at a known scale, which is also the only way to know
+ * it *is* an amount rather than a word.
+ */
+export type Money = string & { readonly [MONEY]: "Money" };
 
-/** Serialize for storage: fixed scale, no exponent notation. */
-export const toMoney = (v: Decimal | Money | number, scale = 8): Money => dec(v).toFixed(scale);
+/**
+ * Parse anything numeric into a Decimal.
+ *
+ * **Takes a raw `string`, deliberately.** This is the boundary where an amount
+ * arrives from outside the type system — a driver, a request body, a literal in
+ * a test — and `Decimal` throws on anything that is not a number. Refusing raw
+ * strings here would leave callers with no way in at all, and they would reach
+ * for a cast, which is the same hole with no validation attached.
+ */
+export const dec = (v: Money | string | number | Decimal): Decimal => new Decimal(v);
+
+/**
+ * Serialize for storage: fixed scale, no exponent notation.
+ *
+ * **This is `Money`'s constructor**, and the only one. Unbranded in, branded
+ * out: a raw string goes through `Decimal`, which throws if it is not a number,
+ * and comes back at a known scale. So the brand is never merely asserted —
+ * every `Money` in the system has been parsed at least once.
+ */
+export const toMoney = (v: Decimal | Money | string | number, scale = 8): Money =>
+  dec(v).toFixed(scale) as Money;
 
 export const add = (a: Money, b: Money): Money => toMoney(dec(a).plus(b));
 export const sub = (a: Money, b: Money): Money => toMoney(dec(a).minus(b));
@@ -63,7 +98,7 @@ export const cmp = (a: Money, b: Money): -1 | 0 | 1 => dec(a).cmp(b) as -1 | 0 |
 export const toPivot = (amount: Money, rate: Money): Money => toMoney(dec(amount).times(rate));
 
 /** Round to a currency's presentation scale — display only, never storage. */
-export const round = (v: Money, decimals: number): Money => dec(v).toFixed(decimals);
+export const round = (v: Money, decimals: number): Money => dec(v).toFixed(decimals) as Money;
 
 export type TxnType = "income" | "expense" | "transfer" | "adjustment";
 
