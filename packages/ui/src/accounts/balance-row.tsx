@@ -22,7 +22,8 @@ export type BalanceRowProps = {
   decimals?: number;
   /** Present only when this account is not in the display currency. */
   conversion?: {
-    rate: money.Money;
+    /** Pivot per unit — `<FxAmount>` multiplies by it (§4). */
+    rate: money.PivotPerUnit;
     displayCurrency: string;
     displayDecimals?: number;
     provenance?: FxProvenance;

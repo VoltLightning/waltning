@@ -40,7 +40,8 @@ export type TransferAmountProps = {
    * amounts. The spread is the difference between them, so one of the two has
    * to be independent.
    */
-  referenceRate: money.Money;
+  /** The **reference** rate, pivot per unit — see `fx-amount.tsx`. */
+  referenceRate: money.PivotPerUnit;
   rateDecimals?: number;
 };
 
