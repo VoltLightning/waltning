@@ -44,8 +44,8 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     why: "a runtime boundary that must survive junk (there is a test passing it `null` and a string), plus `unknown` as the value type of a field bag whose keys are all it reads",
   },
   "packages/ledger/src/write.ts": {
-    max: 8,
-    why: "eight, and all of them structural: `TRun = unknown` defaults on three generic declarations that cannot share a parameter list, `Record<string, unknown>` in constraint position for the schema map, and the JSON payload the drain replays — the alternative was pinning a concrete database type, which compiled and then refused every real driver at the call site",
+    max: 3,
+    why: "two in one constraint — the driver's run-result and the schema map, neither of which this module touches — and the JSON payload the drain replays. It was eight: `TRun` and `TSchema` threaded by hand through three declarations, which is one decision typed out three times",
   },
   "packages/ledger/src/outbox.ts": {
     max: 1,

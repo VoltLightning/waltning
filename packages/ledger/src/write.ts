@@ -28,43 +28,41 @@ import type { BaseSQLiteDatabase, SQLiteTransaction } from "drizzle-orm/sqlite-c
 import { nextSeq, outbox } from "./outbox.ts";
 
 /**
- * A synchronous drizzle SQLite database.
+ * Any synchronous drizzle SQLite database.
  *
- * **A type parameter, not a hand-rolled shape.** An earlier draft declared
- * `{ transaction(fn: (tx: never) => T): T; insert: unknown }` — which compiled,
- * and pushed a cast into the body to get anything done. `CLAUDE.md` names that
- * exact move: a placeholder discards the type the caller had and makes every
- * call site pay for it.
+ * **One type parameter, inferred, rather than two threaded by hand.** An
+ * earlier version carried `TRun` and `TSchema` through `LocalDb`, `LocalTx` and
+ * `LocalWrite` — the same constraint restated three times, which is one
+ * decision typed out three times and reads as though the file has opinions
+ * about six things.
  *
- * Driver-neutral by construction: `better-sqlite3` runs the tests because it has
- * real transactions, `expo-sqlite` runs on the device, and both satisfy this.
- * Naming either one would make the driver the thing under test.
+ * `unknown` for the driver's run-result and `Record<string, unknown>` for the
+ * schema are both **constraint** positions: this module never touches either,
+ * so a narrower bound would be a claim it does not make. Everything downstream
+ * is derived from `Db`.
+ *
+ * Driver-neutral by construction: `better-sqlite3` runs the tests because it
+ * has real transactions, `expo-sqlite` runs on the device, and both satisfy
+ * this. Naming either would make the driver the thing under test.
  */
-export type LocalDb<
-  TRun = unknown,
-  TSchema extends Record<string, unknown> = Record<string, never>,
-> = BaseSQLiteDatabase<"sync", TRun, TSchema>;
+export type LocalDb = BaseSQLiteDatabase<"sync", unknown, Record<string, unknown>>;
 
 /**
- * The transaction handle, as drizzle hands it to a callback.
+ * The transaction handle a given database hands to a callback.
  *
- * Carried through as type parameters rather than pinned, because a database
- * created with a schema has a *different* type from one created without —
- * `BaseSQLiteDatabase<"sync", unknown>` compiles as a declaration and then
- * refuses every real database at the call site, which is the placeholder
- * failure `CLAUDE.md` describes, arriving one step later than usual.
+ * Recovered from `Db` with `infer` rather than reconstructed from parts. A
+ * database created *with* a schema has a different type from one created
+ * without, so rebuilding the transaction type by hand means getting both
+ * arguments right at every call site — and getting one wrong compiles as a
+ * declaration and then refuses every real database.
  */
-export type LocalTx<
-  TRun = unknown,
-  TSchema extends Record<string, unknown> = Record<string, never>,
-> = SQLiteTransaction<"sync", TRun, TSchema, ExtractTablesWithRelations<TSchema>>;
+export type LocalTx<Db extends LocalDb> =
+  Db extends BaseSQLiteDatabase<"sync", infer TRun, infer TSchema>
+    ? SQLiteTransaction<"sync", TRun, TSchema, ExtractTablesWithRelations<TSchema>>
+    : never;
 
 /** What a caller declares about the write it is making. */
-export type LocalWrite<
-  Row,
-  TRun = unknown,
-  TSchema extends Record<string, unknown> = Record<string, never>,
-> = {
+export type LocalWrite<Row, Db extends LocalDb> = {
   /** The registry operation this replays on the drain. */
   operation: string;
   /** Its version at capture, for the drain's upcasters (C24). */
@@ -79,7 +77,7 @@ export type LocalWrite<
    * escape it — a nested `db.insert(...)` on the outer handle would commit
    * separately and reintroduce exactly the gap this closes.
    */
-  apply: (tx: LocalTx<TRun, TSchema>) => Row;
+  apply: (tx: LocalTx<Db>) => Row;
 };
 
 export type LocalWriteResult<Row> = {
@@ -94,12 +92,24 @@ export type LocalWriteResult<Row> = {
  * Returns the row as the local tables now hold it, and the id of the entry that
  * will carry it to a server if one ever exists.
  */
-export function writeLocally<Row, TRun, TSchema extends Record<string, unknown>>(
-  db: LocalDb<TRun, TSchema>,
-  write: LocalWrite<Row, TRun, TSchema>,
+export function writeLocally<Row, Db extends LocalDb>(
+  db: Db,
+  write: LocalWrite<Row, Db>,
 ): LocalWriteResult<Row> {
   return db.transaction((tx) => {
-    const row = write.apply(tx);
+    /**
+     * **The one cast, and it is the limitation ADR 0001 already records.**
+     *
+     * TypeScript checks a generic function's body against the *constraint*, not
+     * against each instantiation — so inside here `tx` is `LocalTx<LocalDb>`
+     * and not `LocalTx<Db>`, however precisely the signature was written. The
+     * same wall the schema-kit spike hit: it needs higher-kinded types.
+     *
+     * Confined to the body deliberately. Every caller reads a signature that is
+     * exact, and the only place the compiler cannot follow is four lines long
+     * and covered by eight tests.
+     */
+    const row = write.apply(tx as LocalTx<Db>);
 
     // The insert is *inside* the same transaction and after `apply`, so a
     // failure in either rolls back both. Ordering between them does not matter
