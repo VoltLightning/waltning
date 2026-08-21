@@ -8,10 +8,11 @@
  */
 
 import type { money } from "@waltning/core";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { FxAmount, type FxProvenance } from "../fx/fx-amount";
-import { color, hairline, space, type } from "../tokens.ts";
+import { makeStyles } from "../theme/index.ts";
+import { hairline, space, type } from "../tokens.ts";
 
 export type BalanceRowProps = {
   account: string;
@@ -36,6 +37,8 @@ export function BalanceRow({
   decimals = 2,
   conversion,
 }: BalanceRowProps) {
+  const styles = useStyles();
+
   return (
     <View style={styles.row}>
       <View style={styles.identity}>
@@ -59,16 +62,16 @@ export function BalanceRow({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
     borderBottomWidth: hairline.width,
-    borderBottomColor: hairline.color,
+    borderBottomColor: t.hairline,
   },
   identity: { flex: 1, gap: 2 },
-  name: { color: color.ink, fontSize: type.bodySm.fontSize },
-  meta: { color: color.muted, fontSize: type.caption.fontSize },
-});
+  name: { color: t.text, fontSize: type.bodySm.fontSize },
+  meta: { color: t.textMuted, fontSize: type.caption.fontSize },
+}));

@@ -12,8 +12,9 @@
  */
 
 import { money } from "@waltning/core";
-import { StyleSheet, Text, type TextStyle } from "react-native";
-import { color, fontFamily, tabularNums, type } from "../tokens.ts";
+import { Text, type TextStyle } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { fontFamily, tabularNums, type } from "../tokens.ts";
 
 export type AmountSize = "hero" | "large" | "body" | "small";
 export type AmountEmphasis = "default" | "muted";
@@ -53,6 +54,8 @@ export function Amount({
   const text = money.toMoney(value, decimals);
   const prefix = signed && !negative && !money.isZero(value) ? "+" : "";
 
+  const styles = useStyles();
+
   return (
     <Text
       style={[
@@ -70,9 +73,9 @@ export function Amount({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   base: {
-    color: color.ink,
+    color: t.text,
     fontFamily: fontFamily.ui,
     // Spread, not cast. React Native types `fontVariant` as a union of the
     // five real values, and both tokens are members — so this typechecks
@@ -82,7 +85,7 @@ const styles = StyleSheet.create({
   },
   /** The serif is for figures and headings — it makes a total feel weighed. */
   display: { fontFamily: fontFamily.display, fontWeight: "600" },
-  negative: { color: color.negative },
-  muted: { color: color.muted },
-  currency: { color: color.muted, fontSize: type.caption.fontSize },
-});
+  negative: { color: t.dangerText },
+  muted: { color: t.textMuted },
+  currency: { color: t.textMuted, fontSize: type.caption.fontSize },
+}));

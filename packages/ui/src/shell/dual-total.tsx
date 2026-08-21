@@ -18,9 +18,10 @@
  */
 
 import type { money } from "@waltning/core";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
-import { color, space, type } from "../tokens.ts";
+import { makeStyles } from "../theme/index.ts";
+import { space, type } from "../tokens.ts";
 
 export type DualTotalProps = {
   /** Everything you own, business included (§6.7). */
@@ -38,6 +39,8 @@ export type DualTotalProps = {
 };
 
 export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps) {
+  const styles = useStyles();
+
   return (
     <View style={styles.block}>
       <View>
@@ -54,13 +57,13 @@ export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   block: { gap: space.xl },
   label: {
-    color: color.muted,
+    color: t.textMuted,
     fontSize: type.kicker.fontSize,
     fontWeight: type.kicker.fontWeight,
     letterSpacing: type.kicker.letterSpacing,
     textTransform: "uppercase",
   },
-});
+}));

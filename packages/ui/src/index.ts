@@ -29,5 +29,6 @@ export * from "./fx/index.ts";
 export * from "./primitives/index.ts";
 export * from "./review/index.ts";
 export * from "./shell/index.ts";
+export * from "./theme/index.ts";
 export * as tokens from "./tokens.ts";
 export * from "./transactions/index.ts";

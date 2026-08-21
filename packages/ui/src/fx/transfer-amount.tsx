@@ -24,8 +24,9 @@
  */
 
 import { money } from "@waltning/core";
-import { StyleSheet, Text, View } from "react-native";
-import { color, fontFamily, space, tabularNums, type } from "../tokens.ts";
+import { Text, View } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { fontFamily, space, tabularNums, type } from "../tokens.ts";
 import { Amount } from "./amount";
 
 export type TransferAmountProps = {
@@ -58,6 +59,8 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
   const atReference = money.toPivot(from.amount, referenceRate);
   const spread = money.sub(atReference, to.amount);
   const spreadMatters = !money.isZero(spread);
+
+  const styles = useStyles();
 
   return (
     <View style={styles.block}>
@@ -93,18 +96,18 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   block: { gap: space.xs },
-  route: { color: color.muted, fontSize: type.caption.fontSize, fontFamily: fontFamily.ui },
-  arrow: { color: color.green500 },
+  route: { color: t.textMuted, fontSize: type.caption.fontSize, fontFamily: fontFamily.ui },
+  arrow: { color: t.accentIcon },
   amounts: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
   rates: { gap: 2 },
   rate: {
-    color: color.muted,
+    color: t.textMuted,
     fontFamily: fontFamily.mono,
     fontSize: type.caption.fontSize,
     fontVariant: [...tabularNums],
   },
   /** The figure this component exists for. Not muted into the rate line. */
-  spread: { color: color.amberInk },
-});
+  spread: { color: t.assertedText },
+}));

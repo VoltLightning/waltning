@@ -11,8 +11,9 @@
  * permits them.
  */
 
-import { StyleSheet, Text, View } from "react-native";
-import { color, radius, space, type } from "../tokens.ts";
+import { Text, View } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { radius, space, type } from "../tokens.ts";
 
 export type PillTier =
   /** Deterministic and free. Names the rule, because "a rule" is not checkable. */
@@ -25,6 +26,8 @@ export type PillTier =
   | { tier: "duplicate" };
 
 export function Pill(props: PillTier) {
+  const styles = useStyles();
+
   return (
     <View style={styles.pill}>
       <Text style={styles.text}>{describe(props)}</Text>
@@ -49,13 +52,13 @@ function describe(p: PillTier): string {
   }
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   pill: {
-    backgroundColor: color.green50,
+    backgroundColor: t.subtleFill,
     borderRadius: radius.pill,
     paddingHorizontal: space.lg,
     paddingVertical: space.xs,
     alignSelf: "flex-start",
   },
-  text: { color: color.green700, fontSize: type.caption.fontSize },
-});
+  text: { color: t.accentText, fontSize: type.caption.fontSize },
+}));

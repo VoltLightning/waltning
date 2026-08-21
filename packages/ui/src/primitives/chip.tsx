@@ -13,8 +13,9 @@
  */
 
 import { useState } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
-import { color, focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { Pressable, Text } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type ChipProps = {
   /** Shown when there is no value. A chip with neither reads as broken. */
@@ -40,6 +41,8 @@ export function Chip({
 }: ChipProps) {
   const [focused, setFocused] = useState(false);
   const filled = value !== undefined && value !== "";
+
+  const styles = useStyles();
 
   return (
     <Pressable
@@ -74,7 +77,7 @@ export function Chip({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   chip: {
     // The §3.5 defect, fixed at the source rather than on thirty screens.
     minHeight: touchTarget.min,
@@ -83,15 +86,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.x3,
     borderWidth: 1,
   },
-  empty: { borderColor: color.green200, backgroundColor: "transparent" },
-  filled: { borderColor: color.green200, backgroundColor: color.green50 },
+  empty: { borderColor: t.border, backgroundColor: "transparent" },
+  filled: { borderColor: t.border, backgroundColor: t.subtleFill },
   /** Amber: asserted rather than chosen (P4), one meaning with every other amber. */
-  machine: { borderColor: color.amberInk, backgroundColor: color.amber },
+  machine: { borderColor: t.assertedBorder, backgroundColor: t.assertedFill },
   pressed: { opacity: 0.85 },
-  focused: { outlineWidth: focus.width, outlineColor: focus.color, outlineOffset: focus.offset },
+  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
   disabled: { opacity: 0.45 },
   text: { fontSize: type.body.fontSize },
-  textEmpty: { color: color.muted },
-  textFilled: { color: color.ink },
-  marker: { color: color.amberInk, fontSize: type.caption.fontSize },
-});
+  textEmpty: { color: t.textMuted },
+  textFilled: { color: t.text },
+  marker: { color: t.assertedText, fontSize: type.caption.fontSize },
+}));

@@ -323,7 +323,7 @@ describe("every src/ is organised by domain, not by layer", () => {
     ],
     // Foundation (`primitives`, `fx`) plus one folder per domain. The full
     // target is thirteen; six exist because six have components.
-    "packages/ui/src": ["accounts", "fx", "primitives", "review", "shell", "transactions"],
+    "packages/ui/src": ["accounts", "fx", "primitives", "review", "shell", "theme", "transactions"],
     "packages/db/src": ["fx", "seed", "test"],
     /**
      * **Flat, and that is the decision.** The two dialects are file suffixes —

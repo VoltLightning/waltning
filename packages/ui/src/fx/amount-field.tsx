@@ -15,8 +15,9 @@
  */
 
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import { color, focus, fontFamily, radius, space, tabularNums, type } from "../tokens.ts";
+import { Text, TextInput, View } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { focus, fontFamily, radius, space, tabularNums, type } from "../tokens.ts";
 
 export type AmountFieldProps = {
   label: string;
@@ -55,6 +56,8 @@ export function AmountField({ label, currency, onChange, initial = "", error }: 
   const [text, setText] = useState(initial);
   const [focused, setFocused] = useState(false);
 
+  const styles = useStyles();
+
   return (
     <View style={styles.block}>
       <Text style={styles.label}>{label}</Text>
@@ -80,10 +83,10 @@ export function AmountField({ label, currency, onChange, initial = "", error }: 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   block: { gap: space.xs },
   label: {
-    color: color.muted,
+    color: t.textMuted,
     fontSize: type.kicker.fontSize,
     fontWeight: type.kicker.fontWeight,
     letterSpacing: type.kicker.letterSpacing,
@@ -94,14 +97,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: space.md,
     borderWidth: 1,
-    borderColor: color.green200,
+    borderColor: t.border,
     borderRadius: radius.sm,
     paddingHorizontal: space.xl,
     minHeight: 44,
   },
   input: {
     flex: 1,
-    color: color.ink,
+    color: t.text,
     fontFamily: fontFamily.display,
     fontSize: type.displayThree.fontSize,
     // Right-aligned and tabular so a column of entered amounts lines up with
@@ -109,8 +112,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
     fontVariant: [...tabularNums],
   },
-  affix: { color: color.muted, fontSize: type.caption.fontSize },
-  focused: { outlineWidth: focus.width, outlineColor: focus.color, outlineOffset: focus.offset },
-  invalid: { borderColor: color.negative },
-  error: { color: color.negative, fontSize: type.caption.fontSize },
-});
+  affix: { color: t.textMuted, fontSize: type.caption.fontSize },
+  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
+  invalid: { borderColor: t.dangerBorder },
+  error: { color: t.dangerText, fontSize: type.caption.fontSize },
+}));
