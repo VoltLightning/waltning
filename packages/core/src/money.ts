@@ -95,7 +95,74 @@ export const cmp = (a: Money, b: Money): -1 | 0 | 1 => dec(a).cmp(b) as -1 | 0 |
  *
  * `rate` is quoted as: 1 unit of the local currency = `rate` units of pivot.
  */
-export const toPivot = (amount: Money, rate: Money): Money => toMoney(dec(amount).times(rate));
+/* ── FX rates, and the direction that has already cost 14.1× ─────────────── */
+
+declare const RATE: unique symbol;
+
+/**
+ * A rate you **multiply** by to reach the pivot.
+ *
+ * `computations.md` §4: *"`transactions.fx_rate` stores pivot per unit"*, and
+ * `amount_pivot` is generated as `amount_original × fx_rate`.
+ */
+export type PivotPerUnit = string & { readonly [RATE]: "PivotPerUnit" };
+
+/**
+ * A rate you **divide** by to reach the pivot. The reciprocal of the above.
+ *
+ * §4: `to_pivot(x, ccy, date) = x ÷ rate(pivot, ccy, date)`. This is what
+ * `fx_rates.rate` stores.
+ *
+ * **The two are reciprocals and both are called *rate*.** §4 says so in as many
+ * words and asks readers to "name variables accordingly" — which is a request
+ * for vigilance, and vigilance is what produced a **14.1× error** (H21). These
+ * are separate types so the request becomes a compile error instead.
+ */
+export type UnitsPerPivot = string & { readonly [RATE]: "UnitsPerPivot" };
+
+/** Either direction, for the few places that genuinely do not care (storage, display). */
+export type Rate = PivotPerUnit | UnitsPerPivot;
+
+/** Parse a rate stated as pivot per unit — multiply by it. */
+export const pivotPerUnit = (v: string | number | Decimal): PivotPerUnit =>
+  dec(v).toFixed(12) as PivotPerUnit;
+
+/** Parse a rate stated as units per pivot — divide by it. */
+export const unitsPerPivot = (v: string | number | Decimal): UnitsPerPivot =>
+  dec(v).toFixed(12) as UnitsPerPivot;
+
+/**
+ * Cross between the two directions.
+ *
+ * **The only legal way across**, and deliberately a named function rather than
+ * an inline `1 / x`. Every reciprocal in the system is now one greppable call,
+ * so the question "where do we flip a rate?" has an answer.
+ *
+ * **Flip at most once, at a boundary, and store the result.** A rate lives at
+ * `numeric(24,12)`, so the reciprocal is truncated to twelve places and
+ * flipping back cannot recover what truncation removed — 4.0231 returns as
+ * 4.023099999996. Invisible on a screen and cumulative in a pipeline;
+ * `money.test.ts` pins it.
+ */
+export function reciprocal(rate: PivotPerUnit): UnitsPerPivot;
+export function reciprocal(rate: UnitsPerPivot): PivotPerUnit;
+export function reciprocal(rate: Rate): Rate {
+  return new Decimal(1).dividedBy(rate).toFixed(12) as Rate;
+}
+
+/**
+ * Convert an amount to the pivot.
+ *
+ * Takes `PivotPerUnit` **only**. It used to take `Money` for the rate, so the
+ * two arguments were the same type and `toPivot(rate, amount)` compiled — in
+ * the function that produces the most-read figure in the system.
+ */
+export const toPivot = (amount: Money, rate: PivotPerUnit): Money =>
+  toMoney(dec(amount).times(rate));
+
+/** Convert an amount to the pivot from the other direction — divide, not multiply. */
+export const toPivotByDivision = (amount: Money, rate: UnitsPerPivot): Money =>
+  toMoney(dec(amount).dividedBy(rate));
 
 /** Round to a currency's presentation scale — display only, never storage. */
 export const round = (v: Money, decimals: number): Money => dec(v).toFixed(decimals) as Money;

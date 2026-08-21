@@ -208,12 +208,12 @@ async function main() {
    * missing rate must never cost us the transaction (§7.6). The fallback is
    * reported so the row can carry `fx_rate_estimated`.
    */
-  const rateCache = new Map<string, { rate: string; estimated: boolean }>();
+  const rateCache = new Map<string, { rate: money.PivotPerUnit; estimated: boolean }>();
   async function pivotRate(
     ccy: string,
     date: string,
-  ): Promise<{ rate: string; estimated: boolean } | null> {
-    if (ccy === pivot) return { rate: "1", estimated: false };
+  ): Promise<{ rate: money.PivotPerUnit; estimated: boolean } | null> {
+    if (ccy === pivot) return { rate: money.pivotPerUnit(1), estimated: false };
     const k = `${ccy}|${date}`;
     const hit = rateCache.get(k);
     if (hit) return hit;
@@ -241,8 +241,14 @@ async function main() {
     if (!row) return null;
 
     // Stored as units of `ccy` per 1 pivot; we want pivot per unit of `ccy`.
+    //
+    // This was `new Decimal(1).div(row.rate)` — correct, and defended by the
+    // comment above it alone. `reciprocal` says the same thing in the type:
+    // `UnitsPerPivot` in, `PivotPerUnit` out, and it is the only sanctioned way
+    // across. §4 names this pair as a known hazard; H21 is the 14.1× error it
+    // has already caused.
     const out = {
-      rate: new Decimal(1).div(row.rate).toFixed(12),
+      rate: money.reciprocal(row.rate),
       estimated: !exact,
     };
     rateCache.set(k, out);

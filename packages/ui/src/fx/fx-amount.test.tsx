@@ -19,7 +19,7 @@ describe("FxAmount", () => {
     // The rate is not an implementation detail of the conversion; it is part of
     // the figure. A converted amount without its rate is a number the reader
     // has to trust rather than check.
-    render(<FxAmount {...base} rate={money.toMoney("4.02310000")} />);
+    render(<FxAmount {...base} rate={money.pivotPerUnit("4.02310000")} />);
     expect(screen.getByText("62.40")).toBeDefined();
     expect(screen.getByText("4.0231")).toBeDefined();
     expect(screen.getByText("251.04")).toBeDefined();
@@ -29,8 +29,12 @@ describe("FxAmount", () => {
     // The defect P1 exists to prevent: a figure silently converted at today's
     // rate is wrong by exactly the market's movement and looks entirely
     // reasonable. Two different rates on the same amount must differ.
-    const { container: atOne } = render(<FxAmount {...base} rate={money.toMoney("4.00000000")} />);
-    const { container: atTwo } = render(<FxAmount {...base} rate={money.toMoney("5.00000000")} />);
+    const { container: atOne } = render(
+      <FxAmount {...base} rate={money.pivotPerUnit("4.00000000")} />,
+    );
+    const { container: atTwo } = render(
+      <FxAmount {...base} rate={money.pivotPerUnit("5.00000000")} />,
+    );
     expect(atOne.textContent).toContain("249.60");
     expect(atTwo.textContent).toContain("312.00");
   });
@@ -39,7 +43,11 @@ describe("FxAmount", () => {
     // P5: a colour-only marker is invisible to anyone who cannot distinguish
     // the two colours — and amber carries four meanings in this system.
     render(
-      <FxAmount {...base} rate={money.toMoney("4.02310000")} provenance={{ kind: "override" }} />,
+      <FxAmount
+        {...base}
+        rate={money.pivotPerUnit("4.02310000")}
+        provenance={{ kind: "override" }}
+      />,
     );
     // Lowercase in the DOM: the capitals are `textTransform`, which is
     // presentation. Asserting on them would be asserting on CSS.
@@ -48,7 +56,11 @@ describe("FxAmount", () => {
 
   it("marks an estimated rate", () => {
     render(
-      <FxAmount {...base} rate={money.toMoney("4.02310000")} provenance={{ kind: "estimated" }} />,
+      <FxAmount
+        {...base}
+        rate={money.pivotPerUnit("4.02310000")}
+        provenance={{ kind: "estimated" }}
+      />,
     );
     expect(screen.getByText("estimated")).toBeDefined();
   });
@@ -60,7 +72,7 @@ describe("FxAmount", () => {
     render(
       <FxAmount
         {...base}
-        rate={money.toMoney("4.02310000")}
+        rate={money.pivotPerUnit("4.02310000")}
         provenance={{ kind: "stale", ageDays: 11 }}
       />,
     );
@@ -69,7 +81,7 @@ describe("FxAmount", () => {
 
   it("marks a synced rate with nothing at all", () => {
     // The default must be quiet, or the marker means nothing when it appears.
-    const { container } = render(<FxAmount {...base} rate={money.toMoney("4.02310000")} />);
+    const { container } = render(<FxAmount {...base} rate={money.pivotPerUnit("4.02310000")} />);
     expect(container.textContent).not.toMatch(/manual|stale|estimated/i);
   });
 });

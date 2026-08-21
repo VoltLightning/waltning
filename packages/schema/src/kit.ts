@@ -40,7 +40,7 @@
  * layered around the shared tables rather than inside them — §14.7's rule.
  */
 
-import type { Money } from "@waltning/core";
+import type { Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core";
 import {
   bigint as pgBigint,
   boolean as pgBoolean,
@@ -90,8 +90,19 @@ export const pgKit = {
    * match the shipped table was exactly as green as one that did.
    */
   money: (name: string) => pgNumeric(name, { precision: 20, scale: 8 }).$type<Money>(),
-  /** `numeric(24,12)` — rates carry more places than money (§7.6). */
-  rate: (name: string) => pgNumeric(name, { precision: 24, scale: 12 }),
+  /**
+   * `numeric(24,12)` — rates carry more places than money (§7.6).
+   *
+   * **Two helpers, because there are two directions and they are reciprocals.**
+   * `computations.md` §4 records that both are called *rate* and treats the
+   * confusion as a known hazard; H21 is the 14.1× error it already caused. The
+   * column now states which one it is, and the types make the pair
+   * non-interchangeable.
+   */
+  pivotPerUnit: (name: string) =>
+    pgNumeric(name, { precision: 24, scale: 12 }).$type<PivotPerUnit>(),
+  unitsPerPivot: (name: string) =>
+    pgNumeric(name, { precision: 24, scale: 12 }).$type<UnitsPerPivot>(),
   /** `numeric(12,3)` — a receipt line's quantity. Three places, not money's eight. */
   qty: (name: string) => pgNumeric(name, { precision: 12, scale: 3 }),
   /** `numeric(5,4)` — a ryczałt rate, e.g. 0.1200. Four places is the statute. */
@@ -142,7 +153,8 @@ export const sqliteKit = {
   boolean: (name: string) => sqliteInteger(name, { mode: "boolean" }),
   /** TEXT. SQLite has no exact decimal type at all — see the header. */
   money: (name: string) => sqliteText(name).$type<Money>(),
-  rate: (name: string) => sqliteText(name),
+  pivotPerUnit: (name: string) => sqliteText(name).$type<PivotPerUnit>(),
+  unitsPerPivot: (name: string) => sqliteText(name).$type<UnitsPerPivot>(),
   /** A bare `YYYY-MM-DD` string, which is what Postgres `date` produces too. */
   date: (name: string) => sqliteText(name),
   qty: (name: string) => sqliteText(name),

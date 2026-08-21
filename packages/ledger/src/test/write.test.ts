@@ -52,7 +52,7 @@ function insertTransaction(id: string) {
         accountId: "acc-1",
         amountOriginal: money.toMoney("18.00"),
         currency: "PLN",
-        fxRate: "1.000000000000",
+        fxRate: money.pivotPerUnit("1.000000000000"),
       })
       .returning()
       .all()[0];

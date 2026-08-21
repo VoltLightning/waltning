@@ -89,3 +89,54 @@ describe("representation", () => {
     expect(money.toMoney("1234.5", 2)).not.toContain(",");
   });
 });
+
+describe("the two rates are reciprocals, and the types know it (H21)", () => {
+  /**
+   * `computations.md` §4: *"The two are reciprocals and both are called rate;
+   * treat that as a known hazard and name variables accordingly."*
+   *
+   * Naming variables accordingly is a request for vigilance, and vigilance is
+   * what produced a **14.1× error**. These assert the arithmetic; the types
+   * assert the rest, and `rate.type-test.ts` proves the swap does not compile.
+   */
+  it("dividing by one equals multiplying by the other", () => {
+    const stored = money.unitsPerPivot("3.81"); // PLN per 1 USD, as `fx_rates` holds it
+    const flipped = money.reciprocal(stored); //   USD per 1 PLN, as a transaction holds it
+
+    const amount = money.toMoney("100");
+    expect(money.toPivotByDivision(amount, stored)).toBe(money.toPivot(amount, flipped));
+  });
+
+  /**
+   * **Flipping twice does not return the original, and that is not a bug.**
+   *
+   * A rate is stored at `numeric(24,12)` (§7.6), so a reciprocal is truncated
+   * to twelve places and flipping it back cannot recover what truncation
+   * removed: 4.0231 returns as 4.023099999996.
+   *
+   * It is pinned because the number is small enough to be invisible and the
+   * conclusion is not: **flip at most once, at a boundary, and store the
+   * result.** A pipeline that flips back and forth accumulates this.
+   */
+  it("flipping twice is lossy at the stored scale", () => {
+    const stored = money.unitsPerPivot("4.0231");
+    const back = money.reciprocal(money.reciprocal(stored));
+
+    expect(back).not.toBe(stored);
+    expect(Math.abs(Number(back) - Number(stored))).toBeLessThan(1e-9);
+  });
+
+  /**
+   * The failure H21 actually was: the wrong direction applied, silently, to a
+   * figure that still looks like money. At 3.81 the two answers differ by
+   * 14.5× — which is the order of magnitude the defect register recorded.
+   */
+  it("using the wrong direction is off by more than an order of magnitude", () => {
+    const stored = money.unitsPerPivot("3.81");
+    const right = money.toPivotByDivision(money.toMoney("100"), stored);
+    const wrong = money.toPivot(money.toMoney("100"), money.pivotPerUnit(stored));
+
+    const ratio = Number(wrong) / Number(right);
+    expect(ratio).toBeGreaterThan(14);
+  });
+});

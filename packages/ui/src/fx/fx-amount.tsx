@@ -53,7 +53,14 @@ export type FxAmountProps = {
    * The rate **for this row's date**, as a decimal string. Required: there is
    * no rendering of this component that does not show its rate.
    */
-  rate: money.Money;
+  /**
+   * **`PivotPerUnit`, not `Money`.** The conversion below multiplies by it, so
+   * it must be the pivot-per-unit direction — and `computations.md` §4 records
+   * that the other direction is called *rate* too, and that confusing them
+   * produced a 14.1× error. It was `Money`, which made the rate and the amount
+   * the same type: `toPivot(rate, value)` compiled.
+   */
+  rate: money.PivotPerUnit;
   /** The currency the converted figure is expressed in. */
   displayCurrency: string;
   decimals?: number;
