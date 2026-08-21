@@ -6,6 +6,21 @@ packages:
 # esbuild's postinstall links its platform binary; drizzle-kit and tsx both
 # need it. Denying this leaves them broken at runtime, not at install time.
 allowBuilds:
+  # `packages/ledger`'s test driver, and a **devDependency only** — it never
+  # reaches the Pi or the phone, both of which run their own SQLite.
+  #
+  # It is here because the property those tests check is **atomicity**: a local
+  # write puts a row in the ledger and an entry in the outbox, or does neither
+  # (§14.1). `drizzle-orm/sqlite-proxy` was the zero-dependency alternative and
+  # is wrong for exactly that reason — it has no transaction support, so a test
+  # written against it would report success on a write path that commits in two
+  # pieces, which is the bug.
+  #
+  # `node:sqlite` ships with Node 24 and needs no build at all, but drizzle has
+  # no driver for it in 0.45; adapting it to the better-sqlite3 driver's surface
+  # would mean maintaining a shim whose divergence would show up as a passing
+  # test rather than a failing one.
+  better-sqlite3: true
   esbuild: true
 
 # Expo supports pnpm's isolated installs from SDK 54 onward, and Metro

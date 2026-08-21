@@ -147,7 +147,19 @@ describe("the database never reaches a client", () => {
    * or `packages/core` importing it, and mobile depends on both. One line would
    * have put the Postgres driver in a phone bundle with a green suite.
    */
-  const CLIENT_ROOTS = ["apps/mobile", "packages/client", "packages/ui", "packages/core"];
+  const CLIENT_ROOTS = [
+    "apps/mobile",
+    "packages/client",
+    "packages/core",
+    /**
+     * The phone's own ledger, and the one that would be worst to miss: it
+     * legitimately imports a database library, so a stray `@waltning/db` would
+     * look like it belonged. §14.7's whole bound is that the two engines meet
+     * through `packages/schema` and nowhere else.
+     */
+    "packages/ledger",
+    "packages/ui",
+  ];
 
   it("no client package or app names @waltning/db, by any path", () => {
     const offenders: string[] = [];
@@ -333,6 +345,12 @@ describe("every src/ is organised by domain, not by layer", () => {
     // target is thirteen; six exist because six have components.
     "packages/ui/src": ["accounts", "fx", "primitives", "review", "shell", "theme", "transactions"],
     "packages/db/src": ["fx", "seed", "test"],
+    /**
+     * The phone's ledger. Flat but for its harness — the SQLite schema, the
+     * outbox and the local write path are one concern, and §14.7 names them
+     * together. A folder here would be a claim that they are separable.
+     */
+    "packages/ledger/src": ["test"],
     /**
      * **Flat, and that is the decision.** The two dialects are file suffixes —
      * `currencies.pg.ts` beside `currencies.sqlite.ts` — not `pg/` and

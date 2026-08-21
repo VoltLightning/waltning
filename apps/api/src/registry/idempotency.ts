@@ -58,7 +58,10 @@ export function requestHash(op: string, input: unknown): string {
 function canonical(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  const entries = Object.entries(value as Record<string, unknown>)
+  // No cast: the two guards above already narrow `value` to a non-null object,
+  // and `Object.entries` asks for nothing more. The assertion restated what the
+  // lines above prove, which means the two were free to disagree.
+  const entries = Object.entries(value)
     .filter(([, v]) => v !== undefined)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
