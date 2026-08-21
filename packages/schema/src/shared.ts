@@ -7,4 +7,4 @@
  * added to one module and not the other fails here, before the row types are
  * even compared.
  */
-export type SharedTable = "currencies" | "transactions";
+export type SharedTable = "accountGroups" | "accounts" | "currencies" | "fxRates" | "transactions";

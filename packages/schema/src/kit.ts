@@ -43,11 +43,14 @@
 import {
   bigint as pgBigint,
   boolean as pgBoolean,
+  date as pgDate,
   integer as pgInteger,
+  numeric as pgNumeric,
   pgTable,
   text as pgText,
   timestamp as pgTimestamp,
   uniqueIndex as pgUniqueIndex,
+  uuid as pgUuid,
 } from "drizzle-orm/pg-core";
 import {
   integer as sqliteInteger,
@@ -75,10 +78,36 @@ export const pgKit = {
   text: pgText,
   integer: pgInteger,
   boolean: pgBoolean,
-  money: (name: string) => pgText(name),
+  /**
+   * `numeric(20,8)`, and the driver is configured to hand it back as a string.
+   *
+   * An earlier version of this kit had `money` as `pgText`, which produced the
+   * right *row type* and the wrong *column*. Nothing caught it, because the
+   * parity assertion compares the two dialects in this package against each
+   * other and never against `packages/db` — so a shared column that did not
+   * match the shipped table was exactly as green as one that did.
+   */
+  money: (name: string) => pgNumeric(name, { precision: 20, scale: 8 }),
+  /** `numeric(24,12)` — rates carry more places than money (§7.6). */
+  rate: (name: string) => pgNumeric(name, { precision: 24, scale: 12 }),
+  /** A bare `YYYY-MM-DD` accounting date. Never a timestamp, never converted. */
+  date: (name: string) => pgDate(name),
+  uuid: pgUuid,
+  /**
+   * A generated primary key.
+   *
+   * Postgres mints it with `gen_random_uuid()`; SQLite has no such function, so
+   * the phone mints it in JavaScript. **The row type is `string` on both and so
+   * is the insert contract** — `defaultRandom()` makes the column optional on
+   * insert, and a SQLite column without a default would leave it required,
+   * which `parity.type-test.ts` compares and would refuse.
+   */
+  id: (name: string) => pgUuid(name).primaryKey().defaultRandom(),
   /** `bigint` with `mode: "number"` — §14.2's conflict token. */
   version: (name: string) => pgBigint(name, { mode: "number" }),
   timestamp: (name: string) => pgTimestamp(name, { withTimezone: true }),
+  /** `timestamptz NOT NULL DEFAULT now()` — `created_at` and `updated_at`. */
+  stamp: (name: string) => pgTimestamp(name, { withTimezone: true }).notNull().defaultNow(),
 } as const;
 
 /**
@@ -95,9 +124,33 @@ export const sqliteKit = {
   text: sqliteText,
   integer: sqliteInteger,
   boolean: (name: string) => sqliteInteger(name, { mode: "boolean" }),
+  /** TEXT. SQLite has no exact decimal type at all — see the header. */
   money: (name: string) => sqliteText(name),
+  rate: (name: string) => sqliteText(name),
+  /** A bare `YYYY-MM-DD` string, which is what Postgres `date` produces too. */
+  date: (name: string) => sqliteText(name),
+  /** No UUID type; the row type is `string` on both engines either way. */
+  uuid: (name: string) => sqliteText(name),
+  /** See `pgKit.id`. Minted in JavaScript, because SQLite cannot mint one. */
+  id: (name: string) =>
+    sqliteText(name)
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
   version: (name: string) => sqliteInteger(name, { mode: "number" }),
   timestamp: (name: string) => sqliteInteger(name, { mode: "timestamp" }),
+  /**
+   * The `DEFAULT now()` equivalent.
+   *
+   * `$defaultFn` rather than a SQL default, because the *insert contract* is
+   * what has to match: `defaultNow()` on Postgres makes the column optional in
+   * `$inferInsert`, and a SQLite column with no default would leave it
+   * required. `parity.type-test.ts` compares inserts as well as selects, so
+   * that difference is a compile error rather than a surprise on the phone.
+   */
+  stamp: (name: string) =>
+    sqliteInteger(name, { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
 } as const;
 
 export type PgKit = typeof pgKit;

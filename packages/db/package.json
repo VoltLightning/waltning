@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@waltning/core": "workspace:*",
+    "@waltning/schema": "workspace:*",
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
