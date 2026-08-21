@@ -18,7 +18,7 @@
  * section. Adding either is therefore a change to a real source, in the open.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { globSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -61,10 +61,25 @@ const neverOperations = namesIn(
  * Deliberately every identifier, not only `pgTable` names: half of them are
  * columns. Checked **after** the registry, so a name that is both stays an
  * operation.
+ *
+ * **Read from `packages/schema` as well as `packages/db`**, because the shared
+ * columns moved there. This scan is a *source of truth about which names
+ * exist*, and it went stale the moment a column was declared somewhere it did
+ * not look — `opening_balance` was reported as an unclassified screen name
+ * within minutes of `accounts` moving, having been a known column for months.
+ * A glob rather than a list of files, so the next table to move does not
+ * repeat it.
  */
+const schemaSources = [
+  "packages/db/src/schema.ts",
+  ...globSync("packages/schema/src/*.pg.ts", { cwd: repoRoot }),
+];
+
 const schemaIdentifiers = new Set(
-  [...read("packages/db/src/schema.ts").matchAll(/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g)]
-    .map((m) => m[1] ?? "")
+  schemaSources
+    .flatMap((f) =>
+      [...read(f).matchAll(/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g)].map((m) => m[1] ?? ""),
+    )
     .filter(Boolean),
 );
 

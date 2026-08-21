@@ -6,7 +6,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./pg": "./src/pg.ts",
-    "./sqlite": "./src/sqlite.ts"
+    "./sqlite": "./src/sqlite.ts",
+    "./enums": "./src/enums.ts",
+    "./enums-pg": "./src/enums.pg.ts",
+    "./columns-pg": "./src/columns.pg.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

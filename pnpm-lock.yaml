@@ -148,6 +148,9 @@ importers:
       '@waltning/core':
         specifier: workspace:*
         version: link:../core
+      '@waltning/schema':
+        specifier: workspace:*
+        version: link:../schema
       decimal.js:
         specifier: ^10.6.0
         version: 10.6.0

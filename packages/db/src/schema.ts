@@ -85,209 +85,113 @@ const version = () => bigint("version", { mode: "number" }).notNull().default(1)
  * Enums
  * ------------------------------------------------------------------ */
 
+import {
+  accountGroupsColumns,
+  accountsColumns,
+  currenciesColumns,
+  fxRatesColumns,
+} from "@waltning/schema/columns-pg";
 /**
- * Money Manager leaves ZTYPE = 0 on all 68 accounts, so the real taxonomy lived
- * in group names and memo text. Decoded from those.
+ * **The enums live in `@waltning/schema` now, and are re-exported here.**
+ *
+ * Postgres has a real `ENUM` type and SQLite has none, so the same column was
+ * a `pgEnum` here and a plain `text` there — which meant the same column had
+ * two different row types, `"income" | "expense" | …` on the server and
+ * `string` on the phone. Nothing connected the two declarations, so
+ * `parity.type-test.ts` could not see the divergence it exists to prevent.
+ *
+ * One value set now feeds both dialects: `pgEnum(name, VALUES)` here,
+ * `text(name, { enum: VALUES })` on SQLite. Drizzle infers the same union from
+ * each, so the row types match *and* the server keeps its compile-time check.
+ *
+ * Re-exported rather than moved-and-forgotten so every existing import of
+ * `txnType` from this module still resolves — the enums did not change, only
+ * where they are declared.
  */
-export const accountKind = pgEnum("account_kind", [
-  "cash",
-  "bank",
-  "card",
-  "loan_receivable",
-  "loan_payable",
-  "clearing",
-  "investment",
-  "deposit",
-  "other",
-]);
+import {
+  accountKind,
+  actor,
+  categoryKind,
+  counterpartyKind,
+  counterpartyRole,
+  fxSource,
+  importRowStatus,
+  ownership,
+  taxLineKind,
+  txnSource,
+  txnType,
+} from "@waltning/schema/enums-pg";
 
-/** §6.7 — a shared account is ordinary; it just belongs to a different total. */
-export const ownership = pgEnum("ownership", ["own", "shared"]);
-
-export const categoryKind = pgEnum("category_kind", ["income", "expense"]);
-
-export const txnType = pgEnum("txn_type", ["income", "expense", "transfer", "adjustment"]);
-
-export const txnSource = pgEnum("txn_source", [
-  "manual",
-  "import",
-  "receipt",
-  "agent",
-  "migration",
-]);
-
-export const actor = pgEnum("actor", ["user", "agent", "import", "migration"]);
-
-export const counterpartyKind = pgEnum("counterparty_kind", ["person", "company"]);
-
-/**
- * §6.6 — naming a counterparty is not the same as owing them. Only `debt` rows
- * reach `counterparty_balances`; `contribution` attributes an inflow to a
- * shared account (§6.7) and carries no settlement expectation; `reference`
- * merely records who was involved.
- */
-export const counterpartyRole = pgEnum("counterparty_role", ["debt", "contribution", "reference"]);
-
-/** §7.6 — `manual` outranks every synced source for the same pair and date. */
-export const fxSource = pgEnum("fx_source", [
-  "nbp",
-  "ecb",
-  "nbrb",
-  "nbg",
-  "manual",
-  "carried_forward",
-]);
-
-export const importRowStatus = pgEnum("import_row_status", [
-  "pending",
-  "ready",
-  "needs_review",
-  "duplicate",
-  "imported",
-  "skipped",
-]);
-
-export const taxLineKind = pgEnum("tax_line_kind", ["revenue", "expense", "excluded"]);
+// Imported for the tables below *and* re-exported, because every existing
+// consumer imports its enums from the same module as its tables.
+export {
+  accountKind,
+  actor,
+  categoryKind,
+  counterpartyKind,
+  counterpartyRole,
+  fxSource,
+  importRowStatus,
+  ownership,
+  taxLineKind,
+  txnSource,
+  txnType,
+};
 
 /* ------------------------------------------------------------------ *
  * Currencies and FX
  * ------------------------------------------------------------------ */
 
-export const currencies = pgTable(
-  "currencies",
-  {
-    code: text("code").primaryKey(), // ISO 4217
-    name: text("name").notNull(),
-    symbol: text("symbol").notNull().default(""),
-    /** 'P' prefix or 'S' suffix. */
-    symbolPosition: text("symbol_position").notNull().default("P"),
-    decimals: integer("decimals").notNull().default(2),
-
-    /**
-     * The technical hub every stored rate is quoted against (§7.0). Chosen once
-     * as USD and never surfaced in the interface. NOT a reporting currency —
-     * there isn't one; display currency is a client preference.
-     */
-    isPivot: boolean("is_pivot").notNull().default(false),
-    /** Shown in the header display-currency toggle. */
-    pinned: boolean("pinned").notNull().default(false),
-
-    rateSource: fxSource("rate_source"),
-    archived: boolean("archived").notNull().default(false),
-    sort: integer("sort").notNull().default(0),
-    updatedAt: updatedAt(),
-    version: version(),
-  },
-  (t) => [
-    // Exactly one pivot. There is deliberately no equivalent constraint on a
-    // reporting currency, because none exists.
-    uniqueIndex("currencies_one_pivot").on(sql`(true)`).where(sql`${t.isPivot}`),
-    check("currencies_decimals_sane", sql`${t.decimals} between 0 and 8`),
-  ],
-);
+/**
+ * **The columns come from `@waltning/schema`; the constraints stay here.**
+ *
+ * §14.7's rule: what a shared column *is* belongs to the shared module, and
+ * everything Postgres can do that SQLite cannot — checks, partial indexes,
+ * generated columns, triggers — layers around it here. Two declarations of the
+ * same column was how `rate_source` came to exist on the server and not in the
+ * shared set, unnoticed, because the parity assertion compares the two dialects
+ * against each other and neither against this file.
+ */
+export const currencies = pgTable("currencies", currenciesColumns(), (t) => [
+  // Exactly one pivot. There is deliberately no equivalent constraint on a
+  // reporting currency, because none exists.
+  uniqueIndex("currencies_one_pivot").on(sql`(true)`).where(sql`${t.isPivot}`),
+  check("currencies_decimals_sane", sql`${t.decimals} between 0 and 8`),
+]);
 
 /**
  * Daily reference rates, all quoted against the pivot — verified available from
  * 2020-11-25 for every currency in use (§7.7). Any other pair derives by
  * triangulation, which is what makes an arbitrary display currency free.
  */
-export const fxRates = pgTable(
-  "fx_rates",
-  {
-    base: text("base")
-      .notNull()
-      .references(() => currencies.code),
-    quote: text("quote")
-      .notNull()
-      .references(() => currencies.code),
-    date: date("date").notNull(),
-    rate: rate("rate").notNull(),
-    source: fxSource("source").notNull(),
-    fetchedAt: timestamp("fetched_at", { withTimezone: true }),
-  },
-  (t) => [
-    // A real primary key: (base, quote, date) *is* the identity of a rate. The
-    // unique constraint already builds the btree that lookups use, so a
-    // separate index on the same columns would be pure duplication.
-    primaryKey({
-      name: "fx_rates_pk",
-      columns: [t.base, t.quote, t.date],
-    }),
-    check("fx_rates_rate_positive", sql`${t.rate} > 0`),
-    check("fx_rates_distinct", sql`${t.base} <> ${t.quote}`),
-  ],
-);
+export const fxRates = pgTable("fx_rates", fxRatesColumns(), (t) => [
+  // A real primary key: (base, quote, date) *is* the identity of a rate. The
+  // unique constraint already builds the btree that lookups use, so a
+  // separate index on the same columns would be pure duplication.
+  primaryKey({
+    name: "fx_rates_pk",
+    columns: [t.base, t.quote, t.date],
+  }),
+  check("fx_rates_rate_positive", sql`${t.rate} > 0`),
+  check("fx_rates_distinct", sql`${t.base} <> ${t.quote}`),
+]);
 
 /* ------------------------------------------------------------------ *
  * Accounts
  * ------------------------------------------------------------------ */
 
-export const accountGroups = pgTable(
-  "account_groups",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    /** §12.2 totals FX cost by institution, and no entity carried one. */
-    institution: text("institution"),
-    sort: integer("sort").notNull().default(0),
-  },
-  (t) => [uniqueIndex("account_groups_name_uq").on(normalized(t.name))],
-);
+export const accountGroups = pgTable("account_groups", accountGroupsColumns(), (t) => [
+  uniqueIndex("account_groups_name_uq").on(normalized(t.name)),
+]);
 
-export const accounts = pgTable(
-  "accounts",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    kind: accountKind("kind").notNull().default("other"),
-    currency: text("currency")
-      .notNull()
-      .references(() => currencies.code),
-    groupId: uuid("group_id").references(() => accountGroups.id),
-
-    /**
-     * §6.7. `shared` accounts are fully real — balance, transactions, and they
-     * may go negative. They belong to the *ours* total rather than *mine*, and
-     * income into one is a contribution rather than earnings.
-     */
-    ownership: ownership("ownership").notNull().default("own"),
-
-    /**
-     * Balance before the first stored transaction. Derived during migration
-     * from the difference between the reported balance and the imported rows,
-     * which is what makes a balances-only migration accurate (§8.0).
-     */
-    openingBalance: money("opening_balance").notNull().default("0"),
-    openingDate: date("opening_date"),
-    /**
-     * §8.4 — the balance as displayed by Money Manager, typed in by hand. The
-     * ONLY figure in existence not computed by our own extractor, and therefore
-     * the only genuinely external oracle the verification gate has. Without it
-     * the gate is an algebraic identity that cannot fail.
-     */
-    expectedBalance: money("expected_balance"),
-
-    memo: text("memo").notNull().default(""),
-    isBusiness: boolean("is_business").notNull().default(false),
-    archived: boolean("archived").notNull().default(false),
-    sort: integer("sort").notNull().default(0),
-
-    /** Money Manager ZUID — makes re-migration idempotent. */
-    externalId: text("external_id"),
-
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-    version: version(),
-  },
-  (t) => [
-    uniqueIndex("accounts_name_uq").on(normalized(t.name)),
-    uniqueIndex("accounts_external_id_uq").on(t.externalId).where(sql`${t.externalId} is not null`),
-    index("accounts_kind_idx").on(t.kind),
-    index("accounts_ownership_idx").on(t.ownership),
-    // Shared money is never reportable (§13).
-    check("accounts_shared_not_business", sql`${t.ownership} = 'own' or ${t.isBusiness} = false`),
-  ],
-);
+export const accounts = pgTable("accounts", accountsColumns(), (t) => [
+  uniqueIndex("accounts_name_uq").on(normalized(t.name)),
+  uniqueIndex("accounts_external_id_uq").on(t.externalId).where(sql`${t.externalId} is not null`),
+  index("accounts_kind_idx").on(t.kind),
+  index("accounts_ownership_idx").on(t.ownership),
+  // Shared money is never reportable (§13).
+  check("accounts_shared_not_business", sql`${t.ownership} = 'own' or ${t.isBusiness} = false`),
+]);
 
 /* ------------------------------------------------------------------ *
  * Categories — groups and leaves, never both
