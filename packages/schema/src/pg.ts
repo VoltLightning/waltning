@@ -1,8 +1,16 @@
 /** The shared tables as Postgres declares them. */
 export { accountGroups } from "./account-groups.pg.ts";
 export { accounts } from "./accounts.pg.ts";
+export { categories } from "./categories.pg.ts";
+export { counterparties } from "./counterparties.pg.ts";
 export { currencies } from "./currencies.pg.ts";
+export { dashboardLayouts } from "./dashboard-layouts.pg.ts";
+export { dashboardWidgets } from "./dashboard-widgets.pg.ts";
 export { fxRates } from "./fx-rates.pg.ts";
+export { recurringTransactions } from "./recurring-transactions.pg.ts";
+export { tags } from "./tags.pg.ts";
+export { transactionLines } from "./transaction-lines.pg.ts";
+export { transactionTags } from "./transaction-tags.pg.ts";
 export { transactions } from "./transactions.pg.ts";
 
 /**
