@@ -40,7 +40,15 @@
  * layered around the shared tables rather than inside them — §14.7's rule.
  */
 
-import type { Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core";
+import type {
+  AccountingDate,
+  CurrencyCode,
+  Id,
+  IdTable,
+  Money,
+  PivotPerUnit,
+  UnitsPerPivot,
+} from "@waltning/core";
 import {
   bigint as pgBigint,
   boolean as pgBoolean,
@@ -117,9 +125,24 @@ export const pgKit = {
    * passes, and every read site casts.
    */
   json: <T>(name: string) => pgJsonb(name).$type<T>(),
-  /** A bare `YYYY-MM-DD` accounting date. Never a timestamp, never converted. */
-  date: (name: string) => pgDate(name),
-  uuid: pgUuid,
+  /**
+   * A bare `YYYY-MM-DD` accounting date. Never a timestamp, never converted.
+   *
+   * Branded, so `new Date().toISOString()` no longer compiles into one — which
+   * is both the wrong shape and, east of UTC, the wrong day.
+   */
+  date: (name: string) => pgDate(name).$type<AccountingDate>(),
+  /** An ISO 4217 code, and not the same type as `payee`. */
+  currency: (name: string) => pgText(name).$type<CurrencyCode>(),
+  /**
+   * A foreign key, branded with **the table it points at**.
+   *
+   * `k.uuid<"categories">("category_id")` states the target in the type, so a
+   * column pointing at the wrong table is a compile error rather than a
+   * constraint violation at run time — or, for a nullable column, nothing at
+   * all until a join comes back empty.
+   */
+  uuid: <Table extends IdTable>(name: string) => pgUuid(name).$type<Id<Table>>(),
   /**
    * A generated primary key.
    *
@@ -129,7 +152,8 @@ export const pgKit = {
    * insert, and a SQLite column without a default would leave it required,
    * which `parity.type-test.ts` compares and would refuse.
    */
-  id: (name: string) => pgUuid(name).primaryKey().defaultRandom(),
+  id: <Table extends IdTable>(name: string) =>
+    pgUuid(name).primaryKey().defaultRandom().$type<Id<Table>>(),
   /** `bigint` with `mode: "number"` — §14.2's conflict token. */
   version: (name: string) => pgBigint(name, { mode: "number" }),
   timestamp: (name: string) => pgTimestamp(name, { withTimezone: true }),
@@ -156,18 +180,20 @@ export const sqliteKit = {
   pivotPerUnit: (name: string) => sqliteText(name).$type<PivotPerUnit>(),
   unitsPerPivot: (name: string) => sqliteText(name).$type<UnitsPerPivot>(),
   /** A bare `YYYY-MM-DD` string, which is what Postgres `date` produces too. */
-  date: (name: string) => sqliteText(name),
+  date: (name: string) => sqliteText(name).$type<AccountingDate>(),
+  currency: (name: string) => sqliteText(name).$type<CurrencyCode>(),
   qty: (name: string) => sqliteText(name),
   taxRate: (name: string) => sqliteText(name),
   /** See `pgKit.json`. `text({ mode: "json" })` parses on read. */
   json: <T>(name: string) => sqliteText(name, { mode: "json" }).$type<T>(),
   /** No UUID type; the row type is `string` on both engines either way. */
-  uuid: (name: string) => sqliteText(name),
+  uuid: <Table extends IdTable>(name: string) => sqliteText(name).$type<Id<Table>>(),
   /** See `pgKit.id`. Minted in JavaScript, because SQLite cannot mint one. */
-  id: (name: string) =>
+  id: <Table extends IdTable>(name: string) =>
     sqliteText(name)
       .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
+      .$defaultFn(() => crypto.randomUUID())
+      .$type<Id<Table>>(),
   version: (name: string) => sqliteInteger(name, { mode: "number" }),
   timestamp: (name: string) => sqliteInteger(name, { mode: "timestamp" }),
   /**

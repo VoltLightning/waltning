@@ -95,6 +95,30 @@ export const cmp = (a: Money, b: Money): -1 | 0 | 1 => dec(a).cmp(b) as -1 | 0 |
  *
  * `rate` is quoted as: 1 unit of the local currency = `rate` units of pivot.
  */
+declare const CURRENCY: unique symbol;
+
+/**
+ * An ISO 4217 code.
+ *
+ * Four columns hold one — `currency`, `to_currency`, `debt_currency`,
+ * `settlement_currency` — and all four were `string`, which is also what
+ * `payee`, `note` and `memo` are. A currency and a payee were interchangeable
+ * on the same row.
+ *
+ * Not a union of known codes: `currencies` is a table a person adds rows to
+ * (§7.6), so a closed union would be a second list to keep in step with the
+ * database and would reject a currency the moment someone added one.
+ */
+export type CurrencyCode = string & { readonly [CURRENCY]: "CurrencyCode" };
+
+/** Parse a currency code. Shape only — whether it *exists* is the table's answer. */
+export function currencyCode(value: string): CurrencyCode {
+  if (!/^[A-Z]{3}$/.test(value)) {
+    throw new Error(`not an ISO 4217 code: ${JSON.stringify(value)} — expected three capitals`);
+  }
+  return value as CurrencyCode;
+}
+
 /* ── FX rates, and the direction that has already cost 14.1× ─────────────── */
 
 declare const RATE: unique symbol;

@@ -29,18 +29,18 @@ export type TransactionLineRefs = {
 };
 
 export const transactionLinesColumns = (refs: TransactionLineRefs) => ({
-  id: k.id("id"),
+  id: k.id<"transactionLines">("id"),
   transactionId: k
     .uuid("transaction_id")
     .notNull()
     .references(refs.transactionId, { onDelete: "cascade" }),
   receiptId: refs.receiptId
-    ? k.uuid("receipt_id").references(refs.receiptId, { onDelete: "set null" })
-    : k.uuid("receipt_id"),
+    ? k.uuid<"receipts">("receipt_id").references(refs.receiptId, { onDelete: "set null" })
+    : k.uuid<"receipts">("receipt_id"),
   description: k.text("description").notNull(),
   amount: k.money("amount").notNull(),
   quantity: k.qty("quantity"),
-  categoryId: k.uuid("category_id").references(() => categories.id),
+  categoryId: k.uuid<"categories">("category_id").references(() => categories.id),
   sort: k.integer("sort").notNull().default(0),
 });
 

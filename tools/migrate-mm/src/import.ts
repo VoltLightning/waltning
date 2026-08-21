@@ -19,7 +19,14 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { money } from "@waltning/core";
+import {
+  type AccountingDate,
+  accountingDate,
+  type CurrencyCode,
+  currencyCode,
+  type Id,
+  money,
+} from "@waltning/core";
 import { createDb, requireRow } from "@waltning/db";
 import {
   accountGroups,
@@ -119,14 +126,14 @@ async function main() {
   // Captured after the guard because narrowing does not follow `pivot` into
   // the nested `pivotRate` closure below — which is why both uses there had
   // grown a `!`. One named constant answers it once instead.
-  const pivotCode: string = pivot;
+  const pivotCode: CurrencyCode = currencyCode(pivot);
 
-  const known = new Set(
+  const known = new Set<string>(
     (await db.select({ code: currencies.code }).from(currencies)).map((c) => c.code),
   );
 
   /* ---- groups ---------------------------------------------------------- */
-  const groupIds = new Map<string, string>();
+  const groupIds = new Map<string, Id<"accountGroups">>();
   for (const name of new Set(data.accounts.map((a) => a.group).filter(Boolean))) {
     const found = await db
       .select({ id: accountGroups.id })
@@ -144,7 +151,7 @@ async function main() {
   }
 
   /* ---- accounts (opening balance filled in after income) ---------------- */
-  const accountIds = new Map<string, string>();
+  const accountIds = new Map<string, Id<"accounts">>();
   for (const a of data.accounts) {
     if (!a.currency || !known.has(a.currency)) {
       // Not a warning. Skipping the account silently drops every row that
@@ -169,7 +176,7 @@ async function main() {
     const values = {
       name: a.name,
       kind: toAccountKind(a.kind),
-      currency: a.currency,
+      currency: currencyCode(a.currency),
       groupId: a.group ? (groupIds.get(a.group) ?? null) : null,
       ownership: a.ownership,
       memo: a.memo,
@@ -187,7 +194,7 @@ async function main() {
   }
 
   /* ---- income ---------------------------------------------------------- */
-  const catIds = new Map<string, string>();
+  const catIds = new Map<string, Id<"categories">>();
   for (const key of new Set(Object.values(INCOME_MAP).filter(Boolean) as string[])) {
     const row = (
       await db
@@ -210,8 +217,8 @@ async function main() {
    */
   const rateCache = new Map<string, { rate: money.PivotPerUnit; estimated: boolean }>();
   async function pivotRate(
-    ccy: string,
-    date: string,
+    ccy: CurrencyCode,
+    date: AccountingDate,
   ): Promise<{ rate: money.PivotPerUnit; estimated: boolean } | null> {
     if (ccy === pivot) return { rate: money.pivotPerUnit(1), estimated: false };
     const k = `${ccy}|${date}`;
@@ -288,7 +295,7 @@ async function main() {
     // disagree, say so with the id rather than crashing on a missing property.
     const acct = data.accounts.find((a) => a.external_id === t.account);
     if (!acct) throw new Error(`income row references unknown account ${t.account}`);
-    const fx = await pivotRate(acct.currency, t.date);
+    const fx = await pivotRate(currencyCode(acct.currency), accountingDate(t.date));
     // Only reachable when a currency has no rate at all — nothing to estimate
     // from. Reported rather than swallowed.
     if (fx === null) {
@@ -313,12 +320,12 @@ async function main() {
     if (!categoryId) throw new Error(`no seeded category for "${key}" — run the seed`);
 
     const values = {
-      date: t.date,
+      date: accountingDate(t.date),
       type: "income" as const,
       accountId,
       categoryId,
       amountOriginal: money.toMoney(amount.toFixed(8)),
-      currency: acct.currency,
+      currency: currencyCode(acct.currency),
       fxRate: fx.rate,
       fxRateEstimated: fx.estimated,
       // amountPivot is GENERATED ALWAYS (§7.4) — Postgres computes it.
@@ -355,7 +362,7 @@ async function main() {
       .update(accounts)
       .set({
         openingBalance: money.toMoney(opening.toFixed(8)),
-        openingDate: "2020-11-24", // the day before the first transaction
+        openingDate: accountingDate("2020-11-24"), // the day before the first transaction
       })
       .where(eq(accounts.id, id));
     if (!opening.isZero()) withOpening++;

@@ -11,8 +11,8 @@ import { pgKit as k } from "./kit.ts";
  * none has a SQLite equivalent (§14.7).
  */
 export const categoriesColumns = () => ({
-  id: k.id("id"),
-  parentId: k.uuid("parent_id").references((): AnyPgColumn => categories.id, {
+  id: k.id<"categories">("id"),
+  parentId: k.uuid<"categories">("parent_id").references((): AnyPgColumn => categories.id, {
     onDelete: "restrict",
   }),
   name: k.text("name").notNull(),

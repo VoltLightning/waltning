@@ -4,10 +4,10 @@ import { pgKit as k } from "./kit.ts";
 
 /** The unique index on the normalised name stays in `packages/db`. */
 export const counterpartiesColumns = () => ({
-  id: k.id("id"),
+  id: k.id<"counterparties">("id"),
   name: k.text("name").notNull(),
   kind: counterpartyKind("kind").notNull().default("person"),
-  settlementCurrency: k.text("settlement_currency").references(() => currencies.code),
+  settlementCurrency: k.currency("settlement_currency").references(() => currencies.code),
   contact: k.text("contact"),
   note: k.text("note").notNull().default(""),
   defaultActivity: k.text("default_activity"),

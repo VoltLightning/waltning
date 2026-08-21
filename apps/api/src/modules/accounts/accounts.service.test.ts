@@ -11,7 +11,7 @@
  * sides would agree, and reconciliation would find nothing.
  */
 
-import { money } from "@waltning/core";
+import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core";
 import { accounts, transactions } from "@waltning/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../../packages/db/src/test/scratch.ts";
@@ -19,8 +19,8 @@ import { listAccounts } from "./accounts.service.ts";
 
 let s: Scratch;
 
-const ACC = "aaaaaaaa-0000-0000-0000-000000000001";
-const DEST = "aaaaaaaa-0000-0000-0000-000000000002";
+const ACC = id<"accounts">("aaaaaaaa-0000-0000-0000-000000000001");
+const DEST = id<"accounts">("aaaaaaaa-0000-0000-0000-000000000002");
 
 beforeAll(async () => {
   s = await scratchDatabase("balance");
@@ -36,32 +36,37 @@ async function reset(opening: money.Money = money.toMoney("0.00")): Promise<void
   await s.sql`DELETE FROM transactions`;
   await s.sql`DELETE FROM accounts`;
   await s.db.insert(accounts).values([
-    { id: ACC, name: "Bank A", currency: "USD", openingBalance: opening },
-    { id: DEST, name: "Bank B", currency: "USD", openingBalance: money.toMoney("0.00") },
+    { id: ACC, name: "Bank A", currency: currencyCode("USD"), openingBalance: opening },
+    {
+      id: DEST,
+      name: "Bank B",
+      currency: currencyCode("USD"),
+      openingBalance: money.toMoney("0.00"),
+    },
   ]);
 }
 
 type Row = {
   type: "income" | "expense" | "transfer" | "adjustment";
   amount: money.Money;
-  to?: { account: string; amount: money.Money };
+  to?: { account: Id<"accounts">; amount: money.Money };
   deleted?: boolean;
 };
 
 async function add(rows: Row[]): Promise<void> {
   for (const r of rows) {
     await s.db.insert(transactions).values({
-      date: "2026-06-01",
+      date: accountingDate("2026-06-01"),
       type: r.type,
       accountId: ACC,
       amountOriginal: r.amount,
-      currency: "USD",
+      currency: currencyCode("USD"),
       fxRate: money.pivotPerUnit("1.000000000000"),
       ...(r.to
         ? {
             toAccountId: r.to.account,
             toAmount: r.to.amount,
-            toCurrency: "USD",
+            toCurrency: currencyCode("USD"),
             toFxRate: money.pivotPerUnit("1.000000000000"),
           }
         : {}),

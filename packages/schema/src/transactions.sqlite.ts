@@ -31,34 +31,40 @@ import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
  * `packages/db`.
  */
 export const transactionsColumns = () => ({
-  id: k.id("id"),
+  id: k.id<"transactions">("id"),
   date: k.date("date").notNull(),
   type: k.text("type", { enum: TXN_TYPE }).notNull(),
   accountId: k
     .uuid("account_id")
     .notNull()
     .references(() => accounts.id, { onDelete: "restrict" }),
-  toAccountId: k.uuid("to_account_id").references(() => accounts.id, { onDelete: "restrict" }),
-  categoryId: k.uuid("category_id").references(() => categories.id, { onDelete: "restrict" }),
-  counterpartyId: k.uuid("counterparty_id").references(() => counterparties.id),
+  toAccountId: k
+    .uuid<"accounts">("to_account_id")
+    .references(() => accounts.id, { onDelete: "restrict" }),
+  categoryId: k
+    .uuid<"categories">("category_id")
+    .references(() => categories.id, { onDelete: "restrict" }),
+  counterpartyId: k.uuid<"counterparties">("counterparty_id").references(() => counterparties.id),
   counterpartyRole: k.text("counterparty_role", { enum: COUNTERPARTY_ROLE }),
-  debtCurrency: k.text("debt_currency").references(() => currencies.code),
+  debtCurrency: k.currency("debt_currency").references(() => currencies.code),
   debtAmount: k.money("debt_amount"),
   amountOriginal: k.money("amount_original").notNull(),
   currency: k
-    .text("currency")
+    .currency("currency")
     .notNull()
     .references(() => currencies.code),
   fxRate: k.pivotPerUnit("fx_rate").notNull(),
   fxRateEstimated: k.boolean("fx_rate_estimated").notNull().default(false),
   toAmount: k.money("to_amount"),
-  toCurrency: k.text("to_currency").references(() => currencies.code),
+  toCurrency: k.currency("to_currency").references(() => currencies.code),
   toFxRate: k.pivotPerUnit("to_fx_rate"),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
   isBusiness: k.boolean("is_business").notNull().default(false),
   isCapital: k.boolean("is_capital").notNull().default(false),
-  recurringId: k.uuid("recurring_id").references(() => recurringTransactions.id),
+  recurringId: k
+    .uuid<"recurringTransactions">("recurring_id")
+    .references(() => recurringTransactions.id),
   occurrenceDate: k.date("occurrence_date"),
   fee: k.money("fee"),
   counterpartyTaxId: k.text("counterparty_tax_id"),

@@ -13,6 +13,7 @@
  * whitespace, and the shared translator has no way to know that.
  */
 
+import type { CurrencyCode } from "@waltning/core";
 import { counterparties, type DbHandle } from "@waltning/db";
 import { DomainError } from "../../common/errors.ts";
 import { pgErrorCode, UNIQUE_VIOLATION } from "../../common/pg-errors.ts";
@@ -20,7 +21,7 @@ import { pgErrorCode, UNIQUE_VIOLATION } from "../../common/pg-errors.ts";
 export type NewCounterparty = {
   name: string;
   kind: "person" | "company";
-  settlementCurrency?: string | undefined;
+  settlementCurrency?: CurrencyCode | undefined;
   contact?: string | undefined;
   note: string;
 };

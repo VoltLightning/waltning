@@ -2,7 +2,7 @@ import { pgKit as k } from "./kit.ts";
 
 /** The unique index on the normalised name stays in `packages/db`. */
 export const tagsColumns = () => ({
-  id: k.id("id"),
+  id: k.id<"tags">("id"),
   name: k.text("name").notNull(),
 });
 

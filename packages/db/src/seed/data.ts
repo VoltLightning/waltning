@@ -1,3 +1,4 @@
+import { type CurrencyCode, currencyCode } from "@waltning/core";
 /**
  * Seed data — currencies and the category taxonomy from TAXONOMY.md.
  *
@@ -11,7 +12,7 @@
  */
 
 export type SeedCurrency = {
-  code: string;
+  code: CurrencyCode;
   name: string;
   symbol: string;
   symbolPosition: "P" | "S";
@@ -28,7 +29,7 @@ export type SeedCurrency = {
  */
 export const currencies: SeedCurrency[] = [
   {
-    code: "USD",
+    code: currencyCode("USD"),
     name: "US Dollar",
     symbol: "$",
     symbolPosition: "P",
@@ -38,7 +39,7 @@ export const currencies: SeedCurrency[] = [
     rateSource: null,
   },
   {
-    code: "PLN",
+    code: currencyCode("PLN"),
     name: "Polish Złoty",
     symbol: "zł",
     symbolPosition: "S",
@@ -47,7 +48,7 @@ export const currencies: SeedCurrency[] = [
     rateSource: "nbp",
   },
   {
-    code: "EUR",
+    code: currencyCode("EUR"),
     name: "Euro",
     symbol: "€",
     symbolPosition: "S",
@@ -56,7 +57,7 @@ export const currencies: SeedCurrency[] = [
     rateSource: "ecb",
   },
   {
-    code: "BYN",
+    code: currencyCode("BYN"),
     name: "Belarusian Ruble",
     symbol: "Br",
     symbolPosition: "S",
@@ -64,7 +65,7 @@ export const currencies: SeedCurrency[] = [
     rateSource: "nbrb",
   },
   {
-    code: "GEL",
+    code: currencyCode("GEL"),
     name: "Georgian Lari",
     symbol: "₾",
     symbolPosition: "S",
@@ -72,7 +73,7 @@ export const currencies: SeedCurrency[] = [
     rateSource: "nbg",
   },
   {
-    code: "GBP",
+    code: currencyCode("GBP"),
     name: "Pound Sterling",
     symbol: "£",
     symbolPosition: "P",
@@ -80,7 +81,7 @@ export const currencies: SeedCurrency[] = [
     rateSource: "ecb",
   },
   {
-    code: "RUB",
+    code: currencyCode("RUB"),
     name: "Russian Ruble",
     symbol: "₽",
     symbolPosition: "S",

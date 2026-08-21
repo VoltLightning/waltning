@@ -12,14 +12,14 @@ import { sqliteKit as k } from "./kit.ts";
  * layered around the shared columns rather than inside them.
  */
 export const accountsColumns = () => ({
-  id: k.id("id"),
+  id: k.id<"accounts">("id"),
   name: k.text("name").notNull(),
   kind: k.text("kind", { enum: ACCOUNT_KIND }).notNull().default("other"),
   currency: k
-    .text("currency")
+    .currency("currency")
     .notNull()
     .references(() => currencies.code),
-  groupId: k.uuid("group_id").references(() => accountGroups.id),
+  groupId: k.uuid<"accountGroups">("group_id").references(() => accountGroups.id),
   ownership: k.text("ownership", { enum: OWNERSHIP }).notNull().default("own"),
   openingBalance: k.money("opening_balance").notNull().default(money.toMoney("0")),
   openingDate: k.date("opening_date"),

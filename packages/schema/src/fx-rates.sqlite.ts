@@ -5,11 +5,11 @@ import { sqliteKit as k } from "./kit.ts";
 /** See `fx-rates.pg.ts`. */
 export const fxRatesColumns = () => ({
   base: k
-    .text("base")
+    .currency("base")
     .notNull()
     .references(() => currencies.code),
   quote: k
-    .text("quote")
+    .currency("quote")
     .notNull()
     .references(() => currencies.code),
   date: k.date("date").notNull(),

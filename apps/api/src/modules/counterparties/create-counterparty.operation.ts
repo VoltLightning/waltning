@@ -10,6 +10,7 @@
  * and expensive to merge.
  */
 
+import { zCurrencyCode } from "@waltning/core";
 import { z } from "zod";
 import type { OperationContext } from "../../registry/context.ts";
 import { defineOperation } from "../../registry/define.ts";
@@ -41,7 +42,7 @@ export const createCounterparty = defineOperation({
   input: z.object({
     name: z.string().trim().min(1).max(120),
     kind: z.enum(["person", "company"]).default("person"),
-    settlementCurrency: z.string().length(3).toUpperCase().optional(),
+    settlementCurrency: zCurrencyCode.optional(),
     contact: z.string().trim().max(200).optional(),
     note: z.string().trim().max(2000).default(""),
   }),

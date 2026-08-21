@@ -5,6 +5,7 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import type { Id } from "@waltning/core";
 import { eq } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { requireRow } from "../rows.ts";
@@ -54,11 +55,11 @@ async function upsertCategory(v: {
   key: string;
   name: string;
   kind: "income" | "expense";
-  parentId: string | null;
+  parentId: Id<"categories"> | null;
   isLeaf: boolean;
   isEarnings: boolean;
   sort: number;
-}): Promise<string> {
+}): Promise<Id<"categories">> {
   const externalId = `seed:${v.key}`;
   const existing = await db
     .select({ id: categories.id })
