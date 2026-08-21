@@ -31,7 +31,7 @@ describe("BalanceRow", () => {
         kind="deposit"
         balance={money.toMoney("100.00000000")}
         currency="USD"
-        conversion={{ rate: money.toMoney("4.00000000"), displayCurrency: "PLN" }}
+        conversion={{ rate: money.pivotPerUnit("4.00000000"), displayCurrency: "PLN" }}
       />,
     );
     expect(screen.getByText("4.0000")).toBeDefined();

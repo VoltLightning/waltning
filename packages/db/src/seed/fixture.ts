@@ -220,7 +220,7 @@ async function apply(today: string): Promise<void> {
             categoryId,
             amountOriginal: money.toMoney(amount),
             currency: account.currency,
-            fxRate: TO_PIVOT[account.currency] ?? "1.000000000000",
+            fxRate: money.pivotPerUnit(TO_PIVOT[account.currency] ?? "1"),
             payee: pattern.payee,
           })
           .onConflictDoUpdate({

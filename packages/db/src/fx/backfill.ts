@@ -12,6 +12,7 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { money } from "@waltning/core";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { currencies, fxRates } from "../schema.ts";
@@ -82,7 +83,8 @@ async function main() {
             base: pivot,
             quote: t.code,
             date: r.date,
-            rate: r.rate,
+            // §4: `fx_rates.rate` is the divide direction.
+            rate: money.unitsPerPivot(r.rate),
             source: (r.carried ? "carried_forward" : t.source) as
               | "nbp"
               | "ecb"

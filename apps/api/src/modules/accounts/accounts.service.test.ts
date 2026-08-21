@@ -56,13 +56,13 @@ async function add(rows: Row[]): Promise<void> {
       accountId: ACC,
       amountOriginal: r.amount,
       currency: "USD",
-      fxRate: "1.000000000000",
+      fxRate: money.pivotPerUnit("1.000000000000"),
       ...(r.to
         ? {
             toAccountId: r.to.account,
             toAmount: r.to.amount,
             toCurrency: "USD",
-            toFxRate: "1.000000000000",
+            toFxRate: money.pivotPerUnit("1.000000000000"),
           }
         : {}),
       ...(r.deleted ? { deletedAt: new Date() } : {}),

@@ -49,11 +49,11 @@ export const transactionsColumns = () => ({
     .text("currency")
     .notNull()
     .references(() => currencies.code),
-  fxRate: k.rate("fx_rate").notNull(),
+  fxRate: k.pivotPerUnit("fx_rate").notNull(),
   fxRateEstimated: k.boolean("fx_rate_estimated").notNull().default(false),
   toAmount: k.money("to_amount"),
   toCurrency: k.text("to_currency").references(() => currencies.code),
-  toFxRate: k.rate("to_fx_rate"),
+  toFxRate: k.pivotPerUnit("to_fx_rate"),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
   isBusiness: k.boolean("is_business").notNull().default(false),
@@ -66,7 +66,7 @@ export const transactionsColumns = () => ({
   ksefId: k.text("ksef_id"),
   ryczaltRate: k.taxRate("ryczalt_rate"),
   ryczaltActivity: k.text("ryczalt_activity"),
-  taxFxRate: k.rate("tax_fx_rate"),
+  taxFxRate: k.pivotPerUnit("tax_fx_rate"),
   taxFxDate: k.date("tax_fx_date"),
   taxFxSource: k.text("tax_fx_source"),
   source: txnSource("source").notNull().default("manual"),

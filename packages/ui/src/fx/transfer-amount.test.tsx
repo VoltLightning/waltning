@@ -13,7 +13,7 @@ import { TransferAmount } from "./transfer-amount";
 const example = {
   from: { account: "Household", currency: "USD", amount: money.toMoney("150.00000000") },
   to: { account: "Cash", currency: "PLN", amount: money.toMoney("565.20000000") },
-  referenceRate: money.toMoney("3.81000000"),
+  referenceRate: money.pivotPerUnit("3.81000000"),
 } as const;
 
 describe("TransferAmount", () => {
@@ -43,7 +43,7 @@ describe("TransferAmount", () => {
       <TransferAmount
         from={{ account: "A", currency: "USD", amount: money.toMoney("100.00000000") }}
         to={{ account: "B", currency: "PLN", amount: money.toMoney("400.00000000") }}
-        referenceRate={money.toMoney("4.00000000")}
+        referenceRate={money.pivotPerUnit("4.00000000")}
       />,
     );
     expect(container.textContent).not.toContain("spread");
@@ -55,7 +55,7 @@ describe("TransferAmount", () => {
       <TransferAmount
         from={{ account: "A", currency: "USD", amount: money.toMoney("0.00000000") }}
         to={{ account: "B", currency: "PLN", amount: money.toMoney("0.00000000") }}
-        referenceRate={money.toMoney("4.00000000")}
+        referenceRate={money.pivotPerUnit("4.00000000")}
       />,
     );
     expect(container.textContent).toContain("realized —");

@@ -13,7 +13,8 @@ export const fxRatesColumns = () => ({
     .notNull()
     .references(() => currencies.code),
   date: k.date("date").notNull(),
-  rate: k.rate("rate").notNull(),
+  // §4: `to_pivot(x) = x ÷ rate`. Divide by this one.
+  rate: k.unitsPerPivot("rate").notNull(),
   source: k.text("source", { enum: FX_SOURCE }).notNull(),
   fetchedAt: k.timestamp("fetched_at"),
 });
