@@ -32,6 +32,7 @@ export {
   type ResponseAuthentication,
   WALTNING_HEADER,
 } from "./protocol.ts";
+export { canMintIds, type IdGenerator, randomId } from "./random.ts";
 export {
   type ConflictGroups,
   type ConflictOutcome,
@@ -65,7 +66,6 @@ export {
   type RuleZeroOptions,
   ruleZeroFetch,
 } from "./rule-zero-fetch.ts";
-
 /**
  * Zod schemas that produce branded values.
  *

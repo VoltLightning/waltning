@@ -18,6 +18,7 @@
  * the server whose only purpose is to make a parity assertion pass.
  */
 
+import { randomId } from "@waltning/core";
 import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
@@ -40,9 +41,7 @@ export const outbox = sqliteTable("outbox", {
    * be decided here rather than by the server, because the whole point is that
    * a retry after an unknown outcome carries the *same* id.
    */
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
+  id: text("id").primaryKey().$defaultFn(randomId),
 
   /**
    * Send order, and **not** the id.

@@ -49,6 +49,7 @@ import type {
   PivotPerUnit,
   UnitsPerPivot,
 } from "@waltning/core";
+import { randomId } from "@waltning/core";
 import {
   bigint as pgBigint,
   boolean as pgBoolean,
@@ -190,10 +191,7 @@ export const sqliteKit = {
   uuid: <Table extends IdTable>(name: string) => sqliteText(name).$type<Id<Table>>(),
   /** See `pgKit.id`. Minted in JavaScript, because SQLite cannot mint one. */
   id: <Table extends IdTable>(name: string) =>
-    sqliteText(name)
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID())
-      .$type<Id<Table>>(),
+    sqliteText(name).primaryKey().$defaultFn(randomId).$type<Id<Table>>(),
   version: (name: string) => sqliteInteger(name, { mode: "number" }),
   timestamp: (name: string) => sqliteInteger(name, { mode: "timestamp" }),
   /**

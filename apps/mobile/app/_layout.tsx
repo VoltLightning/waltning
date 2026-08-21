@@ -9,6 +9,9 @@
  * and this is the platform's entry point.
  */
 
+// Side-effect import, and it must come first: `randomId()` reads the global at
+// call time and the first call is a row insert.
+import "../src/polyfills.ts";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { View } from "react-native";

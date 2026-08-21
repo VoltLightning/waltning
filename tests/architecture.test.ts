@@ -449,3 +449,79 @@ describe("every src/ is organised by domain, not by layer", () => {
     expect(readdirSync(modules).length, "api modules found").toBeGreaterThan(2);
   });
 });
+
+/* ── §4 · globals the phone does not have ────────────────────────────────── */
+
+describe("platform-neutral packages use only globals the phone has", () => {
+  /**
+   * **The gap `crypto.randomUUID()` walked through.**
+   *
+   * `packages/schema` and `packages/ledger` called it directly, in code that
+   * only ever runs on the device — and neither React Native nor Expo defines a
+   * `crypto` global, so every local write that omitted an id would have thrown
+   * at the first insert.
+   *
+   * It typechecked because `tsc` walks up to the workspace root's
+   * `node_modules/@types` and finds `@types/node`, which declares a global Node
+   * has and the phone does not. The editor, resolving from the package, was
+   * right to complain where the CLI was not.
+   *
+   * `types: []` was tried as the fix and is the wrong tool: `packages/core`
+   * legitimately uses `fetch` and `Response` for Rule 0, and adding the DOM lib
+   * to satisfy those puts `crypto` back as a declared global while React Native
+   * still lacks it. There is no lib that describes the phone's runtime, so the
+   * list is stated here instead.
+   */
+  const NEUTRAL = [
+    "packages/core",
+    "packages/schema",
+    "packages/ui",
+    "packages/client",
+    "packages/ledger",
+  ];
+
+  /** Globals that exist in Node, or a browser, or both — and not in React Native. */
+  const ABSENT_ON_DEVICE: Record<string, string> = {
+    crypto: "React Native has no crypto global; apps/mobile polyfills it, core guards it",
+    process: "Metro replaces `process.env` at build time and defines nothing else",
+    Buffer: "Node only",
+    __dirname: "Node only",
+    __filename: "Node only",
+    localStorage: "browser only — the phone uses expo-secure-store (§5.7)",
+    document: "browser only",
+    window: "browser only",
+  };
+
+  /**
+   * `random.ts` is the sanctioned reader, and the only one: it exists precisely
+   * to check for the global and throw something a person can act on.
+   */
+  const GUARDED = ["packages/core/src/random.ts"];
+
+  it("no neutral package reaches for a global the device lacks", () => {
+    const offenders: string[] = [];
+
+    for (const root of NEUTRAL) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        const relative = rel(file);
+        if (isTest(file) || GUARDED.includes(relative)) continue;
+
+        // Comments discuss these globals constantly — `money.ts` explains what
+        // a `Decimal.set` does "for the whole process". Strip them first.
+        const code = readFileSync(file, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, "");
+
+        for (const [name, why] of Object.entries(ABSENT_ON_DEVICE)) {
+          if (new RegExp(`\\b${name}\\s*[.[]`).test(code)) {
+            offenders.push(`${relative} uses \`${name}\` — ${why}`);
+          }
+        }
+      }
+    }
+
+    expect(offenders, "a global the phone does not have").toEqual([]);
+    // Non-vacuous: if the walk stops finding files this passes over nothing.
+    expect(NEUTRAL.flatMap((r) => sourceFiles(join(repoRoot, r))).length).toBeGreaterThan(30);
+  });
+});
