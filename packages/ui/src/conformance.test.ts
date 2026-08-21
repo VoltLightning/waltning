@@ -142,3 +142,41 @@ describe("every theme answers for every role", () => {
     expect(holes, "roles a theme does not answer for").toEqual([]);
   });
 });
+
+describe("a component names a scale step, never a size (§2.2)", () => {
+  /**
+   * The sibling of the colour rule, and it holds **today**: no component writes
+   * a raw `fontSize`, every one goes through `type.*`. That is the cheapest
+   * moment to pin a rule — a check added while the count is zero never has to
+   * argue with an existing exception, and the exception is how these decay.
+   */
+  it("no component writes a font size or line height literal", () => {
+    const LITERAL = /\b(fontSize|lineHeight):\s*[\d.]/;
+
+    const offenders = all
+      .filter((c) => LITERAL.test(c.text.replace(/^\s*\*.*$/gm, "")))
+      .map((c) => c.name);
+
+    expect(offenders, "components with a hardcoded size").toEqual([]);
+    expect(all.length, "components found").toBeGreaterThan(8);
+  });
+
+  /**
+   * **A family plus a weight does not select a face in React Native.** Each
+   * weight is its own file registered under its own name, so `fontFamily:
+   * "Figtree"` with `fontWeight: "600"` finds no such family — it falls back, or
+   * synthesises a bold from the regular, which is a smeared approximation of the
+   * semibold sitting unused in the bundle. Both are silent; the second looks
+   * nearly right.
+   *
+   * So a component asks for a face by name, through `face.ui(600)`, and never
+   * writes a family string of its own.
+   */
+  it("no component writes a font family string", () => {
+    const offenders = all
+      .filter((c) => /fontFamily:\s*["']/.test(c.text.replace(/^\s*\*.*$/gm, "")))
+      .map((c) => c.name);
+
+    expect(offenders, "components naming a font family directly").toEqual([]);
+  });
+});

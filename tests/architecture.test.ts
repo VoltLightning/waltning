@@ -176,9 +176,17 @@ describe("apps hold only what names a platform", () => {
    *
    * A file "names a platform" if it imports a renderer, a router or an SDK, or
    * reads a build-time global that only one bundler defines.
+   *
+   * **Scoped Expo packages count, and were missing.** `@expo-google-fonts/*`
+   * ships `.ttf` files behind `require()` calls that only Metro resolves — an
+   * import of one dies under Node — which is as platform-bound as a line gets.
+   * The pattern matched bare `expo-*` and not the scoped form, so the first
+   * file to import one was reported as shareable code that belongs in a
+   * package. It does not: moving it would put a Metro-only asset require inside
+   * `packages/ui`, which every other surface would then have to resolve.
    */
   const NAMES_PLATFORM =
-    /from\s+["'](react-native|expo|expo-.*|@react-navigation\/.*)["']|Platform\.OS|__DEV__|EXPO_PUBLIC_|import\.meta\.env/;
+    /from\s+["'](react-native|expo|expo-.*|@expo(-[\w-]+)?\/.*|@react-navigation\/.*)["']|Platform\.OS|__DEV__|EXPO_PUBLIC_|import\.meta\.env/;
 
   it("every app source file is platform-bound, a test, or a route", () => {
     const offenders: string[] = [];

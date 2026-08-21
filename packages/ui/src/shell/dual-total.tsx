@@ -20,7 +20,7 @@
 import type { money } from "@waltning/core";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
-import { makeStyles } from "../theme/index.ts";
+import { face, makeStyles } from "../theme/index.ts";
 import { space, type } from "../tokens.ts";
 
 export type DualTotalProps = {
@@ -62,7 +62,7 @@ const useStyles = makeStyles((t) => ({
   label: {
     color: t.textMuted,
     fontSize: type.kicker.fontSize,
-    fontWeight: type.kicker.fontWeight,
+    ...face.ui(700),
     letterSpacing: type.kicker.letterSpacing,
     textTransform: "uppercase",
   },

@@ -13,8 +13,8 @@
 
 import { money } from "@waltning/core";
 import { Text, type TextStyle } from "react-native";
-import { makeStyles } from "../theme/index.ts";
-import { fontFamily, tabularNums, type } from "../tokens.ts";
+import { face, makeStyles } from "../theme/index.ts";
+import { tabularNums, type } from "../tokens.ts";
 
 export type AmountSize = "hero" | "large" | "body" | "small";
 export type AmountEmphasis = "default" | "muted";
@@ -61,7 +61,6 @@ export function Amount({
       style={[
         styles.base,
         SIZES[size],
-        size === "hero" || size === "large" ? styles.display : null,
         negative ? styles.negative : null,
         emphasis === "muted" ? styles.muted : null,
       ]}
@@ -76,15 +75,20 @@ export function Amount({
 const useStyles = makeStyles((t) => ({
   base: {
     color: t.text,
-    fontFamily: fontFamily.ui,
+    // §2.2 files money under the **display** face, and `<Amount>` rendered it
+    // in the UI face at every size below `large` — a divergence with a
+    // consequence, not a cosmetic one: Figtree's digits are proportional by
+    // default (measured: `1` is 413 units against `0` at 641) and align only
+    // because `fontVariant` switches on its `tnum` feature. Source Serif 4's
+    // digits are all 547 with no feature applied, so the column aligns because
+    // of the file rather than because of a renderer. `fonts.test.ts` pins it.
+    ...face.display(600),
     // Spread, not cast. React Native types `fontVariant` as a union of the
     // five real values, and both tokens are members — so this typechecks
     // *because they are correct*. `as string[]` compiled and would have
     // accepted a typo just as happily.
     fontVariant: [...tabularNums],
   },
-  /** The serif is for figures and headings — it makes a total feel weighed. */
-  display: { fontFamily: fontFamily.display, fontWeight: "600" },
   negative: { color: t.dangerText },
   muted: { color: t.textMuted },
   currency: { color: t.textMuted, fontSize: type.caption.fontSize },

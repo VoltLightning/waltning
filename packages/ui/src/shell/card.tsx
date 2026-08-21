@@ -11,7 +11,7 @@
  */
 
 import { Text, View } from "react-native";
-import { makeStyles } from "../theme/index.ts";
+import { face, makeStyles } from "../theme/index.ts";
 import { hairline, radius, shadow, space, type } from "../tokens.ts";
 
 export type CardProps = {
@@ -63,7 +63,7 @@ const useStyles = makeStyles((t) => ({
     borderBottomColor: t.hairline,
     paddingBottom: space.xl,
   },
-  title: { color: t.text, fontSize: type.displayThree.fontSize, fontWeight: "600" },
+  title: { color: t.text, fontSize: type.displayThree.fontSize, ...face.ui(600) },
   panel: {
     backgroundColor: t.ground,
     borderTopLeftRadius: radius.xl,

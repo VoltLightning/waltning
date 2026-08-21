@@ -42,7 +42,54 @@ second hue is needed.
 is mandatory — it is what lets columns align without a monospace face, and it
 is the single most common omission when amounts are rendered ad hoc.
 
+**It is not, however, what makes the column align. The font file is.** React
+Native declares `fontVariant` on `TextStyleIOS` only; it is absent from
+`TextStyleAndroid`, and because `TextStyle extends TextStyleIOS` it typechecks
+everywhere and applies on iOS and web alone. So a face whose digits are
+proportional by default aligns on two platforms out of three, silently.
+
+Measured from the shipped files, in font units:
+
+| Face | Digit advances | Default |
+|---|---|---|
+| Figtree 400 | `0`→641 … `1`→413, nine distinct widths | **proportional** (has `tnum`) |
+| Source Serif 4 600 | all ten at 547 | **tabular** |
+
+**So money renders in the display face at every size**, not only at `hero` and
+`large` — which is what the table above already said and what `<Amount>` had
+been diverging from. The declaration stays as a belt-and-braces no-op and as a
+statement of intent; the guarantee is the file, pinned by `fonts.test.ts`
+reading the digit advances out of the `.ttf`.
+
+**Selecting a weight needs a face, not a family.** Each weight is a separate
+file registered under its own name, so `fontFamily: Figtree` with `fontWeight:
+600` finds no such family and either falls back or synthesises a bold from the
+regular. Components ask for `face.ui(600)`.
+
+**Faces are bundled, never fetched.** A webfont CDN is a third-party request on
+every cold start: it breaks the appliance when the Pi has no route out, and it
+tells whoever hosts it when the owner opened their finance app — the same
+reasoning that keeps brand logos out of a CDN.
+
 **Scale**
+
+**Line height is stated as a ratio, not as a second absolute.** `allowFontScaling`
+defaults to `true`, so the platform scales `fontSize` — and a pair of fixed
+numbers leaves the relationship between them recorded nowhere, which is how a
+line box stays put while the glyphs in it grow. The pairs below are the derived
+values at the default text size and are unchanged.
+
+**How far a step may grow is a decision, per step.** Body text is uncapped:
+capping it defeats the setting for exactly the person who turned it up. The
+display steps are capped and `display-hero` hardest — at 54 it already dominates
+the screen, and an unbounded 2× is 108pt in a layout built for 54.
+
+| Step | Max scale |
+|---|---|
+| `display-hero` | 1.4 |
+| `display-1` | 1.5 |
+| `display-2` | 1.6 |
+| everything else | uncapped |
 
 | Step | Size / line-height | Use |
 |---|---|---|
@@ -54,7 +101,7 @@ is the single most common omission when amounts are rendered ad hoc.
 | `body-sm` | 13 / 1.5 | Table cells, dense rows |
 | `caption` | 11.5 / 1.4 | Captions, metadata |
 | `kicker` | 11 / 1.2, `700`, `.08em`, uppercase | Eyebrow labels |
-| `tag` | 10.5 / 1, `700`, `.08em`, uppercase | Pills and tags |
+| `tag` | 10.5 / 1, `700`, `.08em`, uppercase | Pills and tags. A ratio of exactly 1 is deliberate — uppercase-only, so no descenders to clip |
 
 ### 2.3 Spacing
 

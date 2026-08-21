@@ -16,8 +16,8 @@
 
 import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
-import { makeStyles } from "../theme/index.ts";
-import { focus, fontFamily, radius, space, tabularNums, type } from "../tokens.ts";
+import { face, makeStyles } from "../theme/index.ts";
+import { focus, radius, space, tabularNums, type } from "../tokens.ts";
 
 export type AmountFieldProps = {
   label: string;
@@ -88,7 +88,7 @@ const useStyles = makeStyles((t) => ({
   label: {
     color: t.textMuted,
     fontSize: type.kicker.fontSize,
-    fontWeight: type.kicker.fontWeight,
+    ...face.ui(700),
     letterSpacing: type.kicker.letterSpacing,
     textTransform: "uppercase",
   },
@@ -105,7 +105,7 @@ const useStyles = makeStyles((t) => ({
   input: {
     flex: 1,
     color: t.text,
-    fontFamily: fontFamily.display,
+    ...face.display(600),
     fontSize: type.displayThree.fontSize,
     // Right-aligned and tabular so a column of entered amounts lines up with
     // the column of rendered ones beside it.

@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { makeStyles } from "../theme/index.ts";
+import { face, makeStyles } from "../theme/index.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type Segment = {
@@ -94,7 +94,7 @@ const useStyles = makeStyles((t) => ({
   active: { backgroundColor: t.surface },
   focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
   label: { color: t.textMuted, fontSize: type.bodySm.fontSize },
-  labelActive: { color: t.text, fontWeight: "600" },
+  labelActive: { color: t.text, ...face.ui(600) },
   count: { color: t.textMuted, fontSize: type.caption.fontSize },
   countActive: { color: t.accentText },
 }));

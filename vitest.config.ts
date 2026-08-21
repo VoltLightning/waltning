@@ -15,6 +15,19 @@ export default defineConfig({
    * records that as the accepted cost of platform files.
    */
   resolve: { alias: { "react-native": "react-native-web" } },
+  /**
+   * `__DEV__` is part of the React Native runtime contract, not of any module.
+   *
+   * Metro defines it globally, so nothing in `react-native-web` declares it and
+   * every file is free to read it. Under Vitest nobody plays Metro's part, and
+   * the first import that reaches it dies with `__DEV__ is not defined` — a
+   * failure that reads like a broken module and is a missing global.
+   *
+   * `true` rather than `false`: development is what a test run is, and it is
+   * the branch that keeps `react-native-web`'s own invariant warnings switched
+   * on rather than compiled out.
+   */
+  define: { __DEV__: "true" },
   test: {
     include: [
       "packages/*/src/**/*.test.ts",

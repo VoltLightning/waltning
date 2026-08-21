@@ -10,11 +10,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/figtree": "^0.4.1",
+    "@expo-google-fonts/source-serif-4": "^0.4.1",
     "@trpc/client": "^11.18.0",
     "@waltning/client": "workspace:*",
     "@waltning/core": "workspace:*",
     "@waltning/ui": "workspace:*",
     "expo": "~57.0.13",
+    "expo-font": "~57.0.1",
     "expo-router": "~57.0.13",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
