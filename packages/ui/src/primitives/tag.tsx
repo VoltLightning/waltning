@@ -18,8 +18,8 @@
  */
 
 import { Text, View } from "react-native";
-import { makeStyles, useTheme } from "../theme/index.ts";
-import { radius, space, type } from "../tokens.ts";
+import { face, makeStyles, useTheme } from "../theme/index.ts";
+import { lineHeightFor, radius, space, type } from "../tokens.ts";
 
 export type TagVariant = "neutral" | "warn" | "negative" | "biz";
 
@@ -74,8 +74,8 @@ const useStyles = makeStyles(() => ({
   },
   text: {
     fontSize: type.tag.fontSize,
-    lineHeight: type.tag.lineHeight,
-    fontWeight: type.tag.fontWeight,
+    lineHeight: lineHeightFor("tag"),
+    ...face.ui(700),
     letterSpacing: type.tag.letterSpacing,
     textTransform: "uppercase",
   },

@@ -141,7 +141,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Database | PostgreSQL 16 | Exact numerics, real constraints, one dependency |
 | Language | TypeScript end to end | One language across API, web, mobile |
 | Repo | Monorepo, pnpm workspaces | Shared types; `pnpm deploy --filter` for lean Pi images |
-| Mobile | Expo (React Native) | iOS today; Android free if ever wanted |
+| Mobile | Expo (React Native) | iOS today; Android mostly free — see the note below |
 | Web | React Native Web via Expo | One codebase; revisit if the dashboard fights it (§14.6) |
 | Scope vs Money Manager | Core parity + receipts, import, agent | Skip budgets, goals, tags (0 rows used) |
 | Users | Single | No auth complexity, no per-row ownership |
@@ -151,6 +151,16 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | FX rates | Reference rates synced on app open; realized rates from actual amounts; manual override at three levels | §7.3, §7.6 |
 | Personal expenses | Structurally excluded from every tax output | §13.1 |
 | Apr–Aug 2026 gap | Entered manually in Money Manager first | Migration runs against a later backup |
+
+**"Android free if ever wanted" is true except in one place, and it is worth
+knowing before rather than after.** React Native declares `fontVariant` on
+`TextStyleIOS` and not on `TextStyleAndroid`, so tabular figures — which
+`design-system/02` §2.2 makes mandatory, being what lets a money column align —
+cannot be switched on there. The system stays correct because `<Amount>` renders
+in a face whose digits are tabular *by default* (measured: Source Serif 4's ten
+digits are all 547 font units; Figtree's span 413 to 641). That is a constraint
+on font choice, permanently, and it is the only part of Android that is not
+free.
 
 ---
 

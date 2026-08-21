@@ -64,39 +64,93 @@ export const shellGradient = { angle: 160, from: color.green900, to: color.green
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
 
 /**
- * Families are named here and **loaded by the app** — a package cannot register
- * a font. Until `expo-font` loads them the platform default is used, which is a
- * visual gap and not a correctness one.
+ * **Superseded by `theme/fonts.ts`, and kept because the mono entry is real.**
+ *
+ * This named three families and left the app to load them — which nothing did,
+ * so for the whole life of the file every screen rendered in the system face
+ * and the comment below described the gap without anything closing it.
+ *
+ * The deeper problem was that a family name is not enough: React Native selects
+ * a weight by *face*, not by family plus `fontWeight`, so `Figtree` + `600`
+ * finds nothing and falls back or synthesises. `theme/fonts.ts` names faces;
+ * use `face.ui(600)`.
  */
 export const fontFamily = {
-  /** All interface text. */
-  ui: "Figtree",
-  /** Headings and figures only — the serif makes totals feel weighed. */
-  display: "Source Serif 4",
+  /** The platform's own monospace — the one face that is not loaded. */
   mono: "ui-monospace",
 } as const;
 
-/**
- * **Mandatory on every amount**, and the single most common omission when
- * figures are rendered ad hoc. It is what lets a column of numbers align
- * without a monospace face.
- */
 export const tabularNums = ["tabular-nums", "lining-nums"] as const;
 
+/**
+ * The scale — `design-system/02` §2.2.
+ *
+ * **`lineHeight` is a ratio, not a second absolute.** It was a pair of fixed
+ * numbers per step, which cannot survive the OS text-size setting:
+ * `allowFontScaling` defaults to `true` on `<Text>`, so the platform scales
+ * `fontSize` and the pair's relationship — the thing typography actually cares
+ * about — was recorded nowhere and could not be preserved.
+ *
+ * Stating the ratio means a step scales as a step. `lineHeightFor()` derives
+ * the absolute where one is needed.
+ *
+ * The ratios are the ones the original pairs implied, to three decimals, so
+ * this changes no rendered layout at the default text size — verified in
+ * `type.test.ts`, which recomputes every pair from the ratio and asserts it
+ * lands back on the number §2.2 published.
+ */
 export const type = {
   /** The one dominant total, in the display currency. */
-  displayHero: { fontSize: 54, lineHeight: 57 },
-  displayOne: { fontSize: 38, lineHeight: 42 },
-  displayTwo: { fontSize: 23, lineHeight: 28 },
-  displayThree: { fontSize: 17, lineHeight: 22 },
-  body: { fontSize: 14.5, lineHeight: 23 },
-  bodySm: { fontSize: 13, lineHeight: 20 },
-  caption: { fontSize: 11.5, lineHeight: 16 },
+  displayHero: { fontSize: 54, lineHeightRatio: 57 / 54 },
+  displayOne: { fontSize: 38, lineHeightRatio: 42 / 38 },
+  displayTwo: { fontSize: 23, lineHeightRatio: 28 / 23 },
+  displayThree: { fontSize: 17, lineHeightRatio: 22 / 17 },
+  body: { fontSize: 14.5, lineHeightRatio: 23 / 14.5 },
+  bodySm: { fontSize: 13, lineHeightRatio: 20 / 13 },
+  caption: { fontSize: 11.5, lineHeightRatio: 16 / 11.5 },
   /** Eyebrow labels. */
-  kicker: { fontSize: 11, lineHeight: 13, fontWeight: "700", letterSpacing: 0.88 },
-  /** Pills and tags. */
-  tag: { fontSize: 10.5, lineHeight: 10.5, fontWeight: "700", letterSpacing: 0.84 },
+  kicker: { fontSize: 11, lineHeightRatio: 13 / 11, fontWeight: "700", letterSpacing: 0.88 },
+  /**
+   * Pills and tags. A ratio of exactly 1 is **deliberate** — the step is
+   * `textTransform: uppercase`, so there are no descenders to clip. Recorded
+   * because it looks like an oversight and is the one step where it is not.
+   */
+  tag: { fontSize: 10.5, lineHeightRatio: 1, fontWeight: "700", letterSpacing: 0.84 },
 } as const;
+
+export type TypeStep = keyof typeof type;
+
+/**
+ * The absolute line height for a step, at a given text scale.
+ *
+ * Takes the scale explicitly rather than reading `PixelRatio.getFontScale()`
+ * itself: a function that reads a global cannot be tested at 200% without a
+ * device set to 200%, and the behaviour worth pinning is exactly the one at the
+ * sizes nobody browses at.
+ */
+export function lineHeightFor(step: TypeStep, fontScale = 1): number {
+  const { fontSize, lineHeightRatio } = type[step];
+  return Math.round(fontSize * fontScale * lineHeightRatio * 100) / 100;
+}
+
+/**
+ * How far a step may grow under the OS text-size setting.
+ *
+ * **A decision, not a default, and it differs by step.** Body text is
+ * uncapped — someone who turned the setting up did so to read body text, and
+ * capping it defeats the setting for the person it exists for.
+ *
+ * The display steps are capped, and `displayHero` hardest. At 54 it is the one
+ * dominant figure on the screen; at an unbounded 200% it is 108pt in a layout
+ * built for 54, and it stops being a headline and becomes the whole screen.
+ * The figure stays legible at 1.4× — it is the largest thing rendered either
+ * way — so the cap costs nothing that the setting was asked for.
+ */
+export const maxFontScale: Partial<Record<TypeStep, number>> = {
+  displayHero: 1.4,
+  displayOne: 1.5,
+  displayTwo: 1.6,
+};
 
 /* ── 2.3 Spacing ─────────────────────────────────────────────────────────── */
 

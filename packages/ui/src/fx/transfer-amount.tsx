@@ -25,8 +25,8 @@
 
 import { money } from "@waltning/core";
 import { Text, View } from "react-native";
-import { makeStyles } from "../theme/index.ts";
-import { fontFamily, space, tabularNums, type } from "../tokens.ts";
+import { face, makeStyles } from "../theme/index.ts";
+import { space, tabularNums, type } from "../tokens.ts";
 import { Amount } from "./amount";
 
 export type TransferAmountProps = {
@@ -98,13 +98,13 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
 
 const useStyles = makeStyles((t) => ({
   block: { gap: space.xs },
-  route: { color: t.textMuted, fontSize: type.caption.fontSize, fontFamily: fontFamily.ui },
+  route: { color: t.textMuted, fontSize: type.caption.fontSize, ...face.ui(400) },
   arrow: { color: t.accentIcon },
   amounts: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
   rates: { gap: 2 },
   rate: {
     color: t.textMuted,
-    fontFamily: fontFamily.mono,
+    ...face.mono(),
     fontSize: type.caption.fontSize,
     fontVariant: [...tabularNums],
   },

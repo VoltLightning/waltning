@@ -26,8 +26,8 @@
 import { money } from "@waltning/core";
 import { Text, View } from "react-native";
 import { Tag } from "../primitives/tag";
-import { makeStyles } from "../theme/index.ts";
-import { fontFamily, tabularNums, type } from "../tokens.ts";
+import { face, makeStyles } from "../theme/index.ts";
+import { tabularNums, type } from "../tokens.ts";
 import { Amount } from "./amount";
 
 /**
@@ -111,7 +111,7 @@ const useStyles = makeStyles((t) => ({
   separator: { color: t.textMuted, fontSize: type.caption.fontSize },
   rate: {
     color: t.textMuted,
-    fontFamily: fontFamily.mono,
+    ...face.mono(),
     fontSize: type.caption.fontSize,
     fontVariant: [...tabularNums],
   },

@@ -20,7 +20,7 @@
 
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { makeStyles } from "../theme/index.ts";
+import { face, makeStyles } from "../theme/index.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -122,7 +122,7 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: space.x3,
     borderRadius: radius.sm,
   },
-  label: { fontSize: type.body.fontSize, fontWeight: "600" },
+  label: { fontSize: type.body.fontSize, ...face.ui(600) },
   hidden: { opacity: 0 },
   spinner: {
     position: "absolute",
