@@ -11,6 +11,7 @@
  * than a unit test with a mocked database.
  */
 
+import { currencyCode } from "@waltning/core";
 import { auditLog, currencies } from "@waltning/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../packages/db/src/test/scratch.ts";
@@ -27,9 +28,30 @@ beforeAll(async () => {
   // registry, and coupling it to the seed's shape would make an unrelated
   // change to the category tree break it.
   await s.db.insert(currencies).values([
-    { code: "USD", name: "US Dollar", symbol: "$", decimals: 2, isPivot: true, sort: 0 },
-    { code: "PLN", name: "Polish Zloty", symbol: "zł", decimals: 2, pinned: true, sort: 1 },
-    { code: "XTS", name: "Retired Test Code", symbol: "?", decimals: 2, archived: true, sort: 9 },
+    {
+      code: currencyCode("USD"),
+      name: "US Dollar",
+      symbol: "$",
+      decimals: 2,
+      isPivot: true,
+      sort: 0,
+    },
+    {
+      code: currencyCode("PLN"),
+      name: "Polish Zloty",
+      symbol: "zł",
+      decimals: 2,
+      pinned: true,
+      sort: 1,
+    },
+    {
+      code: currencyCode("XTS"),
+      name: "Retired Test Code",
+      symbol: "?",
+      decimals: 2,
+      archived: true,
+      sort: 9,
+    },
   ]);
 });
 

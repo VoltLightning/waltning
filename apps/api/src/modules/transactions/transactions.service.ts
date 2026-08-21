@@ -12,7 +12,7 @@
  * would disagree on `adjustment` — which carries its own sign.
  */
 
-import type { money } from "@waltning/core";
+import type { AccountingDate, Id, money } from "@waltning/core";
 import { accounts, categories, type DbHandle, transactions } from "@waltning/db";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
@@ -46,7 +46,14 @@ const signedAmount = sql<money.Money>`
 export async function listTransactions(
   db: DbHandle,
   limit: number,
-  cursor: { date: string; id: string } | null,
+  /**
+   * **Branded, because a cursor is client input.** It is echoed back from a
+   * previous response, so it *looks* internal — and it arrives in a request
+   * body like everything else, which means a caller can send anything. It is
+   * compared against branded columns here, so it is parsed at the operation's
+   * Zod boundary rather than trusted for looking familiar.
+   */
+  cursor: { date: AccountingDate; id: Id<"transactions"> } | null,
 ): Promise<TransactionPage> {
   // One more than asked for: whether a next page exists is a fact about the
   // data, not a guess from `rows.length === limit` — which is wrong exactly

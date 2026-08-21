@@ -7,6 +7,7 @@
  * the read and the decision about *coverage* belongs to the caller.
  */
 
+import { zAccountingDate, zId } from "@waltning/core";
 import { z } from "zod";
 import type { OperationContext } from "../../registry/context.ts";
 import { defineOperation } from "../../registry/define.ts";
@@ -29,7 +30,10 @@ export const listTransactionsOperation = defineOperation({
     // 4 GB and the phone renders this into a list.
     limit: z.number().int().min(1).max(200).default(50),
     cursor: z
-      .object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), id: z.string().uuid() })
+      // Branded at the boundary. A cursor is echoed back from a previous
+      // response, so it reads as internal — and arrives in a request body like
+      // everything else, which means a caller can send anything at all.
+      .object({ date: zAccountingDate, id: zId<"transactions">() })
       .nullable()
       .default(null),
   }),

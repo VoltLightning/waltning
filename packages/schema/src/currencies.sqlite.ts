@@ -3,7 +3,7 @@ import { sqliteKit as k } from "./kit.ts";
 
 /** See `currencies.pg.ts` for why this is a factory and not an object. */
 export const currenciesColumns = () => ({
-  code: k.text("code").primaryKey(),
+  code: k.currency("code").primaryKey(),
   name: k.text("name").notNull(),
   symbol: k.text("symbol").notNull().default(""),
   symbolPosition: k.text("symbol_position").notNull().default("P"),

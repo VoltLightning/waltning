@@ -11,18 +11,18 @@ import { pgKit as k } from "./kit.ts";
  * second time.
  */
 export const recurringTransactionsColumns = () => ({
-  id: k.id("id"),
+  id: k.id<"recurringTransactions">("id"),
   type: txnType("type").notNull(),
   accountId: k
     .uuid("account_id")
     .notNull()
     .references(() => accounts.id),
-  toAccountId: k.uuid("to_account_id").references(() => accounts.id),
-  categoryId: k.uuid("category_id").references(() => categories.id),
-  counterpartyId: k.uuid("counterparty_id").references(() => counterparties.id),
+  toAccountId: k.uuid<"accounts">("to_account_id").references(() => accounts.id),
+  categoryId: k.uuid<"categories">("category_id").references(() => categories.id),
+  counterpartyId: k.uuid<"counterparties">("counterparty_id").references(() => counterparties.id),
   amountOriginal: k.money("amount_original").notNull(),
   currency: k
-    .text("currency")
+    .currency("currency")
     .notNull()
     .references(() => currencies.code),
   payee: k.text("payee").notNull().default(""),

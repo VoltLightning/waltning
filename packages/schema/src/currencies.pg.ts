@@ -15,7 +15,7 @@ import { pgKit as k } from "./kit.ts";
  * something to compare against SQLite.
  */
 export const currenciesColumns = () => ({
-  code: k.text("code").primaryKey(), // ISO 4217
+  code: k.currency("code").primaryKey(), // ISO 4217
   name: k.text("name").notNull(),
   symbol: k.text("symbol").notNull().default(""),
   /** 'P' prefix or 'S' suffix. */

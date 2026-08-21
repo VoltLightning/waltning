@@ -8,11 +8,22 @@
  * Grows with the registry: operation definitions, shared Zod schemas, F/R/S
  * classifications (`computations.md` §0).
  */
-export type { JsonObject, JsonPrimitive, JsonSchema, JsonValue } from "./json.ts";
+
 // The branded amount type, importable without the namespace — it appears in
 // every row type in  and in every component that renders one.
-export type { Money, PivotPerUnit, Rate, TxnType, UnitsPerPivot } from "./money.ts";
+export { type AccountingDate, accountingDate, isAccountingDate, todayIn } from "./date.ts";
+export { type Id, type IdTable, id } from "./id.ts";
+export type { JsonObject, JsonPrimitive, JsonSchema, JsonValue } from "./json.ts";
 export * as money from "./money.ts";
+export {
+  type CurrencyCode,
+  currencyCode,
+  type Money,
+  type PivotPerUnit,
+  type Rate,
+  type TxnType,
+  type UnitsPerPivot,
+} from "./money.ts";
 export {
   type AuthenticationFailure,
   authenticateResponse,
@@ -54,3 +65,12 @@ export {
   type RuleZeroOptions,
   ruleZeroFetch,
 } from "./rule-zero-fetch.ts";
+
+/**
+ * Zod schemas that produce branded values.
+ *
+ * The edge is the only place a brand can be established — inside the system a
+ * value is branded because a column or a signature says so, and at a request
+ * boundary there is only a string.
+ */
+export { zAccountingDate, zCurrencyCode, zId, zMoney, zPivotPerUnit } from "./zod.ts";

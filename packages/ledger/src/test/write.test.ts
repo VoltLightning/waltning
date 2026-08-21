@@ -16,7 +16,7 @@
  * failure between them leaves nothing.
  */
 
-import { money } from "@waltning/core";
+import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { outbox, transactions } from "../schema.ts";
@@ -41,17 +41,17 @@ const capture = {
   payload: { account_id: "acc-1", amount_original: "18.00000000" },
 };
 
-function insertTransaction(id: string) {
+function insertTransaction(txnId: Id<"transactions">) {
   return (tx: LedgerTx) =>
     tx
       .insert(transactions)
       .values({
-        id,
-        date: "2026-03-12",
+        id: txnId,
+        date: accountingDate("2026-03-12"),
         type: "expense",
-        accountId: "acc-1",
+        accountId: id<"accounts">("acc-1"),
         amountOriginal: money.toMoney("18.00"),
-        currency: "PLN",
+        currency: currencyCode("PLN"),
         fxRate: money.pivotPerUnit("1.000000000000"),
       })
       .returning()
@@ -60,7 +60,10 @@ function insertTransaction(id: string) {
 
 describe("a write with no backend in existence", () => {
   it("is on the ledger immediately, with exactly one outbox entry", () => {
-    const result = writeLocally(s.db, { ...capture, apply: insertTransaction("txn-1") });
+    const result = writeLocally(s.db, {
+      ...capture,
+      apply: insertTransaction(id<"transactions">("txn-1")),
+    });
 
     const rows = s.db.select().from(transactions).all();
     expect(rows).toHaveLength(1);
@@ -74,7 +77,7 @@ describe("a write with no backend in existence", () => {
   });
 
   it("records the payload as the drain will replay it", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction("txn-1") });
+    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
 
     const [entry] = s.db.select().from(outbox).all();
     // Read back through the driver, not from the object we passed in: `json`
@@ -84,9 +87,9 @@ describe("a write with no backend in existence", () => {
   });
 
   it("orders entries by `seq`, which is not the id and not the clock", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction("txn-1") });
-    writeLocally(s.db, { ...capture, apply: insertTransaction("txn-2") });
-    writeLocally(s.db, { ...capture, apply: insertTransaction("txn-3") });
+    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
+    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-2")) });
+    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-3")) });
 
     const seqs = s.db
       .select({ seq: outbox.seq })
@@ -113,7 +116,7 @@ describe("a failure between the two writes leaves neither", () => {
       writeLocally(s.db, {
         ...capture,
         apply: (tx) => {
-          insertTransaction("txn-1")(tx);
+          insertTransaction(id<"transactions">("txn-1"))(tx);
           throw new Error("killed mid-write");
         },
       }),
@@ -133,7 +136,9 @@ describe("a failure between the two writes leaves neither", () => {
     // succeeds, which is precisely the shape of the bug.
     s.sqlite.exec("drop table outbox");
 
-    expect(() => writeLocally(s.db, { ...capture, apply: insertTransaction("txn-1") })).toThrow();
+    expect(() =>
+      writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) }),
+    ).toThrow();
 
     expect(
       s.db.select().from(transactions).all(),
@@ -142,7 +147,7 @@ describe("a failure between the two writes leaves neither", () => {
   });
 
   it("leaves earlier writes untouched", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction("txn-1") });
+    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
 
     expect(() =>
       writeLocally(s.db, {
@@ -162,7 +167,7 @@ describe("a failure between the two writes leaves neither", () => {
 
 describe("the ledger survives the app going away", () => {
   it("a committed write is still there on the next open", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction("txn-1") });
+    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
 
     // The nearest thing to a force-quit an in-memory database allows: drop
     // every prepared statement and read again through a fresh query path. The
@@ -176,7 +181,10 @@ describe("the ledger survives the app going away", () => {
   });
 
   it("an entry can be found by the id the caller was given", () => {
-    const { entryId } = writeLocally(s.db, { ...capture, apply: insertTransaction("txn-1") });
+    const { entryId } = writeLocally(s.db, {
+      ...capture,
+      apply: insertTransaction(id<"transactions">("txn-1")),
+    });
 
     // That id is the idempotency key the server deduplicates on, so a caller
     // that cannot find its own entry cannot retry safely.

@@ -22,7 +22,15 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { money } from "@waltning/core";
+import {
+  type AccountingDate,
+  accountingDate,
+  type CurrencyCode,
+  currencyCode,
+  type Id,
+  money,
+  todayIn,
+} from "@waltning/core";
 import { eq, isNotNull, like, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { accounts, categories, transactions } from "../schema.ts";
@@ -49,16 +57,40 @@ const TO_PIVOT: Record<string, string> = {
 type FixtureAccount = {
   ref: string;
   name: string;
-  currency: string;
+  currency: CurrencyCode;
   kind: "bank" | "cash" | "card" | "deposit";
   openingBalance: string;
 };
 
 const ACCOUNTS: FixtureAccount[] = [
-  { ref: "bank-a", name: "Bank A", currency: "PLN", kind: "bank", openingBalance: "8400.00" },
-  { ref: "bank-b", name: "Bank B", currency: "USD", kind: "deposit", openingBalance: "2500.00" },
-  { ref: "card-a", name: "Card A", currency: "EUR", kind: "card", openingBalance: "0.00" },
-  { ref: "cash", name: "Cash", currency: "PLN", kind: "cash", openingBalance: "300.00" },
+  {
+    ref: "bank-a",
+    name: "Bank A",
+    currency: currencyCode("PLN"),
+    kind: "bank",
+    openingBalance: "8400.00",
+  },
+  {
+    ref: "bank-b",
+    name: "Bank B",
+    currency: currencyCode("USD"),
+    kind: "deposit",
+    openingBalance: "2500.00",
+  },
+  {
+    ref: "card-a",
+    name: "Card A",
+    currency: currencyCode("EUR"),
+    kind: "card",
+    openingBalance: "0.00",
+  },
+  {
+    ref: "cash",
+    name: "Cash",
+    currency: currencyCode("PLN"),
+    kind: "cash",
+    openingBalance: "300.00",
+  },
 ];
 
 /** Payee, category leaf, amount, and which account it lands on. */
@@ -139,7 +171,7 @@ const PATTERNS: Pattern[] = [
  * in `PATTERNS` is checked against the real seed; `null` here means one was
  * renamed, and the transaction simply arrives uncategorised.
  */
-async function leafId(name: string): Promise<string | null> {
+async function leafId(name: string): Promise<Id<"categories"> | null> {
   const [row] = await db
     .select({ id: categories.id })
     .from(categories)
@@ -149,9 +181,22 @@ async function leafId(name: string): Promise<string | null> {
 }
 
 /** Bare `YYYY-MM-DD`, walked back by whole days. No `Date` arithmetic on it. */
-function dayBefore(iso: string, days: number): string {
+/**
+ * `days` calendar days before `iso`.
+ *
+ * **The UTC round trip is safe here and is not safe in general**, which is
+ * worth saying because `new Date(...).toISOString().slice(0, 10)` is precisely
+ * the shape `AccountingDate` exists to reject: it converts an *instant* to a
+ * UTC day, and the ledger's day is local (C28).
+ *
+ * It holds in this function because the input is anchored at `T00:00:00Z` and
+ * the arithmetic is whole days, so the result never leaves the UTC calendar day
+ * it started on. Seed data has no timezone of its own; a real capture does, and
+ * uses `todayIn(zone)`.
+ */
+function dayBefore(iso: AccountingDate, days: number): AccountingDate {
   const ms = Date.parse(`${iso}T00:00:00Z`) - days * 86_400_000;
-  return new Date(ms).toISOString().slice(0, 10);
+  return accountingDate(new Date(ms).toISOString().slice(0, 10));
 }
 
 async function drop(): Promise<void> {
@@ -160,8 +205,8 @@ async function drop(): Promise<void> {
   console.log("fixture removed");
 }
 
-async function apply(today: string): Promise<void> {
-  const accountIds = new Map<string, string>();
+async function apply(today: AccountingDate): Promise<void> {
+  const accountIds = new Map<string, Id<"accounts">>();
 
   for (const a of ACCOUNTS) {
     const externalId = `${PREFIX}${a.ref}`;
@@ -245,7 +290,17 @@ async function apply(today: string): Promise<void> {
   console.log("  every name invented — this is placeholder data, not a ledger");
 }
 
-const today = new Date().toISOString().slice(0, 10);
+/**
+ * **This was `new Date().toISOString().slice(0, 10)`** — the exact shape C28
+ * records: an instant converted to a *UTC* day, so anyone east of UTC seeding
+ * after their local midnight gets yesterday's date on every row.
+ *
+ * Harmless in seed data and not harmless in the capture path, which is why the
+ * type now refuses it and there is one function that answers the question
+ * properly. The zone is the machine's, because a person seeding a database
+ * means their own today.
+ */
+const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
 if (process.argv.includes("--drop")) await drop();
 else await apply(today);
 process.exit(0);

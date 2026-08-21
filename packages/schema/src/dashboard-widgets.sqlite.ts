@@ -6,7 +6,7 @@ import { sqliteKit as k } from "./kit.ts";
 export type WidgetConfig = Record<string, unknown>;
 
 export const dashboardWidgetsColumns = () => ({
-  id: k.id("id"),
+  id: k.id<"dashboardWidgets">("id"),
   layoutId: k
     .uuid("layout_id")
     .notNull()

@@ -4,8 +4,8 @@ import { sqliteKit as k } from "./kit.ts";
 
 /** See `categories.pg.ts`. */
 export const categoriesColumns = () => ({
-  id: k.id("id"),
-  parentId: k.uuid("parent_id").references((): AnySQLiteColumn => categories.id, {
+  id: k.id<"categories">("id"),
+  parentId: k.uuid<"categories">("parent_id").references((): AnySQLiteColumn => categories.id, {
     onDelete: "restrict",
   }),
   name: k.text("name").notNull(),

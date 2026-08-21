@@ -6,7 +6,7 @@ import { pgKit as k } from "./kit.ts";
  * Postgres construction with no SQLite equivalent.
  */
 export const dashboardLayoutsColumns = () => ({
-  id: k.id("id"),
+  id: k.id<"dashboardLayouts">("id"),
   name: k.text("name").notNull(),
   isActive: k.boolean("is_active").notNull().default(false),
   isPreset: k.boolean("is_preset").notNull().default(false),
