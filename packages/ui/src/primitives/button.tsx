@@ -19,8 +19,9 @@
  */
 
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { color, focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -55,6 +56,8 @@ export function Button({
    * looks handled.
    */
   const [focused, setFocused] = useState(false);
+  const styles = useStyles();
+  const ink = styles[INK_STYLE[variant]];
 
   return (
     <Pressable
@@ -68,7 +71,7 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         { height: HEIGHT[size] },
-        VARIANT[variant],
+        styles[VARIANT_STYLE[variant]],
         pressed ? styles.pressed : null,
         // §2.6: on **every** interactive element, never removed and never
         // replaced by a colour change alone — a colour-only focus state is
@@ -82,31 +85,36 @@ export function Button({
         for a spinner re-measures the button, and the thing beside an
         affirmative action is usually the destructive one.
       */}
-      <Text style={[styles.label, INK[variant], loading ? styles.hidden : null]}>{label}</Text>
+      <Text style={[styles.label, ink, loading ? styles.hidden : null]}>{label}</Text>
       {loading ? (
         <View style={styles.spinner}>
-          <ActivityIndicator size="small" color={INK[variant].color} />
+          <ActivityIndicator size="small" color={ink.color} />
         </View>
       ) : null}
     </Pressable>
   );
 }
 
-const VARIANT = StyleSheet.create({
-  primary: { backgroundColor: color.green600 },
-  secondary: { borderWidth: 1, borderColor: color.green200 },
-  ghost: {},
-  danger: { borderWidth: 1, borderColor: color.negative },
-});
+/**
+ * One stylesheet rather than three, because `makeStyles` builds per theme and
+ * three caches would be three chances for one of them to miss.
+ */
+const useStyles = makeStyles((t) => ({
+  variantPrimary: { backgroundColor: t.accent },
+  variantSecondary: { borderWidth: 1, borderColor: t.border },
+  variantGhost: {},
+  variantDanger: { borderWidth: 1, borderColor: t.dangerBorder },
 
-const INK = StyleSheet.create({
-  primary: { color: color.surface },
-  secondary: { color: color.green700 },
-  ghost: { color: color.muted },
-  danger: { color: color.negative },
-});
+  // `textOnAccent`, not `surface`. They are the same value in light and are not
+  // the same thing: one is a card's background, the other is a label sitting on
+  // a filled button. See `theme/roles.ts`.
+  inkPrimary: { color: t.textOnAccent },
+  inkSecondary: { color: t.accentText },
+  inkGhost: { color: t.textMuted },
+  inkDanger: { color: t.dangerText },
 
-const styles = StyleSheet.create({
+  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
+
   base: {
     minHeight: touchTarget.min,
     justifyContent: "center",
@@ -126,6 +134,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   pressed: { opacity: 0.85 },
-  focused: { outlineWidth: focus.width, outlineColor: focus.color, outlineOffset: focus.offset },
   inactive: { opacity: 0.45 },
-});
+}));
+
+const VARIANT_STYLE = {
+  primary: "variantPrimary",
+  secondary: "variantSecondary",
+  ghost: "variantGhost",
+  danger: "variantDanger",
+} as const satisfies Record<ButtonVariant, string>;
+
+const INK_STYLE = {
+  primary: "inkPrimary",
+  secondary: "inkSecondary",
+  ghost: "inkGhost",
+  danger: "inkDanger",
+} as const satisfies Record<ButtonVariant, string>;

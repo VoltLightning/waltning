@@ -14,8 +14,9 @@
  */
 
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-import { color, focus, radius, touchTarget } from "../tokens.ts";
+import { Pressable, View } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { focus, radius, touchTarget } from "../tokens.ts";
 
 export type IconButtonSize = 32 | 40 | 44;
 
@@ -41,6 +42,8 @@ export function IconButton({
   // `hitSlop` rather than padding so the visual size stays what was asked for.
   const slop = Math.max(0, (touchTarget.min - size) / 2);
 
+  const styles = useStyles();
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -64,10 +67,10 @@ export function IconButton({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   base: { alignItems: "center", justifyContent: "center", borderRadius: radius.sm },
   content: { alignItems: "center", justifyContent: "center" },
-  pressed: { backgroundColor: color.green100 },
-  focused: { outlineWidth: focus.width, outlineColor: focus.color, outlineOffset: focus.offset },
+  pressed: { backgroundColor: t.pressedFill },
+  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
   disabled: { opacity: 0.45 },
-});
+}));

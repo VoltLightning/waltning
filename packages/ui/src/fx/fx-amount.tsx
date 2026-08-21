@@ -24,9 +24,10 @@
  */
 
 import { money } from "@waltning/core";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Tag } from "../primitives/tag";
-import { color, fontFamily, tabularNums, type } from "../tokens.ts";
+import { makeStyles } from "../theme/index.ts";
+import { fontFamily, tabularNums, type } from "../tokens.ts";
 import { Amount } from "./amount";
 
 /**
@@ -83,6 +84,8 @@ export function FxAmount({
   // different places, because there is only one place.
   const converted = money.toPivot(value, rate);
 
+  const styles = useStyles();
+
   return (
     <View style={styles.row}>
       <Amount value={value} currency={currency} decimals={decimals} size="small" emphasis="muted" />
@@ -103,13 +106,13 @@ export function FxAmount({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   row: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  separator: { color: color.muted, fontSize: type.caption.fontSize },
+  separator: { color: t.textMuted, fontSize: type.caption.fontSize },
   rate: {
-    color: color.muted,
+    color: t.textMuted,
     fontFamily: fontFamily.mono,
     fontSize: type.caption.fontSize,
     fontVariant: [...tabularNums],
   },
-});
+}));

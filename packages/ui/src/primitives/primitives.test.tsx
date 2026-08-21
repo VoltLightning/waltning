@@ -7,10 +7,12 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { light, ThemeProvider } from "../theme/index.ts";
 import { Button } from "./button";
 import { Chip } from "./chip";
 import { IconButton } from "./icon-button";
 import { SegmentControl } from "./segment-control";
+import { Tag } from "./tag";
 
 describe("accessible names", () => {
   it("an icon button announces itself", () => {
@@ -62,5 +64,41 @@ describe("Button", () => {
     render(<Button label="Approve" loading onPress={onPress} />);
     screen.getByText("Approve").click();
     expect(onPress).not.toHaveBeenCalled();
+  });
+});
+
+describe("a role reaches the pixel, not just the style object", () => {
+  /**
+   * **The property that makes re-theming a one-line change**, and the reason it
+   * is asserted on the *computed* colour rather than on the stylesheet.
+   *
+   * `Tag` applies its fill inline; `Chip` applies its through the stylesheet,
+   * which react-native-web compiles to an injected CSS class. A check against
+   * rendered markup therefore sees a colour for one and a class name for the
+   * other — which is how a first attempt at this test passed for `Tag` and
+   * reported `Chip` as broken when nothing was.
+   *
+   * Amber is the case worth pinning: `design-system/02` gives it one meaning —
+   * *asserted or aged rather than observed* (P4) — across a manual override, an
+   * estimated rate, an unsettled item and a stale figure. One meaning has to be
+   * one line, or the four drift apart.
+   */
+  it("repointing `assertedFill` moves every asserted surface", () => {
+    const amberish = { ...light, assertedFill: "rgb(255, 153, 0)" };
+
+    render(
+      <ThemeProvider theme={amberish}>
+        <Tag variant="warn">Estimated</Tag>
+        <Chip placeholder="Category" value="Groceries" machineFilled onPress={() => undefined} />
+      </ThemeProvider>,
+    );
+
+    const tag = screen.getByText("Estimated").parentElement as HTMLElement;
+    const chip = screen.getByLabelText(/filled automatically/i);
+
+    expect(getComputedStyle(tag).backgroundColor).toBe("rgb(255, 153, 0)");
+    expect(getComputedStyle(chip).backgroundColor).toBe("rgb(255, 153, 0)");
+    // Non-vacuous: the shipped value must not already be this.
+    expect(light.assertedFill).not.toBe(amberish.assertedFill);
   });
 });

@@ -15,8 +15,9 @@
  */
 
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { color, focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { Pressable, Text, View } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type Segment = {
   value: string;
@@ -34,6 +35,8 @@ export type SegmentControlProps = {
 
 export function SegmentControl({ segments, value, onChange }: SegmentControlProps) {
   const [focusedValue, setFocusedValue] = useState<string | null>(null);
+
+  const styles = useStyles();
 
   return (
     <View accessibilityRole="tablist" style={styles.track}>
@@ -71,10 +74,10 @@ export function SegmentControl({ segments, value, onChange }: SegmentControlProp
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   track: {
     flexDirection: "row",
-    backgroundColor: color.green50,
+    backgroundColor: t.subtleFill,
     borderRadius: radius.pill,
     padding: 2,
   },
@@ -88,10 +91,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: space.xl,
   },
-  active: { backgroundColor: color.surface },
-  focused: { outlineWidth: focus.width, outlineColor: focus.color, outlineOffset: focus.offset },
-  label: { color: color.muted, fontSize: type.bodySm.fontSize },
-  labelActive: { color: color.ink, fontWeight: "600" },
-  count: { color: color.muted, fontSize: type.caption.fontSize },
-  countActive: { color: color.green700 },
-});
+  active: { backgroundColor: t.surface },
+  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
+  label: { color: t.textMuted, fontSize: type.bodySm.fontSize },
+  labelActive: { color: t.text, fontWeight: "600" },
+  count: { color: t.textMuted, fontSize: type.caption.fontSize },
+  countActive: { color: t.accentText },
+}));

@@ -16,10 +16,11 @@
  */
 
 import type { money } from "@waltning/core";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { Tag } from "../primitives/tag";
-import { color, hairline, space, tabularNums, type } from "../tokens.ts";
+import { makeStyles } from "../theme/index.ts";
+import { hairline, space, tabularNums, type } from "../tokens.ts";
 
 export type TransactionRowProps = {
   /** Bare `YYYY-MM-DD`. Rendered as given — never through a `Date` (C28). */
@@ -46,6 +47,8 @@ export function TransactionRow({
 }: TransactionRowProps) {
   const meta = [account, category].filter(Boolean).join(" · ");
 
+  const styles = useStyles();
+
   return (
     <View style={styles.row}>
       {/*
@@ -68,23 +71,23 @@ export function TransactionRow({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
     borderBottomWidth: hairline.width,
-    borderBottomColor: hairline.color,
+    borderBottomColor: t.hairline,
   },
   date: {
-    color: color.muted,
+    color: t.textMuted,
     fontSize: type.caption.fontSize,
     width: 44,
     fontVariant: [...tabularNums],
   },
   identity: { flex: 1, gap: 2 },
   payeeLine: { flexDirection: "row", alignItems: "center", gap: space.md },
-  payee: { color: color.ink, fontSize: type.bodySm.fontSize },
-  meta: { color: color.muted, fontSize: type.caption.fontSize },
-});
+  payee: { color: t.text, fontSize: type.bodySm.fontSize },
+  meta: { color: t.textMuted, fontSize: type.caption.fontSize },
+}));

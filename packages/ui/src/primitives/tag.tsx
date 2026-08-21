@@ -17,8 +17,9 @@
  * than observed" (P4), told apart only by what the tag says.
  */
 
-import { StyleSheet, Text, View } from "react-native";
-import { color, radius, space, type } from "../tokens.ts";
+import { Text, View } from "react-native";
+import { makeStyles, useTheme } from "../theme/index.ts";
+import { radius, space, type } from "../tokens.ts";
 
 export type TagVariant = "neutral" | "warn" | "negative" | "biz";
 
@@ -27,35 +28,44 @@ export type TagProps = {
   children: string;
 };
 
-const FILL: Record<TagVariant, string> = {
-  neutral: color.green100,
-  warn: color.amber,
-  negative: color.negativeBg,
-  biz: color.green100,
-};
+/**
+ * `biz` and `neutral` resolve to the same pair today and are still two entries.
+ * A business marker and a plain category label are different claims about a
+ * row, and the day one of them moves is the day a merge here would have to be
+ * unpicked across every caller.
+ */
+const FILL = {
+  neutral: "tagNeutralFill",
+  warn: "assertedFill",
+  negative: "dangerFill",
+  biz: "tagNeutralFill",
+} as const satisfies Record<TagVariant, string>;
 
-const INK: Record<TagVariant, string> = {
-  neutral: color.green700,
-  warn: color.amberInk,
-  negative: color.negative,
-  biz: color.green700,
-};
+const INK = {
+  neutral: "tagNeutralText",
+  warn: "assertedText",
+  negative: "dangerText",
+  biz: "tagNeutralText",
+} as const satisfies Record<TagVariant, string>;
 
 export function Tag({ variant = "neutral", children }: TagProps) {
+  const t = useTheme();
+  const styles = useStyles();
+
   return (
-    <View style={[styles.tag, { backgroundColor: FILL[variant] }]}>
+    <View style={[styles.tag, { backgroundColor: t[FILL[variant]] }]}>
       {/*
         Casing is `textTransform` alone, never `.toUpperCase()` in JavaScript.
         Two mechanisms doing one job is one that eventually disagrees — and the
         CSS form is also the accessible one: a screen reader announces the
         original text rather than spelling out capitals.
       */}
-      <Text style={[styles.text, { color: INK[variant] }]}>{children}</Text>
+      <Text style={[styles.text, { color: t[INK[variant]] }]}>{children}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   tag: {
     borderRadius: radius.pill,
     paddingHorizontal: space.md,
@@ -69,4 +79,4 @@ const styles = StyleSheet.create({
     letterSpacing: type.tag.letterSpacing,
     textTransform: "uppercase",
   },
-});
+}));

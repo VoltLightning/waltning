@@ -71,6 +71,15 @@ function importsOf(file: string): string[] {
  */
 const FOUNDATION = new Set([
   "primitives", // ui — domain-free shapes
+  /**
+   * `theme` — the roles a colour can play, and the hook that resolves them.
+   *
+   * Domain-free by the same property `primitives/` is: *surface*, *danger* and
+   * *focus ring* mean the same thing in a ledger or a chat client. It sits
+   * below `primitives/` rather than beside it — a `Button` names a role, and no
+   * role has ever needed a button.
+   */
+  "theme",
   "transport", // client — reaching the server
   "query", // client — the async-read primitive
   /**

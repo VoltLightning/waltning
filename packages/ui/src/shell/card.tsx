@@ -10,8 +10,9 @@
  * above.
  */
 
-import { StyleSheet, Text, View } from "react-native";
-import { color, hairline, radius, shadow, space, type } from "../tokens.ts";
+import { Text, View } from "react-native";
+import { makeStyles } from "../theme/index.ts";
+import { hairline, radius, shadow, space, type } from "../tokens.ts";
 
 export type CardProps = {
   title?: string;
@@ -21,6 +22,8 @@ export type CardProps = {
 };
 
 export function Card({ title, action, children }: CardProps) {
+  const styles = useStyles();
+
   return (
     <View style={styles.card}>
       {title || action ? (
@@ -35,12 +38,14 @@ export function Card({ title, action, children }: CardProps) {
 }
 
 export function GroundPanel({ children }: { children: React.ReactNode }) {
+  const styles = useStyles();
+
   return <View style={styles.panel}>{children}</View>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   card: {
-    backgroundColor: color.surface,
+    backgroundColor: t.surface,
     borderRadius: radius.lg,
     padding: space.x5,
     gap: space.x3,
@@ -55,16 +60,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: space.x3,
     borderBottomWidth: hairline.width,
-    borderBottomColor: hairline.color,
+    borderBottomColor: t.hairline,
     paddingBottom: space.xl,
   },
-  title: { color: color.ink, fontSize: type.displayThree.fontSize, fontWeight: "600" },
+  title: { color: t.text, fontSize: type.displayThree.fontSize, fontWeight: "600" },
   panel: {
-    backgroundColor: color.ground,
+    backgroundColor: t.ground,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: space.x5,
     gap: space.x4,
     flex: 1,
   },
-});
+}));
