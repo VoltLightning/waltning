@@ -24,6 +24,7 @@
 
 import {
   defineOperation as defineCoreOperation,
+  type GateFields,
   gateDecision,
   type JsonValue,
   type Operation,
@@ -76,12 +77,10 @@ async function translating<T>(run: () => Promise<T>): Promise<T> {
  * true before it does is that a gated write **cannot run**, and now it cannot.
  */
 function gate(
-  op: {
-    name: string;
-    kind: OperationKind;
-    autoEligible: boolean;
-    taxSensitiveFields?: readonly string[] | undefined;
-  },
+  // `GateFields` rather than the same four fields written out again — this
+  // file having restated them is what showed the placeholder generics in
+  // `gate.ts` were not carrying their weight.
+  op: GateFields,
   input: unknown,
   ctx: OperationContext,
 ): void {
