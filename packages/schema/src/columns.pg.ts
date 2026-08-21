@@ -23,3 +23,4 @@ export {
   transactionLinesColumns,
 } from "./transaction-lines.pg.ts";
 export { transactionTagsColumns } from "./transaction-tags.pg.ts";
+export { transactionsColumns } from "./transactions.pg.ts";

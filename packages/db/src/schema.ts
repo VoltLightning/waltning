@@ -28,7 +28,6 @@
 import { type SQL, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
-  bigint,
   boolean,
   check,
   date,
@@ -52,7 +51,6 @@ import {
 
 /** Money. `numeric` is exact; scale 8 accommodates crypto balances. */
 const money = (name: string) => numeric(name, { precision: 20, scale: 8 });
-const rate = (name: string) => numeric(name, { precision: 24, scale: 12 });
 
 /** Normalized name for uniqueness: case- and whitespace-insensitive. */
 const normalized = (col: AnyPgColumn): SQL => sql`lower(btrim(${col}))`;
@@ -79,7 +77,6 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull(
  * `mode: "number"` because 2^53 row updates is not a reachable number and a
  * `bigint` here would push `BigInt` into every client that reads a row.
  */
-const version = () => bigint("version", { mode: "number" }).notNull().default(1);
 
 /* ------------------------------------------------------------------ *
  * Enums
@@ -97,6 +94,7 @@ import {
   recurringTransactionsColumns,
   tagsColumns,
   transactionLinesColumns,
+  transactionsColumns,
   transactionTagsColumns,
 } from "@waltning/schema/columns-pg";
 /**
@@ -249,216 +247,80 @@ export const counterparties = pgTable("counterparties", counterpartiesColumns(),
  * Transactions
  * ------------------------------------------------------------------ */
 
-export const transactions = pgTable(
-  "transactions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    date: date("date").notNull(),
-    type: txnType("type").notNull(),
+/**
+ * **The two pivot columns left this table** (§14.7).
+ *
+ * They were `GENERATED ALWAYS ... STORED`, which SQLite has no equivalent for —
+ * so under the rule that Postgres adds power *around* a shared table and never
+ * inside it, the multiplication moved to the `transactions_valued` view in
+ * `0005`. `computations.md` is unchanged; only where it happens moved.
+ *
+ * Everything Postgres does that SQLite cannot — nine indexes, the foreign-key
+ * behaviours, every check — still layers around the shared columns here.
+ */
+export const transactions = pgTable("transactions", transactionsColumns(), (t) => [
+  index("transactions_date_idx").on(t.date),
+  index("transactions_account_date_idx").on(t.accountId, t.date),
+  index("transactions_category_idx").on(t.categoryId),
+  index("transactions_to_account_idx").on(t.toAccountId),
+  index("transactions_counterparty_idx").on(t.counterpartyId),
+  index("transactions_payee_idx").on(t.payee),
+  index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
+  // Excludes soft-deleted rows: otherwise deleting an imported row makes its
+  // external_id permanently unusable, and the blocking row is invisible in
+  // every read path (§6.9).
+  uniqueIndex("transactions_external_id_uq")
+    .on(t.externalId)
+    .where(sql`${t.externalId} is not null and ${t.deletedAt} is null`),
+  // A recurring rule fills each occurrence exactly once. If you already
+  // entered this month's rent by hand, the rule's insert is rejected.
+  uniqueIndex("transactions_occurrence_uq")
+    .on(t.recurringId, t.occurrenceDate)
+    .where(sql`${t.recurringId} is not null and ${t.deletedAt} is null`),
 
-    accountId: uuid("account_id")
-      .notNull()
-      .references(() => accounts.id, { onDelete: "restrict" }),
-    /** Set if and only if type = 'transfer'. */
-    toAccountId: uuid("to_account_id").references(() => accounts.id, {
-      onDelete: "restrict",
-    }),
-    categoryId: uuid("category_id").references(() => categories.id, {
-      onDelete: "restrict",
-    }),
-    /**
-     * Debt (§6.6), or attribution of a contribution to a shared account (§6.7).
-     * The latter carries no settlement expectation and is never aged.
-     */
-    counterpartyId: uuid("counterparty_id").references(() => counterparties.id),
-    /**
-     * What the reference *means*. Set at write time, never inferred: deriving
-     * it from `accounts.ownership` works today but silently rewrites the
-     * meaning of history the moment an account is reclassified.
-     */
-    counterpartyRole: counterpartyRole("counterparty_role"),
-    /**
-     * Which balance a settlement discharges, when that differs from the
-     * currency that changed hands (§6.6). Without these, S14's picker is
-     * unimplementable: the currency trigger forces the row into the account's
-     * currency, which discharges the wrong balance.
-     */
-    debtCurrency: text("debt_currency").references(() => currencies.code),
-    debtAmount: money("debt_amount"),
-
-    /** Authoritative: the account's own currency, always positive. */
-    amountOriginal: money("amount_original").notNull(),
-    currency: text("currency")
-      .notNull()
-      .references(() => currencies.code),
-    /**
-     * To the pivot, on this row's own date. **No default**: a forgotten rate
-     * must be a NOT NULL violation, not a silent 1:1 valuation. With
-     * amountPivot generated, a defaulted 1 would turn a bad input into an
-     * authoritative-looking output.
-     */
-    fxRate: rate("fx_rate").notNull(),
-    /**
-     * §7.6 — no rate was published for this date and the nearest was used. The
-     * rate *table* stays capped at 10 days of carry, so it never holds an
-     * invented figure; the estimate lives here, attributable to one row.
-     */
-    fxRateEstimated: boolean("fx_rate_estimated").notNull().default(false),
-    /**
-     * Generated, not written. This is the column every aggregate reads, so
-     * leaving it to application code would make the most-read number in the
-     * system the one most able to drift from its inputs.
-     */
-    amountPivot: money("amount_pivot").generatedAlwaysAs(
-      (): SQL => sql`${transactions.amountOriginal} * ${transactions.fxRate}`,
-    ),
-
-    /**
-     * Cross-currency transfers store BOTH amounts (§7.5). What actually landed
-     * is a fact; deriving it from a reference rate would invent a number and
-     * silently erase the bank's spread.
-     */
-    toAmount: money("to_amount"),
-    toCurrency: text("to_currency").references(() => currencies.code),
-    /**
-     * The **reference** rate for `to_currency` on this row's date, pivot per
-     * unit. NOT the realized rate: storing that makes the two legs net to
-     * exactly zero and erases the bank's margin, which §7.0 says cannot happen.
-     * The realized rate is derived for display as to_amount / amount_original.
-     */
-    toFxRate: rate("to_fx_rate"),
-    /** Generated. The destination leg needs its own pivot value (computations §5). */
-    toAmountPivot: money("to_amount_pivot").generatedAlwaysAs(
-      (): SQL => sql`${transactions.toAmount} * ${transactions.toFxRate}`,
-    ),
-
-    payee: text("payee").notNull().default(""),
-    note: text("note").notNull().default(""),
-    isBusiness: boolean("is_business").notNull().default(false),
-
-    /**
-     * §6.8 — a one-off capital event. Excluded from trends, targets and period
-     * comparisons by default, with the exclusion stated. A single property
-     * purchase is 96% of its category and ~7× a normal year; left unflagged it
-     * makes every comparison meaningless permanently.
-     */
-    isCapital: boolean("is_capital").notNull().default(false),
-
-    /**
-     * §14.4 — which recurring rule produced this row, and which occurrence it
-     * satisfies. The unique index below is what makes double-posting
-     * impossible rather than something a scheduler has to remember.
-     */
-    recurringId: uuid("recurring_id").references((): AnyPgColumn => recurringTransactions.id),
-    occurrenceDate: date("occurrence_date"),
-
-    /** A stated bank fee, distinct from the rate margin (§7.5). */
-    fee: money("fee"),
-
-    /** §13.2 — business rows only; optional from day one so opting into VAT later is not a migration. */
-    counterpartyTaxId: text("counterparty_tax_id"),
-    documentRef: text("document_ref"),
-    ksefId: text("ksef_id"),
-    /**
-     * §13.6 — resolved from `ryczalt_rates` at the row's own date and STAMPED,
-     * so a later rate correction cannot reprice a filed period. The activity is
-     * stamped too: without it, two activities sharing 12% today are
-     * indistinguishable if the rates later diverge, and a retroactive
-     * correction has no affected-row query.
-     */
-    ryczaltRate: numeric("ryczalt_rate", { precision: 5, scale: 4 }),
-    ryczaltActivity: text("ryczalt_activity"),
-
-    /**
-     * The rate a **tax filing** uses, stamped per row (§13.6, migration `0009`).
-     *
-     * Deliberately not `fx_rate`. §7 triangulates through the USD pivot, which
-     * produces a cross-rate the jurisdiction's central bank never published; a
-     * tax authority uses the rate it actually printed. For PL that is the average
-     * NBP rate from the **last working day preceding** the day the revenue arose.
-     *
-     * Stamped rather than joined so a later rate correction cannot reprice a
-     * filed period — the same reason `ryczaltRate` is stamped.
-     */
-    taxFxRate: rate("tax_fx_rate"),
-    taxFxDate: date("tax_fx_date"),
-    taxFxSource: text("tax_fx_source"),
-
-    source: txnSource("source").notNull().default("manual"),
-    externalId: text("external_id"),
-
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-    version: version(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (t) => [
-    index("transactions_date_idx").on(t.date),
-    index("transactions_account_date_idx").on(t.accountId, t.date),
-    index("transactions_category_idx").on(t.categoryId),
-    index("transactions_to_account_idx").on(t.toAccountId),
-    index("transactions_counterparty_idx").on(t.counterpartyId),
-    index("transactions_payee_idx").on(t.payee),
-    index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
-    // Excludes soft-deleted rows: otherwise deleting an imported row makes its
-    // external_id permanently unusable, and the blocking row is invisible in
-    // every read path (§6.9).
-    uniqueIndex("transactions_external_id_uq")
-      .on(t.externalId)
-      .where(sql`${t.externalId} is not null and ${t.deletedAt} is null`),
-    // A recurring rule fills each occurrence exactly once. If you already
-    // entered this month's rent by hand, the rule's insert is rejected.
-    uniqueIndex("transactions_occurrence_uq")
-      .on(t.recurringId, t.occurrenceDate)
-      .where(sql`${t.recurringId} is not null and ${t.deletedAt} is null`),
-
-    // Adjustments carry their own sign: reconciling an account DOWNWARD is the
-    // ordinary use, and every other type takes direction from `type` (§7.2).
-    check(
-      "transactions_amount_positive",
-      sql`${t.amountOriginal} >= 0 or ${t.type} = 'adjustment'`,
-    ),
-    check(
-      "transactions_transfer_shape",
-      sql`(${t.type} = 'transfer') = (${t.toAccountId} is not null)`,
-    ),
-    check(
-      "transactions_transfer_distinct",
-      sql`${t.toAccountId} is null or ${t.toAccountId} <> ${t.accountId}`,
-    ),
-    // Both amounts, or neither — a half-specified transfer is a silent bug.
-    check(
-      "transactions_to_amount_shape",
-      sql`(${t.type} = 'transfer') = (${t.toAmount} is not null)`,
-    ),
-    check("transactions_to_amount_positive", sql`${t.toAmount} is null or ${t.toAmount} >= 0`),
-    // The destination leg's pivot value is computed as to_amount × to_fx_rate
-    // (§7.4), so a transfer missing either is a balance that comes out silently
-    // wrong rather than a write that fails.
-    check(
-      "transactions_to_currency_shape",
-      sql`(${t.type} = 'transfer') = (${t.toCurrency} is not null)`,
-    ),
-    check(
-      "transactions_to_fx_rate_shape",
-      sql`(${t.type} = 'transfer') = (${t.toFxRate} is not null)`,
-    ),
-    check(
-      "transactions_category_shape",
-      sql`(${t.type} in ('income', 'expense')) or ${t.categoryId} is null`,
-    ),
-    // A counterparty reference must say what it means, and a role without a
-    // counterparty is meaningless.
-    check(
-      "transactions_counterparty_role_shape",
-      sql`(${t.counterpartyId} is not null) = (${t.counterpartyRole} is not null)`,
-    ),
-    check(
-      "transactions_occurrence_shape",
-      sql`(${t.recurringId} is null) = (${t.occurrenceDate} is null)`,
-    ),
-  ],
-);
+  // Adjustments carry their own sign: reconciling an account DOWNWARD is the
+  // ordinary use, and every other type takes direction from `type` (§7.2).
+  check("transactions_amount_positive", sql`${t.amountOriginal} >= 0 or ${t.type} = 'adjustment'`),
+  check(
+    "transactions_transfer_shape",
+    sql`(${t.type} = 'transfer') = (${t.toAccountId} is not null)`,
+  ),
+  check(
+    "transactions_transfer_distinct",
+    sql`${t.toAccountId} is null or ${t.toAccountId} <> ${t.accountId}`,
+  ),
+  // Both amounts, or neither — a half-specified transfer is a silent bug.
+  check(
+    "transactions_to_amount_shape",
+    sql`(${t.type} = 'transfer') = (${t.toAmount} is not null)`,
+  ),
+  check("transactions_to_amount_positive", sql`${t.toAmount} is null or ${t.toAmount} >= 0`),
+  // The destination leg's pivot value is computed as to_amount × to_fx_rate
+  // (§7.4), so a transfer missing either is a balance that comes out silently
+  // wrong rather than a write that fails.
+  check(
+    "transactions_to_currency_shape",
+    sql`(${t.type} = 'transfer') = (${t.toCurrency} is not null)`,
+  ),
+  check(
+    "transactions_to_fx_rate_shape",
+    sql`(${t.type} = 'transfer') = (${t.toFxRate} is not null)`,
+  ),
+  check(
+    "transactions_category_shape",
+    sql`(${t.type} in ('income', 'expense')) or ${t.categoryId} is null`,
+  ),
+  // A counterparty reference must say what it means, and a role without a
+  // counterparty is meaningless.
+  check(
+    "transactions_counterparty_role_shape",
+    sql`(${t.counterpartyId} is not null) = (${t.counterpartyRole} is not null)`,
+  ),
+  check(
+    "transactions_occurrence_shape",
+    sql`(${t.recurringId} is null) = (${t.occurrenceDate} is null)`,
+  ),
+]);
 
 export const tags = pgTable("tags", tagsColumns(), (t) => [
   uniqueIndex("tags_name_uq").on(normalized(t.name)),

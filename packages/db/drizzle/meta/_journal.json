@@ -36,6 +36,13 @@
       "when": 1787238417324,
       "tag": "0004_row_touch_and_line_sum",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787322584366,
+      "tag": "0005_transactions_valued",
+      "breakpoints": true
     }
   ]
 }
