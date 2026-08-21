@@ -9,7 +9,7 @@
  * proxy's 403 and will treat a permanent refusal as a transport blip forever.
  */
 
-import { initTRPC } from "@trpc/server";
+import { initTRPC, type TRPCError } from "@trpc/server";
 import type { Database } from "@waltning/db";
 import { ZodError } from "zod";
 import {
@@ -92,35 +92,82 @@ const t = initTRPC.context<Context>().create({
  * *values* were wrong, which is the one situation `validation` describes and the
  * only one where `fieldErrors` can name anything.
  */
-function mapTrpcCode(code: string, cause: unknown): ErrorCode {
-  switch (code) {
-    case "BAD_REQUEST":
-      return cause instanceof ZodError ? "validation" : "internal";
-    /**
-     * **Not `validation`, and this one loses writes.**
-     *
-     * A body that did not parse. `validation` is documented *never retry
-     * unchanged*, so classifying this as one tells the outbox drain that a
-     * dropped connection is a permanent input error and the write is discarded
-     * having never reached an operation. Nothing about the input was wrong; the
-     * bytes did not all arrive.
-     *
-     * `internal` is the existing retryable bucket, so nothing downstream needs
-     * new vocabulary. A genuinely malformed request — a client bug rather than
-     * an accident — then retries against its budget and ends `stalled`, which
-     * `architecture/08` makes visible on S30. Visible and bounded beats
-     * silently dropped.
-     */
-    case "PARSE_ERROR":
-      return "internal";
-    case "FORBIDDEN":
-    case "UNAUTHORIZED":
-      return "forbidden";
-    case "NOT_FOUND":
-      return "not_found";
-    default:
-      return "internal";
-  }
+/**
+ * Every tRPC code, classified. **A total map, not a switch with a default.**
+ *
+ * `mapTrpcCode` took `code: string`, so `error.code` — already a union of the
+ * twenty keys tRPC defines — widened at the seam and the `default` arm swallowed
+ * everything else. Three things followed: a typo like `"NOT_FOND"` compiled and
+ * silently fell through, a tRPC upgrade adding a code inherited `internal`
+ * without anyone deciding that, and nothing in the file said which codes had
+ * actually been considered.
+ *
+ * `Record<TrpcCode, …>` makes each one a decision the compiler insists on. An
+ * upgrade that adds a code fails the build, which is the correct outcome: the
+ * `PARSE_ERROR` note below is a worked example of what mis-bucketing costs, and
+ * inheriting a default is how you get it wrong without noticing.
+ *
+ * `TRPCError["code"]` rather than a deep import — the union is derived from the
+ * error class this file already handles, so it cannot drift from what tRPC
+ * actually throws.
+ */
+type TrpcCode = TRPCError["code"];
+
+const DOMAIN_CODE_BY_TRPC_CODE: Record<TrpcCode, ErrorCode> = {
+  /**
+   * **Not `validation`, and this one loses writes.**
+   *
+   * A body that did not parse. `validation` is documented *never retry
+   * unchanged*, so classifying this as one tells the outbox drain that a
+   * dropped connection is a permanent input error and the write is discarded
+   * having never reached an operation. Nothing about the input was wrong; the
+   * bytes did not all arrive.
+   *
+   * `internal` is the existing retryable bucket, so nothing downstream needs
+   * new vocabulary. A genuinely malformed request — a client bug rather than an
+   * accident — then retries against its budget and ends `stalled`, which
+   * `architecture/08` makes visible on S30. Visible and bounded beats silently
+   * dropped.
+   */
+  PARSE_ERROR: "internal",
+
+  /** Overridden below when the cause is a `ZodError`. See `mapTrpcCode`. */
+  BAD_REQUEST: "internal",
+
+  UNAUTHORIZED: "forbidden",
+  FORBIDDEN: "forbidden",
+  /** No credential will fix it, and the drain must not retry it as one. */
+  PAYMENT_REQUIRED: "forbidden",
+
+  NOT_FOUND: "not_found",
+
+  /**
+   * Retryable, every one. A method that is not supported *here* may be
+   * supported by the build behind the next reconnect, and the rest are
+   * transport or capacity — the cases `internal` exists for.
+   */
+  METHOD_NOT_SUPPORTED: "internal",
+  TIMEOUT: "internal",
+  CONFLICT: "internal",
+  PRECONDITION_FAILED: "internal",
+  PRECONDITION_REQUIRED: "internal",
+  PAYLOAD_TOO_LARGE: "internal",
+  UNSUPPORTED_MEDIA_TYPE: "internal",
+  UNPROCESSABLE_CONTENT: "internal",
+  TOO_MANY_REQUESTS: "internal",
+  CLIENT_CLOSED_REQUEST: "internal",
+  INTERNAL_SERVER_ERROR: "internal",
+  NOT_IMPLEMENTED: "internal",
+  BAD_GATEWAY: "internal",
+  SERVICE_UNAVAILABLE: "internal",
+  GATEWAY_TIMEOUT: "internal",
+};
+
+function mapTrpcCode(code: TrpcCode, cause: unknown): ErrorCode {
+  // The one code whose meaning depends on its cause, which is why the map
+  // alone is not enough — see this function's own note above.
+  if (code === "BAD_REQUEST") return cause instanceof ZodError ? "validation" : "internal";
+  return DOMAIN_CODE_BY_TRPC_CODE[code];
 }
 
 /**

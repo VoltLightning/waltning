@@ -19,7 +19,7 @@
  */
 
 import type { z } from "zod";
-import type { Operation } from "./operation.ts";
+import type { Operation, OperationKind } from "./operation.ts";
 
 /**
  * Fields that are never auto-eligible, whatever grant is in force (§11.2).
@@ -66,14 +66,58 @@ export type GateDecision =
       fields: readonly string[];
     };
 
+/**
+ * The part of an operation the gate reads, named once.
+ *
+ * **This was `Pick<Operation<z.ZodTypeAny, unknown, unknown>, …>`**, and the two
+ * `unknown`s were placeholders — the gate never looks at an operation's output
+ * or its context, so both type arguments existed only to satisfy the arity of a
+ * type nothing here needed. `apps/api/src/registry/define.ts` had already
+ * noticed and written the same four fields out longhand, which is the usual
+ * shape of this smell: a placeholder generic that callers route around.
+ *
+ * Naming the fields directly removes both placeholders and the second copy.
+ * `Operation` is still asserted to satisfy it below, so the two cannot drift.
+ */
+export type GateFields = {
+  name: string;
+  kind: OperationKind;
+  autoEligible: boolean;
+  taxSensitiveFields?: readonly string[] | undefined;
+};
+
+/**
+ * An operation is gateable. A compile-time assertion rather than a comment, so
+ * renaming a field on `Operation` fails here instead of silently making
+ * `GateFields` describe something that no longer exists.
+ */
+export type OperationIsGateable =
+  Operation<z.ZodTypeAny, never, never> extends GateFields ? true : never;
+
+/**
+ * A call's input, as the gate needs to read it: a bag of field names.
+ *
+ * `unknown` in the **value** position of a heterogeneous record is the use
+ * `CLAUDE.md` sanctions — the gate compares *keys* and never touches a value,
+ * so a narrower value type would be a claim it does not make and cannot check.
+ * `input` itself stays `unknown` because this is a runtime boundary: a caller
+ * can hand it `null` or a string, and there is a test that does.
+ */
+type FieldBag = Readonly<Record<string, unknown>>;
+
+const isFieldBag = (input: unknown): input is FieldBag =>
+  input !== null && typeof input === "object";
+
 /** Which declared tax-sensitive fields this particular call actually writes. */
 export function sensitiveFieldsWritten(
-  op: Pick<Operation<z.ZodTypeAny, unknown, unknown>, "taxSensitiveFields">,
+  op: Pick<GateFields, "taxSensitiveFields">,
   input: unknown,
 ): readonly string[] {
   const declared = op.taxSensitiveFields;
-  if (!declared?.length || input === null || typeof input !== "object") return [];
-  const keys = new Set(Object.keys(input as Record<string, unknown>));
+  if (!declared?.length || !isFieldBag(input)) return [];
+  // A guard rather than `input as Record<string, unknown>`: the cast asserted
+  // what the line above actually proves, so the two could disagree.
+  const keys = new Set(Object.keys(input));
   return declared.filter((field) => keys.has(field));
 }
 
@@ -85,10 +129,7 @@ export function sensitiveFieldsWritten(
  * the approval card then shows only those fields with the rest already applied.
  */
 export function gateDecision(
-  op: Pick<
-    Operation<z.ZodTypeAny, unknown, unknown>,
-    "name" | "kind" | "autoEligible" | "taxSensitiveFields"
-  >,
+  op: GateFields,
   input: unknown,
   grant: AutoGrant,
   now: Date,

@@ -28,7 +28,9 @@ export {
 export {
   type AutoGrant,
   type GateDecision,
+  type GateFields,
   gateDecision,
+  type OperationIsGateable,
   sensitiveFieldsWritten,
   TAX_SENSITIVE_FIELDS,
   type TaxSensitiveField,
