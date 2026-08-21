@@ -24,6 +24,7 @@ import {
   TAX_LINE_KIND,
   TXN_SOURCE,
   TXN_TYPE,
+  WIDGET_SIZE,
 } from "./enums.ts";
 
 export const accountKind = pgEnum("account_kind", ACCOUNT_KIND);
@@ -37,3 +38,4 @@ export const counterpartyRole = pgEnum("counterparty_role", COUNTERPARTY_ROLE);
 export const fxSource = pgEnum("fx_source", FX_SOURCE);
 export const importRowStatus = pgEnum("import_row_status", IMPORT_ROW_STATUS);
 export const taxLineKind = pgEnum("tax_line_kind", TAX_LINE_KIND);
+export const widgetSize = pgEnum("widget_size", WIDGET_SIZE);

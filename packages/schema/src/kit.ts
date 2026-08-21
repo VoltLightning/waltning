@@ -45,6 +45,7 @@ import {
   boolean as pgBoolean,
   date as pgDate,
   integer as pgInteger,
+  jsonb as pgJsonb,
   numeric as pgNumeric,
   pgTable,
   text as pgText,
@@ -90,6 +91,18 @@ export const pgKit = {
   money: (name: string) => pgNumeric(name, { precision: 20, scale: 8 }),
   /** `numeric(24,12)` — rates carry more places than money (§7.6). */
   rate: (name: string) => pgNumeric(name, { precision: 24, scale: 12 }),
+  /** `numeric(12,3)` — a receipt line's quantity. Three places, not money's eight. */
+  qty: (name: string) => pgNumeric(name, { precision: 12, scale: 3 }),
+  /**
+   * `jsonb`, with the shape as a type parameter.
+   *
+   * **The parameter is the contract; the storage is not.** Postgres parses and
+   * indexes the value, SQLite keeps a string it parses on read — and both hand
+   * the caller the same object, which is the only thing `parity.type-test.ts`
+   * compares. Without `$type<T>()` both sides infer `unknown`, the assertion
+   * passes, and every read site casts.
+   */
+  json: <T>(name: string) => pgJsonb(name).$type<T>(),
   /** A bare `YYYY-MM-DD` accounting date. Never a timestamp, never converted. */
   date: (name: string) => pgDate(name),
   uuid: pgUuid,
@@ -129,6 +142,9 @@ export const sqliteKit = {
   rate: (name: string) => sqliteText(name),
   /** A bare `YYYY-MM-DD` string, which is what Postgres `date` produces too. */
   date: (name: string) => sqliteText(name),
+  qty: (name: string) => sqliteText(name),
+  /** See `pgKit.json`. `text({ mode: "json" })` parses on read. */
+  json: <T>(name: string) => sqliteText(name, { mode: "json" }).$type<T>(),
   /** No UUID type; the row type is `string` on both engines either way. */
   uuid: (name: string) => sqliteText(name),
   /** See `pgKit.id`. Minted in JavaScript, because SQLite cannot mint one. */

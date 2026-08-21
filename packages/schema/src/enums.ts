@@ -72,6 +72,9 @@ export const IMPORT_ROW_STATUS = [
 
 export const TAX_LINE_KIND = ["revenue", "expense", "excluded"] as const;
 
+/** A dashboard widget's footprint in the grid. */
+export const WIDGET_SIZE = ["s", "m", "l"] as const;
+
 export type AccountKind = (typeof ACCOUNT_KIND)[number];
 export type Ownership = (typeof OWNERSHIP)[number];
 export type CategoryKind = (typeof CATEGORY_KIND)[number];
@@ -83,3 +86,4 @@ export type CounterpartyRole = (typeof COUNTERPARTY_ROLE)[number];
 export type FxSource = (typeof FX_SOURCE)[number];
 export type ImportRowStatus = (typeof IMPORT_ROW_STATUS)[number];
 export type TaxLineKind = (typeof TAX_LINE_KIND)[number];
+export type WidgetSize = (typeof WIDGET_SIZE)[number];

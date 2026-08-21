@@ -88,8 +88,16 @@ const version = () => bigint("version", { mode: "number" }).notNull().default(1)
 import {
   accountGroupsColumns,
   accountsColumns,
+  categoriesColumns,
+  counterpartiesColumns,
   currenciesColumns,
+  dashboardLayoutsColumns,
+  dashboardWidgetsColumns,
   fxRatesColumns,
+  recurringTransactionsColumns,
+  tagsColumns,
+  transactionLinesColumns,
+  transactionTagsColumns,
 } from "@waltning/schema/columns-pg";
 /**
  * **The enums live in `@waltning/schema` now, and are re-exported here.**
@@ -120,6 +128,7 @@ import {
   taxLineKind,
   txnSource,
   txnType,
+  widgetSize,
 } from "@waltning/schema/enums-pg";
 
 // Imported for the tables below *and* re-exported, because every existing
@@ -136,6 +145,7 @@ export {
   taxLineKind,
   txnSource,
   txnType,
+  widgetSize,
 };
 
 /* ------------------------------------------------------------------ *
@@ -197,63 +207,23 @@ export const accounts = pgTable("accounts", accountsColumns(), (t) => [
  * Categories — groups and leaves, never both
  * ------------------------------------------------------------------ */
 
-export const categories = pgTable(
-  "categories",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    parentId: uuid("parent_id").references((): AnyPgColumn => categories.id, {
-      onDelete: "restrict",
-    }),
-    name: text("name").notNull(),
-    kind: categoryKind("kind").notNull(),
-
-    /**
-     * TAXONOMY.md R1: a category is a group OR a leaf, never both. Only leaves
-     * are assignable. Money Manager allowed both — `Food` had 705 transactions
-     * *and* children — which is the root cause of its 13 name collisions and
-     * 15 trailing-space workarounds.
-     */
-    isLeaf: boolean("is_leaf").notNull().default(true),
-
-    /**
-     * §6.7 — income only. Salary, bonus, business revenue and investment
-     * returns are earnings; gifts, refunds and repayments raise a balance
-     * without being income. One flag covers a co-owner's money, a birthday
-     * present, and a refund alike.
-     */
-    isEarnings: boolean("is_earnings").notNull().default(false),
-
-    icon: text("icon"),
-    color: text("color"),
-    archived: boolean("archived").notNull().default(false),
-    sort: integer("sort").notNull().default(0),
-
-    externalId: text("external_id"),
-
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-    version: version(),
-  },
-  (t) => [
-    /**
-     * Sibling names unique within a parent, per kind. Postgres treats NULLs as
-     * distinct in unique indexes, so top-level categories need coalesce to be
-     * constrained at all.
-     */
-    uniqueIndex("categories_sibling_uq").on(
-      sql`coalesce(${t.parentId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
-      t.kind,
-      normalized(t.name),
-    ),
-    uniqueIndex("categories_external_id_uq")
-      .on(t.externalId)
-      .where(sql`${t.externalId} is not null`),
-    index("categories_parent_idx").on(t.parentId),
-    check("categories_no_self_parent", sql`${t.id} <> ${t.parentId}`),
-    // Earnings is an income-side concept only.
-    check("categories_earnings_income_only", sql`${t.kind} = 'income' or ${t.isEarnings} = false`),
-  ],
-);
+export const categories = pgTable("categories", categoriesColumns(), (t) => [
+  /**
+   * Sibling names unique within a parent, per kind. Postgres treats NULLs as
+   * distinct in unique indexes, so top-level categories need coalesce to be
+   * constrained at all.
+   */
+  uniqueIndex("categories_sibling_uq").on(
+    sql`coalesce(${t.parentId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+    t.kind,
+    normalized(t.name),
+  ),
+  uniqueIndex("categories_external_id_uq").on(t.externalId).where(sql`${t.externalId} is not null`),
+  index("categories_parent_idx").on(t.parentId),
+  check("categories_no_self_parent", sql`${t.id} <> ${t.parentId}`),
+  // Earnings is an income-side concept only.
+  check("categories_earnings_income_only", sql`${t.kind} = 'income' or ${t.isEarnings} = false`),
+]);
 
 /** Old Money Manager category → new taxonomy. Translation, not fidelity. */
 export const categoryMappings = pgTable(
@@ -271,26 +241,9 @@ export const categoryMappings = pgTable(
  * Counterparties — §6.6
  * ------------------------------------------------------------------ */
 
-export const counterparties = pgTable(
-  "counterparties",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    kind: counterpartyKind("kind").notNull().default("person"),
-    /** The currency they prefer to settle in — not a system-wide concept. */
-    settlementCurrency: text("settlement_currency").references(() => currencies.code),
-    contact: text("contact"),
-    note: text("note").notNull().default(""),
-    /** §13.6 — resolves the ryczalt rate for revenue rows from this party. */
-    defaultActivity: text("default_activity"),
-    archived: boolean("archived").notNull().default(false),
-    sort: integer("sort").notNull().default(0),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-    version: version(),
-  },
-  (t) => [uniqueIndex("counterparties_name_uq").on(normalized(t.name))],
-);
+export const counterparties = pgTable("counterparties", counterpartiesColumns(), (t) => [
+  uniqueIndex("counterparties_name_uq").on(normalized(t.name)),
+]);
 
 /* ------------------------------------------------------------------ *
  * Transactions
@@ -507,56 +460,20 @@ export const transactions = pgTable(
   ],
 );
 
-export const tags = pgTable(
-  "tags",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-  },
-  (t) => [uniqueIndex("tags_name_uq").on(normalized(t.name))],
-);
+export const tags = pgTable("tags", tagsColumns(), (t) => [
+  uniqueIndex("tags_name_uq").on(normalized(t.name)),
+]);
 
 export const transactionTags = pgTable(
   "transaction_tags",
-  {
-    transactionId: uuid("transaction_id")
-      .notNull()
-      .references(() => transactions.id, { onDelete: "cascade" }),
-    tagId: uuid("tag_id")
-      .notNull()
-      .references(() => tags.id, { onDelete: "cascade" }),
-  },
+  transactionTagsColumns({ transactionId: () => transactions.id }),
   (t) => [unique("transaction_tags_pk").on(t.transactionId, t.tagId)],
 );
 
-export const recurringTransactions = pgTable("recurring_transactions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  type: txnType("type").notNull(),
-  accountId: uuid("account_id")
-    .notNull()
-    .references(() => accounts.id),
-  toAccountId: uuid("to_account_id").references(() => accounts.id),
-  categoryId: uuid("category_id").references(() => categories.id),
-  counterpartyId: uuid("counterparty_id").references(() => counterparties.id),
-
-  amountOriginal: money("amount_original").notNull(),
-  currency: text("currency")
-    .notNull()
-    .references(() => currencies.code),
-  payee: text("payee").notNull().default(""),
-  note: text("note").notNull().default(""),
-
-  /** iCal RRULE. Projections appear in the calendar as scheduled (§14.4). */
-  rrule: text("rrule").notNull(),
-  nextDate: date("next_date"),
-  endDate: date("end_date"),
-  enabled: boolean("enabled").notNull().default(true),
-
-  externalId: text("external_id"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-  version: version(),
-});
+export const recurringTransactions = pgTable(
+  "recurring_transactions",
+  recurringTransactionsColumns(),
+);
 
 /* ------------------------------------------------------------------ *
  * Receipts
@@ -590,21 +507,10 @@ export const receipts = pgTable(
  */
 export const transactionLines = pgTable(
   "transaction_lines",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    transactionId: uuid("transaction_id")
-      .notNull()
-      .references(() => transactions.id, { onDelete: "cascade" }),
-    /** Set when a receipt extraction produced this line. Null when hand-entered. */
-    receiptId: uuid("receipt_id").references(() => receipts.id, {
-      onDelete: "set null",
-    }),
-    description: text("description").notNull(),
-    amount: money("amount").notNull(),
-    quantity: numeric("quantity", { precision: 12, scale: 3 }),
-    categoryId: uuid("category_id").references(() => categories.id),
-    sort: integer("sort").notNull().default(0),
-  },
+  transactionLinesColumns({
+    transactionId: () => transactions.id,
+    receiptId: () => receipts.id,
+  }),
   (t) => [
     index("transaction_lines_transaction_idx").on(t.transactionId),
     index("transaction_lines_receipt_idx").on(t.receiptId),
@@ -967,39 +873,15 @@ export const targets = pgTable("targets", {
  * rows, so switching between them preserves each layout's per-widget config
  * instead of overwriting one stored grid.
  */
-export const dashboardLayouts = pgTable(
-  "dashboard_layouts",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    isActive: boolean("is_active").notNull().default(false),
-    isPreset: boolean("is_preset").notNull().default(false),
-    sort: integer("sort").notNull().default(0),
-  },
-  (t) => [
-    uniqueIndex("dashboard_layouts_name_uq").on(normalized(t.name)),
-    // Exactly one active layout, by the same trick as the pivot currency.
-    uniqueIndex("dashboard_layouts_one_active").on(sql`(true)`).where(sql`${t.isActive}`),
-  ],
-);
+export const dashboardLayouts = pgTable("dashboard_layouts", dashboardLayoutsColumns(), (t) => [
+  uniqueIndex("dashboard_layouts_name_uq").on(normalized(t.name)),
+  // Exactly one active layout, by the same trick as the pivot currency.
+  uniqueIndex("dashboard_layouts_one_active").on(sql`(true)`).where(sql`${t.isActive}`),
+]);
 
-export const widgetSize = pgEnum("widget_size", ["s", "m", "l"]);
-
-export const dashboardWidgets = pgTable(
-  "dashboard_widgets",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    layoutId: uuid("layout_id")
-      .notNull()
-      .references(() => dashboardLayouts.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(),
-    slot: text("slot").notNull(),
-    size: widgetSize("size").notNull().default("m"),
-    config: jsonb("config").notNull().default({}),
-    sort: integer("sort").notNull().default(0),
-  },
-  (t) => [index("dashboard_widgets_layout_idx").on(t.layoutId)],
-);
+export const dashboardWidgets = pgTable("dashboard_widgets", dashboardWidgetsColumns(), (t) => [
+  index("dashboard_widgets_layout_idx").on(t.layoutId),
+]);
 
 /* ------------------------------------------------------------------ *
  * Agent — one operation registry, two consumers (§11.0)

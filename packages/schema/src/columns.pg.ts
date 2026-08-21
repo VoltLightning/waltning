@@ -10,5 +10,16 @@
 
 export { accountGroupsColumns } from "./account-groups.pg.ts";
 export { accountsColumns } from "./accounts.pg.ts";
+export { categoriesColumns } from "./categories.pg.ts";
+export { counterpartiesColumns } from "./counterparties.pg.ts";
 export { currenciesColumns } from "./currencies.pg.ts";
+export { dashboardLayoutsColumns } from "./dashboard-layouts.pg.ts";
+export { dashboardWidgetsColumns, type WidgetConfig } from "./dashboard-widgets.pg.ts";
 export { fxRatesColumns } from "./fx-rates.pg.ts";
+export { recurringTransactionsColumns } from "./recurring-transactions.pg.ts";
+export { tagsColumns } from "./tags.pg.ts";
+export {
+  type TransactionLineRefs,
+  transactionLinesColumns,
+} from "./transaction-lines.pg.ts";
+export { transactionTagsColumns } from "./transaction-tags.pg.ts";
