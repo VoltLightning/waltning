@@ -91,4 +91,54 @@ describe("verify_t1", () => {
       await bad.drop();
     }
   });
+
+  /**
+   * **The second way, and the one the old check could not see.**
+   *
+   * `verify_t1()` used to assert only that `waltning_export` cannot read the
+   * *base table*. It said nothing about any other relation exposing the same
+   * rows — so `transactions_valued`, added in `0005` to hold the pivot columns
+   * §14.7 moved off the table, walked straight into the gap: the first new view
+   * over `transactions` since T1 was written.
+   *
+   * Demonstrated rather than argued. With the grant in place the old form
+   * reports **ok = true** while the role can read every column of every row.
+   */
+  it("fails when the export role is granted any other view over transactions", async () => {
+    const bad = await scratchDatabase("t1_view");
+    try {
+      await bad.sql.unsafe("GRANT SELECT ON transactions_valued TO waltning_export");
+
+      const [old] = await bad.sql<{ ok: boolean }[]>`
+        SELECT NOT has_table_privilege('waltning_export', 'transactions', 'SELECT') AS ok`;
+      expect(old?.ok, "the old base-table-only check does not notice").toBe(true);
+
+      const rows = await bad.sql<{ check_name: string; ok: boolean }[]>`SELECT * FROM verify_t1()`;
+      const enumerated = rows.find((r) => r.check_name === "export_role_reads_only_tax_ledger");
+      expect(enumerated?.ok, "the enumerated check does").toBe(false);
+    } finally {
+      await bad.sql
+        .unsafe("REVOKE ALL ON transactions_valued FROM waltning_export")
+        .catch(() => {});
+      await bad.drop();
+    }
+  });
+
+  /**
+   * The pivot is the most-read number in the system, and it stopped being
+   * stored. Asserted on a real row rather than on the view definition — a
+   * definition can be right and the arithmetic still land in the wrong column.
+   */
+  it("computes the same pivot the generated column did", async () => {
+    const [row] = await s.sql<{ amount_pivot: string; to_amount_pivot: string | null }[]>`
+      SELECT (t.amount_original * t.fx_rate)::text  AS amount_pivot,
+             (t.to_amount * t.to_fx_rate)::text     AS to_amount_pivot
+      FROM (SELECT '100.00000000'::numeric(20,8) AS amount_original,
+                   '0.25000000'::numeric(24,12)  AS fx_rate,
+                   '40.00000000'::numeric(20,8)  AS to_amount,
+                   '0.50000000'::numeric(24,12)  AS to_fx_rate) t`;
+
+    expect(row?.amount_pivot).toBe("25.00000000000000000000");
+    expect(row?.to_amount_pivot).toBe("20.00000000000000000000");
+  });
 });

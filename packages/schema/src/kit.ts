@@ -93,6 +93,8 @@ export const pgKit = {
   rate: (name: string) => pgNumeric(name, { precision: 24, scale: 12 }),
   /** `numeric(12,3)` — a receipt line's quantity. Three places, not money's eight. */
   qty: (name: string) => pgNumeric(name, { precision: 12, scale: 3 }),
+  /** `numeric(5,4)` — a ryczałt rate, e.g. 0.1200. Four places is the statute. */
+  taxRate: (name: string) => pgNumeric(name, { precision: 5, scale: 4 }),
   /**
    * `jsonb`, with the shape as a type parameter.
    *
@@ -143,6 +145,7 @@ export const sqliteKit = {
   /** A bare `YYYY-MM-DD` string, which is what Postgres `date` produces too. */
   date: (name: string) => sqliteText(name),
   qty: (name: string) => sqliteText(name),
+  taxRate: (name: string) => sqliteText(name),
   /** See `pgKit.json`. `text({ mode: "json" })` parses on read. */
   json: <T>(name: string) => sqliteText(name, { mode: "json" }).$type<T>(),
   /** No UUID type; the row type is `string` on both engines either way. */

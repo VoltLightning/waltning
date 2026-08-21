@@ -230,9 +230,27 @@ So the divergence is bounded instead of eliminated, along one rule:
 
 The immediate consequence: `transactions.amount_pivot` and `to_amount_pivot`
 stop being stored generated columns and become columns on a
-`transactions_valued` view. The two tax views read from it, and
-`computations.md`'s formulae are unchanged. The base table is then the same
-concept in both engines.
+`transactions_valued` view. `computations.md`'s formulae are unchanged — only
+where the multiplication happens moved. The base table is then the same concept
+in both engines.
+
+**One tax view reads it, not two.** This said *"the two tax views"*; when it was
+built, exactly one — `tax_ledger` — selected a pivot column. `tax_unvalued_revenue`
+and `tax_omission_candidates` need neither, and pointing them at the valued view
+would add a dependency to buy nothing.
+
+**The view is not materialised.** A stored generated column was consistent by
+construction; a materialised view is consistent only as often as someone
+refreshes it, and the most-read number in the system is the worst place to open
+a staleness window. `STORED` bought disk, not correctness.
+
+**Adding it made `verify_t1()` narrower than the guarantee it names**, which is
+worth recording because it is the shape of the risk rather than a one-off. Check
+(b) asserted only that `waltning_export` cannot read the *base table* — so the
+first new view over `transactions` since T1 was written would have passed while
+handing the export role a complete unfiltered ledger. The check is an
+**enumeration** now: the set of relations that role may read must be exactly
+`{tax_ledger}`, which survives the next view somebody adds.
 
 **Roughly thirteen tables are shared** — `accounts` `account_groups`
 `categories` `counterparties` `currencies` `fx_rates` `transactions`
