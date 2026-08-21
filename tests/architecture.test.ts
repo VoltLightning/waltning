@@ -13,6 +13,7 @@
  * turn a check red, not silently green.
  */
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -523,5 +524,71 @@ describe("platform-neutral packages use only globals the phone has", () => {
     expect(offenders, "a global the phone does not have").toEqual([]);
     // Non-vacuous: if the walk stops finding files this passes over nothing.
     expect(NEUTRAL.flatMap((r) => sourceFiles(join(repoRoot, r))).length).toBeGreaterThan(30);
+  });
+});
+
+/* ── §5 · nothing escapes the typechecker ────────────────────────────────── */
+
+describe("every TypeScript file is typechecked by something", () => {
+  /**
+   * **Twelve files were checked by nothing.**
+   *
+   * `pnpm -r typecheck` walks workspace *packages*, and `tests/` is not one — so
+   * the eleven guards that enforce every architectural rule in this repository,
+   * plus `vitest.config.ts`, were transpiled by vitest and typechecked by
+   * nowhere. Vitest strips types without checking them, so the failure mode is
+   * not a red build: it is a check that passes while asserting something its
+   * author did not mean. Adding `tests/tsconfig.json` found a real error in the
+   * first file it read.
+   *
+   * **This asks a cheap question deliberately.** Two accurate versions were
+   * tried and both are too slow to live in a pre-commit hook: `--listFilesOnly`
+   * per project costs ~14s, and `--showConfig` — which ought to be cheaper,
+   * since it never loads the type system — costs 60s once `npx` resolves the
+   * binary eleven times. A guard that adds a minute to every commit is a guard
+   * somebody deletes.
+   *
+   * So: does an ancestor directory own a `tsconfig.json`? That is the mistake
+   * actually made — a whole directory nobody claimed — and it costs
+   * milliseconds. It would not catch a file *inside* a project that the
+   * project's own `include` excludes, which is a narrower and much rarer hole.
+   */
+  it("every tracked .ts file has a tsconfig above it", () => {
+    const tracked = execFileSync("git", ["ls-files", "*.ts", "*.tsx"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    })
+      .split("\n")
+      .filter(Boolean);
+
+    expect(tracked.length, "tracked TypeScript files").toBeGreaterThan(100);
+
+    /**
+     * Claimed by a project that does not sit above it.
+     *
+     * `vitest.config.ts` is at the repository root, where there is no
+     * `tsconfig.json` — deliberately, because a root project would invite an
+     * editor to treat the whole workspace as one program. `tests/tsconfig.json`
+     * names it in `include` instead, so it *is* checked; the ancestor walk
+     * below simply cannot see that.
+     *
+     * One entry, and it should stay that way: anything else appearing here is a
+     * file that needs a home, not another exception.
+     */
+    const CLAIMED_ELSEWHERE = new Set(["vitest.config.ts"]);
+
+    const orphans = tracked.filter((file) => {
+      if (CLAIMED_ELSEWHERE.has(file)) return false;
+      let dir = join(repoRoot, file, "..");
+      while (dir.startsWith(repoRoot)) {
+        if (existsSync(join(dir, "tsconfig.json"))) return false;
+        const parent = join(dir, "..");
+        if (parent === dir) break;
+        dir = parent;
+      }
+      return true;
+    });
+
+    expect(orphans, "TypeScript in a directory no tsconfig owns").toEqual([]);
   });
 });

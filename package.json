@@ -19,7 +19,7 @@
     "check": "biome check .",
     "fix": "biome check --write .",
     "rules": "npx --yes ai-rulez@4.11.2 generate",
-    "verify": "pnpm check && pnpm -r typecheck && pnpm test",
+    "verify": "pnpm check && pnpm typecheck && pnpm test",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
@@ -31,7 +31,7 @@
     "mm:import": "pnpm --filter @waltning/migrate-mm import",
     "mm:verify": "pnpm --filter @waltning/migrate-mm verify",
     "mm:all": "pnpm mm:extract && pnpm mm:import && pnpm mm:verify",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && pnpm typecheck:tests",
     "db:seed": "pnpm --filter @waltning/db seed",
     "db:fixture": "pnpm --filter @waltning/db fixture",
     "db:fx": "pnpm --filter @waltning/db fx",
@@ -40,7 +40,8 @@
     "db:reset": "pnpm --filter @waltning/db recreate && pnpm db:migrate && pnpm --filter @waltning/db grant && pnpm db:seed",
     "wiki:check": "sh tools/wiki/publish.sh --dry-run",
     "wiki:publish": "sh tools/wiki/publish.sh",
-    "rules:validate": "npx --yes ai-rulez@4.11.2 validate"
+    "rules:validate": "npx --yes ai-rulez@4.11.2 validate",
+    "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

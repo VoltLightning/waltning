@@ -1,0 +1,25 @@
+{
+  // The repo-wide guards, and `vitest.config.ts` beside them.
+  //
+  // `pnpm -r typecheck` walks workspace *packages*, and `tests/` is not one —
+  // so eleven files that enforce every architectural rule in the repository
+  // were transpiled by vitest and typechecked by nothing. A type error in the
+  // allowlist that decides which folders may exist would have surfaced as a
+  // runtime failure at best, and as a check quietly passing at worst.
+  //
+  // `types: ["node"]` because these read the filesystem and shell out to git;
+  // that is what they are for.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // DOM for one file: `setup/dom-cleanup.ts` is the vitest setup that runs in
+    // jsdom and calls `document`. The base config ships `ES2023` alone, which is
+    // right for shipped code — nothing in `packages/` may assume a browser —
+    // and wrong for a harness whose whole job is to clean one up.
+    //
+    // Scoped to this project rather than widened in the base, so a package
+    // cannot pick up `document` by accident.
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["**/*.ts", "../vitest.config.ts"]
+}
