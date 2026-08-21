@@ -1,0 +1,17 @@
+{
+  "name": "@waltning/ledger",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@waltning/core": "workspace:*",
+    "@waltning/schema": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  }
+}

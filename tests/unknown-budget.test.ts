@@ -43,6 +43,18 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 4,
     why: "a runtime boundary that must survive junk (there is a test passing it `null` and a string), plus `unknown` as the value type of a field bag whose keys are all it reads",
   },
+  "packages/ledger/src/write.ts": {
+    max: 8,
+    why: "eight, and all of them structural: `TRun = unknown` defaults on three generic declarations that cannot share a parameter list, `Record<string, unknown>` in constraint position for the schema map, and the JSON payload the drain replays — the alternative was pinning a concrete database type, which compiled and then refused every real driver at the call site",
+  },
+  "packages/ledger/src/outbox.ts": {
+    max: 1,
+    why: "the queued payload is the operation's validated input as JSON, and the outbox is deliberately not allowed an opinion about its shape — the drain's upcasters are",
+  },
+  "packages/ledger/src/test/scratch.ts": {
+    max: 2,
+    why: "a type guard's input, and one deliberate widening to `unknown[]` before filtering: a predicate over a union narrows to concrete drizzle table types, which `exactOptionalPropertyTypes` then refuses",
+  },
   "apps/api/src/registry/idempotency.ts": {
     max: 3,
     why: "hashes arbitrary JSON — it walks a value it is deliberately not allowed to have an opinion about",
