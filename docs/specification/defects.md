@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 30 — **all closed** |
+| **C** | A stated guarantee is false | 31 — **all closed** |
 | **H** | Wrong data, silently | 31 — **all closed** |
 | **M** | Cannot be implemented from the spec | 24 — **all closed** |
 | **L** | Correct but under-specified | 18 |
@@ -450,6 +450,42 @@ document.
 
 Found by building against it rather than reading it: the first screen that
 wanted a balance had to be told what a balance is.
+
+### C31 — "Both, or neither" is not something SQLite offers across two files
+**Fixed** — `architecture/14-local-first.md` §14.6 replaces the transaction with
+an ordering. The outbox entry commits first and alone; the replica row commits
+second, carrying an `applied_seq` watermark in the same transaction; a
+launch-time reconciler applies every entry above that watermark. The drain runs
+the same rule in the other direction (`architecture/08` — canonical row first,
+the entry's removal last), because the rule is not *outbox first* but
+**whichever half commits second must be the half a replay can reconstruct**.
+
+§14.1 said a write **materialises into the local tables and records its intent
+in the outbox**, and the write path read that, correctly, as "both, or neither"
+in one SQLite transaction. §5.7 says in the same breath that `replica.db` and
+`outbox.db` are **separate files** — and protects both `-wal` siblings, so both
+are in WAL mode. SQLite's own documentation lists the cost among WAL's
+disadvantages: *"Transactions that involve changes against multiple ATTACHed
+databases are atomic for each individual database, but are not atomic across all
+databases as a set."* Two requirements, each stated plainly, and nothing
+satisfies both.
+
+**The transaction was doing real work, so the ordering has to do it instead.**
+Row without entry is a capture that reaches no server and is discovered months
+later by two devices disagreeing about a figure. Entry without row is a list
+short by one line until the next launch. Those are not the same defect, and the
+ordering decides which one the crash window is allowed to produce — the outbox
+holds the only copy of unsent intent, while the replica is rebuildable from the
+server or, on Brick 1, from the outbox itself.
+
+Dropping WAL would have made the original sentence literally true, through
+`ATTACH` and the master journal. Rejected: it costs reader-during-write
+concurrency on the capture path and puts both files on one connection, which is
+what having two files exists to avoid.
+
+Found the way the two above were — by building it. The module that implements
+§14.1 states "both, or neither" in its own header comment, and two files in WAL
+mode cannot give it that.
 
 ---
 

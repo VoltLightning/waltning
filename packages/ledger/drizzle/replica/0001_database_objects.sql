@@ -1,0 +1,12 @@
+-- Hand-written, and the same split `packages/db` runs on Postgres: `0000` is
+-- drizzle-kit's output and is regenerated from `src/schema.replica.ts`, this
+-- file is everything the generator has no way to say.
+--
+-- Today that is one statement. `local_meta` is a table whose contents are part
+-- of its definition — `check ("id" = 1)` makes a second row impossible, and a
+-- table constrained to one row that holds none is not "one row", it is zero,
+-- and `readAppliedSeq` throws on it. A generator writes DDL; the row has to
+-- come from somewhere, and the somewhere is here rather than a first-write
+-- upsert hidden in `advanceAppliedSeq` — the watermark starting at 0 is a fact
+-- about a freshly migrated replica, not something the first capture arranges.
+INSERT INTO `local_meta` (`id`, `applied_seq`) VALUES (1, 0);

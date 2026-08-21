@@ -731,7 +731,7 @@ A stolen phone is therefore both the perimeter and the credential.
 | Receipt spool | Downscaled at capture, EXIF stripped, written inside the app container — never the shared Photo Library, never a `UIFileSharingEnabled` directory |
 | Lost device | **Two steps, not one:** revoke the tailnet node *and* kill the server-side session row. A *sign out everywhere* control lives on S30 |
 | Replica | A **complete copy of the whole ledger** (§14.0). It is not evicted, and there is no TTL that drops it — the phone-in-a-drawer case is handled by the session and tailnet expiries above, not by deleting the record the phone holds |
-| Store separation | `replica.db` and `outbox.db` are separate files, so a replica refetch — epoch mismatch, an explicit reset — never touches the outbox, which must survive independently of the replica's state |
+| Store separation | `replica.db` and `outbox.db` are separate files, so a replica refetch — epoch mismatch, an explicit reset — never touches the outbox, which must survive independently of the replica's state. Both are in WAL mode — the file-protection row above protects both `-wal` siblings — and **no transaction spans them**: a capture commits its outbox entry first and alone, its replica row second, and a launch-time reconciler applies whatever a crash left between the two. The ordering, and why the irreplaceable half is the one that goes first, is `architecture/14-local-first.md` §14.6 |
 | Inference artifacts | No on-device model ships (§14.3), so there is no prompt log to retain. If that changes, logging is off in release builds and any disk spill lives inside the encrypted container |
 
 #### Why drain-while-locked is refused

@@ -1,15 +1,18 @@
 /**
- * The phone's schema: the thirteen shared tables, plus the outbox.
+ * The phone's schema: the thirteen shared tables, the replica's meta store, and
+ * the outbox pair.
  *
- * The tables come from `@waltning/schema/sqlite` — the same definitions
- * `packages/db` builds its Postgres tables from, so a column cannot exist on
- * one engine and not the other without failing a compile (§14.7).
- *
- * The outbox is the one addition, and it is local by nature rather than by
- * omission: it holds intent that no server has been told about, so there is
- * nothing on the server for it to correspond to.
+ * **The barrel over both databases, and only the barrel.** The per-database
+ * lists are `schema.replica.ts` and `schema.outbox.ts`, which is what
+ * drizzle-kit generates from — a `SELECT` does not care which file a table
+ * lives in, and a `CREATE TABLE` cares about nothing else. Keeping the union
+ * here means a query module still imports one thing, while neither generated
+ * migration can pick up a table from the other database.
  */
 
+export { localMeta } from "./local-meta.ts";
+export { OUTBOX_STATE, type OutboxState } from "./outbox.ts";
+export { outbox, outboxSeq } from "./schema.outbox.ts";
 export {
   accountGroups,
   accounts,
@@ -24,5 +27,4 @@ export {
   transactionLines,
   transactions,
   transactionTags,
-} from "@waltning/schema/sqlite";
-export { OUTBOX_STATE, type OutboxState, outbox } from "./outbox.ts";
+} from "./schema.replica.ts";

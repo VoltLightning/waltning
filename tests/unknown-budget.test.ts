@@ -47,13 +47,17 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 3,
     why: "two in one constraint — the driver's run-result and the schema map, neither of which this module touches — and the JSON payload the drain replays. It was eight: `TRun` and `TSchema` threaded by hand through three declarations, which is one decision typed out three times",
   },
+  "packages/ledger/src/executor.ts": {
+    max: 3,
+    why: "two raw-payload doors (`invoke`, `mintedIds`) taking JSON off a disk, which is exactly as trustworthy as JSON off a wire, and one widened `Row` in a constraint position — a registry is heterogeneous and TypeScript has no existential type for `returns something`",
+  },
+  "packages/ledger/src/open.ts": {
+    max: 1,
+    why: "the drizzle schema-map constraint, named once. It is not the `LocalDb` alias `write.ts` refuses: it answers only for the schema map, never for the driver's run-result, and every declaration still carries both type parameters",
+  },
   "packages/ledger/src/outbox.ts": {
     max: 1,
     why: "the queued payload is the operation's validated input as JSON, and the outbox is deliberately not allowed an opinion about its shape — the drain's upcasters are",
-  },
-  "packages/ledger/src/test/scratch.ts": {
-    max: 2,
-    why: "a type guard's input, and one deliberate widening to `unknown[]` before filtering: a predicate over a union narrows to concrete drizzle table types, which `exactOptionalPropertyTypes` then refuses",
   },
   "apps/api/src/registry/idempotency.ts": {
     max: 3,

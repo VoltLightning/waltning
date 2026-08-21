@@ -38,10 +38,13 @@ history is complete; nothing daily needs a network.
 Independent, and each one improves the experience without the next:
 
 - **Brick 1 — the phone alone.** A complete finance app: whole ledger, offline
-  indefinitely, scales to any screen. **A write materialises into the local
-  tables and records its intent in the outbox** — it does not sit in a queue
-  waiting to become real. Durability is an **app-owned encrypted export**
-  (§14.4). Tax figures are read-only *estimates*, labelled as such —
+  indefinitely, scales to any screen. **A write records its intent in the outbox
+  and materialises into the local tables** — it does not sit in a queue waiting
+  to become real. That is two commits and not one, in that order, because the
+  two stores are separate files and SQLite offers no transaction across both;
+  §14.6 carries the ordering and what closes the window it leaves open.
+  Durability is an **app-owned encrypted export** (§14.4). Tax figures are
+  read-only *estimates*, labelled as such —
   filing-grade tax needs the server, because T1 is a Postgres role and has no
   device equivalent.
 
@@ -181,6 +184,55 @@ One code path, one flag. This is not a retreat from §14.0: the phone is still
 not authoritative, because the server still admits every write and may refuse
 one the phone already showed. What changes is that a refusal *corrects* a
 visible row rather than *releasing* an invisible one.
+
+**Intent commits first, and it commits alone.** A capture writes to two files —
+`outbox.db` and `replica.db`, separate precisely so that a replica refetch can
+never touch unsent intent (`SPEC.md` §5.7) — and both run in WAL mode, which
+SQLite's own documentation lists this cost against: *"Transactions that involve
+changes against multiple ATTACHed databases are atomic for each individual
+database, but are not atomic across all databases as a set."* So "both, or
+neither" was never on offer. There are two commits, and the only decision left
+is which of them goes first.
+
+**The outbox entry does, because it is the half that cannot be reconstructed.**
+That is the same property the two files exist for: the outbox holds the only
+copy of intent that has not reached a server, while the replica is rebuildable —
+from the server on Brick 2, and on Brick 1 from the outbox itself, which is the
+ledger's whole history in replay form. When only one of the two can be made
+durable first, it has to be the irreplaceable one.
+
+So the window a crash can open is **an entry whose row is missing, never a row
+with no entry** — a list short by one line until the next launch, rather than a
+capture that is gone. A read taken inside that window is already specified:
+`SPEC.md` §14.3 suppresses the fold adjustment for any entry whose target is not
+in the replica and falls back to the bare checkpoint, which is the honestly
+incomplete number rather than the confidently wrong one.
+
+**A launch-time reconciler closes it.** The replica carries an `applied_seq`
+watermark, advanced in the same transaction as the row it describes — one file,
+so *that* pair is genuinely atomic — and on launch every entry above it is
+applied locally before anything reads. Replay is safe because the ids are
+client-minted (`08`'s H13): the local apply is an upsert keyed on an id the
+entry already carries, so twice is once. A refetch resets the watermark to
+nothing, which is correct rather than exceptional — a fresh replica holds what
+the server holds, and what is still in the outbox is by definition what it does
+not.
+
+**The watermark is what keeps this from becoming the fold §14.1 rejects.**
+"Replay every unacknowledged entry" is that failure verbatim: with no server the
+outbox never drains, so every launch would replay five years of capture over a
+replica that already holds all of it. Bounding by `seq` makes the work
+proportional to what a crash interrupted — normally nothing, at most the one
+write a kill landed in the middle of.
+
+**Rollback-journal mode was the alternative, and it was rejected.** Outside WAL,
+`ATTACH` plus SQLite's master journal does give a genuine atomic commit across
+both files, and "both, or neither" would be literally true. It costs
+reader-during-write concurrency on the device's hot path — capture happens with
+a list on screen — and it requires both databases open on one connection, which
+is the thing the separation exists to avoid: dropping and refetching the replica
+has to be possible without the outbox being attached to anything. Buying
+atomicity that way spends the reason the two files are two files.
 
 **Provisional is derived, never stored.** A row is provisional exactly when an
 unacknowledged outbox entry names it. A `provisional` column would be a second
