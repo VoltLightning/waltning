@@ -272,7 +272,7 @@ server. Is this device connected to Tailscale?"*
 
 ---
 
-## Background reconnect is not implementable on iOS
+## Background reconnect is not implementable on iOS, and not dependable on Android
 
 §14.3's earlier wording promised sync "automatic on reconnect". Only the
 foreground half is real: iOS gives ~30 s via `beginBackgroundTask`,
@@ -283,9 +283,34 @@ subject to memory-pressure termination, so the first request after a foreground
 is disproportionately likely to fail, which is what the settle delay above is
 for.
 
-Drain triggers are therefore: foreground · in-foreground path change · user tap ·
-silent push. If background drain ever genuinely matters, the mechanism is a
-`content-available` push from the Pi — outbound-only, consistent with §5.1, and
-the same channel node-key warnings need.
+**Android reaches the same trigger list by a different road.** A background drain
+is genuinely implementable there — `expo-background-task` over `WorkManager`,
+with a network-connected constraint — and the custody objection that closes it on
+iOS does not arise: §5.7 records that Android's credential-encrypted storage is
+readable from first unlock until reboot whatever the app does, so nothing is
+weakened by running while locked. What rules it out of the design is
+**reliability**. The floor between periodic runs is fifteen minutes, the
+constraint only promises *a* network rather than a reachable Pi, Doze and
+app-standby buckets stretch both, and OEM vendors kill background work whatever
+the framework promised. A drain
+that happens somewhere between fifteen minutes and never cannot be a mechanism
+any state, banner or freshness figure refers to.
 
-This also aligns with §5.7: never drain while locked.
+Drain triggers are therefore, on both platforms: foreground · in-foreground path
+change · user tap · silent push. If background drain ever genuinely matters, the
+mechanism is a `content-available` push from the Pi — outbound-only, consistent
+with §5.1, and the same channel node-key warnings need. An opportunistic
+`WorkManager` drain may exist on Android **as a bonus that nothing above the
+transport knows about**: it may advance the queue, and it may never be the reason
+a figure is fresh or a banner is absent, because it cannot be relied on to have
+run.
+
+**§5.7 owns the reason, and the reason is not the same on both.** On iOS *never
+drain while locked* is a custody decision — draining while locked would force the
+weakest file-protection class and make every other control in that table theatre.
+On Android it is a reliability decision, and the custody question there is
+whether the database is encrypted at all, which §5.7 leaves open. If it is
+answered yes, the background drain becomes impossible as well as undependable: a
+passphrase wrapped by a Keystore key requiring an unlocked device cannot be
+unwrapped while the phone is locked. Nothing here loses anything by that,
+which is the test of whether the bonus was correctly scoped.

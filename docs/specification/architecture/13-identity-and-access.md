@@ -26,9 +26,10 @@ nobody to prove yourself to.
 
 What the phone-alone app has instead is **device custody**, which is a
 different mechanism answering a different question. A session token decides
-whether the phone may talk to the Pi. Face ID decides whether the person
-holding the phone may read what it already has — every account by name, every
-counterparty with balances, the whole ledger. A stolen unlocked phone is a
+whether the phone may talk to the Pi. The device's own gate — Face ID, or
+Android's `BiometricPrompt`, or the PIN behind either — decides whether the
+person holding the phone may read what it already has: every account by name,
+every counterparty with balances, the whole ledger. A stolen unlocked phone is a
 total disclosure that never touches the network, so the perimeter this document
 describes does nothing about it. `SPEC.md` §5.7 owns that, and it is a
 prerequisite for Brick 1 while everything below is a prerequisite for Brick 2.
@@ -344,15 +345,38 @@ documentation.
   `expo-local-authentication` instead; the Keychain item itself must not carry
   that flag, or changing a fingerprint silently logs you out and forces a
   re-enrolment against a server you may not be able to reach.
-- **Set `keychainAccessible` explicitly.** The documented default and the source
-  default disagree. Under plain `WHEN_UNLOCKED` the token restores onto a
+  **On Android that flag fails earlier and harder**: it demands
+  `BIOMETRIC_STRONG` with no device-credential path, so on a PIN-only device the
+  store throws rather than degrading and the token cannot be written at all. One
+  remedy, two different failures.
+- **Set `keychainAccessible` explicitly on iOS.** The documented default and the
+  source default disagree. Under plain `WHEN_UNLOCKED` the token restores onto a
   *different* device from an encrypted backup — §5.7 already requires
   `AFTER_FIRST_UNLOCK` **`ThisDeviceOnly`**, and inheriting a default is not the
   same as setting it.
+- **Android has no equivalent setting, and gets the property for free — twice.**
+  `expo-secure-store` there is `SharedPreferences` holding AES-256-GCM blobs
+  under a non-exportable Keystore key, so ciphertext restored onto another handset
+  cannot be decrypted; and Expo's own backup rules exclude `SecureStore.xml` from
+  cloud backup *and* device transfer. Stronger than the iOS flag, by different
+  means — but the second half is a property of a dependency's packaging rather
+  than a decision, and `SPEC.md` §5.7 records how it reverses: writing our own
+  backup rules makes Expo's plugin stand down, and the job of excluding that file
+  becomes ours.
+- **The launch gate must test the device credential, not the biometric.**
+  `getEnrolledLevelAsync() >= SecurityLevel.SECRET`, never `isEnrolledAsync()`,
+  which is biometric-only and returns false on a perfectly well protected
+  PIN-locked device — locking a correct user out of a ledger they own. Pass
+  `biometricsSecurityLevel: 'strong'`, whose default is `'weak'` and admits
+  Android's Class 2 face unlock, and never compare against
+  `SecurityLevel.BIOMETRIC`: it is deprecated and asymmetric, meaning WEAK on
+  Android and STRONG on iOS, so one expression is two different tests.
 - **Neither `expo-secure-store` nor `react-native-keychain` uses the Secure
   Enclave.** Both put bytes in the data-protection keychain. The Enclave is the
   root of the wrapping hierarchy, not where the token lives; any claim otherwise
-  is wrong and would overstate what is protected.
+  is wrong and would overstate what is protected. Android is the mirror image of
+  the same misreading: the Keystore key is hardware-backed and **the token is not
+  in it** — the key wraps bytes that live in `SharedPreferences`.
 - **A rate limiter keyed on an IPv6 address is decorative.** A /64 rotation
   defeats it. Key on the account, and keep the transport-level limit in the
   reverse proxy where it belongs.

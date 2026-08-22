@@ -26,7 +26,7 @@ graph TB
     B2["Backblaze B2<br/><i>age-encrypted backups</i>"]
     KSEF["KSeF<br/><i>PL e-invoicing — read-only ref</i>"]
 
-    V -->|"iPhone, laptop"| W
+    V -->|"phone, laptop"| W
     MM -.->|"one-off migration<br/>+ periodic sync"| W
     BANK -.->|"statement import"| W
     W -->|"outbound only"| FX
@@ -155,7 +155,7 @@ graph TB
     end
 
     subgraph devices["Devices — each an enrolled tailnet node"]
-        PHONE["iPhone<br/><i>Expo app · outbox · replica</i>"]
+        PHONE["Phone — iOS · Android<br/><i>Expo app · outbox · replica</i>"]
         LAPTOP["Laptop<br/><i>browser · dev machine</i>"]
     end
 

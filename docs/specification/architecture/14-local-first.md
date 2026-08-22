@@ -131,12 +131,15 @@ purpose, or a merge produces a plausible wrong number that neither device held.
 
 ## 14.3 Durability graduates
 
-- **Brick 1:** an app-owned, age-encrypted export the owner controls. The key
-  lives in **iCloud Keychain** (Apple's HSM-backed escrow, which Apple cannot
-  read); the ciphertext goes somewhere Apple is **not** — a Mac, a NAS, later the
-  backend. **One vendor never holds both halves.** This is a stated dependency on
-  Apple, not a hidden one, and it is the honest version of "your data, your
-  phone, back it up yourself."
+- **Brick 1:** an app-owned, age-encrypted export the owner controls, with **one
+  vendor never holding both halves.** On iOS the key lives in **iCloud Keychain**
+  (Apple's HSM-backed escrow, which Apple cannot read) and the ciphertext goes
+  somewhere Apple is **not** — a Mac, a NAS, later the backend; that is a stated
+  dependency on Apple, not a hidden one, and it is the honest version of "your
+  data, your phone, back it up yourself." On Android **the escrow half is
+  unsettled** (`SPEC.md` §5.7): a Keystore key is non-exportable, so an export
+  keyed from it cannot outlive the device the export existed to outlive, and
+  until something else is named the owner holds the key themselves.
 - **Brick 2:** the server is the durable copy — `pg_dump`, age-encrypted, offsite,
   with a restore drill. This is the existing design and it is unchanged.
 
@@ -155,9 +158,14 @@ Alignment work, so no surface still describes the collapsed design:
   *information density* stay dense; the phone renders them when given the screen
   (RN Web, DeX, an iPad). "Web-only" that meant "needs a browser" becomes "needs
   the width."
-- **File protection is class A**, not AFU — the key is evicted on lock. Nothing
-  needs the database while the phone is locked, and `§5.7` already argued for this
-  and did not take it.
+- **The database is unreadable on a locked phone, and each platform gets there
+  its own way.** On iOS that is file protection class A, not AFU — the key is
+  evicted on lock, and nothing needs the database while the phone is locked.
+  Android offers no such class: credential-encrypted storage there is
+  AFU-equivalent from first unlock until reboot, so the same requirement can only
+  be met by encrypting the database itself. `SPEC.md` §5.7 settles the iOS half
+  and leaves the Android one open, which is the one place the two phones reach
+  different conclusions rather than the same one twice.
 
 ## 14.5 What held, and stays
 

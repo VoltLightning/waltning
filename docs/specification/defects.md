@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 31 — **all closed** |
+| **C** | A stated guarantee is false | 33 — 31 closed, **2 open** |
 | **H** | Wrong data, silently | 31 — **all closed** |
 | **M** | Cannot be implemented from the spec | 24 — **all closed** |
 | **L** | Correct but under-specified | 18 |
@@ -486,6 +486,70 @@ what having two files exists to avoid.
 Found the way the two above were — by building it. The module that implements
 §14.1 states "both, or neither" in its own header comment, and two files in WAL
 mode cannot give it that.
+
+### C32 — A locked Android phone's ledger has no confidentiality control at all
+**Open.** The mechanism that would close it is §17 **O18**, deliberately not
+decided, so nothing is built either way and this stays open until it is.
+
+`SPEC.md` §5.7 protects the device replica on iOS with `NSFileProtectionComplete`
+— class A — whose central property is that **the key is evicted when the screen
+locks**. Android has no such class. Credential-encrypted storage is unlocked at
+the first unlock after boot and *"remains available"* until the device restarts,
+which is `NSFileProtectionCompleteUntilFirstUserAuthentication` — the class §5.7
+rejects by name on iOS — as a floor rather than a default. The eviction
+primitive that exists, `DevicePolicyManager.FLAG_EVICT_CREDENTIAL_ENCRYPTION_KEY`,
+*"can only be used by a profile owner when locking a managed profile"*: an
+enterprise MDM locking a work profile, not an app locking itself.
+
+So a locked Android phone carrying the whole ledger, every counterparty by name
+with balances, and the receipt spool is readable by anyone who can reach its
+storage — in every state short of a reboot. **The guarantee §5.7 and
+`architecture/14-local-first.md` §14.4 state — that a locked phone does not
+disclose the replica — therefore holds on one of the two phones this project
+ships**, and on the other nothing short of encrypting the database itself can
+deliver it.
+
+That is why the encryption decision is not symmetric: SQLCipher is redundant on
+iOS, where class A already evicts the key, and is the only available control on
+Android, where nothing does. **O18** carries it, and it has to be answered before
+the Android build ships rather than after — keying an existing database is a
+rewrite of it, not a flag.
+
+### C33 — `allowBackup: false` is not backup exclusion on Android 12+
+**Open.** `SPEC.md` §5.7 specifies what exclusion requires on each platform;
+`apps/mobile/app.json` carries the flag and no rules resource exists, so on
+Android the control is specified and not built.
+
+§5.7 requires the databases, their siblings and the receipt spool to be excluded
+from device backup, and on Android the build claims that with
+`"android": { "allowBackup": false }`. That flag does not do this job. Auto
+Backup is on by default, and on Android 12+ the attribute *"disables cloud-based
+backup and restore (such as Google Drive backups) but doesn't disable
+device-to-device transfers for the app"* — which is the transport that copies an
+app's private files onto a replacement handset, in a shop, at the owner's
+request, with the whole ledger and the receipt spool in plaintext along the way.
+The control reads as satisfied and excludes nothing from the path a lost or
+replaced phone actually takes.
+
+Real exclusion is `android:dataExtractionRules` (API 31+) **and**
+`android:fullBackupContent` (API ≤ 30) pointing at resources with explicit
+`<cloud-backup>` *and* `<device-transfer>` sections — with the semantics that
+make this class of defect: *"If there are no rules for a particular backup mode…
+that mode is fully enabled for all content except for no-backup and cache
+directories."* **A missing section is a grant, not an exclusion**, and Android 16
+QPR2 adds `<cross-platform-transfer>`, which will default open the same way.
+Putting the databases in `no_backup/` — reachable through `expo-sqlite`'s third
+positional `directory` argument — is the alternative that needs no rules at all.
+
+**Two adjacent facts are worse than the flag**, because neither was decided.
+Installing `expo-secure-store` **already excludes our databases today**, as a
+side effect: its rules `<include>` only `domain="sharedpref"`, and any
+`<include>` makes everything not included excluded. Nobody chose that, and it
+reverses whenever Expo edits its own plugin. And that plugin **stands down when
+other backup rules are present** — so writing the resource above transfers
+responsibility for excluding `shared_prefs/SecureStore.xml` to us, and getting it
+wrong starts backing up the session token as a consequence of a change made to
+protect the ledger.
 
 ---
 
