@@ -174,5 +174,4 @@ Consequences to accept, stated so they are not discovered later:
 - `SPEC.md` §8 — the reasoning behind each gate
 - `flows/J15-cutover.md` — the same sequence as a user journey
 - `screens/S29-setup-wizard.md` — the interface for steps 5–8
-- `build-order.md` — where this sits relative to Phase 0.5 and the rest
 - `defects.md` C13, C14, C18, C19 — the findings that shaped these gates

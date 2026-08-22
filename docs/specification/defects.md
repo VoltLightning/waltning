@@ -792,8 +792,8 @@ Load findings were mostly **not** where §15 expects. The honest summary:
 **~~Authentication appears in no phase.~~ Fixed — Phase 0.5 exists.** §5.2
 specified it; §16's eight phases did not deliver it, and §15.1's four test layers
 did not cover it, so Phase 1 would have shipped an API over five years of real
-data roughly thirteen weeks before Tailscale landed. `build-order.md` now puts
-auth and perimeter before any listener binds, and before the importer runs — and
+data roughly thirteen weeks before Tailscale landed. The sequence now puts auth
+and perimeter before any listener binds, and before the importer runs — and
 it is a prerequisite for T1 regardless, since a superuser bypasses every `GRANT`.
 This was the single most consequential scheduling finding in the review.
 

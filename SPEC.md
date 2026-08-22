@@ -4019,11 +4019,17 @@ certain — tool surfaces are easy, good agent UX is not.
 Phase 0 before any UI. It is where the project proves viable, and a migration
 bug found in week one is cheap.
 
-**The full sequence is `docs/specification/build-order.md`**, which reconciles
-this table with the component order in `design-system/12-build-order.md` — the
-two were written independently and neither referenced the other. It carries the
-critical path (five strictly serial items, headed by a probe script that takes
-minutes and gates everything), Phase 0.5 above, where each component phase
+**Order by irreversibility, not by size.** A wrong reading of the export costs
+five years of history and is discovered months later; a wrong empty state costs
+an afternoon. Everything expensive to be wrong about goes first even when it is
+small — the smallest item in the plan, a probe script of a few dozen lines,
+gates the largest. The corollary is to order by what a delay actually costs: a
+tail with no risk sequences itself, and a head that is entirely risk **is** the
+plan.
+
+The task-level sequence lives on the board rather than here, where re-ordering
+is cheap and expected. It carries the critical path (five strictly serial items,
+headed by that probe script), the perimeter gate, where each component phase
 actually lands, and the three specified things that should be deleted rather
 than scheduled. Its total is 13 weeks, and the reduction against the estimate
 above comes from the subtractions rather than from optimism.
