@@ -243,5 +243,6 @@ one §5.1 calls categorically strong; ③ is the one a bug lives in; ④ is the 
 that has actually caught things — every C-class defect in `defects.md` that was
 *enforced* rather than *asserted* was enforced at ④.
 
-The ordering matters for the build sequence: `build-order.md`'s Phase 0.5 exists
-because ② and ③ were scheduled at week 15 while real data landed in week 1.
+The ordering matters for the build sequence: the perimeter gate exists because
+② and ③ are cheap to stand up and catastrophic to defer past the first real
+data.

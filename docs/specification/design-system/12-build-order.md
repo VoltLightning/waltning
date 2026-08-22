@@ -35,24 +35,14 @@ reduced-motion branches in D4 and D5 — D12 measures and closes what those
 missed, rather than being where accessibility starts. Accessibility arriving
 last as a single phase is how it gets cut.
 
-## Against §16
+## What the order rests on
 
-`SPEC.md` §16 phases the *system* — API, mobile, receipts, import, agent,
-export. This phases the *component layer*, which is a prerequisite for its
-Phase 1. The two were written independently and neither referenced the other.
+**D3 belongs with its first consumer, which is receipts** — one gate, three
+call sites, and the site that first needs it should build it. **D0–D2 are not a
+blocking prelude**: they are about four days, and holding a fortnight of API
+work behind them idles both sides. **"Screens, in journey order" is not a
+phase** — it is what every phase spends most of its time doing.
 
-**They are now reconciled in [`../build-order.md`](../build-order.md), which is
-the sequence to follow.** It disagrees with this file in three places, and the
-reasons are worth knowing before using the table above on its own:
-
-- **D0–D2 are not a blocking prelude.** They are ~4 days; holding a fortnight of
-  API work behind them idles both sides. They are Phase 1's first week.
-- **D3 moves to the first consumer, which is receipts** — earlier than fourth
-  here and earlier than §16's Phase 3 implies. One gate, three call sites, and
-  the first site to need it should build it.
-- **D13 is not a phase.** "Screens, in journey order" is what every system phase
-  spends most of its time doing.
-
-D9 is the one place this file's order beats §16's, and it survives unchanged:
-`SyncLog`'s coverage view is what would have caught GEL at 0.5%, and it is worth
-having before the ledger fills rather than after.
+**D9 is the one item worth pulling earlier than its dependencies require.**
+`SyncLog`'s coverage view is what catches a currency holding 0.5% of its rate
+range, and it is worth having before the ledger fills rather than after.

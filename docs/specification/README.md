@@ -16,8 +16,7 @@ system it is built from, every user journey, and every screen.
 | 7 | [`defects.md`](defects.md) — what ten adversarial reviews found, and what is still open |
 | 8 | [`completeness.md`](completeness.md) — nine domains audited by cross-referencing the spec against itself, and what each check found |
 | 9 | [`migration-runbook.md`](migration-runbook.md) — the eleven-step procedure, its gates, and where rollback stops being practical |
-| 10 | [`build-order.md`](build-order.md) — the single sequence, reconciling `SPEC.md` §16 with the component order |
-| 11 | [`architecture/`](architecture/) — the engineering view: containers, components, domain model, sequences, deployment, budgets, test strategy |
+| 10 | [`architecture/`](architecture/) — the engineering view: containers, components, domain model, sequences, deployment, budgets, test strategy |
 
 **Outside this folder:** [`SPEC.md`](../../SPEC.md) is the system specification
 — architecture, data model, FX semantics, tax layer. [`TAXONOMY.md`](../../TAXONOMY.md)
@@ -35,6 +34,38 @@ sits underneath it.
 **Templates:** [`_TEMPLATE-screen.md`](_TEMPLATE-screen.md) ·
 [`_TEMPLATE-flow.md`](_TEMPLATE-flow.md). Every file follows one of them, so a
 missing section is visible rather than merely absent.
+
+## These documents describe the system, not their own history
+
+**Every file here states what is true now.** When the design changes, the
+document is rewritten whole — never annotated with what it used to say. A reader
+opening `computations.md` is asking how a figure is derived, and a sentence
+about how an earlier draft derived it differently is something they have to read
+past to reach the answer.
+
+The change record already exists, in three places that are better at it. **Git**
+holds every diff and who made it. **A commit message and a pull request** hold
+why a change was made, next to the change itself. **A task** holds the reasoning
+for a change not yet made. None of those go stale, because none of them claim to
+describe the present.
+
+A rejected *alternative* is not history and stays: knowing that SQLite
+everywhere was considered and what it costs is part of understanding why the
+system is shaped as it is. The line is whether the document is arguing a design
+or recounting its own drafting.
+
+**Two files here are records rather than descriptions**, and history is their
+content: [`defects.md`](defects.md), where an entry's status is the point, and
+[`../adr/`](../adr/), where a decision carries a date and can be superseded. An
+ADR stripped of its status is no longer an ADR.
+
+There is **no test for this**, and that is deliberate in a repository whose rule
+is that a rule without a test is not a rule. What makes a sentence an offender
+is *whose* history it narrates, and no pattern can see that: `no longer` catches
+"correctness no longer depends on every future query being right", which is a
+statement about the system, and "the ECB delisted RUB in 2022", which is a fact
+about the world. A checker here would teach people to phrase around it, which is
+worse than the prose it was meant to catch.
 
 ---
 

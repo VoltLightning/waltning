@@ -196,6 +196,6 @@ every write operation must be **idempotent under replay** — that is what
 mechanism that makes re-migration idempotent (§8.3). An operation added without
 an idempotency key works online and silently double-posts on a flaky train.
 
-Component build order and the component vocabulary itself are
-[`../design-system/`](../design-system/); the sequence that interleaves them with
-these services is [`../build-order.md`](../build-order.md).
+The component vocabulary itself is [`../design-system/`](../design-system/);
+the sequence that interleaves those components with these services is the
+board's.

@@ -24,9 +24,9 @@ first module, and the boundaries that must not be crossed while writing the rest
 | 13 | [`13-identity-and-access.md`](13-identity-and-access.md) | **Authentication is the perimeter, not the network** — passkeys, why the app authenticates through a browser it does not own, and how a client finds its server |
 | 14 | [`14-local-first.md`](14-local-first.md) | **The phone is complete; the server is authoritative** — the two are not the same, why bidirectional merge was rejected, and the Lego bricks |
 
-**Sequence of work** is [`../build-order.md`](../build-order.md) — the single
-plan reconciling `SPEC.md` §16 with the component order, including the Phase 0.5
-perimeter gate. This folder is structure; that one is order.
+**Sequence of work** is the board, not this folder — order is the thing most
+likely to change, and the board is where changing it is cheap. This folder is
+structure.
 
 ---
 

@@ -30,7 +30,7 @@ promises.
 | What does this screen do? | [`screens/`](https://github.com/VoltLightning/waltning/tree/main/docs/specification/screens) — S01–S34 |
 | What is the user actually trying to do? | [`flows/`](https://github.com/VoltLightning/waltning/tree/main/docs/specification/flows) — J01–J17 |
 | What is known to be wrong? | [`defects.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/defects.md) |
-| In what order is this being built? | [`build-order.md`](https://github.com/VoltLightning/waltning/blob/main/docs/specification/build-order.md) → [[Project Status]] |
+| In what order is this being built? | [[Project Status]] — the sequence lives on the board, not in the specification |
 
 ## The packages, and which way they depend
 
