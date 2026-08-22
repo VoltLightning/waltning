@@ -16,7 +16,7 @@ underneath it.
 
 | Severity | Meaning | Count |
 |---|---|---|
-| **C** | A stated guarantee is false | 31 — **all closed** |
+| **C** | A stated guarantee is false | 33 — 31 closed, **2 open** |
 | **H** | Wrong data, silently | 31 — **all closed** |
 | **M** | Cannot be implemented from the spec | 24 — **all closed** |
 | **L** | Correct but under-specified | 18 |
@@ -486,6 +486,76 @@ what having two files exists to avoid.
 Found the way the two above were — by building it. The module that implements
 §14.1 states "both, or neither" in its own header comment, and two files in WAL
 mode cannot give it that.
+
+### C32 — §5.7's device custody was one platform's mechanisms, asserted as the device guarantee
+**Open.** `SPEC.md` §5.7 now states every control per platform; the Android
+decision it exposes is §17 **O18** and is deliberately not made, so nothing is
+built either way and this stays open until it is.
+
+§5.7 required `NSFileProtectionComplete` — class A — and argued from its central
+property, that **the key is evicted when the screen locks**.
+`architecture/14-local-first.md` §14.4 restated the same requirement without a
+platform on it. §3 ships **iOS and Android**, and Android has no such class:
+credential-encrypted storage is unlocked at the first unlock after boot and
+*"remains available"* until the device restarts, which is
+`NSFileProtectionCompleteUntilFirstUserAuthentication` — the exact class §5.7
+rejects by name — as a floor rather than a default. The eviction primitive that
+exists, `FLAG_EVICT_CREDENTIAL_ENCRYPTION_KEY`, *"can only be used by a profile
+owner when locking a managed profile"*.
+
+**So the argument did not merely fail to mention Android; it inverted there.**
+§5.7 declined SQLCipher partly because *"the class A file protection adopted
+above already evicts the key at lock"* — an iOS fact. On Android that premise is
+absent, which makes the same reasoning turn a redundant control into the only
+one, and turns a rejected option into an open decision. A defect that changes
+which way a decision goes is worth more than one that changes a sentence.
+
+**The cost was also attached to the wrong mechanism.** §5.7 treated the
+prebuild-and-native-code price as SQLCipher's alone and priced file protection at
+nothing while requiring it. Both readings are wrong in the same direction: file
+protection is **one entitlement key** in `app.json`, inherited by every file
+created under the container root afterwards — the `-wal` and `-shm` siblings and
+the receipt spool included — while `NSURLIsExcludedFromBackupKey`, which §5.7
+called *"the highest-value single line in the table"* and never priced at all, is
+a runtime call and the **only** control in the section that needs native code.
+`expo-file-system` contains no occurrence of `isExcludedFromBackup` or
+`setResourceValue` in either its current or legacy API, and no config plugin can
+make a runtime call.
+
+### C33 — `allowBackup: false` is not backup exclusion on Android 12+
+**Open.** `SPEC.md` §5.7 now specifies what exclusion actually requires;
+`apps/mobile/app.json` still carries the flag and no rules resource exists, so
+the control is specified and not yet built.
+
+§5.7 states *excluded from cloud backup* as a decision, in iOS terms, and the
+Android build satisfies it with `"android": { "allowBackup": false }`. That flag
+does not do this job. Auto Backup is on by default, and on Android 12+ the
+attribute *"disables cloud-based backup and restore (such as Google Drive
+backups) but doesn't disable device-to-device transfers for the app"* — which is
+the transport that copies an app's private files onto a replacement handset, in a
+shop, at the owner's request, with the whole ledger and the receipt spool in
+plaintext along the way. The control reads as satisfied and excludes nothing from
+the path a lost or replaced phone actually takes.
+
+Real exclusion is `android:dataExtractionRules` (API 31+) **and**
+`android:fullBackupContent` (API ≤ 30) pointing at resources with explicit
+`<cloud-backup>` *and* `<device-transfer>` sections — with the semantics that
+make this class of defect: *"If there are no rules for a particular backup mode…
+that mode is fully enabled for all content except for no-backup and cache
+directories."* **A missing section is a grant, not an exclusion**, and Android 16
+QPR2 adds `<cross-platform-transfer>`, which will default open the same way.
+Putting the databases in `no_backup/` — reachable through `expo-sqlite`'s third
+positional `directory` argument — is the alternative that needs no rules at all.
+
+**Two adjacent facts are worse than the flag**, because neither was decided.
+Installing `expo-secure-store` **already excludes our databases today**, as a
+side effect: its rules `<include>` only `domain="sharedpref"`, and any
+`<include>` makes everything not included excluded. Nobody chose that, and it
+reverses whenever Expo edits its own plugin. And that plugin **stands down when
+other backup rules are present** — so writing the resource above transfers
+responsibility for excluding `shared_prefs/SecureStore.xml` to us, and getting it
+wrong starts backing up the session token as a consequence of a change made to
+protect the ledger.
 
 ---
 

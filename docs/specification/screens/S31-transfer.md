@@ -88,8 +88,13 @@ form, and a wider version of it is not a better one.
 | Reference rate for the date and pair | — |
 
 Writes **one row** carrying `account_id`, `to_account_id`, `amount_original`,
-`to_amount`, `to_currency` and `to_fx_rate` — never two rows to be re-paired
-(§6.1).
+`to_amount` and `to_currency` — never two rows to be re-paired (§6.1).
+
+`to_fx_rate` is **not** among them, and this screen is where that is easiest to
+get wrong. §14.6 resolves it server-side at commit; what this screen sends is the
+two amounts, and the realized rate is derived from them (§7.5) rather than
+asserted alongside them. The `RateField` below says the same thing in the other
+direction — read-only, because it is derived.
 
 ## 6. States
 

@@ -141,7 +141,7 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Database | PostgreSQL 16 | Exact numerics, real constraints, one dependency |
 | Language | TypeScript end to end | One language across API, web, mobile |
 | Repo | Monorepo, pnpm workspaces | Shared types; `pnpm deploy --filter` for lean Pi images |
-| Mobile | Expo (React Native) | iOS today; Android mostly free — see the note below |
+| Mobile | Expo (React Native) | **iOS and Android, both targets.** One codebase; the two places they genuinely diverge are below |
 | Web | React Native Web via Expo | One codebase; revisit if the dashboard fights it (§14.6) |
 | Scope vs Money Manager | Core parity + receipts, import, agent | Skip budgets, goals, tags (0 rows used) |
 | Users | Single | No auth complexity, no per-row ownership |
@@ -152,15 +152,31 @@ Explicitly out of scope. Each is a decision, not an oversight.
 | Personal expenses | Structurally excluded from every tax output | §13.1 |
 | Apr–Aug 2026 gap | Entered manually in Money Manager first | Migration runs against a later backup |
 
-**"Android free if ever wanted" is true except in one place, and it is worth
-knowing before rather than after.** React Native declares `fontVariant` on
+**Three targets, and the shared codebase carries almost all of it.** The places
+that do not come free are worth knowing before rather than after.
+
+**Tabular figures, on Android.** React Native declares `fontVariant` on
 `TextStyleIOS` and not on `TextStyleAndroid`, so tabular figures — which
 `design-system/02` §2.2 makes mandatory, being what lets a money column align —
 cannot be switched on there. The system stays correct because `<Amount>` renders
 in a face whose digits are tabular *by default* (measured: Source Serif 4's ten
-digits are all 547 font units; Figtree's span 413 to 641). That is a constraint
-on font choice, permanently, and it is the only part of Android that is not
-free.
+digits are all 547 font units; Figtree's span 413 to 641). That is a permanent
+constraint on font choice: a face whose digits are proportional cannot be adopted
+however well it reads, because on Android there is no switch to compensate.
+
+**Device custody, on Android.** §5.7 is argued in iOS mechanisms — a file
+protection class whose key is evicted at lock, a Keychain item pinned to one
+device, a watchdog that kills a process holding a locked file at suspension.
+Android's model is not those APIs under different names; it encrypts at the
+device level rather than per file, and its background execution rules are its
+own. §5.7 therefore states each decision twice, and where the two platforms
+reach different conclusions it says so rather than pretending to a single
+answer. That section, not this one, is where the divergence is settled.
+
+**The local database, on web.** `expo-sqlite`'s web build cannot host the ledger
+— §5.7 records the specific defects — so web reads through the server rather
+than a local replica. Everything above the transport is shared; what the web
+build does not have is the offline half.
 
 ---
 
@@ -169,7 +185,7 @@ free.
 ### 4.1 Topology
 
 ```
-┌─ iPhone (Expo) ────────┐   ┌─ Laptop browser ──────┐
+┌─ Phone (iOS·Android) ──┐   ┌─ Laptop browser ──────┐
 │  Quick entry           │   │  Dashboard, import    │
 │  Receipt camera        │   │  review, reports      │
 │  Agent chat            │   │  Agent chat           │
@@ -720,52 +736,278 @@ tailnet node, so it sits
 
 A stolen phone is therefore both the perimeter and the credential.
 
+**And "the phone" is two devices, beside a third surface that holds nothing.**
+§3 ships iOS and Android, and this section was argued entirely in iOS
+mechanisms. Those mechanisms are not the same idea under two names. iOS protects
+per *file*, with a class whose key is evicted when the screen locks. Android
+encrypts per *user*, with a key that survives every lock until the device
+reboots. The web build has no local ledger at all. So the controls below are
+stated per platform: where the two phones agree they agree explicitly, where
+they agree for different reasons that is said, and the one place they reach
+different conclusions is the one decision in this section that is **not made
+here**.
+
+#### The decisions that do not depend on the platform
+
 | Control | Decision |
 |---|---|
-| **Drain never runs while locked** | Foreground, in-foreground network change, user tap, or silent push. See below — this is the decision the others depend on |
-| File protection | **`NSFileProtectionComplete`** — class A, key evicted on lock — on the database, **its `-wal` and `-shm` siblings**, and the receipt spool. The WAL is where recent writes actually live. Not `…UntilFirstUserAuthentication`: the drain-while-locked argument below already establishes that nothing needs the database while the phone is locked, so nothing needs the key resident past lock either (`architecture/14-local-first.md` §14.4) |
-| Keychain class | Session token at `AFTER_FIRST_UNLOCK`, **`ThisDeviceOnly`** — so it does not restore onto a replacement device. There is no database key to place alongside it: SQLCipher was assessed and not adopted (below), so the file's own class-A protection is the guarantee, not a Keychain-held key |
-| **Excluded from cloud backup** | `NSURLIsExcludedFromBackupKey` on the database, its siblings, and `Documents/receipts/`. This is the highest-value single line in the table |
-| Backup (Brick 1) | An app-owned, `age`-encrypted export the owner controls. The key lives in **iCloud Keychain**; the ciphertext goes somewhere Apple is **not**. One vendor never holds both halves (§5.3, `architecture/14-local-first.md` §14.3) |
-| App launch | The app UI is gated behind `LocalAuthentication`. There is no database key to unwrap — the file is protected by class A (above) |
-| Receipt spool | Downscaled at capture, EXIF stripped, written inside the app container — never the shared Photo Library, never a `UIFileSharingEnabled` directory |
+| Backup (Brick 1) | An app-owned, `age`-encrypted export the owner controls. **One vendor never holds both halves** (§5.3, `architecture/14-local-first.md` §14.3): on iOS the key lives in **iCloud Keychain** and the ciphertext goes somewhere Apple is not. **The Android escrow half is not settled**, and the obvious answer is wrong — a Keystore key is non-exportable, so an export keyed only from the Keystore dies with the device it existed to survive. Until it is settled, the Android owner holds the key themselves |
+| Receipt spool | Downscaled at capture, EXIF stripped, written inside the app's **private container** — never the system photo library (`Photos`, `MediaStore`), never a directory the platform shares out (`UIFileSharingEnabled`; external storage or a `FileProvider` grant) |
 | Lost device | **Two steps, not one:** revoke the tailnet node *and* kill the server-side session row. A *sign out everywhere* control lives on S30 |
 | Replica | A **complete copy of the whole ledger** (§14.0). It is not evicted, and there is no TTL that drops it — the phone-in-a-drawer case is handled by the session and tailnet expiries above, not by deleting the record the phone holds |
-| Store separation | `replica.db` and `outbox.db` are separate files, so a replica refetch — epoch mismatch, an explicit reset — never touches the outbox, which must survive independently of the replica's state. Both are in WAL mode — the file-protection row above protects both `-wal` siblings — and **no transaction spans them**: a capture commits its outbox entry first and alone, its replica row second, and a launch-time reconciler applies whatever a crash left between the two. The ordering, and why the irreplaceable half is the one that goes first, is `architecture/14-local-first.md` §14.6 |
-| Inference artifacts | No on-device model ships (§14.3), so there is no prompt log to retain. If that changes, logging is off in release builds and any disk spill lives inside the encrypted container |
+| Store separation | `replica.db` and `outbox.db` are separate files, so a replica refetch — epoch mismatch, an explicit reset — never touches the outbox, which must survive independently of the replica's state. Both are in WAL mode, so **every protection below has to name the `-wal` and `-shm` siblings and not only the database**, and **no transaction spans them**: a capture commits its outbox entry first and alone, its replica row second, and a launch-time reconciler applies whatever a crash left between the two. The ordering, and why the irreplaceable half is the one that goes first, is `architecture/14-local-first.md` §14.6 |
+| Inference artifacts | No on-device model ships (§14.3), so there is no prompt log to retain. If that changes, logging is off in release builds and any disk spill lives inside the app's protected storage |
 
-#### Why drain-while-locked is refused
+#### The decisions that do
 
-It is not a performance decision. A background drain needs the database and its
-key readable **while the phone is locked**, which forces the weakest protection
-class and the weakest Keychain accessibility — making every other row in that
-table theatre. Holding a file lock on a protected file at suspension is also the
-sole cause of the `0xdead10cc` watchdog termination.
+| Control | iOS | Android |
+|---|---|---|
+| **Drain never runs while locked** | **Refused.** Foreground, in-foreground network change, user tap, or silent push. This is the decision the file-protection row depends on | **Same four triggers, different reason.** Nothing here is weakened by a background drain, because there is nothing stronger to weaken; it is excluded because it is unreliable, not because it is unsafe. An opportunistic `WorkManager` drain is permitted as a bonus and may never be promised |
+| File protection | **`NSFileProtectionComplete`** — class A, key evicted at lock — on the database, its `-wal` and `-shm` siblings, and the receipt spool. The WAL is where recent writes actually live. Not `…UntilFirstUserAuthentication`: the drain-while-locked row establishes that nothing needs the database while the phone is locked, so nothing needs the key resident past lock either (`architecture/14-local-first.md` §14.4). **One entitlement key, no native code** | **Nothing to set, and nothing to choose.** Credential-encrypted storage is unlocked at first unlock and stays unlocked until reboot — permanently the class iOS rejects — and the eviction primitive that exists is scoped to managed profiles |
+| Full-database encryption | **Not adopted.** Class A has already made a locked device unreadable, so SQLCipher would lock a door the file system has already sealed | **Open — the one decision here that is not made.** With no lock-time eviction there is nothing behind the file, so this is not a second lock but the only one. §17 O18 |
+| Credential at rest | Session token in the Keychain at `AFTER_FIRST_UNLOCK`, **`ThisDeviceOnly`** set explicitly — so it does not restore onto a replacement device. There is no database key to place alongside it | `expo-secure-store`'s AES-256-GCM blob under a **non-exportable Keystore key**. `ThisDeviceOnly` comes for free and twice: the key is in no backup, so restored ciphertext is undecryptable, and Expo's own rules exclude the file from cloud backup *and* device transfer. Stronger than the iOS flag, by different means. Whether a *database* key joins it is the row above |
+| **Excluded from device backup** | `NSURLIsExcludedFromBackupKey` on the database, its siblings, and `Documents/receipts/`. A runtime call on a URL that must already exist, and **the only control in either table that needs native code** | `allowBackup: false` **is not this** on Android 12+ — it stops the cloud transport and leaves device-to-device transfer alone. Real exclusion is an explicit rules resource, or the databases in `no_backup/`. Below |
+| App launch | The UI is gated behind `expo-local-authentication`, tested on `getEnrolledLevelAsync()` and never on `isEnrolledAsync()`. There is no database key to unwrap — the file is protected by class A | The same call, over `BiometricPrompt`, with `biometricsSecurityLevel: 'strong'`. Same test, and here it is load-bearing rather than tidy: the wrong one locks out a PIN-protected device that is behaving correctly |
+| Screen capture | `preventScreenCaptureAsync()` obscures recording (iOS 11+) and screenshots (13+) — a mitigation | The same call sets `FLAG_SECURE`: screenshots and recording are **refused**, and the recents thumbnail is blank. The one row where Android is strictly stronger |
+
+**Web appears in neither table**, and that is a finding rather than an omission —
+see *Web holds no ledger* below.
+
+#### Why drain-while-locked is refused on iOS, and not relied on anywhere
+
+**On iOS it is not a performance decision.** A background drain needs the
+database and its key readable **while the phone is locked**, which forces the
+weakest protection class and the weakest Keychain accessibility — making every
+other row in that table theatre. Holding a file lock on a protected file at
+suspension is also the sole cause of the `0xdead10cc` watchdog termination.
 
 Nothing in this design needs it. §15 sets no availability target, and §14.3's
 sync control already drains on tap. If a pending count must be visible from a
 notification, a tiny counters file at the weak class carries it — never the
 ledger.
 
-#### On full-database encryption
+**On Android both of those premises evaporate, and the conclusion survives
+anyway.** There is no class-A key to be made unavailable — the credential
+key is resident from first unlock to reboot whatever the app asks for — and
+`0xdead10cc` has no analogue: AOSP's cached-app freezer treats holding a file
+lock as an *exemption* from freezing rather than a cause of death, and
+`ApplicationExitInfo`'s seventeen kill reasons name nothing about file locks. A
+background drain is genuinely feasible here, through `expo-background-task` over
+`WorkManager`.
 
-**Not adopted, and the reasoning is worth recording because two reviewers
-disagreed.** SQLCipher would protect against extraction from a phone seized in
-the after-first-unlock state — a real exposure when the baseline was
-`AFTER_FIRST_UNLOCK`. It no longer is: the class A file protection adopted
-above already evicts the key at lock, so a locked phone is unreadable with or
-without SQLCipher. Against what's left of the case: it requires `expo prebuild`
-and a custom dev client, which contradicts §4.3's managed-workflow choice; its
-own key would need `AFTER_FIRST_UNLOCK` for the app to start reliably, which is
-now *weaker* than the class A protection the file already has; and it costs
-about 30% on writes.
+It is also unreliable, and unreliable in ways the design cannot bound: a
+fifteen-minute floor between runs, a network-connected constraint that only says
+*a* network, Doze and app-standby buckets on top of that, and OEM vendors that
+kill background work whatever the framework promised. So the trigger list is
+identical and the heading is not — **on iOS a background drain is refused, on
+Android it is merely never depended upon.** It may exist as a bonus that no
+screen, no banner, no freshness figure and no guarantee refers to.
+`architecture/09-connectivity.md` carries the trigger list and now says which
+half of this is which.
 
-The decision is to take **file protection plus backup exclusion plus
-launch-time biometrics**, which addresses the realistic loss path — an
-unencrypted cloud backup of a hundred-odd megabytes of receipt photographs — at a
-fraction of the cost. Revisit if the threat model changes: if device seizure
-becomes a real concern rather than a theoretical one, SQLCipher is the answer and
-the prebuild cost is worth paying.
+**One coupling, because it is the only place the two platform decisions touch.**
+If the SQLCipher question below is answered *yes* on Android, the background
+drain stops being possible at all: a passphrase wrapped by a Keystore key
+requiring an unlocked device cannot be unwrapped while the device is locked.
+That is the right way round — the confidentiality decision gets to foreclose the
+convenience one — and it is cheap, because what it forecloses was already
+something nothing may depend on.
+
+#### File protection is one JSON key on iOS, and does not exist on Android
+
+**This section required class A and never priced it**, which left the impression
+that it was the expensive half. It is the cheap half. `ios.entitlements` in
+`app.json` accepts arbitrary entitlements and is applied when the native project
+is generated, so `com.apple.developer.default-data-protection` set to
+`NSFileProtectionComplete` gives the container root its class from one JSON key —
+no native module and no config plugin. Apple's inheritance rule does the rest:
+*"the data protection value is inherited from the parent directory when you
+create an item"*, so the database, the `-wal` and `-shm` siblings SQLite creates
+afterwards, and the receipt spool are all covered by a key that was set before
+any of them existed.
+
+Two consequences follow from *newly created files only*. The entitlement has to
+be in place **before the app's first launch on a device** — added afterwards it
+protects nothing already written, and the remedy is rewriting every file rather
+than setting a flag. And Apple's own advice against this entitlement is scoped
+to *apps that run in the background*, which the row above already forbids: the
+caveat and this design agree. That is worth stating, because a caveat that
+contradicted us would have been the more interesting finding.
+
+**Android has no version of this at all**, which is the next section rather than
+a footnote to this one.
+
+#### Android's key is not evicted at lock, and cannot be
+
+This is the finding that moves a decision rather than a sentence.
+
+Android encrypts per user, not per file. Credential-encrypted storage — where
+an app's own files live — is unlocked at the first unlock after boot and stays
+unlocked: *"Credential encrypted storage is available after the user has
+successfully unlocked the device and until the user restarts the device. If the
+user enables the lock screen after unlocking the device, credential encrypted
+storage remains available."* That is
+`NSFileProtectionCompleteUntilFirstUserAuthentication`, permanently, on every
+Android device — the exact class the iOS row rejects, and it is the floor rather
+than a default.
+
+There is no opt-in to anything stronger. The eviction primitive exists and is
+scoped away from us: `DevicePolicyManager.FLAG_EVICT_CREDENTIAL_ENCRYPTION_KEY`
+*"can only be used by a profile owner when locking a managed profile"* — an
+enterprise MDM locking a work profile, not a personal app locking itself.
+
+So the honest statement of the Android floor is: **a locked Android phone
+carrying this ledger is readable by anyone who can reach its storage while the
+credential key is resident, which is every state short of a reboot.** Powering
+the device off is therefore a real control on Android in a way it is not on iOS.
+That is something to tell an owner, not something to design around.
+
+And it inverts the section below, which is the point of stating it here.
+
+#### On full-database encryption — closed on iOS, open on Android
+
+**On iOS: not adopted, and the reasoning is worth recording because two
+reviewers disagreed.** SQLCipher would protect against extraction from a phone
+seized in the after-first-unlock state — a real exposure when the baseline was
+`AFTER_FIRST_UNLOCK`. It no longer is: the class A file protection above already
+evicts the key at lock, so a locked phone is unreadable with or without
+SQLCipher. Against what's left of the case: its own key would need
+`AFTER_FIRST_UNLOCK` for the app to start reliably, which is now *weaker* than
+the protection the file already has; it costs about 30% on writes; and it needs
+a generated native project and a custom dev client, which §4.3's managed-workflow
+choice was written to avoid. Only the first of those is decisive — a redundant
+control is not worth any price — and it is the one that does not hold on
+Android.
+
+**On Android the same reasoning makes it load-bearing.** The argument for
+redundancy was an iOS fact, and with no lock-time eviction there is nothing
+behind the file. SQLCipher is not a second lock there; it is the only mechanism
+that can make a locked Android device behave like a locked iOS one, which is the
+threat this whole section exists for.
+
+The constructible shape needs less native code than it sounds like. `expo-sqlite`
+ships `useSQLCipher: true` as a first-party config-plugin flag, so the encryption
+itself is a build setting rather than a fork — though it does require a generated
+native project and a dev client, exactly as on iOS. The part that genuinely needs
+a local Kotlin module is the **key**: the passphrase must be wrapped by a Keystore
+key created with `setUnlockedDeviceRequired(true)` (API 28+), because
+`expo-secure-store` never sets that flag, and a passphrase available exactly
+whenever the credential-encrypted storage is available buys nothing at all.
+
+Three costs, stated rather than discovered:
+
+- **The passphrase reaches JavaScript.** A SQLCipher database is keyed with
+  `PRAGMA key`, so the plaintext passphrase exists as a JS string in the app's
+  heap for the life of the process. That is a real weakening of the thing being
+  bought, and it has no iOS analogue because iOS is not buying anything here.
+- **`setUnlockedDeviceRequired` is asymmetric**, in a way nothing on iOS is: it
+  blocks *decryption* while the device is locked and still permits *encryption*.
+  A locked Android phone could therefore append to the outbox and could not drain
+  it or read the ledger. That is coherent, slightly strange, and already turned
+  into a design constraint by the drain section above.
+- **Roughly 30% on writes**, and a generated native project on the platform where
+  the alternative to it was nothing at all.
+
+**Not decided here.** It is §17 **O18**, and it turns on the same question the
+iOS paragraph defers — whether device seizure is a real concern or a theoretical
+one — reaching a different answer only because on iOS the answer was already
+paid for.
+
+#### Backup exclusion is two mechanisms, and the Android one is a trap
+
+**On iOS this is the highest-value single line in either table**, and it is the
+only line that needs native code. `NSURLIsExcludedFromBackupKey` is a runtime
+call against a URL, so it has to happen after the file exists, and nothing
+declarative can make it: `expo-file-system` contains no occurrence of
+`isExcludedFromBackup` or `setResourceValue` in either the current
+`Paths`/`File`/`Directory` API or the legacy one, and its config plugin exposes
+two iOS options, neither of them this. Worth pinning, because that cost was
+previously generalised across the whole iOS column, where it is untrue (C32).
+
+**On Android, `allowBackup: false` is not backup exclusion.** Auto Backup is on
+by default, and on Android 12+ the flag *"disables cloud-based backup and restore
+(such as Google Drive backups) but doesn't disable device-to-device transfers for
+the app"* — which is the transport that copies an app's private files onto a new
+handset, in a shop, at the owner's request, with nothing encrypted anywhere along
+the path. `apps/mobile/app.json` sets that flag today and states this control as
+satisfied (C33).
+
+Two things actually exclude:
+
+- **A rules resource.** `android:dataExtractionRules` (API 31+) **and**
+  `android:fullBackupContent` (API ≤ 30) — both, because they cover different OS
+  versions — pointing at `res/xml` resources with explicit `<cloud-backup>`
+  **and** `<device-transfer>` sections. Android 16 QPR2 adds
+  `<cross-platform-transfer>`, which will default open in exactly the same way.
+  The semantics are the trap: *"If there are no rules for a particular backup
+  mode… that mode is fully enabled for all content except for no-backup and cache
+  directories."* **A missing section is not an exclusion. It is a grant.** There
+  is no Expo config key for either attribute; it is a config plugin and no Kotlin,
+  and `expo-secure-store`'s own plugin is the pattern to copy.
+- **Or move the files.** `expo-sqlite`'s open functions take a third positional
+  `directory` argument, and Android's `no_backup` directory is excluded from both
+  transports by the platform and enforced on restore. The default is
+  `filesDir + "/SQLite"`, which is inside Auto Backup. `expo-file-system`'s
+  `Paths` exposes `document` and `cache` and not the no-backup directory, so the
+  path is derived from the document path rather than read.
+
+Two traps around `expo-secure-store`, both of which change what is true without
+anyone having decided it:
+
+- **Installing it already excludes our databases**, invisibly. Its rules
+  `<include>` only `domain="sharedpref"`, and Android's rule is that the presence
+  of any `<include>` makes everything not included excluded. So the ledger is
+  out of Auto Backup today as a side effect of a dependency's packaging. Nobody
+  chose that, nothing records it, and it reverses the day Expo edits its own
+  rules.
+- **Its plugin stands down when other rules exist**, warning that *"other backup
+  rules are already present"*. So the moment we write the resource above we
+  inherit the job of excluding `shared_prefs/SecureStore.xml` ourselves — and the
+  failure mode is that the **session token starts being backed up**, silently, as
+  a consequence of a change made to protect the ledger.
+
+#### The launch gate is a device-credential test, not a biometric one
+
+`expo-local-authentication` covers both platforms — `LocalAuthentication` on
+iOS, `BiometricPrompt` on Android — and the gate must read
+**`getEnrolledLevelAsync() >= SecurityLevel.SECRET`**, never `isEnrolledAsync()`.
+The latter asks only about biometrics and returns false on a PIN-protected device
+with nothing whatever wrong with it, so the naive check locks a correct user out
+of their own ledger. That is a worse outcome than the exposure the gate exists
+for, and it is the more likely one.
+
+Two settings ride along. `biometricsSecurityLevel` defaults to `'weak'`, which
+admits Android's Class 2 face unlock; a ledger passes `'strong'`. And
+`SecurityLevel.BIOMETRIC` is deprecated and means different things on the two
+platforms — WEAK on Android, STRONG on iOS — so a comparison written against it
+is a stricter test on one target and a looser one on the other, which is the
+shape of bug that never shows up in review. `architecture/13-identity-and-access.md`
+§13.8 carries this alongside the credential-store traps it belongs with.
+
+#### Web holds no ledger, so most of this does not apply
+
+The web build reads through the server. It holds **no replica and no outbox**, so
+file protection, backup exclusion, full-database encryption and the store
+separation have nothing on that device to be about. What is left is the browser's
+own session handling, which `architecture/13-identity-and-access.md` owns — an
+httpOnly `Secure` `SameSite=Strict` cookie, because `expo-secure-store` has no web
+implementation and a token in `localStorage` is not an option.
+
+That is not a preference, and §3 defers to here for the reason. `expo-sqlite`'s
+web build cannot host the ledger, on three counts:
+
+- Its worker bridge writes a length header one byte wide and reads it four bytes
+  wide — `resultArray.set(new Uint32Array([length]), 0)` — so any result over
+  roughly 190 bytes is corrupted.
+- The first synchronous call deterministically times out.
+- `PRAGMA journal_mode = WAL` is a silent no-op, because the OPFS VFS implements
+  no `xShmMap`. The WAL mode the store-separation row and
+  `architecture/14-local-first.md` §14.6 both reason from is simply absent.
+
+So web is a thin client by defect rather than by design, and its custody question
+is the server's. If a local ledger on web is ever wanted it needs a different
+SQLite for the browser, and every row above has to be re-argued against a third
+storage model — the browser's, which has no equivalent of either phone's classes.
 
 #### T1 does not extend to the device
 
@@ -3490,6 +3732,28 @@ Offline, a cross-currency transfer leaves the destination amount **empty**, with
 the stale reference shown only as a hint. An unedited destination amount is then
 impossible.
 
+The row the phone writes locally is a different question, and the answer changed
+underneath this section. `transactions.fx_rate` is `NOT NULL`, so a capture made
+with no backend has to carry *something*, and the first bullet above is the
+argument for why that used to be unacceptable. Both of its premises are now
+false. `amount_pivot` and `to_amount_pivot` were `GENERATED` columns that froze
+whatever the phone stamped; they are a view — `transactions_valued` — and are
+absent from the device table entirely, so a stale rate materializes nothing and
+is re-derived on every read. And there was said to be no mechanism to correct
+it, where the drain now applies the server's canonical row over the local one
+(`architecture/08`), which is the correction, arriving on the ordinary path
+rather than as an offer nobody built.
+
+So the phone writes a **provisional** rate — exactly `1` for a same-currency
+capture, which is not an estimate; the last-known rate for the pair otherwise,
+flipped once from `fx_rates.rate`'s units-per-pivot to the pivot-per-unit this
+column holds. What has not changed is who decides: the phone never sends that
+number as an assertion, the server resolves the real rate at commit from the
+row's own date, and **`fx_rate_estimated` is still set by the server at drain and
+by nothing else**. A provisional figure that no reader can tell is provisional
+would be the original defect wearing a new name, so the distinction is that the
+phone's number never leaves the phone.
+
 #### Validate at entry, not at sync
 
 The phone holds every period lock, all account currencies and the category tree,
@@ -4053,6 +4317,7 @@ Ordered by how much they block.
 | ~~**O14**~~ | ~~Counterparties replace the loan accounts?~~ | — | **Decided: replace.** They exist only because Money Manager had no counterparty concept. `loan_receivable` / `loan_payable` survive as `account_kind` values for migration fidelity |
 | ~~**O15**~~ | ~~Ageing on counterparty balances?~~ | — | **Decided: companies only.** Putting a 60-days-overdue badge on a friend's share of dinner is absurd; on an unpaid invoice it is the point |
 | ~~**O16**~~ | ~~Dashboard layout?~~ | — | **Decided: presets first.** A layout engine is a lot of work to build before knowing which arrangements are wanted; presets answer that cheaply. Free placement only if they prove insufficient |
+| **O18** | **Does the Android build encrypt its database?** Android has no lock-time key eviction (§5.7), so SQLCipher is the only mechanism that makes a locked Android device unreadable — and it has no bearing on iOS, where class A already does it | §5.7, the Android build | Undecided, and it must be answered before the Android build ships rather than after: keying an existing database is a rewrite of it. **For:** it is the only control that survives a locked stolen phone on that platform. **Against:** the passphrase lives in JS memory via `PRAGMA key`, the Keystore wrap needs a local Kotlin module, ~30% on writes, and a generated native project. Answering *yes* also forecloses the opportunistic background drain, which nothing may depend on anyway |
 
 ---
 
