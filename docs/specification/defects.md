@@ -487,55 +487,49 @@ Found the way the two above were — by building it. The module that implements
 §14.1 states "both, or neither" in its own header comment, and two files in WAL
 mode cannot give it that.
 
-### C32 — §5.7's device custody was one platform's mechanisms, asserted as the device guarantee
-**Open.** `SPEC.md` §5.7 now states every control per platform; the Android
-decision it exposes is §17 **O18** and is deliberately not made, so nothing is
-built either way and this stays open until it is.
+### C32 — A locked Android phone's ledger has no confidentiality control at all
+**Open.** The mechanism that would close it is §17 **O18**, deliberately not
+decided, so nothing is built either way and this stays open until it is.
 
-§5.7 required `NSFileProtectionComplete` — class A — and argued from its central
-property, that **the key is evicted when the screen locks**.
-`architecture/14-local-first.md` §14.4 restated the same requirement without a
-platform on it. §3 ships **iOS and Android**, and Android has no such class:
-credential-encrypted storage is unlocked at the first unlock after boot and
-*"remains available"* until the device restarts, which is
-`NSFileProtectionCompleteUntilFirstUserAuthentication` — the exact class §5.7
-rejects by name — as a floor rather than a default. The eviction primitive that
-exists, `FLAG_EVICT_CREDENTIAL_ENCRYPTION_KEY`, *"can only be used by a profile
-owner when locking a managed profile"*.
+`SPEC.md` §5.7 protects the device replica on iOS with `NSFileProtectionComplete`
+— class A — whose central property is that **the key is evicted when the screen
+locks**. Android has no such class. Credential-encrypted storage is unlocked at
+the first unlock after boot and *"remains available"* until the device restarts,
+which is `NSFileProtectionCompleteUntilFirstUserAuthentication` — the class §5.7
+rejects by name on iOS — as a floor rather than a default. The eviction
+primitive that exists, `DevicePolicyManager.FLAG_EVICT_CREDENTIAL_ENCRYPTION_KEY`,
+*"can only be used by a profile owner when locking a managed profile"*: an
+enterprise MDM locking a work profile, not an app locking itself.
 
-**So the argument did not merely fail to mention Android; it inverted there.**
-§5.7 declined SQLCipher partly because *"the class A file protection adopted
-above already evicts the key at lock"* — an iOS fact. On Android that premise is
-absent, which makes the same reasoning turn a redundant control into the only
-one, and turns a rejected option into an open decision. A defect that changes
-which way a decision goes is worth more than one that changes a sentence.
+So a locked Android phone carrying the whole ledger, every counterparty by name
+with balances, and the receipt spool is readable by anyone who can reach its
+storage — in every state short of a reboot. **The guarantee §5.7 and
+`architecture/14-local-first.md` §14.4 state — that a locked phone does not
+disclose the replica — therefore holds on one of the two phones this project
+ships**, and on the other nothing short of encrypting the database itself can
+deliver it.
 
-**The cost was also attached to the wrong mechanism.** §5.7 treated the
-prebuild-and-native-code price as SQLCipher's alone and priced file protection at
-nothing while requiring it. Both readings are wrong in the same direction: file
-protection is **one entitlement key** in `app.json`, inherited by every file
-created under the container root afterwards — the `-wal` and `-shm` siblings and
-the receipt spool included — while `NSURLIsExcludedFromBackupKey`, which §5.7
-called *"the highest-value single line in the table"* and never priced at all, is
-a runtime call and the **only** control in the section that needs native code.
-`expo-file-system` contains no occurrence of `isExcludedFromBackup` or
-`setResourceValue` in either its current or legacy API, and no config plugin can
-make a runtime call.
+That is why the encryption decision is not symmetric: SQLCipher is redundant on
+iOS, where class A already evicts the key, and is the only available control on
+Android, where nothing does. **O18** carries it, and it has to be answered before
+the Android build ships rather than after — keying an existing database is a
+rewrite of it, not a flag.
 
 ### C33 — `allowBackup: false` is not backup exclusion on Android 12+
-**Open.** `SPEC.md` §5.7 now specifies what exclusion actually requires;
-`apps/mobile/app.json` still carries the flag and no rules resource exists, so
-the control is specified and not yet built.
+**Open.** `SPEC.md` §5.7 specifies what exclusion requires on each platform;
+`apps/mobile/app.json` carries the flag and no rules resource exists, so on
+Android the control is specified and not built.
 
-§5.7 states *excluded from cloud backup* as a decision, in iOS terms, and the
-Android build satisfies it with `"android": { "allowBackup": false }`. That flag
-does not do this job. Auto Backup is on by default, and on Android 12+ the
-attribute *"disables cloud-based backup and restore (such as Google Drive
-backups) but doesn't disable device-to-device transfers for the app"* — which is
-the transport that copies an app's private files onto a replacement handset, in a
-shop, at the owner's request, with the whole ledger and the receipt spool in
-plaintext along the way. The control reads as satisfied and excludes nothing from
-the path a lost or replaced phone actually takes.
+§5.7 requires the databases, their siblings and the receipt spool to be excluded
+from device backup, and on Android the build claims that with
+`"android": { "allowBackup": false }`. That flag does not do this job. Auto
+Backup is on by default, and on Android 12+ the attribute *"disables cloud-based
+backup and restore (such as Google Drive backups) but doesn't disable
+device-to-device transfers for the app"* — which is the transport that copies an
+app's private files onto a replacement handset, in a shop, at the owner's
+request, with the whole ledger and the receipt spool in plaintext along the way.
+The control reads as satisfied and excludes nothing from the path a lost or
+replaced phone actually takes.
 
 Real exclusion is `android:dataExtractionRules` (API 31+) **and**
 `android:fullBackupContent` (API ≤ 30) pointing at resources with explicit

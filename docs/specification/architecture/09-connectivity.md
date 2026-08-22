@@ -283,16 +283,16 @@ subject to memory-pressure termination, so the first request after a foreground
 is disproportionately likely to fail, which is what the settle delay above is
 for.
 
-**Android gets to the same trigger list along a different road, and the
-difference matters when someone later asks why.** A background drain is
-genuinely implementable there — `expo-background-task` over `WorkManager`, with a
-network-connected constraint — and the custody objection that closes it on iOS
-does not exist: §5.7 records that Android's credential-encrypted storage is
-readable from first unlock until reboot regardless, so nothing is weakened by
-running while locked. What rules it out of the design is **reliability**. The
-floor between periodic runs is fifteen minutes, the constraint only promises *a*
-network rather than a reachable Pi, Doze and app-standby buckets stretch both,
-and OEM vendors kill background work whatever the framework promised. A drain
+**Android reaches the same trigger list by a different road.** A background drain
+is genuinely implementable there — `expo-background-task` over `WorkManager`,
+with a network-connected constraint — and the custody objection that closes it on
+iOS does not arise: §5.7 records that Android's credential-encrypted storage is
+readable from first unlock until reboot whatever the app does, so nothing is
+weakened by running while locked. What rules it out of the design is
+**reliability**. The floor between periodic runs is fifteen minutes, the
+constraint only promises *a* network rather than a reachable Pi, Doze and
+app-standby buckets stretch both, and OEM vendors kill background work whatever
+the framework promised. A drain
 that happens somewhere between fifteen minutes and never cannot be a mechanism
 any state, banner or freshness figure refers to.
 

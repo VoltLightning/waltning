@@ -345,16 +345,16 @@ documentation.
   `expo-local-authentication` instead; the Keychain item itself must not carry
   that flag, or changing a fingerprint silently logs you out and forces a
   re-enrolment against a server you may not be able to reach.
-  **On Android the same flag is worse**, and fails earlier: it demands
+  **On Android that flag fails earlier and harder**: it demands
   `BIOMETRIC_STRONG` with no device-credential path, so on a PIN-only device the
-  store throws rather than degrading and the token cannot be written at all. Same
-  remedy, and now for two reasons.
-- **Set `keychainAccessible` explicitly.** The documented default and the source
-  default disagree. Under plain `WHEN_UNLOCKED` the token restores onto a
+  store throws rather than degrading and the token cannot be written at all. One
+  remedy, two different failures.
+- **Set `keychainAccessible` explicitly on iOS.** The documented default and the
+  source default disagree. Under plain `WHEN_UNLOCKED` the token restores onto a
   *different* device from an encrypted backup — §5.7 already requires
   `AFTER_FIRST_UNLOCK` **`ThisDeviceOnly`**, and inheriting a default is not the
   same as setting it.
-- **Android has no such setting, and gets the property for free — twice.**
+- **Android has no equivalent setting, and gets the property for free — twice.**
   `expo-secure-store` there is `SharedPreferences` holding AES-256-GCM blobs
   under a non-exportable Keystore key, so ciphertext restored onto another handset
   cannot be decrypted; and Expo's own backup rules exclude `SecureStore.xml` from
@@ -374,10 +374,9 @@ documentation.
 - **Neither `expo-secure-store` nor `react-native-keychain` uses the Secure
   Enclave.** Both put bytes in the data-protection keychain. The Enclave is the
   root of the wrapping hierarchy, not where the token lives; any claim otherwise
-  is wrong and would overstate what is protected. The Android side is the mirror
-  image and is worth stating so nobody claims it either: the Keystore key is
-  hardware-backed and **the token is not in it** — the key wraps bytes that live
-  in `SharedPreferences`.
+  is wrong and would overstate what is protected. Android is the mirror image of
+  the same misreading: the Keystore key is hardware-backed and **the token is not
+  in it** — the key wraps bytes that live in `SharedPreferences`.
 - **A rate limiter keyed on an IPv6 address is decorative.** A /64 rotation
   defeats it. Key on the account, and keep the transport-level limit in the
   reverse proxy where it belongs.
