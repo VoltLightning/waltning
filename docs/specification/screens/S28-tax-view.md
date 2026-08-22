@@ -135,11 +135,10 @@ cleared — the list is a worklist, not a report.
 
 1. ~~**Is `Business revenue` live yet, or anticipated?**~~ **Answered: live —
    the JDG is trading now.** So the per-row ryczałt rate, counterparty NIP and
-   KSeF id are build-time fields, and this screen is not a Phase 6 concern: it
-   wants to exist before the first period it is used to check (`SPEC.md` §13.6,
-   §16). The completeness list is the part that earns its place early — it is
-   the reconciliation surface, and reconciliation is what Waltning owes here
-   rather than filing (§13.5).
+   KSeF id are available when business revenue is recorded, and this screen
+   exists before the first period it is used to check (`SPEC.md` §13.6). The
+   completeness list is the reconciliation surface, and reconciliation is what
+   Waltning owes here rather than filing (§13.5).
 2. ~~**Multiple ryczałt rates in one year.**~~ **Resolved by S22's dated rate
    table.** `ryczalt_rates` is keyed by *(activity, valid_from)*, so two clients
    at different rates in the same period and an annual rate change are the same

@@ -21,7 +21,7 @@ Money Manager is read-only forever.
 
 | Must be true | Why |
 |---|---|
-| Phases 1–6 delivered | You are cutting over to something usable, not to a schema |
+| J02–J06, J09, J11 and J14 meet their §7 success criteria | Daily use, review, receipts, import, agent, export and account management all work before the old system becomes read-only |
 | The Apr–Aug 2026 gap entered in Money Manager | Locked decision (§3) — migration runs against a later backup |
 | FX complete for every currency in use | GEL is currently at 0.5% (§7.7). Cutting over with an unbacked currency means five years of `estimated` amounts |
 | Backups running and a restore drill passed | §5.4. Cutting over onto untested backups moves your only copy onto one SD card |
@@ -68,7 +68,7 @@ Money Manager is read-only forever.
 
 | Failure | Treatment |
 |---|---|
-| **Verification fails** | The project stops here. This is the designed outcome, not an error state — §8.4 makes it the go/no-go for the entire system |
+| **Verification fails** | Cutover stops here. This is the designed outcome, not an error state — §8.4 makes reconciliation the go/no-go for imported data |
 | Unmatched transfer legs (R2) | The 20-row OUT/IN discrepancy is resolved to an explicit exception list **before** cutover, not carried into it |
 | Balances match but monthly totals diverge | Expected. Divergence is the FX correction (§6.1) — Money Manager applied one undated global rate across five years. It must be **explained**, not merely tolerated, and the migration report states the largest drift |
 | A currency has incomplete rates | Every affected row carries `fx_rate_estimated`. Cutting over in this state is a decision, and should be made deliberately rather than discovered |
@@ -77,11 +77,11 @@ Money Manager is read-only forever.
 
 ## 6. Rules
 
-- **Money Manager is authoritative until step 5.** Every phase before this is
-  independently useful precisely so that stopping is survivable — the mitigation
-  for R8 is that no intermediate state has data in two places *authoritatively*.
-- **The verification gate is not advisory.** Failing it stops the project until
-  it is understood.
+- **Money Manager is authoritative until step 5.** Every prerequisite above
+  leaves a usable system if work stops before cutover; no intermediate state has
+  data in two places *authoritatively*.
+- **The verification gate is not advisory.** Failing it stops cutover until the
+  mismatch is understood.
 - **Idempotency is what makes this rehearsable.** The importer has run against
   progressively later backups several times before this moment, so the cutover
   run is familiar rather than novel.

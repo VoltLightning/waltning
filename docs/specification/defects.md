@@ -845,7 +845,7 @@ Load findings were mostly **not** where §15 expects. The honest summary:
   row that describes tuning for four services. **Still true, and now scheduled** —
   `architecture/05-deployment.md` fixes the boot order, the one-shot `migrate`
   service, the two database roles and the per-container memory budget; the
-  compose file catches up in Phase 0.5 and Phase 7.
+  compose file catches up with the perimeter and production-deployment work.
 - **`maintainVisibleContentPosition` does not exist on React Native Web**, so
   backwards calendar scroll will jump the viewport.
 
@@ -853,13 +853,13 @@ Load findings were mostly **not** where §15 expects. The honest summary:
 
 ## What this changes about the plan
 
-**~~Authentication appears in no phase.~~ Fixed — Phase 0.5 exists.** §5.2
-specified it; §16's eight phases did not deliver it, and §15.1's four test layers
-did not cover it, so Phase 1 would have shipped an API over five years of real
-data roughly thirteen weeks before Tailscale landed. The sequence now puts auth
-and perimeter before any listener binds, and before the importer runs — and
-it is a prerequisite for T1 regardless, since a superuser bypasses every `GRANT`.
-This was the single most consequential scheduling finding in the review.
+**~~Authentication appears in no phase.~~ Fixed — the perimeter was moved ahead
+of real data.** The former eight-phase plan did not deliver §5.2, and §15.1's
+four test layers did not cover it, so the API would have exposed five years of
+real data before Tailscale landed. The corrected sequence puts auth and
+perimeter before any listener binds and before the importer runs. It is a
+prerequisite for T1 regardless, since a superuser bypasses every `GRANT`. This
+was the single most consequential scheduling finding in the review.
 
 **~~Three sections are load-bearing far beyond their length.~~ All three are now
 written to that depth.** §14.3 (offline) was four table rows and three bullets
@@ -892,7 +892,7 @@ migration step.
 1. **Probe the `.mmbak`** — C14. Nothing downstream is trustworthy until the
    transfer reading is known.
 2. **Give the gate an independent right-hand side** — C13.
-3. **Auth and perimeter before any listener binds** — a Phase 0.5.
+3. **Auth and perimeter before any listener binds.**
 4. **Write the DDL that T1 claims** — C7, C6: role, view, revoke, and the three
    falsifiable assertions that replace the tautology.
 5. **Close the period lock** — C3, and the closed-period guard every write path

@@ -365,9 +365,8 @@ the inherited categories.
 
 - ~~Is `Business revenue` live yet, or anticipated?~~ **Answered: live.** The
   JDG is trading and revenue rows exist today, so the per-row ryczałt rate,
-  counterparty NIP and KSeF id are needed **at build time**, not deferred. See
-  `SPEC.md` §13.6 and §16 — this moves the revenue side of the tax layer out of
-  the last phase.
+  counterparty NIP and KSeF id must be available when business revenue is
+  recorded. See `SPEC.md` §13.6.
 - Do you want `Uncategorized` to block anything — a nag on the dashboard, or
   silent?
 - Any leaves here you would never use, and any missing that you have wanted?

@@ -6,8 +6,8 @@ scanner, statement import, and an LLM agent over a Postgres ledger you own.
 Replaces [RealByte Money Manager](https://www.realbyteapps.com/) and the
 `mm-tools` Python pipeline in `<path-to-mm-tools>`.
 
-**Status:** specification, with the data foundation built — schema applied,
-taxonomy seeded, FX backfilled. See §16 for what remains.
+**Status:** target specification. This document describes the finished system,
+not implementation progress.
 **Last updated:** 2026-08-05
 
 **The interface is specified separately**, in [`docs/specification/`](docs/specification/):
@@ -33,7 +33,6 @@ sits underneath it.
 13. [Tax reporting — multi-jurisdiction](#13-tax-reporting--multi-jurisdiction)
 14. [Application surface](#14-application-surface)
 15. [Non-functional requirements](#15-non-functional-requirements)
-16. [Phasing and estimates](#16-phasing-and-estimates)
 17. [Open decisions](#17-open-decisions)
 18. [Risks](#18-risks)
 19. [Appendix A — Money Manager data inventory](#appendix-a--money-manager-data-inventory)
@@ -2078,14 +2077,14 @@ Missing days (weekends, holidays) carry forward the last published rate, marked
 
 ## 8. Migration from Money Manager
 
-The riskiest phase, and therefore the first.
+The highest-risk transition in the system, with its own gates.
 
 ### 8.0 Scope — balances and income, not five years of history
 
-**Migration is no longer a project gate.** It was Phase 0 with a
-reconcile-to-the-cent blocker; the new UX matters more than reproducing the old
-ledger, and the importer is idempotent (§8.3), so deferring costs nothing and
-closes no doors.
+**Migration is optional at first launch.** The importer is idempotent (§8.3), so
+accounts, opening balances and income can move first while expense and transfer
+history remains available for a later run. The verification gate governs the
+data that moves; it does not block unrelated surfaces.
 
 | What | Migrates | Why |
 |---|---|---|
@@ -2098,13 +2097,14 @@ closes no doors.
 | Expenses and transfers | ❌ *for now* | ~7,100 rows. Available any time via the same importer |
 | Counterparty proposals | ⚠️ deferred | Names live in loan-transaction notes; extract when history does |
 
-**What this changes downstream**
+**Consequences of partial migration**
 
-- Phase 0 drops from ~2 weeks to ~2 days.
-- The verification gate (§8.4) stops being a project blocker and becomes a
-  check on the balances that *did* come across.
-- **R8 — the largest risk in the register — largely dissolves.** You cannot
-  stall half-migrated if migration was never the prerequisite.
+- Accounts, opening balances and income are enough for the first run; full
+  history remains optional.
+- The verification gate (§8.4) checks the balances that *did* come across
+  without blocking the rest of the product.
+- **R8 — the largest risk in the register — is bounded.** A partial migration
+  leaves a usable system because the importer can resume idempotently.
 - **Rules cold-start:** the classification cascade (§9.2) assumes rules
   accumulate from confirmed history. Starting near-empty means the first months
   lean harder on the model tier — more API calls, more review, self-correcting
@@ -2210,8 +2210,8 @@ against progressively later backups before cutover.
 
 ### 8.4 The verification gate
 
-**Go/no-go for the entire project** — and the version that shipped could not
-fail.
+**Go/no-go for imported data and cutover** — and the version that shipped could
+not fail.
 
 #### Why the obvious gate is decoration
 
@@ -2225,7 +2225,7 @@ opening_balance + Σ(signed transactions) == computed_balance
 evaluates `(computed − Σ) + Σ = computed` for every account, unconditionally.
 Break the sign map so transfers never credit a destination and it still prints
 `0,00` down all 52 rows. **A gate whose two sides share a derivation cannot
-detect anything**, and this one was the sole check on the riskiest phase.
+detect anything**, and this one was the sole check on the riskiest transition.
 
 #### The right-hand side must come from outside the pipeline
 
@@ -2281,8 +2281,8 @@ downstream figure — period spend, category totals, the ryczałt revenue check 
 inherits it. This is not an extractor defect and no balance check can see it:
 the ledger is internally consistent, just partial.
 
-That is why §16 keeps the sync tooling rather than treating migration as a
-one-off. **A gate that passes on fidelity and is never run for completeness
+Statement sync is therefore permanent tooling rather than a migration-only
+step. **A gate that passes on fidelity and is never run for completeness
 certifies a faithful copy of an incomplete ledger** — which is the state this
 backup is in, and worth knowing before five years of it becomes the system of
 record.
@@ -2305,8 +2305,9 @@ To the cent, per account, per currency. Plus:
   Money Manager's, with divergence explained by the FX correction (§6.1) rather
   than by an error.
 
-If balances do not reconcile, nothing built on top is trustworthy. Failure here
-stops the project until it is understood.
+If balances do not reconcile, nothing derived from the imported rows is
+trustworthy. Failure rolls back the import and blocks cutover until the mismatch
+is understood.
 
 **The migration runs inside one transaction, and abandoning rolls it back
 entirely.** No accounts, no opening balances, no rows — the state before the
@@ -2339,9 +2340,9 @@ The shape:
 10. Parallel run for one period — Money Manager stays authoritative.
 11. Money Manager becomes read-only. Archive the export and the tooling.
 
-**Phase 0.5 precedes all of this.** The migration is what puts five years of real
-history on the machine, so the perimeter has to exist before step 8, not after
-week fifteen.
+**The perimeter precedes the real-data step.** Migration puts five years of real
+history on the machine, so Tailscale, authentication and the non-superuser role
+must exist before step 8.
 
 **Step 11 is the practical point of no return** — not technically, since the dump
 restores, but a month of Waltning-only entries would be lost.
@@ -3433,8 +3434,9 @@ One field that exists nowhere else in the design:
 
 #### Revenue is live, which moves this earlier
 
-The JDG is trading and revenue rows exist **now**, so the revenue side is not a
-Phase 6 concern. Three fields are needed at build time rather than later:
+The JDG is trading and revenue rows exist **now**, so the revenue fields are not
+export-only metadata. Three fields must be available when business revenue is
+recorded:
 
 ```
 transactions  + ryczalt_rate      numeric — per revenue row, from the ACTIVITY
@@ -4075,9 +4077,9 @@ little daily space and is included anyway — it is the highest-stakes journey w
 the longest gap between uses, which is the combination that leaves you
 re-learning it every April.
 
-**Phase 1 ships preset layouts** — three or four arrangements you pick between.
-Free drag-and-drop placement comes later, if the presets prove insufficient.
-That order is deliberate: a layout engine is a lot of work to build before
+**The first dashboard release ships preset layouts** — three or four
+arrangements you pick between. Free drag-and-drop placement is added only if the
+presets prove insufficient. A layout engine is a lot of work to build before
 knowing which arrangements are actually wanted, and presets answer the question
 cheaply.
 
@@ -4243,66 +4245,6 @@ the fifth.
 
 ---
 
-## 16. Phasing and estimates
-
-Each phase is independently useful. Stopping after any of them leaves something
-that works.
-
-| Phase | Deliverable | Gate | Est. |
-|---|---|---|---|
-| **0. Foundation** | Schema, taxonomy seed, accounts, opening balances, income import | Balances match; taxonomy in place | ~3 days · **partly done** — schema applied and taxonomy seeded; FX complete for 4 of 6 currencies (§7.7); the importer is written but has not been run, so there are no accounts or transactions yet |
-| **1. API + web read** | Hono + tRPC, dashboard, search, reports | You trust the numbers on sight | 2 wks |
-| **2. Mobile** | Expo app, entry, accounts, offline outbox | Replaces daily Money Manager use | 2–3 wks |
-| **3. Receipts** | Capture, extraction, line splits | Faster than typing it in | 2 wks |
-| **4. Import** | Parsers, rules, classification, review | A month of statements in minutes | 3 wks |
-| **5. Agent** | Tool calling, approval gates, audit | Answers what needs Excel today | 2 wks |
-| **6. Export** | Excel workbook, `tax_ledger` view, PL adapter | Opens in Excel; manifest asserts zero personal rows | 1–2 wks |
-| **7. Cutover** | Pi deploy, backups, restore drill | Money Manager read-only; a restore drill actually run | 1 wk |
-
-**Phase 0.5 is missing from the table above and belongs between 0 and 1.** §5.1
-and §5.2 specify the perimeter and the authentication behind it in full, and
-neither appears in any phase — Tailscale first surfaces in Phase 7, at week 15.
-As written this plan loads five years of real financial history into a dev stack
-in week one and then builds an API, a mobile client and an agent against it for
-thirteen weeks before a perimeter exists. It is also a hard prerequisite for
-§13.1: the application connects as `POSTGRES_USER`, a superuser bypasses every
-`GRANT`, and T1 is unenforceable until the app stops being one. Three days,
-scheduled before the importer runs.
-
-**The revenue side no longer belongs in Phase 6.** Business revenue is live
-(§13.6), so `ryczalt_rate`, the NIP and KSeF fields, and S28's completeness list
-want to exist before the first period they are used to check — not after the
-agent and the export engine. They are a small addition to Phase 1 (a few fields
-and one read-only view) rather than a phase of their own, and pulling them
-forward costs days.
-
-The rest of Phase 6 — the workbook, the adapters, the manifest — stays where it
-is. Nothing about it is time-pressured, because Waltning is not the filing
-path (§13.5).
-
-**Total: 15–17 weeks** of evenings and weekends. The agent phase is the least
-certain — tool surfaces are easy, good agent UX is not.
-
-Phase 0 before any UI. It is where the project proves viable, and a migration
-bug found in week one is cheap.
-
-**Order by irreversibility, not by size.** A wrong reading of the export costs
-five years of history and is discovered months later; a wrong empty state costs
-an afternoon. Everything expensive to be wrong about goes first even when it is
-small — the smallest item in the plan, a probe script of a few dozen lines,
-gates the largest. The corollary is to order by what a delay actually costs: a
-tail with no risk sequences itself, and a head that is entirely risk **is** the
-plan.
-
-The task-level sequence lives on the board rather than here, where re-ordering
-is cheap and expected. It carries the critical path (five strictly serial items,
-headed by that probe script), the perimeter gate, where each component phase
-actually lands, and the three specified things that should be deleted rather
-than scheduled. Its total is 13 weeks, and the reduction against the estimate
-above comes from the subtractions rather than from optimism.
-
----
-
 ## 17. Open decisions
 
 Ordered by how much they block.
@@ -4314,7 +4256,7 @@ Ordered by how much they block.
 | **O3** | Does dedicated filing software already exist in your workflow? | §13.3 handoff | Assume yes; build export, not integration. Lower stakes under ryczałt — the record is a revenue register, not a book |
 | ~~**O4**~~ | ~~BYN and GEL historical FX?~~ | — | **Verified available.** NBP, NBRB and NBG all serve 2020-11-25 and all quote **directly against USD** — no triangulation for primary pairs, no snapshot fallback. Endpoints in §7.7 |
 | ~~**O5**~~ | ~~RUB post-2022 accuracy?~~ | — | **Decided: set it by hand.** ECB delisted RUB in March 2022, so the range is covered by a **manual override over a date range** (§7.6), entered once and outranking every synced source. No extractor, no snapshot import — the figure is asserted by you and labelled as such. Rows falling outside any override carry `fx_rate_estimated` |
-| ~~**O6**~~ | ~~`CARD-C` statement format?~~ | — | **Answered: the account is dormant.** Historical rows migrate; nothing new arrives. **No parser needed** — dropped from Phase 4 entirely |
+| ~~**O6**~~ | ~~`CARD-C` statement format?~~ | — | **Answered: the account is dormant.** Historical rows migrate; nothing new arrives, so no parser exists for this source |
 | ~~**O7**~~ | ~~Budgets?~~ | — | **Answered: targets, not budgets.** A monthly spend target shown as progress against actual — no per-category envelopes, no rollover. See §14.7. The 13 Money Manager budgets are preserved in the migration dump but not imported |
 | ~~**O8**~~ | ~~Off-site backup target?~~ | — | **Answered: Backblaze B2**, age-encrypted before upload so the provider holds ciphertext only. S3-compatible, so MinIO points at it by configuration |
 | ~~**O9**~~ | ~~Pi model?~~ | — | **Answered: Pi 4.** Ample for the workload — 8k rows is nothing. **Boot from SSD over USB3, not SD**; see §15 |
@@ -4334,7 +4276,7 @@ Ordered by how much they block.
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| R1 | Migration balances do not reconcile | Medium | Critical | Phase 0 gate; project stops until understood |
+| R1 | Migration balances do not reconcile | Medium | Critical | Migration stops until the mismatch is understood |
 | R2 | Unmatched transfer legs (OUT 1,734 ≠ IN 1,754) | **High** | Medium | Explicit exception list; manual resolution before cutover |
 | R3 | ~~Historical FX unavailable for BYN/GEL~~ → **GEL backfill blocked by NBG rate-limiting** | **Materialized** | Medium | BYN came back 100% complete; GEL holds 11 of 2,080 days (§7.7). Needs a paced re-run, not a retry. Until then GEL rows carry `fx_rate_estimated` against a 2020 rate — visible, but not good enough to build on |
 | R4 | Scope creep into full tax compliance | **High** | High | §13 boundary is explicit; N1–N3 are non-goals |
@@ -4342,7 +4284,7 @@ Ordered by how much they block.
 | R6 | Pi SD card failure | **High** over years | High | SSD boot; nightly off-site backups; tested restore |
 | ~~R7~~ | ~~Model spend higher than expected~~ | — | — | **Retired.** Measured at real volume, total annual spend is $0.50–$25 depending on tier, and under $250 at 10× usage on the most expensive option (§11.4). Cost was never the constraint; latency and routing are |
 | **R13** | Financial data exposed to an aggregator | Medium | **High** | O17 — undecided. A router sees receipt images and transaction descriptions in plaintext, against a project premise of physical custody (§5.5) |
-| R8 | Project stalls half-migrated, data split across two systems | Medium | **High** | Phases independently useful; Money Manager authoritative until Phase 7 |
+| R8 | Project stalls half-migrated, data split across two systems | Medium | **High** | Money Manager stays authoritative and repeated imports are idempotent until the explicit cutover in J15 |
 | R9 | Agent writes bad data | Low | High | Approval gates on every write; full audit; soft delete |
 | R10 | A personal expense reaches a tax output | Low | **Critical** | §13.1 — separate DB role with no privilege on `transactions`; fails loudly rather than quietly |
 | R11 | `is_business` misclassification on 5 years of history | Medium | Medium | O12 — default personal, classify forward only; bulk reclassification is an audited, approved operation |

@@ -17,12 +17,10 @@ reachable only over Tailscale.
 | **prod** | The Pi | Real | Tailscale + auth + non-superuser role |
 | **scratch** | Migration rehearsal, restore drills | Throwaway copies | Local only, dropped after |
 
-**There is no "dev has fake data" phase, and that is the whole reason Phase 0.5
-exists.** Migration runs in week 0, so five years of real financial history is on
-the development machine from the first week. The original plan scheduled
-Tailscale for week 15. Bind to the tailnet interface before the importer runs —
-half a day, and the alternative is a laptop on a café network one
-`docker compose up` away from binding `0.0.0.0`.
+**Development uses real data, so its perimeter is a prerequisite.** Bind to the
+tailnet interface before the importer runs. Otherwise a laptop on a café network
+is one `docker compose up` away from binding five years of financial history to
+`0.0.0.0`.
 
 ---
 
