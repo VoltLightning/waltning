@@ -50,8 +50,8 @@ five years of history and is found months later, where a wrong empty state costs
 an afternoon — and *order by what a delay actually costs*, since a tail with no
 risk sequences itself and a head that is entirely risk **is** the plan.
 
-`SPEC.md` §16 phases the system and has the same property. It is not resolved
-here.
+The former `SPEC.md` §16 phase table had the same property and was removed in a
+follow-up change.
 
 **The vocabulary loses "Brick".** The glossary defined it as a numbered sequence
 — the phone alone, then a backend, then the web dashboard — which is a plan in a

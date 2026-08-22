@@ -133,8 +133,8 @@ commits refer to, not a position in a sequence.
 ### Depth is declared, not uniform
 
 Specifying S28 Tax view to the same depth as S05 Quick add would be speculative
-— it sits behind a tax layer in Phase 6, under a scheme where most of the screen
-is deliberately absent, and some of its choices genuinely cannot be made well
+— it depends on a tax layer under a scheme where most of the screen is
+deliberately absent, and some of its choices genuinely cannot be made well
 before the ledger exists. So every screen gets **all nine sections**, and the
 prose depth is tiered:
 

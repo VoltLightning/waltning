@@ -19,12 +19,12 @@ Everything here has been rehearsed or is marked as needing you.
 | A final `.mmbak` export | ⬜ Step 1 |
 | 52 balances typed off the Money Manager UI | ⬜ **needs you — the one blocking input** |
 | Bank statements for the accounts you can get them for | ✅ two accounts, four months |
-| Phase 0.5 complete — Tailscale, auth, non-superuser role | ⬜ **must precede this** |
+| Tailscale, auth and the non-superuser role are active | ⬜ **must precede this** |
 | A scratch database to rehearse into | ⬜ |
 
-**Phase 0.5 is a prerequisite, not a parallel track.** The migration puts five
-years of real financial history onto the machine. If the perimeter does not exist
-at that moment, it does not exist for the thirteen weeks that follow.
+**The perimeter is a prerequisite, not a parallel track.** The migration puts
+five years of real financial history onto the machine, so Tailscale,
+authentication and the non-superuser role must exist before the importer runs.
 
 ---
 
