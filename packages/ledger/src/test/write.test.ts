@@ -1,194 +1,307 @@
 /**
- * The local write path, tested on the property that matters: **both, or
- * neither.**
+ * The local write path, tested on the property that replaced "both, or
+ * neither".
  *
- * `architecture/14` §14.1 says a write materialises into the local tables and
- * records its intent in the outbox. Two separate statements would satisfy that
- * sentence and still be wrong, because a process can die between them — iOS
- * force-quit gives no callback at all — and both halves of the failure are
- * silent:
+ * That phrase was true while both tables lived in one file. §5.7 puts them in
+ * two, and SQLite offers no atomic commit across two databases in WAL mode — so
+ * the guarantee is now an **ordering**, and these tests are about which half
+ * survives a crash rather than about neither surviving.
  *
- * - a row with no entry looks like an ordinary transaction and never reaches a
- *   server;
- * - an entry with no row sends a write for something that is not there.
- *
- * So the tests below do not check that two writes happened. They check that a
- * failure between them leaves nothing.
+ * The outbox entry commits first because it is the only copy of unsent intent.
+ * So the window a kill can open is *an entry whose row is missing*, never a row
+ * that will never be sent. The first is repairable and `recover.test.ts` proves
+ * it; the second is not repairable by anything, which is why the order is this
+ * way round.
  */
 
 import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core";
+import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { outbox, transactions } from "../schema.ts";
+import { z } from "zod";
+import { defineLocalExecutor, localRegistry } from "../executor.ts";
+import { readAppliedSeq } from "../migrate.ts";
+import type * as schema from "../schema.ts";
+import { accounts, counterparties, currencies, outbox, transactions } from "../schema.ts";
+import { type Capture, type LocalTx, writeLocally } from "../write.ts";
+import { type ScratchStores, scratchStores } from "./stores.ts";
 
-import { writeLocally } from "../write.ts";
-import { type LedgerTx, type Scratch, scratchLedger } from "./scratch.ts";
+type Tx = LocalTx<Database.RunResult, typeof schema>;
 
-let s: Scratch;
+let s: ScratchStores;
 
 beforeEach(() => {
-  s = scratchLedger();
+  s = scratchStores();
+  seedReferences();
 });
 
 afterEach(() => {
   s?.close();
 });
 
-/** A capture, as `create_transaction` would hand it over. */
-const capture = {
+/** The rows a transaction's foreign keys point at. The replica enforces them. */
+function seedReferences() {
+  s.ledger.replica.db
+    .insert(currencies)
+    .values({ code: currencyCode("PLN"), name: "Placeholder" })
+    .onConflictDoNothing()
+    .run();
+  s.ledger.replica.db
+    .insert(accounts)
+    .values({ id: id<"accounts">("acc-1"), name: "Bank A · PLN", currency: currencyCode("PLN") })
+    .onConflictDoNothing()
+    .run();
+}
+
+const CREATE_TRANSACTION = z.object({
+  id: z.string(),
+  account_id: z.string(),
+  amount_original: z.string(),
+  /**
+   * Optional, and it is what the dependency scan actually matches on.
+   *
+   * Worth stating because it caught this test out: the outbox stores the
+   * **parsed** payload, and Zod strips what the schema does not declare. An id
+   * passed in a field the operation never declared is gone before `deriveDeps`
+   * ever sees it — which is correct (what replays must be what the operation
+   * accepted) and means the scan can only find ids the schema names.
+   */
+  counterparty_id: z.string().optional(),
+});
+
+const CREATE_COUNTERPARTY = z.object({ id: z.string(), name: z.string() });
+
+const createCounterparty = defineLocalExecutor<typeof CREATE_COUNTERPARTY, { id: string }, Tx>({
+  operation: "create_counterparty",
+  opVersion: 1,
+  input: CREATE_COUNTERPARTY,
+  mints: (input) => [input.id],
+  apply: (input, tx) => {
+    const [row] = tx
+      .insert(counterparties)
+      .values({ id: id<"counterparties">(input.id), name: input.name })
+      .returning({ id: counterparties.id })
+      .all();
+    if (!row) throw new Error("no row returned");
+    return row;
+  },
+});
+
+const createTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
   operation: "create_transaction",
   opVersion: 1,
-  payload: { account_id: "acc-1", amount_original: "18.00000000" },
-};
-
-function insertTransaction(txnId: Id<"transactions">) {
-  return (tx: LedgerTx) =>
-    tx
+  input: CREATE_TRANSACTION,
+  mints: (input) => [input.id],
+  apply: (input, tx) => {
+    const [row] = tx
       .insert(transactions)
       .values({
-        id: txnId,
+        id: id<"transactions">(input.id) as Id<"transactions">,
         date: accountingDate("2026-03-12"),
         type: "expense",
-        accountId: id<"accounts">("acc-1"),
-        amountOriginal: money.toMoney("18.00"),
+        accountId: id<"accounts">(input.account_id),
+        ...(input.counterparty_id
+          ? { counterpartyId: id<"counterparties">(input.counterparty_id) }
+          : {}),
+        amountOriginal: money.toMoney(input.amount_original),
         currency: currencyCode("PLN"),
         fxRate: money.pivotPerUnit("1.000000000000"),
       })
-      .returning()
-      .all()[0];
-}
+      .returning({ id: transactions.id })
+      .all();
+    if (!row) throw new Error("no row returned");
+    return row;
+  },
+});
 
-describe("a write with no backend in existence", () => {
-  it("is on the ledger immediately, with exactly one outbox entry", () => {
-    const result = writeLocally(s.db, {
-      ...capture,
-      apply: insertTransaction(id<"transactions">("txn-1")),
+/** An executor that mints nothing and always refuses — the crash in test form. */
+const refuses = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "refuses",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: () => [],
+  apply: () => {
+    throw new Error("the replica half failed");
+  },
+});
+
+const registry = localRegistry<Tx>([createTransaction, createCounterparty, refuses]);
+
+const capture: Capture = { timeZone: "Europe/Warsaw", offsetMinutes: 60 };
+
+const input = (txnId: string) => ({
+  id: txnId,
+  account_id: "acc-1",
+  amount_original: "18.00000000",
+});
+
+const entries = () => s.ledger.outbox.db.select().from(outbox).all();
+const rows = () => s.ledger.replica.db.select().from(transactions).all();
+
+describe("a write records its intent and materialises", () => {
+  it("lands both halves, and moves the watermark to match", () => {
+    const result = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-1"),
+      capture,
     });
 
-    const rows = s.db.select().from(transactions).all();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("txn-1");
-
-    const entries = s.db.select().from(outbox).all();
-    expect(entries, "exactly one entry — not zero, not two").toHaveLength(1);
-    expect(entries[0]?.id).toBe(result.entryId);
-    expect(entries[0]?.operation).toBe("create_transaction");
-    expect(entries[0]?.state, "queued, not sent — there is nothing to send to").toBe("pending");
+    expect(rows()).toHaveLength(1);
+    expect(entries()).toHaveLength(1);
+    expect(result.seq).toBe(1);
+    // The watermark is what says the replica has caught up. If it lagged, the
+    // next launch would replay a write that already landed.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(1);
   });
 
-  it("records the payload as the drain will replay it", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
+  it("stores the zone and the offset beside the entry, not merged into a date", () => {
+    writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-1"),
+      capture,
+    });
 
-    const [entry] = s.db.select().from(outbox).all();
-    // Read back through the driver, not from the object we passed in: `json`
-    // mode has to survive the round trip or the drain replays a string.
-    expect(entry?.payload).toEqual(capture.payload);
-    expect(entry?.opVersion, "the version at capture, for the upcasters (C24)").toBe(1);
+    const [entry] = entries();
+    expect(entry?.capturedTz).toBe("Europe/Warsaw");
+    // Carried separately because the zone alone cannot reconstruct a past
+    // offset — the same zone differs either side of a DST boundary.
+    expect(entry?.capturedOffsetMinutes).toBe(60);
   });
 
-  it("orders entries by `seq`, which is not the id and not the clock", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
-    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-2")) });
-    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-3")) });
+  it("orders by seq, and the numbers do not repeat", () => {
+    const a = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-1"),
+      capture,
+    });
+    const b = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-2"),
+      capture,
+    });
 
-    const seqs = s.db
-      .select({ seq: outbox.seq })
+    expect([a.seq, b.seq]).toEqual([1, 2]);
+  });
+
+  it("derives a dependency on the entry that mints the id it names", () => {
+    // `08`'s own example: a counterparty created offline, then a transaction
+    // naming it. Sent out of order the transaction is a 404 and blocks, for
+    // something nobody did wrong.
+    const first = writeLocally(s.ledger, {
+      executor: createCounterparty,
+      registry,
+      input: { id: "cp-1", name: "Placeholder" },
+      capture,
+    });
+
+    const second = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: { ...input("txn-1"), counterparty_id: "cp-1" },
+      capture,
+    });
+
+    expect(second.deps).toEqual([first.entryId]);
+    expect(first.deps).toEqual([]);
+  });
+
+  it("does not invent a dependency when nothing queued mints the id", () => {
+    // The counterparty already exists locally and was acknowledged long ago —
+    // naming it must not hold the transaction behind anything.
+    s.ledger.replica.db
+      .insert(counterparties)
+      .values({ id: id<"counterparties">("cp-old"), name: "Placeholder" })
+      .run();
+
+    const only = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: { ...input("txn-1"), counterparty_id: "cp-old" },
+      capture,
+    });
+
+    expect(only.deps).toEqual([]);
+  });
+});
+
+describe("invalid input never reaches either store", () => {
+  it("throws before writing anything at all", () => {
+    expect(() =>
+      writeLocally(s.ledger, {
+        executor: createTransaction,
+        registry,
+        input: { id: "txn-1", account_id: "acc-1" },
+        capture,
+      }),
+    ).toThrow();
+
+    // The parse runs outside both transactions, so there is no entry to repair
+    // and no row to explain.
+    expect(entries()).toHaveLength(0);
+    expect(rows()).toHaveLength(0);
+  });
+});
+
+describe("a failure between the two commits keeps the intent", () => {
+  it("leaves the entry and no row — the crash the reconciler exists for", () => {
+    expect(() =>
+      writeLocally(s.ledger, { executor: refuses, registry, input: input("txn-1"), capture }),
+    ).toThrow("the replica half failed");
+
+    // This is the asymmetry the whole design turns on. The capture is not lost:
+    // it is queued, and its local effect is missing until replay.
+    expect(entries()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
+    // The watermark did not move, which is what tells the next launch to replay.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+  });
+});
+
+describe("the two stores are two files", () => {
+  it("keeps the outbox out of the replica, and the ledger out of the outbox", () => {
+    const tablesIn = (db: Database.Database) =>
+      db
+        .prepare("select name from sqlite_master where type = 'table'")
+        .all()
+        .map((row) => (row as { name: string }).name);
+
+    const replica = new Database(s.paths.replica);
+    const outboxDb = new Database(s.paths.outbox);
+
+    try {
+      // §5.7: a replica refetch must never touch the outbox. That is only true
+      // if the outbox is not in the file being refetched.
+      expect(tablesIn(replica)).toContain("transactions");
+      expect(tablesIn(replica)).not.toContain("outbox");
+      expect(tablesIn(outboxDb)).toContain("outbox");
+      expect(tablesIn(outboxDb)).not.toContain("transactions");
+    } finally {
+      replica.close();
+      outboxDb.close();
+    }
+  });
+});
+
+describe("the entry the caller is handed", () => {
+  it("names the row it wrote and the key the server will deduplicate on", () => {
+    const result = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-1"),
+      capture,
+    });
+
+    expect(result.row.id).toBe("txn-1");
+    const [entry] = s.ledger.outbox.db
+      .select()
       .from(outbox)
-      .all()
-      .map((e) => e.seq);
-    expect(
-      seqs.sort((a, b) => a - b),
-      "consecutive, allocated inside the transaction",
-    ).toEqual([1, 2, 3]);
-  });
-});
-
-describe("a failure between the two writes leaves neither", () => {
-  /**
-   * **The card's own acceptance, and the reason the path is one transaction.**
-   *
-   * Throwing from `apply` stands in for the process dying: whatever the local
-   * tables had done is undone, and no entry is left pointing at a row that does
-   * not exist.
-   */
-  it("rolls back the row when applying it fails", () => {
-    expect(() =>
-      writeLocally(s.db, {
-        ...capture,
-        apply: (tx) => {
-          insertTransaction(id<"transactions">("txn-1"))(tx);
-          throw new Error("killed mid-write");
-        },
-      }),
-    ).toThrow("killed mid-write");
-
-    expect(s.db.select().from(transactions).all(), "no orphan row").toHaveLength(0);
-    expect(s.db.select().from(outbox).all(), "no orphan entry").toHaveLength(0);
-  });
-
-  /**
-   * The other direction, and the one a two-statement implementation gets wrong
-   * most often: the row lands, the entry does not, and the ledger looks
-   * perfectly normal while that transaction can never reach a server.
-   */
-  it("rolls back the row when the outbox insert fails", () => {
-    // Remove the table the second half writes to. The first half still
-    // succeeds, which is precisely the shape of the bug.
-    s.sqlite.exec("drop table outbox");
-
-    expect(() =>
-      writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) }),
-    ).toThrow();
-
-    expect(
-      s.db.select().from(transactions).all(),
-      "the row must not survive an entry that failed",
-    ).toHaveLength(0);
-  });
-
-  it("leaves earlier writes untouched", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
-
-    expect(() =>
-      writeLocally(s.db, {
-        ...capture,
-        apply: () => {
-          throw new Error("killed mid-write");
-        },
-      }),
-    ).toThrow();
-
-    // A rollback that took the whole database with it would be a worse bug than
-    // the one being prevented.
-    expect(s.db.select().from(transactions).all()).toHaveLength(1);
-    expect(s.db.select().from(outbox).all()).toHaveLength(1);
-  });
-});
-
-describe("the ledger survives the app going away", () => {
-  it("a committed write is still there on the next open", () => {
-    writeLocally(s.db, { ...capture, apply: insertTransaction(id<"transactions">("txn-1")) });
-
-    // The nearest thing to a force-quit an in-memory database allows: drop
-    // every prepared statement and read again through a fresh query path. The
-    // durable version of this belongs to the migrator card, which owns the file
-    // on disk.
-    const rows = s.sqlite.prepare("select id from transactions where id = ?").all("txn-1");
-    const entries = s.sqlite.prepare("select state from outbox").all();
-
-    expect(rows).toHaveLength(1);
-    expect(entries).toHaveLength(1);
-  });
-
-  it("an entry can be found by the id the caller was given", () => {
-    const { entryId } = writeLocally(s.db, {
-      ...capture,
-      apply: insertTransaction(id<"transactions">("txn-1")),
-    });
-
-    // That id is the idempotency key the server deduplicates on, so a caller
-    // that cannot find its own entry cannot retry safely.
-    const found = s.db.select().from(outbox).where(eq(outbox.id, entryId)).all();
-    expect(found).toHaveLength(1);
+      .where(eq(outbox.id, result.entryId))
+      .all();
+    expect(entry?.operation).toBe("create_transaction");
+    expect(entry?.state).toBe("pending");
   });
 });

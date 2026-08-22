@@ -7,11 +7,16 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "generate": "drizzle-kit generate --config=drizzle.replica.config.ts --name=schema && drizzle-kit generate --config=drizzle.outbox.config.ts --name=schema && tsx tools/embed-ddl.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@waltning/core": "workspace:*",
     "@waltning/schema": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10"
   }
 }

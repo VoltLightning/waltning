@@ -6,5 +6,38 @@
  * `packages/schema`, which is what keeps the divergence bounded.
  */
 
+export {
+  type AnyLocalExecutor,
+  defineLocalExecutor,
+  type LocalExecutor,
+  type LocalRegistry,
+  localRegistry,
+} from "./executor.ts";
+export {
+  advanceAppliedSeq,
+  type LedgerFs,
+  type Migration,
+  type MigrationResult,
+  migrateOutbox,
+  migrateReplica,
+  type ReplicaMigrationResult,
+  readAppliedSeq,
+} from "./migrate.ts";
+export {
+  type Ledger,
+  type LedgerPaths,
+  type LedgerSchema,
+  type OutboxDb,
+  openLedger,
+  type ReplicaDb,
+  type SqliteOpener,
+} from "./open.ts";
+export { type LaunchRecovery, type ReplayHalt, recoverOnLaunch } from "./recover.ts";
 export * from "./schema.ts";
-export { type LocalWrite, type LocalWriteResult, writeLocally } from "./write.ts";
+export {
+  type Capture,
+  type LocalTx,
+  type LocalWrite,
+  type LocalWriteResult,
+  writeLocally,
+} from "./write.ts";

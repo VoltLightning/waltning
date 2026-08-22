@@ -205,10 +205,27 @@ never moves — H15's own complaint, reintroduced.
 
 - **On launch, before anything else:** `UPDATE outbox SET state='pending' WHERE
   state='sending'`. Safe *only* because of the idempotency ledger above.
-- **One transaction per entry, opened after the response arrives**, containing
-  both the entry's removal and the application of the server's canonical row to
-  the replica. Splitting those two is the bug: mark-sent commits, replica-apply
-  does not, and the row is gone from the queue and absent from the replica.
+- **The canonical row first, the entry's removal second — two commits, not
+  one.** The rule that reads better is one transaction per entry, opened after
+  the response arrives, holding both halves. It is not available: `outbox.db`
+  and `replica.db` are separate files in WAL mode, and SQLite is explicit that a
+  transaction touching several attached databases is atomic per database and not
+  as a set (`14-local-first.md` §14.6 settles the same constraint on the capture
+  side). So the ordering has to carry what the transaction was going to.
+- **Removing the entry first is the bug** — the one the missing transaction was
+  there to prevent. Mark-sent commits, the canonical apply does not, and the row
+  stops being provisional while still holding what the phone guessed: the
+  server-stamped rate and pivot amounts (§14.3) never land, nothing marks the
+  row, and no reconciler can find it, because the entry that named it is gone.
+  Applying the canonical row first fails the other way, which is recoverable —
+  the entry stays in `sending`, the line above returns it to `pending`, the
+  resend meets the idempotency ledger and gets the same canonical row back, and
+  the apply, an upsert on a client-minted id (H13), is the same write twice.
+- **The order is the opposite of the capture path's, and one rule produces
+  both:** whichever half commits second must be the half a replay can
+  reconstruct. At capture only the outbox holds unsent intent, so it goes first.
+  At drain the server already holds the write and the entry is still in the
+  queue, so the removal goes last.
 - **Never hold one transaction across N network calls.** That holds a write lock
   across I/O, and a kill rolls back sends the server already committed.
 - **Receipt file deletion is a third step**, after that transaction commits.

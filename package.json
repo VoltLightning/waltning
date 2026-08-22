@@ -26,6 +26,7 @@
     "db:psql": "docker compose exec postgres psql -U waltning -d waltning",
     "db:migrate": "pnpm --filter @waltning/db migrate",
     "db:generate": "pnpm --filter @waltning/db generate",
+    "ledger:generate": "pnpm --filter @waltning/ledger generate",
     "db:studio": "pnpm --filter @waltning/db studio",
     "mm:extract": "pnpm --filter @waltning/migrate-mm extract",
     "mm:import": "pnpm --filter @waltning/migrate-mm import",
