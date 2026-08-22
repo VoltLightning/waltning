@@ -347,11 +347,21 @@ describe("every src/ is organised by domain, not by layer", () => {
     "packages/ui/src": ["accounts", "fx", "primitives", "review", "shell", "theme", "transactions"],
     "packages/db/src": ["fx", "seed", "test"],
     /**
-     * The phone's ledger. Flat but for its harness — the SQLite schema, the
-     * outbox and the local write path are one concern, and §14.7 names them
-     * together. A folder here would be a claim that they are separable.
+     * The phone's ledger: **a flat foundation, plus one folder per domain.**
+     *
+     * The flat half is unchanged and the original reasoning still holds — the
+     * SQLite schema, the outbox, the write path, the migrator and the launch
+     * reconciler are one concern, §14.7 names them together, and a folder
+     * around any of them would be a claim that they are separable.
+     *
+     * The folders are the local **executors**, and they are separable in
+     * exactly the way the foundation is not: `accounts` and `transactions` are
+     * different domains, and §14.7's "two engines, one definition" means each
+     * one mirrors a module in `apps/api/src/modules/`. Filing them flat would
+     * put forty-four operations beside six foundation files and lose the
+     * correspondence that makes the two engines checkable against each other.
      */
-    "packages/ledger/src": ["test"],
+    "packages/ledger/src": ["accounts", "test", "transactions"],
     /**
      * **Flat, and that is the decision.** The two dialects are file suffixes —
      * `currencies.pg.ts` beside `currencies.sqlite.ts` — not `pg/` and

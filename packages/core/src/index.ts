@@ -50,6 +50,18 @@ export {
   TAX_SENSITIVE_FIELDS,
   type TaxSensitiveField,
 } from "./registry/gate.ts";
+/**
+ * The operation inputs, shared by the server's handler and the device's local
+ * executor — §14.7's "two engines, one definition". A schema per side agrees
+ * until one of them is edited.
+ */
+export {
+  type AccountKind,
+  type CreateAccountInput,
+  type CreateTransactionInput,
+  createAccountInput,
+  createTransactionInput,
+} from "./registry/inputs.ts";
 export {
   type AnyOperation,
   type AuditSpec,

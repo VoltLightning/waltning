@@ -47,6 +47,14 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 3,
     why: "two in one constraint — the driver's run-result and the schema map, neither of which this module touches — and the JSON payload the drain replays. It was eight: `TRun` and `TSchema` threaded by hand through three declarations, which is one decision typed out three times",
   },
+  "packages/ledger/src/accounts/create-account.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — `expo-sqlite` on the device and `better-sqlite3` in tests, and an executor never reads one because every statement ends in `.all()`",
+  },
+  "packages/ledger/src/transactions/create-transaction.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — `expo-sqlite` on the device and `better-sqlite3` in tests, and an executor never reads one because every statement ends in `.all()`",
+  },
   "packages/ledger/src/executor.ts": {
     max: 3,
     why: "two raw-payload doors (`invoke`, `mintedIds`) taking JSON off a disk, which is exactly as trustworthy as JSON off a wire, and one widened `Row` in a constraint position — a registry is heterogeneous and TypeScript has no existential type for `returns something`",

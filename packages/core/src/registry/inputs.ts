@@ -1,0 +1,381 @@
+/**
+ * The inputs both engines validate against.
+ *
+ * §14.7 is *"two engines, one definition"*: the phone runs SQLite now and a
+ * later backend will make Postgres authoritative, so the same write is
+ * validated by the device's local executor and eventually by the server's
+ * handler. **Two schemas that agree today is not the same property as one
+ * schema.** They agree until someone widens a `max()` on one side, and the
+ * failure surfaces only after the phone has shown the row as saved.
+ *
+ * So the schema lives here rather than beside the handler. `packages/ledger`
+ * must never import `apps/api` (`tests/architecture.test.ts` enforces the
+ * direction), which leaves `core` as the only place both can reach — and
+ * `operation.ts` already made this argument for the operation *shape*: the
+ * declaration is a contract both sides depend on, and only the handler is the
+ * server's business.
+ *
+ * **What is deliberately not here.** A field derived while materialising a
+ * row is not an input, and putting it here would make the capture caller assert
+ * it. §14.6's reference-rate rule is the sharpest case and it cost four bugs;
+ * every omission below names the executor or later server step that owns the
+ * column instead.
+ *
+ * One file for two operations rather than one per domain: the project's *"no
+ * abstraction before the third use"* rule. It splits when a third domain
+ * arrives and the file stops being readable in one screen, not before.
+ */
+
+import { z } from "zod";
+import { dec } from "../money.ts";
+import { zAccountingDate, zCurrencyCode, zId, zMoney, zPivotPerUnit } from "../zod.ts";
+
+/* ── the enumerations, restated ──────────────────────────────────────────── */
+
+/**
+ * **These are copies of `packages/schema/src/enums.ts`, and the copy is forced.**
+ *
+ * `packages/schema` imports `@waltning/core` for `money.toMoney`, so core
+ * importing schema back is a cycle; and core's dependency floor is decimal.js
+ * and zod, asserted as a set in `tests/architecture.test.ts`. There is no
+ * import that would work.
+ *
+ * `TXN_TYPE` is pinned against `core`'s own `TxnType` in `inputs.test.ts` —
+ * through the parsed output, so it is the schema that is checked and not a
+ * restatement of it. `ACCOUNT_KIND`, `OWNERSHIP`, `TXN_SOURCE` and
+ * `COUNTERPARTY_ROLE` have no core-side counterpart to pin against — the real
+ * fix is moving the value sets down into `core` and having `schema` import
+ * them, which is a change to `packages/schema` and belongs in its own diff.
+ */
+const ACCOUNT_KIND = [
+  "cash",
+  "bank",
+  "card",
+  "loan_receivable",
+  "loan_payable",
+  "clearing",
+  "investment",
+  "deposit",
+  "other",
+] as const;
+
+/** §6.7 — a shared account is ordinary; it just belongs to a different total. */
+const OWNERSHIP = ["own", "shared"] as const;
+
+const TXN_TYPE = ["income", "expense", "transfer", "adjustment"] as const;
+
+/** S29 writes migrated rows as `migration`; the receipt and voice paths differ too. */
+const TXN_SOURCE = ["manual", "import", "receipt", "agent", "migration"] as const;
+
+/** §6.6 — naming a counterparty is not the same as owing them. */
+const COUNTERPARTY_ROLE = ["debt", "contribution", "reference"] as const;
+
+/* ── create_account ──────────────────────────────────────────────────────── */
+
+/**
+ * `create_account` (`operations.md`, *Accounts* — structural, never auto).
+ *
+ * **The id is an input, not a return value.** `architecture/08` H13: *"client
+ * ids are the identity; names are display."* A phone that mints the id can
+ * retry a queued write carrying the same one, so the drain is idempotent by
+ * construction rather than by a dedupe heuristic over `name` — which is the
+ * thing that would have to decide whether two offline devices meant one
+ * account or two.
+ */
+export const createAccountInput = z
+  .object({
+    id: zId<"accounts">(),
+
+    name: z.string().trim().min(1).max(120),
+
+    /**
+     * Defaulted rather than required, matching the column. Money Manager left
+     * `ZTYPE = 0` on all 68 accounts (§6.3), so `other` is the honest value for
+     * an account nobody has classified — not a hole to be filled later.
+     */
+    kind: z.enum(ACCOUNT_KIND).default("other"),
+
+    /**
+     * Required, and the reason is a trigger: §6.5 guarantees
+     * `transactions.currency = accounts.currency`, which is what makes
+     * `computations.md` §2 a plain sum rather than a per-row conversion. An
+     * account with no currency has no balance.
+     */
+    currency: zCurrencyCode,
+
+    /** Optional — `create_group` owns groups, and an ungrouped account is fine. */
+    groupId: zId<"accountGroups">().optional(),
+
+    ownership: z.enum(OWNERSHIP).default("own"),
+
+    /**
+     * `.prefault`, **not** `.default`, and the difference is the bug.
+     *
+     * Zod 4's `.default()` short-circuits: the value is handed back untouched
+     * when the field is absent, so a raw `"0"` would arrive as `"0"` while
+     * every supplied amount arrives as `"0.00000000"` — unbranded, at the wrong
+     * scale, from the same field. `.prefault` feeds the default *through*
+     * `zMoney`, so the absent case and the present case are the same value.
+     */
+    openingBalance: zMoney.prefault("0"),
+
+    /** §8.0 — the migration carries balances and their as-of date, not history. */
+    openingDate: zAccountingDate.optional(),
+
+    memo: z.string().trim().max(2000).default(""),
+
+    isBusiness: z.boolean().default(false),
+
+    /**
+     * §6.5's idempotency key, under a partial unique index. S29 runs the
+     * migration repeatedly against a fresher `.mmbak`; without this the second
+     * run duplicates all 68 accounts.
+     */
+    externalId: z.string().trim().min(1).max(200).optional(),
+
+    // Not here, on purpose:
+    //   `expected_balance`  — `reconcile_account` writes it against a balance
+    //                         you observed (S16 §5). There is no balance to
+    //                         reconcile against at creation.
+    //   `archived`          — `archive_account`. Creating something already
+    //                         archived is not a state anyone wants.
+    //   `sort`              — `reorder_accounts`.
+    //   `version`, `created_at`, `updated_at` — the row's own bookkeeping.
+  })
+  /**
+   * `accounts_shared_not_business` (§6.5), refused here as well as by the CHECK.
+   *
+   * The CHECK is the guarantee; this is the *error*. §6.7: shared money is
+   * *"never business, never reportable"* — and an offline-eligible write whose
+   * payload is guaranteed to fail at drain is the worst version of that, since
+   * the phone reports it as saved and the refusal arrives days later with no
+   * field to attach it to.
+   */
+  .refine((a) => a.ownership === "own" || !a.isBusiness, {
+    path: ["isBusiness"],
+    message: "a shared account is never business — §6.7, accounts_shared_not_business",
+  });
+
+export type CreateAccountInput = z.output<typeof createAccountInput>;
+export type AccountKind = CreateAccountInput["kind"];
+
+/* ── create_transaction ──────────────────────────────────────────────────── */
+
+/**
+ * `create_transaction` — *"the core write. One payment event, one row (§6.10)"*.
+ *
+ * The operation S05, S07, S08, S31 and S29 all write through, which is why the
+ * shape has to carry a transfer's second leg and a migrated row's provenance
+ * without becoming four schemas. §6.10: the unit is **the payment**, not the
+ * thing bought — a fuel-and-coffee card tap is one row with an optional line
+ * breakdown underneath, and the breakdown is `set_transaction_lines`.
+ *
+ * **No rate is required from the caller, and that is the design.** §14.6: the
+ * local executor resolves the replica's provisional `fx_rate`, and a later
+ * backend resolves the canonical date-correct value. The destination rate and
+ * tax rates are not inferred from a capture hint. Doing that froze valuations
+ * that were not re-derivable — most visibly a cross-currency transfer whose
+ * destination amount was pre-filled from the cached reference rate, so both
+ * legs valued to the same pivot and §7.5's margin came out *identically zero*
+ * for every transfer ever recorded, indistinguishable from a fee-free one.
+ */
+export const createTransactionInput = z
+  .object({
+    id: zId<"transactions">(),
+
+    /**
+     * Required, and **not** defaulted to today. `todayIn` needs a zone
+     * (`date.ts`), and this schema has none — C28 is the bug where a capture at
+     * 01:00 in Warsaw is dated yesterday, permanently. The caller holds the
+     * zone; the contract refuses to guess it.
+     */
+    date: zAccountingDate,
+
+    type: z.enum(TXN_TYPE),
+
+    accountId: zId<"accounts">(),
+
+    /**
+     * Positive, with `adjustment` as the sole exception — §7.2 stores direction
+     * in `type`, and `computations.md` §1 records that an adjustment carries its
+     * own sign, because reconciling an account *downward* is the ordinary use.
+     * Refused below rather than here, so the message can name the type.
+     */
+    amountOriginal: zMoney,
+
+    /** §7.1 — this *is* the account's currency; the §6.5 trigger enforces it. */
+    currency: zCurrencyCode,
+
+    /**
+     * Income and expense only (`transactions_category_shape`). A transfer moves
+     * money between two of your own accounts and categorising it would double
+     * count it against the same spend total.
+     */
+    categoryId: zId<"categories">().optional(),
+
+    /** §6.6. Paired with the role by `transactions_counterparty_role_shape`. */
+    counterpartyId: zId<"counterparties">().optional(),
+    counterpartyRole: z.enum(COUNTERPARTY_ROLE).optional(),
+
+    /* The destination leg — a transfer, and only a transfer (§7.5). */
+    toAccountId: zId<"accounts">().optional(),
+    toAmount: zMoney.optional(),
+    toCurrency: zCurrencyCode.optional(),
+
+    /**
+     * **Pivot per unit — you multiply by it.** `fx_rates.rate` is the
+     * reciprocal, units per pivot, and you divide by that one
+     * (`computations.md` §4). Both are called *rate* in prose and the confusion
+     * produced a 14.1× error, which is why `PivotPerUnit` and `UnitsPerPivot`
+     * are separate brands and `rate.type-test.ts` asserts the swap does not
+     * compile.
+     *
+     * Optional, and present only when you are asserting a rate that actually
+     * applied — §7.6 level 1, *"enter the rate your bank actually applied"*,
+     * which travels as an explicit agreement rather than as the phone's cache.
+     * Absent is the ordinary case and the server resolves it at commit, which
+     * is also the only moment `fx_rate_estimated` can be answered correctly —
+     * so that flag is the server's to write and is not an input at all.
+     */
+    fxRate: zPivotPerUnit.optional(),
+
+    /**
+     * The **reference** rate for `to_currency`, in the same pivot-per-unit
+     * direction (§7.5). Never the realized rate: `to_amount ÷ amount_original`
+     * is derived at read time and storing it here collapses the margin to zero.
+     */
+    toFxRate: zPivotPerUnit.optional(),
+
+    /**
+     * The bank's *stated* fee, distinct from the rate margin (§7.5, S31). `FX
+     * Cost` reports them as separate lines because a fee is avoidable by
+     * choosing another route and a margin is not.
+     */
+    fee: zMoney.optional(),
+
+    payee: z.string().trim().max(200).default(""),
+    note: z.string().trim().max(2000).default(""),
+
+    /** §13.1. Gated per-field by the operation's `taxSensitiveFields`, not here. */
+    isBusiness: z.boolean().default(false),
+
+    /** §6.8 — a one-off that would otherwise distort every period average. */
+    isCapital: z.boolean().default(false),
+
+    /** S29 §5 writes migrated rows with `source = migration`. */
+    source: z.enum(TXN_SOURCE).default("manual"),
+
+    /** §6.5's partial unique index — what makes re-running the migration safe. */
+    externalId: z.string().trim().min(1).max(200).optional(),
+
+    // Not here, on purpose:
+    //   `fx_rate_estimated`     — the server sets it at drain, iff no published
+    //                             rate existed for that date (§14.6).
+    //   `recurring_id`, `occurrence_date`
+    //                           — `materialize_occurrence` posts one, and
+    //                             `link_occurrence` stamps a row you already
+    //                             entered by hand. C8's fix is both of those,
+    //                             not a field on the ordinary capture path.
+    //   `debt_amount`, `debt_currency`
+    //                           — `settle_debt`. S14 used to call this
+    //                             operation and that was the defect:
+    //                             `create_transaction` has no notion of a
+    //                             residual and no channel to return one.
+    //   `counterparty_tax_id`, `document_ref`, `ksef_id`
+    //                           — S22 O2: they exist from day one so opting
+    //                             into VAT later is not a migration, and
+    //                             nothing writes them yet.
+    //   `ryczalt_rate`, `ryczalt_activity`, `tax_fx_*`
+    //                           — server-resolved at commit (§14.6, §13.6).
+    //   `deleted_at`            — `delete_transaction`, soft (§6.9).
+  })
+  .superRefine((t, ctx) => {
+    /**
+     * `transactions_amount_positive`. Stated as *"negative only for
+     * adjustment"* rather than as an absolute floor, because the CHECK reads
+     * `>= 0 or type = 'adjustment'` and a schema that refused every negative
+     * would make reconciling an account downward impossible.
+     */
+    if (t.type !== "adjustment" && dec(t.amountOriginal).lt(0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amountOriginal"],
+        message: "amounts are positive; `type` carries direction (§7.2) — only an adjustment signs",
+      });
+    }
+
+    /**
+     * The three transfer-shape CHECKs, as one statement each way.
+     *
+     * Both directions matter. A missing destination is a transfer that vanishes
+     * into one account; a destination on an expense is a field the reader
+     * cannot see and the CHECK rejects at drain.
+     */
+    const isTransfer = t.type === "transfer";
+    for (const field of ["toAccountId", "toAmount", "toCurrency"] as const) {
+      const present = t[field] !== undefined;
+      if (present === isTransfer) continue;
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message: isTransfer
+          ? "a transfer stores both legs — §7.5 stores the destination amount rather than deriving it"
+          : "only a transfer has a destination leg (transactions_transfer_shape)",
+      });
+    }
+
+    /** `to_fx_rate` follows the destination leg it values, when it is supplied. */
+    if (!isTransfer && t.toFxRate !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["toFxRate"],
+        message: "only a transfer has a destination leg to value (transactions_to_fx_rate_shape)",
+      });
+    }
+
+    /**
+     * `transactions_transfer_distinct`. S31 §6 refuses this *inline* — the
+     * mistake is a mis-tap on the second picker and the field it belongs to is
+     * on screen.
+     */
+    if (t.toAccountId !== undefined && t.toAccountId === t.accountId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["toAccountId"],
+        message: "a transfer needs two different accounts (transactions_transfer_distinct)",
+      });
+    }
+
+    if (t.toAmount !== undefined && dec(t.toAmount).lt(0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["toAmount"],
+        message: "the destination amount is positive (transactions_to_amount_positive)",
+      });
+    }
+
+    /** `transactions_category_shape` — TAXONOMY R1 lives on the leaf check, not here. */
+    if (t.categoryId !== undefined && t.type !== "income" && t.type !== "expense") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["categoryId"],
+        message: "only income and expense carry a category (transactions_category_shape)",
+      });
+    }
+
+    /**
+     * `transactions_counterparty_role_shape` — *"a counterparty reference must
+     * say what it means, and a role without a counterparty is meaningless"*.
+     * The role is what decides whether the row reaches `counterparty_balances`
+     * at all (§6.6), so leaving it unsaid is not a smaller claim.
+     */
+    if ((t.counterpartyId !== undefined) !== (t.counterpartyRole !== undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [t.counterpartyId === undefined ? "counterpartyId" : "counterpartyRole"],
+        message: "a counterparty and its role travel together (§6.6)",
+      });
+    }
+  });
+
+export type CreateTransactionInput = z.output<typeof createTransactionInput>;

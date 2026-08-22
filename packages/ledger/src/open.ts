@@ -163,8 +163,26 @@ function tune<TRun, TSchema extends LedgerSchema>(
    * until they are folded back, so a file copy taken without one is stale.
    * §5.7 names the `-wal` and `-shm` siblings for the same reason — they hold
    * real data and need the same file protection class as the database.
+   *
+   * **The result is checked, because this pragma fails by succeeding.** SQLite
+   * returns the mode it actually settled on and reports no error when it could
+   * not switch: a VFS with no shared-memory implementation — which is every
+   * OPFS build in a browser, `xShmMap` being the piece they leave out — quietly
+   * stays in rollback-journal mode. Every sentence above would then be false,
+   * the migrator's checkpoint would be checkpointing nothing, and nothing
+   * anywhere would say so. Discarding this return value hid that for the whole
+   * of the previous change.
    */
-  db.run(sql.raw("pragma journal_mode = WAL"));
+  const [journal] = db.all<{ journal_mode: string }>(sql.raw("pragma journal_mode = WAL"));
+
+  if (journal?.journal_mode?.toLowerCase() !== "wal") {
+    throw new Error(
+      `this SQLite build would not enter WAL mode — it reports ${JSON.stringify(
+        journal?.journal_mode ?? null,
+      )}. The ledger's concurrency and the migrator's checkpoint both assume WAL, ` +
+        "so running on rollback-journal would be a quieter kind of wrong than stopping here.",
+    );
+  }
 
   /**
    * Interpolated, so it is pinned to an integer first. Every other statement in
