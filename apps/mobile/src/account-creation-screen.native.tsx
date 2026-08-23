@@ -3,8 +3,12 @@ import { id } from "@waltning/core/id";
 import { CreateAccountForm } from "@waltning/ui/accounts/create-account-form";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { requirePhoneLedger } from "./phone-ledger";
+
+function handleCancel() {
+  router.back();
+}
 
 export default function NewAccount() {
   const raw = useLocalSearchParams<{
@@ -21,26 +25,27 @@ export default function NewAccount() {
     }
   }, [invalidMessage]);
 
+  const handleSave = useCallback(
+    (name: string) => {
+      const accountId = id<"accounts">(requirePhoneLedger().createAccount(name));
+      if (target.valid && target.returnTo === "quick-add") {
+        router.dismissTo({
+          pathname: "/quick-add",
+          params: { amount: target.amount, accountId },
+        });
+      } else {
+        router.dismissTo("/");
+      }
+    },
+    [target],
+  );
+
   if (!target.valid) return null;
 
   return (
     <GroundPanel>
       <Card title="Create account">
-        <CreateAccountForm
-          currency="USD"
-          onCancel={() => router.back()}
-          onSave={(name) => {
-            const accountId = id<"accounts">(requirePhoneLedger().createAccount(name));
-            if (target.returnTo === "quick-add") {
-              router.dismissTo({
-                pathname: "/quick-add",
-                params: { amount: target.amount, accountId },
-              });
-            } else {
-              router.dismissTo("/");
-            }
-          }}
-        />
+        <CreateAccountForm currency="USD" onCancel={handleCancel} onSave={handleSave} />
       </Card>
     </GroundPanel>
   );

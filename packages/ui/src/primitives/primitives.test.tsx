@@ -15,11 +15,13 @@ import { IconButton } from "./icon-button";
 import { SegmentControl } from "./segment-control";
 import { Tag } from "./tag";
 
+function noop() {}
+
 describe("accessible names", () => {
   it("an icon button announces itself", () => {
     // Without this it announces "button" and nothing else.
     render(
-      <IconButton label="Dismiss" onPress={() => undefined}>
+      <IconButton label="Dismiss" onPress={noop}>
         <span>x</span>
       </IconButton>,
     );
@@ -30,9 +32,7 @@ describe("accessible names", () => {
     // P2 and P5 together: the trail marker has to reach someone who cannot see
     // the colour, because it is the difference between "you chose this" and
     // "something chose this for you".
-    render(
-      <Chip placeholder="Category" value="Groceries" machineFilled onPress={() => undefined} />,
-    );
+    render(<Chip placeholder="Category" value="Groceries" machineFilled onPress={noop} />);
     expect(screen.getByLabelText(/filled automatically/i)).toBeDefined();
   });
 
@@ -44,7 +44,7 @@ describe("accessible names", () => {
           { value: "mine", label: "Mine", count: 30 },
         ]}
         value="all"
-        onChange={() => undefined}
+        onChange={noop}
       />,
     );
     expect(screen.getByLabelText("All, 42 items")).toBeDefined();
@@ -56,7 +56,7 @@ describe("Button", () => {
     // The label stays mounted and hidden. A spinner that replaces it re-measures
     // the button, and the thing beside an affirmative action is usually the
     // destructive one.
-    render(<Button label="Approve" loading onPress={() => undefined} />);
+    render(<Button label="Approve" loading onPress={noop} />);
     expect(screen.getByText("Approve")).toBeDefined();
   });
 
@@ -90,7 +90,7 @@ describe("a role reaches the pixel, not just the style object", () => {
     render(
       <ThemeProvider theme={amberish}>
         <Tag variant="warn">Estimated</Tag>
-        <Chip placeholder="Category" value="Groceries" machineFilled onPress={() => undefined} />
+        <Chip placeholder="Category" value="Groceries" machineFilled onPress={noop} />
       </ThemeProvider>,
     );
 

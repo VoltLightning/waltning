@@ -3,7 +3,26 @@ import { id } from "@waltning/core/id";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
+import { useCallback } from "react";
 import { requirePhoneLedger } from "./phone-ledger";
+
+type QuickAddDraft = { amount: string; accountId: string | null };
+type SavableQuickAddDraft = { amount: string; accountId: string };
+
+function handleCancel() {
+  router.back();
+}
+
+function handleCreateAccount(next: QuickAddDraft) {
+  router.push({
+    pathname: "/account/new",
+    params: {
+      returnTo: "quick-add",
+      amount: next.amount,
+      ...(next.accountId ? { accountId: next.accountId } : {}),
+    },
+  });
+}
 
 export default function QuickAdd() {
   const raw = useLocalSearchParams<{
@@ -17,6 +36,13 @@ export default function QuickAdd() {
     name: account.name,
     currency: "USD" as const,
   }));
+  const handleSave = useCallback(
+    (next: SavableQuickAddDraft) => {
+      ledger.createExpense(next.amount, id<"accounts">(next.accountId));
+      router.dismissTo("/");
+    },
+    [ledger],
+  );
 
   return (
     <GroundPanel>
@@ -25,21 +51,9 @@ export default function QuickAdd() {
           accounts={accounts}
           initialAmount={draft.amount}
           {...(draft.accountId ? { initialAccountId: draft.accountId } : {})}
-          onCancel={() => router.back()}
-          onCreateAccount={(next) =>
-            router.push({
-              pathname: "/account/new",
-              params: {
-                returnTo: "quick-add",
-                amount: next.amount,
-                ...(next.accountId ? { accountId: next.accountId } : {}),
-              },
-            })
-          }
-          onSave={(next) => {
-            ledger.createExpense(next.amount, id<"accounts">(next.accountId));
-            router.dismissTo("/");
-          }}
+          onCancel={handleCancel}
+          onCreateAccount={handleCreateAccount}
+          onSave={handleSave}
         />
       </Card>
     </GroundPanel>

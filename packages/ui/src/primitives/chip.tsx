@@ -12,7 +12,7 @@
  * source, which is what D1 exists for.
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, Text } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
@@ -43,6 +43,19 @@ export function Chip({
   const filled = value !== undefined && value !== "";
 
   const styles = useStyles();
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
+  const pressableStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      styles.chip,
+      filled ? styles.filled : styles.empty,
+      machineFilled ? styles.machine : null,
+      pressed ? styles.pressed : null,
+      focused ? styles.focused : null,
+      disabled ? styles.disabled : null,
+    ],
+    [disabled, filled, focused, machineFilled, styles],
+  );
 
   return (
     <Pressable
@@ -57,16 +70,9 @@ export function Chip({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={({ pressed }) => [
-        styles.chip,
-        filled ? styles.filled : styles.empty,
-        machineFilled ? styles.machine : null,
-        pressed ? styles.pressed : null,
-        focused ? styles.focused : null,
-        disabled ? styles.disabled : null,
-      ]}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      style={pressableStyle}
     >
       <Text style={[styles.text, filled ? styles.textFilled : styles.textEmpty]}>
         {filled ? value : placeholder}

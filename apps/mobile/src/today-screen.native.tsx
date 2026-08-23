@@ -6,10 +6,25 @@ import { TodayFrame } from "@waltning/ui/shell/today-frame";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { router, useLocalSearchParams } from "expo-router";
+import { useCallback } from "react";
 import { useColorScheme } from "react-native";
 import { requirePhoneLedger } from "./phone-ledger";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
+
+function handleCreateAccount() {
+  router.push({ pathname: "/account/new", params: { returnTo: "today" } });
+}
+
+function handlePreference(next: "system" | "light" | "dark") {
+  return appearance.setPreference(next);
+}
+
+function handleAdd() {
+  router.push("/quick-add");
+}
+
+const CREATE_ACCOUNT_ACTION = { label: "Create account", onPress: handleCreateAccount };
 
 export default function Today() {
   const ledger = requirePhoneLedger();
@@ -21,6 +36,7 @@ export default function Today() {
   );
   const { message } = useLocalSearchParams<{ message?: string }>();
   const hasAccounts = snapshot.accounts.length > 0;
+  const handleReset = useCallback(() => ledger.reset(), [ledger]);
 
   const ledgerBody = hasAccounts ? (
     <Card title="Recent">
@@ -42,10 +58,7 @@ export default function Today() {
     <EmptyState
       title="No accounts yet"
       body="Create one account to start your phone ledger."
-      primaryAction={{
-        label: "Create account",
-        onPress: () => router.push({ pathname: "/account/new", params: { returnTo: "today" } }),
-      }}
+      primaryAction={CREATE_ACCOUNT_ACTION}
     />
   );
   const body = (
@@ -61,8 +74,8 @@ export default function Today() {
         <PreviewAppearanceControls
           preference={resolved.preference}
           resetEnabled={PREVIEW_RESET_ENABLED}
-          onPreference={(next) => appearance.setPreference(next)}
-          onReset={() => ledger.reset()}
+          onPreference={handlePreference}
+          onReset={handleReset}
         />
       }
       total={
@@ -70,7 +83,7 @@ export default function Today() {
       }
       body={body}
       addDisabled={!hasAccounts}
-      onAdd={() => router.push("/quick-add")}
+      onAdd={handleAdd}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { Button } from "../primitives/button";
 import { face } from "../theme/fonts.ts";
@@ -15,6 +15,8 @@ export type BottomSheetProps = {
 export function BottomSheet({ visible, title, onDismiss, children }: BottomSheetProps) {
   const [backdropFocused, setBackdropFocused] = useState(false);
   const styles = useStyles();
+  const handleFocus = useCallback(() => setBackdropFocused(true), []);
+  const handleBlur = useCallback(() => setBackdropFocused(false), []);
   if (!visible) return null;
   return (
     <Modal transparent visible onRequestClose={onDismiss} animationType="none">
@@ -23,8 +25,8 @@ export function BottomSheet({ visible, title, onDismiss, children }: BottomSheet
           accessibilityRole="button"
           accessibilityLabel={`Dismiss ${title}`}
           onPress={onDismiss}
-          onFocus={() => setBackdropFocused(true)}
-          onBlur={() => setBackdropFocused(false)}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           style={[styles.backdrop, backdropFocused ? styles.backdropFocused : null]}
         />
         <View accessibilityLabel={title} accessibilityViewIsModal style={styles.sheet}>

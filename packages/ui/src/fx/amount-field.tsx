@@ -14,7 +14,7 @@
  * pushes the decision about bad input onto whoever forgot to check.
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { face } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -58,6 +58,15 @@ export function AmountField({ label, currency, onChange, initial = "", error }: 
   const [focused, setFocused] = useState(false);
 
   const styles = useStyles();
+  const handleTextChange = useCallback(
+    (next: string) => {
+      setText(next);
+      onChange(parseAmount(next));
+    },
+    [onChange],
+  );
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
 
   return (
     <View style={styles.block}>
@@ -69,12 +78,9 @@ export function AmountField({ label, currency, onChange, initial = "", error }: 
           // the operators, which is the only thing that can be typed here.
           keyboardType="decimal-pad"
           value={text}
-          onChangeText={(next) => {
-            setText(next);
-            onChange(parseAmount(next));
-          }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onChangeText={handleTextChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           style={styles.input}
         />
         <Text style={styles.affix}>{currency}</Text>

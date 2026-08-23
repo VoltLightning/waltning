@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { Button } from "../primitives/button";
 import { face } from "../theme/fonts.ts";
@@ -16,6 +16,9 @@ export function CreateAccountForm({ currency, onCancel, onSave }: CreateAccountF
   const [focused, setFocused] = useState(false);
   const styles = useStyles();
   const trimmed = name.trim();
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
+  const handleSave = useCallback(() => onSave(trimmed), [onSave, trimmed]);
   return (
     <View style={styles.root}>
       <Text style={styles.label}>Name</Text>
@@ -24,20 +27,15 @@ export function CreateAccountForm({ currency, onCancel, onSave }: CreateAccountF
         maxLength={120}
         value={name}
         onChangeText={setName}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         style={[styles.input, focused ? styles.focused : null]}
       />
       <Text style={styles.label}>Currency</Text>
       <Text style={styles.currency}>{currency}</Text>
       <View style={styles.actions}>
         <Button label="Cancel" onPress={onCancel} variant="ghost" />
-        <Button
-          label="Save"
-          onPress={() => onSave(trimmed)}
-          disabled={!trimmed}
-          variant="primary"
-        />
+        <Button label="Save" onPress={handleSave} disabled={!trimmed} variant="primary" />
       </View>
     </View>
   );

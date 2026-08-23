@@ -13,7 +13,7 @@
  * name is a button that announces itself as "button" and nothing else.
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, touchTarget } from "../tokens.ts";
@@ -43,6 +43,18 @@ export function IconButton({
   const slop = Math.max(0, (touchTarget.min - size) / 2);
 
   const styles = useStyles();
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
+  const pressableStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      styles.base,
+      { width: size, height: size },
+      pressed ? styles.pressed : null,
+      focused ? styles.focused : null,
+      disabled ? styles.disabled : null,
+    ],
+    [disabled, focused, size, styles],
+  );
 
   return (
     <Pressable
@@ -51,16 +63,10 @@ export function IconButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       hitSlop={slop}
-      style={({ pressed }) => [
-        styles.base,
-        { width: size, height: size },
-        pressed ? styles.pressed : null,
-        focused ? styles.focused : null,
-        disabled ? styles.disabled : null,
-      ]}
+      style={pressableStyle}
     >
       <View style={styles.content}>{children}</View>
     </Pressable>

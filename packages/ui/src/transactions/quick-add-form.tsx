@@ -1,5 +1,5 @@
 import * as money from "@waltning/core/money";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { AmountField, parseAmount } from "../fx/amount-field";
 import { Button } from "../primitives/button";
@@ -37,6 +37,14 @@ export function QuickAddForm({
   } catch {
     positive = false;
   }
+  const handleAmountChange = useCallback((next: string | null) => setAmount(next ?? ""), []);
+  const handleCreateAccount = useCallback(
+    () => onCreateAccount({ amount, accountId }),
+    [accountId, amount, onCreateAccount],
+  );
+  const handleSave = useCallback(() => {
+    if (accountId) onSave({ amount, accountId });
+  }, [accountId, amount, onSave]);
 
   return (
     <View style={styles.root}>
@@ -44,35 +52,48 @@ export function QuickAddForm({
         label="Amount"
         currency="USD"
         initial={initialAmount}
-        onChange={(next) => setAmount(next ?? "")}
+        onChange={handleAmountChange}
       />
       <Text style={styles.label}>Account</Text>
       <View style={styles.accounts}>
         {accounts.map((account) => (
-          <Chip
+          <AccountChoice
             key={account.id}
-            placeholder="Account"
-            value={account.id === accountId ? `${account.name} · selected` : account.name}
-            onPress={() => setAccountId(account.id)}
-            machineFilled={false}
+            account={account}
+            selected={account.id === accountId}
+            onSelect={setAccountId}
           />
         ))}
       </View>
-      <Button
-        label="Create account…"
-        onPress={() => onCreateAccount({ amount, accountId })}
-        variant="secondary"
-      />
+      <Button label="Create account…" onPress={handleCreateAccount} variant="secondary" />
       <View style={styles.actions}>
         <Button label="Cancel" onPress={onCancel} variant="ghost" />
         <Button
           label="Save"
-          onPress={() => accountId && onSave({ amount, accountId })}
+          onPress={handleSave}
           disabled={!positive || !accountId}
           variant="primary"
         />
       </View>
     </View>
+  );
+}
+
+type AccountChoiceProps = {
+  account: QuickAddAccount;
+  selected: boolean;
+  onSelect: (accountId: string) => void;
+};
+
+function AccountChoice({ account, selected, onSelect }: AccountChoiceProps) {
+  const handleSelect = useCallback(() => onSelect(account.id), [account.id, onSelect]);
+  return (
+    <Chip
+      placeholder="Account"
+      value={selected ? `${account.name} · selected` : account.name}
+      onPress={handleSelect}
+      machineFilled={false}
+    />
   );
 }
 
