@@ -26,6 +26,26 @@ type MobileDiagnosticEvent =
 const BUILD = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev";
 const SURFACE = Platform.OS === "web" ? "web" : "mobile";
 
+function diagnosticIdentity(event: MobileDiagnosticEvent): string {
+  if ("operation" in event) return event.operation;
+  if ("action" in event) return event.action;
+  if ("update" in event) return event.update;
+  if (event.scope === "api_request") return `${event.method} ${event.path}`;
+  if ("stage" in event) return `${event.scope} ${event.stage}`;
+  return `${event.scope} ${event.component}`;
+}
+
+function diagnosticOutcome(event: MobileDiagnosticEvent): string {
+  if (event.phase === "start") return "started";
+  if (event.phase === "failure") return "failed";
+  return "completed";
+}
+
+function diagnosticMessage(event: MobileDiagnosticEvent): string {
+  const boundary = "boundary" in event ? ` at ${event.boundary}` : "";
+  return `${diagnosticIdentity(event)} ${diagnosticOutcome(event)}${boundary}`;
+}
+
 function metroFormatter(record: LogRecord): readonly [string] {
   const message =
     typeof record.rawMessage === "string" ? record.rawMessage : record.rawMessage.join("{}");
@@ -71,9 +91,10 @@ export function mobileDiagnostics(event: MobileDiagnosticEvent): void {
       build: BUILD,
       ...event,
     };
-    if (event.phase === "failure") logger.error("Waltning operation failed", properties);
-    else if (event.phase === "start") logger.debug("Waltning operation started", properties);
-    else logger.info("Waltning operation completed", properties);
+    const message = diagnosticMessage(event);
+    if (event.phase === "failure") logger.error(message, properties);
+    else if (event.phase === "start") logger.debug(message, properties);
+    else logger.info(message, properties);
   } catch {
     // Logging must not become a new startup or write failure.
   }
