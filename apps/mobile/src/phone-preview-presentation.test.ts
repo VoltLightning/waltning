@@ -66,8 +66,12 @@ describe("phone-alone preview presentation", () => {
 
   it("keeps SQLite and its safety copies in Expo's project-scoped documents", () => {
     expect(phoneLedger).toContain('new Directory(Paths.document, "SQLite")');
+    expect(phoneLedger).toContain(
+      "databaseDirectory.create({ idempotent: true, intermediates: true })",
+    );
     expect(phoneLedger).toContain("openDatabaseSync(filename, undefined, databaseDirectoryPath)");
     expect(phoneLedger).toContain("deleteDatabaseSync(path, databaseDirectoryPath)");
+    expect(phoneLedger).not.toContain("decodeURIComponent");
     expect(phoneLedger).not.toContain("defaultDatabaseDirectory");
   });
 });

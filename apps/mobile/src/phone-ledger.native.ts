@@ -16,7 +16,8 @@ const LEDGER_PATHS = {
 } as const;
 
 const databaseDirectory = new Directory(Paths.document, "SQLite");
-const databaseDirectoryPath = decodeURIComponent(databaseDirectory.uri.replace(/^file:\/\//u, ""));
+databaseDirectory.create({ idempotent: true, intermediates: true });
+const databaseDirectoryPath = databaseDirectory.uri.replace(/^file:\/\//u, "");
 const file = (path: string) => new File(databaseDirectory, path);
 
 type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
