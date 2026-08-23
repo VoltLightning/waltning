@@ -9,9 +9,9 @@
 ## 1. Purpose
 
 Report whether the system underneath the ledger is still healthy — and prove
-that the backup you have never needed would actually work. That is a Brick 2
-question: it presumes a backend to report on. A backendless phone (Brick 1)
-backs itself up a different way and this screen's backup and drill panels do
+that the backup you have never needed would actually work. That question
+presumes a backend to report on. A backendless phone backs itself up a different
+way and this screen's backup and drill panels do
 not apply to it (`architecture/14` §14.3) — see §3.
 
 ## 2. Entry and exit
@@ -26,7 +26,7 @@ not apply to it (`architecture/14` §14.3) — see §3.
 
 ## 3. Layout
 
-**Backup, drill and FX-coverage cards are Brick 2.** They report on the
+**Backup, drill and FX-coverage cards require a backend.** They report on the
 backend, so a backendless phone has none of them to show — not a degraded
 state, just nothing to be a claim about. Its durability is instead the
 app-owned, age-encrypted export (`architecture/14` §14.3): a self-backup the
@@ -34,7 +34,7 @@ owner triggers and controls, key in iCloud Keychain, ciphertext kept
 somewhere Apple is not. Once a backend exists, these cards start reporting on
 it, and the phone's own export becomes a second, independent copy rather than
 the only one. **Ledger invariants** run against the live Postgres database
-(§15.1), so that card is Brick 2 too. The **outbox** card alone is
+(§15.1), so that card also requires a backend. The **outbox** card alone is
 phone-local and renders regardless — see its own note below.
 
 ### Mobile — 390pt

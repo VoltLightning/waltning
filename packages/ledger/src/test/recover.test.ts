@@ -151,9 +151,9 @@ describe("replay is bounded by the watermark", () => {
     intentOnly(1, "txn-1");
     recoverOnLaunch(s.ledger, registry);
 
-    // The entry is still queued — nothing has drained, and on Brick 1 nothing
-    // ever will. Replaying it again would insert a duplicate row, or throw on
-    // the primary key, on every launch forever.
+    // The entry is still queued — nothing has drained, and with no backend
+    // nothing ever will. Replaying it again would insert a duplicate row, or
+    // throw on the primary key, on every launch forever.
     const second = recoverOnLaunch(s.ledger, registry);
 
     expect(second.replayed).toEqual([]);

@@ -20,8 +20,8 @@
  *
  * The watermark is what keeps this bounded, and the bound is the whole reason it
  * exists. "Replay every unacknowledged entry" would be the undrained-outbox fold
- * §14.1 rejects by name: with no server the outbox never drains, so on Brick 1
- * every launch would sweep the entire history.
+ * §14.1 rejects by name: with no server the outbox never drains, so every
+ * phone-alone launch would sweep the entire history.
  */
 
 import { asc, eq, gt } from "drizzle-orm";

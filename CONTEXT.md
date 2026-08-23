@@ -32,7 +32,7 @@ Orientation, with diagrams and plainer language, is in
 
 ## Vocabulary
 
-The glossary is `SPEC.md` Appendix B, mirrored in `docs/wiki/Glossary.md`. Eight
+The glossary is `SPEC.md` Appendix B, mirrored in `docs/wiki/Glossary.md`. Seven
 terms carry more weight than their length suggests:
 
 - **Complete / authoritative** — two properties that are routinely conflated and
@@ -40,9 +40,6 @@ terms carry more weight than their length suggests:
   network: the phone. *Authoritative* means admitting writes and hosting the
   guarantees: the server. The phone is complete and **not** authoritative, and
   most of `architecture/14` follows from refusing to collapse the two.
-- **Brick** — a layer that improves the product without requiring the next one.
-  Brick 1 is the phone alone, Brick 2 adds a backend, Brick 3 adds the web
-  dashboard. Not phases of one build; each is usable on its own.
 - **`version`** — the conflict token: *did this field change under me since I
   read it?* A `bigint` the database advances, never a timestamp, because a
   timestamp can be ranked and ranking is how an older edit overwrites a newer

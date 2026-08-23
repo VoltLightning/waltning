@@ -10,7 +10,7 @@
 
 The only journey where nothing exists yet — no accounts, no history, no
 balances. Every other journey assumes its output. It runs standalone, on the
-phone alone (Brick 1, `architecture/14` §14.1) — no account, no login, no
+phone alone (`architecture/14` §14.1) — no account, no login, no
 network. Adding a backend is a separate, later, optional step, not a
 precondition of getting started.
 
@@ -24,7 +24,7 @@ thing worth showing.
 
 | Must be true | Why |
 |---|---|
-| The app is installed | Nothing else. Brick 1 needs no account, no tailnet, no server (`architecture/14` §14.0) |
+| The app is installed | Nothing else. The phone-alone app needs no account, no tailnet, no server (`architecture/14` §14.0) |
 | Currencies and taxonomy seeded | Shipped with the app, not created here — 7 currencies, 59 leaves, 15 groups |
 
 **Adding a backend is a later, separate step, with its own preconditions when
@@ -95,7 +95,7 @@ VERIFICATION GATE         per-account balance comparison, to the cent
 | Unmatched transfer legs (R2 — OUT 1,734 ≠ IN 1,754) | Not a failure. Listed as an explicit exception list in the normalization report and carried forward |
 | **FX backfill incomplete for a currency** | Stated per currency with its coverage, not hidden. GEL currently returns 11 of 2,080 days (`SPEC.md` §7.7) — the wizard must say so rather than reporting success, because every later GEL amount will render `estimated` |
 | Network drops mid-import | Import is idempotent on `external_id`; re-running resumes rather than duplicating |
-| No backend, or one is unreachable | Not a failure. This journey never needed one; Brick 1 finishes standalone and a backend can be added at any later point (`architecture/14` §14.1) |
+| No backend, or one is unreachable | Not a failure. This journey finishes standalone and a backend can be added at any later point (`architecture/14` §14.1) |
 
 ## 6. Rules
 

@@ -22,7 +22,7 @@ first module, and the boundaries that must not be crossed while writing the rest
 | 11 | [`11-client-architecture.md`](11-client-architecture.md) | **An app is a delivery mechanism, not a place where logic lives** — what `packages/client` may import, and why a tier is never a top-level folder |
 | 12 | [`12-forms-and-validation.md`](12-forms-and-validation.md) | Two-layer validation: the client is a courtesy, the server decides, and how a field error reaches a field |
 | 13 | [`13-identity-and-access.md`](13-identity-and-access.md) | **Authentication is the perimeter, not the network** — passkeys, why the app authenticates through a browser it does not own, and how a client finds its server |
-| 14 | [`14-local-first.md`](14-local-first.md) | **The phone is complete; the server is authoritative** — the two are not the same, why bidirectional merge was rejected, and the Lego bricks |
+| 14 | [`14-local-first.md`](14-local-first.md) | **The phone is complete; the server is authoritative** — the two are not the same, why bidirectional merge was rejected, and what changes when a backend exists |
 
 **Sequence of work** is the board, not this folder — order is the thing most
 likely to change, and the board is where changing it is cheap. This folder is

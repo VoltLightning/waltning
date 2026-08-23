@@ -33,41 +33,44 @@ megabytes). That one change is what makes it feel autonomous — the window was 
 only reason it ever needed the server to answer a question. Reads are local;
 history is complete; nothing daily needs a network.
 
-## 14.1 The bricks
+## 14.1 With and without a backend
 
-Independent, and each one improves the experience without the next:
+Both configurations are complete products; the backend changes authority and
+durability rather than deciding whether the phone works:
 
-- **Brick 1 — the phone alone.** A complete finance app: whole ledger, offline
-  indefinitely, scales to any screen. **A write records its intent in the outbox
-  and materialises into the local tables** — it does not sit in a queue waiting
-  to become real. That is two commits and not one, in that order, because the
-  two stores are separate files and SQLite offers no transaction across both;
-  §14.6 carries the ordering and what closes the window it leaves open.
-  Durability is an **app-owned encrypted export** (§14.4). Tax figures are
+- **With no backend, the phone stands alone.** It is a complete finance app:
+  whole ledger, offline indefinitely, scales to any screen. **A write records
+  its intent in the outbox and materialises into the local tables** — it does
+  not sit in a queue waiting to become real. That is two commits and not one, in
+  that order, because the two stores are separate files and SQLite offers no
+  transaction across both; §14.6 carries the ordering and what closes the
+  window it leaves open.
+  Durability is an **app-owned encrypted export** (§14.3). Tax figures are
   read-only *estimates*, labelled as such —
   filing-grade tax needs the server, because T1 is a Postgres role and has no
   device equivalent.
 
-  An earlier reading of this document had Brick 1 *only* capturing into an
-  outbox, with reads folding the queue over the replica. That works while the
-  queue is a handful of entries awaiting a drain. **With no server the outbox
-  never drains**, so every transaction ever entered would stay unacknowledged
-  and every read would fold five years of log onto an empty base. See §14.6.
-- **Brick 2 — add a backend, over Tailscale.** It becomes the writer of record
-  and the durable copy. The phone's outbox drains into it; the phone reverts to a
-  *complete replica plus outbox*. Filing-grade tax, continuous backup, and the
-  heavy work (import, classification, FX, scheduled analysis) arrive together.
+  A queue-only phone would capture into the outbox and fold that queue over the
+  replica on every read. That works while the queue is a handful of entries
+  awaiting a drain. **With no server the outbox never drains**, so every
+  transaction ever entered would stay unacknowledged and every read would fold
+  five years of log onto an empty base. See §14.6.
+- **Once a backend exists, over Tailscale, it becomes the writer of record and
+  durable copy.** The phone's outbox drains into it; the phone is a *complete
+  replica plus outbox*. Filing-grade tax, continuous backup, and the heavy work
+  (import, classification, FX, scheduled analysis) are available there.
   Adding it is a **one-time seed-from-phone migration**, not a merge — and the
   migration is **validate-then-apply**: a dry run reports every row Postgres
   would refuse before anything is written. A straight replay of five years of
   phone-authored history into a database that may refuse some of it is a
   migration that fails halfway through the ledger.
-- **Brick 3 — the web dashboard, on the backend.** Full read/write, because the
-  backend is the writer of record. No contradiction: the dashboard writes because
-  the backend admits writes.
+- **The web dashboard requires the backend.** It is full read/write because the
+  backend is the writer of record. No contradiction: the dashboard writes
+  because the backend admits writes.
 
-**The honest cost:** durability is not optional. Brick 1's self-backup is real
-but weaker; Brick 2 is where durability stops being the owner's job.
+**The honest cost:** durability is not optional. The phone's self-backup is real
+but weaker; once a backend exists, durability stops being solely the owner's
+job.
 
 ## 14.2 Conflicts: version, never clock
 
@@ -129,10 +132,10 @@ and the four faces of a transfer (`amount_original`, `to_amount`, `fx_rate`,
 `to_fx_rate`, two of which feed generated columns) are one field for this
 purpose, or a merge produces a plausible wrong number that neither device held.
 
-## 14.3 Durability graduates
+## 14.3 Durability with and without a backend
 
-- **Brick 1:** an app-owned, age-encrypted export the owner controls, with **one
-  vendor never holding both halves.** On iOS the key lives in **iCloud Keychain**
+- **With no backend:** an app-owned, age-encrypted export the owner controls,
+  with **one vendor never holding both halves.** On iOS the key lives in **iCloud Keychain**
   (Apple's HSM-backed escrow, which Apple cannot read) and the ciphertext goes
   somewhere Apple is **not** — a Mac, a NAS, later the backend; that is a stated
   dependency on Apple, not a hidden one, and it is the honest version of "your
@@ -140,8 +143,9 @@ purpose, or a merge produces a plausible wrong number that neither device held.
   unsettled** (`SPEC.md` §5.7): a Keystore key is non-exportable, so an export
   keyed from it cannot outlive the device the export existed to outlive, and
   until something else is named the owner holds the key themselves.
-- **Brick 2:** the server is the durable copy — `pg_dump`, age-encrypted, offsite,
-  with a restore drill. This is the existing design and it is unchanged.
+- **Once a backend exists:** the server is the durable copy — `pg_dump`,
+  age-encrypted, offsite, with a restore drill. This is the existing design and
+  it is unchanged.
 
 ## 14.4 What this document changes elsewhere
 
@@ -178,15 +182,15 @@ mechanisms that only made sense for a cache.
 
 ---
 
-## 14.6 The write path, on both bricks
+## 14.6 The write path, with and without a backend
 
-**The phone always materialises. What the brick decides is whether that
+**The phone always materialises. Whether a backend exists decides whether that
 materialisation is provisional.**
 
-- **Brick 1** — final. Nothing will ever correct it, because there is nothing
-  else that writes.
-- **Brick 2** — provisional until the server admits the write, then reconciled
-  to the row the server returns.
+- **With no backend** — final. Nothing will ever correct it, because there is
+  nothing else that writes.
+- **Once a backend exists** — provisional until the server admits the write,
+  then reconciled to the row the server returns.
 
 One code path, one flag. This is not a retreat from §14.0: the phone is still
 not authoritative, because the server still admits every write and may refuse
@@ -205,9 +209,10 @@ is which of them goes first.
 **The outbox entry does, because it is the half that cannot be reconstructed.**
 That is the same property the two files exist for: the outbox holds the only
 copy of intent that has not reached a server, while the replica is rebuildable —
-from the server on Brick 2, and on Brick 1 from the outbox itself, which is the
-ledger's whole history in replay form. When only one of the two can be made
-durable first, it has to be the irreplaceable one.
+from the server plus the outbox once a server exists, or from the outbox alone
+when the phone stands alone, because it then holds the ledger's whole history in
+replay form. When only one of the two can be made durable first, it has to be the
+irreplaceable one.
 
 So the window a crash can open is **an entry whose row is missing, never a row
 with no entry** — a list short by one line until the next launch, rather than a
@@ -259,13 +264,13 @@ the export runs as a separate OS process holding a connection string it cannot
 change, and on a phone one app process owns the file and every credential in it.
 There is no adversary a role would exclude.
 
-**A migration must not be able to destroy the ledger.** On Brick 1 the phone's
-database is the only copy, and unlike the server there is nothing to reset from
-— no seed, no second copy, no `db:reset`. So every schema migration copies the
-file first, runs inside a transaction, and keeps the pre-migration copy until
-the app has opened cleanly once. A transaction alone covers an error; it does
-not cover a crash, a kill, or a corrupt write, which is the case that matters
-when there is no second copy.
+**A migration must not be able to destroy the ledger.** With no backend the
+phone's database is the only copy, and unlike the server there is nothing to
+reset from — no seed, no second copy, no `db:reset`. So every schema migration
+copies the file first, runs inside a transaction, and keeps the pre-migration
+copy until the app has opened cleanly once. A transaction alone covers an error;
+it does not cover a crash, a kill, or a corrupt write, which is the case that
+matters when there is no second copy.
 
 ---
 

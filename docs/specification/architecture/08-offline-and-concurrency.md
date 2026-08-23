@@ -463,17 +463,17 @@ conflict with a phone's queued category edit (`14-local-first.md` §14.2):
 devices editing the same field within a sync window is rare, and the cost of
 being wrong is one audited overwrite. The machinery would exceed the ledger.
 
-**No offline reads of derived tax figures — on Brick 2.** They depend on rates,
-period locks and residency, all of which the device may hold staler than it
-knows. Once a backend exists, S28 is online-only, and that is a smaller loss
-than a tax figure computed from a stale lock.
+**No offline reads of derived tax figures once a backend exists.** They depend
+on rates, period locks and residency, all of which the device may hold staler
+than it knows. S28 is then online-only, and that is a smaller loss than a tax
+figure computed from a stale lock.
 
-**On Brick 1 the phone shows them as labelled estimates** (`14-local-first.md`
-§14.1), and that is not a contradiction: the objection above is *staleness
-relative to a server*, and with no server there is nothing to be stale against.
-The tax tables are server-only, so what the phone computes is visibly an
-estimate from what it holds. Filing-grade figures still need the backend,
-because T1 is a role grant and a phone has no equivalent.
+**With no backend the phone shows them as labelled estimates**
+(`14-local-first.md` §14.1), and that is not a contradiction: the objection
+above is *staleness relative to a server*, and with no server there is nothing
+to be stale against. The tax tables are server-only, so what the phone computes
+is visibly an estimate from what it holds. Filing-grade figures still need the
+backend, because T1 is a role grant and a phone has no equivalent.
 
 **~~No conflict resolution UI.~~ Superseded.** This predates the conflict
 setting. `14-local-first.md` §14.2 makes a same-field divergence follow a

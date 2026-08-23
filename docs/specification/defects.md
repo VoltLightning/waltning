@@ -476,7 +476,8 @@ later by two devices disagreeing about a figure. Entry without row is a list
 short by one line until the next launch. Those are not the same defect, and the
 ordering decides which one the crash window is allowed to produce — the outbox
 holds the only copy of unsent intent, while the replica is rebuildable from the
-server or, on Brick 1, from the outbox itself.
+server plus that outbox when a server exists or, when the phone stands alone,
+from the outbox itself.
 
 Dropping WAL would have made the original sentence literally true, through
 `ATTACH` and the master journal. Rejected: it costs reader-during-write

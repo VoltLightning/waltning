@@ -18,9 +18,9 @@ changes your identity.
 
 ## 13.0 What this document is not about
 
-**Everything here is Brick 2 and later.** It was written before
+**Everything here assumes a server exists.** It was written before
 [`14-local-first.md`](14-local-first.md) and assumes throughout that a server
-exists to authenticate to. On **Brick 1 — the phone alone — none of it
+exists to authenticate to. On **the phone alone, with no backend, none of it
 applies**: no session, no passkey, no TOTP, no server to discover. There is
 nobody to prove yourself to.
 
@@ -31,8 +31,8 @@ Android's `BiometricPrompt`, or the PIN behind either — decides whether the
 person holding the phone may read what it already has: every account by name,
 every counterparty with balances, the whole ledger. A stolen unlocked phone is a
 total disclosure that never touches the network, so the perimeter this document
-describes does nothing about it. `SPEC.md` §5.7 owns that, and it is a
-prerequisite for Brick 1 while everything below is a prerequisite for Brick 2.
+describes does nothing about it. `SPEC.md` §5.7 owns device custody, while
+everything below is a prerequisite for connecting to a backend.
 
 Stating the boundary because the absence of it is load-bearing: read
 straight through, this document implies you must log in to use the product.
@@ -287,11 +287,11 @@ time, so today the app can only ever talk to the server it was compiled for —
 which makes self-hosting by anyone else impossible, and makes moving the Pi a
 rebuild. The address becomes a **setting**, editable at any time.
 
-**Not a first-run field, and that is the reframe's doing.** Brick 1 has no
-server, so first run must complete with the address unset and the app fully
-usable — a launch that demands a URL before it will show you anything is a
-launch that cannot happen on the brick most people start from. Adding a backend
-is a later, deliberate act: enter an address, validate it, seed from the phone
+**Not a first-run field, and that is the reframe's doing.** A phone-alone first
+run has no server, so it must complete with the address unset and the app fully
+usable — a launch that demands a URL before it will show you anything excludes
+everyone starting without a backend. Adding a backend is a later, deliberate
+act: enter an address, validate it, seed from the phone
 (§14.1). The field belongs beside that act, not in front of the product.
 
 Two rules taken from products that learned them the hard way:

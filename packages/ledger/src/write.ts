@@ -20,9 +20,10 @@
  *
  * The outbox goes first because it is the half that cannot be reconstructed —
  * it holds the only copy of intent that has not reached a server, while the
- * replica is rebuildable from the server on Brick 2 and, on Brick 1, from the
- * outbox itself. When only one of the two can be made durable first, it has to
- * be the irreplaceable one. `defects.md` C31 records the reversal.
+ * replica is rebuildable from the server plus the outbox once a server exists
+ * or, when the phone stands alone, from the outbox itself. When only one of the
+ * two can be made durable first, it has to be the irreplaceable one.
+ * `defects.md` C31 records the reversal.
  *
  * The window a crash opens is therefore **an entry whose row is missing, never
  * a row with no entry** — a list short by one line until the next launch, which
