@@ -7,7 +7,7 @@
  * the read and the decision about *coverage* belongs to the caller.
  */
 
-import { zAccountingDate, zId } from "@waltning/core";
+import { zAccountingDate, zId } from "@waltning/core/zod";
 import { z } from "zod";
 import type { OperationContext } from "../../registry/context.ts";
 import { defineOperation } from "../../registry/define.ts";

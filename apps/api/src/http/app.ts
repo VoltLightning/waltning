@@ -5,7 +5,7 @@
  */
 
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { ping } from "@waltning/db";
+import { ping } from "@waltning/db/client";
 import { Hono } from "hono";
 import { pingBlobs } from "../infra/blobs.ts";
 import { db, dbUnavailableReason } from "../infra/db.ts";

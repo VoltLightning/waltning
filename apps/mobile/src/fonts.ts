@@ -22,7 +22,7 @@ import {
   Figtree_700Bold,
 } from "@expo-google-fonts/figtree";
 import { SourceSerif4_600SemiBold } from "@expo-google-fonts/source-serif-4";
-import type { RequiredFace } from "@waltning/ui";
+import type { RequiredFace } from "@waltning/ui/theme/fonts";
 
 /**
  * The map `expo-font` loads. **Its keys become the family names** on native and

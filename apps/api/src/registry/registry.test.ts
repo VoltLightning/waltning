@@ -12,8 +12,8 @@
  * introducing a divergence *fails*.
  */
 
-import type { AnyOperation } from "@waltning/core";
-import { defineOperation, toolSchemas } from "@waltning/core";
+import { type AnyOperation, defineOperation } from "@waltning/core/registry/operation";
+import { toolSchemas } from "@waltning/core/registry/tools";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { routerFromRegistry } from "../trpc/from-registry.ts";

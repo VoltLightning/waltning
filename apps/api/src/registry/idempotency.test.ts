@@ -9,7 +9,7 @@
  * the field. Nothing did.
  */
 
-import { auditLog, counterparties, outboxReceipts } from "@waltning/db";
+import { auditLog, counterparties, outboxReceipts } from "@waltning/db/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../packages/db/src/test/scratch.ts";
 import type { OperationContext } from "./context.ts";

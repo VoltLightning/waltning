@@ -1,4 +1,4 @@
-import { money } from "@waltning/core";
+import * as money from "@waltning/core/money";
 import { accountGroups } from "./account-groups.pg.ts";
 import { currencies } from "./currencies.pg.ts";
 import { accountKind, ownership } from "./enums.pg.ts";

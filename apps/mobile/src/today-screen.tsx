@@ -11,10 +11,12 @@
  * of which the test runner could see.
  */
 
-import { useAccounts } from "@waltning/client/accounts";
-import { describeProbe, useProbe } from "@waltning/client/connectivity";
-import { useTransactions } from "@waltning/client/transactions";
-import { BalanceRow, Card, GroundPanel, TransactionRow } from "@waltning/ui";
+import { useAccounts } from "@waltning/client/accounts/use-accounts";
+import { describeProbe, useProbe } from "@waltning/client/connectivity/use-probe";
+import { useTransactions } from "@waltning/client/transactions/use-transactions";
+import { BalanceRow } from "@waltning/ui/accounts/balance-row";
+import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { API_BASE_URL, api, isStaleBundle } from "./platform";
 

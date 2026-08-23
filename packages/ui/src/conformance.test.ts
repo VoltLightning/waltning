@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { light, type Theme, themes } from "./theme/index.ts";
+import { light, type Theme, themes } from "./theme/roles.ts";
 
 // From `import.meta.url` (a string) rather than `new URL(...)`: this package
 // compiles against the DOM lib, where `URL` is the DOM's and not Node's.

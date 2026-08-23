@@ -10,11 +10,11 @@
  * run offline, one write that is gated, audited and must not.
  */
 
-import type { Registry } from "@waltning/core";
-import { getAccounts } from "../modules/accounts/index.ts";
-import { createCounterparty } from "../modules/counterparties/index.ts";
-import { getCurrencies } from "../modules/currencies/index.ts";
-import { listTransactionsOperation } from "../modules/transactions/index.ts";
+import type { Registry } from "@waltning/core/registry/operation";
+import { getAccounts } from "../modules/accounts/get-accounts.operation.ts";
+import { createCounterparty } from "../modules/counterparties/create-counterparty.operation.ts";
+import { getCurrencies } from "../modules/currencies/get-currencies.operation.ts";
+import { listTransactionsOperation } from "../modules/transactions/list-transactions.operation.ts";
 import type { OperationContext } from "./context.ts";
 
 /**

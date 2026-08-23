@@ -14,21 +14,25 @@
  * construction.
  */
 
-import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import { type Id, id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
-import { createAccountExecutor } from "../accounts/index.ts";
+import { createAccountExecutor } from "../accounts/create-account.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
-import { ledgerRegistry } from "../index.ts";
 import { readAppliedSeq } from "../migrate.ts";
 import { recoverOnLaunch } from "../recover.ts";
-import type * as schema from "../schema.ts";
-import { accounts, currencies, fxRates, outbox, transactions } from "../schema.ts";
-import { createTransactionExecutor } from "../transactions/index.ts";
+import { ledgerRegistry } from "../registry.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
+import { createTransactionExecutor } from "../transactions/create-transaction.executor.ts";
 import type { Capture, LocalTx, LocalWriteResult } from "../write.ts";
 import { writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
+
+const { accounts, currencies, fxRates, outbox, transactions } = schema;
 
 /* ── placeholders ────────────────────────────────────────────────────────── */
 

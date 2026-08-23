@@ -37,7 +37,7 @@
 
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { FACES, REQUIRED_FACES } from "@waltning/ui";
+import { FACES, REQUIRED_FACES } from "@waltning/ui/theme/fonts";
 import { describe, expect, it } from "vitest";
 
 const require_ = createRequire(import.meta.url);

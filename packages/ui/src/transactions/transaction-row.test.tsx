@@ -5,7 +5,7 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { money } from "@waltning/core";
+import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
 import { TransactionRow } from "./transaction-row";
 

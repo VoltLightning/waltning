@@ -16,7 +16,8 @@
 
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type Segment = {

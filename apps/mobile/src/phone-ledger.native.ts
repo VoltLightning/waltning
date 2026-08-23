@@ -1,12 +1,11 @@
 import "./polyfills.ts";
-import { createPhoneLedger } from "@waltning/client/ledger";
-import { type IdTable, id, randomId, todayIn } from "@waltning/core";
-import {
-  createLocalLedgerSession,
-  ledgerSchema,
-  type SqliteOpener,
-  USD_BOOTSTRAP,
-} from "@waltning/ledger";
+import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
+import { todayIn } from "@waltning/core/date";
+import { type IdTable, id } from "@waltning/core/id";
+import { randomId } from "@waltning/core/random";
+import type { SqliteOpener } from "@waltning/ledger/open";
+import { ledgerSchema } from "@waltning/ledger/schema-map";
+import { createLocalLedgerSession, USD_BOOTSTRAP } from "@waltning/ledger/session";
 import { drizzle } from "drizzle-orm/expo-sqlite";
 import { File } from "expo-file-system";
 import {

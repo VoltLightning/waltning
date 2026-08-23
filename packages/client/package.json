@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./query": "./src/query/index.ts",
-    "./accounts": "./src/accounts/index.ts",
-    "./transactions": "./src/transactions/index.ts",
-    "./currencies": "./src/currencies/index.ts",
-    "./connectivity": "./src/connectivity/index.ts",
-    "./appearance": "./src/appearance/index.ts",
-    "./ledger": "./src/ledger/index.ts"
+    "./accounts/*": "./src/accounts/*.ts",
+    "./appearance/*": "./src/appearance/*.ts",
+    "./connectivity/*": "./src/connectivity/*.ts",
+    "./currencies/*": "./src/currencies/*.ts",
+    "./ledger/*": "./src/ledger/*.ts",
+    "./query/*": "./src/query/*.ts",
+    "./transactions/*": "./src/transactions/*.ts",
+    "./transport/*": "./src/transport/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

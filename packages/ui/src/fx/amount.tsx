@@ -11,9 +11,10 @@
  * numbers does not align, and a ledger that does not align is read wrong.
  */
 
-import { money } from "@waltning/core";
+import * as money from "@waltning/core/money";
 import { Text, type TextStyle } from "react-native";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { tabularNums, type } from "../tokens.ts";
 
 export type AmountSize = "hero" | "large" | "body" | "small";

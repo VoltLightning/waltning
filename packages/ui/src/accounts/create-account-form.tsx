@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { Button } from "../primitives/button";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, type } from "../tokens.ts";
 
 export type CreateAccountFormProps = {

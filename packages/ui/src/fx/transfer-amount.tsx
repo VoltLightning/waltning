@@ -23,9 +23,10 @@
  * is arithmetic over its own props, not a second source of truth.
  */
 
-import { money } from "@waltning/core";
+import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { space, tabularNums, type } from "../tokens.ts";
 import { Amount } from "./amount";
 

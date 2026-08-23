@@ -9,7 +9,7 @@
  * decide whether a development convenience becomes a production hole.
  */
 
-import { WALTNING_HEADER } from "@waltning/core";
+import { WALTNING_HEADER } from "@waltning/core/protocol";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.ts";
 import { DevCorsConfigError, devCors, parseDevCorsOrigins } from "./dev-cors.ts";

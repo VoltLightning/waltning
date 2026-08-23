@@ -13,8 +13,9 @@
  */
 
 import { createHash } from "node:crypto";
-import type { JsonValue } from "@waltning/core";
-import { outboxReceipts, type Transaction } from "@waltning/db";
+import type { JsonValue } from "@waltning/core/json";
+import type { Transaction } from "@waltning/db/client";
+import { outboxReceipts } from "@waltning/db/schema";
 import { eq } from "drizzle-orm";
 import { DomainError } from "../common/errors.ts";
 

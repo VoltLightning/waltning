@@ -12,8 +12,11 @@
  * would disagree on `adjustment` — which carries its own sign.
  */
 
-import type { AccountingDate, Id, money } from "@waltning/core";
-import { accounts, categories, type DbHandle, transactions } from "@waltning/db";
+import type { AccountingDate } from "@waltning/core/date";
+import type { Id } from "@waltning/core/id";
+import type * as money from "@waltning/core/money";
+import type { DbHandle } from "@waltning/db/client";
+import { accounts, categories, transactions } from "@waltning/db/schema";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 export type TransactionRow = {

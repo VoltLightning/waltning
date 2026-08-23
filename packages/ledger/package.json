@@ -4,7 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    "./accounts/*": "./src/accounts/*.ts",
+    "./transactions/*": "./src/transactions/*.ts",
+    "./ddl": "./src/ddl.ts",
+    "./executor": "./src/executor.ts",
+    "./migrate": "./src/migrate.ts",
+    "./open": "./src/open.ts",
+    "./outbox": "./src/outbox.ts",
+    "./recover": "./src/recover.ts",
+    "./registry": "./src/registry.ts",
+    "./schema-map": "./src/schema-map.ts",
+    "./session": "./src/session.ts",
+    "./write": "./src/write.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate --config=drizzle.replica.config.ts --name=schema && drizzle-kit generate --config=drizzle.outbox.config.ts --name=schema && tsx tools/embed-ddl.ts",

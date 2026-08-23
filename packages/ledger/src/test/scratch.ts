@@ -29,7 +29,7 @@ import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { OUTBOX_MIGRATIONS, REPLICA_MIGRATIONS } from "../migrate.ts";
-import * as schema from "../schema.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
 
 export type Scratch = ReturnType<typeof scratchLedger>;
 

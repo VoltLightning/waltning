@@ -1,6 +1,7 @@
-import { parseQuickAddRoute } from "@waltning/client/ledger";
-import { id } from "@waltning/core";
-import { Card, GroundPanel, QuickAddForm } from "@waltning/ui";
+import { parseQuickAddRoute } from "@waltning/client/ledger/preview-routes";
+import { id } from "@waltning/core/id";
+import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
 import { requirePhoneLedger } from "./phone-ledger";
 

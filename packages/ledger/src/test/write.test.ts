@@ -14,17 +14,21 @@
  * way round.
  */
 
-import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import { type Id, id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { defineLocalExecutor, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
-import type * as schema from "../schema.ts";
-import { accounts, counterparties, currencies, outbox, transactions } from "../schema.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
 import { type Capture, type LocalTx, writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
+
+const { accounts, counterparties, currencies, outbox, transactions } = schema;
 
 type Tx = LocalTx<Database.RunResult, typeof schema>;
 

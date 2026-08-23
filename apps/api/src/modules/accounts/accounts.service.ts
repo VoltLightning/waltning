@@ -18,8 +18,9 @@
  * fixture that is the difference between +37 931,70 and −47 268,30.
  */
 
-import type { money } from "@waltning/core";
-import { accounts, currencies, type DbHandle, transactions } from "@waltning/db";
+import type * as money from "@waltning/core/money";
+import type { DbHandle } from "@waltning/db/client";
+import { accounts, currencies, transactions } from "@waltning/db/schema";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 export type AccountSummary = {

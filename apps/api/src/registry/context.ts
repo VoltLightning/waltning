@@ -7,8 +7,8 @@
  * operation on both paths, which is the drift §11.0 exists to prevent.
  */
 
-import type { AutoGrant } from "@waltning/core";
-import type { DbHandle } from "@waltning/db";
+import type { AutoGrant } from "@waltning/core/registry/gate";
+import type { DbHandle } from "@waltning/db/client";
 import type { Idempotency } from "./idempotency.ts";
 
 export type Actor = "user" | "agent" | "import" | "migration";

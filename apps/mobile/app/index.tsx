@@ -1,1 +1,3 @@
-export { default } from "../src/today-screen";
+import TodayScreen from "../src/today-screen";
+
+export default TodayScreen;

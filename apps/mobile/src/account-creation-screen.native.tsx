@@ -1,6 +1,7 @@
-import { parseNewAccountRoute } from "@waltning/client/ledger";
-import { id } from "@waltning/core";
-import { Card, CreateAccountForm, GroundPanel } from "@waltning/ui";
+import { parseNewAccountRoute } from "@waltning/client/ledger/preview-routes";
+import { id } from "@waltning/core/id";
+import { CreateAccountForm } from "@waltning/ui/accounts/create-account-form";
+import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect } from "react";
 import { requirePhoneLedger } from "./phone-ledger";

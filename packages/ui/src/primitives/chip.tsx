@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 import { Pressable, Text } from "react-native";
-import { makeStyles } from "../theme/index.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type ChipProps = {

@@ -19,15 +19,12 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import {
-  type AccountingDate,
-  accountingDate,
-  type CurrencyCode,
-  currencyCode,
-  type Id,
-  money,
-} from "@waltning/core";
-import { createDb, requireRow } from "@waltning/db";
+import { type AccountingDate, accountingDate } from "@waltning/core/date";
+import type { Id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { type CurrencyCode, currencyCode } from "@waltning/core/money";
+import { createDb } from "@waltning/db/client";
+import { requireRow } from "@waltning/db/rows";
 import {
   accountGroups,
   accountKind,

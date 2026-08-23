@@ -11,8 +11,11 @@
  * sides would agree, and reconciliation would find nothing.
  */
 
-import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core";
-import { accounts, transactions } from "@waltning/db";
+import { accountingDate } from "@waltning/core/date";
+import { type Id, id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
+import { accounts, transactions } from "@waltning/db/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../../packages/db/src/test/scratch.ts";
 import { listAccounts } from "./accounts.service.ts";

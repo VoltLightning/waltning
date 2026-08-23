@@ -1,4 +1,7 @@
-import { accountingDate, currencyCode, type IdTable, id, money } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import { type IdTable, id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import {
   createPhoneLedger,

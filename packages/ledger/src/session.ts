@@ -1,23 +1,19 @@
-import type { CreateAccountInput, CreateTransactionInput, CurrencyCode } from "@waltning/core";
-import { money } from "@waltning/core";
-import {
-  createAccountExecutor,
-  type LocalAccountRow,
-  type LocalAccountSummary,
-  readAccounts,
-} from "./accounts/index.ts";
-import { ledgerRegistry } from "./index.ts";
+import type { CurrencyCode } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
+import type { CreateAccountInput, CreateTransactionInput } from "@waltning/core/registry/inputs";
+import { currencies } from "@waltning/schema/sqlite/currencies";
+import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
+import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
 import { type LedgerFs, migrateOutbox, migrateReplica } from "./migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./open.ts";
 import { recoverOnLaunch } from "./recover.ts";
-import { currencies } from "./schema.ts";
+import { ledgerRegistry } from "./registry.ts";
 import type { ledgerSchema } from "./schema-map.ts";
 import {
   createTransactionExecutor,
-  type LocalRecentTransaction,
   type LocalTransactionRow,
-  readRecent,
-} from "./transactions/index.ts";
+} from "./transactions/create-transaction.executor.ts";
+import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
 import { type Capture, writeLocally } from "./write.ts";
 
 export type BootstrapCurrency = {

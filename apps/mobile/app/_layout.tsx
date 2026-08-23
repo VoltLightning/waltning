@@ -12,8 +12,8 @@
 // Side-effect import, and it must come first: `randomId()` reads the global at
 // call time and the first call is a row insert.
 import "../src/polyfills.ts";
-import { useAppearance } from "@waltning/client/appearance";
-import { ThemeProvider } from "@waltning/ui";
+import { useAppearance } from "@waltning/client/appearance/use-appearance";
+import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect } from "react";

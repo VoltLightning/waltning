@@ -12,7 +12,7 @@
  * someone forgetting.
  */
 
-import { counterparties } from "@waltning/db";
+import { counterparties } from "@waltning/db/schema";
 import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../packages/db/src/test/scratch.ts";

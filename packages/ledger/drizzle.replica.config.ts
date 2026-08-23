@@ -19,7 +19,7 @@ import { defineConfig } from "drizzle-kit";
  * beside the hand-written `0001_database_objects.sql`.
  */
 export default defineConfig({
-  schema: "./src/schema.replica.ts",
+  schema: ["../schema/src/*.sqlite.ts", "./src/local-meta.ts"],
   out: "./drizzle/replica",
   dialect: "sqlite",
 });

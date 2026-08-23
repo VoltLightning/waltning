@@ -1,9 +1,12 @@
-import type { AccountKind, CurrencyCode, Id, Money } from "@waltning/core";
-import { money } from "@waltning/core";
+import type { Id } from "@waltning/core/id";
+import type { CurrencyCode, Money } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
+import type { AccountKind } from "@waltning/core/registry/inputs";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
-import { accounts, currencies, transactions } from "../schema.ts";
-import type { ledgerSchema } from "../schema-map.ts";
+import { ledgerSchema } from "../schema-map.ts";
+
+const { accounts, currencies, transactions } = ledgerSchema;
 
 export type LocalAccountSummary = {
   id: Id<"accounts">;

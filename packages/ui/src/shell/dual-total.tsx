@@ -17,10 +17,11 @@
  * the second line carries no information.
  */
 
-import type { money } from "@waltning/core";
+import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { space, type } from "../tokens.ts";
 
 export type DualTotalProps = {

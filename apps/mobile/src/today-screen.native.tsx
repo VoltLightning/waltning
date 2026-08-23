@@ -1,6 +1,10 @@
-import { useAppearance } from "@waltning/client/appearance";
-import { usePhoneLedger } from "@waltning/client/ledger";
-import { Amount, Card, EmptyState, TodayFrame, TransactionRow } from "@waltning/ui";
+import { useAppearance } from "@waltning/client/appearance/use-appearance";
+import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { Amount } from "@waltning/ui/fx/amount";
+import { Card } from "@waltning/ui/shell/card";
+import { TodayFrame } from "@waltning/ui/shell/today-frame";
+import { EmptyState } from "@waltning/ui/states/empty-state";
+import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { router, useLocalSearchParams } from "expo-router";
 import { useColorScheme } from "react-native";
 import { requirePhoneLedger } from "./phone-ledger";

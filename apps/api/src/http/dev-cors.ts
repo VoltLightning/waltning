@@ -24,7 +24,7 @@
  *    only ever widen the browser's reach, never fix a device.
  */
 
-import { NONCE_HEADER, WALTNING_HEADER } from "@waltning/core";
+import { NONCE_HEADER, WALTNING_HEADER } from "@waltning/core/protocol";
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 

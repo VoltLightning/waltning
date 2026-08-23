@@ -7,7 +7,8 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { light, ThemeProvider } from "../theme/index.ts";
+import { ThemeProvider } from "../theme/provider";
+import { light } from "../theme/roles.ts";
 import { Button } from "./button";
 import { Chip } from "./chip";
 import { IconButton } from "./icon-button";

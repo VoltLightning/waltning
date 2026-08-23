@@ -1,5 +1,9 @@
-import type { AppearancePreference } from "@waltning/client/appearance";
-import { BottomSheet, Button, Card, SegmentControl, tokens } from "@waltning/ui";
+import type { AppearancePreference } from "@waltning/client/appearance/create-appearance";
+import { Button } from "@waltning/ui/primitives/button";
+import { SegmentControl } from "@waltning/ui/primitives/segment-control";
+import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
+import { Card } from "@waltning/ui/shell/card";
+import * as tokens from "@waltning/ui/tokens";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 

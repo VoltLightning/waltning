@@ -40,16 +40,10 @@
  * layered around the shared tables rather than inside them — §14.7's rule.
  */
 
-import type {
-  AccountingDate,
-  CurrencyCode,
-  Id,
-  IdTable,
-  Money,
-  PivotPerUnit,
-  UnitsPerPivot,
-} from "@waltning/core";
-import { randomId } from "@waltning/core";
+import type { AccountingDate } from "@waltning/core/date";
+import type { Id, IdTable } from "@waltning/core/id";
+import type { CurrencyCode, Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
+import { randomId } from "@waltning/core/random";
 import {
   bigint as pgBigint,
   boolean as pgBoolean,

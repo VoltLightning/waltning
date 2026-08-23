@@ -16,9 +16,9 @@
  * already uses for exactly this reason.
  */
 
-import { CaptiveResponseError } from "@waltning/core";
-import { useQuery } from "../query/index.ts";
-import type { ApiClient } from "../transport/index.ts";
+import { CaptiveResponseError } from "@waltning/core/rule-zero-fetch";
+import { useQuery } from "../query/use-query.ts";
+import type { ApiClient } from "../transport/client.ts";
 
 export type Probe =
   | { status: "probing" }

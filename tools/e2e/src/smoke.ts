@@ -23,7 +23,8 @@
 import { createTRPCClient, httpLink, TRPCClientError } from "@trpc/client";
 import type { ErrorCode } from "@waltning/api/errors";
 import type { AppRouter } from "@waltning/api/router-type";
-import { ruleZeroFetch, WALTNING_HEADER } from "@waltning/core";
+import { WALTNING_HEADER } from "@waltning/core/protocol";
+import { ruleZeroFetch } from "@waltning/core/rule-zero-fetch";
 
 const API = process.env["E2E_API_URL"] ?? "http://127.0.0.1:3000";
 /** Metro in development, Caddy in the appliance — the check is the same. */

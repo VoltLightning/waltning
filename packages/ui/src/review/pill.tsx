@@ -12,7 +12,7 @@
  */
 
 import { Text, View } from "react-native";
-import { makeStyles } from "../theme/index.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { radius, space, type } from "../tokens.ts";
 
 export type PillTier =

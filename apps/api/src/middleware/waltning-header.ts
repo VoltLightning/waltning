@@ -11,7 +11,7 @@
  * a client that accepts any response at all.
  */
 
-import { WALTNING_HEADER } from "@waltning/core";
+import { WALTNING_HEADER } from "@waltning/core/protocol";
 import type { MiddlewareHandler } from "hono";
 import { BUILD } from "../config/build.ts";
 

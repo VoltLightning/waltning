@@ -23,7 +23,7 @@ async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-import { WALTNING_HEADER } from "@waltning/core";
+import { WALTNING_HEADER } from "@waltning/core/protocol";
 import { createApp } from "./app.ts";
 
 const at = new Date("2026-08-16T10:00:00.000Z");

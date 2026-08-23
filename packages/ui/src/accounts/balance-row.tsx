@@ -7,11 +7,11 @@
  * building the component at all requires the rate (P1).
  */
 
-import type { money } from "@waltning/core";
+import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { FxAmount, type FxProvenance } from "../fx/fx-amount";
-import { makeStyles } from "../theme/index.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { hairline, space, type } from "../tokens.ts";
 
 export type BalanceRowProps = {

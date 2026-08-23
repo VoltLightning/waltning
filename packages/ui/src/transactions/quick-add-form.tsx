@@ -1,10 +1,11 @@
-import { money } from "@waltning/core";
+import * as money from "@waltning/core/money";
 import { useState } from "react";
 import { Text, View } from "react-native";
 import { AmountField, parseAmount } from "../fx/amount-field";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { space, type } from "../tokens.ts";
 
 export type QuickAddAccount = { id: string; name: string; currency: "USD" };

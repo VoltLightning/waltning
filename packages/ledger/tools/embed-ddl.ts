@@ -79,8 +79,8 @@ function block(name: string, doc: string, statements: readonly string[]): string
 }
 
 const HEADER = `/**
- * The DDL the phone runs, generated from \`src/schema.replica.ts\` and
- * \`src/schema.outbox.ts\`.
+ * The DDL the phone runs, generated from the concrete SQLite table modules,
+ * \`src/local-meta.ts\`, and \`src/outbox.ts\`.
  *
  * **Do not edit.** Change a table, run \`pnpm ledger:generate\`, commit both this
  * file and the \`drizzle/\` output it was built from. \`migrate.test.ts\` asserts a

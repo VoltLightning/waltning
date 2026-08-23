@@ -1,8 +1,13 @@
-import { accountingDate, currencyCode, id, money } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import { id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { accounts, currencies, transactions } from "../schema.ts";
+import { ledgerSchema } from "../schema-map.ts";
 import { type ScratchStores, scratchStores } from "../test/stores.ts";
 import { readAccounts } from "./read-accounts.ts";
+
+const { accounts, currencies, transactions } = ledgerSchema;
 
 const USD = currencyCode("USD");
 const ACCOUNT_A = id<"accounts">("11111111-1111-4111-8111-111111111111");

@@ -13,8 +13,9 @@
  * whitespace, and the shared translator has no way to know that.
  */
 
-import type { CurrencyCode } from "@waltning/core";
-import { counterparties, type DbHandle } from "@waltning/db";
+import type { CurrencyCode } from "@waltning/core/money";
+import type { DbHandle } from "@waltning/db/client";
+import { counterparties } from "@waltning/db/schema";
 import { DomainError } from "../../common/errors.ts";
 import { pgErrorCode, UNIQUE_VIOLATION } from "../../common/pg-errors.ts";
 
