@@ -18,13 +18,17 @@ import { resolveApiBaseUrl } from "@waltning/client/transport/base-url";
 import { isStaleBundle as compareBuilds } from "@waltning/client/transport/build";
 import { createApiClient } from "@waltning/client/transport/client";
 import { Platform } from "react-native";
+import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
 
-export const appearance = createAppearance({
-  get: () => AsyncStorage.getItem(APPEARANCE_KEY),
-  set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
-});
+export const appearance = createAppearance(
+  {
+    get: () => AsyncStorage.getItem(APPEARANCE_KEY),
+    set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
+  },
+  mobileDiagnostics,
+);
 
 export const PREVIEW_RESET_ENABLED = previewResetEnabled(
   __DEV__,
@@ -41,7 +45,10 @@ export const API_BASE_URL: string = resolveApiBaseUrl({
  * `nonce` returns null because §5.2 has no sessions yet — passed explicitly so
  * "no session" never reads the same as "nobody wired the check".
  */
-export const api = createApiClient(API_BASE_URL, { nonce: () => null });
+export const api = createApiClient(API_BASE_URL, {
+  nonce: () => null,
+  diagnostics: mobileDiagnostics,
+});
 
 /** This bundle's own build, injected by `web.Dockerfile` at image build time. */
 export const CLIENT_BUILD: string = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev";

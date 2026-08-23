@@ -13,11 +13,13 @@
 // call time and the first call is a row insert.
 import "../src/polyfills.ts";
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
+import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { useColorScheme, View } from "react-native";
+import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
 import { appearance } from "../src/platform";
 
@@ -32,6 +34,23 @@ export default function RootLayout() {
   useEffect(() => {
     void appearance.hydrate();
   }, []);
+
+  useEffect(() => {
+    if (error) {
+      mobileDiagnostics({
+        scope: "app_startup",
+        phase: "failure",
+        component: "fonts",
+        error: describeDiagnosticError(error),
+      });
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (loaded && resolved.hydrated) {
+      mobileDiagnostics({ scope: "app_startup", phase: "success", component: "root" });
+    }
+  }, [loaded, resolved.hydrated]);
 
   /**
    * **Render nothing until the faces are in — and only until then.**
@@ -58,12 +77,10 @@ export default function RootLayout() {
    * for and the app does not supply is a **compile** error (`src/fonts.ts`), so
    * what is left is the bundle being present and unreadable at runtime.
    *
-   * `console.error` rather than a throw or a banner: it reaches the development
-   * build and the logs, and it does not put a typography problem in front of
+   * A structured error rather than a throw or a banner: it reaches the
+   * development logs, and it does not put a typography problem in front of
    * someone trying to enter a transaction.
    */
-  if (error) console.error("[fonts] rendering in the fallback face —", error.message);
-
   return (
     <ThemeProvider name={resolved.theme}>
       <Stack screenOptions={{ headerShown: false }} />

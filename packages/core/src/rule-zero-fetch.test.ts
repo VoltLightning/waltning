@@ -11,7 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { NONCE_HEADER, WALTNING_HEADER } from "./protocol.ts";
+import { NONCE_HEADER, REQUEST_ID_HEADER, WALTNING_HEADER } from "./protocol.ts";
 import { CaptiveResponseError, type FetchInit, ruleZeroFetch } from "./rule-zero-fetch.ts";
 
 const BUILD = "dev";
@@ -189,5 +189,45 @@ describe("the outgoing request", () => {
     const { seen, inner } = capturing();
     await ruleZeroFetch({ inner })("http://localhost:3000/trpc/ping", { method: "GET" });
     expect(seen[0]?.init && "signal" in seen[0].init).toBe(false);
+  });
+
+  it("joins the client and server edge with one request id and safe lifecycle events", async () => {
+    const { seen, inner } = capturing();
+    const diagnostics: object[] = [];
+    const f = ruleZeroFetch({
+      inner,
+      requestId: () => "req-client",
+      now: (() => {
+        let value = 100;
+        return () => {
+          value += 7;
+          return value;
+        };
+      })(),
+      diagnostics: (event: object) => diagnostics.push(event),
+    });
+
+    await f("http://localhost:3000/trpc/op.get_accounts?input=private", { method: "POST" });
+
+    expect(new Headers(seen[0]?.init?.headers).get(REQUEST_ID_HEADER)).toBe("req-client");
+    expect(diagnostics).toEqual([
+      {
+        scope: "api_request",
+        phase: "start",
+        requestId: "req-client",
+        method: "POST",
+        path: "/trpc/op.get_accounts",
+      },
+      {
+        scope: "api_request",
+        phase: "response",
+        requestId: "req-client",
+        method: "POST",
+        path: "/trpc/op.get_accounts",
+        status: 200,
+        durationMs: 7,
+      },
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("private");
   });
 });

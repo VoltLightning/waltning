@@ -75,7 +75,11 @@ afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
 describe("the phone ledger session", () => {
   it("opens, migrates, seeds USD, reads, then releases both safety copies", () => {
-    const session = createLocalLedgerSession(options());
+    const diagnostics: object[] = [];
+    const session = createLocalLedgerSession({
+      ...options(),
+      diagnostics: (event: object) => diagnostics.push(event),
+    });
 
     expect(paths.replica).not.toBe(paths.outbox);
     expect(existsSync(paths.replica)).toBe(true);
@@ -84,6 +88,10 @@ describe("the phone ledger session", () => {
     expect(existsSync(`${paths.outbox}.pre-migration`)).toBe(false);
     expect(session.listAccounts()).toEqual([]);
     expect(session.listRecent(5)).toEqual([]);
+    expect(diagnostics).toEqual([
+      { scope: "ledger_startup", phase: "start", stage: "open" },
+      { scope: "ledger_startup", phase: "success", stage: "ready" },
+    ]);
 
     const sqlite = new Database(paths.replica, { readonly: true });
     expect(sqlite.prepare("select code, is_pivot from currencies").all()).toEqual([
@@ -165,7 +173,23 @@ describe("the phone ledger session", () => {
     sqlite.pragma("user_version = 99");
     sqlite.close();
 
-    expect(() => createLocalLedgerSession(options())).toThrow(/only copy of the ledger/);
+    const diagnostics: object[] = [];
+    expect(() =>
+      createLocalLedgerSession({
+        ...options(),
+        diagnostics: (event: object) => diagnostics.push(event),
+      }),
+    ).toThrow(/only copy of the ledger/);
+    expect(diagnostics.at(-1)).toMatchObject({
+      scope: "ledger_startup",
+      phase: "failure",
+      stage: "migrate_replica",
+      error: {
+        name: "Error",
+        message: expect.stringMatching(/only copy of the ledger/),
+        stack: expect.any(String),
+      },
+    });
 
     const proof = new Database(paths.replica, { readonly: true });
     expect(proof.prepare("select count(*) as count from accounts").get()).toEqual({ count: 1 });

@@ -31,6 +31,7 @@ import {
 } from "@waltning/core/registry/operation";
 import { auditLog } from "@waltning/db/schema";
 import type { z } from "zod";
+import { describeApiError, diagnosticDuration, emitApiDiagnostic } from "../common/diagnostics.ts";
 import { DomainError } from "../common/errors.ts";
 import { toDomainError } from "../common/pg-errors.ts";
 import type { OperationContext } from "./context.ts";
@@ -54,6 +55,44 @@ async function translating<T>(run: () => Promise<T>): Promise<T> {
   } catch (e) {
     if (e instanceof DomainError) throw e;
     throw toDomainError(e) ?? e;
+  }
+}
+
+async function observing<T>(
+  op: { name: string; kind: OperationKind },
+  ctx: OperationContext,
+  run: () => Promise<T>,
+): Promise<T> {
+  const identity = {
+    requestId: ctx.requestId,
+    operation: op.name,
+    kind: op.kind,
+    actor: ctx.actor,
+  } as const;
+  const startedAt = performance.now();
+  emitApiDiagnostic(ctx.diagnostics, {
+    scope: "registry_operation",
+    phase: "start",
+    ...identity,
+  });
+  try {
+    const output = await run();
+    emitApiDiagnostic(ctx.diagnostics, {
+      scope: "registry_operation",
+      phase: "success",
+      ...identity,
+      durationMs: diagnosticDuration(startedAt, performance.now()),
+    });
+    return output;
+  } catch (error) {
+    emitApiDiagnostic(ctx.diagnostics, {
+      scope: "registry_operation",
+      phase: "failure",
+      ...identity,
+      durationMs: diagnosticDuration(startedAt, performance.now()),
+      error: describeApiError(error),
+    });
+    throw error;
   }
 }
 
@@ -108,7 +147,8 @@ export function defineOperation<Input extends z.ZodTypeAny, Output, Kind extends
     const readInner = op.handler.bind(op);
     return defineCoreOperation({
       ...op,
-      handler: (input, ctx) => translating(async () => readInner(input, ctx)),
+      handler: (input, ctx) =>
+        observing(op, ctx, () => translating(async () => readInner(input, ctx))),
     });
   }
 
@@ -118,44 +158,46 @@ export function defineOperation<Input extends z.ZodTypeAny, Output, Kind extends
   return defineCoreOperation({
     ...op,
     async handler(input, ctx) {
-      gate(op, input, ctx);
+      return observing(op, ctx, async () => {
+        gate(op, input, ctx);
 
-      return translating(() =>
-        ctx.db.transaction(async (tx) => {
-          // The handler must write through the *transaction*, not the pooled
-          // handle it was given — otherwise its effects commit separately and
-          // the atomicity above is decorative.
-          const txCtx: OperationContext = { ...ctx, db: tx };
+        return translating(() =>
+          ctx.db.transaction(async (tx) => {
+            // The handler must write through the *transaction*, not the pooled
+            // handle it was given — otherwise its effects commit separately and
+            // the atomicity above is decorative.
+            const txCtx: OperationContext = { ...ctx, db: tx };
 
-          const entryId = ctx.idempotency?.entryId;
-          const hash = entryId ? requestHash(op.name, input) : undefined;
+            const entryId = ctx.idempotency?.entryId;
+            const hash = entryId ? requestHash(op.name, input) : undefined;
 
-          if (entryId && hash) {
-            const found = await findReceipt<Output>(tx, entryId, hash);
-            // Returned verbatim, without re-running the handler or re-evaluating
-            // any version check. A retry after a lost response must be
-            // indistinguishable from the first call.
-            if (found.replayed) return found.response;
-          }
+            if (entryId && hash) {
+              const found = await findReceipt<Output>(tx, entryId, hash);
+              // Returned verbatim, without re-running the handler or re-evaluating
+              // any version check. A retry after a lost response must be
+              // indistinguishable from the first call.
+              if (found.replayed) return found.response;
+            }
 
-          const output = await inner(input, txCtx);
+            const output = await inner(input, txCtx);
 
-          await txCtx.db.insert(auditLog).values({
-            entity: audit.entity,
-            entityId: audit.entityId(input, output),
-            action: audit.action,
-            actor: ctx.actor,
-            before: audit.before?.(input, output) ?? null,
-            after: audit.after?.(input, output) ?? null,
-          });
+            await txCtx.db.insert(auditLog).values({
+              entity: audit.entity,
+              entityId: audit.entityId(input, output),
+              action: audit.action,
+              actor: ctx.actor,
+              before: audit.before?.(input, output) ?? null,
+              after: audit.after?.(input, output) ?? null,
+            });
 
-          if (entryId && hash) {
-            await writeReceipt(tx, entryId, op.name, hash, output as JsonValue);
-          }
+            if (entryId && hash) {
+              await writeReceipt(tx, entryId, op.name, hash, output as JsonValue);
+            }
 
-          return output;
-        }),
-      );
+            return output;
+          }),
+        );
+      });
     },
   });
 }

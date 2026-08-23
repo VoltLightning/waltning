@@ -4,6 +4,12 @@ import type { CreateAccountInput, CreateTransactionInput } from "@waltning/core/
 import { currencies } from "@waltning/schema/sqlite/currencies";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
+import {
+  describeLedgerError,
+  emitLedgerDiagnostic,
+  type LedgerDiagnostics,
+  type LedgerStartupStage,
+} from "./diagnostics.ts";
 import { type LedgerFs, migrateOutbox, migrateReplica } from "./migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./open.ts";
 import { recoverOnLaunch } from "./recover.ts";
@@ -47,37 +53,71 @@ export type LocalLedgerSessionOptions<TRun> = {
   fs: LedgerFs;
   removeDatabase: (path: string) => void;
   bootstrapCurrency: BootstrapCurrency;
+  diagnostics?: LedgerDiagnostics;
 };
 
 type SessionLedger<TRun> = Ledger<TRun, typeof ledgerSchema>;
 
 function start<TRun>(options: LocalLedgerSessionOptions<TRun>): SessionLedger<TRun> {
-  const ledger = openLedger(options.open, options.paths);
+  const { diagnostics } = options;
+  let stage: LedgerStartupStage = "open";
+  emitLedgerDiagnostic(diagnostics, { scope: "ledger_startup", phase: "start", stage });
+
+  let ledger: SessionLedger<TRun>;
   try {
+    ledger = openLedger(options.open, options.paths);
+  } catch (error) {
+    emitLedgerDiagnostic(diagnostics, {
+      scope: "ledger_startup",
+      phase: "failure",
+      stage,
+      error: describeLedgerError(error),
+    });
+    throw error;
+  }
+
+  try {
+    stage = "migrate_outbox";
     const outboxMigration = migrateOutbox(ledger.outbox, { fs: options.fs });
+    stage = "migrate_replica";
     const replicaMigration = migrateReplica(ledger.replica, {
       fs: options.fs,
       canRefetch: false,
     });
 
+    stage = "bootstrap_currency";
     ledger.replica.db
       .insert(currencies)
       .values(options.bootstrapCurrency)
       .onConflictDoNothing()
       .run();
+    stage = "recover";
     recoverOnLaunch(ledger, ledgerRegistry);
 
+    stage = "initial_read";
     readAccounts(ledger.replica.db);
     readRecent(ledger.replica.db, 5);
 
+    stage = "release_copies";
     try {
       outboxMigration.copy?.release();
     } finally {
       replicaMigration.copy?.release();
     }
+    emitLedgerDiagnostic(diagnostics, {
+      scope: "ledger_startup",
+      phase: "success",
+      stage: "ready",
+    });
     return ledger;
   } catch (error) {
     ledger.close();
+    emitLedgerDiagnostic(diagnostics, {
+      scope: "ledger_startup",
+      phase: "failure",
+      stage,
+      error: describeLedgerError(error),
+    });
     throw error;
   }
 }
@@ -102,6 +142,7 @@ export function createLocalLedgerSession<TRun>(
         registry: ledgerRegistry,
         input,
         capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
     createTransaction: (input, capture) =>
       writeLocally(requireOpen(), {
@@ -109,6 +150,7 @@ export function createLocalLedgerSession<TRun>(
         registry: ledgerRegistry,
         input,
         capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
     reset: () => {
       const current = requireOpen();

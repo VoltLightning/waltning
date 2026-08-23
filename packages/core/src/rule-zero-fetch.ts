@@ -21,9 +21,16 @@
  */
 
 import {
+  type DiagnosticError,
+  type DiagnosticSink,
+  describeDiagnosticError,
+  emitDiagnostic,
+} from "./diagnostics.ts";
+import {
   type AuthenticationFailure,
   authenticateResponse,
   NONCE_HEADER,
+  REQUEST_ID_HEADER,
   WALTNING_HEADER,
 } from "./protocol.ts";
 
@@ -81,6 +88,33 @@ export type FetchInit = {
 
 export type FetchLike = (input: Parameters<typeof fetch>[0], init?: FetchInit) => Promise<Response>;
 
+export type ApiRequestDiagnosticEvent =
+  | {
+      scope: "api_request";
+      phase: "start";
+      requestId: string;
+      method: string;
+      path: string;
+    }
+  | {
+      scope: "api_request";
+      phase: "response";
+      requestId: string;
+      method: string;
+      path: string;
+      status: number;
+      durationMs: number;
+    }
+  | {
+      scope: "api_request";
+      phase: "failure";
+      requestId: string;
+      method: string;
+      path: string;
+      durationMs: number;
+      error: DiagnosticError;
+    };
+
 export type RuleZeroOptions = {
   /**
    * The nonce this client was issued at login, or `null` while §5.2 does not
@@ -103,7 +137,15 @@ export type RuleZeroOptions = {
   onCaptive?: (error: CaptiveResponseError) => void;
   /** Injected in tests; the platform `fetch` otherwise. */
   inner?: typeof fetch;
+  /** Correlation id source; one id is sent to and returned by the API edge. */
+  requestId?: () => string;
+  /** Safe request lifecycle evidence; it never receives headers, query or body. */
+  diagnostics?: DiagnosticSink<ApiRequestDiagnosticEvent>;
+  /** Monotonic-enough clock for durations, injectable in tests. */
+  now?: () => number;
 };
+
+let requestCounter = 0;
 
 /**
  * Wraps a `fetch` so every response is authenticated before anyone reads it.
@@ -111,36 +153,72 @@ export type RuleZeroOptions = {
 export function ruleZeroFetch(options: RuleZeroOptions = {}): FetchLike {
   const inner = options.inner ?? globalThis.fetch;
   const nonceOf = options.nonce ?? (() => null);
+  const requestIdOf = options.requestId ?? fallbackRequestId;
+  const now = options.now ?? Date.now;
 
   return async (input, init) => {
     const nonce = nonceOf();
+    const requestId = requestIdOf();
+    const method = methodOf(input, init);
+    const path = pathOf(input);
+    const startedAt = now();
+    emitDiagnostic(options.diagnostics, {
+      scope: "api_request",
+      phase: "start",
+      requestId,
+      method,
+      path,
+    });
 
-    const response = await inner(input, outgoing(init));
+    try {
+      const response = await inner(input, outgoing(init, requestId));
 
-    // Read once. A `Response` body is a stream and can only be consumed once,
-    // so the text is re-wrapped below rather than the response being passed on
-    // — tRPC would otherwise receive a body that has already been drained,
-    // which presents as an empty payload rather than as this bug.
-    const bodyText = await response.text();
+      // Read once. A `Response` body is a stream and can only be consumed once,
+      // so the text is re-wrapped below rather than the response being passed on
+      // — tRPC would otherwise receive a body that has already been drained,
+      // which presents as an empty payload rather than as this bug.
+      const bodyText = await response.text();
 
-    const verdict = authenticateResponse(
-      response.headers.get(WALTNING_HEADER),
-      bodyText,
-      nonce,
-      response.headers.get(NONCE_HEADER),
-    );
+      const verdict = authenticateResponse(
+        response.headers.get(WALTNING_HEADER),
+        bodyText,
+        nonce,
+        response.headers.get(NONCE_HEADER),
+      );
 
-    if (!verdict.ours) {
-      const error = new CaptiveResponseError(verdict.reason, response.status);
-      options.onCaptive?.(error);
+      if (!verdict.ours) {
+        const error = new CaptiveResponseError(verdict.reason, response.status);
+        options.onCaptive?.(error);
+        throw error;
+      }
+
+      emitDiagnostic(options.diagnostics, {
+        scope: "api_request",
+        phase: "response",
+        requestId,
+        method,
+        path,
+        status: response.status,
+        durationMs: elapsed(startedAt, now()),
+      });
+
+      return new Response(bodyText, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    } catch (error) {
+      emitDiagnostic(options.diagnostics, {
+        scope: "api_request",
+        phase: "failure",
+        requestId,
+        method,
+        path,
+        durationMs: elapsed(startedAt, now()),
+        error: describeDiagnosticError(error),
+      });
       throw error;
     }
-
-    return new Response(bodyText, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    });
   };
 }
 
@@ -154,11 +232,12 @@ export function ruleZeroFetch(options: RuleZeroOptions = {}): FetchLike {
  * a time. Adding a field to `FetchInit` and forgetting it here drops it
  * silently, which is what the tests below are for.
  *
- * Nothing is added here. The nonce is deliberately not sent — see
- * `RuleZeroOptions.nonce`.
+ * The correlation id is the only field added here. The nonce is deliberately
+ * not sent — see `RuleZeroOptions.nonce`.
  */
-function outgoing(init: FetchInit | undefined): RequestInit {
+function outgoing(init: FetchInit | undefined, requestId: string): RequestInit {
   const headers = new Headers(init?.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
 
   return {
     headers,
@@ -166,4 +245,28 @@ function outgoing(init: FetchInit | undefined): RequestInit {
     ...(init?.body === undefined ? {} : { body: init.body }),
     ...(init?.signal === undefined ? {} : { signal: init.signal }),
   };
+}
+
+function fallbackRequestId(): string {
+  requestCounter += 1;
+  return `client-${Date.now().toString(36)}-${requestCounter.toString(36)}`;
+}
+
+function methodOf(input: Parameters<typeof fetch>[0], init: FetchInit | undefined): string {
+  if (init?.method) return init.method.toUpperCase();
+  if (typeof Request !== "undefined" && input instanceof Request) return input.method.toUpperCase();
+  return "GET";
+}
+
+function pathOf(input: Parameters<typeof fetch>[0]): string {
+  const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  try {
+    return new URL(raw, "http://waltning.invalid").pathname;
+  } catch {
+    return "[unparseable-path]";
+  }
+}
+
+function elapsed(startedAt: number, endedAt: number): number {
+  return Math.max(0, Math.round(endedAt - startedAt));
 }

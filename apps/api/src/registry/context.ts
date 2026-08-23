@@ -9,6 +9,7 @@
 
 import type { AutoGrant } from "@waltning/core/registry/gate";
 import type { DbHandle } from "@waltning/db/client";
+import type { ApiDiagnostics } from "../common/diagnostics.ts";
 import type { Idempotency } from "./idempotency.ts";
 
 export type Actor = "user" | "agent" | "import" | "migration";
@@ -20,6 +21,8 @@ export type OperationContext = {
   /** One id per request, joining the audit row to the operational log. */
   requestId: string;
   now: Date;
+  /** Operational evidence only; it cannot accept an operation input. */
+  diagnostics?: ApiDiagnostics;
   /**
    * Present when the call arrived from a device outbox, absent for interactive
    * use. An interactive call has no entry id to be idempotent against — the

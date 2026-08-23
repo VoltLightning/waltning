@@ -27,9 +27,10 @@ patchedDependencies:
   # Drizzle 0.45.2's Expo driver never finalizes the SQLite statements it
   # prepares. The retained locks make the first local write fail at `commit` on
   # Android; upstream issue drizzle-team/drizzle-orm#4519 remains open. The
-  # patch finalizes one-shot queries in `finally` while leaving explicit
-  # prepared queries reusable. Remove it when an installed stable release does
-  # that itself and `tests/dependency-patches.test.ts` has been updated first.
+  # patch drives every query to completion, finalizes one-shot queries in
+  # `finally`, and leaves explicit prepared queries reusable. Remove it when an
+  # installed stable release does that itself and
+  # `tests/dependency-patches.test.ts` has been updated first.
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
 
 # Expo supports pnpm's isolated installs from SDK 54 onward, and Metro

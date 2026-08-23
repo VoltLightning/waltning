@@ -21,16 +21,23 @@
 
 import { createTRPCClient, httpLink } from "@trpc/client";
 import type { AppRouter } from "@waltning/api/router";
+import { randomId } from "@waltning/core/random";
 import { type RuleZeroOptions, ruleZeroFetch } from "@waltning/core/rule-zero-fetch";
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-export function createApiClient(baseUrl: string, ruleZero: RuleZeroOptions = {}) {
+export type ApiClientOptions = RuleZeroOptions & Required<Pick<RuleZeroOptions, "diagnostics">>;
+
+export function createApiClient(baseUrl: string, ruleZero: ApiClientOptions) {
+  const requestOptions: RuleZeroOptions = {
+    ...ruleZero,
+    requestId: ruleZero.requestId ?? randomId,
+  };
   return createTRPCClient<AppRouter>({
     links: [
       httpLink({
         url: `${baseUrl}/trpc`,
-        fetch: ruleZeroFetch(ruleZero),
+        fetch: ruleZeroFetch(requestOptions),
       }),
     ],
   });

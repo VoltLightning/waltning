@@ -19,6 +19,7 @@ import { z } from "zod";
 import { routerFromRegistry } from "../trpc/from-registry.ts";
 import { appRouter } from "../trpc/router.ts";
 import type { OperationContext } from "./context.ts";
+import { defineOperation as defineApiOperation } from "./define.ts";
 import { registry } from "./index.ts";
 
 const names = (r: object) => Object.keys(r).sort();
@@ -84,6 +85,93 @@ describe("the registry is the single source", () => {
   it("mounts the operations on the real application router", () => {
     const mounted = Object.keys(appRouter._def.procedures).filter((p) => p.startsWith("op."));
     expect(mounted.sort()).toEqual(names(registry).map((n) => `op.${n}`));
+  });
+});
+
+describe("operation diagnostics", () => {
+  it("reports registry execution without recording operation inputs", async () => {
+    const diagnostics: object[] = [];
+    const probe = defineApiOperation({
+      name: "diagnostic_probe",
+      kind: "read",
+      autoEligible: true,
+      offlineEligible: true,
+      opVersion: 1,
+      description: "A diagnostic probe whose input must never be copied into operational logs.",
+      input: z.object({ privateValue: z.string() }),
+      handler: async () => ({ ok: true as const }),
+    });
+    const context: OperationContext = {
+      ...unusedContext,
+      actor: "user",
+      requestId: "req-test",
+      now: new Date("2026-08-23T10:00:00Z"),
+      diagnostics: (event: object) => diagnostics.push(event),
+    };
+
+    await probe.invoke({ privateValue: "secret-ledger-value" }, context);
+
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]).toMatchObject({
+      scope: "registry_operation",
+      phase: "start",
+      requestId: "req-test",
+      operation: "diagnostic_probe",
+      kind: "read",
+      actor: "user",
+    });
+    expect(diagnostics[1]).toMatchObject({
+      scope: "registry_operation",
+      phase: "success",
+      requestId: "req-test",
+      operation: "diagnostic_probe",
+      kind: "read",
+      actor: "user",
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain("secret-ledger-value");
+  });
+
+  it("reports a failed operation with its complete cause chain", async () => {
+    const diagnostics: object[] = [];
+    const databaseError = Object.assign(new Error("database unavailable"), {
+      code: "ECONNREFUSED",
+    });
+    const probe = defineApiOperation({
+      name: "failing_diagnostic_probe",
+      kind: "read",
+      autoEligible: true,
+      offlineEligible: true,
+      opVersion: 1,
+      description: "A diagnostic probe that preserves the complete causal error chain.",
+      input: z.object({}),
+      handler: async () => {
+        throw new Error("operation failed", { cause: databaseError });
+      },
+    });
+    const context: OperationContext = {
+      ...unusedContext,
+      actor: "user",
+      requestId: "req-failure",
+      now: new Date("2026-08-23T10:00:00Z"),
+      diagnostics: (event: object) => diagnostics.push(event),
+    };
+
+    await expect(probe.invoke({}, context)).rejects.toThrow("operation failed");
+
+    expect(diagnostics.at(-1)).toMatchObject({
+      scope: "registry_operation",
+      phase: "failure",
+      requestId: "req-failure",
+      error: {
+        name: "Error",
+        message: "operation failed",
+        cause: {
+          name: "Error",
+          message: "database unavailable",
+          code: "ECONNREFUSED",
+        },
+      },
+    });
   });
 });
 

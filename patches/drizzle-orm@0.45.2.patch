@@ -69,7 +69,7 @@ index 1556d939bfbdf0001d7ae5680ad32bccb40a90b2..df0775f903844a8863cd91d5c5f9e7b7
      }
      const rows = this.values(placeholderValues);
      if (customResultMapper) {
-@@ -112,11 +130,13 @@ class ExpoSQLitePreparedQuery extends import_session.SQLitePreparedQuery {
+@@ -112,11 +130,17 @@ class ExpoSQLitePreparedQuery extends import_session.SQLitePreparedQuery {
      return rows.map((row) => (0, import_utils.mapResultRow)(fields, row, joinsNotNullableMap));
    }
    get(placeholderValues) {
@@ -81,12 +81,16 @@ index 1556d939bfbdf0001d7ae5680ad32bccb40a90b2..df0775f903844a8863cd91d5c5f9e7b7
 +      return this.finalizeOneTime(() => {
 +        const params = (0, import_sql.fillPlaceholders)(this.query.params, placeholderValues ?? {});
 +        this.logger.logQuery(this.query.sql, params);
-+        return stmt.executeSync(params).getFirstSync();
++        const result = stmt.executeSync(params);
++        const first = result.next();
++        for (const _row of result) {
++        }
++        return first.done ? void 0 : first.value;
 +      });
      }
      const rows = this.values(placeholderValues);
      const row = rows[0];
-@@ -129,9 +149,20 @@ class ExpoSQLitePreparedQuery extends import_session.SQLitePreparedQuery {
+@@ -129,9 +153,20 @@ class ExpoSQLitePreparedQuery extends import_session.SQLitePreparedQuery {
      return (0, import_utils.mapResultRow)(fields, row, joinsNotNullableMap);
    }
    values(placeholderValues) {
@@ -181,7 +185,7 @@ index 23dcc2a7448137b64d7e54887ce5a003a413aff4..f122eeb0e8865cdc6aff0f102622695e
      }
      const rows = this.values(placeholderValues);
      if (customResultMapper) {
-@@ -90,11 +108,13 @@ class ExpoSQLitePreparedQuery extends SQLitePreparedQuery {
+@@ -90,11 +108,17 @@ class ExpoSQLitePreparedQuery extends SQLitePreparedQuery {
      return rows.map((row) => mapResultRow(fields, row, joinsNotNullableMap));
    }
    get(placeholderValues) {
@@ -193,12 +197,16 @@ index 23dcc2a7448137b64d7e54887ce5a003a413aff4..f122eeb0e8865cdc6aff0f102622695e
 +      return this.finalizeOneTime(() => {
 +        const params = fillPlaceholders(this.query.params, placeholderValues ?? {});
 +        this.logger.logQuery(this.query.sql, params);
-+        return stmt.executeSync(params).getFirstSync();
++        const result = stmt.executeSync(params);
++        const first = result.next();
++        for (const _row of result) {
++        }
++        return first.done ? void 0 : first.value;
 +      });
      }
      const rows = this.values(placeholderValues);
      const row = rows[0];
-@@ -107,9 +127,20 @@ class ExpoSQLitePreparedQuery extends SQLitePreparedQuery {
+@@ -107,9 +131,20 @@ class ExpoSQLitePreparedQuery extends SQLitePreparedQuery {
      return mapResultRow(fields, row, joinsNotNullableMap);
    }
    values(placeholderValues) {

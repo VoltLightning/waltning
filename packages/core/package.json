@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./date": "./src/date.ts",
+    "./diagnostics": "./src/diagnostics.ts",
     "./id": "./src/id.ts",
     "./json": "./src/json.ts",
     "./money": "./src/money.ts",

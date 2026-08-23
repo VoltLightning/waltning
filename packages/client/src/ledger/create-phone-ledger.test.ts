@@ -10,7 +10,7 @@ import {
   type PhoneRecentTransaction,
 } from "./create-phone-ledger.ts";
 
-function harness() {
+function harness(diagnostics?: (event: object) => void) {
   let accounts: PhoneAccount[] = [];
   let recent: PhoneRecentTransaction[] = [];
   const createAccount = vi.fn<PhoneLedgerPort["createAccount"]>((input) => {
@@ -69,6 +69,7 @@ function harness() {
   let sequence = 0;
   const controller = createPhoneLedger(port, {
     capture,
+    ...(diagnostics ? { diagnostics } : {}),
     id: <Table extends IdTable>() => {
       sequence += 1;
       return id<Table>(`00000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`);
@@ -172,5 +173,32 @@ describe("phone ledger controller", () => {
     expect(reset).toHaveBeenCalledTimes(1);
     expect(controller.getSnapshot().accounts).toEqual([]);
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports actions and state updates without ledger values", () => {
+    const diagnostics: object[] = [];
+    const { controller } = harness((event) => diagnostics.push(event));
+
+    const accountId = controller.createAccount("Cash · USD");
+    controller.createExpense("10", accountId);
+
+    expect(diagnostics).toContainEqual({
+      scope: "client_action",
+      action: "create_account",
+      phase: "success",
+    });
+    expect(diagnostics).toContainEqual({
+      scope: "client_action",
+      action: "create_expense",
+      phase: "success",
+    });
+    expect(diagnostics).toContainEqual({
+      scope: "client_state",
+      update: "phone_ledger_refresh",
+      phase: "success",
+    });
+    const serialized = JSON.stringify(diagnostics);
+    expect(serialized).not.toContain("Cash · USD");
+    expect(serialized).not.toContain("10.00000000");
   });
 });
