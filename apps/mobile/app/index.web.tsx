@@ -6,7 +6,7 @@
  *
  * **A route composes and nothing else** (`architecture/11` §4). Every component
  * here comes from `@waltning/ui`, every hook from `@waltning/client`, and the
- * only local import is `../src/platform.ts` — the one file that names Expo.
+ * only local import is `../src/platform` — the platform variant that names Expo.
  * This file previously held a type, a hook, a component and a formatter, none
  * of which the test runner could see.
  */
@@ -16,7 +16,7 @@ import { describeProbe, useProbe } from "@waltning/client/connectivity";
 import { useTransactions } from "@waltning/client/transactions";
 import { BalanceRow, Card, GroundPanel, TransactionRow } from "@waltning/ui";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { API_BASE_URL, api, isStaleBundle } from "../src/platform.ts";
+import { API_BASE_URL, api, isStaleBundle } from "../src/platform";
 
 export default function Dashboard() {
   const probe = useProbe(api);

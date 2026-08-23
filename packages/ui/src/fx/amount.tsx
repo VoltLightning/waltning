@@ -17,7 +17,7 @@ import { face, makeStyles } from "../theme/index.ts";
 import { tabularNums, type } from "../tokens.ts";
 
 export type AmountSize = "hero" | "large" | "body" | "small";
-export type AmountEmphasis = "default" | "muted";
+export type AmountEmphasis = "default" | "muted" | "shell";
 
 export type AmountProps = {
   /** A decimal string. A JS number holding money is a bug (`SPEC.md` §7.0). */
@@ -63,11 +63,15 @@ export function Amount({
         SIZES[size],
         negative ? styles.negative : null,
         emphasis === "muted" ? styles.muted : null,
+        emphasis === "shell" ? styles.shell : null,
       ]}
     >
       {prefix}
       {text}
-      <Text style={styles.currency}> {currency}</Text>
+      <Text style={[styles.currency, emphasis === "shell" ? styles.shellCurrency : null]}>
+        {" "}
+        {currency}
+      </Text>
     </Text>
   );
 }
@@ -91,5 +95,7 @@ const useStyles = makeStyles((t) => ({
   },
   negative: { color: t.dangerText },
   muted: { color: t.textMuted },
+  shell: { color: t.shellText },
   currency: { color: t.textMuted, fontSize: type.caption.fontSize },
+  shellCurrency: { color: t.shellText },
 }));

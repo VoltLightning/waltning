@@ -62,6 +62,7 @@ describe("a component follows the active theme", () => {
     ["light asserted text on fill", light.assertedText, light.assertedFill],
     ["light danger text on fill", light.dangerText, light.dangerFill],
     ["light tag text on fill", light.tagNeutralText, light.tagNeutralFill],
+    ["light shell text on shell", light.shellText, light.shellFrom],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
     ["dark muted text on ground", dark.textMuted, dark.ground],
@@ -70,6 +71,7 @@ describe("a component follows the active theme", () => {
     ["dark asserted text on fill", dark.assertedText, dark.assertedFill],
     ["dark danger text on fill", dark.dangerText, dark.dangerFill],
     ["dark tag text on fill", dark.tagNeutralText, dark.tagNeutralFill],
+    ["dark shell text on shell", dark.shellText, dark.shellFrom],
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);

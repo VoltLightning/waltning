@@ -112,6 +112,10 @@ export type Theme = {
   /** The shell gradient's two stops. */
   shellFrom: string;
   shellTo: string;
+  /** Text and icons placed on the shell, whose contrast differs by theme. */
+  shellText: string;
+  /** The dimming layer behind a modal surface. */
+  scrim: string;
 
   elevation: {
     card: ThemeElevation;
@@ -180,6 +184,8 @@ export const light: Theme = {
 
   shellFrom: color.green900,
   shellTo: color.green800,
+  shellText: color.surface,
+  scrim: color.green900,
 
   elevation: {
     card: lightElevation(shadow.card),
@@ -190,6 +196,8 @@ export const light: Theme = {
 
 export const dark: Theme = {
   ...darkColor,
+  shellText: darkColor.text,
+  scrim: darkColor.ground,
   elevation: {
     card: darkElevation(),
     raised: darkElevation(),

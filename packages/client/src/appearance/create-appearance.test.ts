@@ -44,6 +44,17 @@ describe("appearance persistence", () => {
     expect(controller.getSnapshot()).toEqual({ preference: "system", hydrated: true });
   });
 
+  it("falls back to System when persistence cannot be read", async () => {
+    const controller = createAppearance({
+      get: async () => Promise.reject(new Error("storage unavailable")),
+      set: async () => undefined,
+    });
+
+    await controller.hydrate();
+
+    expect(controller.getSnapshot()).toEqual({ preference: "system", hydrated: true });
+  });
+
   it("shares one store read across concurrent hydration", async () => {
     const gate = deferred();
     const get = vi.fn(async () => {
@@ -77,6 +88,18 @@ describe("appearance persistence", () => {
     await saving;
     expect(controller.getSnapshot().preference).toBe("dark");
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the current preference when persistence rejects", async () => {
+    const controller = createAppearance({
+      get: async () => null,
+      set: async () => Promise.reject(new Error("storage unavailable")),
+    });
+    await controller.hydrate();
+
+    await expect(controller.setPreference("dark")).rejects.toThrow("storage unavailable");
+
+    expect(controller.getSnapshot()).toEqual({ preference: "system", hydrated: true });
   });
 
   it("does not let a slow hydration overwrite a saved preference", async () => {
