@@ -1,6 +1,6 @@
 /** Development-readable structured logs for the native and Expo web surfaces. */
 
-import { configureSync, getConsoleSink, getLogger } from "@logtape/logtape";
+import { configureSync, getConsoleSink, getLogger, type LogRecord } from "@logtape/logtape";
 import type { ClientDiagnosticEvent } from "@waltning/client/diagnostics";
 import type { DiagnosticError } from "@waltning/core/diagnostics";
 import type { ApiRequestDiagnosticEvent } from "@waltning/core/rule-zero-fetch";
@@ -26,10 +26,29 @@ type MobileDiagnosticEvent =
 const BUILD = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev";
 const SURFACE = Platform.OS === "web" ? "web" : "mobile";
 
+function metroFormatter(record: LogRecord): readonly [string] {
+  const message =
+    typeof record.rawMessage === "string" ? record.rawMessage : record.rawMessage.join("{}");
+  return [
+    JSON.stringify({
+      ...record.properties,
+      time: new Date(record.timestamp).toISOString(),
+      level: record.level,
+      category: record.category.join("."),
+      message,
+    }),
+  ];
+}
+
 configureSync({
   reset: true,
-  sinks: { console: getConsoleSink() },
+  sinks: { console: getConsoleSink({ formatter: metroFormatter }) },
   loggers: [
+    {
+      category: ["logtape", "meta"],
+      lowestLevel: "warning",
+      sinks: ["console"],
+    },
     {
       category: ["waltning", SURFACE],
       lowestLevel: __DEV__ ? "debug" : "info",
