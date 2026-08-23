@@ -12,13 +12,13 @@
  *   error, never a reset, because the alternative deletes intent that exists
  *   nowhere else.
  *
- * **And one carve-out, which is the sharpest edge in this file.** §14.1: on
- * Brick 1 there is no server, so *"with no server the outbox never drains"* —
+ * **And one carve-out, which is the sharpest edge in this file.** §14.1: when
+ * there is no server, *"with no server the outbox never drains"* —
  * and the replica is not a copy of anything. Dropping it is not a refetch, it
  * is the deletion of the ledger. §14.6 states the rule the whole module obeys:
- * *"A migration must not be able to destroy the ledger. On Brick 1 the phone's
- * database is the only copy, and unlike the server there is nothing to reset
- * from — no seed, no second copy, no `db:reset`."*
+ * *"A migration must not be able to destroy the ledger. With no backend the
+ * phone's database is the only copy, and unlike the server there is nothing to
+ * reset from — no seed, no second copy, no `db:reset`."*
  *
  * So the drop is conditional on there being somewhere to refetch **from**, and
  * that condition is a parameter rather than a guess: whether a backend has ever
@@ -128,10 +128,10 @@ export type MigrateReplicaOptions = MigrateOptions & {
    * Has a backend ever been reached?
    *
    * **Injected, because it is not knowable here and guessing it is
-   * catastrophic.** `false` is Brick 1: the replica is the only copy of the
-   * ledger and the drop-and-refetch rule has no *refetch* half. `true` is
-   * Brick 2 onwards: the server holds every row the replica does, so dropping
-   * costs a resync and nothing else.
+   * catastrophic.** `false` means the replica is the only copy of the ledger
+   * and the drop-and-refetch rule has no *refetch* half. `true` means the server
+   * holds the canonical base and the outbox holds every unadmitted local intent,
+   * so drop, refetch and replay cost a resync and nothing else.
    *
    * It asks *ever*, not *now*. A phone that is merely offline this second still
    * has somewhere to refetch from.
@@ -474,8 +474,8 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
  * safe direction besides: a refetched replica holds what the *server* has
  * admitted, so every entry still in the outbox is by definition not reflected
  * in it and must be replayed. Erring the other way would strand intent that
- * exists nowhere else. Note that on Brick 1 this never arises: the replica is
- * never dropped there, so the watermark only ever resets once a backend exists.
+ * exists nowhere else. With no backend this never arises: the replica is never
+ * dropped, so the watermark only ever resets once a backend exists.
  */
 export function migrateReplica<TRun, TSchema extends LedgerSchema>(
   store: ReplicaStore<TRun, TSchema>,

@@ -53,12 +53,12 @@ risk sequences itself and a head that is entirely risk **is** the plan.
 The former `SPEC.md` §16 phase table had the same property and was removed in a
 follow-up change.
 
-**The vocabulary loses "Brick".** The glossary defined it as a numbered sequence
-— the phone alone, then a backend, then the web dashboard — which is a plan in a
-glossary, and ambiguous besides now that the phone is two platforms. Each use is
-replaced by the precondition it stood for: "with no backend", "once a server
-exists". Those stay true whatever order things arrive in, which the numbers do
-not.
+**The numbered delivery vocabulary is removed.** The glossary defined the phone
+alone, a backend, and the web dashboard as a numbered sequence, which is a plan
+in a glossary and ambiguous besides now that the phone is two platforms. Each
+use is replaced by the precondition it stood for: "with no backend", "once a
+server exists". Those stay true whatever order things arrive in, which the
+numbers do not.
 
 **There is no test.** This repository's rule is that a rule without a test is not
 a rule, and this is the exception, argued rather than overlooked. What makes a

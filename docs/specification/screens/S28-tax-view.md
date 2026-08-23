@@ -76,12 +76,12 @@ implying it was clean. Reopening is possible and audited.
 expense table reads as a bug or as missing data. Saying *why* it is absent is
 the difference between a system that is correct and one that looks broken.
 
-**On a backendless phone (Brick 1), this whole screen is labelled estimate.**
+**On a backendless phone, this whole screen is labelled estimate.**
 `tax_ledger`'s exclusion of personal rows is asserted by a Postgres role grant
 (§13.1); a device with no Postgres has no equivalent to assert it with, so a
-figure computed locally carries the same caveat Brick 1 puts on every tax
-figure (`architecture/14` §14.1). The header's *reconciliation view, not a
-filing* line stays; on Brick 1 it reads *estimate, not a filing* instead, and
+figure computed locally carries the same caveat every phone-alone tax figure
+does (`architecture/14` §14.1). The header's *reconciliation view, not a filing*
+line stays; without a backend it reads *estimate, not a filing* instead, and
 `Close period` and `Export` are absent rather than disabled — there is nothing
 behind them to gate.
 

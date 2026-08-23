@@ -653,7 +653,7 @@ compromise than the login, which is the test a printed code fails.
 secrets; standing the system up needs about twenty variables, and the three
 database URLs are the ones that carry a guarantee rather than a value.
 | Backup encryption key | `age` key on a hardware token, plus a paper copy off-site | On the Pi alone |
-| Brick-1 export key (the phone alone, before a backend exists) | `age` key escrowed in **iCloud Keychain** (Apple's HSM-backed escrow); the ciphertext export goes somewhere Apple is **not** — a Mac, a NAS, later the backend (`architecture/14-local-first.md` §14.3) | Both halves — key and ciphertext — in the same vendor's custody |
+| Phone-alone export key | `age` key escrowed in **iCloud Keychain** (Apple's HSM-backed escrow); the ciphertext export goes somewhere Apple is **not** — a Mac, a NAS, later the backend (`architecture/14-local-first.md` §14.3) | Both halves — key and ciphertext — in the same vendor's custody |
 
 All model calls originate from the API container. The phone never holds an
 Anthropic key.
@@ -750,7 +750,7 @@ is **not made here**.
 
 | Control | Decision |
 |---|---|
-| Backup (Brick 1) | An app-owned, `age`-encrypted export the owner controls. **One vendor never holds both halves** (§5.3, `architecture/14-local-first.md` §14.3): on iOS the key lives in **iCloud Keychain** and the ciphertext goes somewhere Apple is not. **The Android escrow half is not settled**, and the obvious answer is wrong — a Keystore key is non-exportable, so an export keyed only from the Keystore dies with the device it existed to survive. Until it is settled, the Android owner holds the key themselves |
+| Backup without a backend | An app-owned, `age`-encrypted export the owner controls. **One vendor never holds both halves** (§5.3, `architecture/14-local-first.md` §14.3): on iOS the key lives in **iCloud Keychain** and the ciphertext goes somewhere Apple is not. **The Android escrow half is not settled**, and the obvious answer is wrong — a Keystore key is non-exportable, so an export keyed only from the Keystore dies with the device it existed to survive. Until it is settled, the Android owner holds the key themselves |
 | Receipt spool | Downscaled at capture, EXIF stripped, written inside the app's **private container** — never the system photo library (`Photos`, `MediaStore`), never a directory the platform shares out (`UIFileSharingEnabled`; external storage or a `FileProvider` grant) |
 | Lost device | **Two steps, not one:** revoke the tailnet node *and* kill the server-side session row. A *sign out everywhere* control lives on S30 |
 | Replica | A **complete copy of the whole ledger** (§14.0). It is not evicted, and there is no TTL that drops it — the phone-in-a-drawer case is handled by the session and tailnet expiries above, not by deleting the record the phone holds |

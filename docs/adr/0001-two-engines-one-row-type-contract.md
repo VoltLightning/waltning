@@ -63,7 +63,8 @@ the phone can hold everything and still not be where the guarantees live.
   Verified by breaking it six ways — a missing table, a table outside the
   declared set, a changed column type, a changed nullability, a renamed column,
   and a `.default()` on one side only.
-- Brick 1 accepts weaker enforcement than Brick 2, stated rather than hidden:
-  the phone mirrors every invariant SQLite can express, and role grants and
-  cross-table triggers stay on the server. The Brick 1 → Brick 2 migration is
-  therefore **validate-then-apply**, never a straight replay.
+- A phone with no backend accepts weaker enforcement than a server-connected
+  system, stated rather than hidden: the phone mirrors every invariant SQLite
+  can express, and role grants and cross-table triggers stay on the server. The
+  one-time seed-from-phone migration is therefore **validate-then-apply**, never
+  a straight replay.

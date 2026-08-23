@@ -358,16 +358,16 @@ describe("the outbox is never dropped", () => {
   });
 });
 
-/* ── Brick 1: there is nothing to refetch from ───────────────────────────── */
+/* ── With no backend, there is nothing to refetch from ──────────────────── */
 
 describe("the replica is not dropped when there is nowhere to refetch from", () => {
   /**
    * **The carve-out, and the sharpest edge in the module.** §08 says a replica
-   * version mismatch means drop and refetch. §14.1 says that on Brick 1 there
-   * is no server — *"with no server the outbox never drains"* — so the replica
-   * is not a copy of anything, and §14.6 says a migration must not be able to
-   * destroy the ledger. Dropping here is not a refetch; it is the deletion of
-   * the record.
+   * version mismatch means drop and refetch. §14.1 says that with no backend
+   * there is no server — *"with no server the outbox never drains"* — so the
+   * replica is not a copy of anything, and §14.6 says a migration must not be
+   * able to destroy the ledger. Dropping here is not a refetch; it is the
+   * deletion of the record.
    */
   it("raises instead, and leaves every row where it was", () => {
     const ledger = openAt("brick1");

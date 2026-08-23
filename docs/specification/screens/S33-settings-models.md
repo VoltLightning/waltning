@@ -180,7 +180,7 @@ would not add up.
 | Loading | Skeleton rows; the table shape is known |
 | Populated | Five rows, always — an assist is never absent, only off or unconfigured |
 | Empty | n/a. Five rows ship whether or not anything is configured |
-| **On, no provider** | The fresh-install default. `Banner(warn)`, row shows `—`. **Not an error** — also the permanent state on a backendless phone (Brick 1, `architecture/14` §14.1): no Pi means no environment for a key to live in, so every assist sits here and degrades to its fallback (§3's table) |
+| **On, no provider** | The fresh-install default. `Banner(warn)`, row shows `—`. **Not an error** — also the permanent state on a backendless phone (`architecture/14` §14.1): no Pi means no environment for a key to live in, so every assist sits here and degrades to its fallback (§3's table) |
 | **On, provider has no key** | `Banner(warn)` naming the assist and the provider. Degrades exactly as offline does |
 | **Off** | Row still listed, marked off, **spend still shown**. Its settings are intact |
 | **Master off** | Real values throughout, one banner over the table. Per-assist switches keep their positions |
@@ -270,7 +270,7 @@ when you break something.
   is configuration of the agent rather than work done with it.
 - **All model calls originate from the API** (§5.3). Nothing here implies the
   client talks to a provider — including `list_models`, which the API proxies.
-  **A backendless phone (Brick 1) has no API to proxy through**, so this is
+  **A backendless phone has no API to proxy through**, so this is
   not a screen the phone loses — it is a screen that shows five assists stuck
   on `no provider`, same as fresh-install, with the same documented fallback
   for each (§3).
