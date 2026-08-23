@@ -10,7 +10,8 @@
     "./transactions": "./src/transactions/index.ts",
     "./currencies": "./src/currencies/index.ts",
     "./connectivity": "./src/connectivity/index.ts",
-    "./appearance": "./src/appearance/index.ts"
+    "./appearance": "./src/appearance/index.ts",
+    "./ledger": "./src/ledger/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -63,6 +63,13 @@ mid-draft never discards what is there.
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed.
 
+Under the disposable preview profile, the expense path has two explicit inputs:
+a positive USD amount and an account. The app supplies expense type, today's
+device-local accounting date, USD, and the operation defaults. Its *Create
+account…* exit returns to the same draft with the new account selected. That
+profile omits the keypad, category, scope, note, counterparty, voice, scan, and
+FX affordances.
+
 **The chip row is the whole model.** Account, category, date, scope, note, and
 counterparty when attached. Each chip is empty (placeholder), filled, or
 **machine-filled** — the third carries the trail marker (P2).

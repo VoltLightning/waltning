@@ -104,6 +104,8 @@ coverage/
 # Expo build artifacts and generated types
 apps/*/.expo/
 apps/*/dist/
+apps/*/ios/
+apps/*/android/
 
 # Local agent config. Every docs/agents/<name>.md is a committed default that
 # works on a fresh clone; <name>.local.md is a personal override that stays on

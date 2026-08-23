@@ -13,5 +13,7 @@
  * it would break "no module imports another" on the first day.
  */
 
+export { BottomSheet, type BottomSheetProps } from "./bottom-sheet";
 export { Card, type CardProps, GroundPanel } from "./card";
 export { DualTotal, type DualTotalProps } from "./dual-total";
+export { TodayFrame, type TodayFrameProps } from "./today-frame";

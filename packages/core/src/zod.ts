@@ -22,6 +22,7 @@ import type { Id, IdTable } from "./id.ts";
 import {
   type CurrencyCode,
   currencyCode,
+  dec,
   type Money,
   type PivotPerUnit,
   toMoney,
@@ -37,7 +38,8 @@ import {
 export const zMoney = z
   .string()
   .regex(/^-?\d+(\.\d+)?$/, "expected a decimal amount as a string")
-  .transform((v): Money => toMoney(v));
+  .transform((v): Money => toMoney(v))
+  .refine((v) => dec(v).abs().lt("1000000000000"), "amount exceeds numeric(20,8)");
 
 /** A rate you multiply by to reach the pivot (`computations.md` §4). */
 export const zPivotPerUnit = z

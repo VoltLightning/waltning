@@ -41,11 +41,18 @@ export function createAppearance(store: AppearanceStore): AppearanceController {
     const generationAtRead = preferenceGeneration;
     hydration = store
       .get()
-      .then((stored) => {
-        if (generationAtRead === preferenceGeneration) {
-          publish({ preference: preference(stored), hydrated: true });
-        }
-      })
+      .then(
+        (stored) => {
+          if (generationAtRead === preferenceGeneration) {
+            publish({ preference: preference(stored), hydrated: true });
+          }
+        },
+        () => {
+          if (generationAtRead === preferenceGeneration) {
+            publish({ preference: snapshot.preference, hydrated: true });
+          }
+        },
+      )
       .finally(() => {
         hydration = undefined;
       });

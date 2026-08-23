@@ -88,6 +88,16 @@ landed on the screen you saved from. That is the one thing S10 cannot do for
 you, and it is exactly when confirmation matters most — a save with no network
 and no feedback is indistinguishable from a save that failed.
 
+That marker exists only when the phone has a backend relationship and the write
+is awaiting admission. On a phone-alone ledger, successful local
+materialisation is the final save: the row appears as ordinary ledger data with
+no sync-status marker.
+
+Under the disposable preview profile, S04 renders one combined USD total, five
+Recent rows, the Create account first-run action, a raised `+`, and the
+appearance action. That profile omits the tab bar, period figures, voice, scan,
+sync state, shared totals, and FX presentation.
+
 ### Web — ≥1024px
 
 **S04 does not exist on web.** Its job is answered by S01 Dashboard, which has

@@ -339,13 +339,23 @@ describe("every src/ is organised by domain, not by layer", () => {
       "appearance",
       "connectivity",
       "currencies",
+      "ledger",
       "query",
       "transactions",
       "transport",
     ],
     // Foundation (`primitives`, `fx`) plus one folder per domain. The full
     // target is thirteen; six exist because six have components.
-    "packages/ui/src": ["accounts", "fx", "primitives", "review", "shell", "theme", "transactions"],
+    "packages/ui/src": [
+      "accounts",
+      "fx",
+      "primitives",
+      "review",
+      "shell",
+      "states",
+      "theme",
+      "transactions",
+    ],
     "packages/db/src": ["fx", "seed", "test"],
     /**
      * The phone's ledger: **a flat foundation, plus one folder per domain.**

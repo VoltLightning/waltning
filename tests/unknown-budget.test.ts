@@ -107,6 +107,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "`satisfies Record<RequiredFace, unknown>` checks key coverage and deliberately makes no claim about the asset values",
   },
+  "apps/mobile/src/phone-ledger.native.ts": {
+    max: 1,
+    why: "pnpm gives the same Drizzle version different nominal package identities for its Expo and Postgres peer sets; the native platform seam proves the runtime adapter and contains that package-manager-only cast",
+  },
   "packages/db/src/fx/backfill.ts": {
     max: 1,
     why: "an unrecognised rate source, which is a string from the database and not a type",

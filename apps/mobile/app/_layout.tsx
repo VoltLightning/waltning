@@ -12,13 +12,26 @@
 // Side-effect import, and it must come first: `randomId()` reads the global at
 // call time and the first call is a row insert.
 import "../src/polyfills.ts";
+import { useAppearance } from "@waltning/client/appearance";
+import { ThemeProvider } from "@waltning/ui";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
-import { View } from "react-native";
+import { useEffect } from "react";
+import { useColorScheme, View } from "react-native";
 import { FONT_ASSETS } from "../src/fonts.ts";
+import { appearance } from "../src/platform";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
+  const systemScheme = useColorScheme();
+  const resolved = useAppearance(
+    appearance,
+    systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
+  );
+
+  useEffect(() => {
+    void appearance.hydrate();
+  }, []);
 
   /**
    * **Render nothing until the faces are in — and only until then.**
@@ -31,7 +44,7 @@ export default function RootLayout() {
    * the bundle is measured in milliseconds; a spinner would flash and be gone,
    * which reads as a glitch rather than as progress.
    */
-  if (!loaded && !error) return <View />;
+  if ((!loaded && !error) || !resolved.hydrated) return <View />;
 
   /**
    * **A font that failed to load is a fact, not a reason to stop.**
@@ -51,5 +64,9 @@ export default function RootLayout() {
    */
   if (error) console.error("[fonts] rendering in the fallback face —", error.message);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <ThemeProvider name={resolved.theme}>
+      <Stack screenOptions={{ headerShown: false }} />
+    </ThemeProvider>
+  );
 }

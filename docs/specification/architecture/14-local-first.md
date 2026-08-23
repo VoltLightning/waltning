@@ -55,6 +55,11 @@ durability rather than deciding whether the phone works:
   awaiting a drain. **With no server the outbox never drains**, so every
   transaction ever entered would stay unacknowledged and every read would fold
   five years of log onto an empty base. See §14.6.
+
+  A build with the disposable preview profile configures and contacts no
+  backend. Its outbox is invisible local intent, not a user-facing sync state.
+  That profile's reset deletes both the materialised ledger and that intent;
+  builds without the profile expose no destructive reset.
 - **Once a backend exists, over Tailscale, it becomes the writer of record and
   durable copy.** The phone's outbox drains into it; the phone is a *complete
   replica plus outbox*. Filing-grade tax, continuous backup, and the heavy work

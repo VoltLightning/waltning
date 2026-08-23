@@ -11,12 +11,24 @@
  * taken, this is the size of the duplication.
  */
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   isStaleBundle as compareBuilds,
   createApiClient,
   resolveApiBaseUrl,
 } from "@waltning/client";
+import { createAppearance } from "@waltning/client/appearance";
 import { Platform } from "react-native";
+
+const APPEARANCE_KEY = "waltning.appearance";
+
+export const appearance = createAppearance({
+  get: () => AsyncStorage.getItem(APPEARANCE_KEY),
+  set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
+});
+
+export const PREVIEW_RESET_ENABLED =
+  __DEV__ || process.env["EXPO_PUBLIC_ENABLE_PREVIEW_RESET"] === "true";
 
 export const API_BASE_URL: string = resolveApiBaseUrl({
   configured: process.env["EXPO_PUBLIC_API_URL"],

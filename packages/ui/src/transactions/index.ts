@@ -6,4 +6,5 @@
  * `primitives/tag.tsx`. A variant naming a domain does not move the shape.
  */
 
+export { type QuickAddAccount, QuickAddForm, type QuickAddFormProps } from "./quick-add-form";
 export { TransactionRow, type TransactionRowProps } from "./transaction-row";
