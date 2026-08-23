@@ -35,7 +35,7 @@ export const transactionsColumns = () => ({
   date: k.date("date").notNull(),
   type: k.text("type", { enum: TXN_TYPE }).notNull(),
   accountId: k
-    .uuid("account_id")
+    .uuid<"accounts">("account_id")
     .notNull()
     .references(() => accounts.id, { onDelete: "restrict" }),
   toAccountId: k

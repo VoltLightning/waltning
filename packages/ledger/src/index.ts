@@ -10,7 +10,12 @@ import { createAccountExecutor } from "./accounts/index.ts";
 import { localRegistry } from "./executor.ts";
 import { createTransactionExecutor } from "./transactions/index.ts";
 
-export { createAccountExecutor, type LocalAccountRow } from "./accounts/index.ts";
+export {
+  createAccountExecutor,
+  type LocalAccountRow,
+  type LocalAccountSummary,
+  readAccounts,
+} from "./accounts/index.ts";
 export {
   type AnyLocalExecutor,
   defineLocalExecutor,
@@ -39,9 +44,19 @@ export {
 } from "./open.ts";
 export { type LaunchRecovery, type ReplayHalt, recoverOnLaunch } from "./recover.ts";
 export * from "./schema.ts";
+export { ledgerSchema } from "./schema-map.ts";
+export {
+  type BootstrapCurrency,
+  createLocalLedgerSession,
+  type LocalLedgerSession,
+  type LocalLedgerSessionOptions,
+  USD_BOOTSTRAP,
+} from "./session.ts";
 export {
   createTransactionExecutor,
+  type LocalRecentTransaction,
   type LocalTransactionRow,
+  readRecent,
 } from "./transactions/index.ts";
 export {
   type Capture,

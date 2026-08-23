@@ -10,3 +10,4 @@ export {
   createTransactionExecutor,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
+export { type LocalRecentTransaction, readRecent } from "./read-recent.ts";

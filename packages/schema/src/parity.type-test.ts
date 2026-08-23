@@ -18,7 +18,7 @@
 
 // Type-only: this file must not pull either dialect's runtime onto anything's
 // import graph, least of all both at once.
-import { money } from "@waltning/core";
+import { type Id, money } from "@waltning/core";
 import type * as pg from "./pg.ts";
 import type { SharedTable } from "./shared.ts";
 import type * as sqlite from "./sqlite.ts";
@@ -37,6 +37,14 @@ type Inserts<S> = { [K in keyof S]: S[K] extends { $inferInsert: infer R } ? R :
 
 export const readsMatch: Exact<Selects<typeof pg>, Selects<typeof sqlite>> = true;
 export const writesMatch: Exact<Inserts<typeof pg>, Inserts<typeof sqlite>> = true;
+export const pgTransactionAccountIsAccountId: Exact<
+  Selects<typeof pg>["transactions"]["accountId"],
+  Id<"accounts">
+> = true;
+export const sqliteTransactionAccountIsAccountId: Exact<
+  Selects<typeof sqlite>["transactions"]["accountId"],
+  Id<"accounts">
+> = true;
 
 /**
  * The vacuity guard. `Selects<{}>` is `{}`, and `Exact<{}, {}>` is `true` — so
