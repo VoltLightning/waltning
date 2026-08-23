@@ -28,6 +28,10 @@
       "complexity": {
         "useLiteralKeys": "off"
       },
+      "performance": {
+        "noBarrelFile": "error",
+        "noJsxPropsBind": "error"
+      },
       "style": {
         "noNonNullAssertion": "error"
       },

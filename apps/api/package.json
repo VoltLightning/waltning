@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./router-type": "./src/trpc/router-type.ts",
+    "./router": "./src/trpc/router.ts",
     "./errors": "./src/common/errors.ts"
   },
   "scripts": {

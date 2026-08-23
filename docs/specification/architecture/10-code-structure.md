@@ -20,26 +20,34 @@ currencies work is one folder rather than three.
 
 ```
 apps/api/src/
-  modules/<domain>/     index.ts · <op>.operation.ts · <domain>.service.ts · tests
+  modules/<domain>/     <op>.operation.ts · <domain>.service.ts · tests
   common/               errors, pagination — no domain knowledge
   infra/                database, blobs, model providers
   registry/             the mechanism, and the composition of module operations
   http/ trpc/ middleware/ config/    composition root
 
-apps/mobile/src/
-  features/<name>/      index.ts · ui/{atoms,molecules,organisms} · model/ · api/
-  shared/               ui/ lib/ hooks/ — used twice, knows no feature
-  app/                  expo-router routes: compose features, own the fetching
+apps/mobile/
+  app/                  expo-router entries: compose screens, own navigation
+  src/                  platform adapters and platform-resolved screens
 
 packages/
-  core/  contracts (money, operation types, schemas) · db/  schema + client
-  ui/    the cross-app design system
+  core/                 contracts (money, operation types, schemas)
+  client/               transport, hooks, state and derived models by domain
+  ui/                   rendering by domain, plus domain-free foundations
+  db/ · schema/ · ledger/  server and phone persistence
 ```
 
-**Only `index.ts` is public**, and no module or feature imports another.
+Only concrete subpaths declared in a package's `exports` map are public. Each
+subpath resolves directly to the module that owns its values; barrel files are
+forbidden, including package roots. No module or feature imports another.
 Composition happens at the registry on the server and in `app/` routes on the
 client. Two modules that need each other are usually one module, or want a
-third that both depend on. `tests/module-boundaries.test.ts` enforces it.
+third that both depend on. `tests/module-boundaries.test.ts` enforces the
+module direction and Biome refuses barrels.
+
+JSX props take named function references. An arrow function, function
+expression or `.bind()` inside JSX fails the same Biome gate; ordinary arrows
+outside JSX remain legal.
 
 ```mermaid
 graph TB
@@ -47,9 +55,9 @@ graph TB
 
     subgraph mods["modules/"]
         direction LR
-        TX["<b>transactions/</b><br/><i>index.ts</i>"]
-        FX["<b>fx/</b><br/><i>index.ts</i>"]
-        CP["<b>counterparties/</b><br/><i>index.ts</i>"]
+        TX["<b>transactions/</b><br/><i>owner modules</i>"]
+        FX["<b>fx/</b><br/><i>owner modules</i>"]
+        CP["<b>counterparties/</b><br/><i>owner modules</i>"]
     end
 
     COMMON["<b>common/</b> · <b>infra/</b><br/><i>no domain knowledge</i>"]
@@ -242,8 +250,8 @@ bundle, and it is reachable transitively through `ui` as well as directly.
 never; none of them depends on an app.
 
 The one edge this document long omitted: `packages/client` imports
-`@waltning/api/router-type`, **type-only**, which is how an operation's types
-reach the client (§11.0). It is erased before any bundler sees it and
+`@waltning/api/router`, **type-only**, which is how an operation's types reach
+the client (§11.0). It is erased before any bundler sees it and
 `tests/module-boundaries.test.ts` refuses a value import.
 
 ---

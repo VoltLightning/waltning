@@ -386,6 +386,10 @@ git commit -m "Enforce explicit imports and named JSX handlers"
 - Inspect: all branch changes against `feat/installable-phone-preview`
 - Create remotely: PR from `chore/ban-barrels-inline-jsx` to `feat/installable-phone-preview`
 
+- [ ] **Step 0: Expose mobile development and bundle commands at the root**
+
+Add `dev:all`, `dev:android`, `dev:ios`, and `dev:web`, plus matching `bundle:*` commands. `dev:all` uses one Expo Go server; `bundle:all` uses Expo's all-platform export. Document the commands in `apps/mobile/README.md` and retain the existing development-client and physical-device preview scripts.
+
 - [ ] **Step 1: Confirm zero direct rule findings**
 
 ```bash
@@ -409,9 +413,7 @@ Expected: lint, all workspace typechecks, test typecheck, and all Vitest files p
 - [ ] **Step 3: Run all mobile exports**
 
 ```bash
-pnpm --filter @waltning/mobile export:web
-pnpm --filter @waltning/mobile bundle:android
-pnpm --filter @waltning/mobile bundle:ios
+pnpm bundle:all
 ```
 
 Expected: all three exports complete.

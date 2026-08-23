@@ -2,7 +2,7 @@
 
 ## Outcome
 
-The repository has no value-export barrel files and no functions created inside JSX props. Biome rejects either pattern before a commit can pass `pnpm verify`.
+The repository has no value- or type-export barrel files and no functions created inside JSX props. The repository gate rejects either pattern before a commit can pass `pnpm verify`.
 
 The rule applies to application code, packages, tools, and tests. Package roots are not exceptions.
 
@@ -23,7 +23,7 @@ Enable these Biome performance rules globally as errors:
 
 No path override exempts package roots, tests, or Expo routes. `pnpm check` already runs inside `pnpm verify`, so the existing gate and pre-commit hook enforce both rules.
 
-Biome deliberately ignores type-only re-exports because they do not create a runtime module graph. This change removes the existing aggregation files rather than preserving type-only shells; public types are exported beside their concrete implementation modules and imported through explicit subpaths.
+Biome deliberately ignores type-only re-exports because they do not create a runtime module graph. A repository-wide architecture test closes that gap by refusing every direct re-export, including type-only forwarding. Public types are exported beside their concrete implementation modules and imported through explicit subpaths.
 
 ## Module exports and imports
 
@@ -67,3 +67,14 @@ Splitting configuration from cleanup is rejected because it leaves either an unm
 - Run web, Android, and iOS Expo exports because package subpaths and route entry modules affect bundler resolution.
 
 Behavior, product scope, persistence, and backend boundaries do not change in this PR.
+
+## Mobile developer commands
+
+The repository root exposes the mobile commands developers actually use:
+
+- `pnpm dev:all` starts one Expo Go server for Android, iOS, and web.
+- `pnpm dev:android`, `pnpm dev:ios`, and `pnpm dev:web` start and open one target.
+- `pnpm bundle:android`, `pnpm bundle:ios`, and `pnpm bundle:web` export one target.
+- `pnpm bundle:all` uses Expo's all-platform export for one complete output.
+
+These are convenience entrypoints over the mobile package. The existing development-client and physical-device preview/install commands remain separate because they have different build semantics.

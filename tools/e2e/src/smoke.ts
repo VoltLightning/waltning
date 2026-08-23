@@ -22,7 +22,7 @@
 
 import { createTRPCClient, httpLink, TRPCClientError } from "@trpc/client";
 import type { ErrorCode } from "@waltning/api/errors";
-import type { AppRouter } from "@waltning/api/router-type";
+import type { AppRouter } from "@waltning/api/router";
 import { WALTNING_HEADER } from "@waltning/core/protocol";
 import { ruleZeroFetch } from "@waltning/core/rule-zero-fetch";
 

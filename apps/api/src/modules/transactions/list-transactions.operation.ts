@@ -13,8 +13,6 @@ import type { OperationContext } from "../../registry/context.ts";
 import { defineOperation } from "../../registry/define.ts";
 import { listTransactions, type TransactionPage } from "./transactions.service.ts";
 
-export type { TransactionPage, TransactionRow } from "./transactions.service.ts";
-
 export const listTransactionsOperation = defineOperation({
   name: "list_transactions",
   kind: "read",

@@ -122,12 +122,7 @@ function crossModuleViolations(root: string): string[] {
       const other = moduleOf(target, root);
       if (!other || other === owner) continue;
 
-      // Reaching a sibling module is allowed only through its public API.
-      const isPublicApi = /\/index\.tsx?$/.test(target) || target.endsWith(`/${other}`);
-      bad.push(
-        `${relative(repoRoot, file)} → ${spec}` +
-          (isPublicApi ? " (public API, still cross-module)" : " (reaches internals)"),
-      );
+      bad.push(`${relative(repoRoot, file)} → ${spec} (cross-module import)`);
     }
   }
   return bad;
@@ -200,7 +195,7 @@ describe("mobile features", () => {
    * The client knows the server's *types* and none of its code.
    *
    * §11.0 promises an operation's input and output types reach the client, so
-   * `apps/mobile` imports `AppRouter` from `@waltning/api` — an edge the
+   * The client package imports `AppRouter` from `@waltning/api` — an edge the
    * dependency floor does not have. It is safe only while it stays type-only:
    * a value import would compile, run in dev, and pull Hono, Drizzle and the
    * Postgres driver into a phone bundle.
@@ -214,7 +209,8 @@ describe("mobile features", () => {
     const TYPE_ONLY = /^\s*import\s+type\s/;
     const violations: string[] = [];
 
-    for (const file of sourceFiles(join(repoRoot, "apps/mobile"))) {
+    const clientRoots = [join(repoRoot, "apps/mobile"), join(repoRoot, "packages/client")];
+    for (const file of clientRoots.flatMap((root) => sourceFiles(root))) {
       const text = readFileSync(file, "utf8");
       for (const line of text.split("\n")) {
         const server = /["'](@waltning\/(?:api|db))(?:\/[^"']*)?["']/.exec(line);
@@ -227,7 +223,7 @@ describe("mobile features", () => {
       }
     }
 
-    expect(violations, "mobile must import the server as types only").toEqual([]);
+    expect(violations, "client code must import the server as types only").toEqual([]);
   });
 
   /**

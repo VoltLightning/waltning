@@ -144,13 +144,13 @@ stops one feature reaching into another's internals.
 graph LR
     subgraph api["apps/api/src/modules/"]
         direction TB
-        T["<b>transactions/</b><br/><i>index.ts — the only public part</i><br/>create.operation.ts<br/>update.operation.ts<br/>transactions.service.ts<br/>transactions.test.ts"]
+        T["<b>transactions/</b><br/><i>concrete owner modules</i><br/>create.operation.ts<br/>update.operation.ts<br/>transactions.service.ts<br/>transactions.test.ts"]
         C["<b>counterparties/</b><br/><i>same shape</i>"]
     end
 
     subgraph mob["apps/mobile/src/features/"]
         direction TB
-        F["<b>quick-add/</b><br/><i>index.ts</i><br/>ui/atoms · molecules · organisms<br/>model/<br/>api/"]
+        F["<b>quick-add/</b><br/><i>concrete owner modules</i><br/>ui/atoms · molecules · organisms<br/>model/<br/>api/"]
     end
 
     T -.->|"forbidden"| C
@@ -158,10 +158,10 @@ graph LR
     R --> C
 ```
 
-Only `index.ts` is public, and **no module imports another** — they are composed
-at the registry on the server and in the route tree on the phone. A test
-enforces it, because a forbidden import is easy to miss in review and trivial
-for a script to find.
+Only concrete package-export subpaths are public; each resolves directly to its
+owner module, and barrels are forbidden. **No module imports another** — they
+are composed at the registry on the server and in the route tree on the phone.
+A test enforces the module direction and Biome refuses barrels.
 
 Atomic design — atoms, molecules, organisms — applies as a **scale inside one
 feature**, never as three global folders. A component moves to `packages/ui`

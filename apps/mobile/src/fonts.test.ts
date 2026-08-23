@@ -1,11 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * jsdom for a test that only reads bytes off disk, which looks wrong: it reaches
- * `@waltning/ui` for the face list, and that barrel exports components, so
- * importing it pulls in `react-native-web` — which wants a document before it
- * will finish loading. Reaching past the barrel would avoid it and the boundary
- * tests forbid that, rightly.
+ * jsdom is retained because the surrounding font checks use the same test
+ * environment. The face list now comes from its concrete public module, so the
+ * import no longer traverses unrelated components.
  *
  * **It cannot import the app's own `fonts.ts`**, and that is not a limitation
  * worth working around: that file `require()`s `.ttf` assets through

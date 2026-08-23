@@ -10,11 +10,13 @@ dashboard.
 Run from the repository root:
 
 ```bash
-pnpm --filter @waltning/mobile dev -- --clear
+pnpm dev:all -- --clear
 ```
 
-Open the project in Expo Go on either the Android phone or iPhone. Development
-includes **Reset preview data** automatically.
+That starts one Expo Go server; use its `a`, `i`, and `w` shortcuts for Android,
+iOS, and web. To start and open one target directly, use `pnpm dev:android`,
+`pnpm dev:ios`, or `pnpm dev:web`. Development includes **Reset preview data**
+automatically.
 
 The separate `dev:client` script starts Metro for an installed development
 client. The EAS `development` and `preview` profiles produce installable Android
@@ -53,7 +55,8 @@ local build output, ignored by git, and must not be committed.
 These commands compile without installing on a device:
 
 ```bash
-pnpm --filter @waltning/mobile export:web
-pnpm --filter @waltning/mobile bundle:android
-pnpm --filter @waltning/mobile bundle:ios
+pnpm bundle:web
+pnpm bundle:android
+pnpm bundle:ios
+pnpm bundle:all
 ```
