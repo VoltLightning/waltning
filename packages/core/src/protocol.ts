@@ -31,6 +31,9 @@ export const WALTNING_HEADER = "x-waltning";
 /** Sent by the client on every request once a session exists (§5.2). */
 export const NONCE_HEADER = "x-waltning-nonce";
 
+/** Correlates one client request, HTTP edge log and registry invocation. */
+export const REQUEST_ID_HEADER = "x-request-id";
+
 export type ResponseAuthentication =
   | { ours: true; build: string }
   | { ours: false; reason: AuthenticationFailure };

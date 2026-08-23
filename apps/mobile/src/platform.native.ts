@@ -3,13 +3,17 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
+import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
 
-export const appearance = createAppearance({
-  get: () => AsyncStorage.getItem(APPEARANCE_KEY),
-  set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
-});
+export const appearance = createAppearance(
+  {
+    get: () => AsyncStorage.getItem(APPEARANCE_KEY),
+    set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
+  },
+  mobileDiagnostics,
+);
 
 export const PREVIEW_RESET_ENABLED = previewResetEnabled(
   __DEV__,

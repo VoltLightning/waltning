@@ -9,7 +9,7 @@
  * decide whether a development convenience becomes a production hole.
  */
 
-import { WALTNING_HEADER } from "@waltning/core/protocol";
+import { REQUEST_ID_HEADER, WALTNING_HEADER } from "@waltning/core/protocol";
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.ts";
 import { DevCorsConfigError, devCors, parseDevCorsOrigins } from "./dev-cors.ts";
@@ -92,11 +92,13 @@ describe("the app", () => {
       headers: {
         Origin: DEV_ORIGIN,
         "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "content-type",
+        "Access-Control-Request-Headers": `content-type,${REQUEST_ID_HEADER}`,
       },
     });
     expect(res.status).toBeLessThan(300);
     expect(res.headers.get("access-control-allow-origin")).toBe(DEV_ORIGIN);
+    const allowed = res.headers.get("access-control-allow-headers") ?? "";
+    expect(allowed.toLowerCase()).toContain(REQUEST_ID_HEADER);
   });
 
   it("exposes the header Rule 0 authenticates on", async () => {
@@ -108,5 +110,12 @@ describe("the app", () => {
     const res = await app.request("/trpc/ping", { headers: { Origin: DEV_ORIGIN } });
     const exposed = res.headers.get("access-control-expose-headers") ?? "";
     expect(exposed.toLowerCase()).toContain(WALTNING_HEADER);
+  });
+
+  it("exposes the request id used to correlate client and API logs", async () => {
+    const app = createApp({ devCorsOrigin: DEV_ORIGIN });
+    const res = await app.request("/trpc/ping", { headers: { Origin: DEV_ORIGIN } });
+    const exposed = res.headers.get("access-control-expose-headers") ?? "";
+    expect(exposed.toLowerCase()).toContain(REQUEST_ID_HEADER);
   });
 });

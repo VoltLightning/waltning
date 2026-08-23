@@ -62,6 +62,58 @@ describe("GET /healthz", () => {
   });
 });
 
+describe("request diagnostics", () => {
+  it("logs the edge with the propagated request id and strips the query", async () => {
+    const diagnostics: object[] = [];
+    const instrumented = createApp({
+      now: () => at,
+      requestId: () => "req-server",
+      diagnostics: (event: object) => diagnostics.push(event),
+    });
+
+    const res = await instrumented.request("/healthz?account=private", {
+      headers: { "x-request-id": "req-client" },
+    });
+
+    expect(res.headers.get("x-request-id")).toBe("req-client");
+    expect(diagnostics).toEqual([
+      {
+        scope: "http_request",
+        phase: "start",
+        requestId: "req-client",
+        method: "GET",
+        path: "/healthz",
+      },
+      {
+        scope: "http_request",
+        phase: "response",
+        requestId: "req-client",
+        method: "GET",
+        path: "/healthz",
+        status: 200,
+        durationMs: 0,
+      },
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("private");
+  });
+
+  it("replaces an unsafe incoming request id", async () => {
+    const diagnostics: object[] = [];
+    const instrumented = createApp({
+      now: () => at,
+      requestId: () => "req-server",
+      diagnostics: (event: object) => diagnostics.push(event),
+    });
+
+    const res = await instrumented.request("/healthz", {
+      headers: { "x-request-id": "unsafe request id with spaces" },
+    });
+
+    expect(res.headers.get("x-request-id")).toBe("req-server");
+    expect(diagnostics[0]).toMatchObject({ requestId: "req-server" });
+  });
+});
+
 describe("GET /readyz", () => {
   it("reports 503 and db down when no database is configured", async () => {
     const saved = process.env["APP_DATABASE_URL"];

@@ -38,6 +38,11 @@
 import type { ExtractTablesWithRelations } from "drizzle-orm";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
 import type { z } from "zod";
+import {
+  describeLedgerError,
+  emitLedgerDiagnostic,
+  type LedgerDiagnostics,
+} from "./diagnostics.ts";
 import type { AnyLocalExecutor, LocalExecutor, LocalRegistry } from "./executor.ts";
 import { advanceAppliedSeq } from "./migrate.ts";
 import type { Ledger, LedgerSchema } from "./open.ts";
@@ -109,6 +114,9 @@ export type LocalWrite<Input extends z.ZodTypeAny, Row, Tx> = {
   input: unknown;
 
   capture: Capture;
+
+  /** Operational evidence only; it never receives the input or payload. */
+  diagnostics?: LedgerDiagnostics;
 };
 
 export type LocalWriteResult<Row> = {
@@ -141,7 +149,7 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
   ledger: Ledger<TRun, TSchema>,
   write: LocalWrite<Input, Row, LocalTx<TRun, TSchema>>,
 ): LocalWriteResult<Row> {
-  const { executor, registry, capture } = write;
+  const { executor, registry, capture, diagnostics } = write;
 
   // Parsed once, here. What the outbox stores must be what the operation
   // accepted rather than what arrived, and what `apply` receives must be the
@@ -150,49 +158,74 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
   const payload = toPayload(input);
 
   // ─── 1. Intent, alone, in outbox.db ──────────────────────────────────────
-  const enqueued = ledger.outbox.db.transaction((tx) => {
-    // Inside the transaction, so a rollback takes the number with it.
-    const seq = claimSeq(tx);
+  emitLedgerDiagnostic(diagnostics, {
+    scope: "local_write",
+    phase: "start",
+    boundary: "outbox",
+    operation: executor.operation,
+  });
+  let enqueued: { entryId: string; seq: number; deps: string[] };
+  try {
+    enqueued = ledger.outbox.db.transaction((tx) => {
+      // Inside the transaction, so a rollback takes the number with it.
+      const seq = claimSeq(tx);
 
-    // Every row still in the table is unacknowledged by definition — the drain
-    // removes an entry when the server admits it, so there is no `state` filter
-    // to get wrong here. A `blocked` entry counts: it is still unsent, and a
-    // dependent must not overtake it.
-    const queued = tx
-      .select({ id: outbox.id, operation: outbox.operation, payload: outbox.payload })
-      .from(outbox)
-      .all();
+      // Every row still in the table is unacknowledged by definition — the drain
+      // removes an entry when the server admits it, so there is no `state` filter
+      // to get wrong here. A `blocked` entry counts: it is still unsent, and a
+      // dependent must not overtake it.
+      const queued = tx
+        .select({ id: outbox.id, operation: outbox.operation, payload: outbox.payload })
+        .from(outbox)
+        .all();
 
-    const deps = deriveDeps(
-      payload,
-      queued.map((entry) => ({
-        id: entry.id,
-        mintedIds: mintedIdsOf(registry[entry.operation], entry.payload),
-      })),
-    );
-
-    const [row] = tx
-      .insert(outbox)
-      .values({
-        seq,
-        operation: executor.operation,
-        opVersion: executor.opVersion,
+      const deps = deriveDeps(
         payload,
-        deps,
-        capturedTz: capture.timeZone,
-        capturedOffsetMinutes: capture.offsetMinutes,
-        ...(capture.at ? { capturedAt: capture.at } : {}),
-      })
-      .returning({ id: outbox.id })
-      .all();
+        queued.map((entry) => ({
+          id: entry.id,
+          mintedIds: mintedIdsOf(registry[entry.operation], entry.payload),
+        })),
+      );
 
-    if (!row) {
-      // Unreachable with a conforming driver; a throw here rolls the entry back
-      // rather than returning a result whose entry id is a lie.
-      throw new Error("outbox insert returned no row — the write was rolled back");
-    }
+      const [row] = tx
+        .insert(outbox)
+        .values({
+          seq,
+          operation: executor.operation,
+          opVersion: executor.opVersion,
+          payload,
+          deps,
+          capturedTz: capture.timeZone,
+          capturedOffsetMinutes: capture.offsetMinutes,
+          ...(capture.at ? { capturedAt: capture.at } : {}),
+        })
+        .returning({ id: outbox.id })
+        .all();
 
-    return { entryId: row.id, seq, deps };
+      if (!row) {
+        // Unreachable with a conforming driver; a throw here rolls the entry back
+        // rather than returning a result whose entry id is a lie.
+        throw new Error("outbox insert returned no row — the write was rolled back");
+      }
+
+      return { entryId: row.id, seq, deps };
+    });
+  } catch (error) {
+    emitLedgerDiagnostic(diagnostics, {
+      scope: "local_write",
+      phase: "failure",
+      boundary: "outbox",
+      operation: executor.operation,
+      error: describeLedgerError(error),
+    });
+    throw error;
+  }
+  emitLedgerDiagnostic(diagnostics, {
+    scope: "local_write",
+    phase: "success",
+    boundary: "outbox",
+    operation: executor.operation,
+    seq: enqueued.seq,
   });
 
   // ─── 2. Effect, with the watermark, in replica.db ────────────────────────
@@ -202,10 +235,37 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
   // lives in the replica rather than beside the entry: watermark and row are
   // then in one file, so that pair really is atomic even though the cross-file
   // pair is not.
-  const row = ledger.replica.db.transaction((tx) => {
-    const applied = executor.apply(input, tx);
-    advanceAppliedSeq(tx, enqueued.seq);
-    return applied;
+  emitLedgerDiagnostic(diagnostics, {
+    scope: "local_write",
+    phase: "start",
+    boundary: "replica",
+    operation: executor.operation,
+    seq: enqueued.seq,
+  });
+  let row: Row;
+  try {
+    row = ledger.replica.db.transaction((tx) => {
+      const applied = executor.apply(input, tx);
+      advanceAppliedSeq(tx, enqueued.seq);
+      return applied;
+    });
+  } catch (error) {
+    emitLedgerDiagnostic(diagnostics, {
+      scope: "local_write",
+      phase: "failure",
+      boundary: "replica",
+      operation: executor.operation,
+      seq: enqueued.seq,
+      error: describeLedgerError(error),
+    });
+    throw error;
+  }
+  emitLedgerDiagnostic(diagnostics, {
+    scope: "local_write",
+    phase: "success",
+    boundary: "replica",
+    operation: executor.operation,
+    seq: enqueued.seq,
   });
 
   return { row, entryId: enqueued.entryId, seq: enqueued.seq, deps: enqueued.deps };

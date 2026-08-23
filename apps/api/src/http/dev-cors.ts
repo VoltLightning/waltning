@@ -24,7 +24,7 @@
  *    only ever widen the browser's reach, never fix a device.
  */
 
-import { NONCE_HEADER, WALTNING_HEADER } from "@waltning/core/protocol";
+import { NONCE_HEADER, REQUEST_ID_HEADER, WALTNING_HEADER } from "@waltning/core/protocol";
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 
@@ -81,14 +81,15 @@ export function devCors(raw: string | undefined): MiddlewareHandler | null {
   return cors({
     origin: [...origins],
     allowMethods: ["GET", "POST", "OPTIONS"],
-    // `content-type` for tRPC's JSON POSTs; the nonce header so Rule 0's third
-    // check can be sent from the browser once §5.2 issues one.
-    allowHeaders: ["content-type", NONCE_HEADER],
-    // The client must be able to *read* the header it authenticates on.
+    // `content-type` for tRPC's JSON POSTs; the nonce for §5.2; the request id
+    // so the browser and API can name the same edge without a failed preflight.
+    allowHeaders: ["content-type", NONCE_HEADER, REQUEST_ID_HEADER],
+    // The client must be able to *read* the header it authenticates on and the
+    // correlation id it uses to join its log to the API's.
     // Without this, a cross-origin fetch sees no `x-waltning` at all and Rule 0
     // rejects every response as captive — correct behaviour, wrong cause, and
     // it presents as "the server is down" rather than as a missing setting.
-    exposeHeaders: [WALTNING_HEADER],
+    exposeHeaders: [WALTNING_HEADER, REQUEST_ID_HEADER],
     credentials: false,
   });
 }

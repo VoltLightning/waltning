@@ -7,6 +7,7 @@
     "./accounts/*": "./src/accounts/*.ts",
     "./transactions/*": "./src/transactions/*.ts",
     "./ddl": "./src/ddl.ts",
+    "./diagnostics": "./src/diagnostics.ts",
     "./executor": "./src/executor.ts",
     "./migrate": "./src/migrate.ts",
     "./open": "./src/open.ts",

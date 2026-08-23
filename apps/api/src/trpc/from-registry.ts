@@ -31,7 +31,13 @@ function operationContext(ctx: Context): OperationContext {
   if (!ctx.db) {
     throw new Error("no database connection available for this operation");
   }
-  return { db: ctx.db, actor: "user", requestId: ctx.requestId, now: ctx.now };
+  return {
+    db: ctx.db,
+    actor: "user",
+    requestId: ctx.requestId,
+    now: ctx.now,
+    ...(ctx.diagnostics ? { diagnostics: ctx.diagnostics } : {}),
+  };
 }
 
 function makeQuery<Input extends z.ZodTypeAny, Output>(

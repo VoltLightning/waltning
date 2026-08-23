@@ -9,6 +9,7 @@ import {
   createAccountInput,
   createTransactionInput,
 } from "@waltning/core/registry/inputs";
+import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
 
 export type PhoneCapture = {
   date: AccountingDate;
@@ -49,6 +50,7 @@ export type PhoneLedgerPort = {
 export type PhoneLedgerRuntime = {
   capture: () => PhoneCapture;
   id: <Table extends IdTable>() => Id<Table>;
+  diagnostics?: ClientDiagnostics;
 };
 
 export type PhoneLedgerSnapshot = {
@@ -72,19 +74,40 @@ export function createPhoneLedger(
 ): PhoneLedgerController {
   let snapshot: PhoneLedgerSnapshot = { accounts: [], recent: [], total: money.toMoney("0") };
   const listeners = new Set<() => void>();
+  const { diagnostics } = runtime;
 
   const refresh = () => {
-    const accounts = port.listAccounts();
-    const nonUsd = accounts.find((account) => account.currency !== "USD");
-    if (nonUsd) {
-      throw new Error(`phone preview cannot combine non-USD account ${nonUsd.id}`);
+    emitClientDiagnostic(diagnostics, {
+      scope: "client_state",
+      update: "phone_ledger_refresh",
+      phase: "start",
+    });
+    try {
+      const accounts = port.listAccounts();
+      const nonUsd = accounts.find((account) => account.currency !== "USD");
+      if (nonUsd) {
+        throw new Error("phone preview cannot combine non-USD accounts");
+      }
+      snapshot = {
+        accounts,
+        recent: port.listRecent(5),
+        total: money.sum(accounts.map((account) => account.balance)),
+      };
+      for (const listener of listeners) listener();
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_state",
+        update: "phone_ledger_refresh",
+        phase: "success",
+      });
+    } catch (error) {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_state",
+        update: "phone_ledger_refresh",
+        phase: "failure",
+        error: clientFailure(error),
+      });
+      throw error;
     }
-    snapshot = {
-      accounts,
-      recent: port.listRecent(5),
-      total: money.sum(accounts.map((account) => account.balance)),
-    };
-    for (const listener of listeners) listener();
   };
 
   refresh();
@@ -99,41 +122,101 @@ export function createPhoneLedger(
     },
     refresh,
     createAccount: (name) => {
-      const capture = runtime.capture();
-      const input = createAccountInput.parse({
-        id: runtime.id<"accounts">(),
-        name,
-        currency: "USD",
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "create_account",
+        phase: "start",
       });
-      port.createAccount(input, capture);
-      refresh();
-      return input.id;
+      try {
+        const capture = runtime.capture();
+        const input = createAccountInput.parse({
+          id: runtime.id<"accounts">(),
+          name,
+          currency: "USD",
+        });
+        port.createAccount(input, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_account",
+          phase: "success",
+        });
+        return input.id;
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
     },
     createExpense: (amount, accountId) => {
-      const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
-      if (!account) throw new Error("Choose an account before saving");
-
-      const normalized = money.toMoney(amount);
-      if (money.dec(normalized).lte(0)) {
-        throw new Error("Expense amount must be greater than zero");
-      }
-
-      const capture = runtime.capture();
-      const input = createTransactionInput.parse({
-        id: runtime.id<"transactions">(),
-        date: capture.date,
-        type: "expense",
-        accountId,
-        amountOriginal: normalized,
-        currency: account.currency,
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "create_expense",
+        phase: "start",
       });
-      port.createTransaction(input, capture);
-      refresh();
-      return input.id;
+      try {
+        const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
+        if (!account) throw new Error("Choose an account before saving");
+
+        const normalized = money.toMoney(amount);
+        if (money.dec(normalized).lte(0)) {
+          throw new Error("Expense amount must be greater than zero");
+        }
+
+        const capture = runtime.capture();
+        const input = createTransactionInput.parse({
+          id: runtime.id<"transactions">(),
+          date: capture.date,
+          type: "expense",
+          accountId,
+          amountOriginal: normalized,
+          currency: account.currency,
+        });
+        port.createTransaction(input, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_expense",
+          phase: "success",
+        });
+        return input.id;
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_expense",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
     },
     reset: () => {
-      port.reset();
-      refresh();
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "reset_preview",
+        phase: "start",
+      });
+      try {
+        port.reset();
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "reset_preview",
+          phase: "success",
+        });
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "reset_preview",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
     },
   };
 }

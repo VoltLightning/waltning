@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./diagnostics": "./src/diagnostics.ts",
     "./accounts/*": "./src/accounts/*.ts",
     "./appearance/*": "./src/appearance/*.ts",
     "./connectivity/*": "./src/connectivity/*.ts",

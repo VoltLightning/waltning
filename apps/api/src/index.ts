@@ -9,6 +9,8 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
+import { emitApiDiagnostic } from "./common/diagnostics.ts";
+import { apiDiagnostics } from "./common/logger.ts";
 import { BUILD } from "./config/build.ts";
 import { createApp } from "./http/app.ts";
 
@@ -23,5 +25,11 @@ const port = Number(process.env["API_PORT"] ?? 3000);
 const hostname = process.env["BIND_ADDRESS"] ?? "127.0.0.1";
 
 serve({ fetch: createApp().fetch, port, hostname }, (info) => {
-  console.log(`waltning api  build=${BUILD}  http://${hostname}:${info.port}`);
+  emitApiDiagnostic(apiDiagnostics, {
+    scope: "server",
+    phase: "started",
+    build: BUILD,
+    hostname,
+    port: info.port,
+  });
 });

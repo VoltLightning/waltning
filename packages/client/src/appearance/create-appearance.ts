@@ -1,3 +1,5 @@
+import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
+
 export type AppearancePreference = "system" | "light" | "dark";
 
 export type AppearanceStore = {
@@ -21,7 +23,10 @@ function preference(value: string | null): AppearancePreference {
   return value === "light" || value === "dark" ? value : "system";
 }
 
-export function createAppearance(store: AppearanceStore): AppearanceController {
+export function createAppearance(
+  store: AppearanceStore,
+  diagnostics?: ClientDiagnostics,
+): AppearanceController {
   let snapshot: AppearanceSnapshot = { preference: "system", hydrated: false };
   let hydration: Promise<void> | undefined;
   let preferenceGeneration = 0;
@@ -39,6 +44,11 @@ export function createAppearance(store: AppearanceStore): AppearanceController {
     if (hydration) return hydration;
 
     const generationAtRead = preferenceGeneration;
+    emitClientDiagnostic(diagnostics, {
+      scope: "client_state",
+      update: "appearance_hydrate",
+      phase: "start",
+    });
     hydration = store
       .get()
       .then(
@@ -46,11 +56,22 @@ export function createAppearance(store: AppearanceStore): AppearanceController {
           if (generationAtRead === preferenceGeneration) {
             publish({ preference: preference(stored), hydrated: true });
           }
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_state",
+            update: "appearance_hydrate",
+            phase: "success",
+          });
         },
-        () => {
+        (error) => {
           if (generationAtRead === preferenceGeneration) {
             publish({ preference: snapshot.preference, hydrated: true });
           }
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_state",
+            update: "appearance_hydrate",
+            phase: "failure",
+            error: clientFailure(error),
+          });
         },
       )
       .finally(() => {
@@ -67,12 +88,32 @@ export function createAppearance(store: AppearanceStore): AppearanceController {
     },
     hydrate,
     setPreference: async (next) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "change_appearance",
+        phase: "start",
+      });
       const generation = ++preferenceGeneration;
       const saved = writeTail.then(() => store.set(next));
       writeTail = saved.catch(() => undefined);
-      await saved;
-      if (generation === preferenceGeneration) {
-        publish({ preference: next, hydrated: true });
+      try {
+        await saved;
+        if (generation === preferenceGeneration) {
+          publish({ preference: next, hydrated: true });
+        }
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "change_appearance",
+          phase: "success",
+        });
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "change_appearance",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
       }
     },
   };

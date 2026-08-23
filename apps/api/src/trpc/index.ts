@@ -12,6 +12,7 @@
 import { initTRPC, type TRPCError } from "@trpc/server";
 import type { Database } from "@waltning/db/client";
 import { ZodError } from "zod";
+import type { ApiDiagnostics } from "../common/diagnostics.ts";
 import {
   DomainError,
   type ErrorCode,
@@ -25,6 +26,7 @@ export type Context = {
   /** One id per request, in the logs and in the response. */
   requestId: string;
   now: Date;
+  diagnostics: ApiDiagnostics | undefined;
 };
 
 const t = initTRPC.context<Context>().create({

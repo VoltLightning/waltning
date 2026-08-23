@@ -9,6 +9,7 @@ import { createLocalLedgerSession, USD_BOOTSTRAP } from "@waltning/ledger/sessio
 import { drizzle } from "drizzle-orm/expo-sqlite";
 import { Directory, File, Paths } from "expo-file-system";
 import { deleteDatabaseSync, openDatabaseSync, type SQLiteRunResult } from "expo-sqlite";
+import { mobileDiagnostics } from "./diagnostics.ts";
 
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
@@ -45,11 +46,13 @@ const session = createLocalLedgerSession({
   },
   removeDatabase: (path) => deleteDatabaseSync(path, databaseDirectoryPath),
   bootstrapCurrency: USD_BOOTSTRAP,
+  diagnostics: mobileDiagnostics,
 });
 
 export const PHONE_LEDGER_AVAILABLE = true as const;
 
 export const phoneLedger = createPhoneLedger(session, {
+  diagnostics: mobileDiagnostics,
   capture: () => {
     const at = new Date();
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";

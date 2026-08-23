@@ -20,7 +20,7 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineLocalExecutor, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
@@ -262,6 +262,92 @@ describe("a failure between the two commits keeps the intent", () => {
     expect(rows()).toHaveLength(0);
     // The watermark did not move, which is what tells the next launch to replay.
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+  });
+
+  it("reports which commit boundary failed with the complete cause chain", () => {
+    const diagnostics: object[] = [];
+    const databaseError = Object.assign(new Error("database is busy"), { code: "SQLITE_BUSY" });
+    const failure = new Error("the replica half failed", { cause: databaseError });
+    const failsWithCause = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+      operation: "fails_with_cause",
+      opVersion: 1,
+      input: CREATE_TRANSACTION,
+      mints: () => [],
+      apply: () => {
+        throw failure;
+      },
+    });
+    const diagnosticRegistry = localRegistry([createTransaction, failsWithCause]);
+
+    expect(() =>
+      writeLocally(s.ledger, {
+        executor: failsWithCause,
+        registry: diagnosticRegistry,
+        input: input("txn-1"),
+        capture,
+        diagnostics: (event: object) => diagnostics.push(event),
+      }),
+    ).toThrow("the replica half failed");
+
+    expect(diagnostics).toEqual([
+      {
+        scope: "local_write",
+        phase: "start",
+        boundary: "outbox",
+        operation: "fails_with_cause",
+      },
+      {
+        scope: "local_write",
+        phase: "success",
+        boundary: "outbox",
+        operation: "fails_with_cause",
+        seq: 1,
+      },
+      {
+        scope: "local_write",
+        phase: "start",
+        boundary: "replica",
+        operation: "fails_with_cause",
+        seq: 1,
+      },
+      {
+        scope: "local_write",
+        phase: "failure",
+        boundary: "replica",
+        operation: "fails_with_cause",
+        seq: 1,
+        error: {
+          name: "Error",
+          message: "the replica half failed",
+          stack: expect.any(String),
+          cause: {
+            name: "Error",
+            message: "database is busy",
+            code: "SQLITE_BUSY",
+            stack: expect.any(String),
+          },
+        },
+      },
+    ]);
+  });
+
+  it("does not let a diagnostic sink break a successful write", () => {
+    const brokenSink = vi.fn(() => {
+      throw new Error("console transport failed");
+    });
+
+    const result = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-1"),
+      capture,
+      diagnostics: brokenSink,
+    });
+
+    expect(result.row.id).toBe("txn-1");
+    expect(entries()).toHaveLength(1);
+    expect(rows()).toHaveLength(1);
+    expect(brokenSink).toHaveBeenCalled();
   });
 });
 
