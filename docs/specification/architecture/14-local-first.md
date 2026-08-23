@@ -174,11 +174,11 @@ Alignment work, so no surface still describes the collapsed design:
 ## 14.5 What held, and stays
 
 The outbox and idempotency model, the F/R/S discipline (now simpler — the phone
-holds enough to compute more locally), server-side rate stamping, T1 as a role
-grant on the server, passkeys as the perimeter, and "no forwarded port in any
-mode." The reframe is a *correction of scope*, not a new architecture: it
-enlarges the replica, separates complete from authoritative, and deletes the
-mechanisms that only made sense for a cache.
+holds enough to compute more locally), caller-free reference-rate resolution,
+T1 as a role grant on the server, passkeys as the perimeter, and "no forwarded
+port in any mode." The reframe is a *correction of scope*, not a new
+architecture: it enlarges the replica, separates complete from authoritative,
+and deletes the mechanisms that only made sense for a cache.
 
 ---
 
@@ -191,6 +191,15 @@ materialisation is provisional.**
   nothing else that writes.
 - **Once a backend exists** — provisional until the server admits the write,
   then reconciled to the row the server returns.
+
+**The capture caller does not stamp a reference rate.** SQLite still requires a
+non-null `fx_rate`, so the local executor resolves the materialisation: exactly
+`1` in the pivot currency, or the replica's last-known rate for another
+currency. The outbox entry makes that value visibly provisional once a backend
+exists; admission replaces the whole row with the date-correct canonical rate.
+With no backend the local value is final because there is no second authority.
+An explicitly asserted rate — what the bank actually applied — remains part of
+the input because no later resolver has better evidence.
 
 One code path, one flag. This is not a retreat from §14.0: the phone is still
 not authoritative, because the server still admits every write and may refuse
