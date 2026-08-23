@@ -64,10 +64,10 @@ describe("phone-alone preview presentation", () => {
     expect(newAccount).toContain("router.dismissTo(");
   });
 
-  it("adapts Expo SQLite's raw database path to an absolute file URI", () => {
-    expect(phoneLedger).toMatch(
-      /const databaseDirectoryUri = `file:\/\/\$\{defaultDatabaseDirectory\}`;/u,
-    );
-    expect(phoneLedger).not.toContain("new File(defaultDatabaseDirectory, path)");
+  it("keeps SQLite and its safety copies in Expo's project-scoped documents", () => {
+    expect(phoneLedger).toContain('new Directory(Paths.document, "SQLite")');
+    expect(phoneLedger).toContain("openDatabaseSync(filename, undefined, databaseDirectoryPath)");
+    expect(phoneLedger).toContain("deleteDatabaseSync(path, databaseDirectoryPath)");
+    expect(phoneLedger).not.toContain("defaultDatabaseDirectory");
   });
 });
