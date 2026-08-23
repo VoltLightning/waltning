@@ -10,7 +10,7 @@ dashboard.
 Run from the repository root:
 
 ```bash
-pnpm --filter @waltning/mobile dev -- --clear
+pnpm --filter @waltning/mobile dev --clear
 ```
 
 Open the project in Expo Go on either the Android phone or iPhone. Development

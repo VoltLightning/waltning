@@ -19,7 +19,7 @@ import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core
 import Database from "better-sqlite3";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   advanceAppliedSeq,
   COPY_SUFFIX,
@@ -418,6 +418,30 @@ describe("the replica is not dropped when there is nowhere to refetch from", () 
 /* ── the pre-migration copy ──────────────────────────────────────────────── */
 
 describe("the pre-migration copy", () => {
+  it("fully consumes result-bearing pragmas before copying under Expo SQLite", () => {
+    const ledger = openAt("expo-pragmas");
+    migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
+
+    const get = vi.spyOn(ledger.outbox.db, "get").mockImplementation(() => {
+      throw new Error("Expo SQLite would leave the first result row active");
+    });
+    const run = vi.spyOn(ledger.outbox.db, "run").mockImplementation(() => {
+      throw new Error("Expo SQLite would leave the checkpoint result row active");
+    });
+    const all = vi.spyOn(ledger.outbox.db, "all");
+
+    const result = migrateOutbox(ledger.outbox, {
+      fs: realFs,
+      migrations: chainOfTwo(OUTBOX_MIGRATIONS, "creates"),
+    });
+
+    expect(get).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+    expect(all).toHaveBeenCalledTimes(2);
+    result.copy?.release();
+    ledger.close();
+  });
+
   /**
    * §14.6: *"a transaction alone covers an error; it does not cover a crash, a
    * kill, or a corrupt write."* So the copy has to be taken **before** the
