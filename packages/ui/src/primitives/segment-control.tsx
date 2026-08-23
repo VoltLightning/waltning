@@ -14,9 +14,10 @@
  * together regardless of what is selected here.
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type Segment = {
@@ -34,43 +35,52 @@ export type SegmentControlProps = {
 };
 
 export function SegmentControl({ segments, value, onChange }: SegmentControlProps) {
-  const [focusedValue, setFocusedValue] = useState<string | null>(null);
-
   const styles = useStyles();
 
   return (
     <View accessibilityRole="tablist" style={styles.track}>
-      {segments.map((segment) => {
-        const active = segment.value === value;
-        return (
-          <Pressable
-            key={segment.value}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={
-              segment.count === undefined
-                ? segment.label
-                : `${segment.label}, ${segment.count} items`
-            }
-            onPress={() => onChange(segment.value)}
-            onFocus={() => setFocusedValue(segment.value)}
-            onBlur={() => setFocusedValue(null)}
-            style={[
-              styles.segment,
-              active ? styles.active : null,
-              focusedValue === segment.value ? styles.focused : null,
-            ]}
-          >
-            <Text style={[styles.label, active ? styles.labelActive : null]}>{segment.label}</Text>
-            {segment.count === undefined ? null : (
-              <Text style={[styles.count, active ? styles.countActive : null]}>
-                {segment.count}
-              </Text>
-            )}
-          </Pressable>
-        );
-      })}
+      {segments.map((segment) => (
+        <SegmentOption
+          key={segment.value}
+          segment={segment}
+          active={segment.value === value}
+          onChange={onChange}
+        />
+      ))}
     </View>
+  );
+}
+
+type SegmentOptionProps = {
+  segment: Segment;
+  active: boolean;
+  onChange: (value: string) => void;
+};
+
+function SegmentOption({ segment, active, onChange }: SegmentOptionProps) {
+  const [focused, setFocused] = useState(false);
+  const styles = useStyles();
+  const handlePress = useCallback(() => onChange(segment.value), [onChange, segment.value]);
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
+
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={
+        segment.count === undefined ? segment.label : `${segment.label}, ${segment.count} items`
+      }
+      onPress={handlePress}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      style={[styles.segment, active ? styles.active : null, focused ? styles.focused : null]}
+    >
+      <Text style={[styles.label, active ? styles.labelActive : null]}>{segment.label}</Text>
+      {segment.count === undefined ? null : (
+        <Text style={[styles.count, active ? styles.countActive : null]}>{segment.count}</Text>
+      )}
+    </Pressable>
   );
 }
 

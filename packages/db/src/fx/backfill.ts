@@ -12,7 +12,8 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { accountingDate, money } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import * as money from "@waltning/core/money";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { currencies, fxRates } from "../schema.ts";

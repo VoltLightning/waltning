@@ -6,7 +6,8 @@
  * UI reach identical behaviour through the registry.
  */
 
-import { currencies, type DbHandle } from "@waltning/db";
+import type { DbHandle } from "@waltning/db/client";
+import { currencies } from "@waltning/db/schema";
 import { asc, eq } from "drizzle-orm";
 
 export type CurrencySummary = {

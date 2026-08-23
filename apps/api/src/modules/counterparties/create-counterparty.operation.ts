@@ -10,7 +10,7 @@
  * and expensive to merge.
  */
 
-import { zCurrencyCode } from "@waltning/core";
+import { zCurrencyCode } from "@waltning/core/zod";
 import { z } from "zod";
 import type { OperationContext } from "../../registry/context.ts";
 import { defineOperation } from "../../registry/define.ts";

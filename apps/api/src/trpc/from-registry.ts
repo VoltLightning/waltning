@@ -12,7 +12,7 @@
  * directly and never travels this path.
  */
 
-import type { AnyOperation, Operation, Registry } from "@waltning/core";
+import type { AnyOperation, Operation, Registry } from "@waltning/core/registry/operation";
 import type { z } from "zod";
 import type { OperationContext } from "../registry/context.ts";
 import type { Context } from "./index.ts";

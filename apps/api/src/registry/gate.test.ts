@@ -11,7 +11,11 @@
  * they will be thinking about categories. The check is what remembers the rest.
  */
 
-import { gateDecision, sensitiveFieldsWritten, TAX_SENSITIVE_FIELDS } from "@waltning/core";
+import {
+  gateDecision,
+  sensitiveFieldsWritten,
+  TAX_SENSITIVE_FIELDS,
+} from "@waltning/core/registry/gate";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { registry } from "./index.ts";

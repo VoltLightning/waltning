@@ -167,10 +167,18 @@ describe("`makeStyles` builds once per theme", () => {
       return null;
     }
 
+    function captureFirst(styles: unknown) {
+      first = styles;
+    }
+
+    function captureSecond(styles: unknown) {
+      second = styles;
+    }
+
     render(
       <ThemeProvider theme={light}>
-        <Probe into={(s) => (first = s)} />
-        <Probe into={(s) => (second = s)} />
+        <Probe into={captureFirst} />
+        <Probe into={captureSecond} />
       </ThemeProvider>,
     );
 
@@ -179,7 +187,7 @@ describe("`makeStyles` builds once per theme", () => {
 
     render(
       <ThemeProvider theme={dark}>
-        <Probe into={(s) => (second = s)} />
+        <Probe into={captureSecond} />
       </ThemeProvider>,
     );
 

@@ -1,4 +1,4 @@
-import { money } from "@waltning/core";
+import * as money from "@waltning/core/money";
 import { accountGroups } from "./account-groups.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
 import { ACCOUNT_KIND, OWNERSHIP } from "./enums.ts";

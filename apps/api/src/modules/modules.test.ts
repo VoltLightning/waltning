@@ -11,8 +11,8 @@
  * than a unit test with a mocked database.
  */
 
-import { currencyCode } from "@waltning/core";
-import { auditLog, currencies } from "@waltning/db";
+import { currencyCode } from "@waltning/core/money";
+import { auditLog, currencies } from "@waltning/db/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "../../../../packages/db/src/test/scratch.ts";
 import type { OperationContext } from "../registry/context.ts";

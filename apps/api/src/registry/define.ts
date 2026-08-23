@@ -22,15 +22,14 @@
  * no receipt, which replay silently twice.
  */
 
+import type { JsonValue } from "@waltning/core/json";
+import { type GateFields, gateDecision } from "@waltning/core/registry/gate";
 import {
   defineOperation as defineCoreOperation,
-  type GateFields,
-  gateDecision,
-  type JsonValue,
   type Operation,
   type OperationKind,
-} from "@waltning/core";
-import { auditLog } from "@waltning/db";
+} from "@waltning/core/registry/operation";
+import { auditLog } from "@waltning/db/schema";
 import type { z } from "zod";
 import { DomainError } from "../common/errors.ts";
 import { toDomainError } from "../common/pg-errors.ts";

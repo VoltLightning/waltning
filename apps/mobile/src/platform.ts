@@ -12,12 +12,11 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  isStaleBundle as compareBuilds,
-  createApiClient,
-  resolveApiBaseUrl,
-} from "@waltning/client";
-import { createAppearance, previewResetEnabled } from "@waltning/client/appearance";
+import { createAppearance } from "@waltning/client/appearance/create-appearance";
+import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
+import { resolveApiBaseUrl } from "@waltning/client/transport/base-url";
+import { isStaleBundle as compareBuilds } from "@waltning/client/transport/build";
+import { createApiClient } from "@waltning/client/transport/client";
 import { Platform } from "react-native";
 
 const APPEARANCE_KEY = "waltning.appearance";

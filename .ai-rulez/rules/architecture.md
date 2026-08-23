@@ -79,16 +79,25 @@ its place because a `Button` means the same thing in a ledger or a chat client;
 `<Amount>`, so money is this product's cross-cutting vocabulary. The direction is
 one-way and tested: a domain may import the foundation, never the reverse.
 
-Only `index.ts` is public and **no module or feature imports another** — compose
-at the registry (api) or in `app/` routes. Atomic tiers are a scale *inside* a
-UI module, never three global folders. A component moves to `packages/ui` when
-the design system names it, not when it looks generic.
+Only concrete subpaths declared in a package's `exports` map are public. Each
+subpath resolves directly to the module that owns its values; **barrels are
+forbidden**, including package roots. No module or feature imports another —
+compose at the registry (api) or in `app/` routes. Atomic tiers are a scale
+*inside* a UI module, never three global folders. A component moves to
+`packages/ui` when the design system names it, not when it looks generic.
 
-**Every hook has its own file. No hooks in barrels, none in route files.** A
-hook in a route is invisible to the test runner and closes over a singleton
-instead of taking a client — both properties of where it was written. A hook
-takes its dependencies as parameters: `useAccounts(api)` is testable,
-`useAccounts()` is not.
+**Every hook has its own file; none live in route files.** A hook in a route is
+invisible to the test runner and closes over a singleton instead of taking a
+client — both properties of where it was written. A hook takes its dependencies
+as parameters: `useAccounts(api)` is testable, `useAccounts()` is not.
+
+**JSX props take named function references.** Never create an arrow function,
+function expression, or `.bind()` call inside JSX. Ordinary arrows outside JSX
+remain legal.
+
+Biome refuses value re-exports and inline JSX functions. The repository-wide
+architecture test also refuses type-only re-exports, which Biome deliberately
+allows.
 
 **A feature is a vertical slice, built in this order — hard requirement:**
 schema + migration → registry operation (Zod input, `offlineEligible`, gate) →

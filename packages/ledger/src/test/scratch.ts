@@ -29,7 +29,7 @@ import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { OUTBOX_MIGRATIONS, REPLICA_MIGRATIONS } from "../migrate.ts";
-import * as schema from "../schema.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
 
 export type Scratch = ReturnType<typeof scratchLedger>;
 
@@ -55,7 +55,7 @@ export function scratchLedger() {
   for (const migration of [...REPLICA_MIGRATIONS, ...OUTBOX_MIGRATIONS]) migration.up(db);
 
   // Non-vacuous: a chain that stopped emitting tables — an empty `ddl.ts`, a
-  // barrel that lost its exports — would otherwise give every test an empty
+  // schema map that lost its entries — would otherwise give every test an empty
   // database and a green suite.
   const created = db.all<{ n: number }>(
     sql.raw(

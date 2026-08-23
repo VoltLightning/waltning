@@ -4,14 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
     "./tokens": "./src/tokens.ts",
-    "./primitives": "./src/primitives/index.ts",
-    "./fx": "./src/fx/index.ts",
-    "./transactions": "./src/transactions/index.ts",
-    "./accounts": "./src/accounts/index.ts",
-    "./shell": "./src/shell/index.ts",
-    "./review": "./src/review/index.ts"
+    "./accounts/*": "./src/accounts/*.tsx",
+    "./fx/*": "./src/fx/*.tsx",
+    "./primitives/*": "./src/primitives/*.tsx",
+    "./review/*": "./src/review/*.tsx",
+    "./shell/*": "./src/shell/*.tsx",
+    "./states/*": "./src/states/*.tsx",
+    "./theme/fonts": "./src/theme/fonts.ts",
+    "./theme/provider": "./src/theme/provider.tsx",
+    "./theme/roles": "./src/theme/roles.ts",
+    "./theme/styles": "./src/theme/styles.ts",
+    "./transactions/*": "./src/transactions/*.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

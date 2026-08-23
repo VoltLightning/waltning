@@ -15,12 +15,12 @@
  * — a capture that is not visible until a server says so.
  */
 
-import type { CreateAccountInput } from "@waltning/core";
-import { createAccountInput } from "@waltning/core";
+import { type CreateAccountInput, createAccountInput } from "@waltning/core/registry/inputs";
 import { defineLocalExecutor } from "../executor.ts";
-import type * as schema from "../schema.ts";
-import { accounts } from "../schema.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
+
+const { accounts } = schema;
 
 /**
  * The row as the replica holds it — every column, not a projection.

@@ -24,7 +24,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrateOutbox, migrateReplica } from "../migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "../open.ts";
-import * as schema from "../schema.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
 
 type Schema = typeof schema;
 type Run = Database.RunResult;

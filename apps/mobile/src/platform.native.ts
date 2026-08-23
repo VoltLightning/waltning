@@ -1,7 +1,8 @@
 /** Native-only platform wiring for the phone-alone preview. */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createAppearance, previewResetEnabled } from "@waltning/client/appearance";
+import { createAppearance } from "@waltning/client/appearance/create-appearance";
+import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 
 const APPEARANCE_KEY = "waltning.appearance";
 

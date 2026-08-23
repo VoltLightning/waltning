@@ -15,11 +15,11 @@
  * implementation, and the two disagree on `adjustment`, which carries its own.
  */
 
-import type { money } from "@waltning/core";
+import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { Tag } from "../primitives/tag";
-import { makeStyles } from "../theme/index.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { hairline, space, tabularNums, type } from "../tokens.ts";
 
 export type TransactionRowProps = {

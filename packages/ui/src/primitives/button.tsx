@@ -18,9 +18,10 @@
  * destructive one.
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -58,6 +59,22 @@ export function Button({
   const [focused, setFocused] = useState(false);
   const styles = useStyles();
   const ink = styles[INK_STYLE[variant]];
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
+  const pressableStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      styles.base,
+      { height: HEIGHT[size] },
+      styles[VARIANT_STYLE[variant]],
+      pressed ? styles.pressed : null,
+      // §2.6: on **every** interactive element, never removed and never
+      // replaced by a colour change alone — a colour-only focus state is
+      // invisible to exactly the people it exists for.
+      focused ? styles.focused : null,
+      inactive ? styles.inactive : null,
+    ],
+    [focused, inactive, size, styles, variant],
+  );
 
   return (
     <Pressable
@@ -66,19 +83,9 @@ export function Button({
       accessibilityState={{ disabled: inactive, busy: loading }}
       disabled={inactive}
       onPress={onPress}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={({ pressed }) => [
-        styles.base,
-        { height: HEIGHT[size] },
-        styles[VARIANT_STYLE[variant]],
-        pressed ? styles.pressed : null,
-        // §2.6: on **every** interactive element, never removed and never
-        // replaced by a colour change alone — a colour-only focus state is
-        // invisible to exactly the people it exists for.
-        focused ? styles.focused : null,
-        inactive ? styles.inactive : null,
-      ]}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      style={pressableStyle}
     >
       {/*
         Both are always mounted; only visibility changes. Swapping the label out

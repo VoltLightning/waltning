@@ -15,7 +15,10 @@
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { accountingDate, currencyCode, type Id, id, money } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import { type Id, id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import Database from "better-sqlite3";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -32,10 +35,26 @@ import {
   readAppliedSeq,
 } from "../migrate.ts";
 import { openLedger } from "../open.ts";
-import * as outboxSchema from "../schema.outbox.ts";
-import * as replicaSchema from "../schema.replica.ts";
-import * as schema from "../schema.ts";
-import { accounts, currencies, outbox, transactions } from "../schema.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
+
+const { accounts, currencies, outbox, transactions } = schema;
+const outboxSchema = { outbox: schema.outbox, outboxSeq: schema.outboxSeq };
+const replicaSchema = {
+  accountGroups: schema.accountGroups,
+  accounts: schema.accounts,
+  categories: schema.categories,
+  counterparties: schema.counterparties,
+  currencies: schema.currencies,
+  dashboardLayouts: schema.dashboardLayouts,
+  dashboardWidgets: schema.dashboardWidgets,
+  fxRates: schema.fxRates,
+  localMeta: schema.localMeta,
+  recurringTransactions: schema.recurringTransactions,
+  tags: schema.tags,
+  transactionLines: schema.transactionLines,
+  transactions: schema.transactions,
+  transactionTags: schema.transactionTags,
+};
 
 /* ── the harness ─────────────────────────────────────────────────────────── */
 

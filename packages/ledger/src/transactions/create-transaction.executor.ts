@@ -14,13 +14,18 @@
  * `provisionalFxRate` below, which is where that is resolved and argued.
  */
 
-import type { CreateTransactionInput, CurrencyCode, PivotPerUnit } from "@waltning/core";
-import { createTransactionInput, money } from "@waltning/core";
+import type { CurrencyCode, PivotPerUnit } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
+import {
+  type CreateTransactionInput,
+  createTransactionInput,
+} from "@waltning/core/registry/inputs";
 import { and, desc, eq } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
-import type * as schema from "../schema.ts";
-import { currencies, fxRates, transactions } from "../schema.ts";
+import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
+
+const { currencies, fxRates, transactions } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalTransactionRow = typeof transactions.$inferSelect;

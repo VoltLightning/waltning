@@ -18,10 +18,67 @@
 
 // Type-only: this file must not pull either dialect's runtime onto anything's
 // import graph, least of all both at once.
-import { type Id, money } from "@waltning/core";
-import type * as pg from "./pg.ts";
+import type { Id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import type { accountGroups as pgAccountGroups } from "./account-groups.pg.ts";
+import type { accountGroups as sqliteAccountGroups } from "./account-groups.sqlite.ts";
+import type { accounts as pgAccounts } from "./accounts.pg.ts";
+import type { accounts as sqliteAccounts } from "./accounts.sqlite.ts";
+import type { categories as pgCategories } from "./categories.pg.ts";
+import type { categories as sqliteCategories } from "./categories.sqlite.ts";
+import type { counterparties as pgCounterparties } from "./counterparties.pg.ts";
+import type { counterparties as sqliteCounterparties } from "./counterparties.sqlite.ts";
+import type { currencies as pgCurrencies } from "./currencies.pg.ts";
+import type { currencies as sqliteCurrencies } from "./currencies.sqlite.ts";
+import type { dashboardLayouts as pgDashboardLayouts } from "./dashboard-layouts.pg.ts";
+import type { dashboardLayouts as sqliteDashboardLayouts } from "./dashboard-layouts.sqlite.ts";
+import type { dashboardWidgets as pgDashboardWidgets } from "./dashboard-widgets.pg.ts";
+import type { dashboardWidgets as sqliteDashboardWidgets } from "./dashboard-widgets.sqlite.ts";
+import type { fxRates as pgFxRates } from "./fx-rates.pg.ts";
+import type { fxRates as sqliteFxRates } from "./fx-rates.sqlite.ts";
+import type { recurringTransactions as pgRecurringTransactions } from "./recurring-transactions.pg.ts";
+import type { recurringTransactions as sqliteRecurringTransactions } from "./recurring-transactions.sqlite.ts";
 import type { SharedTable } from "./shared.ts";
-import type * as sqlite from "./sqlite.ts";
+import type { tags as pgTags } from "./tags.pg.ts";
+import type { tags as sqliteTags } from "./tags.sqlite.ts";
+import type { transactionLines as pgTransactionLines } from "./transaction-lines.pg.ts";
+import type { transactionLines as sqliteTransactionLines } from "./transaction-lines.sqlite.ts";
+import type { transactionTags as pgTransactionTags } from "./transaction-tags.pg.ts";
+import type { transactionTags as sqliteTransactionTags } from "./transaction-tags.sqlite.ts";
+import type { transactions as pgTransactions } from "./transactions.pg.ts";
+import type { transactions as sqliteTransactions } from "./transactions.sqlite.ts";
+
+type Pg = {
+  accountGroups: typeof pgAccountGroups;
+  accounts: typeof pgAccounts;
+  categories: typeof pgCategories;
+  counterparties: typeof pgCounterparties;
+  currencies: typeof pgCurrencies;
+  dashboardLayouts: typeof pgDashboardLayouts;
+  dashboardWidgets: typeof pgDashboardWidgets;
+  fxRates: typeof pgFxRates;
+  recurringTransactions: typeof pgRecurringTransactions;
+  tags: typeof pgTags;
+  transactionLines: typeof pgTransactionLines;
+  transactions: typeof pgTransactions;
+  transactionTags: typeof pgTransactionTags;
+};
+
+type Sqlite = {
+  accountGroups: typeof sqliteAccountGroups;
+  accounts: typeof sqliteAccounts;
+  categories: typeof sqliteCategories;
+  counterparties: typeof sqliteCounterparties;
+  currencies: typeof sqliteCurrencies;
+  dashboardLayouts: typeof sqliteDashboardLayouts;
+  dashboardWidgets: typeof sqliteDashboardWidgets;
+  fxRates: typeof sqliteFxRates;
+  recurringTransactions: typeof sqliteRecurringTransactions;
+  tags: typeof sqliteTags;
+  transactionLines: typeof sqliteTransactionLines;
+  transactions: typeof sqliteTransactions;
+  transactionTags: typeof sqliteTransactionTags;
+};
 
 /**
  * Invariant under assignability in both directions, so `{a: string}` and
@@ -35,14 +92,14 @@ type Exact<A, B> =
 type Selects<S> = { [K in keyof S]: S[K] extends { $inferSelect: infer R } ? R : never };
 type Inserts<S> = { [K in keyof S]: S[K] extends { $inferInsert: infer R } ? R : never };
 
-export const readsMatch: Exact<Selects<typeof pg>, Selects<typeof sqlite>> = true;
-export const writesMatch: Exact<Inserts<typeof pg>, Inserts<typeof sqlite>> = true;
+export const readsMatch: Exact<Selects<Pg>, Selects<Sqlite>> = true;
+export const writesMatch: Exact<Inserts<Pg>, Inserts<Sqlite>> = true;
 export const pgTransactionAccountIsAccountId: Exact<
-  Selects<typeof pg>["transactions"]["accountId"],
+  Selects<Pg>["transactions"]["accountId"],
   Id<"accounts">
 > = true;
 export const sqliteTransactionAccountIsAccountId: Exact<
-  Selects<typeof sqlite>["transactions"]["accountId"],
+  Selects<Sqlite>["transactions"]["accountId"],
   Id<"accounts">
 > = true;
 
@@ -57,11 +114,11 @@ export const sqliteTransactionAccountIsAccountId: Exact<
  * the two assertions above are satisfied by two modules that agree on the
  * tables they happen to share while each quietly omitting a different one.
  */
-export const pgCoversTheSet: Exact<keyof typeof pg, SharedTable> = true;
-export const sqliteCoversTheSet: Exact<keyof typeof sqlite, SharedTable> = true;
+export const pgCoversTheSet: Exact<keyof Pg, SharedTable> = true;
+export const sqliteCoversTheSet: Exact<keyof Sqlite, SharedTable> = true;
 
 export const notVacuous: [
-  Selects<typeof pg>["transactions"]["amountOriginal"],
-  Selects<typeof sqlite>["transactions"]["amountOriginal"],
-  Selects<typeof pg>["currencies"]["isPivot"],
+  Selects<Pg>["transactions"]["amountOriginal"],
+  Selects<Sqlite>["transactions"]["amountOriginal"],
+  Selects<Pg>["currencies"]["isPivot"],
 ] = [money.toMoney("12.34"), money.toMoney("12.34"), true];

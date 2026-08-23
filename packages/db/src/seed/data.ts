@@ -1,4 +1,4 @@
-import { type CurrencyCode, currencyCode } from "@waltning/core";
+import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 /**
  * Seed data — currencies and the category taxonomy from TAXONOMY.md.
  *

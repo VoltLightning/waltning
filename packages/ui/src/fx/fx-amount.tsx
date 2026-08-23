@@ -23,10 +23,11 @@
  * distinguishable to someone who cannot tell the two ambers apart (P5).
  */
 
-import { money } from "@waltning/core";
+import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Tag } from "../primitives/tag";
-import { face, makeStyles } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { tabularNums, type } from "../tokens.ts";
 import { Amount } from "./amount";
 

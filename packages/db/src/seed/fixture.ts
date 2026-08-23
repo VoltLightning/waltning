@@ -22,15 +22,10 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import {
-  type AccountingDate,
-  accountingDate,
-  type CurrencyCode,
-  currencyCode,
-  type Id,
-  money,
-  todayIn,
-} from "@waltning/core";
+import { type AccountingDate, accountingDate, todayIn } from "@waltning/core/date";
+import type { Id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
+import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 import { eq, isNotNull, like, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { accounts, categories, transactions } from "../schema.ts";

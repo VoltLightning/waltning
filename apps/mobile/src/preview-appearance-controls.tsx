@@ -1,6 +1,10 @@
-import type { AppearancePreference } from "@waltning/client/appearance";
-import { BottomSheet, Button, Card, SegmentControl, tokens } from "@waltning/ui";
-import { useState } from "react";
+import type { AppearancePreference } from "@waltning/client/appearance/create-appearance";
+import { Button } from "@waltning/ui/primitives/button";
+import { SegmentControl } from "@waltning/ui/primitives/segment-control";
+import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
+import { Card } from "@waltning/ui/shell/card";
+import * as tokens from "@waltning/ui/tokens";
+import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 const APPEARANCE_CHOICES = [
@@ -28,46 +32,46 @@ export function PreviewAppearanceControls({
 }: PreviewAppearanceControlsProps) {
   const [sheet, setSheet] = useState<"closed" | "appearance" | "reset">("closed");
   const [appearanceError, setAppearanceError] = useState(false);
+  const showAppearance = useCallback(() => setSheet("appearance"), []);
+  const dismiss = useCallback(() => setSheet("closed"), []);
+  const showReset = useCallback(() => setSheet("reset"), []);
+  const reset = useCallback(() => {
+    onReset();
+    setSheet("closed");
+  }, [onReset]);
+  const changePreference = useCallback(
+    (next: string) => {
+      if (!isAppearancePreference(next)) return;
+      setAppearanceError(false);
+      void onPreference(next).catch(() => setAppearanceError(true));
+    },
+    [onPreference],
+  );
 
   return (
     <>
-      <Button label="Appearance" onPress={() => setSheet("appearance")} variant="primary" />
+      <Button label="Appearance" onPress={showAppearance} variant="primary" />
       <BottomSheet
         visible={sheet !== "closed"}
         title={sheet === "reset" ? "Delete preview data" : "Appearance"}
-        onDismiss={() => setSheet("closed")}
+        onDismiss={dismiss}
       >
         {sheet === "reset" ? (
           <View style={styles.content}>
             <Card title="Delete every account and transaction from this phone?">{null}</Card>
-            <Button label="Cancel" onPress={() => setSheet("appearance")} variant="ghost" />
-            <Button
-              label="Delete preview data"
-              onPress={() => {
-                onReset();
-                setSheet("closed");
-              }}
-              variant="danger"
-            />
+            <Button label="Cancel" onPress={showAppearance} variant="ghost" />
+            <Button label="Delete preview data" onPress={reset} variant="danger" />
           </View>
         ) : (
           <View style={styles.content}>
             <SegmentControl
               segments={APPEARANCE_CHOICES}
               value={preference}
-              onChange={(next) => {
-                if (!isAppearancePreference(next)) return;
-                setAppearanceError(false);
-                void onPreference(next).catch(() => setAppearanceError(true));
-              }}
+              onChange={changePreference}
             />
             {appearanceError ? <Card title="Appearance could not be saved.">{null}</Card> : null}
             {resetEnabled ? (
-              <Button
-                label="Reset preview data"
-                onPress={() => setSheet("reset")}
-                variant="danger"
-              />
+              <Button label="Reset preview data" onPress={showReset} variant="danger" />
             ) : null}
           </View>
         )}

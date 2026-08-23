@@ -78,6 +78,30 @@ const isTest = (f: string) => /\.(test|type-test)\.tsx?$/.test(f);
 /** `expo-env.d.ts` and friends are generated ambient types, not authored code. */
 const isAmbient = (f: string) => f.endsWith(".d.ts");
 
+/* ── Public modules ─────────────────────────────────────────────────────── */
+
+describe("public modules resolve directly to their owners", () => {
+  it("contains no value or type re-exports", () => {
+    const roots = ["apps", "packages", "tools", "tests"].map((root) => join(repoRoot, root));
+    const files = roots.flatMap((root) => sourceFiles(root)).filter((file) => !isAmbient(file));
+    const reExport = /\bexport\s+(?:type\s+)?(?:\*\s+as\s+\w+|\*|\{[^}]*\})\s+from\s+["']/g;
+    const offenders: string[] = [];
+
+    for (const file of files) {
+      const code = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      if (reExport.test(code)) offenders.push(rel(file));
+      reExport.lastIndex = 0;
+    }
+
+    expect(offenders, "import from the concrete owner instead of forwarding its exports").toEqual(
+      [],
+    );
+    expect(files.length, "authored TypeScript files found").toBeGreaterThan(200);
+  });
+});
+
 /* ── §2 · The floor ──────────────────────────────────────────────────────── */
 
 describe("packages/client is React, never React Native", () => {
@@ -253,7 +277,7 @@ describe("apps hold only what names a platform", () => {
     expect(routeFiles.length, "route files found").toBeGreaterThan(2);
     expect(
       offenders,
-      "move platform variants outside app/ and re-export them from one universal route",
+      "move platform variants outside app/ and import them from one universal route",
     ).toEqual([]);
   });
 });

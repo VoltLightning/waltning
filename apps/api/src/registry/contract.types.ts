@@ -21,8 +21,9 @@
  */
 
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import type { AnyOperation, money } from "@waltning/core";
-import type { CurrencySummary } from "../modules/currencies/index.ts";
+import type * as money from "@waltning/core/money";
+import type { AnyOperation } from "@waltning/core/registry/operation";
+import type { CurrencySummary } from "../modules/currencies/currencies.service.ts";
 import type { AppRouter } from "../trpc/router.ts";
 import type { OperationContext } from "./context.ts";
 

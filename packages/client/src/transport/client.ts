@@ -20,8 +20,8 @@
  */
 
 import { createTRPCClient, httpLink } from "@trpc/client";
-import type { AppRouter } from "@waltning/api/router-type";
-import { type RuleZeroOptions, ruleZeroFetch } from "@waltning/core";
+import type { AppRouter } from "@waltning/api/router";
+import { type RuleZeroOptions, ruleZeroFetch } from "@waltning/core/rule-zero-fetch";
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 

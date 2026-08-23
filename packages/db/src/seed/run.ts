@@ -5,7 +5,7 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { Id } from "@waltning/core";
+import type { Id } from "@waltning/core/id";
 import { eq } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { requireRow } from "../rows.ts";

@@ -72,9 +72,8 @@ cancellation, error classification, staleness — is shared by construction, and
 only *rendering* is negotiable.
 
 `client` and `ui` are siblings. Neither imports the other; neither imports an
-app. The one type-only edge from `client` to `apps/api/router-type` is what
-carries operation types to the client (§11.0) and is erased before any bundler
-sees it.
+app. The one type-only edge from `client` to `apps/api/router` is what carries
+operation types to the client (§11.0) and is erased before any bundler sees it.
 
 ---
 
@@ -106,8 +105,9 @@ An **abstraction** over any of these still waits for the third use.
 
 ## 4 · Every hook has a file, and the file is named for what it returns
 
-No hooks in barrel files. No hooks in route files. No hooks defined next to the
-component that happens to be their first caller.
+No hooks in route files. No hooks defined next to the component that happens to
+be their first caller. Each hook's concrete module is its public entrypoint;
+there is no barrel between the caller and its owner.
 
 A hook in a route file is invisible to the test runner — `vitest.config.ts`
 collects `apps/*/src/**`, and `app/` is a sibling of `src/`, not a child. A hook

@@ -1,15 +1,18 @@
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { accountingDate, createAccountInput, createTransactionInput, id } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import { id } from "@waltning/core/id";
+import { createAccountInput, createTransactionInput } from "@waltning/core/registry/inputs";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type LedgerFs, migrateOutbox, migrateReplica } from "../migrate.ts";
 import { type LedgerPaths, openLedger, type SqliteOpener } from "../open.ts";
-import { outbox, outboxSeq } from "../schema.ts";
 import { ledgerSchema } from "../schema-map.ts";
 import { createLocalLedgerSession, USD_BOOTSTRAP } from "../session.ts";
+
+const { outbox, outboxSeq } = ledgerSchema;
 
 type Run = Database.RunResult;
 

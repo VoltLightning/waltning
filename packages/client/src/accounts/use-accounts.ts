@@ -5,8 +5,8 @@
  * else was the state machine, and it lives in `use-query.ts` now.
  */
 
-import { type Query, useQuery } from "../query/index.ts";
-import type { ApiClient } from "../transport/index.ts";
+import { type Query, useQuery } from "../query/use-query.ts";
+import type { ApiClient } from "../transport/client.ts";
 
 /**
  * Indexed access, not `T extends readonly (infer A)[] ? A : never`.

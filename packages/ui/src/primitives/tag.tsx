@@ -18,7 +18,9 @@
  */
 
 import { Text, View } from "react-native";
-import { face, makeStyles, useTheme } from "../theme/index.ts";
+import { face } from "../theme/fonts.ts";
+import { useTheme } from "../theme/provider";
+import { makeStyles } from "../theme/styles.ts";
 import { lineHeightFor, radius, space, type } from "../tokens.ts";
 
 export type TagVariant = "neutral" | "warn" | "negative" | "biz";

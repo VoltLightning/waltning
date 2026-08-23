@@ -1,14 +1,14 @@
-import type {
-  AccountingDate,
-  AccountKind,
-  CreateAccountInput,
-  CreateTransactionInput,
-  CurrencyCode,
-  Id,
-  IdTable,
-  Money,
-} from "@waltning/core";
-import { createAccountInput, createTransactionInput, money } from "@waltning/core";
+import type { AccountingDate } from "@waltning/core/date";
+import type { Id, IdTable } from "@waltning/core/id";
+import type { CurrencyCode, Money } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
+import {
+  type AccountKind,
+  type CreateAccountInput,
+  type CreateTransactionInput,
+  createAccountInput,
+  createTransactionInput,
+} from "@waltning/core/registry/inputs";
 
 export type PhoneCapture = {
   date: AccountingDate;

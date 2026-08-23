@@ -82,21 +82,6 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull(
  * Enums
  * ------------------------------------------------------------------ */
 
-import {
-  accountGroupsColumns,
-  accountsColumns,
-  categoriesColumns,
-  counterpartiesColumns,
-  currenciesColumns,
-  dashboardLayoutsColumns,
-  dashboardWidgetsColumns,
-  fxRatesColumns,
-  recurringTransactionsColumns,
-  tagsColumns,
-  transactionLinesColumns,
-  transactionsColumns,
-  transactionTagsColumns,
-} from "@waltning/schema/columns-pg";
 /**
  * **The enums live in `@waltning/schema` now, and are re-exported here.**
  *
@@ -128,6 +113,19 @@ import {
   txnType,
   widgetSize,
 } from "@waltning/schema/enums-pg";
+import { accountGroupsColumns } from "@waltning/schema/pg/account-groups";
+import { accountsColumns } from "@waltning/schema/pg/accounts";
+import { categoriesColumns } from "@waltning/schema/pg/categories";
+import { counterpartiesColumns } from "@waltning/schema/pg/counterparties";
+import { currenciesColumns } from "@waltning/schema/pg/currencies";
+import { dashboardLayoutsColumns } from "@waltning/schema/pg/dashboard-layouts";
+import { dashboardWidgetsColumns } from "@waltning/schema/pg/dashboard-widgets";
+import { fxRatesColumns } from "@waltning/schema/pg/fx-rates";
+import { recurringTransactionsColumns } from "@waltning/schema/pg/recurring-transactions";
+import { tagsColumns } from "@waltning/schema/pg/tags";
+import { transactionLinesColumns } from "@waltning/schema/pg/transaction-lines";
+import { transactionTagsColumns } from "@waltning/schema/pg/transaction-tags";
+import { transactionsColumns } from "@waltning/schema/pg/transactions";
 
 // Imported for the tables below *and* re-exported, because every existing
 // consumer imports its enums from the same module as its tables.

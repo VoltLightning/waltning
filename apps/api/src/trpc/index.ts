@@ -10,7 +10,7 @@
  */
 
 import { initTRPC, type TRPCError } from "@trpc/server";
-import type { Database } from "@waltning/db";
+import type { Database } from "@waltning/db/client";
 import { ZodError } from "zod";
 import {
   DomainError,

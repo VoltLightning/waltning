@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
 
 import { act, renderHook } from "@testing-library/react";
-import { accountingDate, id } from "@waltning/core";
+import { accountingDate } from "@waltning/core/date";
+import { id } from "@waltning/core/id";
 import { describe, expect, it, vi } from "vitest";
 import { createPhoneLedger } from "./create-phone-ledger.ts";
 import { usePhoneLedger } from "./use-phone-ledger.ts";

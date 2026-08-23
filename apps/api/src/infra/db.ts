@@ -14,7 +14,7 @@
  * Those are different behaviours and only one of them is correct.
  */
 
-import { createDb, type Database } from "@waltning/db";
+import { createDb, type Database } from "@waltning/db/client";
 
 let handle: Database | null = null;
 let lastError: string | null = null;

@@ -8,6 +8,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { AmountField, parseAmount } from "./amount-field";
 
+function noop() {}
+
 describe("parseAmount — comma decimal", () => {
   it("takes the separator the keyboard gives", () => {
     // Polish keyboards give `,`; numeric keypads often give `.`. Both are typed
@@ -39,7 +41,7 @@ describe("parseAmount — comma decimal", () => {
   });
 
   it("renders with a currency affix", () => {
-    render(<AmountField label="Amount" currency="PLN" onChange={() => undefined} />);
+    render(<AmountField label="Amount" currency="PLN" onChange={noop} />);
     expect(screen.getByText("PLN")).toBeDefined();
   });
 });
