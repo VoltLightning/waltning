@@ -1,0 +1,38 @@
+import {
+  accountGroups,
+  accounts,
+  categories,
+  counterparties,
+  currencies,
+  dashboardLayouts,
+  dashboardWidgets,
+  fxRates,
+  localMeta,
+  outbox,
+  outboxSeq,
+  recurringTransactions,
+  tags,
+  transactionLines,
+  transactions,
+  transactionTags,
+} from "./schema.ts";
+
+/** The exact schema map both injected SQLite drivers receive. */
+export const ledgerSchema = {
+  accountGroups,
+  accounts,
+  categories,
+  counterparties,
+  currencies,
+  dashboardLayouts,
+  dashboardWidgets,
+  fxRates,
+  localMeta,
+  outbox,
+  outboxSeq,
+  recurringTransactions,
+  tags,
+  transactionLines,
+  transactions,
+  transactionTags,
+};

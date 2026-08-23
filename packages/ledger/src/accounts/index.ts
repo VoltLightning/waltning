@@ -7,3 +7,4 @@
  */
 
 export { createAccountExecutor, type LocalAccountRow } from "./create-account.executor.ts";
+export { type LocalAccountSummary, readAccounts } from "./read-accounts.ts";
