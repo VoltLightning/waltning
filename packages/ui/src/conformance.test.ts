@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { light, themes } from "./theme/index.ts";
+import { light, type Theme, themes } from "./theme/index.ts";
 
 // From `import.meta.url` (a string) rather than `new URL(...)`: this package
 // compiles against the DOM lib, where `URL` is the DOM's and not Node's.
@@ -128,14 +128,20 @@ describe("every theme answers for every role", () => {
    * `dark` safe rather than hopeful.
    */
   it("no role is missing or empty in any theme", () => {
-    const roles = Object.keys(light) as (keyof typeof light)[];
+    type ColorRole = Exclude<keyof Theme, "elevation">;
+    const roles = Object.keys(light).filter((role): role is ColorRole => role !== "elevation");
     expect(roles.length, "roles found").toBeGreaterThan(15);
 
     const holes: string[] = [];
     for (const [name, theme] of Object.entries(themes)) {
       for (const role of roles) {
-        const value = (theme as Record<string, string | undefined>)[role];
-        if (!value || typeof value !== "string") holes.push(`${name}.${String(role)}`);
+        if (!theme[role]) holes.push(`${name}.${String(role)}`);
+      }
+      for (const level of ["card", "raised", "frame"] as const) {
+        const elevation = theme.elevation[level];
+        if (!elevation.shadowColor || !elevation.borderColor) {
+          holes.push(`${name}.elevation.${level}`);
+        }
       }
     }
 

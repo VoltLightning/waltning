@@ -1,11 +1,10 @@
 /**
  * Design tokens — `design-system/02-tokens.md`, transcribed.
  *
- * **D0, and the reason it comes first.** `12-build-order.md` opens by warning
- * that a screen built before the vocabulary exists coins its own props, and the
- * design system becomes "a retrofit of thirty accumulated inventions". The
- * dashboard proved the point at n=2: it hardcoded `#b3261e` for a negative
- * balance, a colour that appears nowhere in this file.
+ * **The vocabulary comes first.** A screen built before it exists coins its own
+ * props, and the design system becomes "a retrofit of thirty accumulated
+ * inventions". The dashboard proved the point at n=2: it hardcoded `#b3261e`
+ * for a negative balance, a colour that appears nowhere in this file.
  *
  * Plain values, no React and no `StyleSheet`. Two reasons: the same numbers
  * have to reach a native `StyleSheet`, a web style object and a chart library,
@@ -60,6 +59,33 @@ export const color = {
 
 /** `linear-gradient(160deg, …)` on web; two stops for a native gradient. */
 export const shellGradient = { angle: 160, from: color.green900, to: color.green800 } as const;
+
+/** The dark semantic palette — `design-system/02` §2.1, transcribed. */
+export const darkColor = {
+  ground: "#08130d",
+  surface: "#10251a",
+  subtleFill: "#173326",
+  pressedFill: "#214735",
+  border: "#2f5d46",
+  hairline: "rgba(203,230,214,.16)",
+  text: "#f2f6f1",
+  textMuted: "#a3b8ad",
+  textOnAccent: "#08130d",
+  accent: "#75bd99",
+  accentText: "#a3d2b8",
+  accentIcon: "#75bd99",
+  focusRing: "#75bd99",
+  assertedFill: "#3b301c",
+  assertedText: "#f1d18a",
+  assertedBorder: "#9f7a31",
+  dangerFill: "#3b211c",
+  dangerText: "#f0a08d",
+  dangerBorder: "#b95e49",
+  tagNeutralFill: "#173326",
+  tagNeutralText: "#a3d2b8",
+  shellFrom: "#06100a",
+  shellTo: "#0e2e20",
+} as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
 

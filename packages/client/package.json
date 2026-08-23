@@ -9,7 +9,8 @@
     "./accounts": "./src/accounts/index.ts",
     "./transactions": "./src/transactions/index.ts",
     "./currencies": "./src/currencies/index.ts",
-    "./connectivity": "./src/connectivity/index.ts"
+    "./connectivity": "./src/connectivity/index.ts",
+    "./appearance": "./src/appearance/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

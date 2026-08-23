@@ -30,7 +30,7 @@ tab bar → S10, S11, S12, S03.
 
 ```
 ┌ shell · green-900 → green-800 gradient ─────────┐
-│  FxStatusChip          CurrencyChip             │
+│  FxStatusChip     CurrencyChip       Appearance │
 │                                                 │
 │  MINE            12 480,20 zł      display-hero │
 │  ours            18 940,60 zł      display-3    │
@@ -110,6 +110,8 @@ happened*.
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `TabBar` | 5 tabs + raised `+`, all ≥44px |
 | `EmptyState(first-run)` | No accounts — offers create and import |
+| `AppearanceButton` | Header action; opens the appearance sheet |
+| `BottomSheet(appearance)` | Radio choices: System, Light, Dark |
 
 ## 5. Data
 
@@ -142,6 +144,11 @@ keeps it fast and what makes it safe to render from cache offline.
 refresh re-syncs rates and balances. Recent rows swipe to categorize (short) and
 to edit (long) — never to delete (`design-system/05` §5.6). Haptic on save
 arrival.
+
+The appearance action in the header opens a bottom sheet containing exactly
+System, Light, and Dark. The choice persists across launch. System follows the
+device scheme; choosing Light or Dark overrides it. A change repaints S04 in
+place and does not remount the screen or discard navigation or form state.
 
 ### Shared
 Tapping the unsettled banner goes **straight to the unallocated transaction**,

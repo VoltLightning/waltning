@@ -38,7 +38,16 @@
  * governs *inventing* mechanisms, not *naming* meanings.
  */
 
-import { color } from "../tokens.ts";
+import { color, darkColor, shadow } from "../tokens.ts";
+
+export type ThemeElevation = {
+  shadowColor: string;
+  shadowOpacity: number;
+  shadowRadius: number;
+  shadowOffset: { width: number; height: number };
+  borderWidth: number;
+  borderColor: string;
+};
 
 /**
  * Every colour decision the component library can make.
@@ -103,7 +112,35 @@ export type Theme = {
   /** The shell gradient's two stops. */
   shellFrom: string;
   shellTo: string;
+
+  elevation: {
+    card: ThemeElevation;
+    raised: ThemeElevation;
+    frame: ThemeElevation;
+  };
 };
+
+function lightElevation(value: (typeof shadow)[keyof typeof shadow]): ThemeElevation {
+  return {
+    shadowColor: value.color,
+    shadowOpacity: value.opacity,
+    shadowRadius: value.radius,
+    shadowOffset: { width: 0, height: value.offsetY },
+    borderWidth: 0,
+    borderColor: color.green200,
+  };
+}
+
+function darkElevation(): ThemeElevation {
+  return {
+    shadowColor: darkColor.ground,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    borderWidth: 1,
+    borderColor: darkColor.border,
+  };
+}
 
 /**
  * The light theme — `design-system/02` §2.1, mapped rather than restated.
@@ -143,18 +180,23 @@ export const light: Theme = {
 
   shellFrom: color.green900,
   shellTo: color.green800,
+
+  elevation: {
+    card: lightElevation(shadow.card),
+    raised: lightElevation(shadow.raised),
+    frame: lightElevation(shadow.frame),
+  },
 };
 
-/**
- * The themes this build ships.
- *
- * `dark` is deliberately **absent**, not stubbed. A stub would be a second
- * theme that renders wrongly, and a wrong dark mode reachable from a setting is
- * worse than no dark mode: it looks shipped. The dark palette is a design
- * decision recorded against `design-system/02` §2.1, §2.5 and `07`'s
- * *"magnitude is depth"* rule — the last of which **inverts**, and is therefore
- * not a value anyone can fill in here without changing that document.
- */
-export const themes = { light } as const;
+export const dark: Theme = {
+  ...darkColor,
+  elevation: {
+    card: darkElevation(),
+    raised: darkElevation(),
+    frame: darkElevation(),
+  },
+};
+
+export const themes = { light, dark } as const;
 
 export type ThemeName = keyof typeof themes;

@@ -30,6 +30,32 @@ second hue is needed.
 
 **Shell gradient:** `linear-gradient(160deg, #0e2e20, #164531)`.
 
+**Dark appearance is a semantic remap, not an inverted palette.** Components
+continue to name roles such as `surface`, `text`, and `accent`; only the theme
+maps those roles to values. The shipped dark map is closed:
+
+| Role | Dark value |
+|---|---|
+| `ground` | `#08130d` |
+| `surface` | `#10251a` |
+| `subtleFill` / `tagNeutralFill` | `#173326` |
+| `pressedFill` | `#214735` |
+| `border` | `#2f5d46` |
+| `hairline` | `rgba(203,230,214,.16)` |
+| `text` | `#f2f6f1` |
+| `textMuted` | `#a3b8ad` |
+| `textOnAccent` | `#08130d` |
+| `accent` / `accentIcon` / `focusRing` | `#75bd99` |
+| `accentText` / `tagNeutralText` | `#a3d2b8` |
+| `assertedFill` | `#3b301c` |
+| `assertedText` | `#f1d18a` |
+| `assertedBorder` | `#9f7a31` |
+| `dangerFill` | `#3b211c` |
+| `dangerText` | `#f0a08d` |
+| `dangerBorder` | `#b95e49` |
+| `shellFrom` | `#06100a` |
+| `shellTo` | `#0e2e20` |
+
 ### 2.2 Typography
 
 | Role | Family | Weight | Notes |
@@ -131,6 +157,11 @@ would visibly change the designs.
 | `shadow-raised` | `0 8px 26px rgba(14,46,32,.10)` | Panels, popovers |
 | `shadow-frame` | `0 8px 34px rgba(14,46,32,.14)` | Device frames, modals |
 | `border-hairline` | `1px solid rgba(14,46,32,.09)` | Dividers |
+
+Elevation is theme-dependent. Light appearance uses the shadows above. Dark
+appearance uses lighter surfaces plus a one-pixel semantic border and zero
+shadow opacity; adding black shadow to an already dark ground reduces
+separation instead of creating it.
 
 ### 2.6 Focus
 

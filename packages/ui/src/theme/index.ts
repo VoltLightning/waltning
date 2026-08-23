@@ -16,5 +16,5 @@ export {
   type UiWeight,
 } from "./fonts.ts";
 export { ThemeProvider, type ThemeProviderProps, useTheme } from "./provider";
-export { light, type Theme, type ThemeName, themes } from "./roles.ts";
+export { dark, light, type Theme, type ThemeElevation, type ThemeName, themes } from "./roles.ts";
 export { makeStyles, type Styles } from "./styles.ts";
