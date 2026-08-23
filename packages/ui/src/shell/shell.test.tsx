@@ -7,6 +7,8 @@
 import { render, screen } from "@testing-library/react";
 import { money } from "@waltning/core";
 import { describe, expect, it } from "vitest";
+import { ThemeProvider } from "../theme/provider";
+import { dark, light } from "../theme/roles.ts";
 import { Card } from "./card";
 import { DualTotal } from "./dual-total";
 
@@ -52,5 +54,31 @@ describe("Card", () => {
       </Card>,
     );
     expect(container.textContent).toBe("body");
+  });
+
+  it("uses shadow elevation in light and a border in dark", () => {
+    const { container, rerender } = render(
+      <ThemeProvider theme={light}>
+        <Card>
+          <span>body</span>
+        </Card>
+      </ThemeProvider>,
+    );
+    const card = container.firstElementChild as HTMLElement;
+
+    expect(light.elevation.card.shadowOpacity).toBeGreaterThan(0);
+    expect(light.elevation.card.borderWidth).toBe(0);
+
+    rerender(
+      <ThemeProvider theme={dark}>
+        <Card>
+          <span>body</span>
+        </Card>
+      </ThemeProvider>,
+    );
+
+    expect(dark.elevation.card.shadowOpacity).toBe(0);
+    expect(dark.elevation.card.borderWidth).toBe(1);
+    expect(getComputedStyle(card).borderTopWidth).toBe("1px");
   });
 });

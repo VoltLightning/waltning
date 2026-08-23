@@ -16,7 +16,9 @@
  * a domain and matches a folder in `@waltning/ui`.
  *
  * The root export is the transport alone, so a consumer that needs no React
- * gets none. Hooks come from their domain: `@waltning/client/accounts`.
+ * gets none. Hooks and stateful controllers come from their domain or
+ * foundation subpath: `@waltning/client/accounts`,
+ * `@waltning/client/appearance`.
  */
 
 export { CaptiveResponseError } from "@waltning/core";

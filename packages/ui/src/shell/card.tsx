@@ -12,7 +12,7 @@
 
 import { Text, View } from "react-native";
 import { face, makeStyles } from "../theme/index.ts";
-import { hairline, radius, shadow, space, type } from "../tokens.ts";
+import { hairline, radius, space, type } from "../tokens.ts";
 
 export type CardProps = {
   title?: string;
@@ -49,10 +49,12 @@ const useStyles = makeStyles((t) => ({
     borderRadius: radius.lg,
     padding: space.x5,
     gap: space.x3,
-    shadowColor: shadow.card.color,
-    shadowOpacity: shadow.card.opacity,
-    shadowRadius: shadow.card.radius,
-    shadowOffset: { width: 0, height: shadow.card.offsetY },
+    shadowColor: t.elevation.card.shadowColor,
+    shadowOpacity: t.elevation.card.shadowOpacity,
+    shadowRadius: t.elevation.card.shadowRadius,
+    shadowOffset: t.elevation.card.shadowOffset,
+    borderWidth: t.elevation.card.borderWidth,
+    borderColor: t.elevation.card.borderColor,
   },
   header: {
     flexDirection: "row",

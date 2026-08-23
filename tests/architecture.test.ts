@@ -336,6 +336,7 @@ describe("every src/ is organised by domain, not by layer", () => {
     // Foundation (`transport`, `query`) plus one folder per domain.
     "packages/client/src": [
       "accounts",
+      "appearance",
       "connectivity",
       "currencies",
       "query",
