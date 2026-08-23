@@ -10,7 +10,7 @@ dashboard.
 Run from the repository root:
 
 ```bash
-pnpm dev:all -- --clear
+pnpm dev:all --clear
 ```
 
 That starts one Expo Go server; use its `a`, `i`, and `w` shortcuts for Android,

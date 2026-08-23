@@ -10,6 +10,7 @@ const quickAdd = readFileSync(`${src}/quick-add-screen.native.tsx`, "utf8");
 const newAccount = readFileSync(`${src}/account-creation-screen.native.tsx`, "utf8");
 const controls = readFileSync(resolve(app, "../src/preview-appearance-controls.tsx"), "utf8");
 const nativePlatform = readFileSync(resolve(app, "../src/platform.native.ts"), "utf8");
+const phoneLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"), "utf8");
 
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
@@ -61,5 +62,12 @@ describe("phone-alone preview presentation", () => {
   it("collapses successful flows instead of leaving stale drafts behind", () => {
     expect(quickAdd).toContain('router.dismissTo("/")');
     expect(newAccount).toContain("router.dismissTo(");
+  });
+
+  it("adapts Expo SQLite's raw database path to an absolute file URI", () => {
+    expect(phoneLedger).toMatch(
+      /const databaseDirectoryUri = `file:\/\/\$\{defaultDatabaseDirectory\}`;/u,
+    );
+    expect(phoneLedger).not.toContain("new File(defaultDatabaseDirectory, path)");
   });
 });

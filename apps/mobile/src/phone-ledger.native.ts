@@ -20,7 +20,8 @@ const LEDGER_PATHS = {
   outbox: "waltning-outbox.db",
 } as const;
 
-const file = (path: string) => new File(defaultDatabaseDirectory, path);
+const databaseDirectoryUri = `file://${defaultDatabaseDirectory}`;
+const file = (path: string) => new File(databaseDirectoryUri, path);
 
 type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
 
