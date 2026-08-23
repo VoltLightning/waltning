@@ -8,21 +8,17 @@ import {
   USD_BOOTSTRAP,
 } from "@waltning/ledger";
 import { drizzle } from "drizzle-orm/expo-sqlite";
-import { File } from "expo-file-system";
-import {
-  defaultDatabaseDirectory,
-  deleteDatabaseSync,
-  openDatabaseSync,
-  type SQLiteRunResult,
-} from "expo-sqlite";
+import { Directory, File, Paths } from "expo-file-system";
+import { deleteDatabaseSync, openDatabaseSync, type SQLiteRunResult } from "expo-sqlite";
 
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
   outbox: "waltning-outbox.db",
 } as const;
 
-const databaseDirectoryUri = `file://${defaultDatabaseDirectory}`;
-const file = (path: string) => new File(databaseDirectoryUri, path);
+const databaseDirectory = new Directory(Paths.document, "SQLite");
+const databaseDirectoryPath = decodeURIComponent(databaseDirectory.uri.replace(/^file:\/\//u, ""));
+const file = (path: string) => new File(databaseDirectory, path);
 
 type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
 
@@ -32,7 +28,7 @@ type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
 // package-manager boundary here, where Expo enters, rather than weakening the
 // ledger's typed database seam for every caller.
 const openPhoneDatabase = ((filename: string) => {
-  const sqlite = openDatabaseSync(filename);
+  const sqlite = openDatabaseSync(filename, undefined, databaseDirectoryPath);
   return { db: drizzle(sqlite, { schema: ledgerSchema }), close: () => sqlite.closeSync() };
 }) as unknown as PhoneSqliteOpener;
 
@@ -47,7 +43,7 @@ const session = createLocalLedgerSession({
       if (target.exists) target.delete();
     },
   },
-  removeDatabase: (path) => deleteDatabaseSync(path),
+  removeDatabase: (path) => deleteDatabaseSync(path, databaseDirectoryPath),
   bootstrapCurrency: USD_BOOTSTRAP,
 });
 
