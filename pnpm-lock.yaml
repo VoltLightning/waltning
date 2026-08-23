@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  drizzle-orm@0.45.2: 20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d
+  drizzle-orm@0.45.2: 82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466
 
 importers:
 
@@ -58,7 +58,7 @@ importers:
         version: link:../../packages/db
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(patch_hash=20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
+        version: 0.45.2(patch_hash=82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
       hono:
         specifier: ^4.13.2
         version: 4.13.2
@@ -104,7 +104,7 @@ importers:
         version: link:../../packages/ui
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(patch_hash=20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
+        version: 0.45.2(patch_hash=82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
       expo:
         specifier: ~57.0.15
         version: 57.0.15(@babel/core@7.29.7(supports-color@8.1.1))(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.12)(expo-router@57.0.15)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.11.4(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)(typescript@5.9.3)
@@ -196,7 +196,7 @@ importers:
         version: 10.6.0
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(patch_hash=20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
+        version: 0.45.2(patch_hash=82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -215,7 +215,7 @@ importers:
         version: link:../schema
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(patch_hash=20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
+        version: 0.45.2(patch_hash=82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -231,7 +231,7 @@ importers:
         version: link:../core
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(patch_hash=20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
+        version: 0.45.2(patch_hash=82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
 
   packages/ui:
     dependencies:
@@ -274,7 +274,7 @@ importers:
         version: 10.6.0
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(patch_hash=20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
+        version: 0.45.2(patch_hash=82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9)
 
 packages:
 
@@ -6535,7 +6535,7 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.5
 
-  drizzle-orm@0.45.2(patch_hash=20bd417970c4175cfda69293b9e998078c5276782a31576d6b83b4bb61c4403d)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9):
+  drizzle-orm@0.45.2(patch_hash=82b8138489342cf4d943dde9ba3c151293030c512fd41fe33cfa10f1a690a466)(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)(expo-sqlite@57.0.1(expo@57.0.15)(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(postgres@3.4.9):
     optionalDependencies:
       '@types/better-sqlite3': 7.6.13
       better-sqlite3: 13.0.3
