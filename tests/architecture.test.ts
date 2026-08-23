@@ -238,6 +238,24 @@ describe("apps hold only what names a platform", () => {
     }
     expect(offenders, "hooks belong in packages/client, not in a route").toEqual([]);
   });
+
+  it("route declarations stay universal and resolve platform modules outside app", () => {
+    // Expo Router requires an unsuffixed route for deep links and generated
+    // Href types. Keeping platform variants beside that route still puts both
+    // route modules in Metro's context; the web dashboard then appears in a
+    // native bundle. The route stays universal and re-exports an extensionless
+    // module outside `app/`, where Metro resolves exactly one platform file.
+    const platformRoute = /\.(native|android|ios|web)(?=\.tsx?$)/;
+    const routeDirs = appRoots().map((app) => join(app, "app"));
+    const routeFiles = routeDirs.flatMap((dir) => sourceFiles(dir));
+    const offenders = routeFiles.filter((file) => platformRoute.test(file)).map(rel);
+
+    expect(routeFiles.length, "route files found").toBeGreaterThan(2);
+    expect(
+      offenders,
+      "move platform variants outside app/ and re-export them from one universal route",
+    ).toEqual([]);
+  });
 });
 
 /* ── §6 · Design conformance, at repository scope ────────────────────────── */

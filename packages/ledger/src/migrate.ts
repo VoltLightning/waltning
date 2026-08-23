@@ -256,7 +256,7 @@ export function advanceAppliedSeq(tx: SqlRunner, seq: number): void {
 function readUserVersion<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
 ): number {
-  const row = db.get<{ user_version?: number } | undefined>(sql.raw("pragma user_version"));
+  const [row] = db.all<{ user_version?: number }>(sql.raw("pragma user_version"));
   const value = row?.user_version;
   if (typeof value !== "number") {
     throw new Error("`pragma user_version` returned nothing — the database is not readable");
@@ -288,8 +288,15 @@ function checkChain(migrations: readonly Migration[]): number {
  * checkpoint rather than as of now — and the copy exists precisely to hold what
  * was there a moment ago.
  */
-function takeCopy(path: string, db: SqlRunner, fs: LedgerFs): PreMigrationCopy {
-  db.run(sql.raw("pragma wal_checkpoint(truncate)"));
+function takeCopy<TRun, TSchema extends LedgerSchema>(
+  path: string,
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+  fs: LedgerFs,
+): PreMigrationCopy {
+  const [checkpoint] = db.all<{ busy?: number }>(sql.raw("pragma wal_checkpoint(truncate)"));
+  if (checkpoint?.busy !== 0) {
+    throw new Error("the WAL could not be checkpointed before taking the pre-migration copy");
+  }
   const copyPath = `${path}${COPY_SUFFIX}`;
   fs.copy(path, copyPath);
   return { path: copyPath, release: () => fs.remove(copyPath) };

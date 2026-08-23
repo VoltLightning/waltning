@@ -4,9 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "../app");
-const today = readFileSync(`${app}/index.native.tsx`, "utf8");
-const quickAdd = readFileSync(`${app}/quick-add.native.tsx`, "utf8");
-const newAccount = readFileSync(`${app}/account/new.native.tsx`, "utf8");
+const src = resolve(app, "../src");
+const today = readFileSync(`${src}/today-screen.native.tsx`, "utf8");
+const quickAdd = readFileSync(`${src}/quick-add-screen.native.tsx`, "utf8");
+const newAccount = readFileSync(`${src}/account-creation-screen.native.tsx`, "utf8");
+const controls = readFileSync(resolve(app, "../src/preview-appearance-controls.tsx"), "utf8");
+const nativePlatform = readFileSync(resolve(app, "../src/platform.native.ts"), "utf8");
+const phoneLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"), "utf8");
 
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
@@ -18,13 +22,13 @@ describe("phone-alone preview presentation", () => {
   });
 
   it("offers exactly three appearance choices and confirms destructive reset", () => {
-    expect(today).toContain('{ value: "system", label: "System" }');
-    expect(today).toContain('{ value: "light", label: "Light" }');
-    expect(today).toContain('{ value: "dark", label: "Dark" }');
-    expect(today).toContain('label="Reset preview data"');
-    expect(today).toContain('label="Delete preview data"');
-    expect(today).toContain("Delete every account and transaction from this phone?");
-    expect(today).toContain("Appearance could not be saved.");
+    expect(controls).toContain('{ value: "system", label: "System" }');
+    expect(controls).toContain('{ value: "light", label: "Light" }');
+    expect(controls).toContain('{ value: "dark", label: "Dark" }');
+    expect(controls).toContain('label="Reset preview data"');
+    expect(controls).toContain('label="Delete preview data"');
+    expect(controls).toContain("Delete every account and transaction from this phone?");
+    expect(controls).toContain("Appearance could not be saved.");
   });
 
   it("keeps deferred capture and dashboard affordances out", () => {
@@ -42,8 +46,32 @@ describe("phone-alone preview presentation", () => {
     }
   });
 
+  it("keeps backend wiring out of the native phone-alone surface", () => {
+    const nativeSurface = `${today}\n${quickAdd}\n${newAccount}\n${nativePlatform}`;
+    for (const backendMarker of [
+      "createApiClient",
+      "resolveApiBaseUrl",
+      "EXPO_PUBLIC_API_URL",
+      "useAccounts",
+      "useTransactions",
+    ]) {
+      expect(nativeSurface).not.toContain(backendMarker);
+    }
+  });
+
   it("collapses successful flows instead of leaving stale drafts behind", () => {
     expect(quickAdd).toContain('router.dismissTo("/")');
     expect(newAccount).toContain("router.dismissTo(");
+  });
+
+  it("keeps SQLite and its safety copies in Expo's project-scoped documents", () => {
+    expect(phoneLedger).toContain('new Directory(Paths.document, "SQLite")');
+    expect(phoneLedger).toContain(
+      "databaseDirectory.create({ idempotent: true, intermediates: true })",
+    );
+    expect(phoneLedger).toContain("openDatabaseSync(filename, undefined, databaseDirectoryPath)");
+    expect(phoneLedger).toContain("deleteDatabaseSync(path, databaseDirectoryPath)");
+    expect(phoneLedger).not.toContain("decodeURIComponent");
+    expect(phoneLedger).not.toContain("defaultDatabaseDirectory");
   });
 });

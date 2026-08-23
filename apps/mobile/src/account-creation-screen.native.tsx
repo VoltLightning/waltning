@@ -3,7 +3,7 @@ import { id } from "@waltning/core";
 import { Card, CreateAccountForm, GroundPanel } from "@waltning/ui";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect } from "react";
-import { requirePhoneLedger } from "../../src/phone-ledger";
+import { requirePhoneLedger } from "./phone-ledger";
 
 export default function NewAccount() {
   const raw = useLocalSearchParams<{

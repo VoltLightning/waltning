@@ -1,10 +1,10 @@
 /**
- * The dashboard — accounts, their balances, and the recent ledger.
+ * The web dashboard — accounts, their balances, and the recent ledger.
  *
  * A first usable slice of S01. Not S01: the real one has the scope switch,
  * per-widget freshness and a configurable layout (§14.7, S24).
  *
- * **A route composes and nothing else** (`architecture/11` §4). Every component
+ * **A screen composes and nothing else** (`architecture/11` §4). Every component
  * here comes from `@waltning/ui`, every hook from `@waltning/client`, and the
  * only local import is `../src/platform` — the platform variant that names Expo.
  * This file previously held a type, a hook, a component and a formatter, none
@@ -16,7 +16,7 @@ import { describeProbe, useProbe } from "@waltning/client/connectivity";
 import { useTransactions } from "@waltning/client/transactions";
 import { BalanceRow, Card, GroundPanel, TransactionRow } from "@waltning/ui";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { API_BASE_URL, api, isStaleBundle } from "../src/platform";
+import { API_BASE_URL, api, isStaleBundle } from "./platform";
 
 export default function Dashboard() {
   const probe = useProbe(api);
