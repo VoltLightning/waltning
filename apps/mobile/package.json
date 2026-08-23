@@ -4,10 +4,15 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "expo start",
+    "bundle:android": "expo export --platform android",
+    "bundle:ios": "expo export --platform ios",
+    "dev": "expo start --go",
+    "dev:client": "expo start --dev-client",
+    "preview:android": "EXPO_PUBLIC_ENABLE_PREVIEW_RESET=true expo run:android --variant release --device",
+    "preview:ios": "EXPO_PUBLIC_ENABLE_PREVIEW_RESET=true expo run:ios --configuration Release --device",
     "web": "expo start --web",
     "export:web": "expo export --platform web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "expo customize tsconfig.json && tsc --noEmit"
   },
   "dependencies": {
     "@expo-google-fonts/figtree": "^0.4.1",
@@ -19,11 +24,12 @@
     "@waltning/ledger": "workspace:*",
     "@waltning/ui": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "expo": "~57.0.13",
+    "expo": "~57.0.15",
     "expo-crypto": "^57.0.1",
+    "expo-dev-client": "~57.0.14",
     "expo-file-system": "~57.0.5",
     "expo-font": "~57.0.1",
-    "expo-router": "~57.0.13",
+    "expo-router": "~57.0.15",
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",

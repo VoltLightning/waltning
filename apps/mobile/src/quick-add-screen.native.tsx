@@ -2,7 +2,7 @@ import { parseQuickAddRoute } from "@waltning/client/ledger";
 import { id } from "@waltning/core";
 import { Card, GroundPanel, QuickAddForm } from "@waltning/ui";
 import { router, useLocalSearchParams } from "expo-router";
-import { requirePhoneLedger } from "../src/phone-ledger";
+import { requirePhoneLedger } from "./phone-ledger";
 
 export default function QuickAdd() {
   const raw = useLocalSearchParams<{
