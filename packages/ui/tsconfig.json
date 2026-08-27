@@ -1,4 +1,8 @@
 {
   "extends": "../../tsconfig.client.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  // `.storybook` is included deliberately. PR #49 — "The files that enforce
+  // every rule were typechecked by nothing" — was this exact shape: config that
+  // only a bundler ever read, so a broken decorator or a font map missing a
+  // face failed at `storybook dev` rather than at the gate.
+  "include": ["src/**/*.ts", "src/**/*.tsx", ".storybook/**/*.ts", ".storybook/**/*.tsx"]
 }

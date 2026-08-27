@@ -562,13 +562,26 @@ describe("platform-neutral packages use only globals the phone has", () => {
    */
   const GUARDED = ["packages/core/src/random.ts"];
 
+  /**
+   * Storybook's own configuration, which runs in a browser by definition and is
+   * never bundled into an app.
+   *
+   * The exemption is by **directory**, not by file, and that is the narrow part:
+   * `.storybook/` is the one place in a neutral package whose code has a single
+   * known host. Everything under `src/` — stories included — stays subject to
+   * the rule, because a story is imported by `stories.test.tsx` and lives
+   * alongside the component it renders. If a story ever needs `document`, that
+   * is a component reaching for a browser, and the failure is the point.
+   */
+  const isDevTooling = (relative: string) => relative.includes("/.storybook/");
+
   it("no neutral package reaches for a global the device lacks", () => {
     const offenders: string[] = [];
 
     for (const root of NEUTRAL) {
       for (const file of sourceFiles(join(repoRoot, root))) {
         const relative = rel(file);
-        if (isTest(file) || GUARDED.includes(relative)) continue;
+        if (isTest(file) || GUARDED.includes(relative) || isDevTooling(relative)) continue;
 
         // Comments discuss these globals constantly — `money.ts` explains what
         // a `Decimal.set` does "for the whole process". Strip them first.

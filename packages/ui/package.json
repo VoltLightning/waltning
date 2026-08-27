@@ -18,15 +18,25 @@
     "./transactions/*": "./src/transactions/*.tsx"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@waltning/core": "workspace:*"
   },
   "devDependencies": {
+    "@expo-google-fonts/figtree": "^0.4.1",
+    "@expo-google-fonts/source-serif-4": "^0.4.1",
+    "@storybook/addon-a11y": "10.5.10",
+    "@storybook/react-native-web-vite": "10.5.10",
     "@types/react": "^19.2.18",
     "react": "19.2.3",
-    "react-native": "0.86.2"
+    "react-dom": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-web": "^0.21.2",
+    "storybook": "10.5.10",
+    "vite": "^7.3.6"
   },
   "peerDependencies": {
     "react": ">=19",

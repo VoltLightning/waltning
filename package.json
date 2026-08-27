@@ -48,7 +48,9 @@
     "wiki:check": "sh tools/wiki/publish.sh --dry-run",
     "wiki:publish": "sh tools/wiki/publish.sh",
     "rules:validate": "npx --yes ai-rulez@4.11.2 validate",
-    "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit"
+    "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit",
+    "storybook": "pnpm --filter @waltning/ui storybook",
+    "storybook:build": "pnpm --filter @waltning/ui build-storybook"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
