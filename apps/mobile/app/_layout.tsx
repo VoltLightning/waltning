@@ -19,7 +19,6 @@ import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { themes } from "@waltning/ui/theme/roles";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { useColorScheme, View } from "react-native";
 import { DeviceInsets } from "../src/device-insets";
@@ -103,33 +102,22 @@ export default function RootLayout() {
     <DeviceInsets>
       <ThemeProvider name={resolved.theme}>
         {/*
-          **Light glyphs, on every route, with no per-route override.**
+          **No `<StatusBar>` component, and that is the fix.**
 
-          The strip above every screen is `shell` — deep green in *both*
-          appearances, §2.1's one structural use of the brand colour — so the
-          clock and battery never need to flip. They were never set at all
-          before this: the OS drew them in its own choice, which on a
-          light-appearance phone is dark, over a header filled with a deep
-          green.
-        */}
-        <StatusBar style="light" />
-        {/*
-          **Every route's top strip is painted by this app.**
+          `expo-status-bar` drives the status bar through APIs Android
+          deprecated for edge-to-edge, and mounting it *turns edge-to-edge off*
+          — which is what put an opaque black strip above every screen. Expo
+          say as much for Expo Go — edge-to-edge there "works only for
+          projects which aren't using the `<StatusBar/>` component" — and
+          `react-native-edge-to-edge` warns that both it and RN's own
+          `StatusBar` "may cause unexpected behavior".
 
-          The ledger has `TodayFrame`'s shell; every other route now gets a
-          navigation header from the same token, which fixes three symptoms at
-          once. The status bar stops flipping, because the surface under it is
-          always the same one. The Android band goes: under edge-to-edge —
-          which Expo enforces from SDK 54 — the system leaves that area to the
-          app and backs it itself when nothing claims it, and
-          `headerStatusBarHeight` defaults to the safe-area inset, so the
-          header grows to include the strip and paints across it. And the
-          pushed routes get a title and a way back, which the `Cancel` button
-          in each form had been quietly standing in for.
-
-          `headerShadowVisible: false` because §2.5 allows the system exactly
-          one shadow and reserves it for the floating button. A header is a
-          surface, and surfaces here separate by edge and by step.
+          What it was there for — light icons over a dark green header — is a
+          *theme* property, not a runtime one. `app.json` configures the
+          `expo-status-bar` plugin with `style: "light"`, which writes
+          `android:windowLightStatusBar=false` into the app theme at build
+          time. Nothing mounts, edge-to-edge stays on, and the strip is drawn
+          by whatever the app renders at y=0.
         */}
         {/*
           **The root is the shell's green, and that is what paints the status
