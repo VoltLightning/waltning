@@ -24,8 +24,9 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { space, type } from "../tokens.ts";
+import { space } from "../tokens.ts";
 import { Card } from "./card";
 import { TodayFrame } from "./today-frame";
 
@@ -89,5 +90,5 @@ function Body({ children }: { children: string }) {
 }
 
 const useStyles = makeStyles((t) => ({
-  text: { color: t.text, fontSize: type.body.fontSize },
+  text: { color: t.text, ...text.ui("body") },
 }));

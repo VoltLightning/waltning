@@ -36,9 +36,10 @@ the brand colour is allowed to be a surface.
 | `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
 | `danger-bg` | `#f9e9e5` | Fill behind a danger tag |
 | `danger-border` | `#e3a898` | Edge of a danger control |
-| `shell` | `#0f2b1f` | The header shell. **One flat colour; the gradient is gone** |
+| `shell` | `#18492f` | The header shell. **One flat colour; the gradient is gone.** A deep green at L\* 27 — see below |
 | `shell-text` | `#f4f7f5` | Text on the shell |
 | `shell-text-muted` | `#a9c4b6` | The currency marker, the mine/ours line |
+| `shadow-ink` | `#0f2b1f` | The ink the one shadow is cast in. Never a fill, never a text colour |
 | `bolt` | `#f5c63d` | App icon accent only — not a UI colour |
 
 **Six steps for states, before a component needs them.** The 12-step scales
@@ -106,9 +107,31 @@ maps those roles to values. The shipped dark map is closed:
 | `dangerFill` | `#3b201b` |
 | `dangerText` | `#f1a390` |
 | `dangerBorder` | `#a85a48` |
-| `shell` | `#0a1f16` |
+| `shell` | `#1c4d38` |
 | `shellText` | `#f0f5f2` |
-| `shellTextMuted` | `#86a496` |
+| `shellTextMuted` | `#a9c4b6` |
+
+**The shell must read as a band, and it is the only pair where the fills do
+that alone.** Everywhere else an edge is drawn: `elevation.card` puts a
+one-pixel `border` between a card and the ground, which is why `#ffffff` on
+`#f5f7f6` at 1.05:1 is fine. The shell/ground seam has no border by design —
+the ground panel's rounded corners are the join — so the two fills carry the
+separation themselves, and the floor is **1.5:1 in both themes**. Not a WCAG
+number, because WCAG has none for this: 3:1 governs a boundary you must locate
+precisely, and a full-width band is the easiest thing on a screen to see.
+
+The first values failed it and passed every other check. `#0a1f16` in dark held
+`shell-text` at 15.6:1 and sat at **1.10:1 against `ground`** and 1.01:1 against
+`surface` — legible text on an area boundary nobody could see, so the screen
+read as one flat black rectangle. In light, `#0f2b1f` at L\* 15 was a black
+band with a green cast you had to be told about, which spends this section's one
+structural grant of the brand colour on nothing.
+
+So the shell is also held at **L\* ≥ 22 in both themes**, stated as lightness
+rather than as a hue test because *green enough* is a question about how dark it
+is — the hue was always right and never visible. The dark shell ends up the
+*lighter* of the two: on a near-black ground a surface reads by rising.
+`theme/theme.test.tsx` holds both floors.
 
 ### 2.2 Typography
 
@@ -152,7 +175,7 @@ per weight, because a family can ship tabular digits at 400 and proportional at
 **Selecting a weight needs a face, not a family.** Each weight is a separate
 file registered under its own name, so `fontFamily: IBMPlexSans` with
 `fontWeight: 600` finds no such family and either falls back or synthesises a
-bold from the regular. Components ask for `face.ui(600)`.
+bold from the regular. Components ask for a step, and the step names the face: `text.ui("body")`.
 
 **Faces are bundled, never fetched.** A webfont CDN is a third-party request on
 every cold start: it breaks the appliance when the Pi has no route out, and it
@@ -188,17 +211,41 @@ transaction row is now set at what was body.
 −0.01em at 23. Large sans type sets loose by default and reads as unset; the
 tracking is what makes a headline figure look engineered rather than typed.
 
-| Step | Size / line-height | Tracking | Use |
-|---|---|---|---|
-| `display-hero` | 54 / 1.05 | −0.02em | The one dominant total, in the display currency |
-| `display-1` | 38 / 1.1 | −0.015em | Board and page titles |
-| `display-2` | 23 / 1.2 | −0.01em | Section headings |
-| `display-3` | 17 / 1.3 | — | Card titles |
-| `body` | 16 / 1.5 | — | Default |
-| `body-sm` | 14.5 / 1.52 | — | Table cells, dense rows |
-| `caption` | 12 / 1.33 | — | Captions, metadata |
-| `kicker` | 11 / 1.2, `700`, `.08em`, uppercase | Eyebrow labels |
-| `tag` | 10.5 / 1, `700`, `.08em`, uppercase | Pills and tags. A ratio of exactly 1 is deliberate — uppercase-only, so no descenders to clip |
+| Step | Size / line-height | Tracking | Weight | Use |
+|---|---|---|---|---|
+| `display-hero` | 54 / 1.05 | −0.02em | 600 | The one dominant total, in the display currency |
+| `display-1` | 38 / 1.1 | −0.015em | 600 | Board and page titles |
+| `display-2` | 23 / 1.2 | −0.01em | 600 | Section headings |
+| `display-3` | 17 / 1.3 | — | 600 | Card titles |
+| `body` | 16 / 1.5 | — | 400 | Default |
+| `body-sm` | 14.5 / 1.52 | — | 400 | Table cells, dense rows |
+| `caption` | 12 / 1.33 | — | 400 | Captions, metadata |
+| `kicker` | 11 / 1.2, `.08em`, uppercase | | 700 | Eyebrow labels |
+| `tag` | 10.5 / 1, `.08em`, uppercase | | 700 | Pills and tags. A ratio of exactly 1 is deliberate — uppercase-only, so no descenders to clip |
+
+**A step is taken whole, through `text.ui` / `text.display` / `text.mono`.**
+Every property in that table is part of the step, and naming a size is not
+naming a step: `type.body.fontSize` takes one field and completes the other
+three from whatever the component author remembered.
+
+That is not hypothetical — it was the state of the system. The line-height
+column reached exactly one component out of twenty, and the tracking column,
+which the paragraph above spends itself justifying, reached **none**: the 54pt
+headline total rendered at the platform's default leading with no tracking at
+all. Nothing looked broken. It looked slightly wrong, which is the defect a
+design system exists to make impossible and the one that never gets reported.
+
+The weight column is new for the same reason. It sat on two steps as an unread
+`fontWeight` — unread because a weight is chosen by naming a *face*, not by
+declaring a number — while every other step left the decision at the call site.
+`conformance.test.ts` refuses a component that reaches into a step for one of
+its fields.
+
+**Mono is a step too.** `text.mono("caption")` exists because the alternative
+composes two spreads whose *order* decides whether the text is monospaced —
+both rate lines had them the wrong way round, the caption's family won, and the
+mono face was set and immediately discarded. Nothing failed; the rates just
+were not monospaced.
 
 ### 2.3 Spacing
 

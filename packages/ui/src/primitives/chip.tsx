@@ -14,8 +14,9 @@
 
 import { useCallback, useState } from "react";
 import { Animated, Pressable, Text } from "react-native";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { usePressScale } from "./press-scale.ts";
 
 export type ChipProps = {
@@ -105,8 +106,8 @@ const useStyles = makeStyles((t) => ({
   machine: { borderColor: t.assertedBorder, backgroundColor: t.assertedFill },
   focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
   disabled: { opacity: 0.45 },
-  text: { fontSize: type.body.fontSize },
+  text: { ...text.ui("body") },
   textEmpty: { color: t.textMuted },
   textFilled: { color: t.text },
-  marker: { color: t.assertedText, fontSize: type.caption.fontSize },
+  marker: { color: t.assertedText, ...text.ui("caption") },
 }));

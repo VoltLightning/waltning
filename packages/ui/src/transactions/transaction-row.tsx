@@ -25,8 +25,9 @@ import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount, type AmountKind } from "../fx/amount";
 import { Tag } from "../primitives/tag";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { hairline, space, tabularNums, type } from "../tokens.ts";
+import { space, tabularNums } from "../tokens.ts";
 
 /** The ledger's own vocabulary — `schema/enums`. */
 export type TransactionType = "expense" | "income" | "transfer" | "adjustment";
@@ -102,22 +103,37 @@ export function TransactionRow({
 }
 
 const useStyles = makeStyles((t) => ({
+  /**
+   * **No separator here.** The row used to draw its own `borderBottom`, which
+   * put a hairline under the *last* row of every list — a rule dangling in a
+   * card's bottom padding, under nothing. A separator is a property of the gap
+   * between two rows, so it belongs to whatever knows there is a next one, and
+   * that is `<TransactionList>`.
+   */
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
-    borderBottomWidth: hairline.width,
-    borderBottomColor: t.hairline,
   },
   date: {
     color: t.textMuted,
-    fontSize: type.caption.fontSize,
+    ...text.ui("caption"),
     width: 44,
     fontVariant: [...tabularNums],
   },
-  identity: { flex: 1, gap: 2 },
+  /**
+   * No `gap`: the two lines carry their own leading now that a step is taken
+   * whole, and adding a gap on top of a line height is how a dense row grows a
+   * few pixels per release until it is not dense.
+   */
+  identity: { flex: 1 },
   payeeLine: { flexDirection: "row", alignItems: "center", gap: space.md },
-  payee: { color: t.text, fontSize: type.bodySm.fontSize },
-  meta: { color: t.textMuted, fontSize: type.caption.fontSize },
+  /**
+   * Medium, where the metadata under it is regular. The payee is what the eye
+   * looks for when scanning a ledger — at the same weight as its own category
+   * and account it is just the first of three strings.
+   */
+  payee: { color: t.text, ...text.ui("bodySm", 500) },
+  meta: { color: t.textMuted, ...text.ui("caption") },
 }));

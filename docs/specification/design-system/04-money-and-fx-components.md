@@ -12,6 +12,25 @@ The heart of the system. These enforce §7 of `SPEC.md` structurally.
 Props: `value`, `currency`, `size`, `emphasis`, `signed`. Negative values take
 `negative` ink. Never renders a conversion — that is `<FxAmount>`.
 
+**Digits are grouped, through `money.forDisplay`.** A ledger without grouping is
+a ledger you count digits in — `12480.20` and `1248.02` are one glance apart —
+and the phone's headline total read `48210.00` for the whole life of this
+document, while the sketch above has said `1 234,56` throughout.
+
+The separator is **U+00A0, a no-break space**, and it is not a locale choice.
+The app renders a trailing ISO code rather than a symbol, and `screens/S17`
+records that symbol placement is a locale question nobody has answered; a comma
+group with a dot decimal is ambiguous in *both* the conventions this product
+will meet, and a space group is ambiguous in neither. No-break rather than thin,
+because a thin space is not in every fallback face and a plain one would let a
+figure wrap in the middle of itself.
+
+`forDisplay` lives in `core/money` beside the arithmetic and **returns a
+`string`, not a `Money`** — the display form can never be handed back to
+arithmetic or written to the wire, and the type is what says so. `toMoney`
+remains the storage form: full scale, ungrouped, round-trippable. Grouping runs
+on the integer part only; a fraction split into threes reads as a phone number.
+
 ### 4.2 `<FxAmount>` — the P1 component
 
 ```

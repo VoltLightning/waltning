@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { Button } from "../primitives/button";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { focus, radius, space, touchTarget } from "../tokens.ts";
 
 export type BottomSheetProps = {
   visible: boolean;
@@ -72,5 +72,5 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.elevation.raised.borderColor,
   },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { color: t.text, fontSize: type.displayThree.fontSize, ...face.ui(600) },
+  title: { color: t.text, ...text.ui("displayThree") },
 }));

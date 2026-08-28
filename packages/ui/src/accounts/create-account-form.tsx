@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { Button } from "../primitives/button";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space, type } from "../tokens.ts";
+import { focus, radius, space } from "../tokens.ts";
 
 export type CreateAccountFormProps = {
   currency: "USD";
@@ -43,7 +43,7 @@ export function CreateAccountForm({ currency, onCancel, onSave }: CreateAccountF
 
 const useStyles = makeStyles((t) => ({
   root: { gap: space.xl },
-  label: { color: t.textMuted, fontSize: type.kicker.fontSize, ...face.ui(700) },
+  label: { color: t.textMuted, ...text.ui("kicker") },
   input: {
     minHeight: 44,
     borderWidth: 1,
@@ -53,6 +53,6 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: space.xl,
   },
   focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
-  currency: { color: t.text, fontSize: type.body.fontSize },
+  currency: { color: t.text, ...text.ui("body") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

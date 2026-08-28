@@ -4,9 +4,9 @@ import { Text, View } from "react-native";
 import { AmountField, parseAmount } from "../fx/amount-field";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { space, type } from "../tokens.ts";
+import { space } from "../tokens.ts";
 
 export type QuickAddAccount = { id: string; name: string; currency: "USD" };
 export type QuickAddFormProps = {
@@ -99,7 +99,7 @@ function AccountChoice({ account, selected, onSelect }: AccountChoiceProps) {
 
 const useStyles = makeStyles((t) => ({
   root: { gap: space.x3 },
-  label: { color: t.textMuted, fontSize: type.kicker.fontSize, ...face.ui(700) },
+  label: { color: t.textMuted, ...text.ui("kicker") },
   accounts: { gap: space.md },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

@@ -168,6 +168,35 @@ describe("a component names a scale step, never a size (§2.2)", () => {
   });
 
   /**
+   * **A step is four properties, and every call site was taking one.**
+   *
+   * The sibling rule above holds that a component names a step rather than a
+   * size — and it passed for the whole life of the design system while the
+   * scale was, in practice, unenforced. `type.body.fontSize` names a step and
+   * takes only its size, so `lineHeightRatio` reached exactly one component out
+   * of twenty and the negative tracking §2.2 spends a paragraph justifying
+   * reached none: the 54pt headline total rendered at the platform's default
+   * leading with no tracking at all.
+   *
+   * That is the failure mode a design system is for. Nothing looked broken —
+   * it looked *slightly wrong*, which never gets reported and never gets fixed.
+   *
+   * So the unit is the step: `text.ui("body")`, `text.display("displayHero")`,
+   * `text.mono("caption")`. Reaching into a step for one of its fields is what
+   * this refuses.
+   */
+  it("a component takes the whole step, never one of its fields", () => {
+    const FIELD = /\btype\.\w+\.(fontSize|lineHeightRatio|letterSpacing|weight)\b/;
+
+    const offenders = all
+      .filter((c) => FIELD.test(c.text.replace(/^\s*\*.*$/gm, "")))
+      .map((c) => c.name);
+
+    expect(offenders, "components reaching into a scale step").toEqual([]);
+    expect(all.length, "components found").toBeGreaterThan(8);
+  });
+
+  /**
    * **A family plus a weight does not select a face in React Native.** Each
    * weight is its own file registered under its own name, so `fontFamily:
    * "Figtree"` with `fontWeight: "600"` finds no such family — it falls back, or

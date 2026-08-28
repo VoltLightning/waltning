@@ -1,8 +1,8 @@
 import { Text, View } from "react-native";
 import { Button } from "../primitives/button";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { space, type } from "../tokens.ts";
+import { space } from "../tokens.ts";
 
 export type EmptyStateProps = {
   title: string;
@@ -27,7 +27,7 @@ export function EmptyState({ title, body, primaryAction, secondaryAction }: Empt
 
 const useStyles = makeStyles((t) => ({
   root: { alignItems: "center", gap: space.x3, padding: space.x6 },
-  title: { color: t.text, fontSize: type.displayTwo.fontSize, ...face.display(600) },
-  body: { color: t.textMuted, fontSize: type.body.fontSize, textAlign: "center" },
+  title: { color: t.text, ...text.display("displayTwo") },
+  body: { color: t.textMuted, ...text.ui("body"), textAlign: "center" },
   actions: { width: "100%", gap: space.xl },
 }));

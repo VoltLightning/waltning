@@ -30,6 +30,8 @@
  * family is tried the test says whether it is allowed to be.
  */
 
+import { lineHeightFor, type TypeStep, type } from "../tokens.ts";
+
 /** The families §2.2 names. `mono` is the platform's, so it loads nothing. */
 export type FaceFamily = "ui" | "display" | "mono";
 
@@ -103,4 +105,75 @@ export const face = {
   ui: (weight: UiWeight) => ({ fontFamily: FACES.ui[weight] }) as const,
   display: (weight: DisplayWeight) => ({ fontFamily: FACES.display[weight] }) as const,
   mono: () => ({ fontFamily: FACES.mono[400] }) as const,
+};
+
+/**
+ * A **whole** scale step, as a style fragment.
+ *
+ * **The same bug as `face`, one level up.** That function exists because naming
+ * a family and a weight separately does not select a face; this one exists
+ * because naming a size and nothing else does not select a *step*. A step is
+ * four properties — size, leading, tracking, weight — and every call site in
+ * the package was taking one of them. `lineHeightRatio` reached exactly one
+ * component out of twenty, and the display tracking §2.2 spent a paragraph
+ * justifying reached none of them: a 54pt headline rendered at the platform's
+ * default leading with no tracking, which does not look broken, it looks
+ * *slightly wrong*, forever.
+ *
+ * So the step is the unit. `text.ui("body")` is body text; `text.ui("body",
+ * 600)` overrides the weight, which is what a button label is; `text.display(
+ * "displayHero")` is the figure. The weight argument is optional because the
+ * step already states its own, so the default is the design system's answer
+ * rather than the component's.
+ *
+ * **Two functions, mirroring `face`, and `display` is not decoration.** The
+ * two resolve to the same file today. A component that says `display` is
+ * saying *this is a headline or a figure*, and that survives the day the
+ * display face changes again — which is the whole reason `FACES.display`
+ * exists as a separate entry.
+ *
+ * `lineHeight` is resolved at the default text scale, which is what a
+ * `StyleSheet` can hold. A screen that must honour a non-default scale reads
+ * `lineHeightFor(step, scale)` itself; nothing does yet, and when something
+ * does it will be a hook, not a constant.
+ */
+export type TextStep = {
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  letterSpacing?: number;
+};
+
+function step(name: TypeStep, family: string): TextStep {
+  const tokens = type[name];
+  return {
+    fontFamily: family,
+    fontSize: tokens.fontSize,
+    lineHeight: lineHeightFor(name),
+    // Conditional rather than `letterSpacing: undefined`, which React Native
+    // accepts and applies as `0` — a *different* thing from the step not
+    // tracking, because it also overrides whatever a parent `Text` set.
+    ...("letterSpacing" in tokens ? { letterSpacing: tokens.letterSpacing } : {}),
+  };
+}
+
+export const text = {
+  /** The step's own weight unless a component overrides it. */
+  ui: (name: TypeStep, weight: UiWeight = type[name].weight) => step(name, FACES.ui[weight]),
+  /**
+   * The display face has exactly one weight, so it is the default rather than
+   * the step's — a step's weight names a UI face, and `display` is a claim
+   * about *what the text is*, not about how heavy it should be.
+   */
+  display: (name: TypeStep, weight: DisplayWeight = 600) => step(name, FACES.display[weight]),
+  /**
+   * A step in the platform's own monospace — codes, IDs, rate values.
+   *
+   * It exists because the alternative is `...text.ui("caption"), ...face.mono()`
+   * and **the order of those two spreads decides whether the text is
+   * monospaced at all.** Both rate lines had them the other way round, so the
+   * caption's family won and the mono face was set and immediately discarded.
+   * Nothing failed; the rates just were not monospaced.
+   */
+  mono: (name: TypeStep) => step(name, FACES.mono[400]),
 };
