@@ -9,6 +9,11 @@
  * **Every amount is tabular.** §2.2 calls it mandatory and names it the most
  * common omission when figures are rendered ad hoc — without it a column of
  * numbers does not align, and a ledger that does not align is read wrong.
+ *
+ * **A figure takes a `kind`, never a colour.** Money has three colours of its
+ * own — income, spend, transfer — and this is the one place they are resolved,
+ * so a screen cannot paint a credit in the action green or a debit in the
+ * danger red. Both are near misses that look deliberate.
  */
 
 import * as money from "@waltning/core/money";
@@ -20,6 +25,17 @@ import { tabularNums, type } from "../tokens.ts";
 export type AmountSize = "hero" | "large" | "body" | "small";
 export type AmountEmphasis = "default" | "muted" | "shell";
 
+/**
+ * What kind of movement the figure is.
+ *
+ * `auto` is sign-based and is the default: a negative figure is spend, anything
+ * else is plain ink. It is right for a balance, where a positive number is not
+ * income — it is what you have. A row that *knows* it is income says so, and
+ * gets the brighter green; a transfer says so and gets muted, because money
+ * moved between your own accounts is neither gained nor lost.
+ */
+export type AmountKind = "auto" | "income" | "spend" | "transfer";
+
 export type AmountProps = {
   /** A decimal string. A JS number holding money is a bug (`SPEC.md` §7.0). */
   value: money.Money;
@@ -29,6 +45,7 @@ export type AmountProps = {
   decimals?: number;
   size?: AmountSize;
   emphasis?: AmountEmphasis;
+  kind?: AmountKind;
   /** Force a leading `+` on positives. Off by default; ledgers rarely want it. */
   signed?: boolean;
 };
@@ -46,6 +63,7 @@ export function Amount({
   decimals = 2,
   size = "body",
   emphasis = "default",
+  kind = "auto",
   signed = false,
 }: AmountProps) {
   // `cmp` rather than inspecting the string: `-0.00000000` is not a negative
@@ -57,16 +75,22 @@ export function Amount({
 
   const styles = useStyles();
 
+  // On the shell, emphasis wins: the hero total is one colour whatever its
+  // sign, because the shell has its own ink and a red total on dark green is
+  // neither legible nor what the screen is for.
+  const tone =
+    emphasis === "shell"
+      ? styles.shell
+      : kind === "income"
+        ? styles.income
+        : kind === "transfer"
+          ? styles.transfer
+          : kind === "spend" || negative
+            ? styles.spend
+            : null;
+
   return (
-    <Text
-      style={[
-        styles.base,
-        SIZES[size],
-        negative ? styles.negative : null,
-        emphasis === "muted" ? styles.muted : null,
-        emphasis === "shell" ? styles.shell : null,
-      ]}
-    >
+    <Text style={[styles.base, SIZES[size], tone, emphasis === "muted" ? styles.muted : null]}>
       {prefix}
       {text}
       <Text style={[styles.currency, emphasis === "shell" ? styles.shellCurrency : null]}>
@@ -80,13 +104,10 @@ export function Amount({
 const useStyles = makeStyles((t) => ({
   base: {
     color: t.text,
-    // §2.2 files money under the **display** face, and `<Amount>` rendered it
-    // in the UI face at every size below `large` — a divergence with a
-    // consequence, not a cosmetic one: Figtree's digits are proportional by
-    // default (measured: `1` is 413 units against `0` at 641) and align only
-    // because `fontVariant` switches on its `tnum` feature. Source Serif 4's
-    // digits are all 547 with no feature applied, so the column aligns because
-    // of the file rather than because of a renderer. `fonts.test.ts` pins it.
+    // §2.2 files money under the **display** face. It is the same family as
+    // the UI face now, and the reason the column still aligns on Android is
+    // the file, not the feature below: IBM Plex Sans's digits are 600 units at
+    // every weight with no feature applied. `fonts.test.ts` pins it.
     ...face.display(600),
     // Spread, not cast. React Native types `fontVariant` as a union of the
     // five real values, and both tokens are members — so this typechecks
@@ -94,9 +115,11 @@ const useStyles = makeStyles((t) => ({
     // accepted a typo just as happily.
     fontVariant: [...tabularNums],
   },
-  negative: { color: t.dangerText },
+  income: { color: t.income },
+  spend: { color: t.spend },
+  transfer: { color: t.textMuted },
   muted: { color: t.textMuted },
   shell: { color: t.shellText },
   currency: { color: t.textMuted, fontSize: type.caption.fontSize },
-  shellCurrency: { color: t.shellText },
+  shellCurrency: { color: t.shellTextMuted },
 }));

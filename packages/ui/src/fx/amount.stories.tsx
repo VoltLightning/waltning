@@ -4,8 +4,9 @@
  *
  * The stories below are chosen to be the cases that have been wrong before or
  * are silently wrong when they are: the negative that is not negative, the
- * currency whose scale is not two, and the column that only reads as a column
- * if the digits are tabular.
+ * currency whose scale is not two, the column that only reads as a column if
+ * the digits are tabular — and the three kinds of movement, which must read as
+ * three things and not as "green good, red bad".
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
@@ -34,6 +35,7 @@ export const Hero: Story = {
   args: { value: money.toMoney("48210.00"), size: "hero" },
 };
 
+/** Sign-based: a negative figure is spend unless told otherwise. */
 export const Negative: Story = {
   args: { value: money.toMoney("-820.40") },
 };
@@ -69,6 +71,25 @@ export const Muted: Story = {
   args: { emphasis: "muted" },
 };
 
+/** Income is a *brighter* green than the action green — an event, not a control. */
+export const Income: Story = {
+  args: { value: money.toMoney("4200.00"), kind: "income", signed: true },
+};
+
+/** Spend is a restrained red: unmistakable, not alarming. */
+export const Spend: Story = {
+  args: { value: money.toMoney("-184.20"), kind: "spend" },
+};
+
+/**
+ * **A transfer is neither.** Its two legs are signed opposite ways; sign alone
+ * would paint one green and one red — money moved between your own accounts,
+ * read as a gain and a loss. Muted, with no sign, is the honest rendering.
+ */
+export const Transfer: Story = {
+  args: { value: money.toMoney("2000.00"), kind: "transfer" },
+};
+
 const COLUMN = ["9.99", "1234.56", "-820.40", "48210.00", "7.05"] as const;
 
 /**
@@ -87,6 +108,38 @@ function renderColumn() {
     <View style={{ alignItems: "flex-end", gap: space.x2 }}>
       {COLUMN.map((value) => (
         <Amount key={value} value={money.toMoney(value)} currency="PLN" decimals={2} />
+      ))}
+    </View>
+  );
+}
+
+const KINDS = [
+  { value: "4200.00", kind: "income", label: "income" },
+  { value: "-184.20", kind: "spend", label: "spend" },
+  { value: "2000.00", kind: "transfer", label: "transfer" },
+] as const;
+
+/**
+ * The three side by side — the only arrangement in which "reads as three
+ * things" can actually be judged. Switch the toolbar to *Side by side* to see
+ * that they hold in dark, where the greens and reds are lifted.
+ */
+export const ThreeKinds: Story = {
+  render: renderThreeKinds,
+};
+
+function renderThreeKinds() {
+  return (
+    <View style={{ alignItems: "flex-end", gap: space.x2 }}>
+      {KINDS.map((k) => (
+        <Amount
+          key={k.label}
+          value={money.toMoney(k.value)}
+          currency="PLN"
+          decimals={2}
+          kind={k.kind}
+          signed={k.kind === "income"}
+        />
       ))}
     </View>
   );

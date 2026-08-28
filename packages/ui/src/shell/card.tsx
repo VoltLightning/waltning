@@ -1,13 +1,18 @@
 /**
  * `<Card>` and `<GroundPanel>` — `design-system/05` §5.
  *
- * `Card`: `surface`, `radius-lg`, `shadow-card`, with an optional title and one
- * action. **One** action, not a row of them — a card with three affordances in
- * its header is a card whose content has stopped being the point.
+ * `Card`: `surface`, `radius-md`, a one-pixel `border` and **no shadow**, with
+ * an optional title and one action. **One** action, not a row of them — a card
+ * with three affordances in its header is a card whose content has stopped
+ * being the point.
  *
- * `GroundPanel`: the `radius-xl` surface that lifts over the shell. It is the
+ * `GroundPanel`: the `radius-lg` surface that lifts over the shell. It is the
  * page body, and the reason the shell's dark band reads as behind rather than
  * above.
+ *
+ * The elevation props are still read from the theme rather than written here,
+ * because the theme is where "a card has no shadow" is decided — and where the
+ * one exception, the floating button, is granted its.
  */
 
 import { Text, View } from "react-native";
@@ -47,7 +52,7 @@ export function GroundPanel({ children }: { children: React.ReactNode }) {
 const useStyles = makeStyles((t) => ({
   card: {
     backgroundColor: t.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     padding: space.x5,
     gap: space.x3,
     shadowColor: t.elevation.card.shadowColor,
@@ -69,8 +74,8 @@ const useStyles = makeStyles((t) => ({
   title: { color: t.text, fontSize: type.displayThree.fontSize, ...face.ui(600) },
   panel: {
     backgroundColor: t.ground,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
     padding: space.x5,
     gap: space.x4,
     flex: 1,

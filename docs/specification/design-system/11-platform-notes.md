@@ -5,7 +5,7 @@ One codebase via Expo + React Native Web (`SPEC.md` §14.6).
 | Concern | Approach |
 |---|---|
 | Tokens | One TS module, consumed by RN `StyleSheet` and web CSS variables alike |
-| Type | Figtree + Source Serif 4 via `expo-font`; web via the same families |
+| Type | IBM Plex Sans via `expo-font`; web and Storybook via the same files |
 | Icons | `@phosphor-icons/react` (web) / `phosphor-react-native` — same names, one wrapper |
 | Charts | ⚠️ The known RN Web friction point. `victory-native` renders both, but treemap and dense tables may need a web-only path |
 | Tables | Import review and Reports are dense and keyboard-driven — most likely to force `apps/web` |

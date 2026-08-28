@@ -62,7 +62,12 @@ describe("a component follows the active theme", () => {
     ["light asserted text on fill", light.assertedText, light.assertedFill],
     ["light danger text on fill", light.dangerText, light.dangerFill],
     ["light tag text on fill", light.tagNeutralText, light.tagNeutralFill],
-    ["light shell text on shell", light.shellText, light.shellFrom],
+    ["light shell text on shell", light.shellText, light.shell],
+    ["light shell muted text on shell", light.shellTextMuted, light.shell],
+    ["light income on ground", light.income, light.ground],
+    ["light income on surface", light.income, light.surface],
+    ["light spend on ground", light.spend, light.ground],
+    ["light spend on surface", light.spend, light.surface],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
     ["dark muted text on ground", dark.textMuted, dark.ground],
@@ -71,7 +76,12 @@ describe("a component follows the active theme", () => {
     ["dark asserted text on fill", dark.assertedText, dark.assertedFill],
     ["dark danger text on fill", dark.dangerText, dark.dangerFill],
     ["dark tag text on fill", dark.tagNeutralText, dark.tagNeutralFill],
-    ["dark shell text on shell", dark.shellText, dark.shellFrom],
+    ["dark shell text on shell", dark.shellText, dark.shell],
+    ["dark shell muted text on shell", dark.shellTextMuted, dark.shell],
+    ["dark income on ground", dark.income, dark.ground],
+    ["dark income on surface", dark.income, dark.surface],
+    ["dark spend on ground", dark.spend, dark.ground],
+    ["dark spend on surface", dark.spend, dark.surface],
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);

@@ -21,8 +21,7 @@
     "typecheck": "expo customize tsconfig.json && tsc --noEmit"
   },
   "dependencies": {
-    "@expo-google-fonts/figtree": "^0.4.1",
-    "@expo-google-fonts/source-serif-4": "^0.4.1",
+    "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
     "@logtape/logtape": "^2.3.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@trpc/client": "^11.18.0",

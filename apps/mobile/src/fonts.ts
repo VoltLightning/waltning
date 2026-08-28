@@ -16,12 +16,11 @@
  */
 
 import {
-  Figtree_400Regular,
-  Figtree_500Medium,
-  Figtree_600SemiBold,
-  Figtree_700Bold,
-} from "@expo-google-fonts/figtree";
-import { SourceSerif4_600SemiBold } from "@expo-google-fonts/source-serif-4";
+  IBMPlexSans_400Regular,
+  IBMPlexSans_500Medium,
+  IBMPlexSans_600SemiBold,
+  IBMPlexSans_700Bold,
+} from "@expo-google-fonts/ibm-plex-sans";
 import type { RequiredFace } from "@waltning/ui/theme/fonts";
 
 /**
@@ -35,9 +34,8 @@ import type { RequiredFace } from "@waltning/ui/theme/fonts";
  * means there is no moment at which the app is running and wrong.
  */
 export const FONT_ASSETS = {
-  Figtree_400Regular,
-  Figtree_500Medium,
-  Figtree_600SemiBold,
-  Figtree_700Bold,
-  SourceSerif4_600SemiBold,
+  IBMPlexSans_400Regular,
+  IBMPlexSans_500Medium,
+  IBMPlexSans_600SemiBold,
+  IBMPlexSans_700Bold,
 } satisfies Record<RequiredFace, unknown>;

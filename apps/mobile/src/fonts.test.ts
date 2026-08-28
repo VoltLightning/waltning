@@ -27,10 +27,11 @@
  * the file, the column aligns with no feature applied, on any renderer, forever.
  * That turns a platform-conditional hope into a property of the bundle.
  *
- * **This is why `<Amount>` renders in the display face.** `design-system/02`
- * §2.2 files money under *Display & money · Source Serif 4* and the component
- * had been using the UI face below `large` — a divergence whose consequence is
- * measured below: Figtree's digits are proportional by default.
+ * **This is the constraint that chose the family.** When the design system
+ * moved to one sans, seven candidates were measured this way. Inter, Geist,
+ * DM Sans and Manrope are proportional by default — they would have misaligned
+ * every money column on Android however well they read. IBM Plex Sans is 600
+ * units on every digit at every weight, and this file is what keeps that true.
  */
 
 import { readFileSync } from "node:fs";
@@ -40,11 +41,15 @@ import { describe, expect, it } from "vitest";
 
 const require_ = createRequire(import.meta.url);
 
-/** Where a face's `.ttf` actually lives, resolved the way Metro would find it. */
+/**
+ * Where a face's `.ttf` actually lives, resolved the way Metro would find it.
+ *
+ * One package now. If a second family ever returns, this is the line that
+ * says which package holds it — and the digit checks below say whether it is
+ * allowed to.
+ */
 function fontPath(face: string): string {
-  const [family] = face.split("_");
-  const pkg =
-    family === "Figtree" ? "@expo-google-fonts/figtree" : "@expo-google-fonts/source-serif-4";
+  const pkg = "@expo-google-fonts/ibm-plex-sans";
   const root = require_.resolve(`${pkg}/package.json`).replace(/package\.json$/, "");
   const variant = face.slice(face.indexOf("_") + 1);
   return `${root}${variant}/${face}.ttf`;
@@ -146,22 +151,25 @@ describe("money aligns because of the font file, not because of the renderer", (
   });
 
   /**
-   * **The UI face is asserted to be proportional, which looks backwards.**
+   * **Every UI weight, too — and this is the check that changed direction.**
    *
-   * It is the finding written down. Figtree's digits are *not* equal width —
-   * `1` measures 413 against `0` at 641 — and a column set in it aligns only
-   * where `fontVariant` can reach its `tnum` feature, which is iOS and web but
-   * not Android. `SPEC.md` says *"Android free if ever wanted"*; this is the
-   * part that is not free, and it is cheap to know now and expensive to
-   * discover then.
-   *
-   * If this ever fails because Figtree shipped tabular defaults, that is good
-   * news and the note above should be deleted — but it should be deleted
-   * *knowingly*, which is what a failing test buys.
+   * Under Figtree this test asserted the UI face was *proportional*, as a
+   * finding written down: money had to avoid it. Under one family the claim
+   * inverts. A figure can now appear in any weight a screen chooses, so every
+   * weight has to be tabular, and the day someone swaps the family for one
+   * that is not, this is the test that refuses — per weight, naming the one
+   * that broke, because a family can ship tabular digits at 400 and
+   * proportional at 700 and nothing about the name would say so.
    */
-  it("records that the UI face is proportional, so money must not use it", () => {
-    const advances = digitAdvances(fontPath(FACES.ui[400]));
-
-    expect(new Set(advances).size, "Figtree's digit widths").toBeGreaterThan(1);
+  it("every UI weight has equal-width digits, so a figure may use any of them", () => {
+    for (const [weight, name] of Object.entries(FACES.ui)) {
+      const advances = digitAdvances(fontPath(name));
+      expect(advances.length, `${name}: ten digits found`).toBe(10);
+      expect(
+        new Set(advances).size,
+        `${name} (weight ${weight}) digit advances were ${advances.join(", ")}`,
+      ).toBe(1);
+    }
+    expect(Object.keys(FACES.ui).length, "UI weights checked").toBe(4);
   });
 });
