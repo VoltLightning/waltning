@@ -56,7 +56,14 @@ describe("Card", () => {
     expect(container.textContent).toBe("body");
   });
 
-  it("uses shadow elevation in light and a border in dark", () => {
+  /**
+   * **A card has no shadow in either theme.** `design-system/02` §2.5 reserves
+   * the system's one shadow for the floating add button — the only object above
+   * the page — and conveys every surface in the layout by edge. This used to
+   * assert the opposite for light; the dark theme was already right, and light
+   * caught up.
+   */
+  it("is a bordered surface with no shadow, in both themes", () => {
     const { container, rerender } = render(
       <ThemeProvider theme={light}>
         <Card>
@@ -66,8 +73,11 @@ describe("Card", () => {
     );
     const card = container.firstElementChild as HTMLElement;
 
-    expect(light.elevation.card.shadowOpacity).toBeGreaterThan(0);
-    expect(light.elevation.card.borderWidth).toBe(0);
+    for (const theme of [light, dark]) {
+      expect(theme.elevation.card.shadowOpacity).toBe(0);
+      expect(theme.elevation.card.borderWidth).toBe(1);
+    }
+    expect(getComputedStyle(card).borderTopWidth).toBe("1px");
 
     rerender(
       <ThemeProvider theme={dark}>
@@ -76,9 +86,18 @@ describe("Card", () => {
         </Card>
       </ThemeProvider>,
     );
-
-    expect(dark.elevation.card.shadowOpacity).toBe(0);
-    expect(dark.elevation.card.borderWidth).toBe(1);
     expect(getComputedStyle(card).borderTopWidth).toBe("1px");
+  });
+
+  it("grants the one shadow to the floating level only", () => {
+    for (const theme of [light, dark]) {
+      expect(theme.elevation.float.shadowOpacity).toBeGreaterThan(0);
+      expect(theme.elevation.floatLifted.shadowOpacity).toBeGreaterThan(
+        theme.elevation.float.shadowOpacity,
+      );
+      for (const level of ["card", "raised", "frame"] as const) {
+        expect(theme.elevation[level].shadowOpacity, level).toBe(0);
+      }
+    }
   });
 });

@@ -16,20 +16,56 @@
 
 /* ── 2.1 Colour ──────────────────────────────────────────────────────────── */
 
+/**
+ * The light palette.
+ *
+ * **Neutral ground; green is a signal.** The previous palette tinted the
+ * ground, the borders, the headings and the shell green, and a green on
+ * everything is a green that means nothing. The neutrals here carry a faint
+ * green bias — chosen, not inherited — and green itself is reserved for four
+ * jobs: a primary action, the focus ring, income, and the data ramp.
+ */
 export const color = {
   /** Outside the app frame — design boards only, never a screen. */
-  canvas: "#e6ece5",
+  canvas: "#e9ecea",
   /** Page background. Every card sits on this. */
-  ground: "#f2f6f1",
+  ground: "#f5f7f6",
   surface: "#ffffff",
-  ink: "#1a2620",
-  muted: "#5f7168",
+  /** Table headers, inset boxes, filled chips — quieter than `surface`. */
+  subtle: "#eef2f0",
+  /** The transient fill under a finger. */
+  pressed: "#e3e9e6",
+  /** Card edges, dividers, the outline of an unfilled control. */
+  border: "#dfe5e2",
+  ink: "#171d1a",
+  muted: "#667069",
+
+  /** A primary action's fill. Job 1. */
+  accent: "#22754f",
+  /** Links, a secondary action's label. */
+  accentText: "#1f6a48",
+  /** Decorative accent marks, and the focus ring. Job 2. */
+  accentIcon: "#3d9a6c",
+
+  /**
+   * Money has three colours of its own, and none of them is the accent.
+   *
+   * `income` is a *more vivid* green than `accent`, so a credit reads as an event
+   * and a button reads as a control — related, never confused. Vivid by
+   * saturation, not by lightness: the first value tried, `#1f9a5c`, was lighter
+   * and failed 4.5:1 on white in `theme.test.tsx`. Same hue at 70% saturation
+   * passes at 4.85 and still reads as the livelier of the two. `spend` is a
+   * restrained red: unmistakable, not alarming. A transfer is neither; money
+   * moved between your own accounts is `muted`, because nothing was gained or
+   * lost. Job 3 is `income`.
+   */
+  income: "#178249",
+  spend: "#b0402a",
 
   /**
    * The green ramp is the **entire** chart palette: magnitude reads as depth,
-   * so there is no second hue to reach for.
+   * so there is no second hue to reach for. Job 4, and unchanged.
    */
-  green50: "#f2f9f4",
   green100: "#e4f1e8",
   green200: "#cbe6d6",
   green300: "#a3d2b8",
@@ -46,45 +82,58 @@ export const color = {
    * **Never error, never success, never chrome** — the moment amber means two
    * things it means nothing.
    */
-  amber: "#f8eed9",
-  amberInk: "#856223",
+  amber: "#f6efdc",
+  amberInk: "#7b5b1d",
+  amberBorder: "#dcc07a",
 
-  /** Negative balances and rising spend. **Never chrome.** */
-  negative: "#a8452f",
-  negativeBg: "#f6e7e3",
+  /** Danger — a destructive action, a refused write. **Never chrome.** */
+  danger: "#a33d26",
+  dangerBg: "#f9e9e5",
+  dangerBorder: "#e3a898",
+
+  /**
+   * The shell: one flat colour, no gradient. A gradient was the one thing on
+   * the screen that read as decoration rather than as a surface.
+   */
+  shell: "#0f2b1f",
+  shellText: "#f4f7f5",
+  shellTextMuted: "#a9c4b6",
 
   /** App icon accent only. Not a UI colour. */
   bolt: "#f5c63d",
 } as const;
 
-/** `linear-gradient(160deg, …)` on web; two stops for a native gradient. */
-export const shellGradient = { angle: 160, from: color.green900, to: color.green800 } as const;
-
-/** The dark semantic palette — `design-system/02` §2.1, transcribed. */
+/**
+ * The dark palette — `design-system/02` §2.1, transcribed.
+ *
+ * Neutral near-black with the same faint green bias, the same four jobs for
+ * green, and the same three money colours lifted for a dark ground. The shell
+ * stays green in both themes; it is the one place the brand colour is allowed
+ * to be structural.
+ */
 export const darkColor = {
-  ground: "#08130d",
-  surface: "#10251a",
-  subtleFill: "#173326",
-  pressedFill: "#214735",
-  border: "#2f5d46",
-  hairline: "rgba(203,230,214,.16)",
-  text: "#f2f6f1",
-  textMuted: "#a3b8ad",
-  textOnAccent: "#08130d",
-  accent: "#75bd99",
-  accentText: "#a3d2b8",
-  accentIcon: "#75bd99",
-  focusRing: "#75bd99",
-  assertedFill: "#3b301c",
-  assertedText: "#f1d18a",
-  assertedBorder: "#9f7a31",
-  dangerFill: "#3b211c",
-  dangerText: "#f0a08d",
-  dangerBorder: "#b95e49",
-  tagNeutralFill: "#173326",
-  tagNeutralText: "#a3d2b8",
-  shellFrom: "#06100a",
-  shellTo: "#0e2e20",
+  ground: "#0e1210",
+  surface: "#161b18",
+  subtle: "#1c2320",
+  pressed: "#252e29",
+  border: "#2b3530",
+  ink: "#eef2ef",
+  muted: "#9ba79f",
+  accent: "#5cc08f",
+  accentText: "#8fd6b3",
+  accentIcon: "#5cc08f",
+  textOnAccent: "#0b1a12",
+  income: "#62d495",
+  spend: "#ea8f7b",
+  amber: "#3a301b",
+  amberInk: "#f0d38c",
+  amberBorder: "#8f7332",
+  danger: "#f1a390",
+  dangerBg: "#3b201b",
+  dangerBorder: "#a85a48",
+  shell: "#0a1f16",
+  shellText: "#f0f5f2",
+  shellTextMuted: "#86a496",
 } as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
@@ -97,7 +146,7 @@ export const darkColor = {
  * and the comment below described the gap without anything closing it.
  *
  * The deeper problem was that a family name is not enough: React Native selects
- * a weight by *face*, not by family plus `fontWeight`, so `Figtree` + `600`
+ * a weight by *face*, not by family plus `fontWeight`, so a family plus `600`
  * finds nothing and falls back or synthesises. `theme/fonts.ts` names faces;
  * use `face.ui(600)`.
  */
@@ -203,30 +252,59 @@ export const space = {
 
 /* ── 2.4 Radius ──────────────────────────────────────────────────────────── */
 
+/**
+ * Tightened. Cards were 20 and the ground panel 24, which together with a
+ * 26px blur read as a consumer app; a tool is squarer. `pill` stays for chips
+ * and tags, and for exactly one other thing — the floating add button, which
+ * is the only circle on the screen and is findable because of it.
+ */
 export const radius = {
   pill: 999,
   xs: 3,
+  /** Controls: buttons, inputs. */
   sm: 8,
+  /** Cards, inset boxes. */
   md: 12,
-  lg: 20,
-  /** The ground panel lifting over the shell. */
-  xl: 24,
+  /** Sheets, and the ground panel lifting over the shell. */
+  lg: 16,
 } as const;
 
 /* ── 2.5 Elevation ───────────────────────────────────────────────────────── */
 
 /**
- * Expressed as the parts a platform needs, rather than a CSS string: React
+ * **One shadow, on the one thing that floats.**
+ *
+ * Nothing that sits in the layout casts a shadow: a card is a surface with a
+ * hairline, a sheet is a surface with a scrim behind it. Elevation is conveyed
+ * by edge and by surface step, which is what the dark theme was already doing
+ * and light now does too. The `card` / `raised` / `frame` levels are kept as
+ * names so a component can still say which kind of surface it is; they all
+ * resolve to a border.
+ *
+ * `float` is the exception, and it is reserved: the add button is the only
+ * object *above* the page, and the shadow is what says so. Three layers — a
+ * tight contact edge, a mid cast, a soft far cast — rather than one large blur,
+ * which is the glow this design system removed everywhere else.
+ *
+ * Expressed as the parts a platform needs rather than a CSS string: React
  * Native takes offset/opacity/radius and the web takes a `box-shadow`, and a
  * string here would be usable by exactly one of them.
  */
 export const shadow = {
-  card: { color: "#123022", opacity: 0.05, radius: 26, offsetY: 10 },
-  raised: { color: "#0e2e20", opacity: 0.1, radius: 26, offsetY: 8 },
-  frame: { color: "#0e2e20", opacity: 0.14, radius: 34, offsetY: 8 },
+  float: {
+    contact: { color: "#0f2b1f", opacity: 0.22, radius: 2, offsetY: 1 },
+    mid: { color: "#0f2b1f", opacity: 0.18, radius: 10, offsetY: 4 },
+    far: { color: "#0f2b1f", opacity: 0.35, radius: 24, offsetY: 12 },
+  },
+  /** The same three, lifted, while the button is being dragged. */
+  floatLifted: {
+    contact: { color: "#0f2b1f", opacity: 0.22, radius: 4, offsetY: 2 },
+    mid: { color: "#0f2b1f", opacity: 0.22, radius: 22, offsetY: 10 },
+    far: { color: "#0f2b1f", opacity: 0.45, radius: 40, offsetY: 24 },
+  },
 } as const;
 
-export const hairline = { width: 1, color: "rgba(14,46,32,.09)" } as const;
+export const hairline = { width: 1, color: "rgba(23,29,26,.10)" } as const;
 
 /* ── 2.6 Focus ───────────────────────────────────────────────────────────── */
 
@@ -235,7 +313,7 @@ export const hairline = { width: 1, color: "rgba(14,46,32,.09)" } as const;
  * change alone — a colour-only focus state is invisible to anyone who cannot
  * distinguish the two colours, which is the population it exists for.
  */
-export const focus = { width: 2, offset: 2, color: color.green500 } as const;
+export const focus = { width: 2, offset: 2, color: color.accentIcon } as const;
 
 /* ── 2.7 Motion ──────────────────────────────────────────────────────────── */
 
@@ -247,6 +325,8 @@ export const focus = { width: 2, offset: 2, color: color.green500 } as const;
 export const motion = {
   fast: { duration: 120, easing: "ease-out" },
   base: { duration: 200, easing: "cubic-bezier(.2,0,0,1)" },
+  /** The header fold and the sheet rise share one curve. */
+  fold: { duration: 260, easing: "cubic-bezier(.2,0,0,1)" },
   sheet: { duration: 280, easing: "cubic-bezier(.2,0,0,1)" },
   none: { duration: 0, easing: "linear" },
 } as const;

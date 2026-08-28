@@ -158,8 +158,9 @@ that do not come free are worth knowing before rather than after.
 `TextStyleIOS` and not on `TextStyleAndroid`, so tabular figures — which
 `design-system/02` §2.2 makes mandatory, being what lets a money column align —
 cannot be switched on there. The system stays correct because `<Amount>` renders
-in a face whose digits are tabular *by default* (measured: Source Serif 4's ten
-digits are all 547 font units; Figtree's span 413 to 641). That is a permanent
+in a face whose digits are tabular *by default* (measured: IBM Plex Sans's ten
+digits are all 600 font units at every weight; Figtree's, the face it replaced,
+spanned 413 to 641). That is a permanent
 constraint on font choice: a face whose digits are proportional cannot be adopted
 however well it reads, because on Android there is no switch to compensate.
 

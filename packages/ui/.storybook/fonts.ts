@@ -21,19 +21,17 @@
  * inside `@expo-google-fonts/*` that the app ships, resolved by Vite.
  */
 
-import Figtree_400Regular from "@expo-google-fonts/figtree/400Regular/Figtree_400Regular.ttf?url";
-import Figtree_500Medium from "@expo-google-fonts/figtree/500Medium/Figtree_500Medium.ttf?url";
-import Figtree_600SemiBold from "@expo-google-fonts/figtree/600SemiBold/Figtree_600SemiBold.ttf?url";
-import Figtree_700Bold from "@expo-google-fonts/figtree/700Bold/Figtree_700Bold.ttf?url";
-import SourceSerif4_600SemiBold from "@expo-google-fonts/source-serif-4/600SemiBold/SourceSerif4_600SemiBold.ttf?url";
+import IBMPlexSans_400Regular from "@expo-google-fonts/ibm-plex-sans/400Regular/IBMPlexSans_400Regular.ttf?url";
+import IBMPlexSans_500Medium from "@expo-google-fonts/ibm-plex-sans/500Medium/IBMPlexSans_500Medium.ttf?url";
+import IBMPlexSans_600SemiBold from "@expo-google-fonts/ibm-plex-sans/600SemiBold/IBMPlexSans_600SemiBold.ttf?url";
+import IBMPlexSans_700Bold from "@expo-google-fonts/ibm-plex-sans/700Bold/IBMPlexSans_700Bold.ttf?url";
 import type { RequiredFace } from "../src/theme/fonts.ts";
 
 const FONT_URLS = {
-  Figtree_400Regular,
-  Figtree_500Medium,
-  Figtree_600SemiBold,
-  Figtree_700Bold,
-  SourceSerif4_600SemiBold,
+  IBMPlexSans_400Regular,
+  IBMPlexSans_500Medium,
+  IBMPlexSans_600SemiBold,
+  IBMPlexSans_700Bold,
 } satisfies Record<RequiredFace, string>;
 
 /**
@@ -42,8 +40,9 @@ const FONT_URLS = {
  * `src/theme/fonts.ts` explains why the tidier alternative is a trap:
  * `fontFamily` plus `fontWeight` does not select a weight in React Native, so a
  * face is chosen by **name** — `face.ui(600)` emits
- * `fontFamily: "Figtree_600SemiBold"` and no weight at all. Register these as
- * one family with several weights and every call resolves to nothing, silently.
+ * `fontFamily: "IBMPlexSans_600SemiBold"` and no weight at all. Register these
+ * as one family with several weights and every call resolves to nothing,
+ * silently.
  *
  * `font-display: block` because the default lets the browser paint a fallback
  * first and swap. On a review surface that is the worst available behaviour:

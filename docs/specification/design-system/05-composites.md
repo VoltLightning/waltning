@@ -5,8 +5,8 @@
 | Component | Contents |
 |---|---|
 | `Shell` | Dark gradient band — brand, nav, scope segment, `FxStatusChip`, `CurrencyChip`, `DualTotal` hero |
-| `GroundPanel` | `radius-xl` surface lifting over the shell |
-| `Card` | `surface`, `radius-lg`, `shadow-card`; optional title and action |
+| `GroundPanel` | `radius-lg` surface lifting over the shell |
+| `Card` | `surface`, `radius-md`, a one-pixel `border`, no shadow; optional title and action |
 | `StatTile` | Figure + label + delta. Delta takes `negative` ink when spend rose |
 | `DualTotal` | **The two headline figures** — *mine* dominant, *ours* secondary beneath (`SPEC.md` §6.7). Never a toggle: showing one at a time invites reading the wrong number. Degrades to a single figure when no shared account exists |
 | `ContributionRow` | An inflow to a shared account, attributed to a counterparty (`counterparty_role = 'contribution'`). Reads as a contribution, never a debt — no settle action, no ageing. The role is what keeps it out of `counterparty_balances`, so this is a rendering of a distinction the data already makes, not one the component invents |

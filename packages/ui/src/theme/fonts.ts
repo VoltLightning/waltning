@@ -5,10 +5,10 @@
  * **`fontFamily` plus `fontWeight` does not select a weight in React Native.**
  * On the web a browser has the whole family and picks the file; here each
  * weight is a *separate font file* registered under its own name, so
- * `fontFamily: "Figtree"` with `fontWeight: "600"` finds no such family and
- * falls back — or, worse, finds the regular file and synthesises a bold from
- * it, which is a smeared approximation of the semibold sitting unused in the
- * bundle. Both failures are silent, and the second one looks nearly right.
+ * `fontFamily: "IBMPlexSans"` with `fontWeight: "600"` finds no such family
+ * and falls back — or, worse, finds the regular file and synthesises a bold
+ * from it, which is a smeared approximation of the semibold sitting unused in
+ * the bundle. Both failures are silent, and the second one looks nearly right.
  *
  * So a weight is chosen by naming the face: `face.ui(600)`, never a family and
  * a weight separately. That is what these maps are for.
@@ -20,9 +20,14 @@
  * the same string, and `REQUIRED_FACES` is what makes a mismatch fail rather
  * than fall back.
  *
- * **`design-system/02` §2.2 decides which weights exist**, and this is a
- * transcription of it: UI at 400/500/600/700, display at 600 only. A weight not
- * listed there is not available to a component — that is the point of a scale.
+ * **One family, and the digits chose it.** `design-system/02` §2.2 moved from
+ * Figtree + Source Serif 4 to IBM Plex Sans alone, and the constraint that
+ * decided between candidates was not taste: Android ignores `fontVariant`, so
+ * a money column aligns there only if the face's digits are equal-width *in
+ * the file*. Seven sans faces were measured from their `.ttf`s. Inter, Geist,
+ * DM Sans and Manrope are proportional by default; Plex is 600 units on every
+ * digit at every weight. `fonts.test.ts` pins that, so the day a different
+ * family is tried the test says whether it is allowed to be.
  */
 
 /** The families §2.2 names. `mono` is the platform's, so it loads nothing. */
@@ -34,16 +39,22 @@ export type FaceFamily = "ui" | "display" | "mono";
  * A nested record rather than a flat `"ui-600"` key so a missing weight is a
  * compile error at the call site — `face.ui(550)` does not typecheck, where a
  * string key would have resolved to `undefined` and rendered in the fallback.
+ *
+ * **`display` is the same family as `ui`**, and is kept as a name on purpose.
+ * A component that says `face.display(600)` is saying *this is a headline or a
+ * figure*, and that meaning survives the day the display face is changed
+ * again. It costs nothing: the two entries name the same file, and
+ * `REQUIRED_FACES` dedupes.
  */
 export const FACES = {
   ui: {
-    400: "Figtree_400Regular",
-    500: "Figtree_500Medium",
-    600: "Figtree_600SemiBold",
-    700: "Figtree_700Bold",
+    400: "IBMPlexSans_400Regular",
+    500: "IBMPlexSans_500Medium",
+    600: "IBMPlexSans_600SemiBold",
+    700: "IBMPlexSans_700Bold",
   },
   display: {
-    600: "SourceSerif4_600SemiBold",
+    600: "IBMPlexSans_600SemiBold",
   },
   /**
    * Not loaded and deliberately so — §2.2 asks for the platform's own
@@ -75,10 +86,9 @@ export type DisplayWeight = keyof typeof FACES.display;
  */
 export type RequiredFace = (typeof FACES.ui)[UiWeight] | (typeof FACES.display)[DisplayWeight];
 
-/** The same set at runtime, for anything that needs to enumerate it. */
+/** The same set at runtime, deduplicated, for anything that needs to enumerate it. */
 export const REQUIRED_FACES: readonly RequiredFace[] = [
-  ...Object.values(FACES.ui),
-  ...Object.values(FACES.display),
+  ...new Set<RequiredFace>([...Object.values(FACES.ui), ...Object.values(FACES.display)]),
 ];
 
 /**

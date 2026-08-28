@@ -14,24 +14,19 @@
  *
  * > `amber` — *not finished, or not fully observed* (P4). **Never error, never
  * > success, never chrome.**
- * > `negative` — negative balances, MoM spend increases. **Never chrome.**
+ * > `spend` — debits, negative balances, rising spend. **Never chrome.**
  *
- * **The census that produced this set is worth recording**, because it found a
- * defect the palette could not express. `color.surface` (`#ffffff`) was doing
- * two unrelated jobs: the background of a card, and the *label* on a filled
- * primary button. In light they coincide. In dark they do not — a card
- * background rises towards the ground while a label on an accent fill stays
- * light — and with one name there is no way to move one without moving the
- * other. They are `surface` and `textOnAccent` here, and separating them is the
- * whole reason this layer exists.
- *
- * **Why the value stays in `tokens.ts`.** That file's own docstring gives the
- * reason and it still holds: the same numbers reach a native `StyleSheet`, a
- * web style object and a chart library, and a token consumable one way only is
- * a token that gets copied. This maps roles onto it; it does not replace it.
+ * **This layer is why the restyle was a token change and not a rewrite.** The
+ * palette went from a green world to a neutral one with green as a signal;
+ * every component kept naming `surface`, `border`, `accent`, and not one of
+ * them was edited for it. The census that produced the set is still worth
+ * recording: `color.surface` was doing two unrelated jobs — a card's background
+ * and the *label* on a filled primary button — which coincide in light and
+ * diverge in dark. They are `surface` and `textOnAccent` here, and separating
+ * them is the whole reason this layer exists.
  *
  * **Roles that share a value today are still separate roles.** `pressedFill`
- * and `tagNeutralFill` are both `green100`. Merging them would be an
+ * and a tag's fill may resolve to the same hex. Merging them would be an
  * abstraction over a coincidence: a transient press and a persistent tag
  * background are different things, and the day one moves is the day the merge
  * costs more than it saved. The rule against abstraction before the third use
@@ -68,12 +63,12 @@ export type Theme = {
   /** The transient fill under a finger or cursor. */
   pressedFill: string;
 
-  /** Dividers, rules, and the outline of an unfilled control. */
+  /** Card edges, dividers, and the outline of an unfilled control. Neutral. */
   border: string;
   /** The hairline rule, which is a colour *and* an alpha. */
   hairline: string;
 
-  /** Body text. */
+  /** Body text — and heading ink. A heading is not a signal. */
   text: string;
   /** Secondary text: labels, captions, metadata, affixes. */
   textMuted: string;
@@ -83,24 +78,33 @@ export type Theme = {
    */
   textOnAccent: string;
 
-  /** A primary action's fill. */
+  /** A primary action's fill. Green's first job. */
   accent: string;
-  /** Links, a secondary action's label, heading ink. */
+  /** Links, a secondary action's label. */
   accentText: string;
   /** Decorative accent marks — a route arrow, a direction glyph. */
   accentIcon: string;
   /**
-   * The focus ring. §2.6 puts it on **every** interactive element, never
-   * removed and never replaced by a colour change alone.
+   * The focus ring — green's second job. §2.6 puts it on **every** interactive
+   * element, never removed and never replaced by a colour change alone.
    */
   focusRing: string;
+
+  /**
+   * Money's three colours. `<Amount>` takes a `kind`, never a colour, and
+   * resolves it here. `income` is green's third job and is deliberately
+   * brighter than `accent`; `spend` is a restrained red; a transfer renders in
+   * `textMuted`, so it has no role of its own.
+   */
+  income: string;
+  spend: string;
 
   /** P4's *asserted or aged*: a manual override, an estimated rate, a stale figure. */
   assertedFill: string;
   assertedText: string;
   assertedBorder: string;
 
-  /** Negative balances and rising spend. **Never chrome.** */
+  /** A destructive action or a refused write. **Never chrome.** */
   dangerFill: string;
   dangerText: string;
   dangerBorder: string;
@@ -109,40 +113,60 @@ export type Theme = {
   tagNeutralFill: string;
   tagNeutralText: string;
 
-  /** The shell gradient's two stops. */
-  shellFrom: string;
-  shellTo: string;
-  /** Text and icons placed on the shell, whose contrast differs by theme. */
+  /** The shell: one flat colour. The only place green is structural. */
+  shell: string;
+  /** Text and icons placed on the shell. */
   shellText: string;
+  /** Secondary text on the shell — the currency marker, the mine/ours line. */
+  shellTextMuted: string;
   /** The dimming layer behind a modal surface. */
   scrim: string;
 
+  /**
+   * `card`, `raised` and `frame` all resolve to a border in both themes — the
+   * names survive so a component can still say what kind of surface it is.
+   * `float` is the one real shadow, reserved for the add button.
+   */
   elevation: {
     card: ThemeElevation;
     raised: ThemeElevation;
     frame: ThemeElevation;
+    float: ThemeElevation;
+    floatLifted: ThemeElevation;
   };
 };
 
-function lightElevation(value: (typeof shadow)[keyof typeof shadow]): ThemeElevation {
+/** Elevation by edge: a one-pixel border, no shadow. Both themes. */
+function bordered(borderColor: string): ThemeElevation {
   return {
-    shadowColor: value.color,
-    shadowOpacity: value.opacity,
-    shadowRadius: value.radius,
-    shadowOffset: { width: 0, height: value.offsetY },
-    borderWidth: 0,
-    borderColor: color.green200,
-  };
-}
-
-function darkElevation(): ThemeElevation {
-  return {
-    shadowColor: darkColor.ground,
+    shadowColor: borderColor,
     shadowOpacity: 0,
     shadowRadius: 0,
     shadowOffset: { width: 0, height: 0 },
     borderWidth: 1,
-    borderColor: darkColor.border,
+    borderColor,
+  };
+}
+
+/**
+ * The floating button's shadow.
+ *
+ * React Native's `shadow*` props express **one** shadow, and the design is
+ * three layers. The far layer is the one that carries the read of "above the
+ * page", so it is the one a native surface gets; the web bundle composes all
+ * three from `tokens.shadow` directly. The `borderColor` carries the faint
+ * rim the dark theme needs to separate the button from a near-black ground.
+ */
+type ShadowLayer = { color: string; opacity: number; radius: number; offsetY: number };
+
+function floating(layer: ShadowLayer, rim: string, rimWidth: number): ThemeElevation {
+  return {
+    shadowColor: layer.color,
+    shadowOpacity: layer.opacity,
+    shadowRadius: layer.radius,
+    shadowOffset: { width: 0, height: layer.offsetY },
+    borderWidth: rimWidth,
+    borderColor: rim,
   };
 }
 
@@ -156,52 +180,94 @@ function darkElevation(): ThemeElevation {
 export const light: Theme = {
   ground: color.ground,
   surface: color.surface,
-  subtleFill: color.green50,
-  pressedFill: color.green100,
+  subtleFill: color.subtle,
+  pressedFill: color.pressed,
 
-  border: color.green200,
-  hairline: "rgba(14,46,32,.09)",
+  border: color.border,
+  hairline: "rgba(23,29,26,.10)",
 
   text: color.ink,
   textMuted: color.muted,
   textOnAccent: color.surface,
 
-  accent: color.green600,
-  accentText: color.green700,
-  accentIcon: color.green500,
-  focusRing: color.green500,
+  accent: color.accent,
+  accentText: color.accentText,
+  accentIcon: color.accentIcon,
+  focusRing: color.accentIcon,
+
+  income: color.income,
+  spend: color.spend,
 
   assertedFill: color.amber,
   assertedText: color.amberInk,
-  assertedBorder: color.amberInk,
+  assertedBorder: color.amberBorder,
 
-  dangerFill: color.negativeBg,
-  dangerText: color.negative,
-  dangerBorder: color.negative,
+  dangerFill: color.dangerBg,
+  dangerText: color.danger,
+  dangerBorder: color.dangerBorder,
 
-  tagNeutralFill: color.green100,
-  tagNeutralText: color.green700,
+  tagNeutralFill: color.subtle,
+  tagNeutralText: color.muted,
 
-  shellFrom: color.green900,
-  shellTo: color.green800,
-  shellText: color.surface,
-  scrim: color.green900,
+  shell: color.shell,
+  shellText: color.shellText,
+  shellTextMuted: color.shellTextMuted,
+  scrim: color.ink,
 
   elevation: {
-    card: lightElevation(shadow.card),
-    raised: lightElevation(shadow.raised),
-    frame: lightElevation(shadow.frame),
+    card: bordered(color.border),
+    raised: bordered(color.border),
+    frame: bordered(color.border),
+    float: floating(shadow.float.far, color.shell, 0),
+    floatLifted: floating(shadow.floatLifted.far, color.shell, 0),
   },
 };
 
 export const dark: Theme = {
-  ...darkColor,
-  shellText: darkColor.text,
+  ground: darkColor.ground,
+  surface: darkColor.surface,
+  subtleFill: darkColor.subtle,
+  pressedFill: darkColor.pressed,
+
+  border: darkColor.border,
+  hairline: "rgba(228,241,232,.12)",
+
+  text: darkColor.ink,
+  textMuted: darkColor.muted,
+  textOnAccent: darkColor.textOnAccent,
+
+  accent: darkColor.accent,
+  accentText: darkColor.accentText,
+  accentIcon: darkColor.accentIcon,
+  focusRing: darkColor.accentIcon,
+
+  income: darkColor.income,
+  spend: darkColor.spend,
+
+  assertedFill: darkColor.amber,
+  assertedText: darkColor.amberInk,
+  assertedBorder: darkColor.amberBorder,
+
+  dangerFill: darkColor.dangerBg,
+  dangerText: darkColor.danger,
+  dangerBorder: darkColor.dangerBorder,
+
+  tagNeutralFill: darkColor.subtle,
+  tagNeutralText: darkColor.muted,
+
+  shell: darkColor.shell,
+  shellText: darkColor.shellText,
+  shellTextMuted: darkColor.shellTextMuted,
   scrim: darkColor.ground,
+
   elevation: {
-    card: darkElevation(),
-    raised: darkElevation(),
-    frame: darkElevation(),
+    card: bordered(darkColor.border),
+    raised: bordered(darkColor.border),
+    frame: bordered(darkColor.border),
+    // A faint green rim: on a near-black ground a dark shadow alone does not
+    // separate the button, and the rim is what does.
+    float: floating(shadow.float.far, darkColor.accent, 1),
+    floatLifted: floating(shadow.floatLifted.far, darkColor.accent, 1),
   },
 };
 

@@ -28,8 +28,7 @@
     "@waltning/core": "workspace:*"
   },
   "devDependencies": {
-    "@expo-google-fonts/figtree": "^0.4.1",
-    "@expo-google-fonts/source-serif-4": "^0.4.1",
+    "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
     "@playwright/test": "^1.62.1",
     "@storybook/addon-a11y": "10.5.10",
     "@storybook/addon-docs": "10.5.10",

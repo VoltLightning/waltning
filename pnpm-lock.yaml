@@ -75,10 +75,7 @@ importers:
 
   apps/mobile:
     dependencies:
-      '@expo-google-fonts/figtree':
-        specifier: ^0.4.1
-        version: 0.4.1
-      '@expo-google-fonts/source-serif-4':
+      '@expo-google-fonts/ibm-plex-sans':
         specifier: ^0.4.1
         version: 0.4.1
       '@logtape/logtape':
@@ -239,10 +236,7 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@expo-google-fonts/figtree':
-        specifier: ^0.4.1
-        version: 0.4.1
-      '@expo-google-fonts/source-serif-4':
+      '@expo-google-fonts/ibm-plex-sans':
         specifier: ^0.4.1
         version: 0.4.1
       '@playwright/test':
@@ -1286,14 +1280,11 @@ packages:
       '@noble/hashes':
         optional: true
 
-  '@expo-google-fonts/figtree@0.4.1':
-    resolution: {integrity: sha512-6IQQddGeR3yZBSwiIjy2kd1gA+5s2esF8JAFw6M1qqU4RUlj4Zxkw9J+gixAtZFgd+QIS875EPHqeYlpaRcCRw==}
+  '@expo-google-fonts/ibm-plex-sans@0.4.1':
+    resolution: {integrity: sha512-allsuhZbvKoKDTB/U8creFVYYzhI97Nw9MgyyNjFzqISNc/sURpA7ZY37Rr+IRI567OV9BWQ/ioUCjAQrVGRbw==}
 
   '@expo-google-fonts/material-symbols@0.4.44':
     resolution: {integrity: sha512-36JP9Chcy/QEVZ9ZGY4i6zInlyFPbQjkIm6gRNuWWltScIj0WR8rddcD57EIjSC5YKCe2ZKLO6eO/N5r8Jit0A==}
-
-  '@expo-google-fonts/source-serif-4@0.4.1':
-    resolution: {integrity: sha512-Ej4UXDjW1kwYPHG8YLq6fK1bqnJGb3K35J3S5atSL0ScKFAFLKvndxoTWeCls7mybtlS9x99hzwDeXCBkiI3rA==}
 
   '@expo/cli@57.0.17':
     resolution: {integrity: sha512-PQc7if117dNh2qe+CHdlmSWpgwhFiP9CJ7XbwNF0w4KSKxFpJ2qUjDPoAcCMW1VZg1x30mEJ907bT8G1iDIZBQ==}
@@ -6123,11 +6114,9 @@ snapshots:
 
   '@exodus/bytes@1.15.1': {}
 
-  '@expo-google-fonts/figtree@0.4.1': {}
+  '@expo-google-fonts/ibm-plex-sans@0.4.1': {}
 
   '@expo-google-fonts/material-symbols@0.4.44': {}
-
-  '@expo-google-fonts/source-serif-4@0.4.1': {}
 
   '@expo/cli@57.0.17(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.12)(expo-constants@57.0.13)(expo-font@57.0.1)(expo-router@57.0.15)(expo@57.0.15)(react-dom@19.2.3(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.87.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)(typescript@5.9.3)':
     dependencies:

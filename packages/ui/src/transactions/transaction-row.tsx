@@ -13,14 +13,23 @@
  * **The amount arrives already signed** (`computations.md` §1, computed once in
  * SQL). This does not decide the sign from the type: that would be a second
  * implementation, and the two disagree on `adjustment`, which carries its own.
+ *
+ * **The colour, though, does come from the type.** A transfer's two legs are
+ * signed opposite ways and are neither income nor spend, so sign alone would
+ * paint one leg green and the other red — money that moved between your own
+ * accounts, read as a gain and a loss. The row maps the ledger's type onto
+ * `<Amount>`'s `kind`; the component never sees a colour.
  */
 
 import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
-import { Amount } from "../fx/amount";
+import { Amount, type AmountKind } from "../fx/amount";
 import { Tag } from "../primitives/tag";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline, space, tabularNums, type } from "../tokens.ts";
+
+/** The ledger's own vocabulary — `schema/enums`. */
+export type TransactionType = "expense" | "income" | "transfer" | "adjustment";
 
 export type TransactionRowProps = {
   /** Bare `YYYY-MM-DD`. Rendered as given — never through a `Date` (C28). */
@@ -32,7 +41,21 @@ export type TransactionRowProps = {
   amount: money.Money;
   currency: string;
   decimals?: number;
+  /**
+   * Decides the figure's colour, not its sign. Optional because older callers
+   * do not carry it; absent, the row falls back to sign — right for expense
+   * and income, wrong for the two legs of a transfer.
+   */
+  type?: TransactionType;
   isBusiness?: boolean;
+};
+
+const KIND: Record<TransactionType, AmountKind> = {
+  expense: "spend",
+  income: "income",
+  transfer: "transfer",
+  // Carries its own sign and its own meaning; sign decides.
+  adjustment: "auto",
 };
 
 export function TransactionRow({
@@ -43,6 +66,7 @@ export function TransactionRow({
   amount,
   currency,
   decimals = 2,
+  type: transactionType,
   isBusiness = false,
 }: TransactionRowProps) {
   const meta = [account, category].filter(Boolean).join(" · ");
@@ -66,7 +90,13 @@ export function TransactionRow({
         </View>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
       </View>
-      <Amount value={amount} currency={currency} decimals={decimals} size="small" />
+      <Amount
+        value={amount}
+        currency={currency}
+        decimals={decimals}
+        size="small"
+        kind={transactionType ? KIND[transactionType] : "auto"}
+      />
     </View>
   );
 }
