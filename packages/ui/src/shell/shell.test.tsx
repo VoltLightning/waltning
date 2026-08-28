@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { NO_INSETS, type SafeAreaInsets, SafeAreaProvider } from "../primitives/safe-area";
 import { ThemeProvider } from "../theme/provider";
 import { dark, light } from "../theme/roles.ts";
-import { BELOW_SHELL, Card, GroundPanel, type ScreenEdge } from "./card";
+import { Card } from "./card";
 import { DualTotal } from "./dual-total";
 import { TodayFrame } from "./today-frame";
 
@@ -166,6 +166,9 @@ describe("the frame clears the device's chrome", () => {
   });
 
   it("clears the home indicator at the bottom of the ground panel", () => {
+    // The panel never clears the *top* — a header always sits above it, and on
+    // this screen that header is the shell, which cleared the status bar. Two
+    // boxes each adding the inset is the double-padding this split prevents.
     // The panel is what reaches the bottom edge, so it is what owes the
     // clearance — the last card and the add button sat under the indicator on
     // every gesture-navigation phone.
@@ -188,50 +191,43 @@ describe("the frame clears the device's chrome", () => {
 });
 
 /**
- * **A bare `GroundPanel` is a whole screen**, and two of them are: the quick-add
- * and account-creation routes render one under a headerless `Stack`, so the
- * panel's own top edge *is* the top of the display.
+ * **The clearance and the colour must be the same box.**
  *
- * The default therefore clears both edges and `TodayFrame` opts out of the top,
- * because the shell above it has already cleared it. That direction is the
- * decision: forgetting to opt out is extra padding under a shell, which anyone
- * looking will see; forgetting to opt in is content under the status bar, which
- * is invisible on every machine that runs this suite.
+ * This is the property that makes the status-bar strip *part of the header*
+ * rather than a band above it. Padding paints inside the border box, so a
+ * `backgroundColor` and a `paddingTop` on one `View` fill the inset with the
+ * shell's own green. Move the padding to a wrapper — the obvious refactor when
+ * someone wants to reuse the clearance — and the strip becomes whatever is
+ * behind it, which is the ground, and the header reads as cut off.
+ *
+ * Nothing about the types would object, and on a laptop with zero insets
+ * nothing about the render would either.
  */
-describe("the ground panel clears the edges it is actually against", () => {
-  const NOTCHED: SafeAreaInsets = { top: 59, right: 0, bottom: 34, left: 0 };
-
-  function renderPanel(edges?: readonly ScreenEdge[]) {
-    const { container } = render(
-      <SafeAreaProvider insets={NOTCHED}>
-        <GroundPanel {...(edges ? { edges } : {})}>{null}</GroundPanel>
-      </SafeAreaProvider>,
-    );
-    const panel = container.firstElementChild;
-    return panel instanceof HTMLElement ? panel.style : null;
+describe("the shell owns the strip it clears", () => {
+  /** jsdom resolves a computed colour to `rgb()`; the palette is hex. */
+  function rgbOf(hex: string): string {
+    const n = (at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
+    return `rgb(${n(1)}, ${n(3)}, ${n(5)})`;
   }
 
-  it("clears both by default, because a panel is usually the whole screen", () => {
-    const flat = render(
-      <SafeAreaProvider insets={NO_INSETS}>
-        <GroundPanel>{null}</GroundPanel>
-      </SafeAreaProvider>,
-    ).container.firstElementChild;
-    const base = flat instanceof HTMLElement ? Number.parseFloat(flat.style.paddingTop) : 0;
+  it("paints its background across the inset it pads", () => {
+    const { container } = render(
+      <ThemeProvider name="light">
+        <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
+          <TodayFrame appearanceAction={null} total={null} body={null} onAdd={noop} />
+        </SafeAreaProvider>
+      </ThemeProvider>,
+    );
 
-    const style = renderPanel();
-    expect(Number.parseFloat(style?.paddingTop ?? "0") - base).toBe(NOTCHED.top);
-    expect(Number.parseFloat(style?.paddingBottom ?? "0") - base).toBe(NOTCHED.bottom);
-  });
+    const shell = container.firstElementChild?.firstElementChild;
+    if (!(shell instanceof HTMLElement)) throw new Error("no shell");
 
-  it("skips the top when the shell above it already cleared one", () => {
-    const both = renderPanel();
-    const below = renderPanel(BELOW_SHELL);
-
-    expect(
-      Number.parseFloat(both?.paddingTop ?? "0") - Number.parseFloat(below?.paddingTop ?? "0"),
-    ).toBe(NOTCHED.top);
-    // The bottom is unaffected — it is still the panel that reaches it.
-    expect(below?.paddingBottom).toBe(both?.paddingBottom);
+    // The **same element** carries both: the inset as padding and the shell as
+    // its fill. Read through `getComputedStyle` because the colour arrives on a
+    // generated class while the device-varying padding is inline — which is
+    // itself the thing worth checking, since those two could drift onto
+    // different nodes without a type or a render complaining.
+    expect(Number.parseFloat(shell.style.paddingTop)).toBeGreaterThanOrEqual(59);
+    expect(getComputedStyle(shell).backgroundColor).toBe(rgbOf(light.shell));
   });
 });

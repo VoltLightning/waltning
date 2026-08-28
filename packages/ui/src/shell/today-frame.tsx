@@ -4,7 +4,7 @@ import { useSafeArea } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
-import { BELOW_SHELL, GroundPanel } from "./card";
+import { GroundPanel } from "./card";
 
 export type TodayFrameProps = {
   appearanceAction: React.ReactNode;
@@ -57,7 +57,7 @@ export function TodayFrame({ appearanceAction, total, body, onAdd, addDisabled }
         </View>
         <View>{total}</View>
       </View>
-      <GroundPanel edges={BELOW_SHELL}>
+      <GroundPanel>
         <View style={styles.body}>{body}</View>
         <View style={styles.add}>
           <Button

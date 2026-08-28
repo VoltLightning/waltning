@@ -33,11 +33,30 @@ Two rules follow, both in `shell.test.tsx`:
   device needs; the padding is the design's own breathing room. `max()` would
   satisfy a naive "does it clear the notch" check while putting the heading hard
   against the status bar on exactly the phones with the biggest one.
-- **`GroundPanel` clears both edges by default**, and a panel under the shell
-  opts out of the top. That direction is deliberate: forgetting to opt out is
-  extra padding anyone can see, forgetting to opt in is content under the status
-  bar that no test machine ever renders. Left and right are always cleared —
-  they are always the screen's sides.
+- **`GroundPanel` clears the bottom and the sides, never the top.** The top
+  belongs to the header above it, and the app guarantees there is one: the shell
+  on the ledger, a navigation header on every other route. Sides always, because
+  in landscape the notch is on one of them.
+
+**Every route's top strip is painted by the app, in `shell`.** The ledger has
+`TodayFrame`'s shell; every other route takes a navigation header styled from
+the same token. One structural decision, three symptoms:
+
+- **The status bar never flips.** `shell` is a deep green in *both* appearances,
+  so the surface under the clock and battery is dark whatever the theme and the
+  glyphs are `light` everywhere — one app-wide `<StatusBar>`, no per-route
+  override to forget. They had never been set at all: the OS drew them in its
+  own choice, which on a light-appearance phone is dark, over a dark green fill.
+- **The Android band.** Expo enforces edge-to-edge from SDK 54, so the system
+  leaves the status-bar area to the app and backs it itself when nothing claims
+  it. `headerStatusBarHeight` defaults to the safe-area inset, so a header grows
+  to include the strip and paints across it. The header *is* the claim.
+- **A pushed route had no title and no way back.** The `Cancel` button in each
+  form was standing in for navigation.
+
+`headerShadowVisible: false`: §2.5 allows the system exactly one shadow and
+reserves it for the floating button. A header is a surface, and surfaces here
+separate by edge and by step.
 
 **Escape hatch:** if the dashboard fights RN Web, `apps/web` reuses these tokens
 and the tRPC client. Building tokens as a shared module first is what keeps that

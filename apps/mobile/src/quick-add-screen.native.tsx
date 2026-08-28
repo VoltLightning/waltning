@@ -46,7 +46,9 @@ export default function QuickAdd() {
 
   return (
     <GroundPanel>
-      <Card title="Expense">
+      {/* No title: the navigation header carries it, and the same
+          string twice on one screen reads as two sections. */}
+      <Card>
         <QuickAddForm
           accounts={accounts}
           initialAmount={draft.amount}

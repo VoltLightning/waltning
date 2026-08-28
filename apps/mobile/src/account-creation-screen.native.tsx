@@ -44,7 +44,9 @@ export default function NewAccount() {
 
   return (
     <GroundPanel>
-      <Card title="Create account">
+      {/* No title: the navigation header carries it, and the same
+          string twice on one screen reads as two sections. */}
+      <Card>
         <CreateAccountForm currency="USD" onCancel={handleCancel} onSave={handleSave} />
       </Card>
     </GroundPanel>

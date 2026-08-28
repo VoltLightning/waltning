@@ -11,26 +11,19 @@
  * above.
  *
  * **It is also the thing that reaches the screen's edges**, so it is where the
- * device's chrome is cleared. Nothing did that: the last card and the add
- * button sat under the home indicator on every gesture-navigation phone, and
- * the two form screens — which are a bare `GroundPanel` under a headerless
- * route — began under the status bar.
+ * device's chrome is cleared — bottom and sides, never the top.
  *
- * Left and right are always cleared, because they are always the screen's
- * sides; in landscape the notch is on one of them, and a figure running under
- * it is a figure read wrong rather than a cosmetic clip. Top and bottom are the
- * `edges` prop, because a panel under the shell has already had its top cleared
- * by the shell.
+ * The top belongs to the header above it, and the app guarantees there is one:
+ * `TodayFrame`'s shell on the ledger, a navigation header on every other route.
+ * That is why `edges` came and went in the same change — the prop existed to
+ * let a bare panel be a whole screen, and giving the form routes real headers
+ * removed the case it was for. A prop whose only value is its default is a
+ * decision the structure already made.
  *
- * **The default clears both, so the mistake is the cheap one.** A panel that
- * forgets to opt *out* renders a little extra padding under the shell — visible
- * the moment anyone looks. One that forgets to opt *in* renders content under
- * the status bar, which is invisible on every machine this suite runs on and
- * broken on every phone.
- *
- * The elevation props are still read from the theme rather than written here,
- * because the theme is where "a card has no shadow" is decided — and where the
- * one exception, the floating button, is granted its.
+ * Bottom, because the last card and the add button sat under the home
+ * indicator on every gesture-navigation phone. Sides, because in landscape the
+ * notch is on one of them, and a figure running under it is a figure read wrong
+ * rather than a cosmetic clip.
  */
 
 import { Text, View } from "react-native";
@@ -62,34 +55,20 @@ export function Card({ title, action, children }: CardProps) {
   );
 }
 
-/** Which screen edges this panel is actually against. */
-export type ScreenEdge = "top" | "bottom";
-
-/** The panel under a shell: the shell above it already cleared the status bar. */
-export const BELOW_SHELL: readonly ScreenEdge[] = ["bottom"];
-
-export type GroundPanelProps = {
-  edges?: readonly ScreenEdge[];
-  children: React.ReactNode;
-};
-
-export function GroundPanel({ edges = BOTH_EDGES, children }: GroundPanelProps) {
+export function GroundPanel({ children }: { children: React.ReactNode }) {
   const styles = useStyles();
   const insets = useSafeArea();
 
   // Not in `useStyles`: that cache is keyed on the theme, and these are keyed
   // on the device.
   const clearance = {
-    paddingTop: space.x5 + (edges.includes("top") ? insets.top : 0),
-    paddingBottom: space.x5 + (edges.includes("bottom") ? insets.bottom : 0),
+    paddingBottom: space.x5 + insets.bottom,
     paddingLeft: space.x5 + insets.left,
     paddingRight: space.x5 + insets.right,
   };
 
   return <View style={[styles.panel, clearance]}>{children}</View>;
 }
-
-const BOTH_EDGES: readonly ScreenEdge[] = ["top", "bottom"];
 
 const useStyles = makeStyles((t) => ({
   card: {
