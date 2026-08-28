@@ -221,9 +221,18 @@ describe("apps hold only what names a platform", () => {
    * file to import one was reported as shareable code that belongs in a
    * package. It does not: moving it would put a Metro-only asset require inside
    * `packages/ui`, which every other surface would then have to resolve.
+   *
+   * **`react-native-*` community modules count too**, and were missing for the
+   * same reason: the alternation matched `react-native` exactly. A package under
+   * that prefix ships a native module by convention —
+   * `react-native-safe-area-context` measures the window through the platform's
+   * own insets API — so it is as platform-bound as the renderer itself, and the
+   * bridge that reads it belongs in an app. The rule reported that bridge as
+   * shareable code; it is the opposite, and moving it to `packages/ui` would put
+   * a native module in the package that must never name one.
    */
   const NAMES_PLATFORM =
-    /from\s+["'](react-native|expo|expo-.*|@expo(-[\w-]+)?\/.*|@react-navigation\/.*)["']|Platform\.OS|__DEV__|EXPO_PUBLIC_|import\.meta\.env/;
+    /from\s+["'](react-native(-[\w-]+)?|expo|expo-.*|@expo(-[\w-]+)?\/.*|@react-navigation\/.*)["']|Platform\.OS|__DEV__|EXPO_PUBLIC_|import\.meta\.env/;
 
   it("every app source file is platform-bound, a test, or a route", () => {
     const offenders: string[] = [];

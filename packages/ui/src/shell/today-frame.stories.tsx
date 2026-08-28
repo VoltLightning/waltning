@@ -24,6 +24,7 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
+import { type SafeAreaInsets, SafeAreaProvider } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
@@ -50,6 +51,26 @@ export const Populated: Story = {
 };
 
 /**
+ * **The same frame on a phone with a Dynamic Island**, which is the device the
+ * old hardcoded `34` was most wrong about.
+ *
+ * This story exists because `useSafeAreaInsets()` reports whatever the running
+ * device says, and every machine this suite runs on says zero — so the layout
+ * that breaks on a notched phone was the one nothing could render. Insets as a
+ * value mean a story can be that phone, and the screenshot is the evidence.
+ *
+ * The numbers are an iPhone 15 Pro in portrait: 59 above, 34 below for the home
+ * indicator.
+ */
+export const NotchedPhone: Story = {
+  decorators: [withInsets({ top: 59, right: 0, bottom: 34, left: 0 })],
+  args: {
+    total: renderTotal("48210.00"),
+    body: <Body>Three rows would sit here.</Body>,
+  },
+};
+
+/**
  * The state a first launch shows, and the reason `addDisabled` exists — there
  * is nowhere to put a capture until an account exists.
  */
@@ -60,6 +81,21 @@ export const FirstRun: Story = {
     body: <Body>Nothing captured yet.</Body>,
   },
 };
+
+/**
+ * A decorator rather than a wrapper in `render`, so the story still renders
+ * `TodayFrame` through its args and stays a component story — a `render` that
+ * builds the tree itself is a story the args table no longer describes.
+ */
+function withInsets(insets: SafeAreaInsets) {
+  return function InsetDecorator(Story: React.ComponentType) {
+    return (
+      <SafeAreaProvider insets={insets}>
+        <Story />
+      </SafeAreaProvider>
+    );
+  };
+}
 
 function renderTotal(value: string) {
   return (

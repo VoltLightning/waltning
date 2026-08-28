@@ -19,6 +19,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { useColorScheme, View } from "react-native";
+import { DeviceInsets } from "../src/device-insets";
 import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
 import { appearance } from "../src/platform";
@@ -82,8 +83,14 @@ export default function RootLayout() {
    * someone trying to enter a transaction.
    */
   return (
-    <ThemeProvider name={resolved.theme}>
-      <Stack screenOptions={{ headerShown: false }} />
-    </ThemeProvider>
+    // `DeviceInsets` outside `ThemeProvider`: the insets are a property of the
+    // window and the theme is a property of the app. Nothing about a notch
+    // changes when the appearance does, and a provider that remounted on a
+    // theme swap would remeasure the window for no reason.
+    <DeviceInsets>
+      <ThemeProvider name={resolved.theme}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </ThemeProvider>
+    </DeviceInsets>
   );
 }
