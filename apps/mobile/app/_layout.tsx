@@ -131,23 +131,46 @@ export default function RootLayout() {
           one shadow and reserves it for the floating button. A header is a
           surface, and surfaces here separate by edge and by step.
         */}
-        <Stack
-          screenOptions={{
-            contentStyle: { backgroundColor: theme.ground },
-            headerStyle: { backgroundColor: theme.shell },
-            // Colours the title *and* the back chevron; a `color` inside
-            // `headerTitleStyle` would set one of the two and look right.
-            headerTintColor: theme.shellText,
-            headerTitleStyle: text.ui("displayThree"),
-            headerShadowVisible: false,
-          }}
-        >
-          {/* The ledger's header is the shell itself — a 54pt total does not
-              fit in a navigation bar, and §5.1 makes the shell the frame. */}
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="quick-add" options={{ title: "Expense" }} />
-          <Stack.Screen name="account/new" options={{ title: "Create account" }} />
-        </Stack>
+        {/*
+          **The root is the shell's green, and that is what paints the status
+          bar.**
+
+          The strip was black. Under Android's edge-to-edge — enforced from
+          Expo SDK 54 — the window draws behind the status bar and the system
+          paints nothing there; whatever React renders at y=0 is the strip. On
+          the ledger that is `TodayFrame`'s shell, which is why that screen
+          looked right. On a pushed route it is the navigation header, and the
+          native header does not extend its own background under the inset
+          here — so the strip fell through to the window, which is black.
+
+          A root in `shell` makes the fall-through the header's own colour
+          rather than the window's. It is not a workaround for the header: the
+          header still paints itself, and this is simply what is behind
+          everything. The ledger is unaffected — `TodayFrame`'s root is
+          `ground` and covers it.
+
+          `shell` rather than `ground` because green is the colour of every
+          top strip in the app, and the top strip is the only place this shows.
+        */}
+        <View style={{ flex: 1, backgroundColor: theme.shell }}>
+          <Stack
+            screenOptions={{
+              contentStyle: { backgroundColor: theme.ground },
+              headerStyle: { backgroundColor: theme.shell },
+              // Colours the title *and* the back chevron; a `color` inside
+              // `headerTitleStyle` would set one of the two and look right.
+              headerTintColor: theme.shellText,
+              headerTitleStyle: text.ui("displayThree"),
+              headerShadowVisible: false,
+            }}
+          >
+            {/* The ledger's header is the shell itself — a 54pt total does not
+                fit in a navigation bar, and §5.1 makes the shell the frame. */}
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="quick-add" options={{ title: "Expense" }} />
+            <Stack.Screen name="account/new" options={{ title: "Create account" }} />
+          </Stack>
+        </View>
       </ThemeProvider>
     </DeviceInsets>
   );

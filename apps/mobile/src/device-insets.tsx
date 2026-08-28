@@ -20,6 +20,7 @@
 import { SafeAreaProvider as InsetProvider } from "@waltning/ui/primitives/safe-area";
 import {
   SafeAreaProvider as DeviceInsetProvider,
+  initialWindowMetrics,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
@@ -32,7 +33,19 @@ import {
  */
 export function DeviceInsets({ children }: { children: React.ReactNode }) {
   return (
-    <DeviceInsetProvider>
+    /*
+     * **`initialMetrics`, or the first frame has no insets.**
+     *
+     * Without it the provider measures the window asynchronously, so the first
+     * render reports zero on every edge — the layout draws its own padding and
+     * nothing else, leaving the status-bar strip unpainted for a frame. On
+     * Android's edge-to-edge that frame is the window, which is black.
+     *
+     * `initialWindowMetrics` is read natively at startup and is already correct
+     * before React renders; it is `null` on web, where the provider falls back
+     * to measuring and there is no status bar to clear anyway.
+     */
+    <DeviceInsetProvider initialMetrics={initialWindowMetrics}>
       <Bridge>{children}</Bridge>
     </DeviceInsetProvider>
   );
