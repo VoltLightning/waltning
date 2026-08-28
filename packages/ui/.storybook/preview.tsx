@@ -102,6 +102,17 @@ const preview: Preview = {
     },
   },
 
+  /**
+   * A generated props table per component, from the docgen that already runs.
+   *
+   * `design-system/03`–`05` say what a component is *for*; the table says what
+   * it *takes*, and maintaining the second by hand is how it stops matching the
+   * first. This costs one tag because `react-docgen` is already extracting the
+   * types — confirmed by finding `__docgenInfo` in a build before switching it
+   * on, rather than assuming it.
+   */
+  tags: ["autodocs"],
+
   parameters: {
     /**
      * Storybook's own backgrounds are off: the decorator paints
@@ -109,7 +120,19 @@ const preview: Preview = {
      * disagree with no indication which one is the product's.
      */
     backgrounds: { disable: true },
-    a11y: { test: "todo" },
+
+    /**
+     * **`error`, not `todo`.** `todo` reports and never fails, which is the
+     * setting that lets an accessibility spec coexist with an inaccessible
+     * component indefinitely — `design-system/10` exists and `D12` is a card,
+     * so a violation should be a red build rather than a badge somebody may
+     * notice.
+     *
+     * A story that genuinely cannot satisfy a rule turns it off *at that
+     * story*, in writing, with the reason. That is a decision on the record;
+     * a global `todo` is the same exemption granted silently to everything.
+     */
+    a11y: { test: "error" },
   },
 };
 

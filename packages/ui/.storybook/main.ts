@@ -35,11 +35,18 @@ const config: StorybookConfig = {
   /**
    * `addon-a11y` rather than a lint rule, because `design-system/10` asks for
    * things static analysis cannot see: contrast against the *rendered*
-   * background, and a focus order that depends on layout. It reports; it does
-   * not gate. The gate is `stories.test.tsx`, which runs every story through
-   * the existing Vitest runner.
+   * background, and a focus order that depends on layout.
    */
-  addons: ["@storybook/addon-a11y"],
+  addons: [
+    "@storybook/addon-a11y",
+    /**
+     * Required for the `autodocs` tag in `preview.tsx` to produce anything.
+     * The tag alone builds zero docs pages and reports no error — checked by
+     * counting `docs` entries in `index.json` before and after, rather than by
+     * reading the config back and believing it.
+     */
+    "@storybook/addon-docs",
+  ],
 
   /**
    * No framework options. Fonts are the one thing that would want configuring

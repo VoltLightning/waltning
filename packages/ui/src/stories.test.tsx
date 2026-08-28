@@ -25,6 +25,7 @@
 
 import { composeStories } from "@storybook/react";
 import { render } from "@testing-library/react";
+import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 import * as amount from "./fx/amount.stories";
 import * as button from "./primitives/button.stories";
@@ -59,13 +60,60 @@ const MODULES = {
  * alternative is five near-identical blocks to preserve inference that nothing
  * downstream reads.
  */
-type ComposedStory = () => React.ReactNode;
+type Spy = { mockClear: () => void };
+
+type ComposedStory = {
+  (): React.ReactNode;
+  /** Present only on stories that declare one. */
+  play?: (context: { canvasElement: HTMLElement }) => Promise<void>;
+  /** The story's resolved args, which is where its `fn()` spies live. */
+  args?: Record<string, unknown>;
+};
+
+function isSpy(value: unknown): value is Spy {
+  return typeof (value as Spy | null)?.mockClear === "function";
+}
+
+/**
+ * Reset the spies a story declares, before it is rendered again.
+ *
+ * **`vi.clearAllMocks()` does not reach them**, which cost a failing test to
+ * discover: `fn()` comes from `storybook/test` and is not registered with
+ * Vitest, so the global reset skips it entirely. The instance is created once
+ * at module scope and shared by every render of that story — so the dark run
+ * inherited the light run's click and `toHaveBeenCalledTimes(1)` saw two.
+ *
+ * Done over `args` rather than per story so it holds for the next story with a
+ * spy, which will not remember this.
+ */
+function clearStorySpies(story: ComposedStory) {
+  for (const value of Object.values(story.args ?? {})) {
+    if (isSpy(value)) value.mockClear();
+  }
+}
 
 function composed(mod: (typeof MODULES)[keyof typeof MODULES]): Record<string, ComposedStory> {
   return composeStories(mod) as Record<string, ComposedStory>;
 }
 
 const THEMES = Object.keys(themes) as ThemeName[];
+
+/**
+ * The axe rules jsdom can actually answer.
+ *
+ * **`color-contrast` is excluded because jsdom cannot compute it, not because
+ * it does not matter** — it is arguably the rule this design system most needs,
+ * since `design-system/02` grew a second palette and a role can lose its
+ * contrast in exactly one theme. jsdom has no layout and no rendered colour, so
+ * axe either skips the rule or answers from nothing; a check that cannot fail
+ * is worse than an absent one, because it reads as coverage.
+ *
+ * Contrast belongs to the screenshot card, which renders in a real browser.
+ * What is left here is the structural half — roles, names, labels, nesting —
+ * which jsdom answers correctly and which no amount of looking reliably
+ * catches.
+ */
+const JSDOM_BLIND = ["color-contrast"];
 
 describe("every story renders in every theme", () => {
   let rendered = 0;
@@ -75,13 +123,31 @@ describe("every story renders in every theme", () => {
 
     for (const [name, Story] of Object.entries(stories)) {
       for (const theme of THEMES) {
-        it(`${group}/${name} · ${theme}`, () => {
+        it(`${group}/${name} · ${theme}`, async () => {
+          clearStorySpies(Story);
           const { container } = render(
             <ThemeProvider name={theme}>
               <Story />
             </ThemeProvider>,
           );
           expect(container.firstChild).not.toBeNull();
+
+          /**
+           * The story's own assertions, when it has any. This is what
+           * `@storybook/addon-vitest` would run in a browser; `composeStories`
+           * exposes the same function, so an interaction test costs a `play`
+           * block rather than a second runner.
+           */
+          if (Story.play) await Story.play({ canvasElement: container });
+
+          const results = await axe.run(container, {
+            rules: Object.fromEntries(JSDOM_BLIND.map((id) => [id, { enabled: false }])),
+          });
+          expect(
+            results.violations.map((v) => `${v.id}: ${v.help}`),
+            "accessibility violations",
+          ).toEqual([]);
+
           rendered += 1;
         });
       }
@@ -89,11 +155,20 @@ describe("every story renders in every theme", () => {
   }
 
   /**
-   * Non-vacuity. Without this the suite passes just as happily having composed
-   * an empty module map, which is precisely how a test that "covers every
-   * story" ends up covering none.
+   * Non-vacuity, in both directions. Without the first the suite passes just as
+   * happily having composed an empty module map — the way a test that "covers
+   * every story" ends up covering none. The second guards the same failure one
+   * level down: if `play` stopped being exposed, every interaction assertion
+   * would vanish silently and the render checks would still be green.
    */
   it("rendered a plausible number of stories", () => {
     expect(rendered).toBeGreaterThan(30);
+  });
+
+  it("ran the interaction assertions the stories declare", () => {
+    const withPlay = Object.values(MODULES)
+      .flatMap((mod) => Object.values(composed(mod)))
+      .filter((story) => typeof story.play === "function");
+    expect(withPlay.length, "stories declaring a play function").toBeGreaterThan(1);
   });
 });

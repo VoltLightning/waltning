@@ -5,6 +5,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
+import { expect, fn, userEvent, within } from "storybook/test";
 import { space } from "../tokens.ts";
 import { Button, type ButtonVariant } from "./button";
 
@@ -25,6 +26,32 @@ export const Ghost: Story = { args: { variant: "ghost" } };
 export const Danger: Story = { args: { variant: "danger", label: "Delete" } };
 
 export const Disabled: Story = { args: { disabled: true } };
+
+/**
+ * **Pressing it calls `onPress` once.** The floor of the component, and the
+ * first thing in this package that is checked by *driving* it rather than by
+ * inspecting what it rendered.
+ */
+export const Pressed: Story = {
+  args: { onPress: fn() },
+  play: async ({ args, canvasElement }) => {
+    await userEvent.click(await within(canvasElement).findByText("Save"));
+    await expect(args.onPress).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * **A disabled button does not call `onPress`.** The direction that fails
+ * silently: a disabled control that still fires looks correct until the write
+ * it was guarding happens twice.
+ */
+export const DisabledDoesNotFire: Story = {
+  args: { disabled: true, onPress: fn() },
+  play: async ({ args, canvasElement }) => {
+    await userEvent.click(await within(canvasElement).findByText("Save"));
+    await expect(args.onPress).not.toHaveBeenCalled();
+  },
+};
 
 /**
  * **The spinner replaces the label and the width does not change** — stated in
