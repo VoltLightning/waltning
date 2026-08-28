@@ -68,6 +68,7 @@ describe("a component follows the active theme", () => {
     ["light income on surface", light.income, light.surface],
     ["light spend on ground", light.spend, light.ground],
     ["light spend on surface", light.spend, light.surface],
+    ["light accent text on accent fill", light.accentText, light.accentFill],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
     ["dark muted text on ground", dark.textMuted, dark.ground],
@@ -82,6 +83,7 @@ describe("a component follows the active theme", () => {
     ["dark income on surface", dark.income, dark.surface],
     ["dark spend on ground", dark.spend, dark.ground],
     ["dark spend on surface", dark.spend, dark.surface],
+    ["dark accent text on accent fill", dark.accentText, dark.accentFill],
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);

@@ -19,10 +19,11 @@
  */
 
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Pressable, Text, View } from "react-native";
 import { face } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { usePressScale } from "./press-scale.ts";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -61,12 +62,12 @@ export function Button({
   const ink = styles[INK_STYLE[variant]];
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
+  const press = usePressScale();
   const pressableStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => [
+    () => [
       styles.base,
       { height: HEIGHT[size] },
       styles[VARIANT_STYLE[variant]],
-      pressed ? styles.pressed : null,
       // §2.6: on **every** interactive element, never removed and never
       // replaced by a colour change alone — a colour-only focus state is
       // invisible to exactly the people it exists for.
@@ -77,24 +78,27 @@ export function Button({
   );
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: inactive, busy: loading }}
-      disabled={inactive}
-      onPress={onPress}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      style={pressableStyle}
-    >
-      {/*
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: inactive, busy: loading }}
+        disabled={inactive}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        style={pressableStyle}
+      >
+        {/*
         Both are always mounted; only visibility changes. Swapping the label out
         for a spinner re-measures the button, and the thing beside an
         affirmative action is usually the destructive one.
       */}
-      <Text style={[styles.label, ink, loading ? styles.hidden : null]}>{label}</Text>
-      {loading ? (
-        /*
+        <Text style={[styles.label, ink, loading ? styles.hidden : null]}>{label}</Text>
+        {loading ? (
+          /*
           Hidden from the accessibility tree, and that is the accessible
           choice rather than a shortcut. The `Pressable` above already carries
           `accessibilityState={{ busy: loading }}`, so a reader announces
@@ -103,11 +107,12 @@ export function Button({
           fires on. The state is the semantics; the spinner is the picture of
           it.
         */
-        <View style={styles.spinner} aria-hidden>
-          <ActivityIndicator size="small" color={ink.color} />
-        </View>
-      ) : null}
-    </Pressable>
+          <View style={styles.spinner} aria-hidden>
+            <ActivityIndicator size="small" color={ink.color} />
+          </View>
+        ) : null}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -149,7 +154,6 @@ const useStyles = makeStyles((t) => ({
     justifyContent: "center",
     alignItems: "center",
   },
-  pressed: { opacity: 0.85 },
   inactive: { opacity: 0.45 },
 }));
 
