@@ -573,7 +573,10 @@ describe("platform-neutral packages use only globals the phone has", () => {
    * alongside the component it renders. If a story ever needs `document`, that
    * is a component reaching for a browser, and the failure is the point.
    */
-  const isDevTooling = (relative: string) => relative.includes("/.storybook/");
+  const isDevTooling = (relative: string) =>
+    relative.includes("/.storybook/") ||
+    relative.includes("/visual/") ||
+    relative.endsWith("playwright.config.ts");
 
   it("no neutral package reaches for a global the device lacks", () => {
     const offenders: string[] = [];

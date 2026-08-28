@@ -24,6 +24,7 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
+import { makeStyles } from "../theme/styles.ts";
 import { space, type } from "../tokens.ts";
 import { Card } from "./card";
 import { TodayFrame } from "./today-frame";
@@ -43,7 +44,7 @@ type Story = StoryObj<typeof meta>;
 export const Populated: Story = {
   args: {
     total: renderTotal("48210.00"),
-    body: renderBody(),
+    body: <Body>Three rows would sit here.</Body>,
   },
 };
 
@@ -55,7 +56,7 @@ export const FirstRun: Story = {
   args: {
     total: renderTotal("0"),
     addDisabled: true,
-    body: renderEmptyBody(),
+    body: <Body>Nothing captured yet.</Body>,
   },
 };
 
@@ -65,20 +66,28 @@ function renderTotal(value: string) {
   );
 }
 
-function renderBody() {
+/**
+ * **A `Text` with no colour was the bug the contrast check found first**, and
+ * it was in this file rather than in a component. React Native defaults an
+ * uncoloured `Text` to black, which is invisible on a dark `surface` — 1.3:1
+ * against `#10251a`, where 4.5 is required.
+ *
+ * `conformance.test.ts` could not see it: that rule bans a component *naming* a
+ * colour, and this named none. Naming none is the same defect from the other
+ * side, and only a rendered pixel catches it — which is the argument for this
+ * whole suite, made by the suite on its first run.
+ */
+function Body({ children }: { children: string }) {
+  const styles = useStyles();
   return (
     <Card title="Recent">
       <View style={{ gap: space.x2 }}>
-        <Text style={{ fontSize: type.body.fontSize }}>Three rows would sit here.</Text>
+        <Text style={styles.text}>{children}</Text>
       </View>
     </Card>
   );
 }
 
-function renderEmptyBody() {
-  return (
-    <Card title="Recent">
-      <Text style={{ fontSize: type.body.fontSize }}>Nothing captured yet.</Text>
-    </Card>
-  );
-}
+const useStyles = makeStyles((t) => ({
+  text: { color: t.text, fontSize: type.body.fontSize },
+}));

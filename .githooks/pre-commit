@@ -157,3 +157,25 @@ fi
 if ! pnpm test; then
   fail "tests failed." "if Postgres is not running: pnpm db:up"
 fi
+
+# ── 8 · Visual checks ────────────────────────────────────────────────────────
+#
+# The same argument as step 7, one level up: jsdom has no layout and no rendered
+# colour, so `pnpm test` would pass a component that turned invisible. This runs
+# the built Storybook in a real browser and diffs it against committed
+# baselines, and it is the only check that can see a palette regression or the
+# contrast rule axe cannot answer without pixels.
+#
+# **Scoped to changes that can move a pixel**, which is not the same as skipping
+# when it is inconvenient. A doc or migration commit cannot alter a render, so
+# paying thirty seconds for it would train people to reach for --no-verify —
+# and a gate that gets bypassed by habit protects nothing. `core` is in the list
+# because `Amount` renders through `money.ts`.
+if printf '%s\n' "$staged" | grep -qE '^packages/(ui|core)/'; then
+  if ! pnpm --filter @waltning/ui build-storybook --quiet >/dev/null 2>&1; then
+    fail "storybook build failed." "run: pnpm --filter @waltning/ui build-storybook"
+  fi
+  if ! pnpm --filter @waltning/ui test:visual; then
+    fail "visual checks failed." "review the diff, then: pnpm test:visual:update"
+  fi
+fi

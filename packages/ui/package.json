@@ -20,7 +20,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@waltning/core": "workspace:*"
@@ -28,6 +30,7 @@
   "devDependencies": {
     "@expo-google-fonts/figtree": "^0.4.1",
     "@expo-google-fonts/source-serif-4": "^0.4.1",
+    "@playwright/test": "^1.62.1",
     "@storybook/addon-a11y": "10.5.10",
     "@storybook/addon-docs": "10.5.10",
     "@storybook/react-native-web-vite": "10.5.10",

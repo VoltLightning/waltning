@@ -12,6 +12,13 @@ out/
 *.tsbuildinfo
 storybook-static/
 
+# Playwright's own output. The *baselines* under `visual/__screenshots__` are
+# committed — they are the expected values, and a visual test with no reference
+# in the repository compares against whatever the last run happened to produce.
+test-results/
+playwright-report/
+blob-report/
+
 # Scratch space for skills that draft in the working tree. Not source, and its
 # drafts are throwaway HTML that Biome would lint as if it were shipped.
 .superpowers/
