@@ -18,9 +18,9 @@
 
 import * as money from "@waltning/core/money";
 import { Text, type TextStyle } from "react-native";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { tabularNums, type } from "../tokens.ts";
+import { tabularNums } from "../tokens.ts";
 
 export type AmountSize = "hero" | "large" | "body" | "small";
 export type AmountEmphasis = "default" | "muted" | "shell";
@@ -50,11 +50,18 @@ export type AmountProps = {
   signed?: boolean;
 };
 
+/**
+ * **`text.display`, not the raw token.** This was `hero: type.displayHero`,
+ * which spread the whole step object into a `TextStyle` — so the figure got
+ * its size and its tracking, no leading at all, and a stray `lineHeightRatio`
+ * key React Native does not know. It typechecked because the value is a
+ * variable rather than a literal, so excess-property checking never ran.
+ */
 const SIZES: Record<AmountSize, TextStyle> = {
-  hero: type.displayHero,
-  large: type.displayTwo,
-  body: type.body,
-  small: type.bodySm,
+  hero: text.display("displayHero"),
+  large: text.display("displayTwo"),
+  body: text.display("body"),
+  small: text.display("bodySm"),
 };
 
 export function Amount({
@@ -70,7 +77,7 @@ export function Amount({
   // balance, and `startsWith("-")` says it is — showing a cleared account in
   // the ink of an overdraft.
   const negative = money.cmp(value, money.toMoney("0")) < 0;
-  const text = money.toMoney(value, decimals);
+  const figure = money.forDisplay(value, decimals);
   const prefix = signed && !negative && !money.isZero(value) ? "+" : "";
 
   const styles = useStyles();
@@ -92,7 +99,7 @@ export function Amount({
   return (
     <Text style={[styles.base, SIZES[size], tone, emphasis === "muted" ? styles.muted : null]}>
       {prefix}
-      {text}
+      {figure}
       <Text style={[styles.currency, emphasis === "shell" ? styles.shellCurrency : null]}>
         {" "}
         {currency}
@@ -104,11 +111,10 @@ export function Amount({
 const useStyles = makeStyles((t) => ({
   base: {
     color: t.text,
-    // §2.2 files money under the **display** face. It is the same family as
-    // the UI face now, and the reason the column still aligns on Android is
+    // The face comes with the step, from `SIZES` — §2.2 files money under the
+    // **display** face, and the reason the column still aligns on Android is
     // the file, not the feature below: IBM Plex Sans's digits are 600 units at
     // every weight with no feature applied. `fonts.test.ts` pins it.
-    ...face.display(600),
     // Spread, not cast. React Native types `fontVariant` as a union of the
     // five real values, and both tokens are members — so this typechecks
     // *because they are correct*. `as string[]` compiled and would have
@@ -120,6 +126,6 @@ const useStyles = makeStyles((t) => ({
   transfer: { color: t.textMuted },
   muted: { color: t.textMuted },
   shell: { color: t.shellText },
-  currency: { color: t.textMuted, fontSize: type.caption.fontSize },
+  currency: { color: t.textMuted, ...text.ui("caption") },
   shellCurrency: { color: t.shellTextMuted },
 }));

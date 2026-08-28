@@ -16,9 +16,9 @@
  */
 
 import { Text, View } from "react-native";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { hairline, radius, space, type } from "../tokens.ts";
+import { hairline, radius, space } from "../tokens.ts";
 
 export type CardProps = {
   title?: string;
@@ -71,7 +71,7 @@ const useStyles = makeStyles((t) => ({
     borderBottomColor: t.hairline,
     paddingBottom: space.xl,
   },
-  title: { color: t.text, fontSize: type.displayThree.fontSize, ...face.ui(600) },
+  title: { color: t.text, ...text.ui("displayThree") },
   panel: {
     backgroundColor: t.ground,
     borderTopLeftRadius: radius.lg,

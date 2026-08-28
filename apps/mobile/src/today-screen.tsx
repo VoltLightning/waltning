@@ -13,10 +13,13 @@
 
 import { useAccounts } from "@waltning/client/accounts/use-accounts";
 import { describeProbe, useProbe } from "@waltning/client/connectivity/use-probe";
-import { useTransactions } from "@waltning/client/transactions/use-transactions";
+import { type Transaction, useTransactions } from "@waltning/client/transactions/use-transactions";
 import { BalanceRow } from "@waltning/ui/accounts/balance-row";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
-import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
+import {
+  TransactionList,
+  type TransactionListItem,
+} from "@waltning/ui/transactions/transaction-list";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { API_BASE_URL, api, isStaleBundle } from "./platform";
 
@@ -66,17 +69,7 @@ export default function Dashboard() {
           ) : null}
           {transactions.status === "ready" ? (
             <>
-              {transactions.data.transactions.map((t) => (
-                <TransactionRow
-                  key={t.id}
-                  date={t.date}
-                  payee={t.payee}
-                  category={t.categoryName}
-                  account={t.accountName}
-                  amount={t.amount}
-                  currency={t.currency}
-                />
-              ))}
+              <TransactionList transactions={transactions.data.transactions.map(toRow)} />
               {transactions.data.hasMore ? (
                 // Said plainly. A list that silently shows only the first page
                 // reads as the whole ledger, and a short ledger is a wrong one.
@@ -93,6 +86,19 @@ export default function Dashboard() {
       </GroundPanel>
     </ScrollView>
   );
+}
+
+/** The wire's row shape onto the list's. Named — no function expressions in JSX. */
+function toRow(transaction: Transaction): TransactionListItem {
+  return {
+    id: transaction.id,
+    date: transaction.date,
+    payee: transaction.payee,
+    category: transaction.categoryName,
+    account: transaction.accountName,
+    amount: transaction.amount,
+    currency: transaction.currency,
+  };
 }
 
 const styles = StyleSheet.create({

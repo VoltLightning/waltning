@@ -11,8 +11,9 @@ import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { FxAmount, type FxProvenance } from "../fx/fx-amount";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { hairline, space, type } from "../tokens.ts";
+import { hairline, space } from "../tokens.ts";
 
 export type BalanceRowProps = {
   account: string;
@@ -73,6 +74,6 @@ const useStyles = makeStyles((t) => ({
     borderBottomColor: t.hairline,
   },
   identity: { flex: 1, gap: 2 },
-  name: { color: t.text, fontSize: type.bodySm.fontSize },
-  meta: { color: t.textMuted, fontSize: type.caption.fontSize },
+  name: { color: t.text, ...text.ui("bodySm") },
+  meta: { color: t.textMuted, ...text.ui("caption") },
 }));

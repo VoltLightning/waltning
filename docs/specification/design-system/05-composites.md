@@ -18,7 +18,8 @@
 
 | Component | Notes |
 |---|---|
-| `TransactionRow` | Date · payee · category · `Amount`. `BIZ` tag when business |
+| `TransactionList` | **The column.** Owns the separators and the keys; rows are given as data, not as children |
+| `TransactionRow` | Date · payee · category · `Amount`. `BIZ` tag when business. Payee at weight 500, so the identity reads before its metadata |
 | `TransferRow` | Variant showing both accounts — one row, never two |
 | `BalanceRow` | Account · kind · `FxAmount` for foreign accounts |
 | `SharedGroup` | Balances group for shared accounts — own subtotal, visually distinct but **not diminished**. A negative balance here is an ordinary fact and gets no warning treatment |
@@ -26,6 +27,18 @@
 | `AuditRow` | Tool call · kind (read/write) · state · timestamp |
 | `TrailRow` | *"Heard: forty-eight ninety, cash, coffee"* + **Undo**. The P2 component |
 | `QueueItem` | Receipt queue: `waiting` (queued 14:06, uploads on reconnect) / `ready` (extracted 2.4 s) |
+
+**A ledger is read as a column, and a separator belongs to the gap between two
+rows.** `<TransactionRow>` drew its own bottom hairline, so every list ended
+with a rule under nothing — dangling in the card's bottom padding. The row is
+now separator-free and `<TransactionList>` draws the line on the top of every
+row after the first, which is the structure React Native has instead of
+`:not(:first-child)`.
+
+It takes data rather than children: `React.Children.map` cannot tell a row from
+a heading, so the day a screen puts anything else in the list the separators
+land in the wrong places and nothing says so. Taking data also moves the key off
+the screens, which were each constructing one.
 
 ### 5.3 The approval gate
 

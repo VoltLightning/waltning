@@ -20,9 +20,9 @@
 import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { space, type } from "../tokens.ts";
+import { space } from "../tokens.ts";
 
 export type DualTotalProps = {
   /** Everything you own, business included (§6.7). */
@@ -62,9 +62,7 @@ const useStyles = makeStyles((t) => ({
   block: { gap: space.xl },
   label: {
     color: t.textMuted,
-    fontSize: type.kicker.fontSize,
-    ...face.ui(700),
-    letterSpacing: type.kicker.letterSpacing,
+    ...text.ui("kicker"),
     textTransform: "uppercase",
   },
 }));

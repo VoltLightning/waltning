@@ -1,8 +1,8 @@
 import { Text, View } from "react-native";
 import { Button } from "../primitives/button";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { space, type } from "../tokens.ts";
+import { space } from "../tokens.ts";
 import { GroundPanel } from "./card";
 
 export type TodayFrameProps = {
@@ -55,7 +55,7 @@ const useStyles = makeStyles((t) => ({
   root: { flex: 1, backgroundColor: t.ground },
   shell: { backgroundColor: t.shell, padding: space.x5, paddingTop: space.x7, gap: space.x4 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  heading: { color: t.shellText, fontSize: type.displayTwo.fontSize, ...face.ui(600) },
+  heading: { color: t.shellText, ...text.ui("displayTwo") },
   body: { flex: 1, gap: space.x3 },
   add: { alignSelf: "center", minWidth: 72 },
 }));

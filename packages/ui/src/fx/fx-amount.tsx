@@ -26,9 +26,9 @@
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Tag } from "../primitives/tag";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { tabularNums, type } from "../tokens.ts";
+import { tabularNums } from "../tokens.ts";
 import { Amount } from "./amount";
 
 /**
@@ -116,11 +116,10 @@ export function FxAmount({
 
 const useStyles = makeStyles((t) => ({
   row: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  separator: { color: t.textMuted, fontSize: type.caption.fontSize },
+  separator: { color: t.textMuted, ...text.ui("caption") },
   rate: {
     color: t.textMuted,
-    ...face.mono(),
-    fontSize: type.caption.fontSize,
+    ...text.mono("caption"),
     fontVariant: [...tabularNums],
   },
 }));

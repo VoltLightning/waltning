@@ -16,9 +16,9 @@
 
 import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space, tabularNums, type } from "../tokens.ts";
+import { focus, radius, space, tabularNums } from "../tokens.ts";
 
 export type AmountFieldProps = {
   label: string;
@@ -94,9 +94,7 @@ const useStyles = makeStyles((t) => ({
   block: { gap: space.xs },
   label: {
     color: t.textMuted,
-    fontSize: type.kicker.fontSize,
-    ...face.ui(700),
-    letterSpacing: type.kicker.letterSpacing,
+    ...text.ui("kicker"),
     textTransform: "uppercase",
   },
   field: {
@@ -112,15 +110,14 @@ const useStyles = makeStyles((t) => ({
   input: {
     flex: 1,
     color: t.text,
-    ...face.display(600),
-    fontSize: type.displayThree.fontSize,
+    ...text.display("displayThree"),
     // Right-aligned and tabular so a column of entered amounts lines up with
     // the column of rendered ones beside it.
     textAlign: "right",
     fontVariant: [...tabularNums],
   },
-  affix: { color: t.textMuted, fontSize: type.caption.fontSize },
+  affix: { color: t.textMuted, ...text.ui("caption") },
   focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
   invalid: { borderColor: t.dangerBorder },
-  error: { color: t.dangerText, fontSize: type.caption.fontSize },
+  error: { color: t.dangerText, ...text.ui("caption") },
 }));

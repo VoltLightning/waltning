@@ -120,10 +120,24 @@ export const color = {
   /**
    * The shell: one flat colour, no gradient. A gradient was the one thing on
    * the screen that read as decoration rather than as a surface.
+   *
+   * **A deep green, not a near-black.** The first value was `#0f2b1f` at L\* 15,
+   * which on a phone is a black band with a green cast you have to be told
+   * about. §2.1 grants the shell the one structural use of the brand colour;
+   * a value that does not read as the brand colour spends that grant on
+   * nothing. L\* 27 is where it starts reading as green, and it still holds
+   * `shellText` at 9.6:1 and `shellTextMuted` at 5.5:1.
    */
-  shell: "#0f2b1f",
+  shell: "#18492f",
   shellText: "#f4f7f5",
   shellTextMuted: "#a9c4b6",
+
+  /**
+   * The ink the one shadow is cast in — the old shell value, kept because a
+   * shadow wants a near-black with the page's green bias and the shell no
+   * longer is one. Never a fill, never a text colour.
+   */
+  shadowInk: "#0f2b1f",
 
   /** App icon accent only. Not a UI colour. */
   bolt: "#f5c63d",
@@ -162,9 +176,19 @@ export const darkColor = {
   danger: "#f1a390",
   dangerBg: "#3b201b",
   dangerBorder: "#a85a48",
-  shell: "#0a1f16",
+  /**
+   * **Lighter than the light theme's, and that is the point.** At `#0a1f16` the
+   * band measured 1.10:1 against `ground` and 1.01:1 against `surface` — a
+   * header indistinguishable from the page behind it and from the cards on it,
+   * which is what it looked like. On a near-black ground a surface reads by
+   * rising, so the dark shell ends up the lighter of the two: 1.95:1 on ground,
+   * 1.80:1 on surface. `theme.test.tsx` holds the floor.
+   */
+  shell: "#1c4d38",
   shellText: "#f0f5f2",
-  shellTextMuted: "#86a496",
+  /** Lifted with the shell — `#86a496` was tuned for a near-black band and
+   *  reads at 3.58:1 on this one, under the 4.5 floor. */
+  shellTextMuted: "#a9c4b6",
 } as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
@@ -204,6 +228,19 @@ export const tabularNums = ["tabular-nums", "lining-nums"] as const;
  * this changes no rendered layout at the default text size — verified in
  * `type.test.ts`, which recomputes every pair from the ratio and asserts it
  * lands back on the number §2.2 published.
+ *
+ * **A step carries its weight too**, because a scale that does not is a scale
+ * every call site completes from memory. `fontWeight: "700"` sat on two steps
+ * here and was read by nothing — the faces are separate files, so a weight is
+ * chosen by naming a face — while every other step left the decision to
+ * whoever wrote the component. `weight` names the face `theme/fonts.ts` should
+ * resolve, and `text.ui("kicker")` is now the whole step rather than its size.
+ *
+ * **Read this through `text.*`, not field by field.** A step is four
+ * properties and the call sites were taking one: `lineHeightRatio` reached
+ * exactly one component and the display tracking reached none, so a heading
+ * rendered at the platform's default leading with no tracking and looked
+ * *nearly* right. `conformance.test.ts` refuses a bare `type.x.fontSize`.
  */
 export const type = {
   /**
@@ -214,27 +251,27 @@ export const type = {
    * rather than typed. Geist runs −2.4px at 48.
    */
   /** The one dominant total, in the display currency. */
-  displayHero: { fontSize: 54, lineHeightRatio: 57 / 54, letterSpacing: -1.08 },
-  displayOne: { fontSize: 38, lineHeightRatio: 42 / 38, letterSpacing: -0.57 },
-  displayTwo: { fontSize: 23, lineHeightRatio: 28 / 23, letterSpacing: -0.23 },
-  displayThree: { fontSize: 17, lineHeightRatio: 22 / 17 },
+  displayHero: { fontSize: 54, lineHeightRatio: 57 / 54, letterSpacing: -1.08, weight: 600 },
+  displayOne: { fontSize: 38, lineHeightRatio: 42 / 38, letterSpacing: -0.57, weight: 600 },
+  displayTwo: { fontSize: 23, lineHeightRatio: 28 / 23, letterSpacing: -0.23, weight: 600 },
+  displayThree: { fontSize: 17, lineHeightRatio: 22 / 17, weight: 600 },
   /**
    * **16, not 14.5.** The old body was a desktop size on a phone held at
    * arm's length: Apple's floor for that is 17, Material's and Carbon's body
    * is 16. The dense-row size moves up with it and keeps the old body's
    * number, so a transaction row is now set at what was body.
    */
-  body: { fontSize: 16, lineHeightRatio: 24 / 16 },
-  bodySm: { fontSize: 14.5, lineHeightRatio: 22 / 14.5 },
-  caption: { fontSize: 12, lineHeightRatio: 16 / 12 },
+  body: { fontSize: 16, lineHeightRatio: 24 / 16, weight: 400 },
+  bodySm: { fontSize: 14.5, lineHeightRatio: 22 / 14.5, weight: 400 },
+  caption: { fontSize: 12, lineHeightRatio: 16 / 12, weight: 400 },
   /** Eyebrow labels. */
-  kicker: { fontSize: 11, lineHeightRatio: 13 / 11, fontWeight: "700", letterSpacing: 0.88 },
+  kicker: { fontSize: 11, lineHeightRatio: 13 / 11, letterSpacing: 0.88, weight: 700 },
   /**
    * Pills and tags. A ratio of exactly 1 is **deliberate** — the step is
    * `textTransform: uppercase`, so there are no descenders to clip. Recorded
    * because it looks like an oversight and is the one step where it is not.
    */
-  tag: { fontSize: 10.5, lineHeightRatio: 1, fontWeight: "700", letterSpacing: 0.84 },
+  tag: { fontSize: 10.5, lineHeightRatio: 1, letterSpacing: 0.84, weight: 700 },
 } as const;
 
 export type TypeStep = keyof typeof type;
@@ -343,15 +380,15 @@ export const shadow = {
    * which is the one thing a shadow in this system must not do.
    */
   float: {
-    contact: { color: "#0f2b1f", opacity: 0.1, radius: 2, offsetY: 1 },
-    mid: { color: "#0f2b1f", opacity: 0.08, radius: 10, offsetY: 4 },
-    far: { color: "#0f2b1f", opacity: 0.16, radius: 24, offsetY: 12 },
+    contact: { color: color.shadowInk, opacity: 0.1, radius: 2, offsetY: 1 },
+    mid: { color: color.shadowInk, opacity: 0.08, radius: 10, offsetY: 4 },
+    far: { color: color.shadowInk, opacity: 0.16, radius: 24, offsetY: 12 },
   },
   /** The same three, lifted, while the button is being dragged. */
   floatLifted: {
-    contact: { color: "#0f2b1f", opacity: 0.12, radius: 4, offsetY: 2 },
-    mid: { color: "#0f2b1f", opacity: 0.1, radius: 22, offsetY: 10 },
-    far: { color: "#0f2b1f", opacity: 0.22, radius: 40, offsetY: 24 },
+    contact: { color: color.shadowInk, opacity: 0.12, radius: 4, offsetY: 2 },
+    mid: { color: color.shadowInk, opacity: 0.1, radius: 22, offsetY: 10 },
+    far: { color: color.shadowInk, opacity: 0.22, radius: 40, offsetY: 24 },
   },
 } as const;
 

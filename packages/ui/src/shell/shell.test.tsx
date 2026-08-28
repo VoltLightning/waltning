@@ -12,6 +12,21 @@ import { dark, light } from "../theme/roles.ts";
 import { Card } from "./card";
 import { DualTotal } from "./dual-total";
 
+/**
+ * The group separator, **as Testing Library sees it.**
+ *
+ * `money.forDisplay` emits U+00A0, and the DOM holds U+00A0 — but the query's
+ * normalizer collapses every `\s` before matching, and `\s` includes it. So an
+ * assertion written with the real character never matches, and one written
+ * with a plain space matches either character.
+ *
+ * Which means this file cannot pin the separator, and does not try to.
+ * `money.test.ts` does — `forDisplay` is where the choice lives, and it's
+ * asserted there against the raw string. What these prove is that the figure
+ * arrives grouped at all.
+ */
+const GROUP = " ";
+
 describe("DualTotal", () => {
   it("shows both figures at once", () => {
     // §5: **never a toggle.** The two answer different questions and look
@@ -24,8 +39,8 @@ describe("DualTotal", () => {
         currency="PLN"
       />,
     );
-    expect(screen.getByText("1000.00")).toBeDefined();
-    expect(screen.getByText("1600.00")).toBeDefined();
+    expect(screen.getByText(`1${GROUP}000.00`)).toBeDefined();
+    expect(screen.getByText(`1${GROUP}600.00`)).toBeDefined();
   });
 
   it("has no scope prop to toggle with", () => {

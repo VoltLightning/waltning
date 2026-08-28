@@ -140,3 +140,46 @@ describe("the two rates are reciprocals, and the types know it (H21)", () => {
     expect(ratio).toBeGreaterThan(14);
   });
 });
+
+describe("forDisplay — the reading form", () => {
+  const NBSP = " ";
+
+  it("groups the integer part in threes", () => {
+    expect(money.forDisplay(money.toMoney("48210.00"), 2)).toBe(`48${NBSP}210.00`);
+    expect(money.forDisplay(money.toMoney("1234567.89"), 2)).toBe(`1${NBSP}234${NBSP}567.89`);
+    expect(money.forDisplay(money.toMoney("999.99"), 2)).toBe("999.99");
+    expect(money.forDisplay(money.toMoney("1000"), 2)).toBe(`1${NBSP}000.00`);
+  });
+
+  it("groups behind the sign, not in front of it", () => {
+    // `-1 200.00`, never `- 1200.00` and never a group inserted before the
+    // minus, which is what a naive three-from-the-right pass does.
+    expect(money.forDisplay(money.toMoney("-1200.00"), 2)).toBe(`-1${NBSP}200.00`);
+  });
+
+  it("never groups the fraction", () => {
+    // A rate's scale is not a quantity; grouping it reads as a phone number.
+    expect(money.forDisplay(money.toMoney("1.12345678"), 8)).toBe("1.12345678");
+  });
+
+  it("honours a currency with no minor unit", () => {
+    expect(money.forDisplay(money.toMoney("125000"), 0)).toBe(`125${NBSP}000`);
+  });
+
+  /**
+   * **The separator does not wrap.** A plain space would let `48 210.00` break
+   * across two lines at the end of a row, which reads as two figures.
+   */
+  it("separates with a no-break space", () => {
+    expect(money.forDisplay(money.toMoney("48210"), 2)).not.toContain("\u0020");
+  });
+
+  /**
+   * The display form is a `string`, and that is the guarantee: it can never be
+   * handed back to arithmetic or written to the wire. This asserts the property
+   * a type cannot — that the grouped text is not parseable as the storage form.
+   */
+  it("is not round-trippable, deliberately", () => {
+    expect(() => money.toMoney(money.forDisplay(money.toMoney("48210.00"), 2))).toThrow();
+  });
+});

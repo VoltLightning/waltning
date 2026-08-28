@@ -12,8 +12,9 @@
  */
 
 import { Text, View } from "react-native";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { radius, space, type } from "../tokens.ts";
+import { radius, space } from "../tokens.ts";
 
 export type PillTier =
   /** Deterministic and free. Names the rule, because "a rule" is not checkable. */
@@ -60,5 +61,5 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: space.xs,
     alignSelf: "flex-start",
   },
-  text: { color: t.accentText, fontSize: type.caption.fontSize },
+  text: { color: t.accentText, ...text.ui("caption") },
 }));

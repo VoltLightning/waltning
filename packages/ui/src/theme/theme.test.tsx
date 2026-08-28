@@ -18,16 +18,24 @@ import { ThemeProvider, useTheme } from "./provider";
 import { dark, light, themes } from "./roles.ts";
 import { makeStyles } from "./styles.ts";
 
-function contrastRatio(foreground: string, background: string): number {
-  const channel = (hex: string, offset: number) => {
+function relativeLuminance(hex: string): number {
+  const channel = (offset: number) => {
     const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   };
-  const luminance = (hex: string) =>
-    0.2126 * channel(hex, 1) + 0.7152 * channel(hex, 3) + 0.0722 * channel(hex, 5);
-  const a = luminance(foreground);
-  const b = luminance(background);
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const a = relativeLuminance(foreground);
+  const b = relativeLuminance(background);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/** CIE L\*, so a "how dark is it" claim can be stated as a number. */
+function lightness(hex: string): number {
+  const y = relativeLuminance(hex);
+  return y > 216 / 24389 ? 116 * y ** (1 / 3) - 16 : y * (24389 / 27);
 }
 
 const useStyles = makeStyles((t) => ({
@@ -87,6 +95,51 @@ describe("a component follows the active theme", () => {
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * **The shell has to read as a band, and nothing drew a line under it.**
+   *
+   * Every check above is a text-on-fill ratio, and the dark shell passed all of
+   * them: `#0a1f16` holds `shellText` at 15.6:1. What it did not hold was any
+   * relationship to the page — 1.10:1 against `ground` and 1.01:1 against
+   * `surface`, so the header was legible text floating on an area boundary
+   * nobody could see. The screen read as one flat black rectangle, and the
+   * suite was green throughout.
+   *
+   * **A surface pair needs a floor only where no border draws the edge.** A
+   * card is `#ffffff` on `#f5f7f6` at 1.05:1 and that is fine, because
+   * `elevation.card` puts a one-pixel `border` between them; §2.5 made that the
+   * system's whole elevation story. The shell/ground seam is the one adjacency
+   * with no border by design — the ground panel's rounded corners are the join
+   * — so the fills are all there is, and this is the only place they must
+   * carry the separation alone.
+   *
+   * 1.5:1 rather than a WCAG number, because WCAG has none for this: 3:1 is for
+   * a *boundary* you must locate precisely, like a control's edge, and a
+   * full-width band is the easiest thing on a screen to see. 1.5 is where a
+   * large area stops reading as continuous with its neighbour.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s shell separate from the page it bands", (_name, theme) => {
+    expect(contrastRatio(theme.shell, theme.ground)).toBeGreaterThanOrEqual(1.5);
+    expect(contrastRatio(theme.shell, theme.surface)).toBeGreaterThanOrEqual(1.5);
+  });
+
+  /**
+   * §2.1 grants the shell the one structural use of the brand colour. A value
+   * dark enough to read as black spends that grant on nothing — and `#0f2b1f`
+   * at L\* 15 was exactly that. Stated as lightness rather than as a hue test
+   * because *green enough* is a question about how dark it is: the hue was
+   * always right and never visible.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s shell a green rather than a black", (_name, theme) => {
+    expect(lightness(theme.shell)).toBeGreaterThanOrEqual(22);
   });
 
   it("renders the default theme with no provider at all", () => {

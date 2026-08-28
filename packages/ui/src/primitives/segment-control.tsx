@@ -16,9 +16,9 @@
 
 import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { face } from "../theme/fonts.ts";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { focus, radius, space, touchTarget } from "../tokens.ts";
 
 export type Segment = {
   value: string;
@@ -103,8 +103,8 @@ const useStyles = makeStyles((t) => ({
   },
   active: { backgroundColor: t.surface },
   focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
-  label: { color: t.textMuted, fontSize: type.bodySm.fontSize },
-  labelActive: { color: t.text, ...face.ui(600) },
-  count: { color: t.textMuted, fontSize: type.caption.fontSize },
+  label: { color: t.textMuted, ...text.ui("bodySm") },
+  labelActive: { color: t.text, ...text.ui("bodySm", 600) },
+  count: { color: t.textMuted, ...text.ui("caption") },
   countActive: { color: t.accentText },
 }));

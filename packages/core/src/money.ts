@@ -75,6 +75,48 @@ export const dec = (v: Money | string | number | Decimal): Decimal => new Decima
 export const toMoney = (v: Decimal | Money | string | number, scale = 8): Money =>
   dec(v).toFixed(scale) as Money;
 
+/**
+ * The group separator: **U+00A0, a no-break space.**
+ *
+ * Not a comma, and not chosen by locale. `design-system/04` §4.1 draws the
+ * figure as `1 234,56 zł`, which is Polish convention — but the app renders a
+ * trailing ISO code (`PLN`), not a symbol, and `screens/S17` records that
+ * symbol placement is a locale question nobody has answered yet. A comma group
+ * with a dot decimal is the one combination that is ambiguous in *both* the
+ * conventions this product will meet; a space group is unambiguous in both.
+ *
+ * No-break rather than a thin space, for two reasons: a thin space is not
+ * guaranteed to exist in every fallback face, and a plain space would let a
+ * figure wrap in the middle of itself at the end of a row.
+ */
+const GROUP = "\u00a0";
+
+/**
+ * A figure as a person reads it — grouped thousands, fixed decimals.
+ *
+ * **Not `toMoney`.** That is the storage form: full scale, ungrouped,
+ * round-trippable, and the only thing that may ever be written down or sent.
+ * This is the display form, and it is deliberately a *different function with
+ * a different return type* — a `string`, not a `Money` — so a figure formatted
+ * for a screen can never be handed back to arithmetic or to the wire.
+ *
+ * It exists because a ledger without grouping is a ledger you count digits in:
+ * `12480.20` and `1248.02` are one glance apart, and the total on the phone's
+ * home screen read `48210.00` for the whole life of the design system.
+ *
+ * Grouping runs on the integer part only. The fraction is never grouped —
+ * `0.12345678` is a rate's scale, not a quantity, and splitting it into threes
+ * reads as a phone number.
+ */
+export const forDisplay = (v: Money, decimals: number): string => {
+  const fixed = dec(v).toFixed(decimals);
+  const [whole = "", fraction] = fixed.split(".");
+  const negative = whole.startsWith("-");
+  const digits = negative ? whole.slice(1) : whole;
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, GROUP);
+  return `${negative ? "-" : ""}${grouped}${fraction === undefined ? "" : `.${fraction}`}`;
+};
+
 export const add = (a: Money, b: Money): Money => toMoney(dec(a).plus(b));
 export const sub = (a: Money, b: Money): Money => toMoney(dec(a).minus(b));
 export const mul = (a: Money, b: Money | number): Money => toMoney(dec(a).times(b));
