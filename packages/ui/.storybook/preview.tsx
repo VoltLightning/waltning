@@ -47,9 +47,26 @@ type Appearance = ThemeName | "both";
  * `flex: 1` rather than a fixed height so a story that grows — a list, a filled
  * form — is not clipped at an arbitrary line that looks like a layout bug.
  */
-function Panel({ name, children }: { name: ThemeName; children: React.ReactNode }) {
+/**
+ * **A fullscreen story gets no inset.** The 16px was added so a component
+ * would not sit against the canvas edge, and it was applied to screens too —
+ * so every `TodayFrame` baseline showed a shell floating inside a margin of
+ * ground that the app never draws. A screenshot that lies about the edge is
+ * the one thing the visual suite must not produce; the frame reads the
+ * story's own `layout` parameter, which is the Storybook convention for
+ * "this is a screen, not a component".
+ */
+function Panel({
+  name,
+  inset,
+  children,
+}: {
+  name: ThemeName;
+  inset: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={{ flex: 1, backgroundColor: themes[name].ground, padding: 16 }}>
+    <View style={{ flex: 1, backgroundColor: themes[name].ground, padding: inset ? 16 : 0 }}>
       <ThemeProvider name={name}>{children}</ThemeProvider>
     </View>
   );
@@ -60,14 +77,15 @@ const withTheme: Decorator = (Story, context) => {
   // `noPropertyAccessFromIndexSignature` makes the dotted form an error on
   // purpose — it types as present when it is not.
   const appearance = (context.globals["appearance"] ?? "light") as Appearance;
+  const inset = context.parameters["layout"] !== "fullscreen";
 
   if (appearance === "both") {
     return (
       <View style={{ flexDirection: "row", minHeight: 240 }}>
-        <Panel name="light">
+        <Panel name="light" inset={inset}>
           <Story />
         </Panel>
-        <Panel name="dark">
+        <Panel name="dark" inset={inset}>
           <Story />
         </Panel>
       </View>
@@ -75,7 +93,7 @@ const withTheme: Decorator = (Story, context) => {
   }
 
   return (
-    <Panel name={appearance}>
+    <Panel name={appearance} inset={inset}>
       <Story />
     </Panel>
   );
