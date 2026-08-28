@@ -1,4 +1,17 @@
 {
   "extends": "../../tsconfig.client.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  // `.storybook` and `visual` are included deliberately. PR #49 — "The files
+  // that enforce every rule were typechecked by nothing" — was this exact
+  // shape: config and harnesses that only a runner ever read, so a broken
+  // decorator or a spec calling a method that does not exist failed at the
+  // command rather than at the gate.
+  "compilerOptions": { "types": ["node"] },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
+    "visual/**/*.ts",
+    "playwright.config.ts"
+  ]
 }

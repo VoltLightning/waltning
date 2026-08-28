@@ -94,7 +94,16 @@ export function Button({
       */}
       <Text style={[styles.label, ink, loading ? styles.hidden : null]}>{label}</Text>
       {loading ? (
-        <View style={styles.spinner}>
+        /*
+          Hidden from the accessibility tree, and that is the accessible
+          choice rather than a shortcut. The `Pressable` above already carries
+          `accessibilityState={{ busy: loading }}`, so a reader announces
+          "Save, busy"; leaving the indicator exposed adds a second, unnamed
+          announcement of the same fact — which is what `aria-progressbar-name`
+          fires on. The state is the semantics; the spinner is the picture of
+          it.
+        */
+        <View style={styles.spinner} aria-hidden>
           <ActivityIndicator size="small" color={ink.color} />
         </View>
       ) : null}
