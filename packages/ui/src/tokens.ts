@@ -31,12 +31,31 @@ export const color = {
   /** Page background. Every card sits on this. */
   ground: "#f5f7f6",
   surface: "#ffffff",
+  /**
+   * The component-fill steps, and the border steps — six values that the
+   * 12-step scales (Radix, Geist) reserve so every state has a colour before a
+   * component needs one. Ours were three; the audit found no hover, no
+   * interactive border and no strong border, and each was going to be invented
+   * ad hoc by the first component that wanted it. Derived by OKLab
+   * interpolation between the existing anchors, so the new steps sit between
+   * the old ones rather than beside them.
+   */
   /** Table headers, inset boxes, filled chips — quieter than `surface`. */
   subtle: "#eef2f0",
+  /** The fill under a pointer, between `subtle` and `pressed`. */
+  hover: "#e8edeb",
   /** The transient fill under a finger. */
   pressed: "#e3e9e6",
   /** Card edges, dividers, the outline of an unfilled control. */
   border: "#dfe5e2",
+  /** The border of an interactive control at rest — an input, a chip. */
+  borderInteractive: "#bbc3be",
+  /**
+   * A border that must read on its own: a selected control, a focus-adjacent
+   * edge. Held to 3:1 against `surface`, the WCAG floor for a UI boundary —
+   * the first interpolation landed at 2.59 and was pushed.
+   */
+  borderStrong: "#8c958f",
   ink: "#171d1a",
   muted: "#667069",
 
@@ -46,6 +65,13 @@ export const color = {
   accentText: "#1f6a48",
   /** Decorative accent marks, and the focus ring. Job 2. */
   accentIcon: "#3d9a6c",
+  /**
+   * A subtle green fill and its edge — a selected segment, a toggled chip, an
+   * inset that belongs to the accent. Radix's steps 3 and 6; the accent text
+   * reads on the fill at 4.9:1.
+   */
+  accentFill: "#e9f1ec",
+  accentFillBorder: "#adc9b9",
 
   /**
    * Money has three colours of its own, and none of them is the accent.
@@ -115,13 +141,18 @@ export const darkColor = {
   ground: "#0e1210",
   surface: "#161b18",
   subtle: "#1c2320",
+  hover: "#202824",
   pressed: "#252e29",
   border: "#2b3530",
+  borderInteractive: "#48534d",
+  borderStrong: "#66716a",
   ink: "#eef2ef",
   muted: "#9ba79f",
   accent: "#5cc08f",
   accentText: "#8fd6b3",
   accentIcon: "#5cc08f",
+  accentFill: "#223229",
+  accentFillBorder: "#365f4a",
   textOnAccent: "#0b1a12",
   income: "#62d495",
   spend: "#ea8f7b",
@@ -175,14 +206,27 @@ export const tabularNums = ["tabular-nums", "lining-nums"] as const;
  * lands back on the number §2.2 published.
  */
 export const type = {
+  /**
+   * The display steps carry negative tracking, stated in pixels because that
+   * is what React Native's `letterSpacing` takes: −0.02em at 54, −0.015em at
+   * 38, −0.01em at 23. Large sans type sets loose by default and reads as
+   * unset; the tracking is what makes a headline figure look engineered
+   * rather than typed. Geist runs −2.4px at 48.
+   */
   /** The one dominant total, in the display currency. */
-  displayHero: { fontSize: 54, lineHeightRatio: 57 / 54 },
-  displayOne: { fontSize: 38, lineHeightRatio: 42 / 38 },
-  displayTwo: { fontSize: 23, lineHeightRatio: 28 / 23 },
+  displayHero: { fontSize: 54, lineHeightRatio: 57 / 54, letterSpacing: -1.08 },
+  displayOne: { fontSize: 38, lineHeightRatio: 42 / 38, letterSpacing: -0.57 },
+  displayTwo: { fontSize: 23, lineHeightRatio: 28 / 23, letterSpacing: -0.23 },
   displayThree: { fontSize: 17, lineHeightRatio: 22 / 17 },
-  body: { fontSize: 14.5, lineHeightRatio: 23 / 14.5 },
-  bodySm: { fontSize: 13, lineHeightRatio: 20 / 13 },
-  caption: { fontSize: 11.5, lineHeightRatio: 16 / 11.5 },
+  /**
+   * **16, not 14.5.** The old body was a desktop size on a phone held at
+   * arm's length: Apple's floor for that is 17, Material's and Carbon's body
+   * is 16. The dense-row size moves up with it and keeps the old body's
+   * number, so a transaction row is now set at what was body.
+   */
+  body: { fontSize: 16, lineHeightRatio: 24 / 16 },
+  bodySm: { fontSize: 14.5, lineHeightRatio: 22 / 14.5 },
+  caption: { fontSize: 12, lineHeightRatio: 16 / 12 },
   /** Eyebrow labels. */
   kicker: { fontSize: 11, lineHeightRatio: 13 / 11, fontWeight: "700", letterSpacing: 0.88 },
   /**
@@ -291,16 +335,23 @@ export const radius = {
  * string here would be usable by exactly one of them.
  */
 export const shadow = {
+  /**
+   * Halved from the first cut. The construction was right — three hue-matched
+   * layers with doubling offset and blur — and the ink was three times the
+   * field: Geist stacks its layers at 4–12%, Comeau's layered shadows run
+   * about 0.075 per layer. At the old 22/18/35 the button read as glowing,
+   * which is the one thing a shadow in this system must not do.
+   */
   float: {
-    contact: { color: "#0f2b1f", opacity: 0.22, radius: 2, offsetY: 1 },
-    mid: { color: "#0f2b1f", opacity: 0.18, radius: 10, offsetY: 4 },
-    far: { color: "#0f2b1f", opacity: 0.35, radius: 24, offsetY: 12 },
+    contact: { color: "#0f2b1f", opacity: 0.1, radius: 2, offsetY: 1 },
+    mid: { color: "#0f2b1f", opacity: 0.08, radius: 10, offsetY: 4 },
+    far: { color: "#0f2b1f", opacity: 0.16, radius: 24, offsetY: 12 },
   },
   /** The same three, lifted, while the button is being dragged. */
   floatLifted: {
-    contact: { color: "#0f2b1f", opacity: 0.22, radius: 4, offsetY: 2 },
-    mid: { color: "#0f2b1f", opacity: 0.22, radius: 22, offsetY: 10 },
-    far: { color: "#0f2b1f", opacity: 0.45, radius: 40, offsetY: 24 },
+    contact: { color: "#0f2b1f", opacity: 0.12, radius: 4, offsetY: 2 },
+    mid: { color: "#0f2b1f", opacity: 0.1, radius: 22, offsetY: 10 },
+    far: { color: "#0f2b1f", opacity: 0.22, radius: 40, offsetY: 24 },
   },
 } as const;
 
@@ -323,13 +374,48 @@ export const focus = { width: 2, offset: 2, color: color.accentIcon } as const;
  * between using the app and feeling ill.
  */
 export const motion = {
-  fast: { duration: 120, easing: "ease-out" },
+  /**
+   * Entering, exiting, responding: a **strong** ease-out. The built-in
+   * `ease-out` is the one Kowalski names as too weak — it barely decelerates,
+   * so the element arrives at the same speed it left. This curve does most of
+   * its travel in the first third, which is where the eye is.
+   */
+  fast: { duration: 120, easing: "cubic-bezier(.23,1,.32,1)" },
   base: { duration: 200, easing: "cubic-bezier(.2,0,0,1)" },
-  /** The header fold and the sheet rise share one curve. */
+  /**
+   * Something that **moves** on screen rather than appears — the header's
+   * title sliding into its collapsed place, a row reordering. Ease-in-out,
+   * because a thing already visible should leave gently as well as arrive
+   * gently; ease-out on movement looks like it was fired.
+   */
+  move: { duration: 220, easing: "cubic-bezier(.77,0,.175,1)" },
+  /** The header fold. Decelerate; the moving parts inside it use `move`. */
   fold: { duration: 260, easing: "cubic-bezier(.2,0,0,1)" },
-  sheet: { duration: 280, easing: "cubic-bezier(.2,0,0,1)" },
+  /** The iOS drawer curve: quick to leave the edge, long settle. */
+  sheet: { duration: 280, easing: "cubic-bezier(.32,.72,0,1)" },
   none: { duration: 0, easing: "linear" },
 } as const;
+
+/**
+ * **How often an interaction happens decides whether it animates at all.**
+ *
+ * Kowalski's table, adopted as a rule: something done a hundred times a day
+ * gets no animation; tens of times a day, as little as possible; occasionally,
+ * the standard motion; rarely, delight. The named zero-animation case in this
+ * product is the keypad — J02 runs several times a day and a capture is a
+ * dozen taps, so a keypad that animates is a keypad that feels slow by the
+ * second week. The sheet that holds it may rise; the keys inside it may not.
+ */
+export const motionFrequency = {
+  /** A keypad key, a keyboard shortcut. */
+  constant: "none",
+  /** Navigation, a chip tap, a row press. Press feedback only. */
+  frequent: "fast",
+  /** A sheet, a toast, the header fold. */
+  occasional: "base",
+  /** First run, a milestone. */
+  rare: "sheet",
+} as const satisfies Record<string, keyof typeof motion>;
 
 /* ── §10 Accessibility ───────────────────────────────────────────────────── */
 

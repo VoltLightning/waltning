@@ -21,9 +21,9 @@ const PUBLISHED: Record<TypeStep, [size: number, lineHeight: number]> = {
   displayOne: [38, 42],
   displayTwo: [23, 28],
   displayThree: [17, 22],
-  body: [14.5, 23],
-  bodySm: [13, 20],
-  caption: [11.5, 16],
+  body: [16, 24],
+  bodySm: [14.5, 22],
+  caption: [12, 16],
   kicker: [11, 13],
   tag: [10.5, 10.5],
 };

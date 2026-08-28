@@ -13,9 +13,10 @@
  */
 
 import { useCallback, useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Animated, Pressable, Text } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget, type } from "../tokens.ts";
+import { usePressScale } from "./press-scale.ts";
 
 export type ChipProps = {
   /** Shown when there is no value. A chip with neither reads as broken. */
@@ -45,12 +46,12 @@ export function Chip({
   const styles = useStyles();
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
+  const press = usePressScale();
   const pressableStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => [
+    () => [
       styles.chip,
       filled ? styles.filled : styles.empty,
       machineFilled ? styles.machine : null,
-      pressed ? styles.pressed : null,
       focused ? styles.focused : null,
       disabled ? styles.disabled : null,
     ],
@@ -58,28 +59,32 @@ export function Chip({
   );
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      // The state is announced, not only drawn. A marker that exists in colour
-      // alone is not a marker for someone using a screen reader.
-      accessibilityLabel={
-        machineFilled
-          ? `${placeholder}: ${value ?? ""}, filled automatically`
-          : `${placeholder}${filled ? `: ${value}` : ""}`
-      }
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      style={pressableStyle}
-    >
-      <Text style={[styles.text, filled ? styles.textFilled : styles.textEmpty]}>
-        {filled ? value : placeholder}
-        {/* Text, not tint alone (P5) — and the one character that fits. */}
-        {machineFilled ? <Text style={styles.marker}> ·auto</Text> : null}
-      </Text>
-    </Pressable>
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole="button"
+        // The state is announced, not only drawn. A marker that exists in colour
+        // alone is not a marker for someone using a screen reader.
+        accessibilityLabel={
+          machineFilled
+            ? `${placeholder}: ${value ?? ""}, filled automatically`
+            : `${placeholder}${filled ? `: ${value}` : ""}`
+        }
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        style={pressableStyle}
+      >
+        <Text style={[styles.text, filled ? styles.textFilled : styles.textEmpty]}>
+          {filled ? value : placeholder}
+          {/* Text, not tint alone (P5) — and the one character that fits. */}
+          {machineFilled ? <Text style={styles.marker}> ·auto</Text> : null}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -92,11 +97,12 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: space.x3,
     borderWidth: 1,
   },
-  empty: { borderColor: t.border, backgroundColor: "transparent" },
-  filled: { borderColor: t.border, backgroundColor: t.subtleFill },
+  // `borderInteractive`, not `border`: a chip is a control, and the scale
+  // gives a control's resting edge one step more presence than a card's.
+  empty: { borderColor: t.borderInteractive, backgroundColor: "transparent" },
+  filled: { borderColor: t.borderInteractive, backgroundColor: t.subtleFill },
   /** Amber: asserted rather than chosen (P4), one meaning with every other amber. */
   machine: { borderColor: t.assertedBorder, backgroundColor: t.assertedFill },
-  pressed: { opacity: 0.85 },
   focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
   disabled: { opacity: 0.45 },
   text: { fontSize: type.body.fontSize },

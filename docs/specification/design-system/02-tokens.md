@@ -15,13 +15,18 @@ the brand colour is allowed to be a surface.
 | `ground` | `#f5f7f6` | Page background; all cards sit on it |
 | `surface` | `#ffffff` | Cards, sheets, rows |
 | `subtle` | `#eef2f0` | Table headers, inset boxes, neutral tag fills |
+| `hover` | `#e8edeb` | The fill under a pointer |
 | `pressed` | `#e3e9e6` | The transient fill under a finger |
 | `border` | `#dfe5e2` | Card edges, dividers, the outline of an unfilled control |
+| `border-interactive` | `#bbc3be` | The resting edge of a control — an input, a chip |
+| `border-strong` | `#8c958f` | An edge that must read alone: a selected control. **3:1 on `surface`**, the WCAG floor for a UI boundary |
 | `ink` | `#171d1a` | Body text **and heading ink** — a heading is not a signal |
 | `muted` | `#667069` | Secondary text, labels, captions; a transfer's figure |
 | `accent` | `#22754f` | Primary action fill. **Job 1** |
 | `accent-text` | `#1f6a48` | Links, a secondary action's label |
 | `accent-icon` | `#3d9a6c` | Decorative accent marks; the **focus ring**. **Job 2** |
+| `accent-fill` | `#e9f1ec` | A subtle green fill: a selected segment, a toggled chip. `accent-text` reads on it at 4.9:1 |
+| `accent-fill-border` | `#adc9b9` | The edge of `accent-fill` |
 | `income` | `#178249` | Credits, positive deltas. Deliberately brighter than `accent`: an event, not a control. **Job 3** |
 | `spend` | `#b0402a` | Debits, negative balances, rising spend. A restrained red — unmistakable, not alarming |
 | `green-100` … `green-900` | as below | The data ramp. **Job 4** |
@@ -35,6 +40,17 @@ the brand colour is allowed to be a surface.
 | `shell-text` | `#f4f7f5` | Text on the shell |
 | `shell-text-muted` | `#a9c4b6` | The currency marker, the mine/ours line |
 | `bolt` | `#f5c63d` | App icon accent only — not a UI colour |
+
+**Six steps for states, before a component needs them.** The 12-step scales
+the field has converged on (Radix, Geist, Tailwind v4) reserve fixed jobs:
+backgrounds, then a component's fill / hover / pressed, then a subtle border, an
+interactive border and a strong border, then the solid, then two text
+strengths. Our neutrals land within one step of Radix's green-tinted gray
+(*Sage*) and our greens within one step of its green scale; what was missing
+was the state steps, and `hover`, `border-interactive`, `border-strong`,
+`accent-fill` and `accent-fill-border` are those, derived by OKLab
+interpolation between the existing anchors so they sit between the old values
+rather than beside them.
 
 **The ramp**, which is the entire chart palette — magnitude reads as depth, so
 no second hue is needed. Unchanged by the restyle; it was never the problem.
@@ -69,14 +85,19 @@ maps those roles to values. The shipped dark map is closed:
 | `ground` | `#0e1210` |
 | `surface` | `#161b18` |
 | `subtleFill` / `tagNeutralFill` | `#1c2320` |
+| `hoverFill` | `#202824` |
 | `pressedFill` | `#252e29` |
 | `border` | `#2b3530` |
+| `borderInteractive` | `#48534d` |
+| `borderStrong` | `#66716a` |
 | `hairline` | `rgba(228,241,232,.12)` |
 | `text` | `#eef2ef` |
 | `textMuted` / `tagNeutralText` | `#9ba79f` |
 | `textOnAccent` | `#0b1a12` |
 | `accent` / `accentIcon` / `focusRing` | `#5cc08f` |
 | `accentText` | `#8fd6b3` |
+| `accentFill` | `#223229` |
+| `accentFillBorder` | `#365f4a` |
 | `income` | `#62d495` |
 | `spend` | `#ea8f7b` |
 | `assertedFill` | `#3a301b` |
@@ -158,15 +179,24 @@ the screen, and an unbounded 2× is 108pt in a layout built for 54.
 | `display-2` | 1.6 |
 | everything else | uncapped |
 
-| Step | Size / line-height | Use |
-|---|---|---|
-| `display-hero` | 54 / 1.05 | The one dominant total, in the display currency |
-| `display-1` | 38 / 1.1 | Board and page titles |
-| `display-2` | 23 / 1.2 | Section headings |
-| `display-3` | 17 / 1.3 | Card titles |
-| `body` | 14.5 / 1.62 | Default |
-| `body-sm` | 13 / 1.5 | Table cells, dense rows |
-| `caption` | 11.5 / 1.4 | Captions, metadata |
+**Body is 16 on the phone.** It was 14.5 — a desktop size on a device held at
+arm's length. Apple's floor for that is 17; Material's and Carbon's body is 16.
+The dense-row size moves up with it and keeps the old body's number, so a
+transaction row is now set at what was body.
+
+**The display steps carry negative tracking**: −0.02em at 54, −0.015em at 38,
+−0.01em at 23. Large sans type sets loose by default and reads as unset; the
+tracking is what makes a headline figure look engineered rather than typed.
+
+| Step | Size / line-height | Tracking | Use |
+|---|---|---|---|
+| `display-hero` | 54 / 1.05 | −0.02em | The one dominant total, in the display currency |
+| `display-1` | 38 / 1.1 | −0.015em | Board and page titles |
+| `display-2` | 23 / 1.2 | −0.01em | Section headings |
+| `display-3` | 17 / 1.3 | — | Card titles |
+| `body` | 16 / 1.5 | — | Default |
+| `body-sm` | 14.5 / 1.52 | — | Table cells, dense rows |
+| `caption` | 12 / 1.33 | — | Captions, metadata |
 | `kicker` | 11 / 1.2, `700`, `.08em`, uppercase | Eyebrow labels |
 | `tag` | 10.5 / 1, `700`, `.08em`, uppercase | Pills and tags. A ratio of exactly 1 is deliberate — uppercase-only, so no descenders to clip |
 
@@ -207,12 +237,15 @@ in their mechanism.
 |---|---|---|
 | `elevation-card` / `-raised` / `-frame` | `1px solid border`, no shadow | Every surface in the layout. The three names survive so a component can still say what kind of surface it is |
 | `border-hairline` | `1px solid rgba(23,29,26,.10)` | Dividers |
-| `shadow-float` | `0 1px 2px 22%` · `0 4px 10px 18%` · `0 12px 24px -8px 35%`, all `#0f2b1f` | **The floating add button, and nothing else** |
-| `shadow-float-lifted` | `0 2px 4px 22%` · `0 10px 22px 22%` · `0 24px 40px -10px 45%` | The same button while it is being dragged |
+| `shadow-float` | `0 1px 2px 10%` · `0 4px 10px 8%` · `0 12px 24px -8px 16%`, all `#0f2b1f` | **The floating add button, and nothing else** |
+| `shadow-float-lifted` | `0 2px 4px 12%` · `0 10px 22px 10%` · `0 24px 40px -10px 22%` | The same button while it is being dragged |
 
 The floating button is the one object *above* the page, and the shadow is what
 says so: three layers — a tight contact edge, a mid cast, a soft far cast —
-rather than one large blur, which is the glow removed everywhere else. In dark
+rather than one large blur, which is the glow removed everywhere else. The
+opacities are low on purpose: Geist stacks its layers at 4–12%, and a first cut
+at three times that read as a glow, which is the one thing a shadow here must
+not do. In dark
 appearance it also carries a one-pixel rim in `accent` at 18%, because on a
 near-black ground a dark shadow alone does not separate it. React Native's
 `shadow*` props express one shadow; a native surface gets the far layer, and
@@ -227,11 +260,29 @@ removed, never replaced by a colour change alone.
 
 | Token | Duration | Curve | Use |
 |---|---|---|---|
-| `motion-fast` | 120ms | `ease-out` | Hover, press, tint |
-| `motion-base` | 200ms | `cubic-bezier(.2,0,0,1)` | Expand, reveal |
-| `motion-fold` | 260ms | `cubic-bezier(.2,0,0,1)` | The header collapsing and expanding |
-| `motion-sheet` | 280ms | `cubic-bezier(.2,0,0,1)` | Bottom sheet rise |
+| `motion-fast` | 120ms | `cubic-bezier(.23,1,.32,1)` | Press release, tint, anything entering or exiting. A **strong** ease-out — the built-in one barely decelerates |
+| `motion-base` | 200ms | `cubic-bezier(.2,0,0,1)` | Expand, reveal, press-in |
+| `motion-move` | 220ms | `cubic-bezier(.77,0,.175,1)` | Something already visible **moving** — the title sliding into its collapsed place. Ease-in-out: a visible thing leaves gently too |
+| `motion-fold` | 260ms | `cubic-bezier(.2,0,0,1)` | The header collapsing and expanding; its moving parts use `move` |
+| `motion-sheet` | 280ms | `cubic-bezier(.32,.72,0,1)` | Bottom sheet rise — the iOS drawer curve: quick off the edge, long settle |
 | `motion-none` | 0 | — | `prefers-reduced-motion` branch |
+
+**Three rules from the practitioners, adopted.** Nothing on a UI element runs
+longer than 300ms. Nothing uses ease-in — it delays the moment the user is
+watching. Only `transform` and `opacity` animate; never height, padding or
+position, which is why the header fold is built on scale and translate rather
+than on `font-size`.
+
+**Press feedback is `scale(.97)`, and it is asymmetric.** In at `base`, out at
+`fast`: slow where the person is deciding, quick where the system responds.
+Every `Pressable` in the system gets it through one hook.
+
+**How often an interaction happens decides whether it animates at all.** A
+hundred times a day: no animation. Tens of times: press feedback only.
+Occasionally: the standard motion. Rarely: delight. The named zero-animation
+case is the keypad — a capture is a dozen taps several times a day, and a
+keypad that animates feels slow by the second week. The sheet that holds it may
+rise; the keys inside it may not.
 
 **Every animation needs the `motion-none` branch.** The waveform, the mic halo,
 and the sheet rise are all currently unbranched (§10).

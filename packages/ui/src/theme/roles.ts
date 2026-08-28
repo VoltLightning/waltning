@@ -60,11 +60,17 @@ export type Theme = {
   surface: string;
   /** Table headers, inset boxes, filled chips — quieter than `surface`. */
   subtleFill: string;
+  /** The fill under a pointer. Between `subtleFill` and `pressedFill`. */
+  hoverFill: string;
   /** The transient fill under a finger or cursor. */
   pressedFill: string;
 
   /** Card edges, dividers, and the outline of an unfilled control. Neutral. */
   border: string;
+  /** The edge of an interactive control at rest — an input, a chip. */
+  borderInteractive: string;
+  /** An edge that must read alone: a selected control. 3:1 on `surface`. */
+  borderStrong: string;
   /** The hairline rule, which is a colour *and* an alpha. */
   hairline: string;
 
@@ -89,6 +95,9 @@ export type Theme = {
    * element, never removed and never replaced by a colour change alone.
    */
   focusRing: string;
+  /** A subtle green fill and its edge: a selected segment, a toggled chip. */
+  accentFill: string;
+  accentFillBorder: string;
 
   /**
    * Money's three colours. `<Amount>` takes a `kind`, never a colour, and
@@ -181,9 +190,12 @@ export const light: Theme = {
   ground: color.ground,
   surface: color.surface,
   subtleFill: color.subtle,
+  hoverFill: color.hover,
   pressedFill: color.pressed,
 
   border: color.border,
+  borderInteractive: color.borderInteractive,
+  borderStrong: color.borderStrong,
   hairline: "rgba(23,29,26,.10)",
 
   text: color.ink,
@@ -194,6 +206,8 @@ export const light: Theme = {
   accentText: color.accentText,
   accentIcon: color.accentIcon,
   focusRing: color.accentIcon,
+  accentFill: color.accentFill,
+  accentFillBorder: color.accentFillBorder,
 
   income: color.income,
   spend: color.spend,
@@ -227,9 +241,12 @@ export const dark: Theme = {
   ground: darkColor.ground,
   surface: darkColor.surface,
   subtleFill: darkColor.subtle,
+  hoverFill: darkColor.hover,
   pressedFill: darkColor.pressed,
 
   border: darkColor.border,
+  borderInteractive: darkColor.borderInteractive,
+  borderStrong: darkColor.borderStrong,
   hairline: "rgba(228,241,232,.12)",
 
   text: darkColor.ink,
@@ -240,6 +257,8 @@ export const dark: Theme = {
   accentText: darkColor.accentText,
   accentIcon: darkColor.accentIcon,
   focusRing: darkColor.accentIcon,
+  accentFill: darkColor.accentFill,
+  accentFillBorder: darkColor.accentFillBorder,
 
   income: darkColor.income,
   spend: darkColor.spend,
