@@ -7,10 +7,14 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
+import { NO_INSETS, type SafeAreaInsets, SafeAreaProvider } from "../primitives/safe-area";
 import { ThemeProvider } from "../theme/provider";
 import { dark, light } from "../theme/roles.ts";
 import { Card } from "./card";
 import { DualTotal } from "./dual-total";
+import { TodayFrame } from "./today-frame";
+
+function noop() {}
 
 /**
  * The group separator, **as Testing Library sees it.**
@@ -114,5 +118,116 @@ describe("Card", () => {
         expect(theme.elevation[level].shadowOpacity, level).toBe(0);
       }
     }
+  });
+});
+
+/**
+ * **The device decides how much room the chrome needs, and the layout adds its
+ * own.**
+ *
+ * `TodayFrame` hardcoded `paddingTop: 34` — a status-bar guess, right on
+ * nothing. Android runs about 24 and an iPhone with a Dynamic Island 59, so the
+ * heading floated on one device and clipped under the other with nothing in the
+ * layout to say which.
+ *
+ * These assert the arithmetic rather than a pixel, because the arithmetic is
+ * the decision: clearance **plus** breathing room, never `max()`. A `max()`
+ * would satisfy a naive "does it clear the notch" check while putting the
+ * heading hard against the status bar on exactly the phones with the biggest
+ * one.
+ */
+describe("the frame clears the device's chrome", () => {
+  const NOTCHED: SafeAreaInsets = { top: 59, right: 0, bottom: 34, left: 0 };
+
+  function paddingOf(node: Element | null, side: "top" | "bottom"): number {
+    const raw =
+      node instanceof HTMLElement ? node.style[`padding${side === "top" ? "Top" : "Bottom"}`] : "";
+    return Number.parseFloat(raw || "0");
+  }
+
+  /** The shell band, which is the frame's first child. */
+  function renderFrame(insets: SafeAreaInsets) {
+    const { container } = render(
+      <SafeAreaProvider insets={insets}>
+        <TodayFrame appearanceAction={null} total={null} body={null} onAdd={noop} />
+      </SafeAreaProvider>,
+    );
+    const root = container.firstElementChild;
+    return { shell: root?.firstElementChild ?? null, panel: root?.lastElementChild ?? null };
+  }
+
+  it("adds the top inset to the shell's own padding", () => {
+    const flat = renderFrame(NO_INSETS);
+    const notched = renderFrame(NOTCHED);
+
+    // 22 is `space.x5`, the shell's design padding. Stated as a difference so
+    // this does not have to be edited when that number is.
+    expect(paddingOf(notched.shell, "top") - paddingOf(flat.shell, "top")).toBe(NOTCHED.top);
+  });
+
+  it("clears the home indicator at the bottom of the ground panel", () => {
+    // The panel never clears the *top* — a header always sits above it, and on
+    // this screen that header is the shell, which cleared the status bar. Two
+    // boxes each adding the inset is the double-padding this split prevents.
+    // The panel is what reaches the bottom edge, so it is what owes the
+    // clearance — the last card and the add button sat under the indicator on
+    // every gesture-navigation phone.
+    const flat = renderFrame(NO_INSETS);
+    const notched = renderFrame(NOTCHED);
+
+    expect(paddingOf(notched.panel, "bottom") - paddingOf(flat.panel, "bottom")).toBe(
+      NOTCHED.bottom,
+    );
+  });
+
+  it("leaves a surface with no chrome exactly as it was designed", () => {
+    // Zero insets are a real value, not a missing one: a browser has no notch,
+    // and neither does a story or this test. The frame must render its own
+    // padding and nothing more.
+    const { shell, panel } = renderFrame(NO_INSETS);
+    expect(paddingOf(shell, "top")).toBeGreaterThan(0);
+    expect(paddingOf(panel, "bottom")).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * **The clearance and the colour must be the same box.**
+ *
+ * This is the property that makes the status-bar strip *part of the header*
+ * rather than a band above it. Padding paints inside the border box, so a
+ * `backgroundColor` and a `paddingTop` on one `View` fill the inset with the
+ * shell's own green. Move the padding to a wrapper — the obvious refactor when
+ * someone wants to reuse the clearance — and the strip becomes whatever is
+ * behind it, which is the ground, and the header reads as cut off.
+ *
+ * Nothing about the types would object, and on a laptop with zero insets
+ * nothing about the render would either.
+ */
+describe("the shell owns the strip it clears", () => {
+  /** jsdom resolves a computed colour to `rgb()`; the palette is hex. */
+  function rgbOf(hex: string): string {
+    const n = (at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
+    return `rgb(${n(1)}, ${n(3)}, ${n(5)})`;
+  }
+
+  it("paints its background across the inset it pads", () => {
+    const { container } = render(
+      <ThemeProvider name="light">
+        <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
+          <TodayFrame appearanceAction={null} total={null} body={null} onAdd={noop} />
+        </SafeAreaProvider>
+      </ThemeProvider>,
+    );
+
+    const shell = container.firstElementChild?.firstElementChild;
+    if (!(shell instanceof HTMLElement)) throw new Error("no shell");
+
+    // The **same element** carries both: the inset as padding and the shell as
+    // its fill. Read through `getComputedStyle` because the colour arrives on a
+    // generated class while the device-varying padding is inline — which is
+    // itself the thing worth checking, since those two could drift onto
+    // different nodes without a type or a render complaining.
+    expect(Number.parseFloat(shell.style.paddingTop)).toBeGreaterThanOrEqual(59);
+    expect(getComputedStyle(shell).backgroundColor).toBe(rgbOf(light.shell));
   });
 });

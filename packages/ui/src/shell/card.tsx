@@ -10,12 +10,24 @@
  * page body, and the reason the shell's dark band reads as behind rather than
  * above.
  *
- * The elevation props are still read from the theme rather than written here,
- * because the theme is where "a card has no shadow" is decided — and where the
- * one exception, the floating button, is granted its.
+ * **It is also the thing that reaches the screen's edges**, so it is where the
+ * device's chrome is cleared — bottom and sides, never the top.
+ *
+ * The top belongs to the header above it, and the app guarantees there is one:
+ * `TodayFrame`'s shell on the ledger, a navigation header on every other route.
+ * That is why `edges` came and went in the same change — the prop existed to
+ * let a bare panel be a whole screen, and giving the form routes real headers
+ * removed the case it was for. A prop whose only value is its default is a
+ * decision the structure already made.
+ *
+ * Bottom, because the last card and the add button sat under the home
+ * indicator on every gesture-navigation phone. Sides, because in landscape the
+ * notch is on one of them, and a figure running under it is a figure read wrong
+ * rather than a cosmetic clip.
  */
 
 import { Text, View } from "react-native";
+import { useSafeArea } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline, radius, space } from "../tokens.ts";
@@ -45,8 +57,17 @@ export function Card({ title, action, children }: CardProps) {
 
 export function GroundPanel({ children }: { children: React.ReactNode }) {
   const styles = useStyles();
+  const insets = useSafeArea();
 
-  return <View style={styles.panel}>{children}</View>;
+  // Not in `useStyles`: that cache is keyed on the theme, and these are keyed
+  // on the device.
+  const clearance = {
+    paddingBottom: space.x5 + insets.bottom,
+    paddingLeft: space.x5 + insets.left,
+    paddingRight: space.x5 + insets.right,
+  };
+
+  return <View style={[styles.panel, clearance]}>{children}</View>;
 }
 
 const useStyles = makeStyles((t) => ({
