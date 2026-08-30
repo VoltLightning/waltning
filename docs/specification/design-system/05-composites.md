@@ -8,6 +8,7 @@
 | `GroundPanel` | `radius-lg` surface lifting over the shell. Clears the bottom and side insets; the top belongs to the header above it |
 | `Card` | `surface`, `radius-md`, a one-pixel `border`, no shadow; optional title and action |
 | `StatTile` | Figure + label + delta. Delta takes `negative` ink when spend rose |
+| `CurrencyTotals` | **One figure per currency held, and no total.** The lead is a hero, the rest one step down, with *Held separately — not a total.* underneath — the line that stops a stacked pair from reading as a sum and its part. Order is the ledger's: ranking by magnitude would put 12 480,20 above 8 400,00 across two currencies nothing can compare. Yields the slot to `DualTotal` once a display currency and rates exist |
 | `DualTotal` | **The two headline figures** — *mine* dominant, *ours* secondary beneath (`SPEC.md` §6.7). Never a toggle: showing one at a time invites reading the wrong number. Degrades to a single figure when no shared account exists |
 | `ContributionRow` | An inflow to a shared account, attributed to a counterparty (`counterparty_role = 'contribution'`). Reads as a contribution, never a debt — no settle action, no ageing. The role is what keeps it out of `counterparty_balances`, so this is a rendering of a distinction the data already makes, not one the component invents |
 | `BottomSheet` | 170px from top; search, content, **pinned footer** |

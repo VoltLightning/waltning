@@ -15,10 +15,13 @@ const phoneLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"), 
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
     expect(today).toContain('label: "Create account"');
-    expect(today).toContain('currency="USD"');
+    expect(today).toContain("<CurrencyTotals subtotals={snapshot.subtotals} />");
     expect(today).toContain('title="Recent"');
     expect(today).toContain('router.push("/quick-add")');
-    expect(today).toContain("snapshot.total");
+    // The hero is a list of subtotals, not a figure. `snapshot.total` was a
+    // `money.sum` over every balance labelled USD, which only held because a
+    // throw refused any account that was not in dollars.
+    expect(today).not.toContain("snapshot.total");
   });
 
   it("offers exactly three appearance choices and confirms destructive reset", () => {

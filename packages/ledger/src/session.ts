@@ -1,9 +1,9 @@
 import type { CurrencyCode } from "@waltning/core/money";
-import * as money from "@waltning/core/money";
 import type { CreateAccountInput, CreateTransactionInput } from "@waltning/core/registry/inputs";
 import { currencies } from "@waltning/schema/sqlite/currencies";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
+import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 import {
   describeLedgerError,
   emitLedgerDiagnostic,
@@ -22,24 +22,27 @@ import {
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
 import { type Capture, writeLocally } from "./write.ts";
 
+/**
+ * A currency row as the replica needs it at first launch.
+ *
+ * Structurally a `CurrencyDefinition` minus `rateSource`, and deliberately not
+ * that type: the phone's bootstrap is a set of rows to insert, and narrowing it
+ * here means a caller can hand this function a currency the reference list does
+ * not contain — a person's own — without the type saying it came from a seed.
+ */
 export type BootstrapCurrency = {
   code: CurrencyCode;
   name: string;
   symbol: string;
+  symbolPosition: "P" | "S";
   decimals: number;
-  isPivot: true;
+  isPivot?: boolean;
+  pinned?: boolean;
 };
-
-export const USD_BOOTSTRAP = {
-  code: money.currencyCode("USD"),
-  name: "US dollar",
-  symbol: "$",
-  decimals: 2,
-  isPivot: true,
-} as const;
 
 export type LocalLedgerSession = {
   listAccounts: () => readonly LocalAccountSummary[];
+  listCurrencies: () => readonly LocalCurrency[];
   listRecent: (limit: number) => readonly LocalRecentTransaction[];
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
@@ -52,7 +55,15 @@ export type LocalLedgerSessionOptions<TRun> = {
   paths: LedgerPaths;
   fs: LedgerFs;
   removeDatabase: (path: string) => void;
-  bootstrapCurrency: BootstrapCurrency;
+  /**
+   * Every currency the replica starts with, not one.
+   *
+   * A single `bootstrapCurrency: USD_BOOTSTRAP` was the whole of the phone's
+   * single-currency assumption: `accounts.currency` is a foreign key into this
+   * table, so one row meant one possible account currency, enforced by SQLite
+   * rather than by any decision.
+   */
+  bootstrapCurrencies: readonly BootstrapCurrency[];
   diagnostics?: LedgerDiagnostics;
 };
 
@@ -86,11 +97,15 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): SessionLedger<TR
     });
 
     stage = "bootstrap_currency";
-    ledger.replica.db
-      .insert(currencies)
-      .values(options.bootstrapCurrency)
-      .onConflictDoNothing()
-      .run();
+    // `onConflictDoNothing`, so a launch after someone has edited a currency
+    // does not quietly restore the seed's version of it.
+    if (options.bootstrapCurrencies.length > 0) {
+      ledger.replica.db
+        .insert(currencies)
+        .values([...options.bootstrapCurrencies])
+        .onConflictDoNothing()
+        .run();
+    }
     stage = "recover";
     recoverOnLaunch(ledger, ledgerRegistry);
 
@@ -135,6 +150,7 @@ export function createLocalLedgerSession<TRun>(
 
   return {
     listAccounts: () => readAccounts(requireOpen().replica.db),
+    listCurrencies: () => readCurrencies(requireOpen().replica.db),
     listRecent: (limit) => readRecent(requireOpen().replica.db, limit),
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {

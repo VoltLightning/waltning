@@ -1,6 +1,9 @@
 import { parseNewAccountRoute } from "@waltning/client/ledger/preview-routes";
 import { id } from "@waltning/core/id";
-import { CreateAccountForm } from "@waltning/ui/accounts/create-account-form";
+import {
+  type CreateAccountDraft,
+  CreateAccountForm,
+} from "@waltning/ui/accounts/create-account-form";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect } from "react";
@@ -11,6 +14,7 @@ function handleCancel() {
 }
 
 export default function NewAccount() {
+  const ledger = requirePhoneLedger();
   const raw = useLocalSearchParams<{
     returnTo?: string | string[];
     amount?: string | string[];
@@ -26,8 +30,8 @@ export default function NewAccount() {
   }, [invalidMessage]);
 
   const handleSave = useCallback(
-    (name: string) => {
-      const accountId = id<"accounts">(requirePhoneLedger().createAccount(name));
+    (draft: CreateAccountDraft) => {
+      const accountId = id<"accounts">(ledger.createAccount(draft.name, draft.currency));
       if (target.valid && target.returnTo === "quick-add") {
         router.dismissTo({
           pathname: "/quick-add",
@@ -37,7 +41,7 @@ export default function NewAccount() {
         router.dismissTo("/");
       }
     },
-    [target],
+    [ledger, target],
   );
 
   if (!target.valid) return null;
@@ -47,7 +51,11 @@ export default function NewAccount() {
       {/* No title: the navigation header carries it, and the same
           string twice on one screen reads as two sections. */}
       <Card>
-        <CreateAccountForm currency="USD" onCancel={handleCancel} onSave={handleSave} />
+        <CreateAccountForm
+          currencies={ledger.getSnapshot().currencies}
+          onCancel={handleCancel}
+          onSave={handleSave}
+        />
       </Card>
     </GroundPanel>
   );

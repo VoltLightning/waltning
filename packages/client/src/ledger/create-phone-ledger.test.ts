@@ -1,7 +1,7 @@
 import { accountingDate } from "@waltning/core/date";
 import { type IdTable, id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
-import { currencyCode } from "@waltning/core/money";
+import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import {
   createPhoneLedger,
@@ -9,6 +9,42 @@ import {
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
 } from "./create-phone-ledger.ts";
+
+/**
+ * Two currencies, neither of them the pivot. A fixture holding only USD would
+ * pass every assertion below while proving nothing about the case this file
+ * exists for.
+ */
+const CURRENCIES = [
+  { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
+  {
+    code: currencyCode("BYN"),
+    name: "Belarusian Ruble",
+    symbol: "Br",
+    decimals: 2,
+    capturable: true,
+  },
+];
+
+const PLN = currencyCode("PLN");
+const BYN = currencyCode("BYN");
+
+/** A persisted account, as `listAccounts` would return it. */
+function account(
+  uuid: string,
+  name: string,
+  currency: CurrencyCode,
+  balance: string,
+): PhoneAccount {
+  return {
+    id: id<"accounts">(uuid),
+    name,
+    kind: "other",
+    currency,
+    decimals: 2,
+    balance: money.toMoney(balance),
+  };
+}
 
 function harness(diagnostics?: (event: object) => void) {
   let accounts: PhoneAccount[] = [];
@@ -55,6 +91,7 @@ function harness(diagnostics?: (event: object) => void) {
   });
   const port: PhoneLedgerPort = {
     listAccounts: () => accounts,
+    listCurrencies: () => CURRENCIES,
     listRecent: (limit) => recent.slice(0, limit),
     createAccount,
     createTransaction,
@@ -79,23 +116,24 @@ function harness(diagnostics?: (event: object) => void) {
 }
 
 describe("phone ledger controller", () => {
-  it("starts with an empty USD total and Recent", () => {
+  it("starts with no accounts, no subtotals, and no Recent", () => {
     const { controller } = harness();
     expect(controller.getSnapshot()).toEqual({
       accounts: [],
+      currencies: CURRENCIES,
       recent: [],
-      total: money.toMoney("0"),
+      subtotals: [],
     });
   });
 
-  it("creates a USD account through the shared defaults", () => {
+  it("creates an account in the currency it was given, through the shared defaults", () => {
     const { controller, createAccount } = harness();
-    const accountId = controller.createAccount("Cash · USD");
+    const accountId = controller.createAccount("Bank A · PLN", PLN);
 
     expect(accountId).toBe(controller.getSnapshot().accounts[0]?.id);
     expect(createAccount.mock.calls[0]?.[0]).toMatchObject({
-      name: "Cash · USD",
-      currency: currencyCode("USD"),
+      name: "Bank A · PLN",
+      currency: PLN,
       kind: "other",
       ownership: "own",
       openingBalance: money.toMoney("0"),
@@ -104,34 +142,72 @@ describe("phone ledger controller", () => {
     });
   });
 
-  it("refuses to present a combined total when persisted data is not USD", () => {
-    const account: PhoneAccount = {
-      id: id<"accounts">("11111111-1111-4111-8111-111111111111"),
-      name: "Cash · PLN",
-      kind: "other",
-      currency: currencyCode("PLN"),
-      decimals: 2,
-      balance: money.toMoney("10"),
-    };
+  /**
+   * **The test that replaces a throw.**
+   *
+   * `refresh()` used to scan for an account that was not `USD` and throw
+   * *"phone preview cannot combine non-USD accounts"* — which was not a
+   * refusal to *combine*, it was a refusal to *exist*: one złoty account made
+   * every launch crash before the first render. What it was really guarding was
+   * the line under it, `money.sum` over every balance labelled `USD`. Deleting
+   * the throw without deleting the sum would have turned a loud failure into a
+   * wrong number, so this asserts the shape that makes both unnecessary.
+   */
+  it("subtotals per currency, in ledger order, and never across two", () => {
     const port: PhoneLedgerPort = {
-      listAccounts: () => [account],
+      listAccounts: () => [
+        account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "10"),
+        account("33333333-3333-4333-8333-333333333333", "Bank B · BYN", BYN, "40"),
+        account("44444444-4444-4444-8444-444444444444", "Cash · PLN", PLN, "2.50"),
+      ],
+      listCurrencies: () => CURRENCIES,
       listRecent: () => [],
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       reset: vi.fn(),
     };
 
-    expect(() =>
-      createPhoneLedger(port, {
-        capture: vi.fn(),
-        id: <Table extends IdTable>() => id<Table>("22222222-2222-4222-8222-222222222222"),
-      }),
-    ).toThrow(/cannot combine non-USD/);
+    const controller = createPhoneLedger(port, {
+      capture: vi.fn(),
+      id: <Table extends IdTable>() => id<Table>("22222222-2222-4222-8222-222222222222"),
+    });
+
+    expect(controller.getSnapshot().subtotals).toEqual([
+      { currency: PLN, decimals: 2, balance: money.toMoney("12.50") },
+      { currency: BYN, decimals: 2, balance: money.toMoney("40") },
+    ]);
   });
 
-  it("creates one captured expense and refreshes the total and Recent", () => {
+  /**
+   * Order is the ledger's, not the numbers'. `40` sorts above `12.50` on
+   * magnitude and that ranking would be a comparison across currencies the app
+   * cannot make — so the złoty account being *first* is the whole assertion,
+   * and it is why the fixture above puts the larger figure second.
+   */
+  it("orders subtotals by the accounts, never by size", () => {
+    const port: PhoneLedgerPort = {
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank B · BYN", BYN, "9000"),
+        account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "1"),
+      ],
+      listCurrencies: () => CURRENCIES,
+      listRecent: () => [],
+      createAccount: vi.fn(),
+      createTransaction: vi.fn(),
+      reset: vi.fn(),
+    };
+
+    const controller = createPhoneLedger(port, {
+      capture: vi.fn(),
+      id: <Table extends IdTable>() => id<Table>("22222222-2222-4222-8222-222222222222"),
+    });
+
+    expect(controller.getSnapshot().subtotals.map((s) => s.currency)).toEqual([BYN, PLN]);
+  });
+
+  it("creates one captured expense and refreshes the subtotals and Recent", () => {
     const { controller, capture, createTransaction } = harness();
-    const accountId = controller.createAccount("Cash · USD");
+    const accountId = controller.createAccount("Bank A · PLN", PLN);
     const transactionId = controller.createExpense("10", accountId);
 
     expect(capture).toHaveBeenCalledTimes(2);
@@ -141,17 +217,53 @@ describe("phone ledger controller", () => {
       type: "expense",
       accountId,
       amountOriginal: money.toMoney("10"),
-      currency: currencyCode("USD"),
+      currency: PLN,
     });
-    expect(controller.getSnapshot().total).toBe("-10.00000000");
+    expect(controller.getSnapshot().subtotals).toEqual([
+      { currency: PLN, decimals: 2, balance: money.toMoney("-10") },
+    ]);
     expect(controller.getSnapshot().recent[0]?.id).toBe(transactionId);
   });
 
   it.each(["0", "-1"])("rejects the non-positive expense %s before writing", (amount) => {
     const { controller, createTransaction } = harness();
-    const accountId = controller.createAccount("Cash · USD");
+    const accountId = controller.createAccount("Bank A · PLN", PLN);
     expect(() => controller.createExpense(amount, accountId)).toThrow(/greater than zero/);
     expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **The write is refused before the outbox is touched.**
+   *
+   * `provisionalFxRate` refuses the same capture, but it does so mid-transaction
+   * — after the outbox entry has committed, since §14.6 commits intent first —
+   * and with a message written for a sync log. On a phone with no backend that
+   * entry drains nowhere, so the capture becomes an invisible row rather than a
+   * refusal someone can act on.
+   */
+  it("refuses an expense in a currency the ledger holds no rate for", () => {
+    const port: PhoneLedgerPort = {
+      listAccounts: () => [
+        account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: false },
+      ],
+      listRecent: () => [],
+      createAccount: vi.fn(),
+      createTransaction: vi.fn(),
+      reset: vi.fn(),
+    };
+    const controller = createPhoneLedger(port, {
+      capture: vi.fn(),
+      id: <Table extends IdTable>() => id<Table>("22222222-2222-4222-8222-222222222222"),
+    });
+
+    expect(controller.getSnapshot().accounts[0]?.capturable).toBe(false);
+    expect(() =>
+      controller.createExpense("10", id<"accounts">("11111111-1111-4111-8111-111111111111")),
+    ).toThrow(/PLN needs an exchange rate/);
+    expect(port.createTransaction).not.toHaveBeenCalled();
   });
 
   it("rejects a missing account before writing", () => {
@@ -164,7 +276,7 @@ describe("phone ledger controller", () => {
 
   it("resets, refreshes, and notifies once", () => {
     const { controller, reset } = harness();
-    controller.createAccount("Cash · USD");
+    controller.createAccount("Bank A · PLN", PLN);
     const listener = vi.fn();
     controller.subscribe(listener);
 
@@ -179,7 +291,7 @@ describe("phone ledger controller", () => {
     const diagnostics: object[] = [];
     const { controller } = harness((event) => diagnostics.push(event));
 
-    const accountId = controller.createAccount("Cash · USD");
+    const accountId = controller.createAccount("Bank A · PLN", PLN);
     controller.createExpense("10", accountId);
 
     expect(diagnostics).toContainEqual({
@@ -198,7 +310,7 @@ describe("phone ledger controller", () => {
       phase: "success",
     });
     const serialized = JSON.stringify(diagnostics);
-    expect(serialized).not.toContain("Cash · USD");
+    expect(serialized).not.toContain("Bank A · PLN");
     expect(serialized).not.toContain("10.00000000");
   });
 });

@@ -1,8 +1,10 @@
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { currencies as referenceCurrencies } from "@waltning/core/currencies";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
+import { currencyCode, pivotPerUnit } from "@waltning/core/money";
 import { createAccountInput, createTransactionInput } from "@waltning/core/registry/inputs";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -10,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type LedgerFs, migrateOutbox, migrateReplica } from "../migrate.ts";
 import { type LedgerPaths, openLedger, type SqliteOpener } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
-import { createLocalLedgerSession, USD_BOOTSTRAP } from "../session.ts";
+import { type BootstrapCurrency, createLocalLedgerSession } from "../session.ts";
 
 const { outbox, outboxSeq } = ledgerSchema;
 
@@ -44,16 +46,30 @@ const fs: LedgerFs = {
   },
 };
 
+const bootstrapCurrencies: readonly BootstrapCurrency[] = referenceCurrencies.map(
+  ({ rateSource: _rateSource, ...currency }) => currency,
+);
+
 const options = () => ({
   open,
   paths,
   fs,
   removeDatabase: (path: string) => rmSync(path, { force: true }),
-  bootstrapCurrency: USD_BOOTSTRAP,
+  bootstrapCurrencies,
 });
 
 const accountInput = () =>
-  createAccountInput.parse({ id: accountId, name: "Wallet · USD", currency: "USD" });
+  createAccountInput.parse({ id: accountId, name: "Bank A · PLN", currency: "PLN" });
+/**
+ * A złoty expense with the rate asserted — §7.6 level 1, *"enter the rate your
+ * bank actually applied"*, which `provisionalFxRate` takes as case 1.
+ *
+ * The account is in PLN and the pivot is USD, so this row is the proof that the
+ * replica holds a currency other than the pivot end to end. It also names the
+ * one thing that is **not** yet solved: with no asserted rate and no `fx_rates`
+ * row, the executor refuses rather than valuing the row at `1` — correct, and
+ * the reason `#e3` has to land before capture in a second currency is routine.
+ */
 const expenseInput = () =>
   createTransactionInput.parse({
     id: transactionId,
@@ -61,7 +77,8 @@ const expenseInput = () =>
     type: "expense",
     accountId,
     amountOriginal: "10",
-    currency: "USD",
+    currency: "PLN",
+    fxRate: pivotPerUnit("0.250000000000"),
   });
 
 beforeEach(() => {
@@ -74,7 +91,7 @@ beforeEach(() => {
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
 
 describe("the phone ledger session", () => {
-  it("opens, migrates, seeds USD, reads, then releases both safety copies", () => {
+  it("opens, migrates, seeds every reference currency, reads, then releases both copies", () => {
     const diagnostics: object[] = [];
     const session = createLocalLedgerSession({
       ...options(),
@@ -93,11 +110,42 @@ describe("the phone ledger session", () => {
       { scope: "ledger_startup", phase: "success", stage: "ready" },
     ]);
 
+    // Every one of them, because `accounts.currency` is a foreign key into this
+    // table: what is seeded here is exactly the set of currencies an account can
+    // be opened in, and one row was the whole single-currency assumption.
     const sqlite = new Database(paths.replica, { readonly: true });
-    expect(sqlite.prepare("select code, is_pivot from currencies").all()).toEqual([
-      { code: "USD", is_pivot: 1 },
-    ]);
+    const seeded = sqlite.prepare("select code, is_pivot from currencies order by code").all();
+    expect(seeded).toEqual(
+      [...referenceCurrencies]
+        .sort((a, b) => a.code.localeCompare(b.code))
+        .map((currency) => ({ code: currency.code, is_pivot: currency.isPivot ? 1 : 0 })),
+    );
+    expect(seeded.length).toBeGreaterThan(1);
     sqlite.close();
+    session.close();
+  });
+
+  /**
+   * **What the replica can value, asked before the write rather than during it.**
+   *
+   * `provisionalFxRate` resolves `1` for the pivot and the last-known rate for
+   * anything else, and refuses when there is neither. `capturable` asks the same
+   * question in advance, so a screen can decline with a reason instead of
+   * letting the executor throw from inside a transaction that has already
+   * committed the outbox entry.
+   *
+   * A fresh replica has `fx_rates` empty, so exactly one currency is capturable
+   * on a phone that has never synced — and that is the boundary this whole
+   * change stops at: accounts in any currency, captures in the pivot.
+   */
+  it("marks only the pivot capturable while the replica holds no rates", () => {
+    const session = createLocalLedgerSession(options());
+    const byCode = new Map(session.listCurrencies().map((c) => [c.code, c.capturable]));
+
+    expect(byCode.get(currencyCode("USD"))).toBe(true);
+    expect(byCode.get(currencyCode("PLN"))).toBe(false);
+    expect(byCode.get(currencyCode("BYN"))).toBe(false);
+    expect([...byCode.values()].filter(Boolean)).toHaveLength(1);
     session.close();
   });
 

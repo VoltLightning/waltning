@@ -1,3 +1,4 @@
+import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
@@ -8,7 +9,26 @@ import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 
-export type QuickAddAccount = { id: string; name: string; currency: "USD" };
+/**
+ * `currency` was declared `"USD"`, which made the compiler the enforcer of a
+ * single-currency preview at every call site. It is the account's own currency,
+ * and the amount field takes it from whichever account is selected — an expense
+ * is denominated by the account it leaves.
+ */
+export type QuickAddAccount = {
+  id: string;
+  name: string;
+  currency: CurrencyCode;
+  /**
+   * Whether an expense against this account can be valued.
+   *
+   * `false` when the ledger holds no exchange rate for the account's currency,
+   * which is the ordinary state of a phone that has never synced (§14.6). The
+   * account is shown either way — hiding it would read as *this account is
+   * gone* rather than *not into this one, yet* — and picking it explains why.
+   */
+  capturable: boolean;
+};
 export type QuickAddFormProps = {
   accounts: readonly QuickAddAccount[];
   initialAmount?: string;
@@ -31,6 +51,8 @@ export function QuickAddForm({
     accounts.some((account) => account.id === initialAccountId) ? (initialAccountId ?? null) : null,
   );
   const styles = useStyles();
+  const selected = accounts.find((account) => account.id === accountId);
+  const blocked = selected !== undefined && !selected.capturable;
   let positive = false;
   try {
     positive = amount !== "" && money.dec(amount).gt(0);
@@ -43,14 +65,17 @@ export function QuickAddForm({
     [accountId, amount, onCreateAccount],
   );
   const handleSave = useCallback(() => {
-    if (accountId) onSave({ amount, accountId });
-  }, [accountId, amount, onSave]);
+    if (accountId && !blocked) onSave({ amount, accountId });
+  }, [accountId, amount, blocked, onSave]);
 
   return (
     <View style={styles.root}>
+      {/* No account chosen yet, so no currency is known — and a placeholder
+          currency here would be a figure labelled in something the money is
+          not. The field carries the label alone until one is picked. */}
       <AmountField
         label="Amount"
-        currency="USD"
+        {...(selected ? { currency: selected.currency } : {})}
         initial={initialAmount}
         onChange={handleAmountChange}
       />
@@ -65,13 +90,21 @@ export function QuickAddForm({
           />
         ))}
       </View>
+      {/* Under the picker, not under Save: the reason belongs to the choice
+          that caused it, and Save being dim is the consequence rather than the
+          thing to explain. */}
+      {blocked ? (
+        <Text style={styles.blocked}>
+          {selected.currency} needs an exchange rate before an expense can be recorded in it.
+        </Text>
+      ) : null}
       <Button label="Create account…" onPress={handleCreateAccount} variant="secondary" />
       <View style={styles.actions}>
         <Button label="Cancel" onPress={onCancel} variant="ghost" />
         <Button
           label="Save"
           onPress={handleSave}
-          disabled={!positive || !accountId}
+          disabled={!positive || !accountId || blocked}
           variant="primary"
         />
       </View>
@@ -85,6 +118,12 @@ type AccountChoiceProps = {
   onSelect: (accountId: string) => void;
 };
 
+/**
+ * An uncapturable account is still selectable, and that is deliberate. Making
+ * the chip `disabled` would say *this account is unavailable* with no way to
+ * ask why; letting it be chosen puts the reason on the screen the moment
+ * someone wonders.
+ */
 function AccountChoice({ account, selected, onSelect }: AccountChoiceProps) {
   const handleSelect = useCallback(() => onSelect(account.id), [account.id, onSelect]);
   return (
@@ -101,5 +140,6 @@ const useStyles = makeStyles((t) => ({
   root: { gap: space.x3 },
   label: { color: t.textMuted, ...text.ui("kicker") },
   accounts: { gap: space.md },
+  blocked: { color: t.textMuted, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

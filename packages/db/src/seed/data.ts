@@ -1,6 +1,9 @@
-import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 /**
- * Seed data — currencies and the category taxonomy from TAXONOMY.md.
+ * Seed data — the category taxonomy from TAXONOMY.md.
+ *
+ * Currencies are **not** here. They are reference data both the server and the
+ * phone need, so they live in `@waltning/core/currencies`; a list only the
+ * server could reach is what made the phone's replica a single-currency one.
  *
  * One refinement against that document: it drew `EARNINGS` and `UNEARNED` as
  * top-level groups, which would have made income three levels deep and broken
@@ -10,85 +13,6 @@ import { type CurrencyCode, currencyCode } from "@waltning/core/money";
  *
  * Every entry carries a stable `seed:` key so re-running is idempotent.
  */
-
-export type SeedCurrency = {
-  code: CurrencyCode;
-  name: string;
-  symbol: string;
-  symbolPosition: "P" | "S";
-  decimals: number;
-  isPivot?: boolean;
-  pinned?: boolean;
-  rateSource: "nbp" | "ecb" | "nbrb" | "nbg" | null;
-};
-
-/**
- * USD is the pivot: every rate source in use publishes against it, and it is
- * what Money Manager already stores, so migration needs no conversion (§7.0).
- * Pinned currencies appear in the header display toggle.
- */
-export const currencies: SeedCurrency[] = [
-  {
-    code: currencyCode("USD"),
-    name: "US Dollar",
-    symbol: "$",
-    symbolPosition: "P",
-    decimals: 2,
-    isPivot: true,
-    pinned: true,
-    rateSource: null,
-  },
-  {
-    code: currencyCode("PLN"),
-    name: "Polish Złoty",
-    symbol: "zł",
-    symbolPosition: "S",
-    decimals: 2,
-    pinned: true,
-    rateSource: "nbp",
-  },
-  {
-    code: currencyCode("EUR"),
-    name: "Euro",
-    symbol: "€",
-    symbolPosition: "S",
-    decimals: 2,
-    pinned: true,
-    rateSource: "ecb",
-  },
-  {
-    code: currencyCode("BYN"),
-    name: "Belarusian Ruble",
-    symbol: "Br",
-    symbolPosition: "S",
-    decimals: 2,
-    rateSource: "nbrb",
-  },
-  {
-    code: currencyCode("GEL"),
-    name: "Georgian Lari",
-    symbol: "₾",
-    symbolPosition: "S",
-    decimals: 2,
-    rateSource: "nbg",
-  },
-  {
-    code: currencyCode("GBP"),
-    name: "Pound Sterling",
-    symbol: "£",
-    symbolPosition: "P",
-    decimals: 2,
-    rateSource: "ecb",
-  },
-  {
-    code: currencyCode("RUB"),
-    name: "Russian Ruble",
-    symbol: "₽",
-    symbolPosition: "S",
-    decimals: 2,
-    rateSource: "ecb",
-  },
-];
 
 export type SeedGroup = {
   key: string;
