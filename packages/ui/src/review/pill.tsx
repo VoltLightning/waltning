@@ -53,13 +53,13 @@ function describe(p: PillTier): string {
   }
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   pill: {
-    backgroundColor: t.subtleFill,
+    backgroundColor: theme.subtleFill,
     borderRadius: radius.pill,
     paddingHorizontal: space.lg,
     paddingVertical: space.xs,
     alignSelf: "flex-start",
   },
-  text: { color: t.accentText, ...text.ui("caption") },
+  text: { color: theme.accentText, ...text.ui("caption") },
 }));

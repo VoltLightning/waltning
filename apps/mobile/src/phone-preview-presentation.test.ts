@@ -11,12 +11,13 @@ const newAccount = readFileSync(`${src}/account-creation-screen.native.tsx`, "ut
 const controls = readFileSync(resolve(app, "../src/preview-appearance-controls.tsx"), "utf8");
 const nativePlatform = readFileSync(resolve(app, "../src/platform.native.ts"), "utf8");
 const phoneLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"), "utf8");
+const english = readFileSync(resolve(app, "../../../packages/ui/src/i18n/en.ts"), "utf8");
 
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
-    expect(today).toContain('label: "Create account"');
+    expect(today).toContain('label: t("routes.createAccount")');
     expect(today).toContain("<CurrencyTotals subtotals={snapshot.subtotals} />");
-    expect(today).toContain('title="Recent"');
+    expect(today).toContain('title={t("shell.recent")}');
     expect(today).toContain('router.push("/quick-add")');
     // The hero is a list of subtotals, not a figure. `snapshot.total` was a
     // `money.sum` over every balance labelled USD, which only held because a
@@ -24,14 +25,28 @@ describe("phone-alone preview presentation", () => {
     expect(today).not.toContain("snapshot.total");
   });
 
+  /**
+   * **The words moved; the presentation did not.** Every string here now lives
+   * in `packages/ui/src/i18n/en.ts`, so this asserts the *keys* the screen
+   * reaches for and `i18n.test.tsx` asserts that each key has a word in every
+   * language. Asserting the English text here again would pin the copy in two
+   * places and make a translation a two-file change.
+   */
   it("offers exactly three appearance choices and confirms destructive reset", () => {
-    expect(controls).toContain('{ value: "system", label: "System" }');
-    expect(controls).toContain('{ value: "light", label: "Light" }');
-    expect(controls).toContain('{ value: "dark", label: "Dark" }');
-    expect(controls).toContain('label="Reset preview data"');
-    expect(controls).toContain('label="Delete preview data"');
-    expect(controls).toContain("Delete every account and transaction from this phone?");
-    expect(controls).toContain("Appearance could not be saved.");
+    expect(controls).toContain('{ value: "system", label: t("preview.system") }');
+    expect(controls).toContain('{ value: "light", label: t("preview.light") }');
+    expect(controls).toContain('{ value: "dark", label: t("preview.dark") }');
+    // The reset is two steps and the second one is the destructive word.
+    expect(controls).toContain('label={t("preview.resetAction")}');
+    expect(controls).toContain('label={t("preview.resetTitle")}');
+    expect(controls).toContain('title={t("preview.resetPrompt")}');
+    expect(controls).toContain('title={t("preview.appearanceFailed")}');
+
+    // …and the words themselves exist, in both languages.
+    expect(english).toContain(
+      'resetPrompt: "Delete every account and transaction from this phone?"',
+    );
+    expect(english).toContain('appearanceFailed: "Appearance could not be saved."');
   });
 
   it("keeps deferred capture and dashboard affordances out", () => {

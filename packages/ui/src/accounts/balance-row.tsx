@@ -64,16 +64,16 @@ export function BalanceRow({
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
     borderBottomWidth: hairline.width,
-    borderBottomColor: t.hairline,
+    borderBottomColor: theme.hairline,
   },
   identity: { flex: 1, gap: 2 },
-  name: { color: t.text, ...text.ui("bodySm") },
-  meta: { color: t.textMuted, ...text.ui("caption") },
+  name: { color: theme.text, ...text.ui("bodySm") },
+  meta: { color: theme.textMuted, ...text.ui("caption") },
 }));

@@ -20,6 +20,7 @@
 import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
+import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
@@ -40,17 +41,18 @@ export type DualTotalProps = {
 };
 
 export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps) {
+  const t = useT();
   const styles = useStyles();
 
   return (
     <View style={styles.block}>
       <View>
-        <Text style={styles.label}>mine</Text>
+        <Text style={styles.label}>{t("shell.mine")}</Text>
         <Amount value={mine} currency={currency} decimals={decimals} size="hero" />
       </View>
       {ours === null ? null : (
         <View>
-          <Text style={styles.label}>ours</Text>
+          <Text style={styles.label}>{t("shell.ours")}</Text>
           <Amount value={ours} currency={currency} decimals={decimals} size="large" />
         </View>
       )}
@@ -58,10 +60,10 @@ export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   block: { gap: space.xl },
   label: {
-    color: t.textMuted,
+    color: theme.textMuted,
     ...text.ui("kicker"),
     textTransform: "uppercase",
   },

@@ -34,6 +34,7 @@ packages/
   core/                 contracts (money, operation types, schemas)
   client/               transport, hooks, state and derived models by domain
   ui/                   rendering by domain, plus domain-free foundations
+                        (primitives · theme · fx · i18n)
   db/ · schema/ · ledger/  server and phone persistence
 ```
 
@@ -48,6 +49,10 @@ module direction and Biome refuses barrels.
 JSX props take named function references. An arrow function, function
 expression or `.bind()` inside JSX fails the same Biome gate; ordinary arrows
 outside JSX remain legal.
+
+No user-visible string is written into a component. Words come from the
+catalogues in `ui/i18n/`, reached through `useT()` — `architecture/11` §7 holds
+the rule and `tests/architecture.test.ts` refuses both shapes a literal takes.
 
 ```mermaid
 graph TB

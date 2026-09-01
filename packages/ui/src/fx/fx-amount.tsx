@@ -114,11 +114,11 @@ export function FxAmount({
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   row: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  separator: { color: t.textMuted, ...text.ui("caption") },
+  separator: { color: theme.textMuted, ...text.ui("caption") },
   rate: {
-    color: t.textMuted,
+    color: theme.textMuted,
     ...text.mono("caption"),
     fontVariant: [...tabularNums],
   },

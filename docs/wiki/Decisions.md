@@ -27,6 +27,13 @@ get removed from icon sets for legal reasons, so a test checks every icon in the
 catalogue still resolves — an upgrade that drops one fails loudly instead of
 rendering blanks.
 
+**No `.json` translation files, and no Lingui.** JSON cannot be a type, so a
+language missing a key is a blank label at run time instead of a compile error.
+Lingui's macro would have removed key-naming entirely and was rejected on build
+topology: `packages/ui` is bundled by Metro *and* by Vite, so a macro is two
+pipelines to keep in step and a test suite that sees un-expanded macro calls
+when they drift. i18next needs no build step.
+
 **No saving the client's data cache to disk.** Storing it is the standard
 pattern for this stack, and it would quietly copy arbitrary server responses
 into the phone's encrypted storage — breaking the explicit list of what is
@@ -169,3 +176,32 @@ not three global folders. A component moves to the shared package when a
 §4.3 records **what was chosen and why**. The *why* is the part that survives a
 version bump — check the package against its current documentation when you add
 it.
+
+## Every word comes from a catalogue
+
+Recorded in
+[ADR 0003](https://github.com/VoltLightning/waltning/blob/main/docs/adr/0003-strings-live-in-a-typed-catalogue.md)
+and enforced by `tests/architecture.test.ts`. A string literal in a component
+fails the gate, the same way a hardcoded colour does — and for the same reason,
+which is that neither looks wrong. A hardcoded label renders, is legible, and is
+only wrong to a reader who never sees this repository.
+
+The timing is the argument. Localising the six screens that existed cost an
+afternoon; forty more are on the board. Every string written before the rule is
+one to find later, and late is when it is found by someone who does not read the
+language.
+
+The English catalogue **is the type**: a language missing a key does not
+compile. Two tests cover what the type cannot see — a key that is present and
+empty, and a placeholder renamed inside a translated sentence.
+
+**Polish is the second language, and not arbitrarily.** It is the language of
+~96% of imported statement text, the currency most of this ledger is in, and it
+has **four plural categories where English has two** — a second language sharing
+English's grammar would have proved the wiring and none of the hard parts.
+Hermes ships no `Intl.PluralRules`, so the device gets a polyfill.
+
+One thing does **not** follow the language: money's group separator stays
+U+00A0 everywhere. Only the decimal mark moves, so a złoty balance reads
+`12 480,20`. `Intl.NumberFormat` is deliberately unused for figures — it would
+take the separator with it, and Hermes formats differently on Android and iOS.

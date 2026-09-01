@@ -15,6 +15,7 @@ import { useAccounts } from "@waltning/client/accounts/use-accounts";
 import { describeProbe, useProbe } from "@waltning/client/connectivity/use-probe";
 import { type Transaction, useTransactions } from "@waltning/client/transactions/use-transactions";
 import { BalanceRow } from "@waltning/ui/accounts/balance-row";
+import { useT } from "@waltning/ui/i18n/provider";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import {
   TransactionList,
@@ -24,6 +25,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { API_BASE_URL, api, isStaleBundle } from "./platform";
 
 export default function Dashboard() {
+  const t = useT();
   const probe = useProbe(api);
   const accounts = useAccounts(api);
   const transactions = useTransactions(api, 20);
@@ -31,10 +33,12 @@ export default function Dashboard() {
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <GroundPanel>
-        <Text style={styles.title}>Waltning</Text>
+        <Text style={styles.title}>{t("common.appName")}</Text>
 
-        <Card title="Accounts">
-          {accounts.status === "loading" ? <Text style={styles.detail}>Loading…</Text> : null}
+        <Card title={t("shell.accounts")}>
+          {accounts.status === "loading" ? (
+            <Text style={styles.detail}>{t("common.loading")}</Text>
+          ) : null}
           {accounts.status === "failed" ? (
             <Text style={styles.detail}>{accounts.error.message}</Text>
           ) : null}
@@ -55,15 +59,15 @@ export default function Dashboard() {
                 every balance to a display currency first; adding these would
                 put złoty and dollars into one number and call it net worth.
               */}
-              <Text style={styles.note}>
-                Each balance is in its own account's currency — not a total.
-              </Text>
+              <Text style={styles.note}>{t("shell.ownCurrency")}</Text>
             </>
           ) : null}
         </Card>
 
-        <Card title="Recent">
-          {transactions.status === "loading" ? <Text style={styles.detail}>Loading…</Text> : null}
+        <Card title={t("shell.recent")}>
+          {transactions.status === "loading" ? (
+            <Text style={styles.detail}>{t("common.loading")}</Text>
+          ) : null}
           {transactions.status === "failed" ? (
             <Text style={styles.detail}>{transactions.error.message}</Text>
           ) : null}
@@ -73,14 +77,14 @@ export default function Dashboard() {
               {transactions.data.hasMore ? (
                 // Said plainly. A list that silently shows only the first page
                 // reads as the whole ledger, and a short ledger is a wrong one.
-                <Text style={styles.note}>More transactions exist — paging is not built yet.</Text>
+                <Text style={styles.note}>{t("shell.morePages")}</Text>
               ) : null}
             </>
           ) : null}
         </Card>
 
         <View style={styles.connection}>
-          <Text style={styles.detail}>{API_BASE_URL || "this origin"}</Text>
+          <Text style={styles.detail}>{API_BASE_URL || t("shell.thisOrigin")}</Text>
           <Text style={styles.detail}>{describeProbe(probe, isStaleBundle)}</Text>
         </View>
       </GroundPanel>

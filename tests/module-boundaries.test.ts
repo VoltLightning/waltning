@@ -93,6 +93,16 @@ const FOUNDATION = new Set([
    * the next test fails and this line stops being true.
    */
   "fx",
+  /**
+   * **`i18n` is foundational for the same reason `fx` is.**
+   *
+   * A language is not a domain. Every module that shows a word depends on this
+   * one, and `tests/architecture.test.ts` makes that mandatory — no component
+   * anywhere may hold a user-visible literal. The direction stays one-way:
+   * `i18n/` imports nothing but itself, so the catalogue cannot come to depend
+   * on the screens that read it.
+   */
+  "i18n",
 ]);
 
 /** Which module a path belongs to, or undefined if it is outside them all. */

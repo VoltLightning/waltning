@@ -38,9 +38,9 @@ function lightness(hex: string): number {
   return y > 216 / 24389 ? 116 * y ** (1 / 3) - 16 : y * (24389 / 27);
 }
 
-const useStyles = makeStyles((t) => ({
-  box: { backgroundColor: t.surface },
-  label: { color: t.text },
+const useStyles = makeStyles((theme) => ({
+  box: { backgroundColor: theme.surface },
+  label: { color: theme.text },
 }));
 
 function Swatch() {
@@ -219,9 +219,9 @@ describe("`makeStyles` builds once per theme", () => {
    */
   it("returns the same stylesheet for the same theme, and a different one for another", () => {
     let built = 0;
-    const useCounted = makeStyles((t) => {
+    const useCounted = makeStyles((theme) => {
       built += 1;
-      return { box: { backgroundColor: t.surface } };
+      return { box: { backgroundColor: theme.surface } };
     });
 
     let first: unknown;

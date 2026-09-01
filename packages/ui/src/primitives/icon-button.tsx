@@ -73,10 +73,14 @@ export function IconButton({
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   base: { alignItems: "center", justifyContent: "center", borderRadius: radius.sm },
   content: { alignItems: "center", justifyContent: "center" },
-  pressed: { backgroundColor: t.pressedFill },
-  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
+  pressed: { backgroundColor: theme.pressedFill },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
   disabled: { opacity: 0.45 },
 }));

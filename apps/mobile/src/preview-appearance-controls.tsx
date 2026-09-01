@@ -1,17 +1,12 @@
 import type { AppearancePreference } from "@waltning/client/appearance/create-appearance";
+import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { SegmentControl } from "@waltning/ui/primitives/segment-control";
+import { SegmentControl, type SegmentControlProps } from "@waltning/ui/primitives/segment-control";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card } from "@waltning/ui/shell/card";
 import * as tokens from "@waltning/ui/tokens";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-
-const APPEARANCE_CHOICES = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-] as const;
 
 function isAppearancePreference(value: string): value is AppearancePreference {
   return value === "system" || value === "light" || value === "dark";
@@ -30,6 +25,17 @@ export function PreviewAppearanceControls({
   onPreference,
   onReset,
 }: PreviewAppearanceControlsProps) {
+  const t = useT();
+  // Three values, three words. The values are the contract `AppearancePreference`
+  // names and never move; only the words do.
+  const choices = useMemo<SegmentControlProps["segments"]>(
+    () => [
+      { value: "system", label: t("preview.system") },
+      { value: "light", label: t("preview.light") },
+      { value: "dark", label: t("preview.dark") },
+    ],
+    [t],
+  );
   const [sheet, setSheet] = useState<"closed" | "appearance" | "reset">("closed");
   const [appearanceError, setAppearanceError] = useState(false);
   const showAppearance = useCallback(() => setSheet("appearance"), []);
@@ -50,28 +56,24 @@ export function PreviewAppearanceControls({
 
   return (
     <>
-      <Button label="Appearance" onPress={showAppearance} variant="primary" />
+      <Button label={t("preview.appearance")} onPress={showAppearance} variant="primary" />
       <BottomSheet
         visible={sheet !== "closed"}
-        title={sheet === "reset" ? "Delete preview data" : "Appearance"}
+        title={sheet === "reset" ? t("preview.resetTitle") : t("preview.appearance")}
         onDismiss={dismiss}
       >
         {sheet === "reset" ? (
           <View style={styles.content}>
-            <Card title="Delete every account and transaction from this phone?">{null}</Card>
-            <Button label="Cancel" onPress={showAppearance} variant="ghost" />
-            <Button label="Delete preview data" onPress={reset} variant="danger" />
+            <Card title={t("preview.resetPrompt")}>{null}</Card>
+            <Button label={t("common.cancel")} onPress={showAppearance} variant="ghost" />
+            <Button label={t("preview.resetTitle")} onPress={reset} variant="danger" />
           </View>
         ) : (
           <View style={styles.content}>
-            <SegmentControl
-              segments={APPEARANCE_CHOICES}
-              value={preference}
-              onChange={changePreference}
-            />
-            {appearanceError ? <Card title="Appearance could not be saved.">{null}</Card> : null}
+            <SegmentControl segments={choices} value={preference} onChange={changePreference} />
+            {appearanceError ? <Card title={t("preview.appearanceFailed")}>{null}</Card> : null}
             {resetEnabled ? (
-              <Button label="Reset preview data" onPress={showReset} variant="danger" />
+              <Button label={t("preview.resetAction")} onPress={showReset} variant="danger" />
             ) : null}
           </View>
         )}

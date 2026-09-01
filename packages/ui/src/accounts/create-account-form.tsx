@@ -16,6 +16,7 @@
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
+import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { text } from "../theme/fonts.ts";
@@ -41,6 +42,7 @@ export type CreateAccountFormProps = {
 };
 
 export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccountFormProps) {
+  const t = useT();
   const [name, setName] = useState("");
   const [focused, setFocused] = useState(false);
   const [currency, setCurrency] = useState<CurrencyCode | null>(currencies[0]?.code ?? null);
@@ -54,9 +56,9 @@ export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccoun
 
   return (
     <View style={styles.root}>
-      <Text style={styles.label}>Name</Text>
+      <Text style={styles.label}>{t("common.name")}</Text>
       <TextInput
-        accessibilityLabel="Name"
+        accessibilityLabel={t("common.name")}
         maxLength={120}
         value={name}
         onChangeText={setName}
@@ -64,7 +66,7 @@ export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccoun
         onBlur={handleBlur}
         style={[styles.input, focused ? styles.focused : null]}
       />
-      <Text style={styles.label}>Currency</Text>
+      <Text style={styles.label}>{t("accounts.currency")}</Text>
       <View style={styles.currencies}>
         {currencies.map((candidate) => (
           <CurrencyChoice
@@ -76,9 +78,9 @@ export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccoun
         ))}
       </View>
       <View style={styles.actions}>
-        <Button label="Cancel" onPress={onCancel} variant="ghost" />
+        <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
         <Button
-          label="Save"
+          label={t("common.save")}
           onPress={handleSave}
           disabled={!trimmed || currency === null}
           variant="primary"
@@ -100,29 +102,34 @@ type CurrencyChoiceProps = {
  * The name rides along in the accessible label, where the length costs nothing.
  */
 function CurrencyChoice({ currency, selected, onSelect }: CurrencyChoiceProps) {
+  const t = useT();
   const handleSelect = useCallback(() => onSelect(currency.code), [currency.code, onSelect]);
   return (
     <Chip
-      placeholder="Currency"
-      value={selected ? `${currency.code} · selected` : currency.code}
+      placeholder={t("accounts.currency")}
+      value={selected ? t("common.chipSelected", { value: currency.code }) : currency.code}
       onPress={handleSelect}
       machineFilled={false}
     />
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
-  label: { color: t.textMuted, ...text.ui("kicker") },
+  label: { color: theme.textMuted, ...text.ui("kicker") },
   input: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: theme.border,
     borderRadius: radius.sm,
-    color: t.text,
+    color: theme.text,
     paddingHorizontal: space.xl,
   },
-  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
   currencies: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

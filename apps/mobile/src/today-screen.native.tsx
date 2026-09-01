@@ -1,6 +1,7 @@
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useT } from "@waltning/ui/i18n/provider";
 import { Card } from "@waltning/ui/shell/card";
 import { CurrencyTotals } from "@waltning/ui/shell/currency-totals";
 import { TodayFrame } from "@waltning/ui/shell/today-frame";
@@ -10,7 +11,7 @@ import {
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { requirePhoneLedger } from "./phone-ledger";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
@@ -27,8 +28,6 @@ function handlePreference(next: "system" | "light" | "dark") {
 function handleAdd() {
   router.push("/quick-add");
 }
-
-const CREATE_ACCOUNT_ACTION = { label: "Create account", onPress: handleCreateAccount };
 
 /**
  * The replica's row shape onto the list's. Named rather than inline because
@@ -50,7 +49,15 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
 }
 
 export default function Today() {
+  const t = useT();
   const ledger = requirePhoneLedger();
+  // A label is a word, so the action cannot be a module constant any more —
+  // `useT` is a hook. Memoised on `t` so the empty state is not handed a new
+  // object on every render.
+  const createAccountAction = useMemo(
+    () => ({ label: t("routes.createAccount"), onPress: handleCreateAccount }),
+    [t],
+  );
   const snapshot = usePhoneLedger(ledger);
   const systemScheme = useColorScheme();
   const resolved = useAppearance(
@@ -62,14 +69,14 @@ export default function Today() {
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
 
   const ledgerBody = hasAccounts ? (
-    <Card title="Recent">
+    <Card title={t("shell.recent")}>
       <TransactionList transactions={snapshot.recent.map(toRow)} />
     </Card>
   ) : (
     <EmptyState
-      title="No accounts yet"
+      title={t("shell.noAccounts")}
       body="Create one account to start your phone ledger."
-      primaryAction={CREATE_ACCOUNT_ACTION}
+      primaryAction={createAccountAction}
     />
   );
   const body = (

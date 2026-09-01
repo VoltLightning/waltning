@@ -7,6 +7,10 @@
     "./tokens": "./src/tokens.ts",
     "./accounts/*": "./src/accounts/*.tsx",
     "./fx/*": "./src/fx/*.tsx",
+    "./i18n/en": "./src/i18n/en.ts",
+    "./i18n/locales": "./src/i18n/locales.ts",
+    "./i18n/pl": "./src/i18n/pl.ts",
+    "./i18n/provider": "./src/i18n/provider.tsx",
     "./primitives/*": "./src/primitives/*.tsx",
     "./review/*": "./src/review/*.tsx",
     "./shell/*": "./src/shell/*.tsx",
@@ -25,7 +29,9 @@
     "test:visual:update": "playwright test --update-snapshots"
   },
   "dependencies": {
-    "@waltning/core": "workspace:*"
+    "@waltning/core": "workspace:*",
+    "i18next": "^26.4.0",
+    "react-i18next": "^17.0.12"
   },
   "devDependencies": {
     "@expo-google-fonts/ibm-plex-sans": "^0.4.1",

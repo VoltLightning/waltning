@@ -120,21 +120,25 @@ export function Button({
  * One stylesheet rather than three, because `makeStyles` builds per theme and
  * three caches would be three chances for one of them to miss.
  */
-const useStyles = makeStyles((t) => ({
-  variantPrimary: { backgroundColor: t.accent },
-  variantSecondary: { borderWidth: 1, borderColor: t.border },
+const useStyles = makeStyles((theme) => ({
+  variantPrimary: { backgroundColor: theme.accent },
+  variantSecondary: { borderWidth: 1, borderColor: theme.border },
   variantGhost: {},
-  variantDanger: { borderWidth: 1, borderColor: t.dangerBorder },
+  variantDanger: { borderWidth: 1, borderColor: theme.dangerBorder },
 
   // `textOnAccent`, not `surface`. They are the same value in light and are not
   // the same thing: one is a card's background, the other is a label sitting on
   // a filled button. See `theme/roles.ts`.
-  inkPrimary: { color: t.textOnAccent },
-  inkSecondary: { color: t.accentText },
-  inkGhost: { color: t.textMuted },
-  inkDanger: { color: t.dangerText },
+  inkPrimary: { color: theme.textOnAccent },
+  inkSecondary: { color: theme.accentText },
+  inkGhost: { color: theme.textMuted },
+  inkDanger: { color: theme.dangerText },
 
-  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
 
   base: {
     minHeight: touchTarget.min,

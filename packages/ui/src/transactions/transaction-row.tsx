@@ -102,7 +102,7 @@ export function TransactionRow({
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   /**
    * **No separator here.** The row used to draw its own `borderBottom`, which
    * put a hairline under the *last* row of every list — a rule dangling in a
@@ -117,7 +117,7 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: space.lg,
   },
   date: {
-    color: t.textMuted,
+    color: theme.textMuted,
     ...text.ui("caption"),
     width: 44,
     fontVariant: [...tabularNums],
@@ -134,6 +134,6 @@ const useStyles = makeStyles((t) => ({
    * looks for when scanning a ledger — at the same weight as its own category
    * and account it is just the first of three strings.
    */
-  payee: { color: t.text, ...text.ui("bodySm", 500) },
-  meta: { color: t.textMuted, ...text.ui("caption") },
+  payee: { color: theme.text, ...text.ui("bodySm", 500) },
+  meta: { color: theme.textMuted, ...text.ui("caption") },
 }));

@@ -98,17 +98,17 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   block: { gap: space.xs },
-  route: { color: t.textMuted, ...text.ui("caption") },
-  arrow: { color: t.accentIcon },
+  route: { color: theme.textMuted, ...text.ui("caption") },
+  arrow: { color: theme.accentIcon },
   amounts: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
   rates: { gap: 2 },
   rate: {
-    color: t.textMuted,
+    color: theme.textMuted,
     ...text.mono("caption"),
     fontVariant: [...tabularNums],
   },
   /** The figure this component exists for. Not muted into the rate line. */
-  spread: { color: t.assertedText },
+  spread: { color: theme.assertedText },
 }));

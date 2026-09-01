@@ -47,6 +47,6 @@ export function TransactionList({ transactions }: TransactionListProps) {
   );
 }
 
-const useStyles = makeStyles((t) => ({
-  separated: { borderTopWidth: hairline.width, borderTopColor: t.hairline },
+const useStyles = makeStyles((theme) => ({
+  separated: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
 }));

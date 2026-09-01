@@ -25,6 +25,7 @@
 import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
+import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
@@ -41,6 +42,7 @@ export type CurrencyTotalsProps = {
 };
 
 export function CurrencyTotals({ subtotals }: CurrencyTotalsProps) {
+  const t = useT();
   const styles = useStyles();
   const [lead, ...rest] = subtotals;
 
@@ -69,13 +71,13 @@ export function CurrencyTotals({ subtotals }: CurrencyTotalsProps) {
         // Said, not implied. Two figures stacked read as a sum and a component
         // of it — the same shape `DualTotal` uses for exactly that — so the one
         // line that distinguishes them has to be on the screen.
-        <Text style={styles.note}>Held separately — not a total.</Text>
+        <Text style={styles.note}>{t("shell.heldSeparately")}</Text>
       )}
     </View>
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   block: { gap: space.md },
-  note: { color: t.shellTextMuted, ...text.ui("caption") },
+  note: { color: theme.shellTextMuted, ...text.ui("caption") },
 }));

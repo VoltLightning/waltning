@@ -1,4 +1,5 @@
 import { Text, View } from "react-native";
+import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useSafeArea } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
@@ -15,7 +16,7 @@ export type TodayFrameProps = {
 };
 
 /**
- * The shell is one flat colour — `t.shell`, no gradient. The heading is the UI
+ * The shell is one flat colour — `theme.shell`, no gradient. The heading is the UI
  * face: a headline is not a figure, and the display face exists for figures.
  *
  * The add button below is the placeholder for the floating one: `design-system/
@@ -36,6 +37,7 @@ export type TodayFrameProps = {
  * the status bar on exactly the phones that need the most room.
  */
 export function TodayFrame({ appearanceAction, total, body, onAdd, addDisabled }: TodayFrameProps) {
+  const t = useT();
   const styles = useStyles();
   const insets = useSafeArea();
 
@@ -52,7 +54,7 @@ export function TodayFrame({ appearanceAction, total, body, onAdd, addDisabled }
     <View style={styles.root}>
       <View style={[styles.shell, clearance]}>
         <View style={styles.header}>
-          <Text style={styles.heading}>Today</Text>
+          <Text style={styles.heading}>{t("shell.today")}</Text>
           {appearanceAction}
         </View>
         <View>{total}</View>
@@ -73,11 +75,11 @@ export function TodayFrame({ appearanceAction, total, body, onAdd, addDisabled }
   );
 }
 
-const useStyles = makeStyles((t) => ({
-  root: { flex: 1, backgroundColor: t.ground },
-  shell: { backgroundColor: t.shell, padding: space.x5, gap: space.x4 },
+const useStyles = makeStyles((theme) => ({
+  root: { flex: 1, backgroundColor: theme.ground },
+  shell: { backgroundColor: theme.shell, padding: space.x5, gap: space.x4 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  heading: { color: t.shellText, ...text.ui("displayTwo") },
+  heading: { color: theme.shellText, ...text.ui("displayTwo") },
   body: { flex: 1, gap: space.x3 },
   add: { alignSelf: "center", minWidth: 72 },
 }));
