@@ -197,6 +197,18 @@ materialisation is provisional.**
 - **Once a backend exists** — provisional until the server admits the write,
   then reconciled to the row the server returns.
 
+**The replica bootstraps with every reference currency, not the pivot alone.**
+`accounts.currency` is a foreign key into `currencies`, so the set of rows a
+fresh replica holds *is* the set of currencies an account can be opened in — a
+single seeded row made the phone single-currency by referential integrity rather
+than by any decision. The list is `@waltning/core/currencies`, the same one the
+server seeds from, because two lists is how the phone's `USD` and the server's
+`USD` start disagreeing about `decimals`, which is arithmetic.
+
+Reference data is bootstrapped, never restored: the insert is
+`ON CONFLICT DO NOTHING`, so a later launch does not overwrite a currency
+someone has edited.
+
 **The capture caller does not stamp a reference rate.** SQLite still requires a
 non-null `fx_rate`, so the local executor resolves the materialisation: exactly
 `1` in the pivot currency, or the replica's last-known rate for another
@@ -205,6 +217,26 @@ exists; admission replaces the whole row with the date-correct canonical rate.
 With no backend the local value is final because there is no second authority.
 An explicitly asserted rate — what the bank actually applied — remains part of
 the input because no later resolver has better evidence.
+
+**Holding a currency and capturing in it are two different capabilities, and the
+second one is gated.** An account can be opened in any currency the replica
+holds, and its balance renders at that currency's own scale — that needs no rate
+and no network. A *transaction* is different: every row carries a pivot
+valuation, so a capture in a non-pivot currency needs either an asserted rate or
+an `fx_rates` row, and a phone that has never synced has neither. The executor
+refuses rather than valuing the row at `1`, because `1` is a wrong figure that
+looks right and nothing downstream would ever question it.
+
+That refusal is correct and it is not yet a product, so it is asked *before* the
+write rather than raised from inside it. `readCurrencies` reports `capturable`
+per currency — the same three cases `provisionalFxRate` decides, resolved in
+advance — and the capture screen declines with the currency named. Letting the
+executor refuse instead would throw after the outbox entry had committed, which
+on a phone with no backend leaves an entry that drains nowhere: a capture that
+is neither recorded nor reported.
+
+Until FX writes land, a phone-alone ledger holds accounts in every currency it
+knows and captures into the pivot.
 
 One code path, one flag. This is not a retreat from §14.0: the phone is still
 not authoritative, because the server still admits every write and may refuse

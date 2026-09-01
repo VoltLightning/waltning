@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./accounts/*": "./src/accounts/*.ts",
+    "./currencies/*": "./src/currencies/*.ts",
     "./transactions/*": "./src/transactions/*.ts",
     "./ddl": "./src/ddl.ts",
     "./diagnostics": "./src/diagnostics.ts",

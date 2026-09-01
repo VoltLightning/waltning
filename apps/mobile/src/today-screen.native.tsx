@@ -1,8 +1,8 @@
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import { Amount } from "@waltning/ui/fx/amount";
 import { Card } from "@waltning/ui/shell/card";
+import { CurrencyTotals } from "@waltning/ui/shell/currency-totals";
 import { TodayFrame } from "@waltning/ui/shell/today-frame";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import {
@@ -89,9 +89,7 @@ export default function Today() {
           onReset={handleReset}
         />
       }
-      total={
-        <Amount value={snapshot.total} currency="USD" decimals={2} size="hero" emphasis="shell" />
-      }
+      total={<CurrencyTotals subtotals={snapshot.subtotals} />}
       body={body}
       addDisabled={!hasAccounts}
       onAdd={handleAdd}

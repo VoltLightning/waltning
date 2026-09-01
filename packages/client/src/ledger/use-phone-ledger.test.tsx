@@ -3,6 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
+import { currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import { createPhoneLedger } from "./create-phone-ledger.ts";
 import { usePhoneLedger } from "./use-phone-ledger.ts";
@@ -18,6 +19,15 @@ describe("usePhoneLedger", () => {
     const controller = createPhoneLedger(
       {
         listAccounts: () => accounts,
+        listCurrencies: () => [
+          {
+            code: currencyCode("PLN"),
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+          },
+        ],
         listRecent: () => [],
         createAccount: (input) => {
           accounts = [
@@ -28,6 +38,7 @@ describe("usePhoneLedger", () => {
               currency: input.currency,
               decimals: 2,
               balance: input.openingBalance,
+              capturable: true,
             },
           ];
         },
@@ -55,7 +66,7 @@ describe("usePhoneLedger", () => {
     };
 
     const { result, unmount } = renderHook(() => usePhoneLedger(controller));
-    act(() => controller.createAccount("Cash · USD"));
+    act(() => controller.createAccount("Bank A · PLN", currencyCode("PLN")));
     expect(result.current.accounts).toHaveLength(1);
 
     unmount();

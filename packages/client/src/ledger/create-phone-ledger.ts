@@ -27,6 +27,38 @@ export type PhoneAccount = {
   balance: Money;
 };
 
+/**
+ * An account, plus whether an expense can be captured against it.
+ *
+ * The join is here rather than on the screen because it is a rule, not a
+ * rendering: `createExpense` refuses the same accounts this marks, and a screen
+ * that worked the pairing out itself could disagree with the controller that
+ * enforces it.
+ */
+export type PhoneCapturableAccount = PhoneAccount & {
+  capturable: boolean;
+};
+
+/**
+ * A currency the replica holds, for a picker to offer.
+ *
+ * Structural rather than imported from `@waltning/ledger`: the port is what
+ * keeps this package free of the storage engine behind it, and a type import
+ * would be the first thread of the dependency it exists to avoid.
+ */
+export type PhoneCurrency = {
+  code: CurrencyCode;
+  name: string;
+  symbol: string;
+  decimals: number;
+  /**
+   * Whether a capture in this currency can be valued without a rate being
+   * asserted. `false` for any non-pivot currency the replica has no rate for —
+   * the ordinary state of a phone that has never synced (§14.6).
+   */
+  capturable: boolean;
+};
+
 export type PhoneRecentTransaction = {
   id: Id<"transactions">;
   date: AccountingDate;
@@ -41,6 +73,7 @@ export type PhoneRecentTransaction = {
 
 export type PhoneLedgerPort = {
   listAccounts: () => readonly PhoneAccount[];
+  listCurrencies: () => readonly PhoneCurrency[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
@@ -53,26 +86,78 @@ export type PhoneLedgerRuntime = {
   diagnostics?: ClientDiagnostics;
 };
 
+/**
+ * One currency's balance across every account held in it.
+ *
+ * **Not a total, and there is no total.** Adding a złoty balance to a dollar one
+ * needs a rate, and until `#e3` there is no rate table for that number to be
+ * wrong against — inventing one here is H21 with nothing to check it. The
+ * screen shows a subtotal per currency, each at its own scale, and the reader
+ * does the only comparison anyone can honestly do.
+ */
+export type PhoneCurrencySubtotal = {
+  currency: CurrencyCode;
+  decimals: number;
+  balance: Money;
+};
+
 export type PhoneLedgerSnapshot = {
-  accounts: readonly PhoneAccount[];
+  accounts: readonly PhoneCapturableAccount[];
+  currencies: readonly PhoneCurrency[];
   recent: readonly PhoneRecentTransaction[];
-  total: Money;
+  /**
+   * Ordered by the account list, so the currency of your first account leads.
+   *
+   * Deliberately **not** ordered by size. `12400` is a bigger number than `840`
+   * and that says nothing about which holding is larger; ranking currencies by
+   * their raw figures is a comparison the app cannot make, printed as though it
+   * had.
+   */
+  subtotals: readonly PhoneCurrencySubtotal[];
 };
 
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
   refresh: () => void;
-  createAccount: (name: string) => Id<"accounts">;
+  createAccount: (name: string, currency: CurrencyCode) => Id<"accounts">;
   createExpense: (amount: string, accountId: Id<"accounts">) => Id<"transactions">;
   reset: () => void;
 };
+
+/**
+ * Balances folded per currency, in the order the accounts arrive.
+ *
+ * `money.add` rather than `money.sum` over a filtered list: the accumulator is
+ * built in one pass, and a currency's first account establishes both its place
+ * in the order and its `decimals`.
+ */
+function subtotalsOf(accounts: readonly PhoneAccount[]): readonly PhoneCurrencySubtotal[] {
+  const byCurrency = new Map<CurrencyCode, PhoneCurrencySubtotal>();
+
+  for (const account of accounts) {
+    const running = byCurrency.get(account.currency);
+    byCurrency.set(
+      account.currency,
+      running === undefined
+        ? { currency: account.currency, decimals: account.decimals, balance: account.balance }
+        : { ...running, balance: money.add(running.balance, account.balance) },
+    );
+  }
+
+  return [...byCurrency.values()];
+}
 
 export function createPhoneLedger(
   port: PhoneLedgerPort,
   runtime: PhoneLedgerRuntime,
 ): PhoneLedgerController {
-  let snapshot: PhoneLedgerSnapshot = { accounts: [], recent: [], total: money.toMoney("0") };
+  let snapshot: PhoneLedgerSnapshot = {
+    accounts: [],
+    currencies: [],
+    recent: [],
+    subtotals: [],
+  };
   const listeners = new Set<() => void>();
   const { diagnostics } = runtime;
 
@@ -84,14 +169,18 @@ export function createPhoneLedger(
     });
     try {
       const accounts = port.listAccounts();
-      const nonUsd = accounts.find((account) => account.currency !== "USD");
-      if (nonUsd) {
-        throw new Error("phone preview cannot combine non-USD accounts");
-      }
+      const currencies = port.listCurrencies();
+      const capturable = new Set(
+        currencies.filter((currency) => currency.capturable).map((currency) => currency.code),
+      );
       snapshot = {
-        accounts,
+        accounts: accounts.map((account) => ({
+          ...account,
+          capturable: capturable.has(account.currency),
+        })),
+        currencies,
         recent: port.listRecent(5),
-        total: money.sum(accounts.map((account) => account.balance)),
+        subtotals: subtotalsOf(accounts),
       };
       for (const listener of listeners) listener();
       emitClientDiagnostic(diagnostics, {
@@ -121,7 +210,7 @@ export function createPhoneLedger(
       };
     },
     refresh,
-    createAccount: (name) => {
+    createAccount: (name, currency) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
         action: "create_account",
@@ -132,7 +221,7 @@ export function createPhoneLedger(
         const input = createAccountInput.parse({
           id: runtime.id<"accounts">(),
           name,
-          currency: "USD",
+          currency,
         });
         port.createAccount(input, capture);
         refresh();
@@ -161,6 +250,23 @@ export function createPhoneLedger(
       try {
         const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
         if (!account) throw new Error("Choose an account before saving");
+
+        /**
+         * **Refused here, so it cannot throw from inside the write.**
+         *
+         * `provisionalFxRate` already refuses this — every row carries a pivot
+         * valuation and there is no rate to compute one from — but it refuses
+         * mid-transaction, after the outbox entry has been committed, with a
+         * message written for a sync log rather than for a person. On a phone
+         * with no backend that entry drains nowhere, so the capture becomes an
+         * invisible row. Declining first is the difference between "not yet"
+         * and a silent loss.
+         */
+        if (!account.capturable) {
+          throw new Error(
+            `${account.currency} needs an exchange rate before an expense can be recorded in it`,
+          );
+        }
 
         const normalized = money.toMoney(amount);
         if (money.dec(normalized).lte(0)) {

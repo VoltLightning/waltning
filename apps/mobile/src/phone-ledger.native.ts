@@ -1,11 +1,12 @@
 import "./polyfills.ts";
 import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
+import { currencies } from "@waltning/core/currencies";
 import { todayIn } from "@waltning/core/date";
 import { type IdTable, id } from "@waltning/core/id";
 import { randomId } from "@waltning/core/random";
 import type { SqliteOpener } from "@waltning/ledger/open";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
-import { createLocalLedgerSession, USD_BOOTSTRAP } from "@waltning/ledger/session";
+import { createLocalLedgerSession } from "@waltning/ledger/session";
 import { drizzle } from "drizzle-orm/expo-sqlite";
 import { Directory, File, Paths } from "expo-file-system";
 import { deleteDatabaseSync, openDatabaseSync, type SQLiteRunResult } from "expo-sqlite";
@@ -45,7 +46,10 @@ const session = createLocalLedgerSession({
     },
   },
   removeDatabase: (path) => deleteDatabaseSync(path, databaseDirectoryPath),
-  bootstrapCurrency: USD_BOOTSTRAP,
+  // The whole reference set, not the pivot alone. `accounts.currency` is a
+  // foreign key into this table, so what the replica is bootstrapped with is
+  // exactly the set of currencies an account can be opened in.
+  bootstrapCurrencies: currencies.map(({ rateSource: _rateSource, ...currency }) => currency),
   diagnostics: mobileDiagnostics,
 });
 

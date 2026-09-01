@@ -23,12 +23,12 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
-import { Amount } from "../fx/amount";
 import { type SafeAreaInsets, SafeAreaProvider } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 import { Card } from "./card";
+import { CurrencyTotals } from "./currency-totals";
 import { TodayFrame } from "./today-frame";
 
 function noop() {}
@@ -71,12 +71,39 @@ export const NotchedPhone: Story = {
 };
 
 /**
+ * **Two currencies, and no total.** The screenshot is the evidence for the one
+ * claim this change makes visually: the lead figure is a hero, the second is
+ * one step down rather than a component of it, and the line underneath says so.
+ *
+ * The order is the ledger's — złoty first because the first account is in it,
+ * not because 12 480,20 outranks 8 400,00 across two currencies it cannot be
+ * compared to.
+ */
+export const TwoCurrencies: Story = {
+  args: {
+    total: (
+      <CurrencyTotals
+        subtotals={[
+          { currency: "PLN", decimals: 2, balance: money.toMoney("12480.20") },
+          { currency: "BYN", decimals: 2, balance: money.toMoney("8400.00") },
+        ]}
+      />
+    ),
+    body: <Body>Three rows would sit here.</Body>,
+  },
+};
+
+/**
  * The state a first launch shows, and the reason `addDisabled` exists — there
  * is nowhere to put a capture until an account exists.
+ *
+ * **The headline is absent, not zero.** With no account there is no currency to
+ * print a zero in, and `0,00 USD` on a ledger someone banks in złoty would be
+ * an invented figure in an invented currency.
  */
 export const FirstRun: Story = {
   args: {
-    total: renderTotal("0"),
+    total: <CurrencyTotals subtotals={[]} />,
     addDisabled: true,
     body: <Body>Nothing captured yet.</Body>,
   },
@@ -97,9 +124,10 @@ function withInsets(insets: SafeAreaInsets) {
   };
 }
 
+/** One currency. `<CurrencyTotals>` prints the lead figure and nothing else. */
 function renderTotal(value: string) {
   return (
-    <Amount value={money.toMoney(value)} currency="PLN" decimals={2} size="hero" emphasis="shell" />
+    <CurrencyTotals subtotals={[{ currency: "PLN", decimals: 2, balance: money.toMoney(value) }]} />
   );
 }
 

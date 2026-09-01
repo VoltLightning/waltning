@@ -22,8 +22,15 @@ import { focus, radius, space, tabularNums } from "../tokens.ts";
 
 export type AmountFieldProps = {
   label: string;
-  /** ISO code, shown as the affix. Never used to convert — that is `FxAmount`. */
-  currency: string;
+  /**
+   * ISO code, shown as the affix. Never used to convert — that is `FxAmount`.
+   *
+   * **Optional, because "not yet known" is a real state.** Quick add asks for an
+   * amount before an account, and until one is chosen there is no currency this
+   * money is in. A placeholder affix there would label a figure in something it
+   * is not, which is worse than an unlabelled field.
+   */
+  currency?: string;
   /** The decimal string, or `null` when what is typed is not yet an amount. */
   onChange: (value: string | null) => void;
   initial?: string;
@@ -83,7 +90,7 @@ export function AmountField({ label, currency, onChange, initial = "", error }: 
           onBlur={handleBlur}
           style={styles.input}
         />
-        <Text style={styles.affix}>{currency}</Text>
+        {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
