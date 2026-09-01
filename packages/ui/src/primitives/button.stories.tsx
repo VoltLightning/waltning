@@ -6,6 +6,7 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
 import { expect, fn, userEvent, within } from "storybook/test";
+import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 import { Button, type ButtonVariant } from "./button";
 
@@ -68,12 +69,13 @@ const VARIANTS: readonly ButtonVariant[] = ["primary", "secondary", "ghost", "da
  * once.
  */
 export const AllVariants: Story = {
-  render: renderAllVariants,
+  render: AllVariantsDemo,
 };
 
-function renderAllVariants() {
+function AllVariantsDemo() {
+  const styles = useStyles();
   return (
-    <View style={{ gap: space.x2, alignItems: "flex-start" }}>
+    <View style={styles.stack}>
       {VARIANTS.map((variant) => (
         <Button key={variant} label={variant} onPress={noop} variant={variant} />
       ))}
@@ -86,15 +88,21 @@ function renderAllVariants() {
  * than a preference, and the row is where an off-by-one shows.
  */
 export const Sizes: Story = {
-  render: renderSizes,
+  render: SizesDemo,
 };
 
-function renderSizes() {
+function SizesDemo() {
+  const styles = useStyles();
   return (
-    <View style={{ flexDirection: "row", gap: space.x2, alignItems: "center" }}>
+    <View style={styles.row}>
       <Button label="sm" onPress={noop} size="sm" />
       <Button label="md" onPress={noop} size="md" />
       <Button label="lg" onPress={noop} size="lg" />
     </View>
   );
 }
+
+const useStyles = makeStyles(() => ({
+  stack: { gap: space.x2, alignItems: "flex-start" },
+  row: { flexDirection: "row", gap: space.x2, alignItems: "center" },
+}));

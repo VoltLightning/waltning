@@ -205,3 +205,36 @@ One thing does **not** follow the language: money's group separator stays
 U+00A0 everywhere. Only the decimal mark moves, so a złoty balance reads
 `12 480,20`. `Intl.NumberFormat` is deliberately unused for figures — it would
 take the separator with it, and Hermes formats differently on Android and iOS.
+
+## One way to build a stylesheet
+
+`makeStyles` — a theme-keyed `StyleSheet.create` behind a `WeakMap` cache — and
+nothing else. `StyleSheet.create` is called in exactly one place, inside it.
+
+**No styling library.** The question was asked and the answer is that the
+useful half is already here: theme-aware, cached, typed, per-theme, built once.
+What was missing was reach, not power. Unistyles v3 was the strongest candidate
+and needs a Babel plugin *and* Nitro Modules native code, so it **cannot run in
+Expo Go** — the exact constraint already blocking the system-bars work — and its
+Babel plugin lands the two-pipeline problem (Metro *and* Vite for Storybook)
+that Lingui was rejected over. NativeWind is the same shape, and would replace
+`design-system/02`'s named roles with Tailwind's scale.
+
+**Inline `style={{ … }}` is banned, and not for tidiness.** The two files with no
+stylesheet at all were the root layout's first frame and Storybook's own theme
+panel. Both painted a `View` that sat *above* `ThemeProvider`, so both looked
+the theme up by hand and wrote a colour straight into JSX — the only two places
+in the app where one did. Neither needed an inline style; both needed to be a
+component one level lower.
+
+**`opacity` is not a muted colour.** It fades the glyph and the ground under it,
+so one value reads differently on two surfaces, and in dark it moves text toward
+the background rather than away. The web dashboard used `opacity: 0.7` as ink
+for months. Fading a *whole control* is a different thing and stays legal —
+`0.45` for disabled, `0.5` for the scrim — so the check fires only where opacity
+sits beside a colour or a type step.
+
+The rule lives in `tests/architecture.test.ts` rather than `packages/ui`, and
+that placement is the point: `conformance.test.ts` bans raw font sizes and roots
+at `packages/ui/src`, and the web dashboard one directory over carried three of
+them with every check green.

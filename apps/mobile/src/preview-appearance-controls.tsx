@@ -4,9 +4,10 @@ import { Button } from "@waltning/ui/primitives/button";
 import { SegmentControl, type SegmentControlProps } from "@waltning/ui/primitives/segment-control";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card } from "@waltning/ui/shell/card";
+import { makeStyles } from "@waltning/ui/theme/styles";
 import * as tokens from "@waltning/ui/tokens";
 import { useCallback, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 
 function isAppearancePreference(value: string): value is AppearancePreference {
   return value === "system" || value === "light" || value === "dark";
@@ -26,6 +27,7 @@ export function PreviewAppearanceControls({
   onReset,
 }: PreviewAppearanceControlsProps) {
   const t = useT();
+  const styles = useStyles();
   // Three values, three words. The values are the contract `AppearancePreference`
   // names and never move; only the words do.
   const choices = useMemo<SegmentControlProps["segments"]>(
@@ -82,4 +84,8 @@ export function PreviewAppearanceControls({
   );
 }
 
-const styles = StyleSheet.create({ content: { gap: tokens.space.x3 } });
+// `makeStyles` rather than `StyleSheet.create`, though nothing here reads the
+// theme today. The pattern is the point: a stylesheet that cannot see the theme
+// is one that answers "add a colour here" with an inline style, and this file
+// already renders inside `ThemeProvider`.
+const useStyles = makeStyles(() => ({ content: { gap: tokens.space.x3 } }));

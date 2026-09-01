@@ -257,6 +257,15 @@ describe("apps hold only what names a platform", () => {
     // `src/`, not a child) and closes over a singleton instead of taking a
     // client, so no test can point it at a stub. Both are properties of where
     // it was written.
+    //
+    // **`makeStyles` is not that hook, and the exception is narrow on purpose.**
+    // Both objections are about *behaviour* reaching for a dependency it did
+    // not take: there is nothing in a stylesheet to point at a stub, and it
+    // reads the theme from context rather than a singleton — which is the
+    // property `theme/styles.ts` exists to give it. Banning it here would leave
+    // a route with exactly one way to paint itself, an inline style object,
+    // which is the thing §5 refuses.
+    const STYLESHEET = /\bconst\s+use[A-Z]\w*\s*=\s*makeStyles\(/;
     const offenders: string[] = [];
     const routeDirs = appRoots().map((a) => join(a, "app"));
     expect(
@@ -264,7 +273,7 @@ describe("apps hold only what names a platform", () => {
       "route trees found",
     ).toBe(true);
     for (const file of routeDirs.flatMap((d) => sourceFiles(d))) {
-      const text = readFileSync(file, "utf8");
+      const text = readFileSync(file, "utf8").replace(STYLESHEET, "const styles_ = makeStyles(");
       if (/\bfunction\s+use[A-Z]/.test(text) || /\bconst\s+use[A-Z]\w*\s*=/.test(text)) {
         offenders.push(rel(file));
       }
@@ -774,5 +783,106 @@ describe("no user-visible string is written into a component", () => {
     }
 
     expect(offenders, 'use t("section.key") — packages/ui/src/i18n/en.ts').toEqual([]);
+  });
+});
+
+/* ── §5 · Styling: one way to build a stylesheet ─────────────────────────── */
+
+describe("every component builds its styles the same way", () => {
+  /**
+   * **`makeStyles`, everywhere, and nothing else.**
+   *
+   * `packages/ui` reached this on its own — all twenty components there use it.
+   * The apps did not, and the gap was not visible from inside the package:
+   * `conformance.test.ts` roots at `packages/ui/src`, so the web dashboard
+   * carried `fontSize: 28`, `fontSize: 13` and `opacity: 0.7` while the rule
+   * banning exactly those passed green one directory over. That is the defect
+   * `conformance.test.ts`'s own header describes, recurring at the app
+   * boundary — which is why these checks live here, rooted at the repository.
+   *
+   * `opacity` is checked **only where it is standing in for ink** — a style
+   * that sets a colour or a type step and then fades it. That is the case the
+   * dashboard had, and it looks like a muted colour without being one: opacity
+   * fades the glyph *and* the ground beneath it, so one value reads differently
+   * on `ground` than on `surface`, and in dark it moves text toward the
+   * background instead of away from it. `theme.textMuted` is a colour the theme
+   * answers for; `opacity: 0.7` is a guess that happened to look right in the
+   * theme it was written in.
+   *
+   * Fading a **whole control** is a different thing and stays legal: `opacity:
+   * 0.45` is how four primitives render disabled, and `0.5` is the scrim. Those
+   * dim a shape, not a word.
+   */
+  const ROOTS = ["packages/ui/src", "packages/ui/.storybook", "apps/mobile/app", "apps/mobile/src"];
+
+  const rendering = ROOTS.flatMap((root) => sourceFiles(join(repoRoot, root)))
+    .filter((f) => f.endsWith(".tsx"))
+    .filter((f) => !f.endsWith(".test.tsx"));
+
+  it("scans a tree that exists", () => {
+    expect(rendering.length).toBeGreaterThan(20);
+  });
+
+  /**
+   * An inline object splits a component's styling across two places — layout in
+   * a stylesheet, one colour in a JSX attribute — which is how a hardcoded
+   * colour gets added back without anyone noticing. It is also the shape a
+   * colour took in the two files that had no stylesheet at all: the root layout
+   * and Storybook's own panel, both of which read `themes[name]` by hand
+   * because their `View` sat *above* the provider. Both are now components
+   * underneath it.
+   */
+  it("passes no style object literal through JSX", () => {
+    const offenders = rendering.filter((f) => /style=\{\{/.test(readFileSync(f, "utf8"))).map(rel);
+
+    expect(offenders, "build it with makeStyles instead").toEqual([]);
+  });
+
+  /**
+   * `StyleSheet.create` at module scope resolves colours at **import** time,
+   * which is what made the theme a build-time constant before `makeStyles`
+   * existed. One call site remains and it is `makeStyles` itself.
+   */
+  it("calls StyleSheet.create in exactly one place", () => {
+    const callers = rendering
+      .concat(ROOTS.flatMap((root) => sourceFiles(join(repoRoot, root))))
+      .filter((f) =>
+        /\bStyleSheet\.create\(/.test(importsOf(f).join("\n") + readFileSync(f, "utf8")),
+      )
+      .map(rel);
+
+    expect([...new Set(callers)]).toEqual(["packages/ui/src/theme/styles.ts"]);
+  });
+
+  /**
+   * The scale-step and colour rules `conformance.test.ts` holds inside
+   * `packages/ui`, applied where it could not reach. Both were live: the web
+   * dashboard wrote three font sizes and used `opacity` as an ink.
+   */
+  it("names a scale step and a role, never a size or an opacity", () => {
+    const SIZE = /\b(fontSize|lineHeight):\s*[\d.]/;
+    const COLOUR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
+    // One style entry — `{ … }` with no nested brace — that both paints text
+    // and fades it. Fading a shape has no `color:` or `text.` beside it.
+    const INK_OPACITY = /\{[^{}]*\bopacity:\s*0?\.\d[^{}]*\}/g;
+    const PAINTS_TEXT = /\bcolor:|\.\.\.text\.(ui|display|mono)\(/;
+
+    const offenders: string[] = [];
+    for (const file of rendering) {
+      const code = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+
+      if (SIZE.test(code)) offenders.push(`${rel(file)} — a font size literal`);
+      if (COLOUR.test(code)) offenders.push(`${rel(file)} — a colour literal`);
+
+      for (const entry of code.match(INK_OPACITY) ?? []) {
+        if (PAINTS_TEXT.test(entry)) {
+          offenders.push(`${rel(file)} — opacity as ink; use theme.textMuted`);
+        }
+      }
+    }
+
+    expect(offenders, "tokens.ts and theme/roles.ts hold these").toEqual([]);
   });
 });
