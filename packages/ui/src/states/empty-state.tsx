@@ -25,9 +25,9 @@ export function EmptyState({ title, body, primaryAction, secondaryAction }: Empt
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   root: { alignItems: "center", gap: space.x3, padding: space.x6 },
-  title: { color: t.text, ...text.display("displayTwo") },
-  body: { color: t.textMuted, ...text.ui("body"), textAlign: "center" },
+  title: { color: theme.text, ...text.display("displayTwo") },
+  body: { color: theme.textMuted, ...text.ui("body"), textAlign: "center" },
   actions: { width: "100%", gap: space.xl },
 }));

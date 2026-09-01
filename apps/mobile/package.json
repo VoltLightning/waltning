@@ -22,6 +22,9 @@
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
+    "@formatjs/intl-getcanonicallocales": "^3.2.11",
+    "@formatjs/intl-locale": "^5.3.10",
+    "@formatjs/intl-pluralrules": "^6.3.13",
     "@logtape/logtape": "^2.3.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@trpc/client": "^11.18.0",
@@ -35,6 +38,7 @@
     "expo-dev-client": "~57.0.14",
     "expo-file-system": "~57.0.5",
     "expo-font": "~57.0.1",
+    "expo-localization": "~57.0.1",
     "expo-router": "~57.0.15",
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",

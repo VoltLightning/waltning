@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
+import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -13,6 +14,7 @@ export type BottomSheetProps = {
 };
 
 export function BottomSheet({ visible, title, onDismiss, children }: BottomSheetProps) {
+  const t = useT();
   const [backdropFocused, setBackdropFocused] = useState(false);
   const styles = useStyles();
   const handleFocus = useCallback(() => setBackdropFocused(true), []);
@@ -32,7 +34,7 @@ export function BottomSheet({ visible, title, onDismiss, children }: BottomSheet
         <View accessibilityLabel={title} accessibilityViewIsModal style={styles.sheet}>
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
-            <Button label="Close" onPress={onDismiss} variant="ghost" />
+            <Button label={t("common.close")} onPress={onDismiss} variant="ghost" />
           </View>
           {children}
         </View>
@@ -41,7 +43,7 @@ export function BottomSheet({ visible, title, onDismiss, children }: BottomSheet
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   overlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: {
     position: "absolute",
@@ -50,27 +52,27 @@ const useStyles = makeStyles((t) => ({
     bottom: 0,
     left: 0,
     minHeight: touchTarget.min,
-    backgroundColor: t.scrim,
+    backgroundColor: theme.scrim,
     opacity: 0.5,
   },
   backdropFocused: {
     outlineWidth: focus.width,
-    outlineColor: t.focusRing,
+    outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
   sheet: {
-    backgroundColor: t.surface,
+    backgroundColor: theme.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: space.x5,
     gap: space.x4,
-    shadowColor: t.elevation.raised.shadowColor,
-    shadowOpacity: t.elevation.raised.shadowOpacity,
-    shadowRadius: t.elevation.raised.shadowRadius,
-    shadowOffset: t.elevation.raised.shadowOffset,
-    borderWidth: t.elevation.raised.borderWidth,
-    borderColor: t.elevation.raised.borderColor,
+    shadowColor: theme.elevation.raised.shadowColor,
+    shadowOpacity: theme.elevation.raised.shadowOpacity,
+    shadowRadius: theme.elevation.raised.shadowRadius,
+    shadowOffset: theme.elevation.raised.shadowOffset,
+    borderWidth: theme.elevation.raised.borderWidth,
+    borderColor: theme.elevation.raised.borderColor,
   },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { color: t.text, ...text.ui("displayThree") },
+  title: { color: theme.text, ...text.ui("displayThree") },
 }));

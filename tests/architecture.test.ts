@@ -395,11 +395,14 @@ describe("every src/ is organised by domain, not by layer", () => {
       "transactions",
       "transport",
     ],
-    // Foundation (`primitives`, `fx`) plus one folder per domain. The full
-    // target is thirteen; six exist because six have components.
+    // Foundation (`primitives`, `fx`, `theme`, `i18n`) plus one folder per
+    // domain. The full target is thirteen; six exist because six have
+    // components. `i18n` is foundation by the same property as `fx`: a
+    // language is not a domain, and every domain needs one.
     "packages/ui/src": [
       "accounts",
       "fx",
+      "i18n",
       "primitives",
       "review",
       "shell",
@@ -678,5 +681,98 @@ describe("every TypeScript file is typechecked by something", () => {
     });
 
     expect(orphans, "TypeScript in a directory no tsconfig owns").toEqual([]);
+  });
+});
+
+/* ── §4 · Language: every word a person reads comes from a catalogue ─────── */
+
+describe("no user-visible string is written into a component", () => {
+  /**
+   * **The rule that stops the retrofit from being needed twice.**
+   *
+   * Localising six screens cost an afternoon. Localising forty would not, and
+   * forty is what the board holds — so the moment to make a literal fail is
+   * before they are written, not after. Nothing about a hardcoded label *looks*
+   * wrong: it renders, it is legible, and it is only wrong to a reader who
+   * never sees this repository.
+   *
+   * Two shapes, because there are two ways a word reaches a screen: as a prop
+   * on a component that renders it, and as the text child of a `<Text>`.
+   *
+   * **`=` or `:`, because a label is not always a prop.** The appearance
+   * switch held its three words in a module-scope array of
+   * `{ value, label }` — outside any component, so outside `useT`, and
+   * invisible to a check that only read JSX. Both had to become hooks;
+   * `System` `Light` `Dark` were three of the four strings this half of the
+   * pattern caught.
+   *
+   * **Anything without a letter is fine.** `label="+"` is a symbol and means
+   * the same in every language; so do `variant="primary"` and every other
+   * enumerated prop, which is why the check names the props that carry prose
+   * rather than scanning all of them.
+   */
+  const PROSE_PROPS =
+    /\b(?:label|placeholder|title|accessibilityLabel|accessibilityHint)\s*[=:]\s*"([^"]*)"/g;
+  const TEXT_CHILD = /<Text(?:\s[^>]*)?>\s*([^<>{}]*[A-Za-z][^<>{}]*?)\s*<\/Text>/g;
+
+  const ROOTS = ["packages/ui/src", "apps/mobile/app", "apps/mobile/src"];
+
+  const screens = ROOTS.flatMap((root) => sourceFiles(join(repoRoot, root)))
+    .filter((f) => f.endsWith(".tsx"))
+    .filter((f) => !/\.(test|stories)\.tsx$/.test(f));
+
+  it("scans a tree that exists", () => {
+    // Non-vacuity: a renamed folder must turn this red, not silently green.
+    expect(screens.length).toBeGreaterThan(10);
+  });
+
+  it("imports the translator from the module that initialises it", () => {
+    /**
+     * `react-i18next`'s own `useTranslation` reaches an i18next that nothing
+     * registered unless `i18n/provider` happens to have been imported — and it
+     * usually has not. The result is not an error: every component renders its
+     * own keys, so `Save` reads `common.save` in 22 tests and every story.
+     * Importing `useT` from the provider makes initialisation a consequence of
+     * use rather than a thing to remember.
+     */
+    const offenders = screens
+      .concat(sourceFiles(join(repoRoot, "packages/client/src")))
+      .filter((f) => !f.endsWith(join("i18n", "provider.tsx")))
+      .filter((f) => importsOf(f).includes("react-i18next"))
+      .map(rel);
+
+    expect(offenders, "import { useT } from the i18n provider").toEqual([]);
+  });
+
+  it("passes prose props through a catalogue, never a literal", () => {
+    const offenders: string[] = [];
+
+    for (const file of screens) {
+      const code = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+
+      for (const [, value] of code.matchAll(PROSE_PROPS)) {
+        if (value && /[A-Za-z]/.test(value)) offenders.push(`${rel(file)} — "${value}"`);
+      }
+    }
+
+    expect(offenders, 'use t("section.key") — packages/ui/src/i18n/en.ts').toEqual([]);
+  });
+
+  it("renders no bare text child", () => {
+    const offenders: string[] = [];
+
+    for (const file of screens) {
+      const code = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+
+      for (const [, value] of code.matchAll(TEXT_CHILD)) {
+        offenders.push(`${rel(file)} — "${value}"`);
+      }
+    }
+
+    expect(offenders, 'use t("section.key") — packages/ui/src/i18n/en.ts').toEqual([]);
   });
 });

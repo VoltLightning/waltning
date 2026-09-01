@@ -57,3 +57,20 @@ export const CLIENT_BUILD: string = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev
 export function isStaleBundle(serverBuild: string): boolean {
   return compareBuilds(CLIENT_BUILD, serverBuild);
 }
+
+/**
+ * The browser's ordered language preferences.
+ *
+ * **`navigator.languages`, not `expo-localization`** — this is the web half of
+ * the seam, and the browser answers the question itself. Reaching for the Expo
+ * module here would pull `expo-modules-core` into the web bundle for a value
+ * the platform already has, and its native binding does not exist off-device:
+ * importing it is what broke `platform.test.tsx`, the test that exists to prove
+ * these platform reads are wired at all.
+ *
+ * Guarded because `navigator` is absent in a Node render and `languages` is
+ * absent in older engines. An empty list is a real answer, and `resolveLocale`
+ * falls back to English on one.
+ */
+export const DEVICE_LOCALES: readonly string[] =
+  typeof navigator === "undefined" ? [] : [...(navigator.languages ?? [])];

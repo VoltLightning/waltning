@@ -17,13 +17,28 @@ a ledger you count digits in — `12480.20` and `1248.02` are one glance apart �
 and the phone's headline total read `48210.00` for the whole life of this
 document, while the sketch above has said `1 234,56` throughout.
 
-The separator is **U+00A0, a no-break space**, and it is not a locale choice.
-The app renders a trailing ISO code rather than a symbol, and `screens/S17`
-records that symbol placement is a locale question nobody has answered; a comma
-group with a dot decimal is ambiguous in *both* the conventions this product
-will meet, and a space group is ambiguous in neither. No-break rather than thin,
-because a thin space is not in every fallback face and a plain one would let a
-figure wrap in the middle of itself.
+**The group separator is fixed and the decimal mark follows the language.**
+
+The separator is **U+00A0, a no-break space**, in every language. The app
+renders a trailing ISO code rather than a symbol, and `screens/S17` records that
+symbol placement is a locale question nobody has answered; a comma group with a
+dot decimal is ambiguous in *both* the conventions this product will meet, and a
+space group is ambiguous in neither. No-break rather than thin, because a thin
+space is not in every fallback face and a plain one would let a figure wrap in
+the middle of itself.
+
+That argument settles the separator and leaves the **mark** open — and once the
+groups are spaces, `12 480,20` and `12 480.20` are each unambiguous, so the mark
+is free to follow the reader. Which is to say it must: `12 480.20` is not how a
+Polish reader writes a figure, and this ledger is mostly złoty. `forDisplay`
+takes the mark as a parameter and `<Amount>` supplies it from the active
+language (`ui/i18n/locales`).
+
+**Not `Intl.NumberFormat`.** It would take the group separator with it —
+`en-US` groups with a comma — and so overturn the paragraph above as a side
+effect of a call nobody read as a decision. Hermes's `NumberFormat` also differs
+between Android and iOS, which is a way for one ledger to render two ways on two
+phones.
 
 `forDisplay` lives in `core/money` beside the arithmetic and **returns a
 `string`, not a `Money`** — the display form can never be handed back to

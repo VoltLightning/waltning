@@ -27,7 +27,8 @@
         {
           "style": "light"
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true

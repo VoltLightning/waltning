@@ -14,8 +14,10 @@
 import "../src/polyfills.ts";
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import { describeDiagnosticError } from "@waltning/core/diagnostics";
+import { resolveLocale } from "@waltning/ui/i18n/locales";
+import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { text } from "@waltning/ui/theme/fonts";
-import { ThemeProvider } from "@waltning/ui/theme/provider";
+import { ThemeProvider, useTheme } from "@waltning/ui/theme/provider";
 import { themes } from "@waltning/ui/theme/roles";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -24,7 +26,7 @@ import { useColorScheme, View } from "react-native";
 import { DeviceInsets } from "../src/device-insets";
 import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
-import { appearance } from "../src/platform";
+import { appearance, DEVICE_LOCALES } from "../src/platform";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -140,26 +142,49 @@ export default function RootLayout() {
           `shell` rather than `ground` because green is the colour of every
           top strip in the app, and the top strip is the only place this shows.
         */}
-        <View style={{ flex: 1, backgroundColor: theme.shell }}>
-          <Stack
-            screenOptions={{
-              contentStyle: { backgroundColor: theme.ground },
-              headerStyle: { backgroundColor: theme.shell },
-              // Colours the title *and* the back chevron; a `color` inside
-              // `headerTitleStyle` would set one of the two and look right.
-              headerTintColor: theme.shellText,
-              headerTitleStyle: text.ui("displayThree"),
-              headerShadowVisible: false,
-            }}
-          >
-            {/* The ledger's header is the shell itself — a 54pt total does not
-                fit in a navigation bar, and §5.1 makes the shell the frame. */}
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="quick-add" options={{ title: "Expense" }} />
-            <Stack.Screen name="account/new" options={{ title: "Create account" }} />
-          </Stack>
-        </View>
+        <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
+          <View style={{ flex: 1, backgroundColor: theme.shell }}>
+            <AppStack />
+          </View>
+        </I18nProvider>
       </ThemeProvider>
     </DeviceInsets>
+  );
+}
+
+/**
+ * The navigator, **inside `<I18nProvider>` rather than beside it.**
+ *
+ * A route title is a translated string, and `useTranslation` reads the nearest
+ * provider — called in `RootLayout`, which *renders* the provider, it would
+ * find none and fall back to English. Every route would then be titled in
+ * English on a Polish phone while the screen below it was Polish, which is the
+ * kind of half-translation that looks like a data problem rather than a wiring
+ * one.
+ *
+ * Separated for that reason alone: this is the same tree, one component down.
+ */
+function AppStack() {
+  const t = useT();
+  const theme = useTheme();
+
+  return (
+    <Stack
+      screenOptions={{
+        contentStyle: { backgroundColor: theme.ground },
+        headerStyle: { backgroundColor: theme.shell },
+        // Colours the title *and* the back chevron; a `color` inside
+        // `headerTitleStyle` would set one of the two and look right.
+        headerTintColor: theme.shellText,
+        headerTitleStyle: text.ui("displayThree"),
+        headerShadowVisible: false,
+      }}
+    >
+      {/* The ledger's header is the shell itself — a 54pt total does not fit in
+          a navigation bar, and §5.1 makes the shell the frame. */}
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
+      <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
+    </Stack>
   );
 }

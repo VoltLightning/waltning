@@ -3,6 +3,7 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { expect, it } from "vitest";
+import { I18nProvider } from "../i18n/provider";
 import { CurrencyTotals } from "./currency-totals";
 
 const PLN = { currency: "PLN", decimals: 2, balance: money.toMoney("12480.20") };
@@ -65,4 +66,22 @@ it("renders each currency at its own scale", () => {
 it("renders nothing at all before the first account exists", () => {
   const { container } = render(<CurrencyTotals subtotals={[]} />);
   expect(container.textContent).toBe("");
+});
+
+/**
+ * The one line here that is prose rather than a figure, in the language the
+ * reader has. It carries the whole meaning of the stack — without it two
+ * figures read as a sum and its part — so it is the line that must not be the
+ * one left in English.
+ */
+it("says it in the reader's language", () => {
+  const { container } = render(
+    <I18nProvider locale="pl">
+      <CurrencyTotals subtotals={[PLN, BYN]} />
+    </I18nProvider>,
+  );
+
+  expect(textOf(container)).toContain("Trzymane osobno — to nie jest suma.");
+  // The mark follows the language; the group separator does not (§4.1).
+  expect(textOf(container)).toContain("12 480,20 PLN");
 });

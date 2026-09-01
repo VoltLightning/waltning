@@ -14,6 +14,7 @@
 
 import { useCallback, useState } from "react";
 import { Animated, Pressable, Text } from "react-native";
+import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
@@ -41,6 +42,7 @@ export function Chip({
   machineFilled = false,
   disabled = false,
 }: ChipProps) {
+  const t = useT();
   const [focused, setFocused] = useState(false);
   const filled = value !== undefined && value !== "";
 
@@ -67,8 +69,10 @@ export function Chip({
         // alone is not a marker for someone using a screen reader.
         accessibilityLabel={
           machineFilled
-            ? `${placeholder}: ${value ?? ""}, filled automatically`
-            : `${placeholder}${filled ? `: ${value}` : ""}`
+            ? t("common.autoFilledLabel", { field: placeholder, value: value ?? "" })
+            : filled
+              ? t("common.fieldValue", { field: placeholder, value })
+              : placeholder
         }
         accessibilityState={{ disabled }}
         disabled={disabled}
@@ -82,14 +86,14 @@ export function Chip({
         <Text style={[styles.text, filled ? styles.textFilled : styles.textEmpty]}>
           {filled ? value : placeholder}
           {/* Text, not tint alone (P5) — and the one character that fits. */}
-          {machineFilled ? <Text style={styles.marker}> ·auto</Text> : null}
+          {machineFilled ? <Text style={styles.marker}>{t("common.autoFilled")}</Text> : null}
         </Text>
       </Pressable>
     </Animated.View>
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   chip: {
     // The §3.5 defect, fixed at the source rather than on thirty screens.
     minHeight: touchTarget.min,
@@ -100,14 +104,18 @@ const useStyles = makeStyles((t) => ({
   },
   // `borderInteractive`, not `border`: a chip is a control, and the scale
   // gives a control's resting edge one step more presence than a card's.
-  empty: { borderColor: t.borderInteractive, backgroundColor: "transparent" },
-  filled: { borderColor: t.borderInteractive, backgroundColor: t.subtleFill },
+  empty: { borderColor: theme.borderInteractive, backgroundColor: "transparent" },
+  filled: { borderColor: theme.borderInteractive, backgroundColor: theme.subtleFill },
   /** Amber: asserted rather than chosen (P4), one meaning with every other amber. */
-  machine: { borderColor: t.assertedBorder, backgroundColor: t.assertedFill },
-  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
+  machine: { borderColor: theme.assertedBorder, backgroundColor: theme.assertedFill },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
   disabled: { opacity: 0.45 },
   text: { ...text.ui("body") },
-  textEmpty: { color: t.textMuted },
-  textFilled: { color: t.text },
-  marker: { color: t.assertedText, ...text.ui("caption") },
+  textEmpty: { color: theme.textMuted },
+  textFilled: { color: theme.text },
+  marker: { color: theme.assertedText, ...text.ui("caption") },
 }));

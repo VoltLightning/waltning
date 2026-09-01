@@ -3,6 +3,7 @@ import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { AmountField, parseAmount } from "../fx/amount-field";
+import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { text } from "../theme/fonts.ts";
@@ -46,6 +47,7 @@ export function QuickAddForm({
   onCreateAccount,
   onSave,
 }: QuickAddFormProps) {
+  const t = useT();
   const [amount, setAmount] = useState(parseAmount(initialAmount) ?? "");
   const [accountId, setAccountId] = useState<string | null>(
     accounts.some((account) => account.id === initialAccountId) ? (initialAccountId ?? null) : null,
@@ -74,12 +76,12 @@ export function QuickAddForm({
           currency here would be a figure labelled in something the money is
           not. The field carries the label alone until one is picked. */}
       <AmountField
-        label="Amount"
+        label={t("transactions.amount")}
         {...(selected ? { currency: selected.currency } : {})}
         initial={initialAmount}
         onChange={handleAmountChange}
       />
-      <Text style={styles.label}>Account</Text>
+      <Text style={styles.label}>{t("transactions.account")}</Text>
       <View style={styles.accounts}>
         {accounts.map((account) => (
           <AccountChoice
@@ -95,14 +97,14 @@ export function QuickAddForm({
           thing to explain. */}
       {blocked ? (
         <Text style={styles.blocked}>
-          {selected.currency} needs an exchange rate before an expense can be recorded in it.
+          {t("transactions.needsRate", { currency: selected.currency })}
         </Text>
       ) : null}
-      <Button label="Create account…" onPress={handleCreateAccount} variant="secondary" />
+      <Button label={t("accounts.create")} onPress={handleCreateAccount} variant="secondary" />
       <View style={styles.actions}>
-        <Button label="Cancel" onPress={onCancel} variant="ghost" />
+        <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
         <Button
-          label="Save"
+          label={t("common.save")}
           onPress={handleSave}
           disabled={!positive || !accountId || blocked}
           variant="primary"
@@ -125,21 +127,22 @@ type AccountChoiceProps = {
  * someone wonders.
  */
 function AccountChoice({ account, selected, onSelect }: AccountChoiceProps) {
+  const t = useT();
   const handleSelect = useCallback(() => onSelect(account.id), [account.id, onSelect]);
   return (
     <Chip
-      placeholder="Account"
-      value={selected ? `${account.name} · selected` : account.name}
+      placeholder={t("transactions.account")}
+      value={selected ? t("common.chipSelected", { value: account.name }) : account.name}
       onPress={handleSelect}
       machineFilled={false}
     />
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
-  label: { color: t.textMuted, ...text.ui("kicker") },
+  label: { color: theme.textMuted, ...text.ui("kicker") },
   accounts: { gap: space.md },
-  blocked: { color: t.textMuted, ...text.ui("caption") },
+  blocked: { color: theme.textMuted, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

@@ -97,10 +97,10 @@ export function AmountField({ label, currency, onChange, initial = "", error }: 
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   block: { gap: space.xs },
   label: {
-    color: t.textMuted,
+    color: theme.textMuted,
     ...text.ui("kicker"),
     textTransform: "uppercase",
   },
@@ -109,22 +109,26 @@ const useStyles = makeStyles((t) => ({
     alignItems: "center",
     gap: space.md,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: theme.border,
     borderRadius: radius.sm,
     paddingHorizontal: space.xl,
     minHeight: 44,
   },
   input: {
     flex: 1,
-    color: t.text,
+    color: theme.text,
     ...text.display("displayThree"),
     // Right-aligned and tabular so a column of entered amounts lines up with
     // the column of rendered ones beside it.
     textAlign: "right",
     fontVariant: [...tabularNums],
   },
-  affix: { color: t.textMuted, ...text.ui("caption") },
-  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
-  invalid: { borderColor: t.dangerBorder },
-  error: { color: t.dangerText, ...text.ui("caption") },
+  affix: { color: theme.textMuted, ...text.ui("caption") },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
+  invalid: { borderColor: theme.dangerBorder },
+  error: { color: theme.dangerText, ...text.ui("caption") },
 }));

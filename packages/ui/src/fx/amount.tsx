@@ -18,6 +18,8 @@
 
 import * as money from "@waltning/core/money";
 import { Text, type TextStyle } from "react-native";
+import { decimalMark } from "../i18n/locales.ts";
+import { useLocale } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { tabularNums } from "../tokens.ts";
@@ -77,7 +79,10 @@ export function Amount({
   // balance, and `startsWith("-")` says it is — showing a cleared account in
   // the ink of an overdraft.
   const negative = money.cmp(value, money.toMoney("0")) < 0;
-  const figure = money.forDisplay(value, decimals);
+  // The mark follows the language; the group separator does not (§4.1).
+  // Unwrapped — in a test, in a story — `useLocale` is English, so a figure
+  // renders correctly with no provider rather than throwing.
+  const figure = money.forDisplay(value, decimals, decimalMark(useLocale()));
   const prefix = signed && !negative && !money.isZero(value) ? "+" : "";
 
   const styles = useStyles();
@@ -108,9 +113,9 @@ export function Amount({
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   base: {
-    color: t.text,
+    color: theme.text,
     // The face comes with the step, from `SIZES` — §2.2 files money under the
     // **display** face, and the reason the column still aligns on Android is
     // the file, not the feature below: IBM Plex Sans's digits are 600 units at
@@ -121,11 +126,11 @@ const useStyles = makeStyles((t) => ({
     // accepted a typo just as happily.
     fontVariant: [...tabularNums],
   },
-  income: { color: t.income },
-  spend: { color: t.spend },
-  transfer: { color: t.textMuted },
-  muted: { color: t.textMuted },
-  shell: { color: t.shellText },
-  currency: { color: t.textMuted, ...text.ui("caption") },
-  shellCurrency: { color: t.shellTextMuted },
+  income: { color: theme.income },
+  spend: { color: theme.spend },
+  transfer: { color: theme.textMuted },
+  muted: { color: theme.textMuted },
+  shell: { color: theme.shellText },
+  currency: { color: theme.textMuted, ...text.ui("caption") },
+  shellCurrency: { color: theme.shellTextMuted },
 }));

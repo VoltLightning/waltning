@@ -153,6 +153,6 @@ function Body({ children }: { children: string }) {
   );
 }
 
-const useStyles = makeStyles((t) => ({
-  text: { color: t.text, ...text.ui("body") },
+const useStyles = makeStyles((theme) => ({
+  text: { color: theme.text, ...text.ui("body") },
 }));

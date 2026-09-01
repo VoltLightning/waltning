@@ -38,9 +38,9 @@ export type Styles = Record<string, ViewStyle | TextStyle | ImageStyle>;
  * Turn a theme-dependent stylesheet into a hook.
  *
  * ```ts
- * const useStyles = makeStyles((t) => ({
- *   card: { backgroundColor: t.surface },
- *   title: { color: t.text },
+ * const useStyles = makeStyles((theme) => ({
+ *   card: { backgroundColor: theme.surface },
+ *   title: { color: theme.text },
  * }));
  *
  * function Card() {

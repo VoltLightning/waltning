@@ -18,6 +18,35 @@
  * is the direction the whole seam exists to forbid.
  */
 
+/**
+ * **`Intl.PluralRules`, which Hermes does not ship.** Hermes implements `Intl`
+ * by calling into the platform's own ICU, and its published support table names
+ * `Collator`, `NumberFormat`, `DateTimeFormat` and `getCanonicalLocales` — not
+ * `PluralRules` and not `Locale`. i18next builds its plural resolver from
+ * `Intl.PluralRules`, so without these the first message that takes a `count`
+ * throws on the device and nowhere else.
+ *
+ * It matters more than an English-only app would suggest: **Polish has four
+ * plural categories** where English has two, so the failure this prevents is
+ * not a crash but a sentence that is quietly ungrammatical for the language
+ * most of this ledger is written in.
+ *
+ * `/polyfill` rather than `/polyfill-force` — it installs only where the
+ * runtime has none, so the browser and Node keep their own implementations and
+ * only Hermes gets ours. The locale data is per-language and must be imported
+ * for each: a language with no data resolves as English.
+ *
+ * Order is required. `Locale` is built on `getCanonicalLocales`, and
+ * `PluralRules` on both.
+ *
+ * The `.js` suffixes are the packages' own `exports` map — `"./polyfill.js"`
+ * is the declared subpath and `"./polyfill"` resolves to nothing.
+ */
+import "@formatjs/intl-getcanonicallocales/polyfill.js";
+import "@formatjs/intl-locale/polyfill.js";
+import "@formatjs/intl-pluralrules/polyfill.js";
+import "@formatjs/intl-pluralrules/locale-data/en.js";
+import "@formatjs/intl-pluralrules/locale-data/pl.js";
 import { randomUUID } from "expo-crypto";
 
 const existing = globalThis.crypto as (Crypto & { randomUUID?: () => string }) | undefined;

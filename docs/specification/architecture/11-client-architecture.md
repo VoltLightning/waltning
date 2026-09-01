@@ -160,10 +160,59 @@ The enforcement that makes this document real lives in
 | Design conformance covers every `ui/` folder | a hardcoded colour outside `packages/ui` |
 | Platform-variant files are imported extension-less | a web override silently ignored |
 | Only screens fetch | a molecule that cannot render in a test or offline |
+| No component holds a user-visible string | the next forty screens needing a retrofit |
+| The translator is imported from `i18n/provider` | a component rendering its own keys |
 
 ---
 
-## 7 · What this is not
+## 7 · No word reaches a screen except through a catalogue
+
+**Every user-visible string lives in `packages/ui/src/i18n/`, and a literal in a
+component fails the gate.** This is the same rule as *no hardcoded colours*, for
+the same reason and with the same evidence behind it: nothing about a hardcoded
+label looks wrong. It renders, it is legible, and it is only wrong to a reader
+who never sees this repository.
+
+**The rule exists now because the retrofit is cheap now.** Localising six
+screens cost an afternoon; the board holds forty more. Every string written
+before the rule is one to find later, and the ones that are found late are found
+by a person who does not read the language.
+
+The shape:
+
+| Piece | Where | Why there |
+|---|---|---|
+| The catalogues | `ui/i18n/en.ts`, `ui/i18n/pl.ts` | TypeScript, not JSON — **the English file is the type**, so a language missing a key does not compile and one inventing a key does not either |
+| The language choice | `ui/i18n/locales.ts` | Pure functions over strings: which language a device gets, and how a figure is punctuated in it. No React, no i18next, so both are testable without mounting anything |
+| The provider and `useT` | `ui/i18n/provider.tsx` | A language is a value, not a module constant — the same call `theme/provider.tsx` makes |
+| The device's languages | `apps/<surface>/src/platform.ts` | A platform read. `expo-localization` on the phone, `navigator.languages` in the browser |
+
+**`i18n` is foundation, beside `fx` and `theme`.** A language is not a domain:
+every module that shows a word depends on it, and nothing in it may depend on a
+screen. `tests/module-boundaries.test.ts` holds that direction.
+
+**Components import `useT` from the provider, never `useTranslation` from
+`react-i18next`.** The default i18next instance is created when that module is
+first imported, and importing the translator *is* importing the module — so
+initialisation is a consequence of use rather than a thing to remember. The
+alternative is not an error but something worse: every component silently
+renders its own keys, so `Save` reads `common.save` in every test and story that
+did not happen to wrap a provider.
+
+**A component with no provider renders English rather than throwing.** The
+population of call sites that legitimately have no provider — render tests,
+stories, diff previews — is large and growing, and a throw there would buy
+nothing and cost a wrapper at each one.
+
+Two things are **not** translated and the distinction is worth stating. Money's
+*group separator* is fixed at U+00A0 in every language, with the reasoning in
+`design-system/04` §4.1; only the decimal mark follows the reader. And
+accounting dates stay bare `YYYY-MM-DD` strings end to end (§7.0a) — a localised
+date is a rendering, never a value.
+
+---
+
+## 8 · What this is not
 
 It is **not** a rewrite. The moves are moves: the same files, in directories
 that exist for them.

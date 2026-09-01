@@ -115,12 +115,12 @@ function Surface({ children }: { children: React.ReactNode }) {
   return <View style={styles.surface}>{children}</View>;
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   surface: {
-    backgroundColor: t.surface,
+    backgroundColor: theme.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: t.border,
+    borderColor: theme.border,
     padding: space.x5,
   },
 }));

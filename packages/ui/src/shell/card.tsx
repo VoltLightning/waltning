@@ -70,18 +70,18 @@ export function GroundPanel({ children }: { children: React.ReactNode }) {
   return <View style={[styles.panel, clearance]}>{children}</View>;
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   card: {
-    backgroundColor: t.surface,
+    backgroundColor: theme.surface,
     borderRadius: radius.md,
     padding: space.x5,
     gap: space.x3,
-    shadowColor: t.elevation.card.shadowColor,
-    shadowOpacity: t.elevation.card.shadowOpacity,
-    shadowRadius: t.elevation.card.shadowRadius,
-    shadowOffset: t.elevation.card.shadowOffset,
-    borderWidth: t.elevation.card.borderWidth,
-    borderColor: t.elevation.card.borderColor,
+    shadowColor: theme.elevation.card.shadowColor,
+    shadowOpacity: theme.elevation.card.shadowOpacity,
+    shadowRadius: theme.elevation.card.shadowRadius,
+    shadowOffset: theme.elevation.card.shadowOffset,
+    borderWidth: theme.elevation.card.borderWidth,
+    borderColor: theme.elevation.card.borderColor,
   },
   header: {
     flexDirection: "row",
@@ -89,12 +89,12 @@ const useStyles = makeStyles((t) => ({
     justifyContent: "space-between",
     gap: space.x3,
     borderBottomWidth: hairline.width,
-    borderBottomColor: t.hairline,
+    borderBottomColor: theme.hairline,
     paddingBottom: space.xl,
   },
-  title: { color: t.text, ...text.ui("displayThree") },
+  title: { color: theme.text, ...text.ui("displayThree") },
   panel: {
-    backgroundColor: t.ground,
+    backgroundColor: theme.ground,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: space.x5,

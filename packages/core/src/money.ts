@@ -107,14 +107,24 @@ const GROUP = "\u00a0";
  * Grouping runs on the integer part only. The fraction is never grouped —
  * `0.12345678` is a rate's scale, not a quantity, and splitting it into threes
  * reads as a phone number.
+ *
+ * **The group separator is fixed and the decimal mark is not.** §4.1 settles
+ * the separator at U+00A0 for every language, on the grounds that a space group
+ * is unambiguous in both conventions this product meets. That argument leaves
+ * the mark open, and once the groups are spaces `12 480,20` and `12 480.20` are
+ * each unambiguous — so the mark follows the reader's language. It is a
+ * parameter rather than a lookup because `core` has no locale and must not
+ * acquire one: it ships to a phone, a server and a test, and the caller is the
+ * only one of the three that knows who is reading. `ui/i18n/locales` holds the
+ * mapping.
  */
-export const forDisplay = (v: Money, decimals: number): string => {
+export const forDisplay = (v: Money, decimals: number, mark: "." | "," = "."): string => {
   const fixed = dec(v).toFixed(decimals);
   const [whole = "", fraction] = fixed.split(".");
   const negative = whole.startsWith("-");
   const digits = negative ? whole.slice(1) : whole;
   const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, GROUP);
-  return `${negative ? "-" : ""}${grouped}${fraction === undefined ? "" : `.${fraction}`}`;
+  return `${negative ? "-" : ""}${grouped}${fraction === undefined ? "" : `${mark}${fraction}`}`;
 };
 
 export const add = (a: Money, b: Money): Money => toMoney(dec(a).plus(b));

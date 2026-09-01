@@ -84,10 +84,10 @@ function SegmentOption({ segment, active, onChange }: SegmentOptionProps) {
   );
 }
 
-const useStyles = makeStyles((t) => ({
+const useStyles = makeStyles((theme) => ({
   track: {
     flexDirection: "row",
-    backgroundColor: t.subtleFill,
+    backgroundColor: theme.subtleFill,
     borderRadius: radius.pill,
     padding: 2,
   },
@@ -101,10 +101,14 @@ const useStyles = makeStyles((t) => ({
     borderRadius: radius.pill,
     paddingHorizontal: space.xl,
   },
-  active: { backgroundColor: t.surface },
-  focused: { outlineWidth: focus.width, outlineColor: t.focusRing, outlineOffset: focus.offset },
-  label: { color: t.textMuted, ...text.ui("bodySm") },
-  labelActive: { color: t.text, ...text.ui("bodySm", 600) },
-  count: { color: t.textMuted, ...text.ui("caption") },
-  countActive: { color: t.accentText },
+  active: { backgroundColor: theme.surface },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
+  label: { color: theme.textMuted, ...text.ui("bodySm") },
+  labelActive: { color: theme.text, ...text.ui("bodySm", 600) },
+  count: { color: theme.textMuted, ...text.ui("caption") },
+  countActive: { color: theme.accentText },
 }));
