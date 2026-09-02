@@ -15,13 +15,14 @@
 
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
+import { TextField } from "../primitives/text-field";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space } from "../tokens.ts";
+import { space } from "../tokens.ts";
 
 export type CreateAccountCurrency = { code: CurrencyCode; name: string };
 
@@ -44,28 +45,17 @@ export type CreateAccountFormProps = {
 export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccountFormProps) {
   const t = useT();
   const [name, setName] = useState("");
-  const [focused, setFocused] = useState(false);
   const [currency, setCurrency] = useState<CurrencyCode | null>(currencies[0]?.code ?? null);
   const styles = useStyles();
   const trimmed = name.trim();
-  const handleFocus = useCallback(() => setFocused(true), []);
-  const handleBlur = useCallback(() => setFocused(false), []);
   const handleSave = useCallback(() => {
     if (currency) onSave({ name: trimmed, currency });
   }, [currency, onSave, trimmed]);
 
   return (
     <View style={styles.root}>
-      <Text style={styles.label}>{t("common.name")}</Text>
-      <TextInput
-        accessibilityLabel={t("common.name")}
-        maxLength={120}
-        value={name}
-        onChangeText={setName}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        style={[styles.input, focused ? styles.focused : null]}
-      />
+      {/* 120 is the shared operation contract's cap, stated where it binds. */}
+      <TextField label={t("common.name")} value={name} onChangeText={setName} maxLength={120} />
       <Text style={styles.label}>{t("accounts.currency")}</Text>
       <View style={styles.currencies}>
         {currencies.map((candidate) => (
@@ -117,19 +107,6 @@ function CurrencyChoice({ currency, selected, onSelect }: CurrencyChoiceProps) {
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
   label: { color: theme.textMuted, ...text.ui("kicker") },
-  input: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: radius.sm,
-    color: theme.text,
-    paddingHorizontal: space.xl,
-  },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
   currencies: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

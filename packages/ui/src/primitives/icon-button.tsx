@@ -13,10 +13,11 @@
  * name is a button that announces itself as "button" and nothing else.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, touchTarget } from "../tokens.ts";
+import { useInteraction } from "./interaction.ts";
 
 export type IconButtonSize = 32 | 40 | 44;
 
@@ -36,24 +37,24 @@ export function IconButton({
   disabled = false,
   children,
 }: IconButtonProps) {
-  const [focused, setFocused] = useState(false);
+  const { hovered, focused, handlers } = useInteraction();
 
   // The gap between the drawn control and the 44px floor, split either side.
   // `hitSlop` rather than padding so the visual size stays what was asked for.
   const slop = Math.max(0, (touchTarget.min - size) / 2);
 
   const styles = useStyles();
-  const handleFocus = useCallback(() => setFocused(true), []);
-  const handleBlur = useCallback(() => setFocused(false), []);
   const pressableStyle = useCallback(
     ({ pressed }: { pressed: boolean }) => [
       styles.base,
       { width: size, height: size },
+      // Hover under press: the pressed fill is one step darker and must win.
+      hovered && !disabled ? styles.hovered : null,
       pressed ? styles.pressed : null,
       focused ? styles.focused : null,
       disabled ? styles.disabled : null,
     ],
-    [disabled, focused, size, styles],
+    [disabled, focused, hovered, size, styles],
   );
 
   return (
@@ -63,8 +64,7 @@ export function IconButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
+      {...handlers}
       hitSlop={slop}
       style={pressableStyle}
     >
@@ -76,6 +76,7 @@ export function IconButton({
 const useStyles = makeStyles((theme) => ({
   base: { alignItems: "center", justifyContent: "center", borderRadius: radius.sm },
   content: { alignItems: "center", justifyContent: "center" },
+  hovered: { backgroundColor: theme.hoverFill },
   pressed: { backgroundColor: theme.pressedFill },
   focused: {
     outlineWidth: focus.width,

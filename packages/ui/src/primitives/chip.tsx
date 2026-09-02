@@ -12,12 +12,13 @@
  * source, which is what D1 exists for.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Animated, Pressable, Text } from "react-native";
 import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { useInteraction } from "./interaction.ts";
 import { usePressScale } from "./press-scale.ts";
 
 export type ChipProps = {
@@ -43,22 +44,23 @@ export function Chip({
   disabled = false,
 }: ChipProps) {
   const t = useT();
-  const [focused, setFocused] = useState(false);
+  const { hovered, focused, handlers } = useInteraction();
   const filled = value !== undefined && value !== "";
 
   const styles = useStyles();
-  const handleFocus = useCallback(() => setFocused(true), []);
-  const handleBlur = useCallback(() => setFocused(false), []);
   const press = usePressScale();
   const pressableStyle = useCallback(
     () => [
       styles.chip,
       filled ? styles.filled : styles.empty,
       machineFilled ? styles.machine : null,
+      // Under the machine amber the neutral hover would read as a state
+      // change; the pointer answer there is the press scale alone.
+      hovered && !disabled && !machineFilled ? styles.hovered : null,
       focused ? styles.focused : null,
       disabled ? styles.disabled : null,
     ],
-    [disabled, filled, focused, machineFilled, styles],
+    [disabled, filled, focused, hovered, machineFilled, styles],
   );
 
   return (
@@ -79,8 +81,7 @@ export function Chip({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
+        {...handlers}
         style={pressableStyle}
       >
         <Text style={[styles.text, filled ? styles.textFilled : styles.textEmpty]}>
@@ -108,6 +109,7 @@ const useStyles = makeStyles((theme) => ({
   filled: { borderColor: theme.borderInteractive, backgroundColor: theme.subtleFill },
   /** Amber: asserted rather than chosen (P4), one meaning with every other amber. */
   machine: { borderColor: theme.assertedBorder, backgroundColor: theme.assertedFill },
+  hovered: { backgroundColor: theme.hoverFill },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,

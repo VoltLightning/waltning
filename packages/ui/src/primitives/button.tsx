@@ -18,11 +18,12 @@
  * destructive one.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { ActivityIndicator, Animated, Pressable, Text, View } from "react-native";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { useInteraction } from "./interaction.ts";
 import { usePressScale } from "./press-scale.ts";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -51,30 +52,26 @@ export function Button({
 }: ButtonProps) {
   const inactive = disabled || loading;
 
-  /**
-   * Tracked here rather than read from Pressable's state callback, which only
-   * reports `pressed` in React Native core — `focused` exists on web alone. A
-   * ring that appears on one surface and not the other is worse than none: it
-   * looks handled.
-   */
-  const [focused, setFocused] = useState(false);
+  const { hovered, focused, handlers } = useInteraction();
   const styles = useStyles();
   const ink = styles[INK_STYLE[variant]];
-  const handleFocus = useCallback(() => setFocused(true), []);
-  const handleBlur = useCallback(() => setFocused(false), []);
   const press = usePressScale();
   const pressableStyle = useCallback(
     () => [
       styles.base,
       { height: HEIGHT[size] },
       styles[VARIANT_STYLE[variant]],
+      // The outlined variants take `hoverFill` under a pointer; `primary` is a
+      // solid fill and gets its liveliness from the press scale alone — a
+      // second green for its hover would be a new role for one state.
+      hovered && !inactive && variant !== "primary" ? styles.hovered : null,
       // §2.6: on **every** interactive element, never removed and never
       // replaced by a colour change alone — a colour-only focus state is
       // invisible to exactly the people it exists for.
       focused ? styles.focused : null,
       inactive ? styles.inactive : null,
     ],
-    [focused, inactive, size, styles, variant],
+    [focused, hovered, inactive, size, styles, variant],
   );
 
   return (
@@ -87,8 +84,7 @@ export function Button({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
+        {...handlers}
         style={pressableStyle}
       >
         {/*
@@ -134,6 +130,7 @@ const useStyles = makeStyles((theme) => ({
   inkGhost: { color: theme.textMuted },
   inkDanger: { color: theme.dangerText },
 
+  hovered: { backgroundColor: theme.hoverFill },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,
