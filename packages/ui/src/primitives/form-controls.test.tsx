@@ -257,8 +257,8 @@ describe("MultiSelect", () => {
     expect(onChange).toHaveBeenLastCalledWith([]);
   });
 
-  /** The field restates the labels themselves — never an invented count. */
-  it("joins the chosen labels in the field", () => {
+  /** The field holds the labels themselves, as tokens — never a count. */
+  it("shows each chosen label as its own removable token", () => {
     render(
       <MultiSelect
         label="Currencies"
@@ -268,6 +268,26 @@ describe("MultiSelect", () => {
         onChange={vi.fn()}
       />,
     );
-    expect(screen.getByText("Polish Złoty · Belarusian Ruble")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Remove Polish Złoty" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Remove Belarusian Ruble" })).toBeDefined();
+  });
+
+  /** A pick is undone where it shows — no reopening the list it came from. */
+  it("removes from the token, with the panel staying closed", () => {
+    const onChange = vi.fn();
+    render(
+      <MultiSelect
+        label="Currencies"
+        placeholder="Choose"
+        options={CURRENCIES}
+        values={["PLN", "BYN"]}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Polish Złoty" }));
+
+    expect(onChange).toHaveBeenCalledWith(["BYN"]);
+    // Removal is not disclosure: the options did not open.
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });

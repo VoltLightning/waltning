@@ -93,7 +93,7 @@ the design decision; everything visual follows from it.
 | `Checkbox` | Each row is its own yes/no — rows do not exclude each other | One exclusive choice → `Radio` |
 | `RadioGroup` | Exactly one of these, all worth reading before picking | Options many, long, or rarely changed → `Select` |
 | `Select` | One choice, folded away until asked for. **Picking is answering** — the panel closes on choice | A partition used as a filter → `SegmentControl` |
-| `MultiSelect` | A collection. **Picking is collecting** — the panel stays open, and the field restates the chosen labels (never an invented count — that is a plural, and the catalogue's plural story is device-unproven) |  |
+| `MultiSelect` | A collection. **Picking is collecting** — the panel stays open, and the field holds each choice as a **removable token**: the × takes one out with the panel closed, because deciding against something should not require reopening the list it came from. Labels, never an invented count — a count is a plural, and the catalogue's plural story is device-unproven |  |
 
 **The group is the component.** A lone radio is a checkbox with worse manners:
 "exactly one selected" is a property of the set, so the API takes the set —

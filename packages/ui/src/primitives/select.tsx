@@ -26,6 +26,16 @@
  * Polish plural reads as ordinary text to anyone who does not speak it — the
  * labels themselves, joined, say more anyway.
  *
+ * **A pick is undone where it shows.** `MultiSelect`'s field holds its
+ * choices as removable tokens — the × takes one out with the panel closed,
+ * because a person deciding against something should not have to reopen the
+ * list it came from. That is also why its field is built differently from
+ * `Select`'s: a token is a button, and a button inside the field-wide
+ * Pressable would be a control inside a control — an axe violation
+ * (`nested-interactive`) and a screen-reader trap. So the single select keeps
+ * the whole-field target, and the multi's field is a row of tokens beside a
+ * toggle that owns the rest of the width.
+ *
  * **The panel scrolls; it does not grow without bound.** Its height is capped
  * at six and a half rows — the half row is the signal that there is more, the
  * way a list edge does it everywhere else. `searchable` adds a filter row for
@@ -34,16 +44,15 @@
  * an invisible reason the list looks short next time.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Animated, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, motion, radius, space, touchTarget } from "../tokens.ts";
-import { easing } from "./easing.ts";
+import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { useDisclosureMotion } from "./disclosure-motion.ts";
 import { useInteraction } from "./interaction.ts";
-import { useReducedMotion } from "./reduced-motion.ts";
 
 export type SelectOption = {
   value: string;
@@ -151,20 +160,20 @@ export function MultiSelect({
     if (!next) setQuery("");
   }, []);
 
-  // The field restates the collection in the options' own order — the labels
-  // joined, not a count (see the header).
-  const display = options
-    .filter((option) => values.includes(option.value))
-    .map((option) => option.label)
-    .join(" · ");
-
   const shown = filterOptions(options, searchable ? query : "");
+  const chosen = options.filter((option) => values.includes(option.value));
+
+  const handleRemove = useCallback(
+    (value: string) => onChange(values.filter((existing) => existing !== value)),
+    [onChange, values],
+  );
 
   return (
-    <Disclosure
+    <MultiSelectField
       label={label}
       placeholder={placeholder}
-      display={display === "" ? undefined : display}
+      chosen={chosen}
+      onRemove={handleRemove}
       disabled={disabled === true}
       open={open}
       onOpenChange={handleOpenChange}
@@ -219,32 +228,9 @@ function Disclosure({
   const t = useT();
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
-  const reduced = useReducedMotion();
-
-  const turn = useRef(new Animated.Value(0)).current;
-  const reveal = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(turn, {
-      toValue: open ? 1 : 0,
-      duration: reduced ? motion.none.duration : motion.move.duration,
-      easing: easing.move,
-      useNativeDriver: true,
-    }).start();
-    if (open) {
-      reveal.setValue(0);
-      Animated.timing(reveal, {
-        toValue: 1,
-        duration: reduced ? motion.none.duration : motion.fast.duration,
-        easing: easing.fast,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [open, reduced, reveal, turn]);
+  const { rotate, reveal } = useDisclosureMotion(open);
 
   const toggleOpen = useCallback(() => onOpenChange(!open), [onOpenChange, open]);
-
-  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
   const filled = display !== undefined;
 
   return (
@@ -275,18 +261,158 @@ function Disclosure({
         </Animated.View>
       </Pressable>
       {open ? (
-        <Animated.View style={[styles.panel, { opacity: reveal }]}>
-          {search === undefined ? null : (
-            <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
-          )}
-          {/* Capped, and the cap is deliberately six and a half rows: the half
-              row is the signal that there is more, the way a list edge says it
-              everywhere else. `maxHeight` is a bound, not an animation — the
-              §2.7 ban is on height *moving*. */}
-          <ScrollView style={styles.panelScroll}>{panel}</ScrollView>
-        </Animated.View>
+        <PanelBlock reveal={reveal} search={search}>
+          {panel}
+        </PanelBlock>
       ) : null}
     </View>
+  );
+}
+
+type PanelBlockProps = {
+  reveal: Animated.Value;
+  search: { query: string; onQueryChange: (query: string) => void } | undefined;
+  children: React.ReactNode;
+};
+
+function PanelBlock({ reveal, search, children }: PanelBlockProps) {
+  const styles = useStyles();
+  return (
+    <Animated.View style={[styles.panel, { opacity: reveal }]}>
+      {search === undefined ? null : (
+        <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
+      )}
+      {/* Capped, and the cap is deliberately six and a half rows: the half
+          row is the signal that there is more, the way a list edge says it
+          everywhere else. `maxHeight` is a bound, not an animation — the
+          §2.7 ban is on height *moving*. */}
+      <ScrollView style={styles.panelScroll}>{children}</ScrollView>
+    </Animated.View>
+  );
+}
+
+/* ── The multi-select's field: tokens beside a toggle ────────────────────── */
+
+type MultiSelectFieldProps = {
+  label: string;
+  placeholder: string;
+  chosen: readonly SelectOption[];
+  onRemove: (value: string) => void;
+  disabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  search: { query: string; onQueryChange: (query: string) => void } | undefined;
+  panel: React.ReactNode;
+};
+
+/**
+ * The container is a `View`, not a Pressable — each token is a button, and a
+ * button inside a button is `nested-interactive`. The toggle owns all the
+ * width the tokens leave, so tapping anywhere that is not a token still
+ * discloses, and an empty field is one whole-width target like `Select`'s.
+ */
+function MultiSelectField({
+  label,
+  placeholder,
+  chosen,
+  onRemove,
+  disabled,
+  open,
+  onOpenChange,
+  search,
+  panel,
+}: MultiSelectFieldProps) {
+  const styles = useStyles();
+  const { rotate, reveal } = useDisclosureMotion(open);
+  const { hovered, focused, handlers } = useInteraction();
+
+  const toggleOpen = useCallback(() => onOpenChange(!open), [onOpenChange, open]);
+  const empty = chosen.length === 0;
+
+  return (
+    <View style={styles.root}>
+      <Text style={styles.label}>{label}</Text>
+      <View
+        style={[
+          styles.field,
+          styles.tokenField,
+          open ? styles.fieldOpen : null,
+          disabled ? styles.disabled : null,
+        ]}
+      >
+        {chosen.map((option) => (
+          <Token key={option.value} option={option} disabled={disabled} onRemove={onRemove} />
+        ))}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={{ expanded: open, disabled }}
+          disabled={disabled}
+          onPress={toggleOpen}
+          {...handlers}
+          style={[
+            styles.tokenToggle,
+            hovered && !disabled && !focused ? styles.tokenToggleHovered : null,
+            focused ? styles.focused : null,
+          ]}
+        >
+          {empty ? (
+            <Text numberOfLines={1} style={[styles.value, styles.valuePlaceholder]}>
+              {placeholder}
+            </Text>
+          ) : null}
+          <Animated.View style={[styles.chevron, { transform: [{ rotate }] }]}>
+            <View style={styles.chevronMark} />
+          </Animated.View>
+        </Pressable>
+      </View>
+      {open ? (
+        <PanelBlock reveal={reveal} search={search}>
+          {panel}
+        </PanelBlock>
+      ) : null}
+    </View>
+  );
+}
+
+type TokenProps = {
+  option: SelectOption;
+  disabled: boolean;
+  onRemove: (value: string) => void;
+};
+
+/**
+ * One chosen thing, undone where it shows. The whole token is the remove
+ * target — an ×-only target would be a 10px button wearing a 44px costume —
+ * and its accessible name says the verb, because "Polish Złoty, button" does
+ * not warn that pressing deletes.
+ */
+function Token({ option, disabled, onRemove }: TokenProps) {
+  const t = useT();
+  const styles = useStyles();
+  const { hovered, focused, handlers } = useInteraction();
+  const handleRemove = useCallback(() => onRemove(option.value), [onRemove, option.value]);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t("common.remove", { value: option.label })}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={handleRemove}
+      {...handlers}
+      style={[
+        styles.token,
+        hovered && !disabled ? styles.tokenHovered : null,
+        focused ? styles.focused : null,
+      ]}
+    >
+      <Text style={styles.tokenLabel}>{option.label}</Text>
+      <View style={styles.tokenCross}>
+        <View style={[styles.tokenCrossBar, styles.tokenCrossBarA]} />
+        <View style={[styles.tokenCrossBar, styles.tokenCrossBarB]} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -471,6 +597,48 @@ const useStyles = makeStyles((theme) => ({
     paddingVertical: space.xs,
   },
   panelScroll: { maxHeight: touchTarget.min * 6.5 },
+  /** The token field wraps and pads itself; the toggle inside carries the 44. */
+  tokenField: {
+    flexWrap: "wrap",
+    paddingVertical: space.xs,
+    paddingLeft: space.xs,
+    paddingRight: 0,
+    gap: space.xs,
+  },
+  tokenToggle: {
+    flexGrow: 1,
+    minHeight: touchTarget.min - space.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: space.md,
+    paddingHorizontal: space.md,
+    borderRadius: radius.xs,
+  },
+  tokenToggleHovered: { backgroundColor: theme.hoverFill },
+  token: {
+    minHeight: touchTarget.min - space.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    paddingHorizontal: space.xl,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: theme.accentFillBorder,
+    backgroundColor: theme.accentFill,
+  },
+  tokenHovered: { backgroundColor: theme.hoverFill },
+  tokenLabel: { color: theme.accentText, ...text.ui("bodySm", 600) },
+  /** The ×, drawn: two bars crossed, in the token's own ink. */
+  tokenCross: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },
+  tokenCrossBar: {
+    position: "absolute",
+    width: 11,
+    height: 1.5,
+    backgroundColor: theme.accentText,
+  },
+  tokenCrossBarA: { transform: [{ rotate: "45deg" }] },
+  tokenCrossBarB: { transform: [{ rotate: "-45deg" }] },
   search: {
     minHeight: touchTarget.min,
     marginHorizontal: space.xs,

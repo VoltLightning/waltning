@@ -30,6 +30,8 @@ export const en = {
     search: "Search…",
     /** A filter that matched nothing must say so — an empty panel reads as broken. */
     noMatches: "Nothing matches.",
+    /** A token's whole accessible name — the visible label plus the verb. */
+    remove: "Remove {{value}}",
     /**
      * The product's name. In the catalogue and identical in every language,
      * because the rule that no word reaches a screen except through here is

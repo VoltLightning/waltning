@@ -46,7 +46,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {};
 
-/** The labels themselves, joined — the field restates the collection. */
+/**
+ * The collection as removable tokens — each × takes one out with the panel
+ * closed. A pick is undone where it shows.
+ */
 export const Collected: Story = { args: { values: ["PLN", "BYN"] } };
 
 /** Several rows lit at once — the shape Select can never show. */

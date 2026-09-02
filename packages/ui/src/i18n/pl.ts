@@ -29,6 +29,7 @@ export const pl: Messages = {
     loading: "Wczytywanie…",
     search: "Szukaj…",
     noMatches: "Brak wyników.",
+    remove: "Usuń {{value}}",
     appName: "Waltning",
     autoFilled: " ·auto",
     autoFilledLabel: "{{field}}: {{value}}, wypełnione automatycznie",
