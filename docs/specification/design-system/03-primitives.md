@@ -118,6 +118,16 @@ any of these controls. A primitive reaching for the shell would invert the
 foundation. States for every selection control: default · hover · focus ·
 selected · disabled.
 
+**The panel scrolls at six and a half rows** — the half row is the signal that
+there is more, the way a list edge says it everywhere else. **`searchable`**
+adds a filter row for the lists scrolling cannot carry (52 accounts is S16's
+own number): case-blind, matching the *label* — the person filters what they
+see, and matching hidden values reads as haunted. The query clears when the
+panel closes; a filter that survives a closed panel is an invisible reason the
+list looks short next time, and a filter that matches nothing says so.
+`defaultOpen` starts a select disclosed, for a screen whose whole point is the
+choice.
+
 ### 3.9 `Feedback`
 
 `Spinner` · `Skeleton` (matches the shape it replaces, never a grey box) ·

@@ -25,12 +25,20 @@
  * "3 selected": that is a plural, the catalogue holds none yet, and a wrong
  * Polish plural reads as ordinary text to anyone who does not speak it — the
  * labels themselves, joined, say more anyway.
+ *
+ * **The panel scrolls; it does not grow without bound.** Its height is capped
+ * at six and a half rows — the half row is the signal that there is more, the
+ * way a list edge does it everywhere else. `searchable` adds a filter row for
+ * the lists where scrolling is not enough (52 accounts, S16's own number);
+ * the query clears on close, because a filter that survives a closed panel is
+ * an invisible reason the list looks short next time.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { Animated, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
+import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, motion, radius, space, touchTarget } from "../tokens.ts";
 import { easing } from "./easing.ts";
@@ -52,21 +60,45 @@ export type SelectProps = {
   /** `null` before the first pick — a default is the caller's decision. */
   value: string | null;
   onChange: (value: string) => void;
+  /** A filter row above the options — for the lists scrolling cannot carry. */
+  searchable?: boolean;
+  /** Start disclosed. For a screen whose whole point is this choice. */
+  defaultOpen?: boolean;
   disabled?: boolean;
 };
 
-export function Select({ label, placeholder, options, value, onChange, disabled }: SelectProps) {
-  const [open, setOpen] = useState(false);
+export function Select({
+  label,
+  placeholder,
+  options,
+  value,
+  onChange,
+  searchable = false,
+  defaultOpen = false,
+  disabled,
+}: SelectProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [query, setQuery] = useState("");
   const selected = options.find((option) => option.value === value);
+
+  // The query dies with the panel — a filter that survives a closed panel is
+  // an invisible reason the list looks short next time.
+  const handleOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    if (!next) setQuery("");
+  }, []);
 
   // Picking is answering, so the panel folds on choice.
   const handlePick = useCallback(
     (next: string) => {
       onChange(next);
       setOpen(false);
+      setQuery("");
     },
     [onChange],
   );
+
+  const shown = filterOptions(options, searchable ? query : "");
 
   return (
     <Disclosure
@@ -75,8 +107,15 @@ export function Select({ label, placeholder, options, value, onChange, disabled 
       display={selected?.label}
       disabled={disabled === true}
       open={open}
-      onOpenChange={setOpen}
-      panel={<SelectRows options={options} value={value} onPick={handlePick} />}
+      onOpenChange={handleOpenChange}
+      search={searchable ? { query, onQueryChange: setQuery } : undefined}
+      panel={
+        shown.length === 0 ? (
+          <NoMatches />
+        ) : (
+          <SelectRows options={shown} value={value} onPick={handlePick} />
+        )
+      }
     />
   );
 }
@@ -87,6 +126,10 @@ export type MultiSelectProps = {
   options: readonly SelectOption[];
   values: readonly string[];
   onChange: (values: readonly string[]) => void;
+  /** A filter row above the options — for the lists scrolling cannot carry. */
+  searchable?: boolean;
+  /** Start disclosed. For a screen whose whole point is this collection. */
+  defaultOpen?: boolean;
   disabled?: boolean;
 };
 
@@ -96,9 +139,17 @@ export function MultiSelect({
   options,
   values,
   onChange,
+  searchable = false,
+  defaultOpen = false,
   disabled,
 }: MultiSelectProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const [query, setQuery] = useState("");
+
+  const handleOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    if (!next) setQuery("");
+  }, []);
 
   // The field restates the collection in the options' own order — the labels
   // joined, not a count (see the header).
@@ -107,6 +158,8 @@ export function MultiSelect({
     .map((option) => option.label)
     .join(" · ");
 
+  const shown = filterOptions(options, searchable ? query : "");
+
   return (
     <Disclosure
       label={label}
@@ -114,10 +167,27 @@ export function MultiSelect({
       display={display === "" ? undefined : display}
       disabled={disabled === true}
       open={open}
-      onOpenChange={setOpen}
-      panel={<MultiSelectRows options={options} values={values} onChange={onChange} />}
+      onOpenChange={handleOpenChange}
+      search={searchable ? { query, onQueryChange: setQuery } : undefined}
+      panel={
+        shown.length === 0 ? (
+          <NoMatches />
+        ) : (
+          <MultiSelectRows options={shown} values={values} onChange={onChange} />
+        )
+      }
     />
   );
+}
+
+/**
+ * Case-blind substring on the label — the person is matching what they *see*.
+ * Value matching would find "PLN" behind "Polish Złoty" and read as haunted.
+ */
+function filterOptions(options: readonly SelectOption[], query: string): readonly SelectOption[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return options;
+  return options.filter((option) => option.label.toLowerCase().includes(needle));
 }
 
 /* ── The shared disclosure shell ─────────────────────────────────────────── */
@@ -131,6 +201,8 @@ type DisclosureProps = {
   /** Owned by the caller: `Select` must close it on a pick, so it holds it. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Present = render the filter row. The caller owns the query. */
+  search?: { query: string; onQueryChange: (query: string) => void } | undefined;
   panel: React.ReactNode;
 };
 
@@ -141,6 +213,7 @@ function Disclosure({
   disabled,
   open,
   onOpenChange,
+  search,
   panel,
 }: DisclosureProps) {
   const t = useT();
@@ -202,8 +275,55 @@ function Disclosure({
         </Animated.View>
       </Pressable>
       {open ? (
-        <Animated.View style={[styles.panel, { opacity: reveal }]}>{panel}</Animated.View>
+        <Animated.View style={[styles.panel, { opacity: reveal }]}>
+          {search === undefined ? null : (
+            <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
+          )}
+          {/* Capped, and the cap is deliberately six and a half rows: the half
+              row is the signal that there is more, the way a list edge says it
+              everywhere else. `maxHeight` is a bound, not an animation — the
+              §2.7 ban is on height *moving*. */}
+          <ScrollView style={styles.panelScroll}>{panel}</ScrollView>
+        </Animated.View>
       ) : null}
+    </View>
+  );
+}
+
+/* ── The filter row and its empty answer ─────────────────────────────────── */
+
+type SearchRowProps = { query: string; onQueryChange: (query: string) => void };
+
+function SearchRow({ query, onQueryChange }: SearchRowProps) {
+  const t = useT();
+  const styles = useStyles();
+  const theme = useTheme();
+  const { focused, handlers } = useInteraction();
+
+  return (
+    <TextInput
+      accessibilityLabel={t("common.search")}
+      value={query}
+      onChangeText={onQueryChange}
+      placeholder={t("common.search")}
+      placeholderTextColor={theme.textMuted}
+      // The keyboard opens on the tap that focuses it, not on disclosure —
+      // auto-focusing here would cover half the options with a keyboard the
+      // moment the panel arrives.
+      style={[styles.search, focused ? styles.focused : null]}
+      onFocus={handlers.onFocus}
+      onBlur={handlers.onBlur}
+    />
+  );
+}
+
+/** A filter that matched nothing says so — an empty panel reads as broken. */
+function NoMatches() {
+  const t = useT();
+  const styles = useStyles();
+  return (
+    <View style={styles.noMatches}>
+      <Text style={styles.noMatchesText}>{t("common.noMatches")}</Text>
     </View>
   );
 }
@@ -350,6 +470,18 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.surface,
     paddingVertical: space.xs,
   },
+  panelScroll: { maxHeight: touchTarget.min * 6.5 },
+  search: {
+    minHeight: touchTarget.min,
+    marginHorizontal: space.xs,
+    paddingHorizontal: space.x2,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.hairline,
+    color: theme.text,
+    ...text.ui("body"),
+  },
+  noMatches: { minHeight: touchTarget.min, justifyContent: "center", paddingHorizontal: space.x2 },
+  noMatchesText: { color: theme.textMuted, ...text.ui("caption") },
   option: {
     minHeight: touchTarget.min,
     flexDirection: "row",

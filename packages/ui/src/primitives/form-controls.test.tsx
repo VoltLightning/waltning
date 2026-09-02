@@ -161,6 +161,71 @@ describe("Select", () => {
   });
 });
 
+describe("Select, searchable", () => {
+  const MANY = [
+    { value: "a", label: "Bank A · PLN" },
+    { value: "b", label: "Bank B · BYN" },
+    { value: "c", label: "Cash · PLN" },
+  ] as const;
+
+  it("filters on what the person sees, and says when nothing matches", () => {
+    render(
+      <Select
+        label="Account"
+        placeholder="Choose"
+        options={MANY}
+        value={null}
+        onChange={vi.fn()}
+        searchable
+        defaultOpen
+      />,
+    );
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+
+    fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "pln" } });
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+
+    fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "zzz" } });
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.getByText("Nothing matches.")).toBeDefined();
+  });
+
+  /** A filter that survives a closed panel is an invisible short list later. */
+  it("clears the query when the panel closes", () => {
+    render(
+      <Select
+        label="Account"
+        placeholder="Choose"
+        options={MANY}
+        value={null}
+        onChange={vi.fn()}
+        searchable
+        defaultOpen
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "cash" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+
+    // Reopen: the full list is back, not yesterday's filter.
+    fireEvent.click(screen.getByRole("button", { name: /Account/ }));
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+  });
+
+  it("starts disclosed when asked to", () => {
+    render(
+      <Select
+        label="Account"
+        placeholder="Choose"
+        options={MANY}
+        value={null}
+        onChange={vi.fn()}
+        defaultOpen
+      />,
+    );
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+  });
+});
+
 describe("MultiSelect", () => {
   /** Picking is collecting: the panel stays open across picks. */
   it("stays open, grows the collection, and can shrink it", () => {

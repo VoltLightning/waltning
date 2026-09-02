@@ -27,6 +27,9 @@ export const en = {
     close: "Close",
     name: "Name",
     loading: "Loading…",
+    search: "Search…",
+    /** A filter that matched nothing must say so — an empty panel reads as broken. */
+    noMatches: "Nothing matches.",
     /**
      * The product's name. In the catalogue and identical in every language,
      * because the rule that no word reaches a screen except through here is

@@ -1,10 +1,11 @@
 /**
- * `Select` and `MultiSelect` — §3.8. A choice folded away until asked for.
+ * `Select` — §3.8. A choice folded away until asked for. Its sibling has its
+ * own file: `multi-select.stories.tsx`, because a component the picker hides
+ * behind another's stories is a component nobody finds.
  *
- * The open stories are the ones the visual suite needs: the panel, the turned
- * chevron and the lit rows only exist while disclosed, and only the live
- * stories can disclose them — so each fixed story pins a closed state and the
- * live pair carries the interaction.
+ * `defaultOpen` is what lets the fixed stories show the disclosed states —
+ * the panel, the turned chevron, the lit row, the scroll cap and the filter
+ * row all only exist while open, and a screenshot suite cannot click.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
@@ -12,7 +13,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
-import { MultiSelect, Select } from "./select";
+import { Select } from "./select";
 
 function noop() {}
 
@@ -22,6 +23,12 @@ const CURRENCIES = [
   { value: "USD", label: "US Dollar" },
   { value: "GEL", label: "Georgian Lari", disabled: true },
 ] as const;
+
+/** Twelve rows — enough to show the cap and give the filter something to do. */
+const MANY = Array.from({ length: 12 }, (_ignored, index) => ({
+  value: `opt-${String(index).padStart(2, "0")}`,
+  label: `Account ${String(index + 1).padStart(2, "0")} · PLN`,
+}));
 
 const meta = {
   title: "Primitives/Select",
@@ -44,11 +51,24 @@ export const Answered: Story = { args: { value: "PLN" } };
 
 export const Disabled: Story = { args: { value: "PLN", disabled: true } };
 
+/** The panel, the turned chevron, and the chosen row lit with its check. */
+export const Open: Story = { args: { value: "PLN", defaultOpen: true } };
+
+/**
+ * Six and a half rows, then scroll — the half row is the signal that there is
+ * more, the way a list edge says it everywhere else.
+ */
+export const LongList: Story = {
+  args: { options: MANY, value: "opt-03", defaultOpen: true },
+};
+
+/** The filter row, for the lists scrolling cannot carry (52 accounts, S16). */
+export const Searchable: Story = {
+  args: { options: MANY, value: null, searchable: true, defaultOpen: true },
+};
+
 /** Picking is answering — the panel folds on choice. */
 export const Live: Story = { render: LiveDemo };
-
-/** Picking is collecting — the panel stays open and the field restates it. */
-export const LiveMulti: Story = { render: LiveMultiDemo };
 
 function LiveDemo() {
   const [value, setValue] = useState<string | null>(null);
@@ -61,22 +81,6 @@ function LiveDemo() {
         options={CURRENCIES}
         value={value}
         onChange={setValue}
-      />
-    </View>
-  );
-}
-
-function LiveMultiDemo() {
-  const [values, setValues] = useState<readonly string[]>([]);
-  const styles = useStyles();
-  return (
-    <View style={styles.stack}>
-      <MultiSelect
-        label="Currencies"
-        placeholder="Choose currencies"
-        options={CURRENCIES}
-        values={values}
-        onChange={setValues}
       />
     </View>
   );
