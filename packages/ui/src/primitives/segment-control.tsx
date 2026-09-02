@@ -94,7 +94,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     backgroundColor: theme.subtleFill,
     borderRadius: radius.pill,
-    padding: 2,
+    padding: space.xxs,
   },
   segment: {
     flex: 1,

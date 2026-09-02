@@ -39,7 +39,14 @@ export type ButtonProps = {
   loading?: boolean;
 };
 
-/** §3.1: sm 32 · md 40 · lg 48. */
+/**
+ * §3.1: sm 32 · md 40 · lg 48 — and until now two of the three were lies.
+ * The base style carried `minHeight: 44` for the §10 floor, and in Yoga a
+ * minHeight beats a smaller height, so `sm` and `md` both rendered at 44 and
+ * nobody had chosen that. The floor belongs to the *touch target*, not the
+ * drawn box: `hitSlop` fills the difference, which is `IconButton`'s pattern
+ * and now §2.4's stated rule.
+ */
 const HEIGHT: Record<ButtonSize, number> = { sm: 32, md: 40, lg: 48 };
 
 export function Button({
@@ -56,6 +63,7 @@ export function Button({
   const styles = useStyles();
   const ink = styles[INK_STYLE[variant]];
   const press = usePressScale();
+  const slop = Math.max(0, (touchTarget.min - HEIGHT[size]) / 2);
   const pressableStyle = useCallback(
     () => [
       styles.base,
@@ -85,6 +93,7 @@ export function Button({
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
         {...handlers}
+        hitSlop={slop}
         style={pressableStyle}
       >
         {/*
@@ -138,7 +147,6 @@ const useStyles = makeStyles((theme) => ({
   },
 
   base: {
-    minHeight: touchTarget.min,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: space.x3,

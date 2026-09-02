@@ -28,7 +28,7 @@ import { Text, View } from "react-native";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { tabularNums } from "../tokens.ts";
+import { space, tabularNums } from "../tokens.ts";
 import { Amount } from "./amount";
 
 /**
@@ -115,7 +115,7 @@ export function FxAmount({
 }
 
 const useStyles = makeStyles((theme) => ({
-  row: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  row: { flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" },
   separator: { color: theme.textMuted, ...text.ui("caption") },
   rate: {
     color: theme.textMuted,

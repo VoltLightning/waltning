@@ -43,7 +43,8 @@ export type ToggleProps = {
 const TRACK_WIDTH = 44;
 const TRACK_HEIGHT = 26;
 const THUMB = 22;
-const TRAVEL = TRACK_WIDTH - THUMB - 4;
+const TRACK_INSET = 1;
+const TRAVEL = TRACK_WIDTH - THUMB - 2 * (TRACK_INSET + 1); // inset + border, both sides
 
 export function Toggle({ label, value, onChange, hint, disabled = false }: ToggleProps) {
   const styles = useStyles();
@@ -117,7 +118,7 @@ const useStyles = makeStyles((theme) => ({
     outlineOffset: focus.offset,
   },
   disabled: { opacity: 0.45 },
-  copy: { flex: 1, gap: 2 },
+  copy: { flex: 1, gap: space.xxs },
   label: { color: theme.text, ...text.ui("body") },
   hint: { color: theme.textMuted, ...text.ui("caption") },
   track: {
@@ -130,7 +131,7 @@ const useStyles = makeStyles((theme) => ({
     // it is `borderInteractive` because a toggle is a control at rest.
     borderColor: theme.borderInteractive,
     justifyContent: "center",
-    padding: 1,
+    padding: TRACK_INSET,
   },
   trackOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   thumb: {

@@ -73,7 +73,7 @@ const useStyles = makeStyles((theme) => ({
     borderBottomWidth: hairline.width,
     borderBottomColor: theme.hairline,
   },
-  identity: { flex: 1, gap: 2 },
+  identity: { flex: 1, gap: space.xxs },
   name: { color: theme.text, ...text.ui("bodySm") },
   meta: { color: theme.textMuted, ...text.ui("caption") },
 }));

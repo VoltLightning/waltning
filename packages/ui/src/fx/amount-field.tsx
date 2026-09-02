@@ -111,7 +111,7 @@ const useStyles = makeStyles((theme) => ({
     borderWidth: 1,
     borderColor: theme.border,
     borderRadius: radius.sm,
-    paddingHorizontal: space.xl,
+    paddingHorizontal: space.x2,
     minHeight: 44,
   },
   input: {

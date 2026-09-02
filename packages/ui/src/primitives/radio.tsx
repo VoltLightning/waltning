@@ -174,7 +174,7 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: radius.pill,
     backgroundColor: theme.accent,
   },
-  copy: { flex: 1, gap: 2 },
+  copy: { flex: 1, gap: space.xxs },
   label: { color: theme.text, ...text.ui("body") },
   hint: { color: theme.textMuted, ...text.ui("caption") },
 }));

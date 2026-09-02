@@ -137,7 +137,7 @@ const useStyles = makeStyles((theme) => ({
     // nudge up to look centred inside the box.
     marginTop: -2,
   },
-  copy: { flex: 1, gap: 2 },
+  copy: { flex: 1, gap: space.xxs },
   label: { color: theme.text, ...text.ui("body") },
   hint: { color: theme.textMuted, ...text.ui("caption") },
 }));

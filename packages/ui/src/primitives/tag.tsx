@@ -70,7 +70,7 @@ export function Tag({ variant = "neutral", children }: TagProps) {
 const useStyles = makeStyles(() => ({
   tag: {
     borderRadius: radius.pill,
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.lg,
     paddingVertical: space.xs,
     alignSelf: "flex-start",
   },

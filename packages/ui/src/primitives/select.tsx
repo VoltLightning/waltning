@@ -349,6 +349,7 @@ function MultiSelectField({
           accessibilityState={{ expanded: open, disabled }}
           disabled={disabled}
           onPress={toggleOpen}
+          hitSlop={space.xs}
           {...handlers}
           style={[
             styles.tokenToggle,
@@ -400,6 +401,9 @@ function Token({ option, disabled, onRemove }: TokenProps) {
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={handleRemove}
+      // Drawn at 36 so the tokens sit inside a 44 field without inflating it;
+      // the §10 floor is the *target*, and hitSlop restores it (§2.4).
+      hitSlop={space.xs}
       {...handlers}
       style={[
         styles.token,
@@ -613,7 +617,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "flex-end",
     gap: space.md,
     paddingHorizontal: space.md,
-    borderRadius: radius.xs,
+    borderRadius: radius.sm,
   },
   tokenToggleHovered: { backgroundColor: theme.hoverFill },
   token: {
