@@ -12,6 +12,7 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
 import { View } from "react-native";
+import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 import { Amount } from "./amount";
 
@@ -100,12 +101,13 @@ const COLUMN = ["9.99", "1234.56", "-820.40", "48210.00", "7.05"] as const;
  * when several stack.
  */
 export const Column: Story = {
-  render: renderColumn,
+  render: ColumnDemo,
 };
 
-function renderColumn() {
+function ColumnDemo() {
+  const styles = useStyles();
   return (
-    <View style={{ alignItems: "flex-end", gap: space.x2 }}>
+    <View style={styles.column}>
       {COLUMN.map((value) => (
         <Amount key={value} value={money.toMoney(value)} currency="PLN" decimals={2} />
       ))}
@@ -125,12 +127,13 @@ const KINDS = [
  * that they hold in dark, where the greens and reds are lifted.
  */
 export const ThreeKinds: Story = {
-  render: renderThreeKinds,
+  render: ThreeKindsDemo,
 };
 
-function renderThreeKinds() {
+function ThreeKindsDemo() {
+  const styles = useStyles();
   return (
-    <View style={{ alignItems: "flex-end", gap: space.x2 }}>
+    <View style={styles.column}>
       {KINDS.map((k) => (
         <Amount
           key={k.label}
@@ -144,3 +147,12 @@ function renderThreeKinds() {
     </View>
   );
 }
+
+/**
+ * A story is a component, and gets its styles the same way one does. These
+ * were inline objects while `today-frame.stories.tsx` two folders over already
+ * used `makeStyles` — the same file kind, styled two ways.
+ */
+const useStyles = makeStyles(() => ({
+  column: { alignItems: "flex-end", gap: space.x2 },
+}));

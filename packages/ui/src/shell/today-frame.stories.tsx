@@ -146,7 +146,7 @@ function Body({ children }: { children: string }) {
   const styles = useStyles();
   return (
     <Card title="Recent">
-      <View style={{ gap: space.x2 }}>
+      <View style={styles.stack}>
         <Text style={styles.text}>{children}</Text>
       </View>
     </Card>
@@ -154,5 +154,6 @@ function Body({ children }: { children: string }) {
 }
 
 const useStyles = makeStyles((theme) => ({
+  stack: { gap: space.x2 },
   text: { color: theme.text, ...text.ui("body") },
 }));

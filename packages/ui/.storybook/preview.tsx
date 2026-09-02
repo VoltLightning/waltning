@@ -17,7 +17,9 @@
 import type { Decorator, Preview } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
 import { ThemeProvider } from "../src/theme/provider";
-import { type ThemeName, themes } from "../src/theme/roles.ts";
+import type { ThemeName } from "../src/theme/roles.ts";
+import { makeStyles } from "../src/theme/styles.ts";
+import { space } from "../src/tokens.ts";
 import { FONT_FACE_CSS } from "./fonts.ts";
 
 /**
@@ -66,10 +68,26 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <View style={{ flex: 1, backgroundColor: themes[name].ground, padding: inset ? 16 : 0 }}>
-      <ThemeProvider name={name}>{children}</ThemeProvider>
-    </View>
+    // The ground comes from the theme in **context**, so the provider is
+    // outside the painted surface rather than inside it. It was the other way
+    // round — the `View` read `themes[name].ground` by hand into an inline
+    // style — which is the one shape in this package where a colour reached JSX
+    // directly, in the very file that renders every conformance check.
+    <ThemeProvider name={name}>
+      <PanelSurface inset={inset}>{children}</PanelSurface>
+    </ThemeProvider>
   );
+}
+
+function PanelSurface({ inset, children }: { inset: boolean; children: React.ReactNode }) {
+  const styles = useStyles();
+  return <View style={[styles.panel, inset ? styles.inset : null]}>{children}</View>;
+}
+
+/** Both themes at once. No colour of its own — it is the seam between two. */
+function SideBySide({ children }: { children: React.ReactNode }) {
+  const styles = useStyles();
+  return <View style={styles.sideBySide}>{children}</View>;
 }
 
 const withTheme: Decorator = (Story, context) => {
@@ -81,14 +99,14 @@ const withTheme: Decorator = (Story, context) => {
 
   if (appearance === "both") {
     return (
-      <View style={{ flexDirection: "row", minHeight: 240 }}>
+      <SideBySide>
         <Panel name="light" inset={inset}>
           <Story />
         </Panel>
         <Panel name="dark" inset={inset}>
           <Story />
         </Panel>
-      </View>
+      </SideBySide>
     );
   }
 
@@ -155,3 +173,10 @@ const preview: Preview = {
 };
 
 export default preview;
+
+const useStyles = makeStyles((theme) => ({
+  panel: { flex: 1, backgroundColor: theme.ground },
+  inset: { padding: space.x3 },
+  // Tall enough that a short component still shows both grounds meeting.
+  sideBySide: { flexDirection: "row", minHeight: 240 },
+}));

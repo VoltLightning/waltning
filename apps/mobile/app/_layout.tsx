@@ -18,7 +18,7 @@ import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { text } from "@waltning/ui/theme/fonts";
 import { ThemeProvider, useTheme } from "@waltning/ui/theme/provider";
-import { themes } from "@waltning/ui/theme/roles";
+import { makeStyles } from "@waltning/ui/theme/styles";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
@@ -68,17 +68,7 @@ export default function RootLayout() {
    * the bundle is measured in milliseconds; a spinner would flash and be gone,
    * which reads as a glitch rather than as progress.
    */
-  const theme = themes[resolved.theme];
-
-  /**
-   * **The blank is painted.** It was a bare `<View>`, which is transparent, so
-   * a cold start flashed the window's own background — white — before the first
-   * frame, including for someone who chose the dark theme. The appearance is
-   * already resolved by this point; there is nothing to wait for.
-   */
-  if ((!loaded && !error) || !resolved.hydrated) {
-    return <View style={{ flex: 1, backgroundColor: theme.ground }} />;
-  }
+  const ready = (loaded || error) && resolved.hydrated;
 
   /**
    * **A font that failed to load is a fact, not a reason to stop.**
@@ -143,9 +133,7 @@ export default function RootLayout() {
           top strip in the app, and the top strip is the only place this shows.
         */}
         <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
-          <View style={{ flex: 1, backgroundColor: theme.shell }}>
-            <AppStack />
-          </View>
+          {ready ? <AppShell /> : <StartupBlank />}
         </I18nProvider>
       </ThemeProvider>
     </DeviceInsets>
@@ -188,3 +176,56 @@ function AppStack() {
     </Stack>
   );
 }
+
+/**
+ * The blank first frame, **painted** — it was a bare `<View>`, which is
+ * transparent, so a cold start flashed the window's own white before the first
+ * frame even for someone who had chosen the dark theme.
+ *
+ * It is a component rather than an early return because that is what lets it
+ * take its colour from `makeStyles` like everything else. The early return
+ * happened *above* `ThemeProvider` and so had to read `themes[name]` by hand
+ * and write the result into an inline style — the one shape in the app where a
+ * colour reached JSX directly, and the shape a hardcoded colour comes back in.
+ *
+ * A `View` rather than a spinner, deliberately: font loading from the bundle is
+ * measured in milliseconds, and a spinner that flashes and is gone reads as a
+ * glitch rather than as progress.
+ */
+function StartupBlank() {
+  const styles = useStyles();
+  return <View style={styles.blank} />;
+}
+
+/**
+ * The app under its providers: the shell's green behind everything, and the
+ * navigator on top.
+ */
+function AppShell() {
+  const styles = useStyles();
+  return (
+    <View style={styles.root}>
+      <AppStack />
+    </View>
+  );
+}
+
+const useStyles = makeStyles((theme) => ({
+  blank: { flex: 1, backgroundColor: theme.ground },
+  /**
+   * **The root is the shell's green, and that is what paints the status bar.**
+   *
+   * Under Android's edge-to-edge — enforced from Expo SDK 54 — the window draws
+   * behind the status bar and the system paints nothing there; whatever React
+   * renders at y=0 is the strip. On the ledger that is `TodayFrame`'s own
+   * shell, which is why that screen always looked right. On a pushed route it
+   * is the navigation header, and the native header does not extend its
+   * background under the inset — so the strip fell through to the window, which
+   * is black.
+   *
+   * `shell` rather than `ground` because green is the colour of every top strip
+   * in the app, and the top strip is the only place this shows. The ledger is
+   * unaffected: `TodayFrame`'s root is `ground` and covers it.
+   */
+  root: { flex: 1, backgroundColor: theme.shell },
+}));

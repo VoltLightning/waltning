@@ -162,6 +162,8 @@ The enforcement that makes this document real lives in
 | Only screens fetch | a molecule that cannot render in a test or offline |
 | No component holds a user-visible string | the next forty screens needing a retrofit |
 | The translator is imported from `i18n/provider` | a component rendering its own keys |
+| Every stylesheet is a `makeStyles` | a theme resolved at import time, and a colour in JSX |
+| No `style={{ … }}` object in JSX | styling split across two places in one component |
 
 ---
 
@@ -212,7 +214,53 @@ date is a rendering, never a value.
 
 ---
 
-## 8 · What this is not
+## 8 · One way to build a stylesheet
+
+**Every component's styles come from `makeStyles`, and `StyleSheet.create` is
+called in exactly one place — inside `makeStyles` itself.**
+
+`StyleSheet.create` at module scope resolves colours at *import* time, which is
+what made the theme a build-time constant before `theme/styles.ts` existed. The
+alternative that suggests itself — move the colours inline and leave the layout
+in a stylesheet — is worse: it splits one component's styling across two places,
+which is how a hardcoded colour gets added back without anyone noticing.
+
+**An inline `style={{ … }}` is banned for that reason, not for tidiness.** The
+two files that had no stylesheet at all are the evidence. The root layout's
+first frame and Storybook's own theme panel both painted a `View` that sat
+*above* `ThemeProvider`, so both read `themes[name].ground` by hand and wrote
+the result into JSX — the only two places in the app where a colour reached an
+attribute directly. Neither needed an inline style; both needed to be a
+component one level down, under the provider. That is what they are now.
+
+`makeStyles` is a hook, so a route may define one — the narrow exception to §4's
+rule that hooks do not live in route files. Both of that rule's objections are
+about *behaviour* reaching for a dependency it did not take: a stylesheet has
+nothing to point at a stub, and it reads the theme from context rather than a
+singleton. Banning it would leave a route one way to paint itself, and that way
+is the inline object.
+
+### What the app boundary was hiding
+
+`packages/ui`'s conformance suite bans colour literals and raw `fontSize`, and
+roots at `packages/ui/src`. The web dashboard, one directory over, wrote
+`fontSize: 28`, `fontSize: 13`, `fontSize: 11` and used `opacity` as ink — with
+every rule passing green. This is the defect `conformance.test.ts`'s own header
+describes, recurring at the boundary it could not see, which is why the styling
+checks live in `tests/architecture.test.ts` and root at the repository.
+
+**`opacity` is not a muted colour**, and the distinction is the one worth
+keeping. It fades the glyph *and* the ground beneath it, so a single value reads
+differently on `ground` than on `surface`, and in dark it moves text toward the
+background rather than away from it. `theme.textMuted` is a colour the theme
+answers for. Fading a **whole control** is a different thing and stays legal —
+`opacity: 0.45` is how four primitives render disabled, and `0.5` is the scrim.
+Those dim a shape, not a word, so the check fires only where opacity sits beside
+a `color` or a type step.
+
+---
+
+## 9 · What this is not
 
 It is **not** a rewrite. The moves are moves: the same files, in directories
 that exist for them.

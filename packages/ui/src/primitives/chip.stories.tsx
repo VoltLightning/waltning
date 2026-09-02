@@ -10,6 +10,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
+import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 import { Chip } from "./chip";
 
@@ -49,15 +50,20 @@ export const Disabled: Story = {
  * can actually be judged.
  */
 export const ThreeStates: Story = {
-  render: renderThreeStates,
+  render: ThreeStatesDemo,
 };
 
-function renderThreeStates() {
+function ThreeStatesDemo() {
+  const styles = useStyles();
   return (
-    <View style={{ flexDirection: "row", gap: space.x2, flexWrap: "wrap" }}>
+    <View style={styles.row}>
       <Chip placeholder="Category" onPress={noop} />
       <Chip placeholder="Category" value="Groceries" onPress={noop} />
       <Chip placeholder="Category" value="Groceries" onPress={noop} machineFilled />
     </View>
   );
 }
+
+const useStyles = makeStyles(() => ({
+  row: { flexDirection: "row", gap: space.x2, flexWrap: "wrap" },
+}));

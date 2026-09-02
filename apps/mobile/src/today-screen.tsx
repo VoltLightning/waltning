@@ -17,15 +17,19 @@ import { type Transaction, useTransactions } from "@waltning/client/transactions
 import { BalanceRow } from "@waltning/ui/accounts/balance-row";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { text } from "@waltning/ui/theme/fonts";
+import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
 import {
   TransactionList,
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { API_BASE_URL, api, isStaleBundle } from "./platform";
 
 export default function Dashboard() {
   const t = useT();
+  const styles = useStyles();
   const probe = useProbe(api);
   const accounts = useAccounts(api);
   const transactions = useTransactions(api, 20);
@@ -105,10 +109,32 @@ function toRow(transaction: Transaction): TransactionListItem {
   };
 }
 
-const styles = StyleSheet.create({
+/**
+ * **Four raw values and no theme, until now.** This screen was the one place a
+ * stylesheet was built with `StyleSheet.create` directly: `fontSize: 28` and
+ * `fontSize: 13` where every component in `packages/ui` names a scale step, and
+ * `opacity: 0.7` standing in for muted ink. None of it was caught, because
+ * `conformance.test.ts` roots at `packages/ui/src` and cannot see `apps/` — the
+ * defect its own header describes, recurring one directory over.
+ *
+ * `opacity` is the interesting one. It is not the same thing as `textMuted`: it
+ * fades the glyph *and* whatever the glyph sits on, so the same 0.7 reads
+ * differently on `ground` and on `surface`, and in dark it lightens toward the
+ * background rather than away from it. A role is a colour the theme answers
+ * for; opacity is a guess that happens to look right in the theme it was
+ * written in.
+ *
+ * The italic goes with it. IBM Plex Sans's italic is not among the loaded
+ * faces (`fonts.ts`), so the platform was synthesising one by shearing the
+ * upright — which is the thing §2.2's face table exists to prevent.
+ */
+const useStyles = makeStyles((theme) => ({
+  // 640 is a reading measure rather than a scale step: this is the one surface
+  // that gets a desktop-width window, and a ledger line set across 1400px is
+  // unreadable regardless of its type size.
   screen: { flexGrow: 1, maxWidth: 640, width: "100%", alignSelf: "center" },
-  title: { fontSize: 28, fontWeight: "600" },
-  detail: { fontSize: 13, opacity: 0.7 },
-  note: { fontSize: 11, opacity: 0.5, fontStyle: "italic" },
-  connection: { gap: 4 },
-});
+  title: { color: theme.text, ...text.display("displayTwo") },
+  detail: { color: theme.textMuted, ...text.ui("caption") },
+  note: { color: theme.textMuted, ...text.ui("caption") },
+  connection: { gap: space.xs },
+}));
