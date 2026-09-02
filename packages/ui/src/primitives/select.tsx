@@ -283,9 +283,11 @@ function OptionRow({ option, selected, role, onSelect }: OptionRowProps) {
     <Pressable
       accessibilityRole={role}
       accessibilityLabel={option.label}
-      accessibilityState={
-        role === "checkbox" ? { checked: selected, disabled } : { selected, disabled }
-      }
+      // `checked` for both: a radio's ARIA state is `aria-checked` too. The
+      // ARIA prop repeats it because react-native-web drops `checked` from a
+      // Pressable's accessibilityState (see chip.tsx).
+      accessibilityState={{ checked: selected, disabled }}
+      aria-checked={selected}
       disabled={disabled}
       onPress={handlePress}
       {...handlers}

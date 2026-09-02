@@ -28,6 +28,18 @@ describe("accessible names", () => {
     expect(screen.getByLabelText("Dismiss")).toBeDefined();
   });
 
+  it("a selected chip says so in state, never in its label", () => {
+    // The regression this pins: the announcement was appended to the visible
+    // value, so every chosen chip read as "Test · selected" on screen. A
+    // selectable chip is a radio in a pill costume — role and `aria-checked`
+    // are the pair ARIA allows, and what the phone announces as "selected".
+    render(<Chip placeholder="Account" value="Test" selected onPress={noop} />);
+    const chip = screen.getByRole("radio", { name: "Account: Test" });
+    expect(chip.getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByText(/selected/)).toBeNull();
+    expect(screen.getByText("Test")).toBeDefined();
+  });
+
   it("a machine-filled chip says so out loud, not only in amber", () => {
     // P2 and P5 together: the trail marker has to reach someone who cannot see
     // the colour, because it is the difference between "you chose this" and

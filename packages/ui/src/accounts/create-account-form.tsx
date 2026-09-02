@@ -97,7 +97,8 @@ function CurrencyChoice({ currency, selected, onSelect }: CurrencyChoiceProps) {
   return (
     <Chip
       placeholder={t("accounts.currency")}
-      value={selected ? t("common.chipSelected", { value: currency.code }) : currency.code}
+      value={currency.code}
+      selected={selected}
       onPress={handleSelect}
       machineFilled={false}
     />

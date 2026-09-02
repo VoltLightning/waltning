@@ -74,6 +74,9 @@ export function Toggle({ label, value, onChange, hint, disabled = false }: Toggl
       accessibilityRole="switch"
       accessibilityLabel={label}
       accessibilityState={{ checked: value, disabled }}
+      // The ARIA prop too — react-native-web drops `checked` from a
+      // Pressable's accessibilityState (see chip.tsx).
+      aria-checked={value}
       disabled={disabled}
       onPress={handlePress}
       {...handlers}

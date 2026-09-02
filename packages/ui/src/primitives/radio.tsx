@@ -109,7 +109,13 @@ function RadioRow({ option, selected, groupDisabled, onChange }: RadioRowProps) 
     <Pressable
       accessibilityRole="radio"
       accessibilityLabel={option.label}
-      accessibilityState={{ selected, disabled }}
+      // `checked`, not `selected`: ARIA gives a radio `aria-checked`, and
+      // react-native-web silently drops `selected` — the announcement would
+      // exist on the phone and vanish on the web.
+      accessibilityState={{ checked: selected, disabled }}
+      // The ARIA prop too — react-native-web drops `checked` from a
+      // Pressable's accessibilityState (see chip.tsx).
+      aria-checked={selected}
       disabled={disabled}
       onPress={handlePress}
       {...handlers}

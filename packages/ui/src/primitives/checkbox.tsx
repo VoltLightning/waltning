@@ -67,6 +67,9 @@ export function Checkbox({ label, checked, onChange, hint, disabled = false }: C
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       accessibilityState={{ checked, disabled }}
+      // The ARIA prop too — react-native-web drops `checked` from a
+      // Pressable's accessibilityState (see chip.tsx).
+      aria-checked={checked}
       disabled={disabled}
       onPress={handlePress}
       {...handlers}

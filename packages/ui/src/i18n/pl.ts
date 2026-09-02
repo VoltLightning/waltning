@@ -31,7 +31,6 @@ export const pl: Messages = {
     autoFilled: " ·auto",
     autoFilledLabel: "{{field}}: {{value}}, wypełnione automatycznie",
     fieldValue: "{{field}}: {{value}}",
-    chipSelected: "{{value}} · wybrano",
   },
   accounts: {
     currency: "Waluta",

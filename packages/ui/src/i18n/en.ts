@@ -38,12 +38,6 @@ export const en = {
     autoFilled: " ·auto",
     autoFilledLabel: "{{field}}: {{value}}, filled automatically",
     fieldValue: "{{field}}: {{value}}",
-    /**
-     * The chip's spoken value. A chip renders its value visually and this is
-     * what a screen reader announces, so the selection has to be *said* — a
-     * highlighted border is not information to someone who cannot see it.
-     */
-    chipSelected: "{{value}} · selected",
   },
   accounts: {
     currency: "Currency",

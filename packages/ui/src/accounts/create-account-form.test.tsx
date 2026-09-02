@@ -23,7 +23,7 @@ it("trims the name and saves it with the chosen currency", () => {
   const onSave = vi.fn();
   render(<CreateAccountForm currencies={currencies} onCancel={vi.fn()} onSave={onSave} />);
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "  Bank A  " } });
-  fireEvent.click(screen.getByRole("button", { name: /BYN/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /BYN/ }));
   screen.getByRole("button", { name: "Save" }).click();
   expect(onSave).toHaveBeenCalledWith({ name: "Bank A", currency: "BYN" });
 });

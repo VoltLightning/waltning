@@ -49,9 +49,14 @@ Import review's row-level provenance marker. Carries text, not just tint.
 Tappable, holds a value, opens a picker. Used across the Quick-add composer for
 account, category, date, scope, note.
 
-States: empty (placeholder) · filled · **machine-filled** (carries the trail
-marker, P2) · hover · focus · disabled. The 44px floor is fixed in the
-component itself, not per screen (§10).
+States: empty (placeholder) · filled · **selected** · **machine-filled**
+(carries the trail marker, P2) · hover · focus · disabled. The 44px floor is
+fixed in the component itself, not per screen (§10).
+
+**Selected is paint, never a suffix.** The chosen chip takes the accent fill
+and the drawn check — §3.8's selection vocabulary — and announces itself
+through `accessibilityState`. Appending "· selected" to the visible value is
+the announcement leaking into the picture, and it shipped that way once.
 
 ### 3.6 `SegmentControl`
 

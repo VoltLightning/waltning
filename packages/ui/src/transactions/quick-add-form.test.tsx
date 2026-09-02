@@ -50,7 +50,7 @@ it("saves a positive amount as a string only with an account", () => {
   );
   expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
   fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "10" } });
-  fireEvent.click(screen.getByRole("button", { name: /Account: Bank A · PLN/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank A · PLN/ }));
   const save = screen.getByRole("button", { name: "Save" });
   expect(save.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(save);
@@ -92,10 +92,10 @@ it("labels the amount in the selected account's own currency", () => {
   );
   expect(screen.queryByText("PLN")).toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: /Account: Bank A · PLN/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank A · PLN/ }));
   expect(screen.getByText("PLN")).toBeDefined();
 
-  fireEvent.click(screen.getByRole("button", { name: /Account: Bank B · BYN/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank B · BYN/ }));
   expect(screen.getByText("BYN")).toBeDefined();
   expect(screen.queryByText("PLN")).toBeNull();
 });
@@ -123,7 +123,7 @@ it("declines a capture into a currency it holds no rate for, and says why", () =
   );
 
   fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "10" } });
-  fireEvent.click(screen.getByRole("button", { name: /Account: Bank A · PLN/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank A · PLN/ }));
 
   expect(screen.getByText(/PLN needs an exchange rate/)).toBeDefined();
   const save = screen.getByRole("button", { name: "Save" });

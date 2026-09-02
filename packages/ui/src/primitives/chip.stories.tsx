@@ -41,6 +41,16 @@ export const MachineFilled: Story = {
   args: { value: "Groceries", machineFilled: true },
 };
 
+/**
+ * **The pick — paint, never a suffix.** An earlier version appended
+ * "· selected" to the visible value: the screen-reader announcement leaking
+ * into the picture. Selection is the accent fill, the drawn check, and
+ * `accessibilityState.selected`; the label stays the label.
+ */
+export const Selected: Story = {
+  args: { value: "Groceries", selected: true },
+};
+
 export const Disabled: Story = {
   args: { value: "Groceries", disabled: true },
 };
