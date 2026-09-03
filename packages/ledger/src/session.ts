@@ -5,6 +5,7 @@ import type { CategoryKind } from "@waltning/schema/enums";
 import { currencies } from "@waltning/schema/sqlite/currencies";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
+import { type LocalGroup, readGroups } from "./accounts/read-groups.ts";
 import { readCategoryTree } from "./categories/read-category-tree.ts";
 import {
   type LocalCounterparty,
@@ -64,6 +65,7 @@ export type LocalCapturableCategory = {
 export type LocalLedgerSession = {
   listAccounts: () => readonly LocalAccountSummary[];
   listCurrencies: () => readonly LocalCurrency[];
+  listGroups: () => readonly LocalGroup[];
   listRecent: (limit: number) => readonly LocalRecentTransaction[];
   listCategories: () => readonly LocalCapturableCategory[];
   listCounterparties: () => readonly LocalCounterparty[];
@@ -184,6 +186,7 @@ export function createLocalLedgerSession<TRun>(
   return {
     listAccounts: () => readAccounts(requireOpen().replica.db),
     listCurrencies: () => readCurrencies(requireOpen().replica.db),
+    listGroups: () => readGroups(requireOpen().replica.db),
     listRecent: (limit) => readRecent(requireOpen().replica.db, limit),
     listCategories: () =>
       readCategoryTree(requireOpen().replica.db)

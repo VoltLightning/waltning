@@ -28,6 +28,7 @@ describe("usePhoneLedger", () => {
             capturable: true,
           },
         ],
+        listGroups: () => [],
         listRecent: () => [],
         listCategories: () => [],
         listCounterparties: () => [],

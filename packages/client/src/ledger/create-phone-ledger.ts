@@ -60,6 +60,20 @@ export type PhoneCurrency = {
   capturable: boolean;
 };
 
+/**
+ * A group the replica holds, for the create-account form's group picker.
+ *
+ * Structural rather than imported from `@waltning/ledger`, matching
+ * `PhoneCurrency` above — the port is what keeps this package free of the
+ * storage engine behind it.
+ */
+export type PhoneGroup = {
+  id: Id<"accountGroups">;
+  name: string;
+  institution: string | null;
+  sort: number;
+};
+
 export type PhoneRecentTransaction = {
   id: Id<"transactions">;
   date: AccountingDate;
@@ -99,6 +113,7 @@ export type PhoneCounterparty = {
 export type PhoneLedgerPort = {
   listAccounts: () => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
+  listGroups: () => readonly PhoneGroup[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
   listCounterparties: () => readonly PhoneCounterparty[];
@@ -131,6 +146,7 @@ export type PhoneCurrencySubtotal = {
 export type PhoneLedgerSnapshot = {
   accounts: readonly PhoneCapturableAccount[];
   currencies: readonly PhoneCurrency[];
+  groups: readonly PhoneGroup[];
   recent: readonly PhoneRecentTransaction[];
   categories: readonly PhoneCategory[];
   counterparties: readonly PhoneCounterparty[];
@@ -213,6 +229,7 @@ export function createPhoneLedger(
   let snapshot: PhoneLedgerSnapshot = {
     accounts: [],
     currencies: [],
+    groups: [],
     recent: [],
     categories: [],
     counterparties: [],
@@ -239,6 +256,7 @@ export function createPhoneLedger(
           capturable: capturable.has(account.currency),
         })),
         currencies,
+        groups: port.listGroups(),
         recent: port.listRecent(5),
         categories: port.listCategories(),
         counterparties: port.listCounterparties(),

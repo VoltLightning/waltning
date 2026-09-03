@@ -59,6 +59,7 @@ function fakeController(initialAccounts: readonly FakeAccount[] = []) {
           capturable: true,
         },
       ],
+      listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
       listCounterparties: () => [],

@@ -117,6 +117,7 @@ function harness(diagnostics?: (event: object) => void) {
   const port: PhoneLedgerPort = {
     listAccounts: () => accounts,
     listCurrencies: () => CURRENCIES,
+    listGroups: () => [],
     listRecent: (limit) => recent.slice(0, limit),
     listCategories: () => [],
     listCounterparties: () => [],
@@ -148,6 +149,7 @@ describe("phone ledger controller", () => {
     expect(controller.getSnapshot()).toEqual({
       accounts: [],
       currencies: CURRENCIES,
+      groups: [],
       recent: [],
       categories: [],
       counterparties: [],
@@ -190,6 +192,7 @@ describe("phone ledger controller", () => {
         account("44444444-4444-4444-8444-444444444444", "Cash · PLN", PLN, "2.50"),
       ],
       listCurrencies: () => CURRENCIES,
+      listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
       listCounterparties: () => [],
@@ -222,6 +225,7 @@ describe("phone ledger controller", () => {
         account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "1"),
       ],
       listCurrencies: () => CURRENCIES,
+      listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
       listCounterparties: () => [],
@@ -318,6 +322,7 @@ describe("phone ledger controller", () => {
       listCurrencies: () => [
         { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: false },
       ],
+      listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
       listCounterparties: () => [],
