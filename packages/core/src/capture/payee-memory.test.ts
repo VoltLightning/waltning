@@ -75,4 +75,18 @@ describe("proposeCategory", () => {
   it("returns null on empty history", () => {
     expect(proposeCategory("Coffee House", [])).toBeNull();
   });
+
+  it("returns null for a blank payee rather than matching another blank one", () => {
+    const history = [row("   ", "groceries", "2026-01-01")];
+
+    expect(proposeCategory("", history)).toBeNull();
+    expect(proposeCategory("   ", history)).toBeNull();
+  });
+
+  it("rejects a non-positive k", () => {
+    const history = [row("Coffee House", "groceries", "2026-01-01")];
+
+    expect(() => proposeCategory("Coffee House", history, 0)).toThrow();
+    expect(() => proposeCategory("Coffee House", history, -1)).toThrow();
+  });
 });

@@ -46,9 +46,16 @@ export function proposeCategory(
   history: readonly PayeeHistoryRow[],
   k: number = DEFAULT_K,
 ): CategoryProposal {
+  if (!Number.isInteger(k) || k < 1) {
+    throw new Error(`proposeCategory k must be a positive integer, got ${k}`);
+  }
   if (history.length === 0) return null;
 
   const target = fold(payee);
+  // A blank or whitespace-only payee has no meaningful trigrams — padding
+  // alone would make it look identical to any other blank history row (both
+  // fold to the single all-space gram), a confident-looking match on nothing.
+  if (target.trim().length === 0) return null;
 
   const exactMatches = history.filter((row) => fold(row.payee) === target);
   if (exactMatches.length > 0) {
