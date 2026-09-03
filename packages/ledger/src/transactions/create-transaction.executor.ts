@@ -61,7 +61,19 @@ export const createTransactionExecutor = defineLocalExecutor<
   apply: (input, tx) => insertTransaction(input, tx),
 });
 
-function insertTransaction(input: CreateTransactionInput, tx: ReplicaTx): LocalTransactionRow {
+/**
+ * **Exported.** `reconcile_account` (`packages/ledger/src/accounts/reconcile-account.executor.ts`)
+ * writes its one `adjustment` row through this same function rather than a
+ * second `insert(transactions)` — one write path for the table, not two that
+ * can drift on which columns default and which upsert on conflict. A2's
+ * `supersede_transaction` imports it for the same reason; whichever of A2/A3
+ * merges second drops its own duplicate export in the rebase (both plans name
+ * this exact line).
+ */
+export function insertTransaction(
+  input: CreateTransactionInput,
+  tx: ReplicaTx,
+): LocalTransactionRow {
   /**
    * **`to_amount` is copied from the input and is never derived.** §14.6:
    * *"offline, a cross-currency transfer leaves the destination amount empty,

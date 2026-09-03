@@ -55,6 +55,65 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — `expo-sqlite` on the device and `better-sqlite3` in tests, and an executor never reads one because every statement ends in `.all()`",
   },
+  // A3 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
+  // `create-account.executor.ts` above, once per executor file — the driver's
+  // run-result, in a position nothing consumes.
+  "packages/ledger/src/accounts/update-account.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/accounts/archive-account.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/accounts/reorder-accounts.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/accounts/update-group.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/accounts/reorder-groups.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/accounts/archive-group.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/accounts/reconcile-account.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/accounts/create-group.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/categories/create-category.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/categories/rename-category.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/categories/reparent-category.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/categories/convert-leaf-group.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/categories/merge-categories.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/categories/archive-category.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
   "packages/ledger/src/executor.ts": {
     max: 3,
     why: "two raw-payload doors (`invoke`, `mintedIds`) taking JSON off a disk, which is exactly as trustworthy as JSON off a wire, and one widened `Row` in a constraint position — a registry is heterogeneous and TypeScript has no existential type for `returns something`",

@@ -18,12 +18,30 @@ import { describe, expect, it } from "vitest";
 import type { AccountingDate } from "../date.ts";
 import type { Id } from "../id.ts";
 import type { CurrencyCode, Money, PivotPerUnit, TxnType, UnitsPerPivot } from "../money.ts";
+// A3's own import from "./inputs.ts" — kept separate from A2's above so a
+// rebase against A2's append is a line-level merge, not a symbol-level one.
 import {
   type AccountKind,
+  type ArchiveAccountInput,
+  archiveAccountInput,
+  archiveCategoryInput,
+  archiveGroupInput,
   type CreateAccountInput,
+  type CreateCategoryInput,
   type CreateTransactionInput,
   createAccountInput,
+  createCategoryInput,
+  createGroupInput,
   createTransactionInput,
+  mergeCategoriesInput,
+  reconcileAccountInput,
+  renameCategoryInput,
+  reorderAccountsInput,
+  reorderGroupsInput,
+  reparentCategoryInput,
+  type UpdateAccountInput,
+  updateAccountInput,
+  updateGroupInput,
 } from "./inputs.ts";
 
 /* ── compile-time assertions ─────────────────────────────────────────────────
@@ -385,6 +403,206 @@ describe("createTransactionInput", () => {
 
       expect(parsed.counterpartyRole).toBe("debt");
     });
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A3 · accounts, groups and categories — appended in its own block, matching
+ * `inputs.ts`'s own delimiter, so a rebase against A2's append is trivial.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const GROUP_ID = "66666666-6666-4666-8666-666666666666";
+const LEAF_ID = "77777777-7777-4777-8777-777777777777";
+const OTHER_LEAF_ID = "88888888-8888-4888-8888-888888888888";
+const ADJUSTMENT_ID = "99999999-9999-4999-8999-999999999999";
+
+export type PatchAccountVersionIsRequired = Expect<Extends<UpdateAccountInput["version"], number>>;
+export type ArchiveAccountVersionIsRequired = Expect<
+  Extends<ArchiveAccountInput["version"], number>
+>;
+export type CategoryKindIsIncomeOrExpense = Expect<
+  Extends<CreateCategoryInput["kind"], "income" | "expense">
+>;
+
+describe("updateAccountInput", () => {
+  it("refuses an empty patch", () => {
+    const result = updateAccountInput.safeParse({ id: ACCOUNT_ID, version: 1, patch: {} });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("patch");
+  });
+
+  it("refuses currency in the patch — S16 §7 has no in-place path for it", () => {
+    const result = updateAccountInput.safeParse({
+      id: ACCOUNT_ID,
+      version: 1,
+      patch: { currency: "PLN" },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a single-field patch and normalises the money one", () => {
+    const parsed = updateAccountInput.parse({
+      id: ACCOUNT_ID,
+      version: 3,
+      patch: { openingBalance: "40" },
+    });
+
+    expect(parsed.patch.openingBalance).toBe("40.00000000");
+  });
+});
+
+describe("archiveAccountInput", () => {
+  it("requires a version", () => {
+    const result = archiveAccountInput.safeParse({ id: ACCOUNT_ID });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("version");
+  });
+});
+
+describe("reorderAccountsInput", () => {
+  it("refuses an empty list", () => {
+    const result = reorderAccountsInput.safeParse({ ids: [] });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("ids");
+  });
+
+  it("refuses a duplicate id — two rows tied on sort is not an order", () => {
+    const result = reorderAccountsInput.safeParse({ ids: [ACCOUNT_ID, ACCOUNT_ID] });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("ids");
+  });
+});
+
+describe("createGroupInput", () => {
+  it("defaults institution to null rather than requiring it", () => {
+    const parsed = createGroupInput.parse({ id: GROUP_ID, name: "Bank A" });
+
+    expect(parsed.institution).toBeNull();
+  });
+});
+
+describe("updateGroupInput", () => {
+  it("refuses an empty patch", () => {
+    const result = updateGroupInput.safeParse({ id: GROUP_ID, patch: {} });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("patch");
+  });
+});
+
+describe("reorderGroupsInput", () => {
+  it("refuses an empty list", () => {
+    const result = reorderGroupsInput.safeParse({ ids: [] });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("ids");
+  });
+
+  it("refuses a duplicate id", () => {
+    const result = reorderGroupsInput.safeParse({ ids: [GROUP_ID, GROUP_ID] });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("ids");
+  });
+});
+
+describe("archiveGroupInput", () => {
+  it("parses the id alone — no version column on account_groups", () => {
+    expect(archiveGroupInput.parse({ id: GROUP_ID })).toEqual({ id: GROUP_ID });
+  });
+});
+
+describe("reconcileAccountInput", () => {
+  it("parses S16 §5's worked example", () => {
+    const parsed = reconcileAccountInput.parse({
+      accountId: ACCOUNT_ID,
+      adjustmentId: ADJUSTMENT_ID,
+      observedBalance: "1198.30",
+      asOf: "2026-03-12",
+      note: "cash spent, not recorded",
+    });
+
+    expect(parsed.observedBalance).toBe("1198.30000000");
+    expect(parsed.categoryId).toBeUndefined();
+  });
+
+  it("refuses an ISO timestamp where `asOf` belongs", () => {
+    const result = reconcileAccountInput.safeParse({
+      accountId: ACCOUNT_ID,
+      adjustmentId: ADJUSTMENT_ID,
+      observedBalance: "1198.30",
+      asOf: "2026-03-12T22:00:00.000Z",
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("asOf");
+  });
+});
+
+describe("createCategoryInput", () => {
+  it("defaults parentId to null and isEarnings to false", () => {
+    const parsed = createCategoryInput.parse({ id: LEAF_ID, name: "Groceries", kind: "expense" });
+
+    expect(parsed.parentId).toBeNull();
+    expect(parsed.isEarnings).toBe(false);
+  });
+
+  it("refuses a colour that is not a hex triplet", () => {
+    const result = createCategoryInput.safeParse({
+      id: LEAF_ID,
+      name: "Groceries",
+      kind: "expense",
+      color: "red",
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("color");
+  });
+});
+
+describe("renameCategoryInput", () => {
+  it("requires a version", () => {
+    const result = renameCategoryInput.safeParse({ id: LEAF_ID, name: "Groceries" });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("version");
+  });
+});
+
+describe("reparentCategoryInput", () => {
+  it("allows an explicit null parent — a top-level leaf", () => {
+    const parsed = reparentCategoryInput.parse({ id: LEAF_ID, version: 1, parentId: null });
+
+    expect(parsed.parentId).toBeNull();
+  });
+});
+
+describe("mergeCategoriesInput", () => {
+  it("refuses a category merging into itself", () => {
+    const result = mergeCategoriesInput.safeParse({ loserId: LEAF_ID, winnerId: LEAF_ID });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("winnerId");
+  });
+
+  it("accepts two different categories", () => {
+    expect(
+      mergeCategoriesInput.safeParse({ loserId: LEAF_ID, winnerId: OTHER_LEAF_ID }).success,
+    ).toBe(true);
+  });
+});
+
+describe("archiveCategoryInput", () => {
+  it("requires a version", () => {
+    const result = archiveCategoryInput.safeParse({ id: LEAF_ID });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("version");
   });
 });
 

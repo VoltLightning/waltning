@@ -43,6 +43,13 @@
       "when": 1787322584366,
       "tag": "0005_transactions_valued",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788463444881,
+      "tag": "0006_account_groups_archived",
+      "breakpoints": true
     }
   ]
 }

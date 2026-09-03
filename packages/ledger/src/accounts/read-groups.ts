@@ -10,7 +10,7 @@
  */
 
 import type { Id } from "@waltning/core/id";
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
@@ -34,6 +34,9 @@ export function readGroups<TRun, TSchema extends typeof ledgerSchema>(
       sort: accountGroups.sort,
     })
     .from(accountGroups)
+    // Archived groups are kept for the accounts that still name them (§6.9);
+    // nothing offers one for a new account, and no list shows one.
+    .where(eq(accountGroups.archived, false))
     .orderBy(asc(accountGroups.sort), asc(accountGroups.name), asc(accountGroups.id))
     .all();
 }
