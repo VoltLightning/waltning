@@ -93,7 +93,7 @@ const useStyles = makeStyles((theme) => ({
   track: {
     flexDirection: "row",
     backgroundColor: theme.subtleFill,
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     padding: space.xxs,
   },
   segment: {
@@ -103,7 +103,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     gap: space.sm,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     paddingHorizontal: space.xl,
   },
   hovered: { backgroundColor: theme.hoverFill },

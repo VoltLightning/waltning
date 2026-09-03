@@ -139,7 +139,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     gap: space.md,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     paddingHorizontal: space.x3,
     borderWidth: 1,
   },

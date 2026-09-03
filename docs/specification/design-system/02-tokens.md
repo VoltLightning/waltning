@@ -2,71 +2,76 @@
 
 ### 2.1 Colour
 
-**Neutral ground; green is a signal.** The neutrals carry a faint green bias —
-chosen, not inherited — and green itself has exactly four jobs: a primary
-action, the focus ring, income, and the data ramp. Anything green that is none
-of those is chrome, and chrome is neutral. The one structural exception is the
-shell, which stays a deep green in both themes because it is the single place
+**Warm ground; sage is the signal.** The app is a home, not a terminal: the
+neutrals are warm — cream paper for the page, warm greys for text — chosen so
+opening the ledger feels like opening a notebook rather than a dashboard. The
+brand green is a muted sage, and it has exactly four jobs: a primary action,
+the focus ring, income, and the data ramp. Anything green that is none of
+those is chrome, and chrome is neutral. The one structural exception is the
+shell, which stays a deep sage in both themes because it is the single place
 the brand colour is allowed to be a surface.
+
+Money's two event colours are *not* the brand: `income` is a livelier green
+than `accent` and `spend` a warm, restrained red, and both hold their meaning
+whatever the chrome around them does.
 
 | Token | Value | Use |
 |---|---|---|
-| `canvas` | `#e9ecea` | Outside the app frame (design boards only) |
-| `ground` | `#f5f7f6` | Page background; all cards sit on it |
+| `canvas` | `#efe9dd` | Outside the app frame (design boards only) |
+| `ground` | `#faf6ef` | Page background; all cards sit on it |
 | `surface` | `#ffffff` | Cards, sheets, rows |
-| `subtle` | `#eef2f0` | Table headers, inset boxes, neutral tag fills |
-| `hover` | `#e8edeb` | The fill under a pointer |
-| `pressed` | `#e3e9e6` | The transient fill under a finger |
-| `border` | `#dfe5e2` | Card edges, dividers, the outline of an unfilled control |
-| `border-interactive` | `#bbc3be` | The resting edge of a control — an input, a chip |
-| `border-strong` | `#8c958f` | An edge that must read alone: a selected control. **3:1 on `surface`**, the WCAG floor for a UI boundary |
-| `ink` | `#171d1a` | Body text **and heading ink** — a heading is not a signal |
-| `muted` | `#667069` | Secondary text, labels, captions; a transfer's figure |
-| `accent` | `#22754f` | Primary action fill. **Job 1** |
-| `accent-text` | `#1f6a48` | Links, a secondary action's label |
-| `accent-icon` | `#3d9a6c` | Decorative accent marks; the **focus ring**. **Job 2** |
-| `accent-fill` | `#e9f1ec` | A subtle green fill: a selected segment, a toggled chip. `accent-text` reads on it at 4.9:1 |
-| `accent-fill-border` | `#adc9b9` | The edge of `accent-fill` |
-| `income` | `#178249` | Credits, positive deltas. Deliberately brighter than `accent`: an event, not a control. **Job 3** |
-| `spend` | `#b0402a` | Debits, negative balances, rising spend. A restrained red — unmistakable, not alarming |
+| `subtle` | `#f1ebe0` | Table headers, inset boxes, neutral tag fills, the segment track |
+| `hover` | `#ece5d7` | The fill under a pointer |
+| `pressed` | `#e6ddcb` | The transient fill under a finger |
+| `border` | `#eae3d5` | Card edges, dividers, the outline of an unfilled control |
+| `border-interactive` | `#c6bdaa` | The resting edge of a control — an input, a chip |
+| `border-strong` | `#8d8672` | An edge that must read alone: a selected control. **3:1 on `surface`**, the WCAG floor for a UI boundary (3.63) |
+| `ink` | `#33302a` | Body text **and heading ink** — a heading is not a signal. Warm near-black, never `#000` |
+| `muted` | `#6e6759` | Secondary text, labels, captions; a transfer's figure. 5.2:1 on `ground` |
+| `accent` | `#55704f` | Primary action fill. Sage. **Job 1** |
+| `accent-text` | `#4c6247` | Links, a secondary action's label |
+| `accent-icon` | `#6f8f66` | Decorative accent marks; the **focus ring**. **Job 2** |
+| `accent-fill` | `#eef0e6` | A subtle sage fill: a selected segment, a toggled chip. `accent-text` reads on it at 5.8:1 |
+| `accent-fill-border` | `#b9c6ae` | The edge of `accent-fill` |
+| `income` | `#3f7a34` | Credits, positive deltas. Deliberately livelier than `accent`: an event, not a control. **Job 3** |
+| `spend` | `#a8543c` | Debits, negative balances, rising spend. A warm, restrained red — unmistakable, not alarming |
 | `green-100` … `green-900` | as below | The data ramp. **Job 4** |
-| `amber` | `#f6efdc` | Fill — *not finished, or not fully observed* (P4). Never error, never success, never chrome |
-| `amber-ink` | `#7b5b1d` | Text on amber |
-| `amber-border` | `#dcc07a` | Edge of an amber tag or chip |
+| `amber` | `#f4ecdf` | Fill — *not finished, or not fully observed* (P4). Never error, never success, never chrome |
+| `amber-ink` | `#77591c` | Text on amber |
+| `amber-border` | `#d9bd75` | Edge of an amber tag or chip |
 | `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
-| `danger-bg` | `#f9e9e5` | Fill behind a danger tag |
-| `danger-border` | `#e3a898` | Edge of a danger control |
-| `shell` | `#18492f` | The header shell. **One flat colour; the gradient is gone.** A deep green at L\* 27 — see below |
-| `shell-text` | `#f4f7f5` | Text on the shell |
-| `shell-text-muted` | `#a9c4b6` | The currency marker, the mine/ours line |
-| `shadow-ink` | `#0f2b1f` | The ink the one shadow is cast in. Never a fill, never a text colour |
+| `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
+| `danger-border` | `#dfa68f` | Edge of a danger control |
+| `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
+| `shell-text` | `#f2f0e7` | Text on the shell |
+| `shell-text-muted` | `#b8c4ae` | The currency marker, the mine/ours line |
+| `shadow-ink` | `#262117` | The ink the one shadow is cast in. Never a fill, never a text colour |
 | `bolt` | `#f5c63d` | App icon accent only — not a UI colour |
 
 **Six steps for states, before a component needs them.** The 12-step scales
 the field has converged on (Radix, Geist, Tailwind v4) reserve fixed jobs:
 backgrounds, then a component's fill / hover / pressed, then a subtle border, an
 interactive border and a strong border, then the solid, then two text
-strengths. Our neutrals land within one step of Radix's green-tinted gray
-(*Sage*) and our greens within one step of its green scale; what was missing
-was the state steps, and `hover`, `border-interactive`, `border-strong`,
-`accent-fill` and `accent-fill-border` are those, derived by OKLab
-interpolation between the existing anchors so they sit between the old values
-rather than beside them.
+strengths. The warm neutrals keep that structure — `hover`,
+`border-interactive`, `border-strong`, `accent-fill` and `accent-fill-border`
+are the state steps, spaced so each sits between its neighbours rather than
+beside them, and every text-on-fill pair is held at 4.5:1 by
+`theme/theme.test.tsx`.
 
 **The ramp**, which is the entire chart palette — magnitude reads as depth, so
-no second hue is needed. Unchanged by the restyle; it was never the problem.
+no second hue is needed. Sage-toned to match the accent family.
 
 | Step | Value | Use |
 |---|---|---|
-| `green-100` | `#e4f1e8` | Ramp floor |
-| `green-200` | `#cbe6d6` | |
-| `green-300` | `#a3d2b8` | The ramp's middle |
-| `green-400` | `#75bd99` | |
-| `green-500` | `#48a479` | |
-| `green-600` | `#2f7d5a` | |
-| `green-700` | `#215f45` | |
-| `green-800` | `#164531` | |
-| `green-900` | `#0e2e20` | |
+| `green-100` | `#ecefe4` | Ramp floor |
+| `green-200` | `#d8dfc9` | |
+| `green-300` | `#bccaa9` | The ramp's middle |
+| `green-400` | `#9cb287` | |
+| `green-500` | `#7c9a68` | |
+| `green-600` | `#5f7d52` | |
+| `green-700` | `#49613f` | |
+| `green-800` | `#33452c` | |
+| `green-900` | `#202d1c` | |
 
 **Money has three colours of its own, and none of them is the accent.**
 `<Amount>` takes a `kind` — `income`, `spend`, `transfer`, or `auto` — and
@@ -81,57 +86,59 @@ are signed opposite ways, so sign alone would paint one green and one red.
 continue to name roles such as `surface`, `text`, and `accent`; only the theme
 maps those roles to values. The shipped dark map is closed:
 
+The dark theme is **warm charcoal** — a room with the lights low, not an OLED
+void: the near-blacks carry the same warm bias as the light theme's creams,
+and the accent stays a *saturated fill with a white label*, never a pale fill
+with dark text.
+
 | Role | Dark value |
 |---|---|
-| `ground` | `#0e1210` |
-| `surface` | `#161b18` |
-| `subtleFill` / `tagNeutralFill` | `#1c2320` |
-| `hoverFill` | `#202824` |
-| `pressedFill` | `#252e29` |
-| `border` | `#2b3530` |
-| `borderInteractive` | `#48534d` |
-| `borderStrong` | `#66716a` |
-| `hairline` | `rgba(228,241,232,.12)` |
-| `text` | `#eef2ef` |
-| `textMuted` / `tagNeutralText` | `#9ba79f` |
-| `textOnAccent` | `#0b1a12` |
-| `accent` / `accentIcon` / `focusRing` | `#5cc08f` |
-| `accentText` | `#8fd6b3` |
-| `accentFill` | `#223229` |
-| `accentFillBorder` | `#365f4a` |
-| `income` | `#62d495` |
-| `spend` | `#ea8f7b` |
-| `assertedFill` | `#3a301b` |
-| `assertedText` | `#f0d38c` |
-| `assertedBorder` | `#8f7332` |
-| `dangerFill` | `#3b201b` |
-| `dangerText` | `#f1a390` |
-| `dangerBorder` | `#a85a48` |
-| `shell` | `#1c4d38` |
-| `shellText` | `#f0f5f2` |
-| `shellTextMuted` | `#a9c4b6` |
+| `ground` | `#1c1a15` |
+| `surface` | `#26221b` |
+| `subtleFill` / `tagNeutralFill` | `#2b2620` |
+| `hoverFill` | `#302a23` |
+| `pressedFill` | `#363027` |
+| `border` | `#38332a` |
+| `borderInteractive` | `#5a5344` |
+| `borderStrong` | `#78715e` |
+| `hairline` | `rgba(240,236,227,.12)` |
+| `text` | `#f0ece3` |
+| `textMuted` / `tagNeutralText` | `#a59d8d` |
+| `textOnAccent` | `#ffffff` |
+| `accent` | `#55704f` |
+| `accentIcon` / `focusRing` | `#8fae84` |
+| `accentText` | `#a4c297` |
+| `accentFill` | `#2c3226` |
+| `accentFillBorder` | `#46543c` |
+| `income` | `#8fd47c` |
+| `spend` | `#e0937b` |
+| `assertedFill` | `#3a311d` |
+| `assertedText` | `#e6cd8c` |
+| `assertedBorder` | `#8f7a3a` |
+| `dangerFill` | `#3d241c` |
+| `dangerText` | `#f0a28c` |
+| `dangerBorder` | `#a45f48` |
+| `shell` | `#3d4f39` |
+| `shellText` | `#f0f4ec` |
+| `shellTextMuted` | `#b3c2a9` |
 
 **The shell must read as a band, and it is the only pair where the fills do
 that alone.** Everywhere else an edge is drawn: `elevation.card` puts a
 one-pixel `border` between a card and the ground, which is why `#ffffff` on
-`#f5f7f6` at 1.05:1 is fine. The shell/ground seam has no border by design —
-the ground panel's rounded corners are the join — so the two fills carry the
-separation themselves, and the floor is **1.5:1 in both themes**. Not a WCAG
-number, because WCAG has none for this: 3:1 governs a boundary you must locate
-precisely, and a full-width band is the easiest thing on a screen to see.
+`#faf6ef` at a near-1:1 ratio is fine. The shell/ground seam has no border by
+design — the ground panel's rounded corners are the join — so the two fills
+carry the separation themselves, and the floor is **1.5:1 in both themes**.
+Not a WCAG number, because WCAG has none for this: 3:1 governs a boundary you
+must locate precisely, and a full-width band is the easiest thing on a screen
+to see.
 
-The first values failed it and passed every other check. `#0a1f16` in dark held
-`shell-text` at 15.6:1 and sat at **1.10:1 against `ground`** and 1.01:1 against
-`surface` — legible text on an area boundary nobody could see, so the screen
-read as one flat black rectangle. In light, `#0f2b1f` at L\* 15 was a black
-band with a green cast you had to be told about, which spends this section's one
-structural grant of the brand colour on nothing.
-
-So the shell is also held at **L\* ≥ 22 in both themes**, stated as lightness
-rather than as a hue test because *green enough* is a question about how dark it
-is — the hue was always right and never visible. The dark shell ends up the
-*lighter* of the two: on a near-black ground a surface reads by rising.
-`theme/theme.test.tsx` holds both floors.
+The shell is also held at **L\* ≥ 22 in both themes**, stated as lightness
+rather than as a hue test because *sage enough* is a question about how dark
+it is: a shell dark enough to read as black spends this section's one
+structural grant of the brand colour on nothing. Both shells sit at L\* ≈ 31 —
+on the warm charcoal ground the dark shell reads by rising, on cream by
+deepening, and the same lightness serves both. `theme/theme.test.tsx` holds
+both floors.
 
 ### 2.2 Typography
 
@@ -267,19 +274,23 @@ blur read as a consumer app; a tool is squarer.
 
 | Token | Value | Use |
 |---|---|---|
-| `radius-pill` | `999px` | Tags, chips — and the floating add button, the only circle on the screen |
+| `radius-pill` | `999px` | The round metaphors only: a radio's ring and dot, a switch's track and thumb, and the floating add button — the only full circle on the screen |
 | `radius-xs` | `3px` | Inline code |
-| `radius-sm` | `8px` | Controls: buttons, inputs |
-| `radius-md` | `12px` | Cards, inset boxes |
+| `radius-sm` | `8px` | Controls: buttons, inputs — and every compact value-carrier: chip, tag, classification pill, segment thumb, multi-select token |
+| `radius-md` | `12px` | Cards, inset boxes; the segment track |
 | `radius-lg` | `16px` | Sheets; the ground panel lifting over the shell |
 | `radius-icon` | `13 / 18 / 28px` | App icon at 56 / 120 / 512 |
 
-**The shape rule, stated rather than implied.** Two families, and adjacency in
-one form is the point where the difference must read as designed: **pills are
-compact value-carriers** — chip, tag, classification pill, segment,
-multi-select token — and **soft rectangles (`sm`) hold or submit** — buttons,
-inputs, selection-row highlights. `md` is a card, `lg` a sheet, `xs` a
-glyph-scale box (a checkbox). No control invents a radius between these.
+**The shape rule: one soft-rectangle family, circles only where the metaphor
+is round.** A pill-shaped chip is a capsule from someone else's app; a soft
+rectangle at `sm` is a thing in this one. Chips, tags, tokens, segments,
+buttons and inputs all share the `sm` corner, differing by size and padding
+rather than by shape — so adjacency between a chip and a button reads as two
+sizes of one material. `md` is a card, `lg` a sheet, `xs` a glyph-scale box (a
+checkbox). `pill` survives only where roundness *is* the control: a radio is a
+circle everywhere in computing, a switch is a sliding capsule, and the add
+button is the one object floating above the page. No control invents a radius
+between these.
 
 **Control metrics, the ones that drifted before they were written down:**
 

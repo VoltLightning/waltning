@@ -56,7 +56,7 @@ function describe(p: PillTier): string {
 const useStyles = makeStyles((theme) => ({
   pill: {
     backgroundColor: theme.subtleFill,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     paddingHorizontal: space.lg,
     paddingVertical: space.xs,
     alignSelf: "flex-start",
