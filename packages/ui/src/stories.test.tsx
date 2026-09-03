@@ -30,8 +30,20 @@ import { describe, expect, it } from "vitest";
 import * as amount from "./fx/amount.stories";
 import * as button from "./primitives/button.stories";
 import * as chip from "./primitives/chip.stories";
+import * as shell from "./shell/shell.stories";
+import * as tabBar from "./shell/tab-bar.stories";
+import * as tabIcons from "./shell/tab-icons.stories";
 import * as todayFrame from "./shell/today-frame.stories";
+import * as banner from "./states/banner.stories";
 import * as emptyState from "./states/empty-state.stories";
+import * as errorState from "./states/error-state.stories";
+import * as matchWarning from "./states/match-warning.stories";
+import * as ruleHealthTag from "./states/rule-health-tag.stories";
+import * as skeleton from "./states/skeleton.stories";
+import * as thinkingIndicator from "./states/thinking-indicator.stories";
+import * as thresholdSlider from "./states/threshold-slider.stories";
+import * as toast from "./states/toast.stories";
+import * as undoToast from "./states/undo-toast.stories";
 import { ThemeProvider } from "./theme/provider";
 import { type ThemeName, themes } from "./theme/roles.ts";
 
@@ -44,9 +56,21 @@ import { type ThemeName, themes } from "./theme/roles.ts";
 const MODULES = {
   Amount: amount,
   Button: button,
+  Banner: banner,
   Chip: chip,
   EmptyState: emptyState,
+  ErrorState: errorState,
+  MatchWarning: matchWarning,
+  RuleHealthTag: ruleHealthTag,
+  Shell: shell,
+  Skeleton: skeleton,
+  TabBar: tabBar,
+  TabIcons: tabIcons,
+  ThinkingIndicator: thinkingIndicator,
+  ThresholdSlider: thresholdSlider,
+  Toast: toast,
   TodayFrame: todayFrame,
+  UndoToast: undoToast,
 };
 
 /**

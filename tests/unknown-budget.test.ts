@@ -150,6 +150,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "a CommonJS mock with no declared type, cast once to the module it stands in for",
   },
+  "packages/ui/src/states/use-timer.ts": {
+    max: 1,
+    why: "the timer's re-arm signal is compared only by identity across renders — a constraint position for a deliberately heterogeneous value, the same shape as a dependency array",
+  },
   "packages/ledger/src/outbox.ts": {
     max: 1,
     why: "the queued payload is the operation's validated input as JSON, and the outbox is deliberately not allowed an opinion about its shape — the drain's upcasters are",

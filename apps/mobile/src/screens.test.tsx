@@ -31,6 +31,9 @@ vi.mock("expo-router", () => ({
 }));
 
 import NewAccount from "./account-creation-screen";
+import CalendarStub from "./calendar-screen";
+import DebtStub from "./debt-screen";
+import LedgerStub from "./ledger-screen";
 import QuickAdd from "./quick-add-screen";
 import Today from "./today-screen";
 
@@ -127,7 +130,7 @@ describe("Today", () => {
     });
   });
 
-  it("shows the ledger once an account exists, and enables add", () => {
+  it("shows the ledger once an account exists", () => {
     withLedger(<Today />, fakeController([PLN_ACCOUNT]));
 
     expect(screen.queryByText("No accounts yet")).toBeNull();
@@ -150,5 +153,22 @@ describe("NewAccount", () => {
 
     expect(screen.getByText(/PLN/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
+  });
+});
+
+/**
+ * The three tab stubs — S10/S11/S12 until their own arcs build the real
+ * screen. Each names itself and offers the one honest way out: Today.
+ */
+describe("tab stubs", () => {
+  it.each([
+    ["Ledger", LedgerStub],
+    ["Calendar", CalendarStub],
+    ["Debt", DebtStub],
+  ])("%s names itself and returns to Today", (title, Stub) => {
+    render(<Stub />);
+    expect(screen.getByText(title)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Go to Today" }));
+    expect(router.push).toHaveBeenCalledWith("/");
   });
 });

@@ -15,6 +15,13 @@
  * **Degrades to a single figure** when no shared account exists. A household
  * total of exactly the same number, printed underneath, teaches the reader that
  * the second line carries no information.
+ *
+ * **Lives only on the shell**, like `CurrencyTotals` — `emphasis="shell"` on
+ * both `<Amount>`s and `shellTextMuted` on the labels, not the `text`/
+ * `textMuted` a component sitting on `ground` would reach for. Nothing had
+ * ever rendered this component under axe until its own story did — it has no
+ * caller yet (`DualTotal` is E9's hero, once a display currency exists) — and
+ * the light-ground inks measured 1.48:1 and 1.58:1 against the shell's green.
  */
 
 import type * as money from "@waltning/core/money";
@@ -48,12 +55,18 @@ export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps
     <View style={styles.block}>
       <View>
         <Text style={styles.label}>{t("shell.mine")}</Text>
-        <Amount value={mine} currency={currency} decimals={decimals} size="hero" />
+        <Amount value={mine} currency={currency} decimals={decimals} size="hero" emphasis="shell" />
       </View>
       {ours === null ? null : (
         <View>
           <Text style={styles.label}>{t("shell.ours")}</Text>
-          <Amount value={ours} currency={currency} decimals={decimals} size="large" />
+          <Amount
+            value={ours}
+            currency={currency}
+            decimals={decimals}
+            size="large"
+            emphasis="shell"
+          />
         </View>
       )}
     </View>
@@ -63,7 +76,7 @@ export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps
 const useStyles = makeStyles((theme) => ({
   block: { gap: space.xl },
   label: {
-    color: theme.textMuted,
+    color: theme.shellTextMuted,
     ...text.ui("kicker"),
     textTransform: "uppercase",
   },

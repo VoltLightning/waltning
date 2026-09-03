@@ -24,5 +24,6 @@ export const useSharedValue = m.useSharedValue;
 export const useAnimatedStyle = m.useAnimatedStyle;
 export const withTiming = m.withTiming;
 export const withSpring = m.withSpring;
+export const withRepeat = m.withRepeat;
 export const runOnJS = m.runOnJS;
 export const Easing = m.Easing;

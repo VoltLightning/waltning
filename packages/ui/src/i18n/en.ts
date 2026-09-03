@@ -137,6 +137,46 @@ export const en = {
   routes: {
     expense: "Expense",
     createAccount: "Create account",
+    ledger: "Ledger",
+    calendar: "Calendar",
+    debt: "Debt",
+  },
+  states: {
+    /**
+     * `filtered`'s excluded count (§8.1). Deliberately a number beside a noun
+     * that does not decline, rather than a caller-built plural sentence — the
+     * catalogue carries no `_one`/`_few`/`_many`/`_other` forms yet (blocked on
+     * a build), and this is the one message a screen cannot get wrong by
+     * composing its own.
+     */
+    filteredHidden: "Hidden by filters: {{count}}",
+    /** §8.2 — the badge naming which of the three claims an `ErrorState` is making. */
+    "error.recoverable": "Temporary",
+    "error.terminal": "Won't retry",
+    "error.partial": "Partly done",
+    /** §8.4 — the one recovery verb, reused by `UndoToast` everywhere it appears. */
+    undo: "Undo",
+    /** Rapid repeats collapse into one toast with a count (§8.4). */
+    "toast.repeatCount": "×{{count}}",
+    "toast.dismiss": "Dismiss",
+    /** §8.4 — two equal actions, no default. */
+    "matchWarning.same": "This is the same one",
+    "matchWarning.different": "These are different",
+    "matchWarning.transactionCount": "Transactions: {{count}}",
+    /** §8.5 — the phase with no output yet. */
+    "thinking.thinking": "Thinking…",
+    /** §8.5 — after 20 s, explicit rather than a silent spinner. */
+    "thinking.stillWorking": "Still working",
+    threshold: "Confidence threshold",
+    /** §8.6 row 13 — `RuleHealthTag`'s five states. */
+    "rule.healthy": "Healthy",
+    "rule.endingSoon": "Ending soon",
+    "rule.amountDrifted": "Amount drifted",
+    "rule.overdue": "Overdue",
+    "rule.neverPosted": "Never posted",
+    /** The tab stubs (Ledger · Calendar · Debt) until their own arcs build the real screen. */
+    "stub.body": "This screen isn't built yet.",
+    "stub.goToToday": "Go to Today",
   },
 } as const;
 

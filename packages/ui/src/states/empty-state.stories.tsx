@@ -18,6 +18,7 @@ const meta = {
   title: "States/EmptyState",
   component: EmptyState,
   args: {
+    variant: "first-run",
     title: "No accounts yet",
     body: "Create one account to start your ledger.",
     primaryAction: { label: "Create account", onPress: noop },
@@ -35,15 +36,18 @@ type Story = StoryObj<typeof meta>;
 export const FirstRun: Story = {};
 
 /**
- * **`filtered`.** Rows exist and the filter excluded them — so the body names
- * the excluding filter and the action clears it. `S10`'s card is explicit that
- * this variant "names the excluding filter"; an empty state that just said "no
- * transactions" here would be false.
+ * **`filtered`.** Rows exist and the filter excluded them — `body` names the
+ * excluding filter and `count` states exactly how many it hid, through the one
+ * fixed line every screen shares rather than a caller-built plural sentence.
+ * `S10`'s card is explicit that this variant "names the excluding filter"; an
+ * empty state that just said "no transactions" here would be false.
  */
 export const Filtered: Story = {
   args: {
+    variant: "filtered",
     title: "No transactions match",
-    body: "The Needs attention filter is excluding 214 rows.",
+    body: "The Needs attention filter is excluding these rows.",
+    count: 214,
     primaryAction: { label: "Clear filter", onPress: noop },
     secondaryAction: { label: "Edit filters", onPress: noop },
   },
@@ -56,6 +60,7 @@ export const Filtered: Story = {
  */
 export const Range: Story = {
   args: {
+    variant: "range",
     title: "Nothing in August",
     body: "The nearest period with activity is June 2026.",
     primaryAction: { label: "Go to June", onPress: noop },

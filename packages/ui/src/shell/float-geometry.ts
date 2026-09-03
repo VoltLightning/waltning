@@ -61,6 +61,27 @@ export function defaultFloat(bounds: FloatBounds, insets: SafeAreaInsets): Float
 }
 
 /**
+ * A tab column, kept on screen with the whole tab visible.
+ *
+ * **Defined before `clampFloat`, which calls it, on purpose.** Reanimated's
+ * Babel plugin rewrites every `"worklet"` function into a closure over the
+ * bindings it references at the point of definition; a worklet calling
+ * another worklet declared later in the file closed over the binding before
+ * it existed and threw `Cannot access 'clampDock' before initialization` the
+ * first time this ran through the real plugin rather than the test mock,
+ * which does not apply it. Plain `function` hoisting would have made the
+ * original order work anywhere else in this codebase — it does not survive
+ * this one transform.
+ */
+export function clampDock(column: number, bounds: FloatBounds, insets: SafeAreaInsets): number {
+  "worklet";
+  const half = floating.tab.width / 2;
+  const min = insets.left + half;
+  const max = Math.max(min, bounds.width - insets.right - half);
+  return clamp(column, min, max);
+}
+
+/**
  * A stored position brought inside the current frame. The stored value is
  * left alone — this is a rendering of it, not a correction.
  */
@@ -76,15 +97,6 @@ export function clampFloat(
     y: clamp(position.y, r.minY, r.maxY),
     dock: position.dock === null ? null : clampDock(position.dock, bounds, insets),
   };
-}
-
-/** A tab column, kept on screen with the whole tab visible. */
-export function clampDock(column: number, bounds: FloatBounds, insets: SafeAreaInsets): number {
-  "worklet";
-  const half = floating.tab.width / 2;
-  const min = insets.left + half;
-  const max = Math.max(min, bounds.width - insets.right - half);
-  return clamp(column, min, max);
 }
 
 /**
