@@ -1,8 +1,15 @@
+import type { Id } from "@waltning/core/id";
 import type { CurrencyCode } from "@waltning/core/money";
 import type { CreateAccountInput, CreateTransactionInput } from "@waltning/core/registry/inputs";
+import type { CategoryKind } from "@waltning/schema/enums";
 import { currencies } from "@waltning/schema/sqlite/currencies";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
+import { readCategoryTree } from "./categories/read-category-tree.ts";
+import {
+  type LocalCounterparty,
+  readCounterparties,
+} from "./counterparties/read-counterparties.ts";
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 import {
   describeLedgerError,
@@ -40,10 +47,26 @@ export type BootstrapCurrency = {
   pinned?: boolean;
 };
 
+/**
+ * A leaf category, as a picker needs it.
+ *
+ * `readCategoryTree` carries the whole hierarchy — parent, depth, `isLeaf` —
+ * for the executors' cycle check and S19's editor. Only a leaf can be
+ * assigned to a transaction (TAXONOMY R1), so the session filters to that
+ * subset before it ever reaches a form.
+ */
+export type LocalCapturableCategory = {
+  id: Id<"categories">;
+  name: string;
+  kind: CategoryKind;
+};
+
 export type LocalLedgerSession = {
   listAccounts: () => readonly LocalAccountSummary[];
   listCurrencies: () => readonly LocalCurrency[];
   listRecent: (limit: number) => readonly LocalRecentTransaction[];
+  listCategories: () => readonly LocalCapturableCategory[];
+  listCounterparties: () => readonly LocalCounterparty[];
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
   reset: () => void;
@@ -162,6 +185,11 @@ export function createLocalLedgerSession<TRun>(
     listAccounts: () => readAccounts(requireOpen().replica.db),
     listCurrencies: () => readCurrencies(requireOpen().replica.db),
     listRecent: (limit) => readRecent(requireOpen().replica.db, limit),
+    listCategories: () =>
+      readCategoryTree(requireOpen().replica.db)
+        .filter((category) => category.isLeaf && !category.archived)
+        .map(({ id, name, kind }) => ({ id, name, kind })),
+    listCounterparties: () => readCounterparties(requireOpen().replica.db),
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createAccountExecutor,

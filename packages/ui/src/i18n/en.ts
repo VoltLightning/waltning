@@ -45,6 +45,7 @@ export const en = {
     fieldValue: "{{field}}: {{value}}",
     /** Heading over a form's unmatched errors — architecture/12. */
     couldNotSave: "Couldn't save",
+    note: "Note",
   },
   accounts: {
     currency: "Currency",
@@ -56,9 +57,26 @@ export const en = {
     /**
      * §14.6: holding a currency and capturing in it are separate capabilities.
      * The message names the currency because the person chose the account, not
-     * the currency, and the two are one step apart.
+     * the currency, and the two are one step apart. No longer names "expense"
+     * — B3 put income through the same field, and the refusal is about the
+     * currency, not the direction.
      */
-    needsRate: "{{currency}} needs an exchange rate before an expense can be recorded in it.",
+    needsRate: "{{currency}} needs an exchange rate before a transaction can be recorded in it.",
+    expense: "Expense",
+    income: "Income",
+    category: "Category",
+    noCategory: "No category",
+    more: "More",
+    date: "Date",
+    invalidDate: "Not a valid date (YYYY-MM-DD).",
+    business: "Business",
+    counterparty: "Counterparty",
+    noCounterparty: "No counterparty",
+    role: "Role",
+    /** §6.6 — what naming a counterparty on this row means. */
+    "role.debt": "Debt — expected back",
+    "role.contribution": "Contribution to a shared account",
+    "role.reference": "Just involved — no obligation",
   },
   shell: {
     today: "Today",
