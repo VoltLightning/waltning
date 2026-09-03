@@ -24,6 +24,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { useColorScheme, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { DeviceInsets } from "../src/device-insets";
 import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
@@ -101,9 +102,13 @@ export default function RootLayout() {
     // window and the theme is a property of the app. Nothing about a notch
     // changes when the appearance does, and a provider that remounted on a
     // theme swap would remeasure the window for no reason.
-    <DeviceInsets>
-      <ThemeProvider name={resolved.theme}>
-        {/*
+    // `GestureHandlerRootView` outermost: every gesture in the tree — the
+    // floating button's drag today — is resolved by this one root, and a
+    // gesture outside it is silently a no-op on Android.
+    <GestureHandlerRootView style={rootViewStyle}>
+      <DeviceInsets>
+        <ThemeProvider name={resolved.theme}>
+          {/*
           **No `<StatusBar>` component, and that is the fix.**
 
           `expo-status-bar` drives the status bar through APIs Android
@@ -121,7 +126,7 @@ export default function RootLayout() {
           time. Nothing mounts, edge-to-edge stays on, and the strip is drawn
           by whatever the app renders at y=0.
         */}
-        {/*
+          {/*
           **The root is the shell's green, and that is what paints the status
           bar.**
 
@@ -142,22 +147,29 @@ export default function RootLayout() {
           `shell` rather than `ground` because green is the colour of every
           top strip in the app, and the top strip is the only place this shows.
         */}
-        <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
-          {/* The one place the platform-resolved ledger meets the tree: every
+          <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
+            {/* The one place the platform-resolved ledger meets the tree: every
               screen below reads it from context, so a test or a diff preview
               can hand the same screens a different controller. */}
-          {ready ? (
-            <LedgerProvider controller={requirePhoneLedger()}>
-              <AppShell />
-            </LedgerProvider>
-          ) : (
-            <StartupBlank />
-          )}
-        </I18nProvider>
-      </ThemeProvider>
-    </DeviceInsets>
+            {ready ? (
+              <LedgerProvider controller={requirePhoneLedger()}>
+                <AppShell />
+              </LedgerProvider>
+            ) : (
+              <StartupBlank />
+            )}
+          </I18nProvider>
+        </ThemeProvider>
+      </DeviceInsets>
+    </GestureHandlerRootView>
   );
 }
+
+/**
+ * The one style that cannot come from `makeStyles`: it sits *outside*
+ * `ThemeProvider`, and it names no colour — `flex: 1` is layout, not theme.
+ */
+const rootViewStyle = { flex: 1 } as const;
 
 /**
  * The navigator, **inside `<I18nProvider>` rather than beside it.**

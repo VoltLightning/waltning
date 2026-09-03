@@ -13,7 +13,8 @@
  */
 
 import { useCallback } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";

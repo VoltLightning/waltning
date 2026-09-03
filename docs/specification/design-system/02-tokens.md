@@ -369,6 +369,10 @@ case is the keypad — a capture is a dozen taps several times a day, and a
 keypad that animates feels slow by the second week. The sheet that holds it may
 rise; the keys inside it may not.
 
+**The library is Reanimated, the gestures are gesture-handler, and nothing
+else moves anything** (`architecture/11` §8b). A token here is a duration and
+a curve; `primitives/easing.ts` turns the curve into a Reanimated easing once.
+
 **Every animation needs the `motion-none` branch.** The waveform, the mic halo,
 and the sheet rise are all currently unbranched (§10).
 

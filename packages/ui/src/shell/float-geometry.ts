@@ -8,6 +8,11 @@
  * function here, with no React in it, so the rules can be tested as rules and
  * the component is left with the gesture and the spring.
  *
+ * **Every function is a worklet.** The gesture that calls them runs on the UI
+ * thread, so the arithmetic that decides where a drop lands has to be there
+ * too — a `runOnJS` round-trip per frame is the lag this library exists to
+ * remove. The directive is a string the web and the tests ignore.
+ *
  * Coordinates are the button's **top-left corner in the frame it floats
  * over**, in points. Not fractions of the screen: a fraction re-derives the
  * height on every resize, and the height is the one thing the user chose. A
@@ -32,6 +37,7 @@ type Range = { minX: number; maxX: number; minY: number; maxY: number };
 
 /** The rectangle the button's top-left corner may occupy. */
 function range(bounds: FloatBounds, insets: SafeAreaInsets): Range {
+  "worklet";
   const minX = insets.left + floating.inset;
   const minY = insets.top + floating.inset;
   return {
@@ -43,11 +49,13 @@ function range(bounds: FloatBounds, insets: SafeAreaInsets): Range {
 }
 
 function clamp(value: number, min: number, max: number): number {
+  "worklet";
   return Math.min(Math.max(value, min), max);
 }
 
 /** Bottom-right, inset by 16 plus the device — where a thumb already is. */
 export function defaultFloat(bounds: FloatBounds, insets: SafeAreaInsets): FloatPosition {
+  "worklet";
   const r = range(bounds, insets);
   return { x: r.maxX, y: r.maxY, dock: null };
 }
@@ -61,6 +69,7 @@ export function clampFloat(
   bounds: FloatBounds,
   insets: SafeAreaInsets,
 ): FloatPosition {
+  "worklet";
   const r = range(bounds, insets);
   return {
     x: clamp(position.x, r.minX, r.maxX),
@@ -71,6 +80,7 @@ export function clampFloat(
 
 /** A tab column, kept on screen with the whole tab visible. */
 export function clampDock(column: number, bounds: FloatBounds, insets: SafeAreaInsets): number {
+  "worklet";
   const half = floating.tab.width / 2;
   const min = insets.left + half;
   const max = Math.max(min, bounds.width - insets.right - half);
@@ -84,6 +94,7 @@ export function clampDock(column: number, bounds: FloatBounds, insets: SafeAreaI
  * position sits.
  */
 export function inDockBand(y: number, bounds: FloatBounds, insets: SafeAreaInsets): boolean {
+  "worklet";
   return y > range(bounds, insets).maxY + floating.band;
 }
 
@@ -97,6 +108,7 @@ export function dragRange(
   bounds: FloatBounds,
   insets: SafeAreaInsets,
 ): { minX: number; maxX: number; minY: number; maxY: number } {
+  "worklet";
   const r = range(bounds, insets);
   return { ...r, maxY: Math.max(r.maxY, bounds.height - insets.bottom - floating.size / 2) };
 }
@@ -116,6 +128,7 @@ export function releaseAt(
   bounds: FloatBounds,
   insets: SafeAreaInsets,
 ): FloatPosition {
+  "worklet";
   if (inDockBand(y, bounds, insets)) {
     return { x: previous.x, y: previous.y, dock: clampDock(x + floating.size / 2, bounds, insets) };
   }
@@ -142,6 +155,7 @@ export function releaseAt(
  * `mass`), which are the ones both drivers accept.
  */
 export function settleSpring(travel: number): { stiffness: number; damping: number; mass: number } {
+  "worklet";
   const stiffness = 220;
   const mass = 1;
   const budget = floating.inset / 2;
@@ -165,6 +179,7 @@ export function dockFrame(
   bounds: FloatBounds,
   insets: SafeAreaInsets,
 ): { x: number; y: number } {
+  "worklet";
   return {
     x: clampDock(column, bounds, insets) - floating.tab.width / 2,
     y: bounds.height - insets.bottom - floating.tab.height,

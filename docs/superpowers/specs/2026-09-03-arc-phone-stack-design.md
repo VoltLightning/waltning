@@ -150,6 +150,16 @@ adds the desk composition: a breakpoint hook in `packages/ui` (`useBreakpoint`
 over `useWindowDimensions` — no platform named), a sidebar `Shell(desk)`,
 tables where the spec says table. The phone composition is untouched.
 
+**The desk is not a wide phone** (asked for 2026-09-03: *"the web page doesn't
+need that btw. floating doesn't make sense there. the web ux should look more
+packed, like we have more estate"*). At desk width there is **no floating add
+button** — the add action lives in the shell's top bar and on a keyboard
+shortcut — and density goes up: the ledger is a table with real columns, the
+hero shares its row with the period figures, cards sit side by side. The desk
+layout is **designed before it is built** — a design canvas in the Hearth
+palette, approved like the phone was — and that design is the input to this
+PR, not this PR's output.
+
 ## 4. What every PR must satisfy
 
 These are the repository's existing rules, restated so an agent's prompt can

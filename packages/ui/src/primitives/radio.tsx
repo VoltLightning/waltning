@@ -21,8 +21,9 @@
  * group read as indecision.
  */
 
-import { useCallback, useEffect, useRef } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { useCallback, useEffect } from "react";
+import { Pressable, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, motion, radius, space, touchTarget } from "../tokens.ts";
@@ -83,21 +84,24 @@ function RadioRow({ option, selected, groupDisabled, onChange }: RadioRowProps) 
   const reduced = useReducedMotion();
   const disabled = groupDisabled || option.disabled === true;
 
-  const pop = useRef(new Animated.Value(selected ? 1 : 0)).current;
+  const pop = useSharedValue(selected ? 1 : 0);
 
   useEffect(() => {
     if (selected) {
-      pop.setValue(0.4);
-      Animated.timing(pop, {
-        toValue: 1,
+      pop.value = 0.4;
+      pop.value = withTiming(1, {
         duration: reduced ? motion.none.duration : motion.fast.duration,
         easing: easing.fast,
-        useNativeDriver: true,
-      }).start();
+      });
     } else {
-      pop.setValue(0);
+      pop.value = 0;
     }
   }, [pop, reduced, selected]);
+
+  const dotMotion = useAnimatedStyle(
+    () => ({ opacity: pop.value, transform: [{ scale: pop.value }] }),
+    [pop],
+  );
 
   const handlePress = useCallback(() => {
     // Re-picking the selected option is a no-op, not a deselection — a radio
@@ -127,7 +131,7 @@ function RadioRow({ option, selected, groupDisabled, onChange }: RadioRowProps) 
       ]}
     >
       <View style={[styles.ring, selected ? styles.ringSelected : null]}>
-        <Animated.View style={[styles.dot, { opacity: pop, transform: [{ scale: pop }] }]} />
+        <Animated.View style={[styles.dot, dotMotion]} />
       </View>
       <View style={styles.copy}>
         <Text style={styles.label}>{option.label}</Text>

@@ -260,6 +260,35 @@ a `color` or a type step.
 
 ---
 
+## 8b · One way to move, and one way to touch
+
+**Everything that moves is Reanimated; everything that is dragged is
+gesture-handler.** React Native's own `Animated` and `PanResponder` are not
+used, and `tests/architecture.test.ts` refuses an import of `Animated`,
+`PanResponder` or `Easing` from `react-native` anywhere in `packages/ui`,
+`packages/client` or an app.
+
+The reason is the thread. `Animated` runs on the JS thread (its "native
+driver" covers transforms and opacity, and nothing else, and Expo Go does not
+ship the module that would make it real). A list rendering, a store publishing,
+a JSON parse — any of them lands between two frames of a drag and the button
+lags the finger, or a press answers late. Reanimated's shared values and
+gesture-handler's gesture callbacks are worklets on the UI thread: the drag
+that places the floating button never crosses to JS until the drop, which is a
+device preference the JS side stores.
+
+The second reason is that two vocabularies in one package is how the second
+one arrives. Every `usePressScale`, `useDisclosureMotion`, pop and slide reads
+the same tokens (`motion.*`, through `primitives/easing.ts`) and writes the
+same kind of value. A component's motion is a `useAnimatedStyle`; a gesture is a
+`GestureDetector`; the geometry a gesture needs is a `"worklet"`-marked
+function in a plain `.ts` file the tests call directly. The browser runs the
+same code on its main thread, which is what it has.
+
+`GestureHandlerRootView` is the app's outermost view and the story
+decorator's, for the same reason `ThemeProvider` is: a gesture outside it is
+silently nothing.
+
 ## 9 · What this is not
 
 It is **not** a rewrite. The moves are moves: the same files, in directories

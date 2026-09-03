@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -14,7 +15,31 @@ export default defineConfig({
    * variant would need its own projection, and `architecture/10` already
    * records that as the accepted cost of platform files.
    */
-  resolve: { alias: { "react-native": "react-native-web" } },
+  resolve: {
+    alias: [
+      // Reanimated's own jsdom mock: every `withTiming`/`withSpring` lands at
+      // once and `useAnimatedStyle` is the style. Component tests assert what
+      // a control *is*, never how it moved; the motion is looked at in
+      // Storybook and on the device.
+      {
+        find: /^react-native-reanimated$/,
+        replacement: fileURLToPath(new URL("packages/ui/.vitest/reanimated.ts", import.meta.url)),
+      },
+      // gesture-handler cannot load under jsdom (see the stub); its three
+      // exports are stood in for.
+      {
+        find: /^react-native-gesture-handler$/,
+        replacement: fileURLToPath(
+          new URL("packages/ui/.vitest/gesture-handler.ts", import.meta.url),
+        ),
+      },
+      { find: /^react-native$/, replacement: "react-native-web" },
+    ],
+    // Platform extensions, web first — the same order Metro uses for the web
+    // bundle. Reanimated and gesture-handler ship `.web.js` halves, and without
+    // this the native half loads under jsdom and trips on a Flow `typeof`.
+    extensions: [".web.tsx", ".web.ts", ".web.js", ".tsx", ".ts", ".mts", ".js", ".mjs", ".json"],
+  },
   /**
    * `__DEV__` is part of the React Native runtime contract, not of any module.
    *
@@ -29,6 +54,18 @@ export default defineConfig({
    */
   define: { __DEV__: "true" },
   test: {
+    server: {
+      deps: {
+        // Transformed by Vite rather than loaded by Node: the worklets
+        // package imports its own files without extensions, which Node's ESM
+        // loader refuses and Vite resolves.
+        inline: [
+          /react-native-worklets/,
+          /react-native-reanimated/,
+          /react-native-gesture-handler/,
+        ],
+      },
+    },
     include: [
       "packages/*/src/**/*.test.ts",
       // `packages/ui` is components. Without this the design system's render
@@ -43,7 +80,7 @@ export default defineConfig({
       "tests/**/*.test.ts",
     ],
     globalSetup: ["packages/db/src/test/global-setup.ts"],
-    setupFiles: ["tests/setup/dom-cleanup.ts"],
+    setupFiles: ["tests/setup/match-media.ts", "tests/setup/dom-cleanup.ts"],
     /**
      * Pinned to a zone that observes DST, deliberately.
      *

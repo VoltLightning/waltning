@@ -26,6 +26,24 @@
 
 import type { StorybookConfig } from "@storybook/react-native-web-vite";
 
+const reanimatedWebUtils = {
+  name: "waltning:reanimated-web-utils",
+  enforce: "pre" as const,
+  transform(_code: string, id: string) {
+    if (!id.includes("react-native-reanimated") || !id.includes("js-reanimated/webUtils")) {
+      return null;
+    }
+    return {
+      code: [
+        'import createReactDOMStyle from "react-native-web/dist/exports/StyleSheet/compiler/createReactDOMStyle";',
+        'import { createTextShadowValue, createTransformValue } from "react-native-web/dist/exports/StyleSheet/preprocess";',
+        "export { createReactDOMStyle, createTextShadowValue, createTransformValue };",
+      ].join("\n"),
+      map: null,
+    };
+  },
+};
+
 const config: StorybookConfig = {
   /**
    * Colocated with the components, and `.tsx` only — a story renders something.
@@ -66,6 +84,28 @@ const config: StorybookConfig = {
    * system. Nothing here needs the outside world, so nothing here reaches it.
    */
   core: { disableTelemetry: true },
+
+  /**
+   * **Reanimated's browser half reaches `react-native-web` through `require`,
+   * and Vite leaves a `require` undefined.** `js-reanimated/webUtils.web.js`
+   * does `try { createReactDOMStyle = require("react-native-web/…") } catch {}`
+   * three times; in a Vite bundle each throws, each is swallowed, and every
+   * animated style update then falls into a branch written for a React
+   * component rather than a DOM node — `Object.keys(component.props)` on an
+   * element — so the first component to move on mount crashed its story.
+   * `vite-plugin-rnw` carries a transform for exactly this file and it did
+   * not fire here; this one does the same rewrite, as static imports, and is
+   * gated on the file's path alone. Excluded from dependency pre-bundling so
+   * the dev server sees the same source as the build.
+   */
+  viteFinal: (config) => ({
+    ...config,
+    plugins: [reanimatedWebUtils, ...(config.plugins ?? [])],
+    optimizeDeps: {
+      ...config.optimizeDeps,
+      exclude: [...(config.optimizeDeps?.exclude ?? []), "react-native-reanimated"],
+    },
+  }),
 };
 
 export default config;

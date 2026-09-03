@@ -20,8 +20,9 @@
  * the 44pt floor (§10).
  */
 
-import { useCallback, useEffect, useRef } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { useCallback, useEffect } from "react";
+import { Pressable, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, motion, radius, space, touchTarget } from "../tokens.ts";
@@ -51,24 +52,22 @@ export function Toggle({ label, value, onChange, hint, disabled = false }: Toggl
   const { hovered, focused, handlers } = useInteraction();
   const reduced = useReducedMotion();
 
-  const progress = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const progress = useSharedValue(value ? 1 : 0);
 
   useEffect(() => {
-    Animated.timing(progress, {
-      toValue: value ? 1 : 0,
+    progress.value = withTiming(value ? 1 : 0, {
       // The motion-none branch: same path, zero duration (§2.7).
       duration: reduced ? motion.none.duration : motion.base.duration,
       easing: easing.base,
-      useNativeDriver: true,
-    }).start();
+    });
   }, [progress, reduced, value]);
 
-  const handlePress = useCallback(() => onChange(!value), [onChange, value]);
+  const thumbMotion = useAnimatedStyle(
+    () => ({ transform: [{ translateX: progress.value * TRAVEL }] }),
+    [progress],
+  );
 
-  const translateX = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, TRAVEL],
-  });
+  const handlePress = useCallback(() => onChange(!value), [onChange, value]);
 
   return (
     <Pressable
@@ -93,9 +92,7 @@ export function Toggle({ label, value, onChange, hint, disabled = false }: Toggl
         {hint === undefined ? null : <Text style={styles.hint}>{hint}</Text>}
       </View>
       <View style={[styles.track, value ? styles.trackOn : null]}>
-        <Animated.View
-          style={[styles.thumb, value ? styles.thumbOn : null, { transform: [{ translateX }] }]}
-        />
+        <Animated.View style={[styles.thumb, value ? styles.thumbOn : null, thumbMotion]} />
       </View>
     </Pressable>
   );

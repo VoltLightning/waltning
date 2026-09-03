@@ -12,28 +12,40 @@
  * **Still a button.** Tap adds, and only a real drag — past a small slop —
  * moves it. The `Pressable` inside is what a keyboard and a screen reader
  * meet: focusable, labelled, activated by Enter, and never asked to drag. The
- * gesture lives on the wrapper as a `PanResponder`, which claims the touch
- * only once it has moved, so a tap never sees it and a drag cancels the press
- * underneath. `PanResponder` is React Native's own responder plumbing and
- * runs unchanged under `react-native-web`, which is why this is one file with
- * no platform variant.
+ * drag is a `Gesture.Pan` around it that activates only after `minDistance`,
+ * so a tap never sees it and a drag takes the touch from the press beneath.
  *
- * **Where it is comes from outside.** The position is a device preference —
- * stored like appearance, never a registry operation, never synced — and the
- * component neither reads nor writes storage: it takes `position` (or `null`
- * for the default) and reports every drop through `onPositionChange`. The
- * geometry is `float-geometry.ts`, tested as arithmetic.
+ * **The drag never touches the JS thread.** The gesture's callbacks are
+ * worklets; the geometry they call is worklets; the position is a pair of
+ * shared values the style reads on the UI thread. A list rendering on the JS
+ * thread cannot make the button lag the finger — which is the reason this
+ * package uses Reanimated and gesture-handler and nothing else for motion.
+ * The only crossings are `runOnJS`: the lifted-shadow state on start and
+ * end, and the drop, which is a device preference the JS side stores.
+ *
+ * **Where it is comes from outside.** The component neither reads nor writes
+ * storage: it takes `position` (or `null` for the default) and reports every
+ * drop through `onPositionChange`. The geometry is `float-geometry.ts`,
+ * tested as arithmetic.
  *
  * **The motion, named.** Press is `usePressScale` and nothing more. The drag
- * is unanimated, following the finger 1:1, with the lifted shadow swapped in
- * at once. Settling is a spring (`settleSpring` — its damping is solved from
- * the travel so the overshoot stays inside the inset). Parking and returning
- * are `motion.move` — the button *travels* rather than appears. Reduced
- * motion: it still moves, it just arrives.
+ * follows the finger 1:1, with the lifted shadow swapped in at once. Settling
+ * is `withSpring` on `settleSpring` — damping solved from the travel so the
+ * overshoot stays inside the inset. Parking and returning are `motion.move` —
+ * the button *travels* rather than appears. Reduced motion: it still moves,
+ * it just arrives.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, type LayoutChangeEvent, PanResponder, Pressable, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { type LayoutChangeEvent, Pressable, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { easing } from "../primitives/easing.ts";
 import { useInteraction } from "../primitives/interaction.ts";
@@ -64,6 +76,8 @@ export type FloatingAddProps = {
 /** Finger travel before a touch stops being a tap. */
 const DRAG_SLOP = 4;
 
+const MOVE = { duration: motion.move.duration, easing: easing.move };
+
 export function FloatingAdd({
   onAdd,
   disabled = false,
@@ -91,147 +105,124 @@ export function FloatingAdd({
         ? defaultFloat(bounds, insets)
         : clampFloat(position, bounds, insets);
 
-  // The wrapper's translation. One value for the whole life of the component,
-  // across parked and floating, so a return can start from the tab.
-  const pan = useRef(new Animated.ValueXY()).current;
-  // What the responder needs at release time, without stale closures: the
-  // handlers are created once and read these.
-  const live = useRef({
-    shown,
-    bounds,
-    insets,
-    onPositionChange,
-    reduced,
-    busy: false,
-    start: { x: 0, y: 0 },
-    down: { x: 0, y: 0 },
-  });
-  live.current.shown = shown;
-  live.current.bounds = bounds;
-  live.current.insets = insets;
-  live.current.onPositionChange = onPositionChange;
-  live.current.reduced = reduced;
+  // The wrapper's translation, on the UI thread, for the whole life of the
+  // component — across parked and floating, so a return can start from the
+  // tab. `settling` is true while a spring or a slide owns them.
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const settling = useSharedValue(false);
 
-  // Rest the wrapper where the position says, unless a finger or a tween owns
-  // it right now.
+  // Rest the wrapper where the position says, unless a finger or a tween
+  // owns it right now.
   useEffect(() => {
-    if (shown === null || shown.dock !== null || dragging || live.current.busy) return;
-    pan.setValue({ x: shown.x, y: shown.y });
-  }, [shown, dragging, pan]);
+    if (shown === null || shown.dock !== null || dragging || settling.value) return;
+    tx.value = shown.x;
+    ty.value = shown.y;
+  }, [shown, dragging, settling, tx, ty]);
 
-  const travel = useCallback(
-    (to: { x: number; y: number }, then: () => void) => {
-      if (live.current.reduced) {
-        pan.setValue(to);
-        then();
-        return;
-      }
-      live.current.busy = true;
-      Animated.timing(pan, {
-        toValue: to,
-        duration: motion.move.duration,
-        easing: easing.move,
-        useNativeDriver: true,
-      }).start(() => {
-        live.current.busy = false;
-        then();
-      });
-    },
-    [pan],
-  );
+  const finishSettling = useCallback(() => {
+    settling.value = false;
+  }, [settling]);
 
-  /** From the drop point to the rest, on a spring sized to the distance. */
-  const settle = useCallback(
-    (from: { x: number; y: number }, to: { x: number; y: number }) => {
-      if (live.current.reduced) {
-        pan.setValue(to);
-        return;
-      }
-      live.current.busy = true;
-      Animated.spring(pan, {
-        toValue: to,
-        ...settleSpring(Math.hypot(to.x - from.x, to.y - from.y)),
-        useNativeDriver: true,
-      }).start(() => {
-        live.current.busy = false;
-      });
-    },
-    [pan],
-  );
-
-  const responder = useRef(
-    PanResponder.create({
-      /**
-       * The touch-down point, taken in the capture phase so it is seen even
-       * when the `Pressable` below claims the start. `gestureState.dx` is
-       * measured from the *grant*, and a drag is granted on its first move —
-       * so a drag made of one move event (a flick, a scripted pointer) would
-       * measure zero and the button would not move. Every position below is
-       * the finger's page point minus this one.
-       */
-      onStartShouldSetPanResponderCapture: (evt) => {
-        live.current.down = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
-        return false;
-      },
-      onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > DRAG_SLOP || Math.abs(g.dy) > DRAG_SLOP,
-      onPanResponderGrant: () => {
-        const { shown: at } = live.current;
-        if (at === null) return;
-        live.current.start = { x: at.x, y: at.y };
-        setDragging(true);
-      },
-      onPanResponderMove: (evt) => {
-        const { bounds: b, insets: i } = live.current;
-        if (b === null) return;
-        const r = dragRange(b, i);
-        const to = dragged(live.current, evt.nativeEvent);
-        pan.setValue({
-          x: Math.min(Math.max(to.x, r.minX), r.maxX),
-          y: Math.min(Math.max(to.y, r.minY), r.maxY),
-        });
-      },
-      onPanResponderRelease: (evt) => {
-        const { shown: at, bounds: b, insets: i } = live.current;
-        setDragging(false);
-        if (at === null || b === null) return;
-        const to = dragged(live.current, evt.nativeEvent);
-        const next = releaseAt(at, to.x, to.y, b, i);
+  const pan = useMemo(() => {
+    const gesture = Gesture.Pan()
+      .minDistance(DRAG_SLOP)
+      .enabled(bounds !== null && shown !== null)
+      .onStart(() => {
+        "worklet";
+        startX.value = tx.value;
+        startY.value = ty.value;
+        runOnJS(setDragging)(true);
+      })
+      .onUpdate((e) => {
+        "worklet";
+        if (bounds === null) return;
+        const r = dragRange(bounds, insets);
+        tx.value = Math.min(Math.max(startX.value + e.translationX, r.minX), r.maxX);
+        ty.value = Math.min(Math.max(startY.value + e.translationY, r.minY), r.maxY);
+      })
+      .onEnd((e) => {
+        "worklet";
+        runOnJS(setDragging)(false);
+        if (bounds === null || shown === null) return;
+        const x = startX.value + e.translationX;
+        const y = startY.value + e.translationY;
+        const next = releaseAt(shown, x, y, bounds, insets);
         if (next.dock === null) {
-          live.current.onPositionChange(next);
-          settle(to, next);
+          runOnJS(onPositionChange)(next);
+          if (reduced) {
+            tx.value = next.x;
+            ty.value = next.y;
+            return;
+          }
+          const spring = settleSpring(Math.hypot(next.x - tx.value, next.y - ty.value));
+          settling.value = true;
+          tx.value = withSpring(next.x, spring);
+          ty.value = withSpring(next.y, spring, (finished) => {
+            if (finished) runOnJS(finishSettling)();
+          });
           return;
         }
         // Slide down into the edge, then become the tab.
-        const frame = dockFrame(next.dock, b, i);
-        travel(
-          {
-            x: frame.x + floating.tab.width / 2 - floating.size / 2,
-            y: frame.y + floating.tab.height - floating.size / 2,
-          },
-          () => live.current.onPositionChange(next),
-        );
-      },
-      onPanResponderTerminate: () => {
-        const { start } = live.current;
-        setDragging(false);
-        pan.setValue(start);
-      },
-    }),
-  ).current;
+        const frame = dockFrame(next.dock, bounds, insets);
+        const to = {
+          x: frame.x + floating.tab.width / 2 - floating.size / 2,
+          y: frame.y + floating.tab.height - floating.size / 2,
+        };
+        if (reduced) {
+          tx.value = to.x;
+          ty.value = to.y;
+          runOnJS(onPositionChange)(next);
+          return;
+        }
+        settling.value = true;
+        tx.value = withTiming(to.x, MOVE);
+        ty.value = withTiming(to.y, MOVE, (finished) => {
+          if (finished) {
+            settling.value = false;
+            runOnJS(onPositionChange)(next);
+          }
+        });
+      });
+    return gesture;
+  }, [
+    bounds,
+    shown,
+    insets,
+    reduced,
+    onPositionChange,
+    finishSettling,
+    startX,
+    startY,
+    tx,
+    ty,
+    settling,
+  ]);
 
   const handleReturn = useCallback(() => {
-    const { shown: at, bounds: b, insets: i } = live.current;
-    if (at === null || at.dock === null || b === null) return;
-    const frame = dockFrame(at.dock, b, i);
-    pan.setValue({
-      x: frame.x + floating.tab.width / 2 - floating.size / 2,
-      y: frame.y + floating.tab.height - floating.size / 2,
+    if (shown === null || shown.dock === null || bounds === null) return;
+    const frame = dockFrame(shown.dock, bounds, insets);
+    tx.value = frame.x + floating.tab.width / 2 - floating.size / 2;
+    ty.value = frame.y + floating.tab.height - floating.size / 2;
+    onPositionChange({ x: shown.x, y: shown.y, dock: null });
+    if (reduced) {
+      tx.value = shown.x;
+      ty.value = shown.y;
+      return;
+    }
+    settling.value = true;
+    tx.value = withTiming(shown.x, MOVE);
+    ty.value = withTiming(shown.y, MOVE, (finished) => {
+      if (finished) runOnJS(finishSettling)();
     });
-    const next = { x: at.x, y: at.y, dock: null };
-    live.current.onPositionChange(next);
-    travel({ x: at.x, y: at.y }, noop);
-  }, [pan, travel]);
+  }, [shown, bounds, insets, reduced, onPositionChange, finishSettling, settling, tx, ty]);
+
+  const wrapperMotion = useAnimatedStyle(
+    () => ({ transform: [{ translateX: tx.value }, { translateY: ty.value }] }),
+    [tx, ty],
+  );
 
   return (
     <View style={styles.layer} onLayout={onLayout}>
@@ -242,25 +233,19 @@ export function FloatingAdd({
           label={t("shell.showAdd")}
         />
       ) : (
-        <Animated.View
-          style={[styles.wrapper, { transform: pan.getTranslateTransform() }]}
-          {...responder.panHandlers}
-        >
-          <AddButton label={t("shell.add")} onPress={onAdd} disabled={disabled} lifted={dragging} />
-        </Animated.View>
+        <GestureDetector gesture={pan}>
+          <Animated.View style={[styles.wrapper, wrapperMotion]}>
+            <AddButton
+              label={t("shell.add")}
+              onPress={onAdd}
+              disabled={disabled}
+              lifted={dragging}
+            />
+          </Animated.View>
+        </GestureDetector>
       )}
     </View>
   );
-}
-
-function noop() {}
-
-/** Where the button's corner is for a finger at `page`, given where both began. */
-function dragged(
-  from: { start: { x: number; y: number }; down: { x: number; y: number } },
-  page: { pageX: number; pageY: number },
-): { x: number; y: number } {
-  return { x: from.start.x + page.pageX - from.down.x, y: from.start.y + page.pageY - from.down.y };
 }
 
 type AddButtonProps = { label: string; onPress: () => void; disabled: boolean; lifted: boolean };
@@ -331,7 +316,14 @@ function layer(l: { color: string; opacity: number; radius: number; offsetY: num
 
 const useStyles = makeStyles((theme) => ({
   /** `pointerEvents` in the style, not the prop: the prop is deprecated on web. */
-  layer: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, pointerEvents: "box-none" },
+  layer: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    pointerEvents: "box-none",
+  },
   wrapper: { position: "absolute", top: 0, left: 0 },
   button: {
     width: floating.size,

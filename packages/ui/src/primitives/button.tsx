@@ -19,7 +19,8 @@
  */
 
 import { useCallback } from "react";
-import { ActivityIndicator, Animated, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";

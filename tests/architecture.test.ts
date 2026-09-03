@@ -363,6 +363,37 @@ describe("platform-variant files are imported extension-less", () => {
   });
 });
 
+/* ── §4b · Motion and gestures ───────────────────────────────────────────── */
+
+describe("motion is Reanimated and gestures are gesture-handler", () => {
+  /**
+   * `architecture/11`: React Native's own `Animated` and `PanResponder` run on
+   * the JS thread, so a list rendering makes a drag lag the finger and a
+   * press feel late. Reanimated's shared values and gesture-handler's
+   * worklets run on the UI thread, and the decision is that *everything*
+   * that moves uses them — two animation vocabularies in one package is how
+   * the second one arrives one file at a time. `Easing` is in the list
+   * because it is `Animated`'s, and Reanimated has its own.
+   */
+  it("nothing imports Animated, PanResponder or Easing from react-native", () => {
+    const BANNED = new Set(["Animated", "PanResponder", "Easing"]);
+    const roots = ["packages/ui/src", "packages/client/src", "apps/mobile"];
+    const offenders: string[] = [];
+    for (const root of roots) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        const text = readFileSync(file, "utf8");
+        for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*"react-native"/g)) {
+          const names = (m[1] ?? "").split(",").map((n) => n.trim().split(/\s+as\s+/)[0] ?? "");
+          for (const name of names) {
+            if (BANNED.has(name)) offenders.push(`${rel(file)} imports ${name} from react-native`);
+          }
+        }
+      }
+    }
+    expect(offenders, "use react-native-reanimated / react-native-gesture-handler").toEqual([]);
+  });
+});
+
 /* ── §3 · Structure: modules first, layers inside them ───────────────────── */
 
 describe("every src/ is organised by domain, not by layer", () => {
