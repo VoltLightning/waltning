@@ -380,3 +380,197 @@ export const createTransactionInput = z
   });
 
 export type CreateTransactionInput = z.output<typeof createTransactionInput>;
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A3 · accounts and groups — appended in its own block so a rebase against
+ * A2's own append (`update_transaction` et al.) is a trivial merge. Nothing
+ * above this line is A3's; nothing below is A2's.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── accounts and groups ─────────────────────────────────────────────────── */
+
+/**
+ * `update_account` — S16 §5/§7, a patch with a version and nothing else.
+ *
+ * **`currency` is deliberately absent.** S16 §7: changing an account's
+ * currency with transactions present is refused, and with none present it is
+ * create-then-archive, not an edit — there is no in-place path for this field
+ * to travel through.
+ *
+ * `openingBalance`/`openingDate` **are** patchable — S16 §5 says editing one is
+ * *"an audited write with a confirm"*, not a forbidden one. The confirm is the
+ * screen's; this is the write it confirms.
+ */
+const accountPatch = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    kind: z.enum(ACCOUNT_KIND).optional(),
+    groupId: zId<"accountGroups">().nullable().optional(),
+    ownership: z.enum(OWNERSHIP).optional(),
+    memo: z.string().trim().max(2000).optional(),
+    isBusiness: z.boolean().optional(),
+    openingBalance: zMoney.optional(),
+    openingDate: zAccountingDate.nullable().optional(),
+  })
+  .strict();
+
+export const updateAccountInput = z
+  .object({
+    id: zId<"accounts">(),
+    version: z.number().int().positive(),
+    patch: accountPatch,
+  })
+  .refine((v) => Object.keys(v.patch).length > 0, {
+    message: "a patch must set at least one field",
+    path: ["patch"],
+  });
+export type UpdateAccountInput = z.output<typeof updateAccountInput>;
+
+/** `archive_account` — structural, `operations.md` *Accounts*. Never deletes (§6.9). */
+export const archiveAccountInput = z.object({
+  id: zId<"accounts">(),
+  version: z.number().int().positive(),
+});
+export type ArchiveAccountInput = z.output<typeof archiveAccountInput>;
+
+/** `reorder_accounts` — the whole ordered list; `sort` becomes each id's index. */
+export const reorderAccountsInput = z.object({ ids: z.array(zId<"accounts">()).min(1) });
+export type ReorderAccountsInput = z.output<typeof reorderAccountsInput>;
+
+/**
+ * `create_group` — S16 §5, *"nothing in the specification created a group"*
+ * until now. `id` is client-minted, matching `create_account` (H13).
+ */
+export const createGroupInput = z.object({
+  id: zId<"accountGroups">(),
+  name: z.string().trim().min(1).max(120),
+  institution: z.string().trim().max(120).nullable().default(null),
+});
+export type CreateGroupInput = z.output<typeof createGroupInput>;
+
+/**
+ * `update_group` — sets `institution`, which `FX Cost` (`computations.md`
+ * §12) totals by. No version column on `account_groups`; there is nothing on
+ * the row two devices could race over that a plain update does not already
+ * resolve last-write-wins.
+ */
+export const updateGroupInput = z
+  .object({
+    id: zId<"accountGroups">(),
+    patch: z
+      .object({
+        name: z.string().trim().min(1).max(120).optional(),
+        institution: z.string().trim().max(120).nullable().optional(),
+      })
+      .strict(),
+  })
+  .refine((v) => Object.keys(v.patch).length > 0, {
+    message: "a patch must set at least one field",
+    path: ["patch"],
+  });
+export type UpdateGroupInput = z.output<typeof updateGroupInput>;
+
+export const reorderGroupsInput = z.object({ ids: z.array(zId<"accountGroups">()).min(1) });
+export type ReorderGroupsInput = z.output<typeof reorderGroupsInput>;
+
+/**
+ * `archive_group` — named to match the server operation, though the local
+ * executor's real behaviour is closer to a delete than to `archive_account`'s
+ * soft flag. See `archive-group.executor.ts` for why: `account_groups` has no
+ * `archived` column on either dialect, because a group carries no history of
+ * its own (§6.9 is about `accounts`, which do).
+ */
+export const archiveGroupInput = z.object({ id: zId<"accountGroups">() });
+export type ArchiveGroupInput = z.output<typeof archiveGroupInput>;
+
+/**
+ * `reconcile_account` — S16 §5, *"I counted, and it says this."*
+ *
+ * The observed balance and the date it was observed; the executor computes
+ * the difference against §2 and writes one `adjustment`. `note` is the
+ * reason; `categoryId` defaults to Uncategorized on the server — here it is
+ * optional and the executor leaves it unset when absent, which reads as
+ * uncategorised in every list, same as any other transaction.
+ */
+export const reconcileAccountInput = z.object({
+  accountId: zId<"accounts">(),
+  adjustmentId: zId<"transactions">(),
+  observedBalance: zMoney,
+  asOf: zAccountingDate,
+  note: z.string().trim().max(2000).default(""),
+  categoryId: zId<"categories">().optional(),
+});
+export type ReconcileAccountInput = z.output<typeof reconcileAccountInput>;
+
+/* ── categories ───────────────────────────────────────────────────────────── */
+
+/**
+ * Restated from `packages/schema/src/enums.ts` — core cannot import schema
+ * (see the note above `ACCOUNT_KIND`). `CATEGORY_KIND` has no core-side brand
+ * to pin it against, the same gap that note records for `ACCOUNT_KIND` itself.
+ */
+const CATEGORY_KIND = ["income", "expense"] as const;
+
+/**
+ * `create_category` — `operations.md`: *"the agent proposes; it never creates
+ * silently"* (§11.5). This schema is the write either a person or an accepted
+ * proposal ends up calling; the gate that keeps the agent from calling it
+ * directly lives in the registry operation, not here.
+ */
+export const createCategoryInput = z.object({
+  id: zId<"categories">(),
+  name: z.string().trim().min(1).max(120),
+  kind: z.enum(CATEGORY_KIND),
+  parentId: zId<"categories">().nullable().default(null),
+  isEarnings: z.boolean().default(false),
+  icon: z.string().trim().max(64).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .optional(),
+});
+export type CreateCategoryInput = z.output<typeof createCategoryInput>;
+export type CategoryKind = CreateCategoryInput["kind"];
+
+/** `rename_category` — J12: names are not identifiers, and renaming propagates. */
+export const renameCategoryInput = z.object({
+  id: zId<"categories">(),
+  version: z.number().int().positive(),
+  name: z.string().trim().min(1).max(120),
+});
+export type RenameCategoryInput = z.output<typeof renameCategoryInput>;
+
+/** `reparent_category` — J12: refused across `kind`, refused into a cycle. */
+export const reparentCategoryInput = z.object({
+  id: zId<"categories">(),
+  version: z.number().int().positive(),
+  parentId: zId<"categories">().nullable(),
+});
+export type ReparentCategoryInput = z.output<typeof reparentCategoryInput>;
+
+/** `convert_leaf_group` — leaf⇄group, refused where it would strand a row. */
+export const convertLeafGroupInput = z.object({
+  id: zId<"categories">(),
+  version: z.number().int().positive(),
+  to: z.enum(["leaf", "group"]),
+});
+export type ConvertLeafGroupInput = z.output<typeof convertLeafGroupInput>;
+
+/**
+ * `merge_categories` — J12: *"not reversible in one step"*. Every transaction
+ * and line on `loserId` moves to `winnerId`, then `loserId` is archived.
+ */
+export const mergeCategoriesInput = z
+  .object({ loserId: zId<"categories">(), winnerId: zId<"categories">() })
+  .refine((v) => v.loserId !== v.winnerId, {
+    message: "a category cannot merge into itself",
+    path: ["winnerId"],
+  });
+export type MergeCategoriesInput = z.output<typeof mergeCategoriesInput>;
+
+/** `archive_category` — `TAXONOMY.md` R2: a leaf with history keeps it and stops being offerable. */
+export const archiveCategoryInput = z.object({
+  id: zId<"categories">(),
+  version: z.number().int().positive(),
+});
+export type ArchiveCategoryInput = z.output<typeof archiveCategoryInput>;
