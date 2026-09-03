@@ -451,7 +451,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "theme",
       "transactions",
     ],
-    "packages/db/src": ["fx", "seed", "test"],
+    "packages/db/src": ["figures", "fx", "seed", "test"],
     /**
      * The phone's ledger: **a flat foundation, plus one folder per domain.**
      *

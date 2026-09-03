@@ -20,6 +20,7 @@
 
 import type * as money from "@waltning/core/money";
 import type { DbHandle } from "@waltning/db/client";
+import { signedFromLeg } from "@waltning/db/figures/signed.sql";
 import { accounts, currencies, transactions } from "@waltning/db/schema";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
@@ -52,7 +53,7 @@ export type AccountSummary = {
 const live = sql`${transactions.deletedAt} is null`;
 
 /**
- * The source leg, signed by **type**.
+ * The source leg, signed by **type** — `signedFromLeg` (§1), summed.
  *
  * `expense` and the source leg of a `transfer` leave the account; `income` and
  * `adjustment` add to it, and an `adjustment` carries its own sign so negating
@@ -60,12 +61,7 @@ const live = sql`${transactions.deletedAt} is null`;
  */
 const sourceLeg = sql<string>`
   coalesce((
-    SELECT sum(
-      CASE ${transactions.type}
-        WHEN 'expense'  THEN -${transactions.amountOriginal}
-        WHEN 'transfer' THEN -${transactions.amountOriginal}
-        ELSE                   ${transactions.amountOriginal}
-      END)
+    SELECT sum(${signedFromLeg})
     FROM ${transactions}
     WHERE ${transactions.accountId} = ${accounts.id} AND ${live}
   ), 0)`;

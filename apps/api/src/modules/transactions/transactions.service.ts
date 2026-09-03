@@ -16,8 +16,9 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type * as money from "@waltning/core/money";
 import type { DbHandle } from "@waltning/db/client";
+import { signedFromLeg } from "@waltning/db/figures/signed.sql";
 import { accounts, categories, transactions } from "@waltning/db/schema";
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 export type TransactionRow = {
   id: string;
@@ -37,14 +38,6 @@ export type TransactionPage = {
   /** Feed back as `cursor` for the next page; `null` when there are no more. */
   nextCursor: { date: string; id: string } | null;
 };
-
-/** §1's `signed(t,'from')`, in SQL so there is one implementation of it. */
-const signedAmount = sql<money.Money>`
-  CASE ${transactions.type}
-    WHEN 'expense'  THEN -${transactions.amountOriginal}
-    WHEN 'transfer' THEN -${transactions.amountOriginal}
-    ELSE                   ${transactions.amountOriginal}
-  END`;
 
 export async function listTransactions(
   db: DbHandle,
@@ -67,7 +60,7 @@ export async function listTransactions(
       date: transactions.date,
       type: transactions.type,
       payee: transactions.payee,
-      amount: signedAmount,
+      amount: signedFromLeg,
       currency: transactions.currency,
       accountName: accounts.name,
       categoryName: categories.name,

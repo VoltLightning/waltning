@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./client": "./src/client.ts",
+    "./figures/signed.sql": "./src/figures/signed.sql.ts",
     "./rows": "./src/rows.ts",
     "./schema": "./src/schema.ts"
   },
