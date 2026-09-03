@@ -15,6 +15,10 @@ import { renameCategoryExecutor } from "./categories/rename-category.executor.ts
 import { reparentCategoryExecutor } from "./categories/reparent-category.executor.ts";
 import { localRegistry } from "./executor.ts";
 import { createTransactionExecutor } from "./transactions/create-transaction.executor.ts";
+// ── A2 · transaction operations — the phone half ──────────────────────────
+import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
+import { updateTransactionExecutor } from "./transactions/update-transaction.executor.ts";
+// ── end A2 block ───────────────────────────────────────────────────────────
 
 /** Every operation the phone can apply locally, keyed by its registry name. */
 export const ledgerRegistry = localRegistry([
@@ -36,4 +40,8 @@ export const ledgerRegistry = localRegistry([
   convertLeafGroupExecutor,
   mergeCategoriesExecutor,
   archiveCategoryExecutor,
+  // ── A2 · transaction operations — the phone half ─────────────────────────
+  updateTransactionExecutor,
+  deleteTransactionExecutor,
+  // ── end A2 block ─────────────────────────────────────────────────────────
 ]);
