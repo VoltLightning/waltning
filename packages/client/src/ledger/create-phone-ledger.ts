@@ -60,6 +60,20 @@ export type PhoneCurrency = {
   capturable: boolean;
 };
 
+/**
+ * A group the replica holds, for the create-account form's group picker.
+ *
+ * Structural rather than imported from `@waltning/ledger`, matching
+ * `PhoneCurrency` above — the port is what keeps this package free of the
+ * storage engine behind it.
+ */
+export type PhoneGroup = {
+  id: Id<"accountGroups">;
+  name: string;
+  institution: string | null;
+  sort: number;
+};
+
 export type PhoneRecentTransaction = {
   id: Id<"transactions">;
   date: AccountingDate;
@@ -99,6 +113,7 @@ export type PhoneCounterparty = {
 export type PhoneLedgerPort = {
   listAccounts: () => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
+  listGroups: () => readonly PhoneGroup[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
   listCounterparties: () => readonly PhoneCounterparty[];
@@ -131,6 +146,7 @@ export type PhoneCurrencySubtotal = {
 export type PhoneLedgerSnapshot = {
   accounts: readonly PhoneCapturableAccount[];
   currencies: readonly PhoneCurrency[];
+  groups: readonly PhoneGroup[];
   recent: readonly PhoneRecentTransaction[];
   categories: readonly PhoneCategory[];
   counterparties: readonly PhoneCounterparty[];
@@ -169,13 +185,36 @@ export type QuickAddDraft = {
   counterpartyRole: "debt" | "contribution" | "reference" | null;
 };
 
+/**
+ * The full user-owned subset of `CreateAccountInput` — everything the form
+ * asks for, and nothing the operation derives (`id`) or the migration alone
+ * sets (`externalId`).
+ *
+ * Structural rather than imported from `@waltning/ui`, matching `PhoneCurrency`
+ * and `PhoneGroup` above: `packages/client` and `packages/ui` are siblings on
+ * the floor (`architecture/11-client-architecture.md`), and a value import
+ * across that seam would be the first thread of a dependency neither package
+ * is supposed to have on the other. `CreateAccountForm`'s own
+ * `CreateAccountDraft` is the same shape by construction.
+ */
+export type CreateAccountDraft = {
+  name: string;
+  currency: CurrencyCode;
+  kind: AccountKind;
+  ownership: CreateAccountInput["ownership"];
+  isBusiness: boolean;
+  openingBalance: string;
+  openingDate: string | null;
+  memo: string;
+  groupId: string | null;
+};
+
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
   refresh: () => void;
   createAccount: (
-    name: string,
-    currency: CurrencyCode,
+    draft: CreateAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
   createTransaction: (
     draft: QuickAddDraft,
@@ -213,6 +252,7 @@ export function createPhoneLedger(
   let snapshot: PhoneLedgerSnapshot = {
     accounts: [],
     currencies: [],
+    groups: [],
     recent: [],
     categories: [],
     counterparties: [],
@@ -239,6 +279,7 @@ export function createPhoneLedger(
           capturable: capturable.has(account.currency),
         })),
         currencies,
+        groups: port.listGroups(),
         recent: port.listRecent(5),
         categories: port.listCategories(),
         counterparties: port.listCounterparties(),
@@ -272,7 +313,7 @@ export function createPhoneLedger(
       };
     },
     refresh,
-    createAccount: (name, currency) => {
+    createAccount: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
         action: "create_account",
@@ -282,8 +323,9 @@ export function createPhoneLedger(
         const capture = runtime.capture();
         const parsed = createAccountInput.safeParse({
           id: runtime.id<"accounts">(),
-          name,
-          currency,
+          ...draft,
+          openingDate: draft.openingDate ?? undefined,
+          groupId: draft.groupId ?? undefined,
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {

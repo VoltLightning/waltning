@@ -244,6 +244,42 @@ describe("the phone ledger session", () => {
     proof.close();
   });
 
+  /**
+   * No `create_group` operation exists on `main` yet (A3), so the fixture
+   * inserts the row directly — the same way "replays an intent" above reaches
+   * under `createLocalLedgerSession` to set up a state no executor can build.
+   */
+  it("lists groups sorted, with institution and an ungrouped account unaffected", () => {
+    const session = createLocalLedgerSession(options());
+    const sqlite = new Database(paths.replica);
+    sqlite
+      .prepare("insert into account_groups (id, name, institution, sort) values (?, ?, ?, ?)")
+      .run("44444444-4444-4444-8444-444444444444", "Household", "Bank A", 1);
+    sqlite
+      .prepare("insert into account_groups (id, name, institution, sort) values (?, ?, ?, ?)")
+      .run("55555555-5555-4555-8555-555555555555", "Business", null, 0);
+    sqlite.close();
+
+    expect(session.listGroups()).toEqual([
+      {
+        id: "55555555-5555-4555-8555-555555555555",
+        name: "Business",
+        institution: null,
+        sort: 0,
+      },
+      {
+        id: "44444444-4444-4444-8444-444444444444",
+        name: "Household",
+        institution: "Bank A",
+        sort: 1,
+      },
+    ]);
+
+    session.createAccount(accountInput(), capture);
+    expect(session.listAccounts()[0]?.id).toBe(accountId);
+    session.close();
+  });
+
   it("reset deletes an unmaterialised outbox entry too", () => {
     const session = createLocalLedgerSession(options());
     const sqlite = new Database(paths.outbox);
