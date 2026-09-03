@@ -49,6 +49,7 @@ export const pl: Messages = {
     mine: "moje",
     ours: "nasze",
     noAccounts: "Brak kont",
+    noAccountsBody: "Utwórz jedno konto, aby rozpocząć swoją księgę.",
     heldSeparately: "Trzymane osobno — to nie jest suma.",
     accounts: "Konta",
     recent: "Ostatnie",

@@ -1,9 +1,7 @@
 import "./polyfills.ts";
 import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { currencies } from "@waltning/core/currencies";
-import { todayIn } from "@waltning/core/date";
-import { type IdTable, id } from "@waltning/core/id";
-import { randomId } from "@waltning/core/random";
 import type { SqliteOpener } from "@waltning/ledger/open";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
 import { createLocalLedgerSession } from "@waltning/ledger/session";
@@ -55,21 +53,13 @@ const session = createLocalLedgerSession({
 
 export const PHONE_LEDGER_AVAILABLE = true as const;
 
-export const phoneLedger = createPhoneLedger(session, {
-  diagnostics: mobileDiagnostics,
-  capture: () => {
-    const at = new Date();
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    return {
-      date: todayIn(timeZone, at),
-      timeZone,
-      offsetMinutes: -at.getTimezoneOffset(),
-      at,
-    };
-  },
-  id: <Table extends IdTable>() => id<Table>(randomId()),
-});
+export const phoneLedger = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
 
 export function requirePhoneLedger() {
   return phoneLedger;
+}
+
+/** The device opens synchronously with no worker to warm — always ready. */
+export function usePhoneLedgerReady(): true {
+  return true;
 }

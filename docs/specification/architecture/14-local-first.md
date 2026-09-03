@@ -73,6 +73,24 @@ durability rather than deciding whether the phone works:
   backend is the writer of record. No contradiction: the dashboard writes
   because the backend admits writes.
 
+  **The browser *preview* is a different thing and must not be mistaken for
+  it.** With no backend configured, the web bundle runs the same
+  `packages/ledger` engine the phone does — the thirteen shared tables, the
+  executors, the two-file write path — over `expo-sqlite`'s WASM build, its
+  files in the browser's origin-private file system. It is the phone-alone
+  preview on a bigger screen: same screens, same local ledger, same
+  invisible-outbox semantics, and the same durability caveat, sharpened —
+  browser storage is evictable in ways a phone's document directory is not.
+  Two complete-and-unsynced clients is **not** the shipping model: once a
+  backend exists it is the writer of record for every surface, the browser's
+  preview ledger is superseded by the API port, and this paragraph stops
+  describing anything a user should be doing. One honest limit of the OPFS
+  build: SQLite there cannot enter WAL, so the preview runs a rollback
+  journal — acceptable because the browser holds one connection per file and
+  its pre-migration copies go through the backup API rather than the
+  filesystem (`packages/ledger/src/open.ts` verifies the claim in both
+  directions).
+
 **The honest cost:** durability is not optional. The phone's self-backup is real
 but weaker; once a backend exists, durability stops being solely the owner's
 job.

@@ -64,6 +64,7 @@ export const en = {
     mine: "mine",
     ours: "ours",
     noAccounts: "No accounts yet",
+    noAccountsBody: "Create one account to start your ledger.",
     /**
      * Said, not implied. Two figures stacked read as a sum and a component of
      * it, which is the shape `DualTotal` uses to mean exactly that.

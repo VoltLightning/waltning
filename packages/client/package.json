@@ -10,6 +10,7 @@
     "./connectivity/*": "./src/connectivity/*.ts",
     "./currencies/*": "./src/currencies/*.ts",
     "./ledger/*": "./src/ledger/*.ts",
+    "./ledger/ledger-provider": "./src/ledger/ledger-provider.tsx",
     "./query/*": "./src/query/*.ts",
     "./transactions/*": "./src/transactions/*.ts",
     "./transport/*": "./src/transport/*.ts"

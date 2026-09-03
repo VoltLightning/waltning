@@ -1,103 +1,40 @@
-/**
- * The web dashboard — accounts, their balances, and the recent ledger.
- *
- * A first usable slice of S01. Not S01: the real one has the scope switch,
- * per-widget freshness and a configurable layout (§14.7, S24).
- *
- * **A screen composes and nothing else** (`architecture/11` §4). Every component
- * here comes from `@waltning/ui`, every hook from `@waltning/client`, and the
- * only local import is `../src/platform` — the platform variant that names Expo.
- * This file previously held a type, a hook, a component and a formatter, none
- * of which the test runner could see.
- */
-
-import { useAccounts } from "@waltning/client/accounts/use-accounts";
-import { describeProbe, useProbe } from "@waltning/client/connectivity/use-probe";
-import { type Transaction, useTransactions } from "@waltning/client/transactions/use-transactions";
-import { BalanceRow } from "@waltning/ui/accounts/balance-row";
+import { useAppearance } from "@waltning/client/appearance/use-appearance";
+import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
+import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
+import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useT } from "@waltning/ui/i18n/provider";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
-import { text } from "@waltning/ui/theme/fonts";
-import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
+import { Card } from "@waltning/ui/shell/card";
+import { CurrencyTotals } from "@waltning/ui/shell/currency-totals";
+import { TodayFrame } from "@waltning/ui/shell/today-frame";
+import { EmptyState } from "@waltning/ui/states/empty-state";
 import {
   TransactionList,
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
-import { ScrollView, Text, View } from "react-native";
-import { API_BASE_URL, api, isStaleBundle } from "./platform";
+import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useMemo } from "react";
+import { useColorScheme } from "react-native";
+import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
+import { PreviewAppearanceControls } from "./preview-appearance-controls";
 
-export default function Dashboard() {
-  const t = useT();
-  const styles = useStyles();
-  const probe = useProbe(api);
-  const accounts = useAccounts(api);
-  const transactions = useTransactions(api, 20);
-
-  return (
-    <ScrollView contentContainerStyle={styles.screen}>
-      <GroundPanel>
-        <Text style={styles.title}>{t("common.appName")}</Text>
-
-        <Card title={t("shell.accounts")}>
-          {accounts.status === "loading" ? (
-            <Text style={styles.detail}>{t("common.loading")}</Text>
-          ) : null}
-          {accounts.status === "failed" ? (
-            <Text style={styles.detail}>{accounts.error.message}</Text>
-          ) : null}
-          {accounts.status === "ready" ? (
-            <>
-              {accounts.data.map((account) => (
-                <BalanceRow
-                  key={account.id}
-                  account={account.name}
-                  kind={account.kind}
-                  balance={account.balance}
-                  currency={account.currency}
-                  decimals={account.decimals}
-                />
-              ))}
-              {/*
-                Stated rather than shown as a total. §3's net worth converts
-                every balance to a display currency first; adding these would
-                put złoty and dollars into one number and call it net worth.
-              */}
-              <Text style={styles.note}>{t("shell.ownCurrency")}</Text>
-            </>
-          ) : null}
-        </Card>
-
-        <Card title={t("shell.recent")}>
-          {transactions.status === "loading" ? (
-            <Text style={styles.detail}>{t("common.loading")}</Text>
-          ) : null}
-          {transactions.status === "failed" ? (
-            <Text style={styles.detail}>{transactions.error.message}</Text>
-          ) : null}
-          {transactions.status === "ready" ? (
-            <>
-              <TransactionList transactions={transactions.data.transactions.map(toRow)} />
-              {transactions.data.hasMore ? (
-                // Said plainly. A list that silently shows only the first page
-                // reads as the whole ledger, and a short ledger is a wrong one.
-                <Text style={styles.note}>{t("shell.morePages")}</Text>
-              ) : null}
-            </>
-          ) : null}
-        </Card>
-
-        <View style={styles.connection}>
-          <Text style={styles.detail}>{API_BASE_URL || t("shell.thisOrigin")}</Text>
-          <Text style={styles.detail}>{describeProbe(probe, isStaleBundle)}</Text>
-        </View>
-      </GroundPanel>
-    </ScrollView>
-  );
+function handleCreateAccount() {
+  router.push({ pathname: "/account/new", params: { returnTo: "today" } });
 }
 
-/** The wire's row shape onto the list's. Named — no function expressions in JSX. */
-function toRow(transaction: Transaction): TransactionListItem {
+function handlePreference(next: "system" | "light" | "dark") {
+  return appearance.setPreference(next);
+}
+
+function handleAdd() {
+  router.push("/quick-add");
+}
+
+/**
+ * The replica's row shape onto the list's. Named rather than inline because
+ * `architecture/11` bans a function expression inside JSX — and because this is
+ * the one place the ledger's field names and the component's meet.
+ */
+function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
   return {
     id: transaction.id,
     date: transaction.date,
@@ -106,35 +43,69 @@ function toRow(transaction: Transaction): TransactionListItem {
     account: transaction.accountName,
     amount: transaction.amount,
     currency: transaction.currency,
+    decimals: transaction.decimals,
+    isBusiness: transaction.isBusiness,
   };
 }
 
 /**
- * **Four raw values and no theme, until now.** This screen was the one place a
- * stylesheet was built with `StyleSheet.create` directly: `fontSize: 28` and
- * `fontSize: 13` where every component in `packages/ui` names a scale step, and
- * `opacity: 0.7` standing in for muted ink. None of it was caught, because
- * `conformance.test.ts` roots at `packages/ui/src` and cannot see `apps/` — the
- * defect its own header describes, recurring one directory over.
- *
- * `opacity` is the interesting one. It is not the same thing as `textMuted`: it
- * fades the glyph *and* whatever the glyph sits on, so the same 0.7 reads
- * differently on `ground` and on `surface`, and in dark it lightens toward the
- * background rather than away from it. A role is a colour the theme answers
- * for; opacity is a guess that happens to look right in the theme it was
- * written in.
- *
- * The italic goes with it. IBM Plex Sans's italic is not among the loaded
- * faces (`fonts.ts`), so the platform was synthesising one by shearing the
- * upright — which is the thing §2.2's face table exists to prevent.
+ * One screen for both surfaces. The ledger arrives through context — provided
+ * at the app boundary from whichever platform module Metro resolved — so
+ * nothing in this file knows whether the rows below it live in an iOS
+ * document directory or an OPFS pool.
  */
-const useStyles = makeStyles((theme) => ({
-  // 640 is a reading measure rather than a scale step: this is the one surface
-  // that gets a desktop-width window, and a ledger line set across 1400px is
-  // unreadable regardless of its type size.
-  screen: { flexGrow: 1, maxWidth: 640, width: "100%", alignSelf: "center" },
-  title: { color: theme.text, ...text.display("displayTwo") },
-  detail: { color: theme.textMuted, ...text.ui("caption") },
-  note: { color: theme.textMuted, ...text.ui("caption") },
-  connection: { gap: space.xs },
-}));
+export default function Today() {
+  const t = useT();
+  const ledger = useLedgerController();
+  // A label is a word, so the action cannot be a module constant any more —
+  // `useT` is a hook. Memoised on `t` so the empty state is not handed a new
+  // object on every render.
+  const createAccountAction = useMemo(
+    () => ({ label: t("routes.createAccount"), onPress: handleCreateAccount }),
+    [t],
+  );
+  const snapshot = usePhoneLedger(ledger);
+  const systemScheme = useColorScheme();
+  const resolved = useAppearance(
+    appearance,
+    systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
+  );
+  const { message } = useLocalSearchParams<{ message?: string }>();
+  const hasAccounts = snapshot.accounts.length > 0;
+  const handleReset = useCallback(() => ledger.reset(), [ledger]);
+
+  const ledgerBody = hasAccounts ? (
+    <Card title={t("shell.recent")}>
+      <TransactionList transactions={snapshot.recent.map(toRow)} />
+    </Card>
+  ) : (
+    <EmptyState
+      title={t("shell.noAccounts")}
+      body={t("shell.noAccountsBody")}
+      primaryAction={createAccountAction}
+    />
+  );
+  const body = (
+    <>
+      {typeof message === "string" ? <Card title={message}>{null}</Card> : null}
+      {ledgerBody}
+    </>
+  );
+
+  return (
+    <TodayFrame
+      appearanceAction={
+        <PreviewAppearanceControls
+          preference={resolved.preference}
+          resetEnabled={PREVIEW_RESET_ENABLED}
+          onPreference={handlePreference}
+          onReset={handleReset}
+        />
+      }
+      total={<CurrencyTotals subtotals={snapshot.subtotals} />}
+      body={body}
+      addDisabled={!hasAccounts}
+      onAdd={handleAdd}
+    />
+  );
+}

@@ -844,4 +844,46 @@ describe("opening the pair", () => {
     expect(read(ledger.replica.db, "busy_timeout")).toEqual({ timeout: 5000 });
     ledger.close();
   });
+
+  /**
+   * The browser's declaration: no WAL on offer, verified rather than assumed.
+   * `open.ts` carries why the two WAL properties are not needed there.
+   */
+  it("accepts a platform that declares rollback, and leaves the files out of WAL", () => {
+    const ledger = openLedger(
+      (filename: string) => {
+        const sqlite = new Database(filename);
+        return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+      },
+      { replica: join(dir, "rb-replica.db"), outbox: join(dir, "rb-outbox.db") },
+      { journalMode: "rollback" },
+    );
+
+    const journal = ledger.replica.db.get<{ journal_mode: string }>(sql.raw("pragma journal_mode"));
+    expect(journal?.journal_mode).not.toBe("wal");
+    // The rest of the tuning still applies — the declaration changes one pragma.
+    expect(ledger.replica.db.get<{ foreign_keys: number }>(sql.raw("pragma foreign_keys"))).toEqual(
+      { foreign_keys: 1 },
+    );
+    ledger.close();
+  });
+
+  it("refuses the rollback declaration over a file that is already in WAL", () => {
+    // A previous run put the file in WAL — the mode is stored in the file.
+    const path = join(dir, "was-wal-replica.db");
+    const prior = new Database(path);
+    prior.pragma("journal_mode = WAL");
+    prior.close();
+
+    expect(() =>
+      openLedger(
+        (filename: string) => {
+          const sqlite = new Database(filename);
+          return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+        },
+        { replica: path, outbox: join(dir, "was-wal-outbox.db") },
+        { journalMode: "rollback" },
+      ),
+    ).toThrow(/declared journalMode "rollback"/);
+  });
 });

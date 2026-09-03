@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const drizzlePatch = join(repoRoot, "patches/drizzle-orm@0.45.2.patch");
+const sqlitePatch = join(repoRoot, "patches/expo-sqlite@57.0.1.patch");
 const workspace = join(repoRoot, "pnpm-workspace.yaml");
 
 const expoDriverProbe = `
@@ -120,5 +121,24 @@ describe("the Expo SQLite Drizzle patch", () => {
         stdio: "pipe",
       }),
     ).not.toThrow();
+  });
+});
+
+/**
+ * The browser's half. `Uint8Array.prototype.set(new Uint32Array([n]))` copies
+ * one *element* coerced to a byte, so the main thread read `n & 0xFF` as the
+ * result length and any synchronous result over 255 bytes came back cut off —
+ * "Unterminated string in JSON" the moment the outbox held two rows. Nothing
+ * under Node exercises a `SharedArrayBuffer` worker channel, so the pin is the
+ * patch's text: the byte-accurate write present, the element-wise one gone.
+ */
+describe("the Expo SQLite web channel patch", () => {
+  it("writes the sync result length as four bytes, not one", () => {
+    const patch = readFileSync(sqlitePatch, "utf8");
+    const workspaceConfig = readFileSync(workspace, "utf8");
+
+    expect(patch).toContain("+    new DataView(resultBuffer).setUint32(0, length, true);");
+    expect(patch).toContain("-    resultArray.set(new Uint32Array([length]), 0);");
+    expect(workspaceConfig).toContain("expo-sqlite@57.0.1: patches/expo-sqlite@57.0.1.patch");
   });
 });

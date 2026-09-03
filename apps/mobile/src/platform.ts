@@ -11,13 +11,13 @@
  * taken, this is the size of the duplication.
  */
 
+// The API client that used to live here — `resolveApiBaseUrl`, `createApiClient`,
+// `isStaleBundle` — left with the API-reading dashboard: the browser preview
+// reads its own ledger now, and the API surface returns with `#e7`. The
+// helpers kept their homes and their tests in `packages/client/src/transport/`.
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
-import { resolveApiBaseUrl } from "@waltning/client/transport/base-url";
-import { isStaleBundle as compareBuilds } from "@waltning/client/transport/build";
-import { createApiClient } from "@waltning/client/transport/client";
-import { Platform } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
@@ -34,29 +34,6 @@ export const PREVIEW_RESET_ENABLED = previewResetEnabled(
   __DEV__,
   process.env["EXPO_PUBLIC_ENABLE_PREVIEW_RESET"],
 );
-
-export const API_BASE_URL: string = resolveApiBaseUrl({
-  configured: process.env["EXPO_PUBLIC_API_URL"],
-  surface: Platform.OS === "web" ? "web" : "native",
-  dev: __DEV__,
-});
-
-/**
- * `nonce` returns null because §5.2 has no sessions yet — passed explicitly so
- * "no session" never reads the same as "nobody wired the check".
- */
-export const api = createApiClient(API_BASE_URL, {
-  nonce: () => null,
-  diagnostics: mobileDiagnostics,
-});
-
-/** This bundle's own build, injected by `web.Dockerfile` at image build time. */
-export const CLIENT_BUILD: string = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev";
-
-/** The comparison is shared; only the value it reads is platform-bound. */
-export function isStaleBundle(serverBuild: string): boolean {
-  return compareBuilds(CLIENT_BUILD, serverBuild);
-}
 
 /**
  * The browser's ordered language preferences.

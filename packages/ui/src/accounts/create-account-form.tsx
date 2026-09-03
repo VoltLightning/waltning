@@ -24,7 +24,7 @@ import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 
-export type CreateAccountCurrency = { code: CurrencyCode; name: string };
+export type CreateAccountCurrency = { code: CurrencyCode; name: string; symbol: string };
 
 export type CreateAccountDraft = { name: string; currency: CurrencyCode };
 
@@ -87,9 +87,11 @@ type CurrencyChoiceProps = {
 };
 
 /**
- * The code, not the name. `PLN` is what appears on the account afterwards and
- * on every figure it holds, so the choice and its consequence read the same.
- * The name rides along in the accessible label, where the length costs nothing.
+ * The code and its symbol, not the name. `PLN` is what appears on the account
+ * afterwards and on every figure it holds, so the choice and its consequence
+ * read the same; `zł` beside it is the glyph the figures will actually carry,
+ * which is how someone who thinks in symbols finds the code. The name rides
+ * along in the accessible label, where the length costs nothing.
  */
 function CurrencyChoice({ currency, selected, onSelect }: CurrencyChoiceProps) {
   const t = useT();
@@ -97,7 +99,7 @@ function CurrencyChoice({ currency, selected, onSelect }: CurrencyChoiceProps) {
   return (
     <Chip
       placeholder={t("accounts.currency")}
-      value={currency.code}
+      value={`${currency.code} ${currency.symbol}`}
       selected={selected}
       onPress={handleSelect}
       machineFilled={false}

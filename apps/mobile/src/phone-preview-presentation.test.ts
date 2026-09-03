@@ -5,12 +5,13 @@ import { describe, expect, it } from "vitest";
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "../app");
 const src = resolve(app, "../src");
-const today = readFileSync(`${src}/today-screen.native.tsx`, "utf8");
-const quickAdd = readFileSync(`${src}/quick-add-screen.native.tsx`, "utf8");
-const newAccount = readFileSync(`${src}/account-creation-screen.native.tsx`, "utf8");
+const today = readFileSync(`${src}/today-screen.tsx`, "utf8");
+const quickAdd = readFileSync(`${src}/quick-add-screen.tsx`, "utf8");
+const newAccount = readFileSync(`${src}/account-creation-screen.tsx`, "utf8");
 const controls = readFileSync(resolve(app, "../src/preview-appearance-controls.tsx"), "utf8");
 const nativePlatform = readFileSync(resolve(app, "../src/platform.native.ts"), "utf8");
-const phoneLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"), "utf8");
+const nativeLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"), "utf8");
+const webLedger = readFileSync(resolve(app, "../src/phone-ledger.web.ts"), "utf8");
 const english = readFileSync(resolve(app, "../../../packages/ui/src/i18n/en.ts"), "utf8");
 
 describe("phone-alone preview presentation", () => {
@@ -23,6 +24,25 @@ describe("phone-alone preview presentation", () => {
     // `money.sum` over every balance labelled USD, which only held because a
     // throw refused any account that was not in dollars.
     expect(today).not.toContain("snapshot.total");
+  });
+
+  /**
+   * **One file per route, and the data source is injected.** The screens used
+   * to exist twice — a native half reading a module singleton and a web half
+   * reading the API or redirecting away — which was a data-source split
+   * wearing a platform costume. Now each screen reads the ledger from
+   * context, and the platform variants live where the platform actually
+   * differs: the two `phone-ledger` modules.
+   */
+  it("keeps every screen a single file reading the ledger from context", () => {
+    for (const screen of [today, quickAdd, newAccount]) {
+      expect(screen).toContain("useLedgerController()");
+      expect(screen).not.toContain("requirePhoneLedger");
+      // Subscribed, never a one-shot read: a write on a sibling route lands
+      // in this screen the moment the router returns to it.
+      expect(screen).toContain("usePhoneLedger(ledger)");
+      expect(screen).not.toContain("getSnapshot()");
+    }
   });
 
   /**
@@ -64,8 +84,8 @@ describe("phone-alone preview presentation", () => {
     }
   });
 
-  it("keeps backend wiring out of the native phone-alone surface", () => {
-    const nativeSurface = `${today}\n${quickAdd}\n${newAccount}\n${nativePlatform}`;
+  it("keeps backend wiring out of the phone-alone surface, on both platforms", () => {
+    const previewSurface = `${today}\n${quickAdd}\n${newAccount}\n${nativePlatform}\n${webLedger}`;
     for (const backendMarker of [
       "createApiClient",
       "resolveApiBaseUrl",
@@ -73,7 +93,7 @@ describe("phone-alone preview presentation", () => {
       "useAccounts",
       "useTransactions",
     ]) {
-      expect(nativeSurface).not.toContain(backendMarker);
+      expect(previewSurface).not.toContain(backendMarker);
     }
   });
 
@@ -83,13 +103,27 @@ describe("phone-alone preview presentation", () => {
   });
 
   it("keeps SQLite and its safety copies in Expo's project-scoped documents", () => {
-    expect(phoneLedger).toContain('new Directory(Paths.document, "SQLite")');
-    expect(phoneLedger).toContain(
+    expect(nativeLedger).toContain('new Directory(Paths.document, "SQLite")');
+    expect(nativeLedger).toContain(
       "databaseDirectory.create({ idempotent: true, intermediates: true })",
     );
-    expect(phoneLedger).toContain("openDatabaseSync(filename, undefined, databaseDirectoryPath)");
-    expect(phoneLedger).toContain("deleteDatabaseSync(path, databaseDirectoryPath)");
-    expect(phoneLedger).not.toContain("decodeURIComponent");
-    expect(phoneLedger).not.toContain("defaultDatabaseDirectory");
+    expect(nativeLedger).toContain("openDatabaseSync(filename, undefined, databaseDirectoryPath)");
+    expect(nativeLedger).toContain("deleteDatabaseSync(path, databaseDirectoryPath)");
+    expect(nativeLedger).not.toContain("decodeURIComponent");
+    expect(nativeLedger).not.toContain("defaultDatabaseDirectory");
+  });
+
+  /**
+   * The browser's ledger is the same engine with a different way of holding
+   * files: no WAL (declared, and verified by `open.ts`), and copies through
+   * the backup API because the OPFS pool hides its files from any filesystem.
+   */
+  it("gives the browser the same engine, declared honestly", () => {
+    expect(webLedger).toContain('journalMode: "rollback"');
+    expect(webLedger).toContain("backupDatabaseSync({ sourceDatabase: source");
+    expect(webLedger).toContain("createLocalLedgerSession");
+    expect(webLedger).toContain("PHONE_LEDGER_AVAILABLE = true");
+    // The browser never reaches for a filesystem the pool does not have.
+    expect(webLedger).not.toContain("expo-file-system");
   });
 });
