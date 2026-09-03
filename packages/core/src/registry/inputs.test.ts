@@ -29,19 +29,24 @@ import {
   type CreateAccountInput,
   type CreateCategoryInput,
   type CreateTransactionInput,
+  categorizeBatchInput,
   createAccountInput,
   createCategoryInput,
   createGroupInput,
   createTransactionInput,
+  deleteTransactionInput,
   mergeCategoriesInput,
   reconcileAccountInput,
   renameCategoryInput,
   reorderAccountsInput,
   reorderGroupsInput,
   reparentCategoryInput,
+  setTransactionLinesInput,
+  supersedeTransactionInput,
   type UpdateAccountInput,
   updateAccountInput,
   updateGroupInput,
+  updateTransactionInput,
 } from "./inputs.ts";
 
 /* ── compile-time assertions ─────────────────────────────────────────────────
@@ -615,3 +620,121 @@ export const inhabited: [CreateAccountInput, CreateTransactionInput] = [
   createAccountInput.parse(account),
   createTransactionInput.parse(expense),
 ];
+
+/* ════════════════════════════════════════════════════════════════════════
+ * A2 · transaction operations
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const TXN_ID_2 = "66666666-6666-4666-8666-666666666666";
+const LINE_ID_1 = "77777777-7777-4777-8777-777777777771";
+const LINE_ID_2 = "77777777-7777-4777-8777-777777777772";
+
+describe("update_transaction", () => {
+  it("is a patch: only the fields sent are set, and version is required", () => {
+    const parsed = updateTransactionInput.parse({
+      id: TXN_ID,
+      version: 3,
+      patch: { payee: "Coffee" },
+    });
+    expect(parsed.patch).toEqual({ payee: "Coffee" });
+    expect(() => updateTransactionInput.parse({ id: TXN_ID, patch: {} })).toThrow();
+  });
+
+  it("refuses an empty patch — a write that changes nothing is a bug, not a no-op", () => {
+    expect(() => updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: {} })).toThrow(
+      /at least one field/,
+    );
+  });
+
+  it("refuses fields that are not patchable: id, version, source, createdAt", () => {
+    expect(() =>
+      updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: { id: "x" } }),
+    ).toThrow();
+    expect(() =>
+      updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: { version: 2 } }),
+    ).toThrow();
+    expect(() =>
+      updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: { source: "manual" } }),
+    ).toThrow();
+    expect(() =>
+      updateTransactionInput.parse({
+        id: TXN_ID,
+        version: 1,
+        patch: { createdAt: "2026-01-01" },
+      }),
+    ).toThrow();
+  });
+});
+
+describe("delete_transaction", () => {
+  it("needs an id and the version it read", () => {
+    const parsed = deleteTransactionInput.parse({ id: TXN_ID, version: 1 });
+    expect(parsed).toEqual({ id: TXN_ID, version: 1 });
+    expect(() => deleteTransactionInput.parse({ id: TXN_ID })).toThrow();
+  });
+});
+
+describe("set_transaction_lines", () => {
+  it("requires each line's amount and description", () => {
+    expect(() =>
+      setTransactionLinesInput.parse({
+        transactionId: TXN_ID,
+        version: 1,
+        lines: [{ id: LINE_ID_1, amount: "1" }],
+      }),
+    ).toThrow();
+  });
+
+  it("accepts an empty set — that is how lines are removed", () => {
+    expect(
+      setTransactionLinesInput.parse({ transactionId: TXN_ID, version: 1, lines: [] }).lines,
+    ).toEqual([]);
+  });
+
+  it("parses a full set, branding each amount", () => {
+    const parsed = setTransactionLinesInput.parse({
+      transactionId: TXN_ID,
+      version: 1,
+      lines: [
+        { id: LINE_ID_1, description: "Espresso", amount: "10" },
+        { id: LINE_ID_2, description: "Croissant", amount: "8" },
+      ],
+    });
+    expect(parsed.lines.map((l) => l.amount)).toEqual(["10.00000000", "8.00000000"]);
+  });
+});
+
+describe("supersede_transaction", () => {
+  it("carries the whole replacement row and the id it replaces", () => {
+    expect(() =>
+      supersedeTransactionInput.parse({ supersedesId: TXN_ID, supersedesVersion: 1 }),
+    ).toThrow();
+
+    const parsed = supersedeTransactionInput.parse({
+      supersedesId: TXN_ID,
+      supersedesVersion: 1,
+      replacement: { ...expense, id: TXN_ID_2, source: "import" },
+    });
+    expect(parsed.replacement.id).toBe(TXN_ID_2);
+    expect(parsed.replacement.source).toBe("import");
+  });
+});
+
+describe("categorize_batch", () => {
+  it("needs at least one id and one category", () => {
+    expect(() =>
+      categorizeBatchInput.parse({ transactionIds: [], categoryId: CATEGORY_ID }),
+    ).toThrow();
+    expect(() =>
+      categorizeBatchInput.parse({ transactionIds: [TXN_ID], categoryId: undefined }),
+    ).toThrow();
+  });
+
+  it("parses one category over many ids", () => {
+    const parsed = categorizeBatchInput.parse({
+      transactionIds: [TXN_ID, TXN_ID_2],
+      categoryId: CATEGORY_ID,
+    });
+    expect(parsed.transactionIds).toEqual([TXN_ID, TXN_ID_2]);
+  });
+});

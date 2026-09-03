@@ -590,3 +590,118 @@ export const archiveCategoryInput = z.object({
   version: z.number().int().positive(),
 });
 export type ArchiveCategoryInput = z.output<typeof archiveCategoryInput>;
+
+/* ════════════════════════════════════════════════════════════════════════
+ * A2 · transaction operations — the phone half
+ *
+ * `update_transaction`, `delete_transaction`, `set_transaction_lines`,
+ * `supersede_transaction`, `categorize_batch`. `attach_receipt` is not here:
+ * a receipt is an object in MinIO the phone never holds, so the operation has
+ * no local executor and no local input.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── update_transaction ─────────────────────────────────────────────────── */
+
+/**
+ * **A patch, not a row.** `architecture/14` §14.2: a write carries the version
+ * it last read and only the fields it sets. Everything in `patch` is optional;
+ * an empty patch is refused because a write that changes nothing is a bug
+ * wearing a no-op. The fields that are *not* here are deliberate: `id`,
+ * `version`, `source`, `createdAt` are never patched, and `type` changes are
+ * a supersede, not an edit.
+ */
+const transactionPatch = z
+  .object({
+    date: zAccountingDate.optional(),
+    accountId: zId<"accounts">().optional(),
+    amountOriginal: zMoney.optional(),
+    categoryId: zId<"categories">().nullable().optional(),
+    counterpartyId: zId<"counterparties">().nullable().optional(),
+    counterpartyRole: z.enum(COUNTERPARTY_ROLE).nullable().optional(),
+    toAccountId: zId<"accounts">().nullable().optional(),
+    toAmount: zMoney.nullable().optional(),
+    toCurrency: zCurrencyCode.nullable().optional(),
+    fxRate: zPivotPerUnit.optional(),
+    toFxRate: zPivotPerUnit.nullable().optional(),
+    fee: zMoney.nullable().optional(),
+    payee: z.string().trim().max(200).optional(),
+    note: z.string().trim().max(2000).optional(),
+    isBusiness: z.boolean().optional(),
+    isCapital: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateTransactionInput = z
+  .object({
+    id: zId<"transactions">(),
+    version: z.number().int().positive(),
+    patch: transactionPatch,
+  })
+  .refine((v) => Object.keys(v.patch).length > 0, {
+    message: "a patch must set at least one field",
+    path: ["patch"],
+  });
+export type UpdateTransactionInput = z.output<typeof updateTransactionInput>;
+
+/* ── delete_transaction ─────────────────────────────────────────────────── */
+
+/** Soft, always. `operations.md`: deletion is the one thing you cannot un-notice. */
+export const deleteTransactionInput = z.object({
+  id: zId<"transactions">(),
+  version: z.number().int().positive(),
+});
+export type DeleteTransactionInput = z.output<typeof deleteTransactionInput>;
+
+/* ── set_transaction_lines ──────────────────────────────────────────────── */
+
+const transactionLine = z.object({
+  id: zId<"transactionLines">(),
+  description: z.string().trim().min(1).max(200),
+  amount: zMoney,
+  quantity: z
+    .string()
+    .regex(/^\d+(\.\d{1,3})?$/)
+    .optional(),
+  categoryId: zId<"categories">().optional(),
+});
+
+/**
+ * The optional breakdown (§10.3). The whole set replaces the old one — a
+ * line-by-line patch would need a merge rule nobody can state. The sum of
+ * line amounts equalling the transaction is enforced in the executor, where
+ * the transaction's amount is known.
+ */
+export const setTransactionLinesInput = z.object({
+  transactionId: zId<"transactions">(),
+  version: z.number().int().positive(),
+  lines: z.array(transactionLine).max(200),
+});
+export type SetTransactionLinesInput = z.output<typeof setTransactionLinesInput>;
+
+/* ── supersede_transaction ──────────────────────────────────────────────── */
+
+/**
+ * An import row replaces a manual entry (S02). The replacement is a full
+ * `create_transaction` input; the old row is soft-deleted and the new one
+ * records which it superseded. The receipt reattachment `operations.md`
+ * mentions is server-side.
+ */
+export const supersedeTransactionInput = z.object({
+  supersedesId: zId<"transactions">(),
+  supersedesVersion: z.number().int().positive(),
+  replacement: createTransactionInput,
+});
+export type SupersedeTransactionInput = z.output<typeof supersedeTransactionInput>;
+
+/* ── categorize_batch ───────────────────────────────────────────────────── */
+
+/** The bulk path. One category over many ids; a `DiffCard` states the count. */
+export const categorizeBatchInput = z.object({
+  transactionIds: z.array(zId<"transactions">()).min(1).max(5000),
+  categoryId: zId<"categories">(),
+});
+export type CategorizeBatchInput = z.output<typeof categorizeBatchInput>;
+
+/* ════════════════════════════════════════════════════════════════════════
+ * end A2 block
+ * ════════════════════════════════════════════════════════════════════════ */
