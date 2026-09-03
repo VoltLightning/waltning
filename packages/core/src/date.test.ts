@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { accountingDate, isAccountingDate, todayIn } from "./date.ts";
+import { accountingDate, addDays, isAccountingDate, todayIn } from "./date.ts";
 
 describe("what a bare date is not", () => {
   it("refuses an ISO timestamp", () => {
@@ -60,5 +60,28 @@ describe("today is a local calendar day, not a UTC instant", () => {
 
   it("returns something the type accepts", () => {
     expect(isAccountingDate(todayIn("UTC"))).toBe(true);
+  });
+});
+
+describe("addDays — calendar arithmetic, no clock", () => {
+  it("adds within a month", () => {
+    expect(addDays(accountingDate("2026-03-12"), 1)).toBe("2026-03-13");
+  });
+
+  it("subtracts for a negative n — this is how 'yesterday' is computed", () => {
+    expect(addDays(accountingDate("2026-03-12"), -1)).toBe("2026-03-11");
+  });
+
+  it("carries across a month boundary", () => {
+    expect(addDays(accountingDate("2026-03-31"), 1)).toBe("2026-04-01");
+  });
+
+  it("carries across a year boundary", () => {
+    expect(addDays(accountingDate("2026-12-31"), 1)).toBe("2027-01-01");
+    expect(addDays(accountingDate("2027-01-01"), -1)).toBe("2026-12-31");
+  });
+
+  it("n = 0 is the identity", () => {
+    expect(addDays(accountingDate("2026-03-12"), 0)).toBe("2026-03-12");
   });
 });
