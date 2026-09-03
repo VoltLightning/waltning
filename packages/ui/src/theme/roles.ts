@@ -196,7 +196,7 @@ export const light: Theme = {
   border: color.border,
   borderInteractive: color.borderInteractive,
   borderStrong: color.borderStrong,
-  hairline: "rgba(23,29,26,.10)",
+  hairline: "rgba(51,48,42,.10)",
 
   text: color.ink,
   textMuted: color.muted,
@@ -247,7 +247,7 @@ export const dark: Theme = {
   border: darkColor.border,
   borderInteractive: darkColor.borderInteractive,
   borderStrong: darkColor.borderStrong,
-  hairline: "rgba(228,241,232,.12)",
+  hairline: "rgba(240,236,227,.12)",
 
   text: darkColor.ink,
   textMuted: darkColor.muted,

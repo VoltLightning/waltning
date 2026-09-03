@@ -19,17 +19,18 @@
 /**
  * The light palette.
  *
- * **Neutral ground; green is a signal.** The previous palette tinted the
- * ground, the borders, the headings and the shell green, and a green on
- * everything is a green that means nothing. The neutrals here carry a faint
- * green bias — chosen, not inherited — and green itself is reserved for four
- * jobs: a primary action, the focus ring, income, and the data ramp.
+ * **Warm ground; sage is the signal.** The app is a home, not a terminal: the
+ * neutrals are warm — cream paper for the page, warm greys for text — so
+ * opening the ledger reads as opening a notebook rather than a dashboard. The
+ * brand green is a muted sage, reserved for four jobs: a primary action, the
+ * focus ring, income, and the data ramp. A green on everything is a green
+ * that means nothing.
  */
 export const color = {
   /** Outside the app frame — design boards only, never a screen. */
-  canvas: "#e9ecea",
+  canvas: "#efe9dd",
   /** Page background. Every card sits on this. */
-  ground: "#f5f7f6",
+  ground: "#faf6ef",
   surface: "#ffffff",
   /**
    * The component-fill steps, and the border steps — six values that the
@@ -41,66 +42,66 @@ export const color = {
    * the old ones rather than beside them.
    */
   /** Table headers, inset boxes, filled chips — quieter than `surface`. */
-  subtle: "#eef2f0",
+  subtle: "#f1ebe0",
   /** The fill under a pointer, between `subtle` and `pressed`. */
-  hover: "#e8edeb",
+  hover: "#ece5d7",
   /** The transient fill under a finger. */
-  pressed: "#e3e9e6",
+  pressed: "#e6ddcb",
   /** Card edges, dividers, the outline of an unfilled control. */
-  border: "#dfe5e2",
+  border: "#eae3d5",
   /** The border of an interactive control at rest — an input, a chip. */
-  borderInteractive: "#bbc3be",
+  borderInteractive: "#c6bdaa",
   /**
    * A border that must read on its own: a selected control, a focus-adjacent
    * edge. Held to 3:1 against `surface`, the WCAG floor for a UI boundary —
-   * the first interpolation landed at 2.59 and was pushed.
+   * this one sits at 3.63.
    */
-  borderStrong: "#8c958f",
-  ink: "#171d1a",
-  muted: "#667069",
+  borderStrong: "#8d8672",
+  ink: "#33302a",
+  muted: "#6e6759",
 
   /** A primary action's fill. Job 1. */
-  accent: "#22754f",
+  accent: "#55704f",
   /** Links, a secondary action's label. */
-  accentText: "#1f6a48",
+  accentText: "#4c6247",
   /** Decorative accent marks, and the focus ring. Job 2. */
-  accentIcon: "#3d9a6c",
+  accentIcon: "#6f8f66",
   /**
-   * A subtle green fill and its edge — a selected segment, a toggled chip, an
-   * inset that belongs to the accent. Radix's steps 3 and 6; the accent text
-   * reads on the fill at 4.9:1.
+   * A subtle sage fill and its edge — a selected segment, a toggled chip, an
+   * inset that belongs to the accent. The accent text reads on the fill at
+   * 5.8:1.
    */
-  accentFill: "#e9f1ec",
-  accentFillBorder: "#adc9b9",
+  accentFill: "#eef0e6",
+  accentFillBorder: "#b9c6ae",
 
   /**
    * Money has three colours of its own, and none of them is the accent.
    *
-   * `income` is a *more vivid* green than `accent`, so a credit reads as an event
-   * and a button reads as a control — related, never confused. Vivid by
-   * saturation, not by lightness: the first value tried, `#1f9a5c`, was lighter
-   * and failed 4.5:1 on white in `theme.test.tsx`. Same hue at 70% saturation
-   * passes at 4.85 and still reads as the livelier of the two. `spend` is a
-   * restrained red: unmistakable, not alarming. A transfer is neither; money
-   * moved between your own accounts is `muted`, because nothing was gained or
-   * lost. Job 3 is `income`.
+   * `income` is a *livelier* green than the sage `accent`, so a credit reads
+   * as an event and a button reads as a control — related, never confused.
+   * Held at 4.5:1 on `ground` as well as `surface` in `theme.test.tsx`, which
+   * is what pushed it a step darker than the mockups' figure. `spend` is a
+   * warm, restrained red: unmistakable, not alarming. A transfer is neither;
+   * money moved between your own accounts is `muted`, because nothing was
+   * gained or lost. Job 3 is `income`.
    */
-  income: "#178249",
-  spend: "#b0402a",
+  income: "#3f7a34",
+  spend: "#a8543c",
 
   /**
    * The green ramp is the **entire** chart palette: magnitude reads as depth,
-   * so there is no second hue to reach for. Job 4, and unchanged.
+   * so there is no second hue to reach for. Job 4, sage-toned to match the
+   * accent family.
    */
-  green100: "#e4f1e8",
-  green200: "#cbe6d6",
-  green300: "#a3d2b8",
-  green400: "#75bd99",
-  green500: "#48a479",
-  green600: "#2f7d5a",
-  green700: "#215f45",
-  green800: "#164531",
-  green900: "#0e2e20",
+  green100: "#ecefe4",
+  green200: "#d8dfc9",
+  green300: "#bccaa9",
+  green400: "#9cb287",
+  green500: "#7c9a68",
+  green600: "#5f7d52",
+  green700: "#49613f",
+  green800: "#33452c",
+  green900: "#202d1c",
 
   /**
    * P4's colour: *asserted or aged rather than observed*. One meaning across a
@@ -108,36 +109,35 @@ export const color = {
    * **Never error, never success, never chrome** — the moment amber means two
    * things it means nothing.
    */
-  amber: "#f6efdc",
-  amberInk: "#7b5b1d",
-  amberBorder: "#dcc07a",
+  amber: "#f4ecdf",
+  amberInk: "#77591c",
+  amberBorder: "#d9bd75",
 
   /** Danger — a destructive action, a refused write. **Never chrome.** */
   danger: "#a33d26",
-  dangerBg: "#f9e9e5",
-  dangerBorder: "#e3a898",
+  dangerBg: "#f8e8e2",
+  dangerBorder: "#dfa68f",
 
   /**
    * The shell: one flat colour, no gradient. A gradient was the one thing on
    * the screen that read as decoration rather than as a surface.
    *
-   * **A deep green, not a near-black.** The first value was `#0f2b1f` at L\* 15,
-   * which on a phone is a black band with a green cast you have to be told
-   * about. §2.1 grants the shell the one structural use of the brand colour;
-   * a value that does not read as the brand colour spends that grant on
-   * nothing. L\* 27 is where it starts reading as green, and it still holds
-   * `shellText` at 9.6:1 and `shellTextMuted` at 5.5:1.
+   * **A deep sage, not a near-black.** §2.1 grants the shell the one
+   * structural use of the brand colour; a value dark enough to read as black
+   * spends that grant on nothing, so the shell is held at L\* ≥ 22 — this one
+   * sits at L\* 31 and holds `shellText` at 7.8:1 and `shellTextMuted` at
+   * 4.9:1.
    */
-  shell: "#18492f",
-  shellText: "#f4f7f5",
-  shellTextMuted: "#a9c4b6",
+  shell: "#3c4f38",
+  shellText: "#f2f0e7",
+  shellTextMuted: "#b8c4ae",
 
   /**
-   * The ink the one shadow is cast in — the old shell value, kept because a
-   * shadow wants a near-black with the page's green bias and the shell no
-   * longer is one. Never a fill, never a text colour.
+   * The ink the one shadow is cast in — a near-black with the page's warm
+   * bias, because a cool shadow on cream paper reads as a stain. Never a
+   * fill, never a text colour.
    */
-  shadowInk: "#0f2b1f",
+  shadowInk: "#262117",
 
   /** App icon accent only. Not a UI colour. */
   bolt: "#f5c63d",
@@ -146,49 +146,48 @@ export const color = {
 /**
  * The dark palette — `design-system/02` §2.1, transcribed.
  *
- * Neutral near-black with the same faint green bias, the same four jobs for
- * green, and the same three money colours lifted for a dark ground. The shell
- * stays green in both themes; it is the one place the brand colour is allowed
- * to be structural.
+ * **Warm charcoal — a room with the lights low, not an OLED void.** The
+ * near-blacks carry the same warm bias as the light theme's creams, the four
+ * jobs for green hold, and the money colours are lifted for a dark ground.
+ * The accent stays a *saturated fill with a white label* — never a pale fill
+ * with dark text. The shell stays sage in both themes; it is the one place
+ * the brand colour is allowed to be structural.
  */
 export const darkColor = {
-  ground: "#0e1210",
-  surface: "#161b18",
-  subtle: "#1c2320",
-  hover: "#202824",
-  pressed: "#252e29",
-  border: "#2b3530",
-  borderInteractive: "#48534d",
-  borderStrong: "#66716a",
-  ink: "#eef2ef",
-  muted: "#9ba79f",
-  accent: "#5cc08f",
-  accentText: "#8fd6b3",
-  accentIcon: "#5cc08f",
-  accentFill: "#223229",
-  accentFillBorder: "#365f4a",
-  textOnAccent: "#0b1a12",
-  income: "#62d495",
-  spend: "#ea8f7b",
-  amber: "#3a301b",
-  amberInk: "#f0d38c",
-  amberBorder: "#8f7332",
-  danger: "#f1a390",
-  dangerBg: "#3b201b",
-  dangerBorder: "#a85a48",
+  ground: "#1c1a15",
+  surface: "#26221b",
+  subtle: "#2b2620",
+  hover: "#302a23",
+  pressed: "#363027",
+  border: "#38332a",
+  borderInteractive: "#5a5344",
+  borderStrong: "#78715e",
+  ink: "#f0ece3",
+  muted: "#a59d8d",
+  accent: "#55704f",
+  accentText: "#a4c297",
+  accentIcon: "#8fae84",
+  accentFill: "#2c3226",
+  accentFillBorder: "#46543c",
+  textOnAccent: "#ffffff",
+  income: "#8fd47c",
+  spend: "#e0937b",
+  amber: "#3a311d",
+  amberInk: "#e6cd8c",
+  amberBorder: "#8f7a3a",
+  danger: "#f0a28c",
+  dangerBg: "#3d241c",
+  dangerBorder: "#a45f48",
   /**
-   * **Lighter than the light theme's, and that is the point.** At `#0a1f16` the
-   * band measured 1.10:1 against `ground` and 1.01:1 against `surface` — a
-   * header indistinguishable from the page behind it and from the cards on it,
-   * which is what it looked like. On a near-black ground a surface reads by
-   * rising, so the dark shell ends up the lighter of the two: 1.95:1 on ground,
-   * 1.80:1 on surface. `theme.test.tsx` holds the floor.
+   * On a warm-charcoal ground a surface reads by rising, so the dark shell
+   * sits well above `ground` (1.97:1) and `surface` (1.79:1) — the 1.5 floor
+   * in `theme.test.tsx` is what keeps the band a band rather than a legible
+   * headline floating on an edge nobody can see.
    */
-  shell: "#1c4d38",
-  shellText: "#f0f5f2",
-  /** Lifted with the shell — `#86a496` was tuned for a near-black band and
-   *  reads at 3.58:1 on this one, under the 4.5 floor. */
-  shellTextMuted: "#a9c4b6",
+  shell: "#3d4f39",
+  shellText: "#f0f4ec",
+  /** Tuned to this shell — 4.7:1 on it, over the 4.5 floor. */
+  shellTextMuted: "#b3c2a9",
 } as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
@@ -341,10 +340,12 @@ export const space = {
 /* ── 2.4 Radius ──────────────────────────────────────────────────────────── */
 
 /**
- * Tightened. Cards were 20 and the ground panel 24, which together with a
- * 26px blur read as a consumer app; a tool is squarer. `pill` stays for chips
- * and tags, and for exactly one other thing — the floating add button, which
- * is the only circle on the screen and is findable because of it.
+ * One soft-rectangle family; circles only where the metaphor is round (§2.4).
+ * Chips, tags, tokens, segments, buttons and inputs all share `sm` and differ
+ * by size, never by shape — a pill-shaped chip is a capsule from someone
+ * else's app. `pill` survives for the radio's ring, the switch's track and
+ * thumb, and the floating add button, which is the only full circle on the
+ * screen and is findable because of it.
  */
 export const radius = {
   pill: 999,
