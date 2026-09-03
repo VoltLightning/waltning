@@ -54,7 +54,10 @@ export default function QuickAdd() {
   const accounts = snapshot.accounts.map(toChoice);
   const handleSave = useCallback(
     (next: SavableQuickAddDraft) => {
-      ledger.createExpense(next.amount, id<"accounts">(next.accountId));
+      const result = ledger.createExpense(next.amount, id<"accounts">(next.accountId));
+      // The next commit renders `result.fieldErrors` on the form; this one
+      // only stops a refusal from being treated as a save.
+      if (!("id" in result)) return;
       router.dismissTo("/");
     },
     [ledger],

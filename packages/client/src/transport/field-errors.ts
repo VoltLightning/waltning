@@ -22,9 +22,10 @@ export type FieldError = {
   /**
    * A catalogue key, when one exists — set only by a caller that cannot call
    * `useT()` itself (the phone controller is `packages/client`, not a
-   * component). Absent, the form renders `message` as-is: today that is every
-   * Zod issue, whose text is an English literal by construction
-   * (`architecture/12` — that is the spec's problem, not this contract's).
+   * component). A form resolves this first, falling back to `message` when it
+   * is absent: today that is every Zod issue, whose text is an English
+   * literal by construction (`architecture/12` — that is the spec's problem,
+   * not this contract's).
    */
   messageKey?: string;
   /** Interpolation values for `messageKey`, when it takes any. */

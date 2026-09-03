@@ -33,7 +33,11 @@ export default function NewAccount() {
 
   const handleSave = useCallback(
     (draft: CreateAccountDraft) => {
-      const accountId = id<"accounts">(ledger.createAccount(draft.name, draft.currency));
+      const result = ledger.createAccount(draft.name, draft.currency);
+      // The next commit renders `result.fieldErrors` on the form; this one
+      // only stops a refusal from being treated as a save.
+      if (!("id" in result)) return;
+      const accountId = id<"accounts">(result.id);
       if (target.valid && target.returnTo === "quick-add") {
         router.dismissTo({
           pathname: "/quick-add",
