@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./capture/*": "./src/capture/*.ts",
     "./currencies": "./src/currencies.ts",
     "./date": "./src/date.ts",
     "./diagnostics": "./src/diagnostics.ts",
