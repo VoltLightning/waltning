@@ -16,6 +16,7 @@
  * teardown: a parallel test would lose its role mid-run.
  */
 
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -29,7 +30,19 @@ if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 /** The migrations folder, resolved from this file so cwd never matters. */
 export const migrationsFolder = fileURLToPath(new URL("../../drizzle", import.meta.url));
 
-export const TEMPLATE_DB = "waltning_test_template";
+/**
+ * **One template per checkout.** The name carries a hash of this file's own
+ * path, so two worktrees running `pnpm verify` against the same Postgres —
+ * nine agents did, on 2026-09-03 — build and drop their own templates rather
+ * than one another's. Without it, run A's `DROP DATABASE` landed while run B
+ * was cloning, and B failed with *template database does not exist* on code
+ * that was fine. Eight hex characters keep the name well inside Postgres's
+ * 63-byte limit.
+ */
+export const TEMPLATE_DB = `waltning_test_template_${createHash("sha1")
+  .update(fileURLToPath(import.meta.url))
+  .digest("hex")
+  .slice(0, 8)}`;
 
 /**
  * The superuser connection. Migrations create roles and issue grants, which
