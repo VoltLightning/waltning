@@ -467,7 +467,14 @@ describe("every src/ is organised by domain, not by layer", () => {
      * put forty-four operations beside six foundation files and lose the
      * correspondence that makes the two engines checkable against each other.
      */
-    "packages/ledger/src": ["accounts", "currencies", "test", "transactions"],
+    "packages/ledger/src": [
+      "accounts",
+      "categories",
+      "counterparties",
+      "currencies",
+      "test",
+      "transactions",
+    ],
     /**
      * **Flat, and that is the decision.** The two dialects are file suffixes —
      * `currencies.pg.ts` beside `currencies.sqlite.ts` — not `pg/` and
