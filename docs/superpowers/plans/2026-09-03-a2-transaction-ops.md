@@ -476,7 +476,7 @@ describe("categorize_batch", () => {
 
 - [ ] **Step 2–5:** implement each executor following Task 2's shape. Rules that must be checks:
   - `set_transaction_lines`: `Σ line.amount == transaction.amountOriginal` (use `money.sum`/`money.eq`, never `Number`); delete existing lines then insert — inside the one `tx`; version check on the transaction; bump its version.
-  - `supersede_transaction`: version check on the old row; soft-delete it; insert the replacement via the same `insertTransaction`/`provisionalFxRate` logic as create — **import it**, do not copy it (export `insertTransaction` from `create-transaction.executor.ts` if it is not already).
+  - `supersede_transaction`: version check on the old row; soft-delete it; insert the replacement via the same `insertTransaction`/`provisionalFxRate` logic as create — **import it**, do not copy it. `insertTransaction` is a module-private function at `create-transaction.executor.ts:64`; add `export` to it (and keep its name — A3's `reconcile_account` imports it too).
   - `categorize_batch`: every id must exist and be live and be income/expense (a transfer takes no category — the input's `.superRefine` rule); one `update … where id in (…)`; refuse if the affected count differs from `transactionIds.length`.
 
 - [ ] **Step 6: Register, run `npx vitest run packages/ledger`, commit** — `"Lines, supersede and batch categorise, on the device"`.

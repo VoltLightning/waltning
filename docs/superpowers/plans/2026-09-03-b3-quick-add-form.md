@@ -29,7 +29,7 @@ export type QuickAddDraft = {
   categoryId: string | null;
   date: string;                 // AccountingDate, defaults to capture.date
   note: string; isBusiness: boolean;
-  counterpartyId: string | null; counterpartyRole: "debt" | "payer" | "payee" | null; // use COUNTERPARTY_ROLE's real values
+  counterpartyId: string | null; counterpartyRole: "debt" | "contribution" | "reference" | null; // COUNTERPARTY_ROLE in inputs.ts:71
 };
 ```
 Controller: `createTransaction(draft)` replaces `createExpense`; keeps the capturable check and the positive-amount check; `date: draft.date` (the form's, which defaults to `capture().date` — the `capturedTz` card's editable-date half lands here). Update tests and screens. Commit `"Quick add saves the whole transaction, not amount and account"`.

@@ -101,7 +101,7 @@ Append a section `/* ── categories ── */`:
 export const createCategoryInput = z.object({
   id: zId<"categories">(),
   name: z.string().trim().min(1).max(120),
-  kind: z.enum(CATEGORY_KIND),            // add CATEGORY_KIND to the restated enums if absent
+  kind: z.enum(CATEGORY_KIND),            // restate `["income", "expense"] as const` beside the other enums at inputs.ts:33-71 — core cannot import schema
   parentId: zId<"categories">().nullable().default(null),
   isEarnings: z.boolean().default(false),
   icon: z.string().trim().max(64).optional(),
