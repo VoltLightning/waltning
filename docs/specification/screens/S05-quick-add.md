@@ -63,12 +63,18 @@ mid-draft never discards what is there.
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed.
 
-Under the disposable preview profile, the expense path has two explicit inputs:
-a positive USD amount and an account. The app supplies expense type, today's
-device-local accounting date, USD, and the operation defaults. Its *Create
-account…* exit returns to the same draft with the new account selected. That
-profile omits the keypad, category, scope, note, counterparty, voice, scan, and
-FX affordances.
+Under the disposable preview profile, amount and account stay the fast default
+path — the two fields the app cannot supply on your behalf. Beneath them, the
+form now carries every other user-owned field `create_transaction` takes: an
+Expense · Income segment (default expense; the keypad never signs — §7.2's
+`type` alone carries direction), a searchable category limited to the chosen
+type's leaves, and a collapsed *More* fold holding an editable accounting date
+(defaults to today's device-local date), a note, the business toggle, and —
+only when the ledger holds any — a counterparty with its role (§6.6). Its
+*Create account…* exit still returns to the same draft with the new account
+selected. That profile still omits the keypad, voice, scan, sync, and FX
+affordances, and offers no transfer — `+` long-press opens that composer
+separately.
 
 **The chip row is the whole model.** Account, category, date, scope, note, and
 counterparty when attached. Each chip is empty (placeholder), filled, or

@@ -62,7 +62,10 @@ export function Button({
 
   const { hovered, focused, handlers } = useInteraction();
   const styles = useStyles();
-  const ink = styles[INK_STYLE[variant]];
+  const ink =
+    variant === "ghost" && hovered && !inactive
+      ? styles.inkGhostHovered
+      : styles[INK_STYLE[variant]];
   const press = usePressScale();
   const slop = Math.max(0, (touchTarget.min - HEIGHT[size]) / 2);
   const pressableStyle = useCallback(
@@ -138,6 +141,15 @@ const useStyles = makeStyles((theme) => ({
   inkPrimary: { color: theme.textOnAccent },
   inkSecondary: { color: theme.accentText },
   inkGhost: { color: theme.textMuted },
+  /**
+   * `textMuted` on `hoverFill` measures 4.47:1 — under the 4.5:1 floor by a
+   * hair, and invisible until a real story left a ghost button hovered under
+   * axe (`QuickAddForm`'s `More`). `inkSecondary` and `inkDanger` sit on the
+   * same fill well clear of the line, so only ghost needs its own hover ink;
+   * full-strength `theme.text` is the label's resting colour on every other
+   * surface in the system, not a new role invented for this one state.
+   */
+  inkGhostHovered: { color: theme.text },
   inkDanger: { color: theme.dangerText },
 
   hovered: { backgroundColor: theme.hoverFill },
