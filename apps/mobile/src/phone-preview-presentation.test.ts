@@ -13,13 +13,18 @@ const nativePlatform = readFileSync(resolve(app, "../src/platform.native.ts"), "
 const nativeLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"), "utf8");
 const webLedger = readFileSync(resolve(app, "../src/phone-ledger.web.ts"), "utf8");
 const english = readFileSync(resolve(app, "../../../packages/ui/src/i18n/en.ts"), "utf8");
+const tabsLayout = readFileSync(resolve(app, "(tabs)/_layout.tsx"), "utf8");
 
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
     expect(today).toContain('label: t("routes.createAccount")');
     expect(today).toContain("<CurrencyTotals subtotals={snapshot.subtotals} />");
     expect(today).toContain('title={t("shell.recent")}');
-    expect(today).toContain('router.push("/quick-add")');
+    // The `+` is not wired here — `(tabs)/_layout.tsx` mounts one
+    // `FloatingAdd` above the whole tab slot, so it survives a tab switch
+    // rather than remounting with this screen.
+    expect(today).not.toContain("FloatingAdd");
+    expect(tabsLayout).toContain('router.push("/quick-add")');
     // The hero is a list of subtotals, not a figure. `snapshot.total` was a
     // `money.sum` over every balance labelled USD, which only held because a
     // throw refused any account that was not in dollars.

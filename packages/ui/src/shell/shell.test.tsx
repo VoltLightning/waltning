@@ -14,8 +14,6 @@ import { Card } from "./card";
 import { DualTotal } from "./dual-total";
 import { TodayFrame } from "./today-frame";
 
-function noop() {}
-
 /**
  * The group separator, **as Testing Library sees it.**
  *
@@ -149,19 +147,12 @@ describe("the frame clears the device's chrome", () => {
   function renderFrame(insets: SafeAreaInsets) {
     const { container } = render(
       <SafeAreaProvider insets={insets}>
-        <TodayFrame
-          appearanceAction={null}
-          total={null}
-          body={null}
-          onAdd={noop}
-          floatPosition={null}
-          onFloatPositionChange={noop}
-        />
+        <TodayFrame appearanceAction={null} total={null} body={null} />
       </SafeAreaProvider>,
     );
     const root = container.firstElementChild;
-    // Shell, then panel, then the floating button's layer — so the panel is
-    // the second child, not the last.
+    // Shell, then panel — the floating button no longer mounts inside this
+    // frame (`(tabs)/_layout.tsx` owns it now), so the panel is the last child.
     return { shell: root?.firstElementChild ?? null, panel: root?.children[1] ?? null };
   }
 
@@ -223,14 +214,7 @@ describe("the shell owns the strip it clears", () => {
     const { container } = render(
       <ThemeProvider name="light">
         <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
-          <TodayFrame
-            appearanceAction={null}
-            total={null}
-            body={null}
-            onAdd={noop}
-            floatPosition={null}
-            onFloatPositionChange={noop}
-          />
+          <TodayFrame appearanceAction={null} total={null} body={null} />
         </SafeAreaProvider>
       </ThemeProvider>,
     );

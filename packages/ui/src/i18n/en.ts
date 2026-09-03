@@ -174,6 +174,9 @@ export const en = {
     "rule.amountDrifted": "Amount drifted",
     "rule.overdue": "Overdue",
     "rule.neverPosted": "Never posted",
+    /** The tab stubs (Ledger · Calendar · Debt) until their own arcs build the real screen. */
+    "stub.body": "This screen isn't built yet.",
+    "stub.goToToday": "Go to Today",
   },
 } as const;
 

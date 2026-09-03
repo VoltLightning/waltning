@@ -199,9 +199,11 @@ function AppStack() {
         headerShadowVisible: false,
       }}
     >
-      {/* The ledger's header is the shell itself — a 54pt total does not fit in
-          a navigation bar, and §5.1 makes the shell the frame. */}
-      <Stack.Screen name="index" options={{ headerShown: false }} />
+      {/* The tab shell draws its own chrome — Today's header is the shell
+          itself (a 54pt total does not fit in a navigation bar, §5.1), and
+          the other tabs are stubs with none yet. `quick-add` and
+          `account/new` stay stack routes pushed *over* the tabs. */}
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
     </Stack>

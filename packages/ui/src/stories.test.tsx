@@ -30,6 +30,8 @@ import { describe, expect, it } from "vitest";
 import * as amount from "./fx/amount.stories";
 import * as button from "./primitives/button.stories";
 import * as chip from "./primitives/chip.stories";
+import * as shell from "./shell/shell.stories";
+import * as tabBar from "./shell/tab-bar.stories";
 import * as todayFrame from "./shell/today-frame.stories";
 import * as banner from "./states/banner.stories";
 import * as emptyState from "./states/empty-state.stories";
@@ -59,7 +61,9 @@ const MODULES = {
   ErrorState: errorState,
   MatchWarning: matchWarning,
   RuleHealthTag: ruleHealthTag,
+  Shell: shell,
   Skeleton: skeleton,
+  TabBar: tabBar,
   ThinkingIndicator: thinkingIndicator,
   ThresholdSlider: thresholdSlider,
   Toast: toast,

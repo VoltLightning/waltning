@@ -134,5 +134,7 @@ export const pl: Messages = {
     "rule.amountDrifted": "Kwota odbiega",
     "rule.overdue": "Zaległa",
     "rule.neverPosted": "Nigdy nie zaksięgowana",
+    "stub.body": "Ten ekran nie jest jeszcze gotowy.",
+    "stub.goToToday": "Przejdź do Dziś",
   },
 };

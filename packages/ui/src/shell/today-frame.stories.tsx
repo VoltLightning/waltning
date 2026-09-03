@@ -31,12 +31,10 @@ import { Card } from "./card";
 import { CurrencyTotals } from "./currency-totals";
 import { TodayFrame } from "./today-frame";
 
-function noop() {}
-
 const meta = {
   title: "Shell/TodayFrame",
   component: TodayFrame,
-  args: { appearanceAction: null, onAdd: noop, floatPosition: null, onFloatPositionChange: noop },
+  args: { appearanceAction: null },
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof TodayFrame>;
 
@@ -94,8 +92,9 @@ export const TwoCurrencies: Story = {
 };
 
 /**
- * The state a first launch shows, and the reason `addDisabled` exists — there
- * is nowhere to put a capture until an account exists.
+ * The state a first launch shows — there is nowhere to put a capture until an
+ * account exists, which is why the floating add button (mounted separately by
+ * `(tabs)/_layout.tsx`, not by this frame) disables itself on the same fact.
  *
  * **The headline is absent, not zero.** With no account there is no currency to
  * print a zero in, and `0,00 USD` on a ledger someone banks in złoty would be
@@ -104,7 +103,6 @@ export const TwoCurrencies: Story = {
 export const FirstRun: Story = {
   args: {
     total: <CurrencyTotals subtotals={[]} />,
-    addDisabled: true,
     body: <Body>Nothing captured yet.</Body>,
   },
 };
