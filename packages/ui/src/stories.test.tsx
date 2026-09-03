@@ -32,6 +32,7 @@ import * as button from "./primitives/button.stories";
 import * as chip from "./primitives/chip.stories";
 import * as shell from "./shell/shell.stories";
 import * as tabBar from "./shell/tab-bar.stories";
+import * as tabIcons from "./shell/tab-icons.stories";
 import * as todayFrame from "./shell/today-frame.stories";
 import * as banner from "./states/banner.stories";
 import * as emptyState from "./states/empty-state.stories";
@@ -64,6 +65,7 @@ const MODULES = {
   Shell: shell,
   Skeleton: skeleton,
   TabBar: tabBar,
+  TabIcons: tabIcons,
   ThinkingIndicator: thinkingIndicator,
   ThresholdSlider: thresholdSlider,
   Toast: toast,

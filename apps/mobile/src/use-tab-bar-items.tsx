@@ -39,30 +39,35 @@ export function useTabBarItems(): {
   const calendar = useTabTrigger({ name: "calendar" });
   const debt = useTabTrigger({ name: "debt" });
 
+  const todayActive = today.trigger?.isFocused ?? false;
+  const ledgerActive = ledger.trigger?.isFocused ?? false;
+  const calendarActive = calendar.trigger?.isFocused ?? false;
+  const debtActive = debt.trigger?.isFocused ?? false;
+
   const items: readonly TabBarItem[] = [
     {
       name: "today",
       label: t("shell.today"),
-      icon: <TodayTabIcon />,
-      active: today.trigger?.isFocused ?? false,
+      icon: <TodayTabIcon active={todayActive} />,
+      active: todayActive,
     },
     {
       name: "ledger",
       label: t("routes.ledger"),
-      icon: <LedgerTabIcon />,
-      active: ledger.trigger?.isFocused ?? false,
+      icon: <LedgerTabIcon active={ledgerActive} />,
+      active: ledgerActive,
     },
     {
       name: "calendar",
       label: t("routes.calendar"),
-      icon: <CalendarTabIcon />,
-      active: calendar.trigger?.isFocused ?? false,
+      icon: <CalendarTabIcon active={calendarActive} />,
+      active: calendarActive,
     },
     {
       name: "debt",
       label: t("routes.debt"),
-      icon: <DebtTabIcon />,
-      active: debt.trigger?.isFocused ?? false,
+      icon: <DebtTabIcon active={debtActive} />,
+      active: debtActive,
     },
   ];
 
