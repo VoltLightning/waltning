@@ -100,12 +100,26 @@ test.describe("contrast", () => {
         await page.addScriptTag({ content: axeSource });
 
         const violations = await page.evaluate(async () => {
-          const results = await window.axe.run("#storybook-root", {
-            runOnly: { type: "rule", values: ["color-contrast"] },
-          });
-          return results.violations.flatMap((v) =>
-            v.nodes.map((n) => `${v.id}: ${n.failureSummary ?? ""}`),
-          );
+          // `addon-a11y` ships in this build and runs its own axe on story
+          // render; two axe instances share one page and axe refuses to run
+          // concurrently. The addon's pass finishes in milliseconds — wait it
+          // out rather than lose a real contrast check to a timing race.
+          for (let attempt = 0; ; attempt += 1) {
+            try {
+              const results = await window.axe.run("#storybook-root", {
+                runOnly: { type: "rule", values: ["color-contrast"] },
+              });
+              return results.violations.flatMap((v) =>
+                v.nodes.map((n) => `${v.id}: ${n.failureSummary ?? ""}`),
+              );
+            } catch (error) {
+              if (attempt < 20 && String(error).includes("already running")) {
+                await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+                continue;
+              }
+              throw error;
+            }
+          }
         });
 
         expect(violations, "contrast violations").toEqual([]);

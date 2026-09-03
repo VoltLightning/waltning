@@ -6,14 +6,14 @@ import { expect, it, vi } from "vitest";
 import { type CreateAccountCurrency, CreateAccountForm } from "./create-account-form";
 
 const currencies: readonly CreateAccountCurrency[] = [
-  { code: currencyCode("PLN"), name: "Polish Złoty" },
-  { code: currencyCode("BYN"), name: "Belarusian Ruble" },
+  { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł" },
+  { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br" },
 ];
 
 it("offers every currency the ledger holds and rejects a whitespace-only name", () => {
   render(<CreateAccountForm currencies={currencies} onCancel={vi.fn()} onSave={vi.fn()} />);
   expect(screen.getByText(/PLN/)).toBeDefined();
-  expect(screen.getByText("BYN")).toBeDefined();
+  expect(screen.getByText(/BYN/)).toBeDefined();
   const save = screen.getByRole("button", { name: "Save" });
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "   " } });
   expect(save.getAttribute("aria-disabled")).toBe("true");

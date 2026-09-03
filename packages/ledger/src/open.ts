@@ -13,11 +13,11 @@
  * give one. SQLite states it plainly, in the list of what WAL costs:
  * *"Transactions that involve changes against multiple ATTACHed databases are
  * atomic for each individual database, but are not atomic across all databases
- * as a set."* WAL is not optional here (below), so the atomicity `ATTACH` looks
- * like it buys is not on offer — and it still costs the property the two files
- * exist for: a drop-and-refetch would have to detach, delete and re-attach a
- * file whose connection is also the outbox's. Two connections, two files, and
- * the boundary stays where §5.7 drew it.
+ * as a set."* WAL is the device default (below), so the atomicity `ATTACH`
+ * looks like it buys is not on offer — and it still costs the property the two
+ * files exist for: a drop-and-refetch would have to detach, delete and
+ * re-attach a file whose connection is also the outbox's. Two connections, two
+ * files, and the boundary stays where §5.7 drew it, on every platform.
  *
  * **The driver is injected, not imported.** `packages/ledger` must not depend on
  * `expo-sqlite`: that package needs the Expo native runtime, so importing it
@@ -125,6 +125,24 @@ export type OpenOptions = {
    * what it overlaps with.
    */
   readonly busyTimeoutMs?: number;
+  /**
+   * The journal mode the platform can actually deliver. Default `"wal"`.
+   *
+   * **`"rollback"` exists for exactly one caller: the browser.** The OPFS
+   * builds SQLite runs on in a web worker leave out `xShmMap`, so WAL is not
+   * on offer there — and the two things WAL buys this app are not needed
+   * there either. Reader/writer overlap: the browser holds **one** connection
+   * per file inside one worker, so there is nothing to overlap. The
+   * migrator's checkpoint-then-copy: the browser's `LedgerFs` copies through
+   * SQLite's backup API over the live connection, which reads committed state
+   * directly and never looks at a `-wal` sibling.
+   *
+   * The declaration is verified in both directions: `"wal"` still throws when
+   * the build will not enter it, and `"rollback"` throws if the file somehow
+   * *is* in WAL — a platform that declares it cannot checkpoint must not be
+   * running a journal that needs checkpointing.
+   */
+  readonly journalMode?: "wal" | "rollback";
 };
 
 export type Ledger<TRun, TSchema extends LedgerSchema> = {
@@ -150,13 +168,18 @@ const IN_MEMORY = ":memory:";
  */
 function tune<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
-  options: { busyTimeoutMs: number; foreignKeys: boolean; synchronous: "NORMAL" | "FULL" },
+  options: {
+    busyTimeoutMs: number;
+    foreignKeys: boolean;
+    synchronous: "NORMAL" | "FULL";
+    journalMode: "wal" | "rollback";
+  },
 ): void {
   /**
-   * **WAL.** A reader does not block the writer and the writer does not block
-   * readers, which is the shape of this app: a screen is reading the ledger
-   * while a capture commits. It is also persistent — set once, stored in the
-   * file — unlike everything else here.
+   * **WAL, where the platform has it.** A reader does not block the writer and
+   * the writer does not block readers, which is the shape of this app on a
+   * device: a screen is reading the ledger while a capture commits. It is also
+   * persistent — set once, stored in the file — unlike everything else here.
    *
    * It is what makes `ATTACH` useless above, and it is what makes the
    * migrator's checkpoint necessary: recent writes live in the `-wal` sibling
@@ -172,16 +195,33 @@ function tune<TRun, TSchema extends LedgerSchema>(
    * the migrator's checkpoint would be checkpointing nothing, and nothing
    * anywhere would say so. Discarding this return value hid that for the whole
    * of the previous change.
+   *
+   * **`"rollback"` is the browser's declaration, verified, not a bypass** —
+   * see `OpenOptions.journalMode` for why the two WAL properties are not
+   * needed there. A file that reports WAL under that declaration throws: the
+   * caller has promised a copy strategy that never checkpoints, and a WAL
+   * file under it would hand that strategy stale data.
    */
-  const [journal] = db.all<{ journal_mode: string }>(sql.raw("pragma journal_mode = WAL"));
+  if (options.journalMode === "wal") {
+    const [journal] = db.all<{ journal_mode: string }>(sql.raw("pragma journal_mode = WAL"));
 
-  if (journal?.journal_mode?.toLowerCase() !== "wal") {
-    throw new Error(
-      `this SQLite build would not enter WAL mode — it reports ${JSON.stringify(
-        journal?.journal_mode ?? null,
-      )}. The ledger's concurrency and the migrator's checkpoint both assume WAL, ` +
-        "so running on rollback-journal would be a quieter kind of wrong than stopping here.",
-    );
+    if (journal?.journal_mode?.toLowerCase() !== "wal") {
+      throw new Error(
+        `this SQLite build would not enter WAL mode — it reports ${JSON.stringify(
+          journal?.journal_mode ?? null,
+        )}. The ledger's concurrency and the migrator's checkpoint both assume WAL, ` +
+          "so running on rollback-journal would be a quieter kind of wrong than stopping here.",
+      );
+    }
+  } else {
+    const [journal] = db.all<{ journal_mode: string }>(sql.raw("pragma journal_mode"));
+    if (journal?.journal_mode?.toLowerCase() === "wal") {
+      throw new Error(
+        'this database is in WAL mode but the platform declared journalMode "rollback" — ' +
+          "its copy strategy never checkpoints, so recent commits in the -wal sibling would be " +
+          "invisible to every pre-migration copy it takes.",
+      );
+    }
   }
 
   /**
@@ -249,6 +289,7 @@ export function openLedger<TRun, TSchema extends LedgerSchema>(
   }
 
   const busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS;
+  const journalMode = options.journalMode ?? "wal";
 
   const replicaFile = open(paths.replica);
   let outboxFile: OpenedSqlite<TRun, TSchema>;
@@ -262,8 +303,8 @@ export function openLedger<TRun, TSchema extends LedgerSchema>(
   }
 
   try {
-    tune(replicaFile.db, { busyTimeoutMs, foreignKeys: true, synchronous: "NORMAL" });
-    tune(outboxFile.db, { busyTimeoutMs, foreignKeys: false, synchronous: "FULL" });
+    tune(replicaFile.db, { busyTimeoutMs, foreignKeys: true, synchronous: "NORMAL", journalMode });
+    tune(outboxFile.db, { busyTimeoutMs, foreignKeys: false, synchronous: "FULL", journalMode });
   } catch (error) {
     replicaFile.close();
     outboxFile.close();

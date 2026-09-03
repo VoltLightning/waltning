@@ -43,6 +43,15 @@
 	handle {
 		root * /srv
 
+		# Cross-origin isolation, for the browser's ledger. `expo-sqlite` on web
+		# carries its synchronous API over `SharedArrayBuffer`, which browsers
+		# expose only to isolated pages. `require-corp` rather than
+		# `credentialless` because Safari never shipped the latter, and every
+		# asset here is same-origin anyway. `apps/mobile/metro.config.js` sends
+		# the same pair in dev — changing one means changing both.
+		header Cross-Origin-Opener-Policy "same-origin"
+		header Cross-Origin-Embedder-Policy "require-corp"
+
 		# Content-hashed by Metro, so the name changes when the content does.
 		header /_expo/static/* Cache-Control "public, max-age=31536000, immutable"
 

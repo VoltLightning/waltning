@@ -54,6 +54,12 @@ export type LocalLedgerSessionOptions<TRun> = {
   open: SqliteOpener<TRun, typeof ledgerSchema>;
   paths: LedgerPaths;
   fs: LedgerFs;
+  /**
+   * `"rollback"` only where the platform genuinely cannot WAL — the browser —
+   * and only with a `fs.copy` that reads through the live connection rather
+   * than the file. `open.ts` carries the reasoning and verifies the claim.
+   */
+  journalMode?: "wal" | "rollback";
   removeDatabase: (path: string) => void;
   /**
    * Every currency the replica starts with, not one.
@@ -76,7 +82,11 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): SessionLedger<TR
 
   let ledger: SessionLedger<TRun>;
   try {
-    ledger = openLedger(options.open, options.paths);
+    ledger = openLedger(
+      options.open,
+      options.paths,
+      options.journalMode ? { journalMode: options.journalMode } : {},
+    );
   } catch (error) {
     emitLedgerDiagnostic(diagnostics, {
       scope: "ledger_startup",

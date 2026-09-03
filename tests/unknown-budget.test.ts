@@ -111,6 +111,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "pnpm gives the same Drizzle version different nominal package identities for its Expo and Postgres peer sets; the native platform seam proves the runtime adapter and contains that package-manager-only cast",
   },
+  "apps/mobile/src/phone-ledger.web.ts": {
+    max: 1,
+    why: "the same package-manager-only Drizzle cast, on the browser's half of the seam",
+  },
   "packages/db/src/fx/backfill.ts": {
     max: 1,
     why: "an unrecognised rate source, which is a string from the database and not a type",
