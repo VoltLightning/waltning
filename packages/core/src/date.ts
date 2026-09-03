@@ -73,3 +73,21 @@ export function todayIn(timeZone: string, now = new Date()): AccountingDate {
 
   return accountingDate(formatted);
 }
+
+/**
+ * Add (or, for a negative `n`, subtract) whole days to a bare accounting
+ * date. Used by the capture grammar (`capture/dates.ts`) to turn "yesterday"
+ * and a weekday name into a date, without touching a clock.
+ *
+ * **Calendar arithmetic, not clock arithmetic — the distinction this file's
+ * header exists to draw.** `Date.UTC` here is not a timezone; it is a Gregorian
+ * day-count device applied to three numbers that already name a calendar day,
+ * with no `now`, no local zone and no `toISOString` anywhere in the path. That
+ * is different from `todayIn`'s hazard, which comes from asking a *clock* what
+ * day it is in the wrong zone — there is no clock here to get wrong.
+ */
+export function addDays(date: AccountingDate, n: number): AccountingDate {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  const shifted = new Date(Date.UTC(year, month - 1, day + n));
+  return accountingDate(shifted.toISOString().slice(0, 10));
+}
