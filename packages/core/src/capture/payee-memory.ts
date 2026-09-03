@@ -1,20 +1,6 @@
 import type { AccountingDate } from "../date.ts";
+import { fold } from "./names.ts";
 import { jaccard, trigrams } from "./trigrams.ts";
-
-/**
- * Case- and diacritic-fold a payee string for comparison.
- *
- * D2 depends on D1's `fold()` (`packages/core/src/capture/names.ts`). D1 had
- * not merged when this module was written, so this is a local copy —
- * de-duplicate against D1's `fold` in the rebase once both land.
- */
-export function fold(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/ł/g, "l")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
 
 const MIN_SIMILARITY = 0.2;
 const DEFAULT_K = 7;

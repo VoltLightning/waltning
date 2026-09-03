@@ -1,4 +1,5 @@
-import { fold, type PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
+import { fold } from "@waltning/core/capture/names";
+import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { and, desc, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
