@@ -5,31 +5,20 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
-import { View } from "react-native";
-import { makeStyles } from "../theme/styles.ts";
-import { radius } from "../tokens.ts";
 import { TabBar } from "./tab-bar";
+import { CalendarTabIcon, DebtTabIcon, LedgerTabIcon, TodayTabIcon } from "./tab-icons";
 
 function noop() {}
-
-function Dot() {
-  const styles = useStyles();
-  return <View style={styles.dot} />;
-}
-
-const useStyles = makeStyles((theme) => ({
-  dot: { width: 20, height: 20, borderRadius: radius.sm, backgroundColor: theme.textMuted },
-}));
 
 const meta = {
   title: "Shell/TabBar",
   component: TabBar,
   args: {
     items: [
-      { name: "today", label: "Today", icon: <Dot />, active: true },
-      { name: "ledger", label: "Ledger", icon: <Dot />, active: false },
-      { name: "calendar", label: "Calendar", icon: <Dot />, active: false },
-      { name: "debt", label: "Debt", icon: <Dot />, active: false },
+      { name: "today", label: "Today", icon: <TodayTabIcon active />, active: true },
+      { name: "ledger", label: "Ledger", icon: <LedgerTabIcon />, active: false },
+      { name: "calendar", label: "Calendar", icon: <CalendarTabIcon />, active: false },
+      { name: "debt", label: "Debt", icon: <DebtTabIcon />, active: false },
     ],
     onSelect: noop,
   },
@@ -44,11 +33,11 @@ export const Default: Story = {};
 export const FiveTabs: Story = {
   args: {
     items: [
-      { name: "today", label: "Today", icon: <Dot />, active: false },
-      { name: "ledger", label: "Ledger", icon: <Dot />, active: true },
-      { name: "calendar", label: "Calendar", icon: <Dot />, active: false },
-      { name: "debt", label: "Debt", icon: <Dot />, active: false },
-      { name: "settings", label: "Settings", icon: <Dot />, active: false },
+      { name: "today", label: "Today", icon: <TodayTabIcon />, active: false },
+      { name: "ledger", label: "Ledger", icon: <LedgerTabIcon active />, active: true },
+      { name: "calendar", label: "Calendar", icon: <CalendarTabIcon />, active: false },
+      { name: "debt", label: "Debt", icon: <DebtTabIcon />, active: false },
+      { name: "settings", label: "Settings", icon: <TodayTabIcon />, active: false },
     ],
   },
 };

@@ -76,7 +76,7 @@ const useStyles = makeStyles((theme) => ({
   tintInactive: { borderColor: theme.textMuted },
 
   /** `Today` — a plain filled soft rectangle, the simplest mark of the four. */
-  square: { width: 14, height: 14, borderRadius: radius.sm, alignSelf: "center" },
+  square: { width: 14, height: 14, borderRadius: radius.xs, alignSelf: "center" },
 
   /** `Ledger` — three stacked rows, the list a ledger already is. */
   stack: {
@@ -85,14 +85,14 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-between",
     paddingVertical: space.xxs,
   },
-  bar: { height: 3, borderRadius: radius.sm },
+  bar: { height: 3, borderRadius: radius.xs },
 
   /** `Calendar` — a bordered page with a header band and a day grid. */
   frame: {
     width: SIZE,
     height: SIZE,
     borderWidth: 1.5,
-    borderRadius: radius.sm,
+    borderRadius: radius.xs,
     overflow: "hidden",
   },
   calendarHeader: { height: 5 },
@@ -104,17 +104,16 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-around",
     padding: space.xxs,
   },
-  calendarDot: { width: 4, height: 4, borderRadius: radius.sm },
+  calendarDot: { width: 4, height: 4 },
 
   /** `Debt` — an arrow: money that moved, and which way. */
   arrowBox: { width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center" },
-  arrowShaft: { width: 2, height: 14, borderRadius: radius.sm },
+  arrowShaft: { width: 2, height: 14 },
   arrowHeadLeft: {
     position: "absolute",
     top: 2,
     width: 2,
     height: 8,
-    borderRadius: radius.sm,
     transform: [{ translateX: -3 }, { rotate: "45deg" }],
   },
   arrowHeadRight: {
@@ -122,7 +121,6 @@ const useStyles = makeStyles((theme) => ({
     top: 2,
     width: 2,
     height: 8,
-    borderRadius: radius.sm,
     transform: [{ translateX: 3 }, { rotate: "-45deg" }],
   },
 }));
