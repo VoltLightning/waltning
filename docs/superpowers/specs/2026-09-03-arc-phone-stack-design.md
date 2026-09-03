@@ -206,8 +206,10 @@ point at one list:
 - **The orchestrator** (this session) writes plans, dispatches, rebases the
   stack when a lower PR merges, and composes screens. It does not implement.
 - **Cadence.** Wave 1: A1–A4, B1–B3, D1–D2, F (as many as parallel budget
-  allows) — all off `main`. Wave 2: C1. Wave 3: C2–C6, D3, DESK1. Wave 4:
-  D4–D5, E. Wave 5: DESK2–DESK4, then DESK5.
+  allows) — all off `main`. Wave 2: C1. Wave 3a: D3, D4a (S06), C2, DESK1 —
+  off `main`. Wave 3b, once D3 and D4a merge: C3–C6. Wave 4: D4b (S05 on the
+  Dock), D5, E. Wave 5: DESK2–DESK4, then DESK5. The wave-3 plans share
+  `plans/2026-09-04-wave-3-shared.md`.
 
 ## 6. Risks named now
 
