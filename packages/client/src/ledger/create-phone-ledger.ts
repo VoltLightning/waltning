@@ -72,10 +72,36 @@ export type PhoneRecentTransaction = {
   isBusiness: boolean;
 };
 
+/**
+ * A leaf category the quick-add form can offer.
+ *
+ * Structural, like `PhoneCurrency` above — `kind` names the two draft types a
+ * category can attach to (`transactions_category_shape`) without importing
+ * the schema package's own enum.
+ */
+export type PhoneCategory = {
+  id: Id<"categories">;
+  name: string;
+  kind: "income" | "expense";
+};
+
+/**
+ * A counterparty the quick-add form can attach a role to (§6.6).
+ *
+ * `#e3` has not shipped a write path yet, so this list is ordinarily empty —
+ * the form offers the field only when it is not (S05 §5).
+ */
+export type PhoneCounterparty = {
+  id: Id<"counterparties">;
+  name: string;
+};
+
 export type PhoneLedgerPort = {
   listAccounts: () => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
+  listCategories: () => readonly PhoneCategory[];
+  listCounterparties: () => readonly PhoneCounterparty[];
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
   reset: () => void;
@@ -106,6 +132,8 @@ export type PhoneLedgerSnapshot = {
   accounts: readonly PhoneCapturableAccount[];
   currencies: readonly PhoneCurrency[];
   recent: readonly PhoneRecentTransaction[];
+  categories: readonly PhoneCategory[];
+  counterparties: readonly PhoneCounterparty[];
   /**
    * Ordered by the account list, so the currency of your first account leads.
    *
@@ -117,6 +145,30 @@ export type PhoneLedgerSnapshot = {
   subtotals: readonly PhoneCurrencySubtotal[];
 };
 
+/**
+ * Every field the quick-add screen can save, plain-string ids and all.
+ *
+ * **The user-owned subset of `CreateTransactionInput`.** Everything else on
+ * that schema is either a transfer field (Quick add never offers a transfer —
+ * `+` long-press does) or resolved by the server (`fxRate`, `source`, …). Ids
+ * stay `string` rather than `Id<Table>` on purpose: this is the shape a form
+ * hands back, and `createTransactionInput.parse` inside the controller is
+ * where the brand and the format are actually checked — a screen that
+ * pre-branded them would be asserting a claim it cannot verify.
+ */
+export type QuickAddDraft = {
+  type: "expense" | "income";
+  amount: string;
+  accountId: string;
+  categoryId: string | null;
+  /** `AccountingDate`'s shape (`YYYY-MM-DD`), defaulted by the form to today. */
+  date: string;
+  note: string;
+  isBusiness: boolean;
+  counterpartyId: string | null;
+  counterpartyRole: "debt" | "contribution" | "reference" | null;
+};
+
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
@@ -125,9 +177,8 @@ export type PhoneLedgerController = {
     name: string,
     currency: CurrencyCode,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
-  createExpense: (
-    amount: string,
-    accountId: Id<"accounts">,
+  createTransaction: (
+    draft: QuickAddDraft,
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
   reset: () => void;
 };
@@ -163,6 +214,8 @@ export function createPhoneLedger(
     accounts: [],
     currencies: [],
     recent: [],
+    categories: [],
+    counterparties: [],
     subtotals: [],
   };
   const listeners = new Set<() => void>();
@@ -187,6 +240,8 @@ export function createPhoneLedger(
         })),
         currencies,
         recent: port.listRecent(5),
+        categories: port.listCategories(),
+        counterparties: port.listCounterparties(),
         subtotals: subtotalsOf(accounts),
       };
       for (const listener of listeners) listener();
@@ -256,18 +311,18 @@ export function createPhoneLedger(
         throw error;
       }
     },
-    createExpense: (amount, accountId) => {
+    createTransaction: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
-        action: "create_expense",
+        action: "create_transaction",
         phase: "start",
       });
       try {
-        const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
+        const account = snapshot.accounts.find((candidate) => candidate.id === draft.accountId);
         if (!account) {
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
-            action: "create_expense",
+            action: "create_transaction",
             phase: "success",
           });
           return {
@@ -289,14 +344,14 @@ export function createPhoneLedger(
         if (!account.capturable) {
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
-            action: "create_expense",
+            action: "create_transaction",
             phase: "success",
           });
           return {
             fieldErrors: [
               {
                 path: "accountId",
-                message: `${account.currency} needs an exchange rate before an expense can be recorded in it`,
+                message: `${account.currency} needs an exchange rate before a transaction can be recorded in it`,
                 messageKey: "transactions.needsRate",
                 params: { currency: account.currency },
               },
@@ -304,33 +359,40 @@ export function createPhoneLedger(
           };
         }
 
-        const normalized = money.toMoney(amount);
+        const normalized = money.toMoney(draft.amount);
         if (money.dec(normalized).lte(0)) {
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
-            action: "create_expense",
+            action: "create_transaction",
             phase: "success",
           });
           return {
-            fieldErrors: [
-              { path: "amountOriginal", message: "Expense amount must be greater than zero" },
-            ],
+            fieldErrors: [{ path: "amountOriginal", message: "Amount must be greater than zero" }],
           };
         }
 
         const capture = runtime.capture();
         const parsed = createTransactionInput.safeParse({
           id: runtime.id<"transactions">(),
-          date: capture.date,
-          type: "expense",
-          accountId,
+          // The form's date, not the device's `capture().date` — this is the
+          // `capturedTz` card's editable-date half. `capture()` above still
+          // runs, because the outbox entry needs its own timestamp and zone
+          // regardless of which accounting date the row lands on.
+          date: draft.date,
+          type: draft.type,
+          accountId: draft.accountId,
           amountOriginal: normalized,
           currency: account.currency,
+          categoryId: draft.categoryId ?? undefined,
+          note: draft.note,
+          isBusiness: draft.isBusiness,
+          counterpartyId: draft.counterpartyId ?? undefined,
+          counterpartyRole: draft.counterpartyRole ?? undefined,
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
-            action: "create_expense",
+            action: "create_transaction",
             phase: "success",
           });
           return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
@@ -339,14 +401,14 @@ export function createPhoneLedger(
         refresh();
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
-          action: "create_expense",
+          action: "create_transaction",
           phase: "success",
         });
         return { id: parsed.data.id };
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
-          action: "create_expense",
+          action: "create_transaction",
           phase: "failure",
           error: clientFailure(error),
         });

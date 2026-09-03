@@ -29,6 +29,8 @@ describe("usePhoneLedger", () => {
           },
         ],
         listRecent: () => [],
+        listCategories: () => [],
+        listCounterparties: () => [],
         createAccount: (input) => {
           accounts = [
             {

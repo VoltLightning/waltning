@@ -60,6 +60,8 @@ function fakeController(initialAccounts: readonly FakeAccount[] = []) {
         },
       ],
       listRecent: () => [],
+      listCategories: () => [],
+      listCounterparties: () => [],
       createAccount: (input) => {
         accounts = [
           ...accounts,

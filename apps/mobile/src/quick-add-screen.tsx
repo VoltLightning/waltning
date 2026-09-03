@@ -1,21 +1,32 @@
-import type { PhoneCapturableAccount } from "@waltning/client/ledger/create-phone-ledger";
+import type {
+  PhoneCapturableAccount,
+  QuickAddDraft,
+} from "@waltning/client/ledger/create-phone-ledger";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseQuickAddRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
-import { id } from "@waltning/core/id";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 
-type QuickAddDraft = { amount: string; accountId: string | null };
-type SavableQuickAddDraft = { amount: string; accountId: string };
+type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
 
 /** `create_transaction`'s own field paths — everything else lands at form level. */
-const KNOWN_PATHS = ["amountOriginal", "accountId"];
+const KNOWN_PATHS = [
+  "amountOriginal",
+  "accountId",
+  "categoryId",
+  "date",
+  "note",
+  "isBusiness",
+  "counterpartyId",
+  "counterpartyRole",
+];
 
 /**
  * A refusal's own text, resolving the one `messageKey` the controller sets
@@ -48,7 +59,7 @@ function toChoice(account: PhoneCapturableAccount): QuickAddAccount {
   };
 }
 
-function handleCreateAccount(next: QuickAddDraft) {
+function handleCreateAccount(next: CreateAccountEscapeDraft) {
   router.push({
     pathname: "/account/new",
     params: {
@@ -72,9 +83,13 @@ export default function QuickAdd() {
   const snapshot = usePhoneLedger(ledger);
   const accounts = snapshot.accounts.map(toChoice);
   const [fieldErrors, setFieldErrors] = useState<ReturnType<typeof mapFieldErrors>>();
+  // The device's own calendar (§7.0a) — the form's default, editable from
+  // there. `deviceRuntime` reads `Intl`/`Date` only, not a platform API, so it
+  // is the same call `phone-ledger.*.ts` already makes to build the runtime.
+  const today = deviceRuntime().capture().date;
   const handleSave = useCallback(
-    (next: SavableQuickAddDraft) => {
-      const result = ledger.createExpense(next.amount, id<"accounts">(next.accountId));
+    (next: QuickAddDraft) => {
+      const result = ledger.createTransaction(next);
       if (!("id" in result)) {
         const resolved = result.fieldErrors.map((error) => ({
           path: error.path,
@@ -96,6 +111,9 @@ export default function QuickAdd() {
       <Card>
         <QuickAddForm
           accounts={accounts}
+          categories={snapshot.categories}
+          counterparties={snapshot.counterparties}
+          today={today}
           initialAmount={draft.amount}
           {...(draft.accountId ? { initialAccountId: draft.accountId } : {})}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}

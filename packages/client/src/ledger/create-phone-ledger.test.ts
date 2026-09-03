@@ -9,6 +9,7 @@ import {
   type PhoneAccount,
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
+  type QuickAddDraft,
 } from "./create-phone-ledger.ts";
 
 /** Unwraps the write result in a test, or fails with the refusal's field errors. */
@@ -37,6 +38,21 @@ const CURRENCIES = [
 
 const PLN = currencyCode("PLN");
 const BYN = currencyCode("BYN");
+
+/** The user-owned draft `createTransaction` takes, for the ordinary expense case. */
+function expenseDraft(accountId: string, amount = "10"): QuickAddDraft {
+  return {
+    type: "expense",
+    amount,
+    accountId,
+    categoryId: null,
+    date: "2026-08-23",
+    note: "",
+    isBusiness: false,
+    counterpartyId: null,
+    counterpartyRole: null,
+  };
+}
 
 /** A persisted account, as `listAccounts` would return it. */
 function account(
@@ -102,6 +118,8 @@ function harness(diagnostics?: (event: object) => void) {
     listAccounts: () => accounts,
     listCurrencies: () => CURRENCIES,
     listRecent: (limit) => recent.slice(0, limit),
+    listCategories: () => [],
+    listCounterparties: () => [],
     createAccount,
     createTransaction,
     reset,
@@ -131,6 +149,8 @@ describe("phone ledger controller", () => {
       accounts: [],
       currencies: CURRENCIES,
       recent: [],
+      categories: [],
+      counterparties: [],
       subtotals: [],
     });
   });
@@ -171,6 +191,8 @@ describe("phone ledger controller", () => {
       ],
       listCurrencies: () => CURRENCIES,
       listRecent: () => [],
+      listCategories: () => [],
+      listCounterparties: () => [],
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       reset: vi.fn(),
@@ -201,6 +223,8 @@ describe("phone ledger controller", () => {
       ],
       listCurrencies: () => CURRENCIES,
       listRecent: () => [],
+      listCategories: () => [],
+      listCounterparties: () => [],
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       reset: vi.fn(),
@@ -217,7 +241,7 @@ describe("phone ledger controller", () => {
   it("creates one captured expense and refreshes the subtotals and Recent", () => {
     const { controller, capture, createTransaction } = harness();
     const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
-    const transactionId = idOf(controller.createExpense("10", accountId));
+    const transactionId = idOf(controller.createTransaction(expenseDraft(accountId)));
 
     expect(capture).toHaveBeenCalledTimes(2);
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
@@ -234,12 +258,45 @@ describe("phone ledger controller", () => {
     expect(controller.getSnapshot().recent[0]?.id).toBe(transactionId);
   });
 
-  it.each(["0", "-1"])("rejects the non-positive expense %s before writing", (amount) => {
+  /**
+   * The draft is the user-owned subset of `CreateTransactionInput` (B3) — an
+   * income, its category, its editable date, a note, business, and a
+   * counterparty and role all reach the write, not only amount and account.
+   */
+  it("carries income, category, date, note, business and counterparty through to the write", () => {
     const { controller, createTransaction } = harness();
     const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
-    const result = controller.createExpense(amount, accountId);
+
+    controller.createTransaction({
+      type: "income",
+      amount: "25",
+      accountId,
+      categoryId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      date: "2026-07-01",
+      note: "Freelance invoice",
+      isBusiness: true,
+      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      counterpartyRole: "reference",
+    });
+
+    expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
+      type: "income",
+      amountOriginal: money.toMoney("25"),
+      categoryId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      date: accountingDate("2026-07-01"),
+      note: "Freelance invoice",
+      isBusiness: true,
+      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      counterpartyRole: "reference",
+    });
+  });
+
+  it.each(["0", "-1"])("rejects the non-positive amount %s before writing", (amount) => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const result = controller.createTransaction(expenseDraft(accountId, amount));
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
-      { path: "amountOriginal", message: "Expense amount must be greater than zero" },
+      { path: "amountOriginal", message: "Amount must be greater than zero" },
     ]);
     expect(createTransaction).not.toHaveBeenCalled();
   });
@@ -262,6 +319,8 @@ describe("phone ledger controller", () => {
         { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: false },
       ],
       listRecent: () => [],
+      listCategories: () => [],
+      listCounterparties: () => [],
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       reset: vi.fn(),
@@ -272,14 +331,13 @@ describe("phone ledger controller", () => {
     });
 
     expect(controller.getSnapshot().accounts[0]?.capturable).toBe(false);
-    const result = controller.createExpense(
-      "10",
-      id<"accounts">("11111111-1111-4111-8111-111111111111"),
+    const result = controller.createTransaction(
+      expenseDraft("11111111-1111-4111-8111-111111111111"),
     );
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
       {
         path: "accountId",
-        message: "PLN needs an exchange rate before an expense can be recorded in it",
+        message: "PLN needs an exchange rate before a transaction can be recorded in it",
         messageKey: "transactions.needsRate",
         params: { currency: "PLN" },
       },
@@ -289,9 +347,8 @@ describe("phone ledger controller", () => {
 
   it("rejects a missing account before writing", () => {
     const { controller, createTransaction } = harness();
-    const result = controller.createExpense(
-      "10",
-      id<"accounts">("99999999-9999-4999-8999-999999999999"),
+    const result = controller.createTransaction(
+      expenseDraft("99999999-9999-4999-8999-999999999999"),
     );
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
       { path: "accountId", message: "Choose an account before saving" },
@@ -317,7 +374,7 @@ describe("phone ledger controller", () => {
     const { controller } = harness((event) => diagnostics.push(event));
 
     const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
-    controller.createExpense("10", accountId);
+    controller.createTransaction(expenseDraft(accountId));
 
     expect(diagnostics).toContainEqual({
       scope: "client_action",
@@ -326,7 +383,7 @@ describe("phone ledger controller", () => {
     });
     expect(diagnostics).toContainEqual({
       scope: "client_action",
-      action: "create_expense",
+      action: "create_transaction",
       phase: "success",
     });
     expect(diagnostics).toContainEqual({
