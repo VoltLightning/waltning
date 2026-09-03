@@ -309,6 +309,18 @@ signs by obligation, and they are exact opposites.
 `from` — a repayment out of a receivable is a transfer *into* your bank, and
 using the source leg inverts the sign. **`debtDelta` must take the side.**
 
+**`side` is resolved from `type` alone: `'to'` for `transfer`, `'from'`
+otherwise.** Nothing on the row marks *which* of its two accounts is "the
+counterparty's" — a debt-role transfer is an ordinary transfer between two
+real, owned/shared accounts that also happens to carry `counterparty_id` —
+so this cannot be read off `account_id` versus `to_account_id` case by case.
+Every debt-role transfer this repository's fixtures or the Money Manager
+migration produce is a repayment landing on the `to` leg; there is no shipped
+example of the reverse, and none is currently constructible through S05 or
+S14 (both only ever create single-leg `income`/`expense` debt rows). If a
+transfer-shaped debt with the counterparty on the `from` leg is ever needed,
+this rule — and both implementations of it — changes together.
+
 `debt_currency` and `debt_amount` exist so a settlement can discharge a balance
 in a currency other than the one that changed hands (S14). Where null, the
 transaction's own currency and amount apply.

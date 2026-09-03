@@ -56,14 +56,23 @@ describe("netWorth — §3", () => {
 });
 
 describe("counterpartyBalance — §7", () => {
-  it("negates the cash flow on the leg that carries the counterparty", () => {
+  const PLN = money.currencyCode("PLN");
+  const EUR = money.currencyCode("EUR");
+
+  it("negates the cash flow on the leg that carries the counterparty, split by currency", () => {
     const rows: money.DebtRow[] = [
-      // lent 200 (expense, from leg): receivable +200
-      { type: "expense", amountOriginal: m("200"), side: "from" },
-      // repaid 50 as a transfer INTO my bank, counterparty on the `to` leg: −50
-      { type: "transfer", amountOriginal: m("999"), toAmount: m("50"), side: "to" },
+      // lent 200 (expense, from leg): receivable +200, PLN
+      { type: "expense", amountOriginal: m("200"), side: "from", currency: PLN },
+      // repaid 50 as a transfer INTO my bank, counterparty on the `to` leg: −50, PLN
+      { type: "transfer", amountOriginal: m("999"), toAmount: m("50"), side: "to", currency: PLN },
+      // lent 50 in a DIFFERENT currency — §7 is balance(c, ccy): this must not
+      // net against the PLN rows above into one combined figure.
+      { type: "expense", amountOriginal: m("50"), side: "from", currency: EUR },
     ];
-    expect(money.counterpartyBalance(rows)).toBe("150.00000000");
+    expect(money.counterpartyBalance(rows)).toEqual([
+      { currency: EUR, balance: "50.00000000" },
+      { currency: PLN, balance: "150.00000000" },
+    ]);
   });
 });
 

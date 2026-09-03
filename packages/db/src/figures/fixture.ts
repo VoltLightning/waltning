@@ -66,7 +66,13 @@ export const ACCOUNTS = [
   },
 ] as const;
 
-/** §7 — one counterparty, two debt-carrying rows: a loan and its repayment. */
+/**
+ * §7 — one counterparty, three debt-carrying rows: a PLN loan, its PLN
+ * repayment, and a separate USD loan. The USD row is what proves §7 is
+ * `balance(c, ccy)` — parameterised by currency — rather than one figure per
+ * counterparty: summing 200 PLN and 30 USD together would silently invent an
+ * exchange rate nobody agreed to.
+ */
 export const COUNTERPARTY = { id: "10000000-0000-4000-8000-000000000001", name: "Counterparty A" };
 
 export type FixtureTx = {
@@ -183,6 +189,18 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "999999",
     currency: "PLN",
     deleted: true,
+  },
+  // the same counterparty, a SEPARATE currency: must not net against the PLN
+  // rows above (§7 is per currency).
+  {
+    id: "20000000-0000-4000-8000-000000000010",
+    date: "2026-09-07",
+    type: "expense",
+    accountId: ACCOUNTS[3].id,
+    amountOriginal: "30",
+    currency: "USD",
+    counterpartyId: COUNTERPARTY.id,
+    counterpartyRole: "debt",
   },
 ];
 

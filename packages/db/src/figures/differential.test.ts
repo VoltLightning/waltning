@@ -18,6 +18,7 @@ import { getTableName, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { accounts, transactions } from "../schema.ts";
 import { type Scratch, scratchDatabase } from "../test/scratch.ts";
+import { counterpartyBalances } from "./counterparty-balance.ts";
 import { ACCOUNTS, COUNTERPARTY, CURRENCIES, TRANSACTIONS } from "./fixture.ts";
 import { netWorth } from "./net-worth.ts";
 import { signedFromLeg } from "./signed.sql.ts";
@@ -60,16 +61,21 @@ const legRows: money.LegRow[] = TRANSACTIONS.filter((t) => !t.deleted).map((t) =
   toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
 }));
 
-/** §7's rows, with `side` resolved the way a caller would: from `counterparty_id`. */
+/**
+ * §7's rows, with `side` and `currency` resolved the way a caller would:
+ * from `counterparty_id`, `counterparty_role`, and `coalesce(debt_currency,
+ * currency)`. `side` is a rule on `type` alone — see the comment on
+ * `debtDeltaOnCarryingLeg` in `counterparty-balance.ts` for why a transfer's
+ * counterparty always sits on the `to` leg here, not case-by-case per row.
+ */
 const debtRows: money.DebtRow[] = TRANSACTIONS.filter(
   (t) => !t.deleted && t.counterpartyId === COUNTERPARTY.id,
 ).map((t) => ({
   type: t.type,
   amountOriginal: money.toMoney(t.amountOriginal),
   toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
-  // The leg that carries the counterparty: the source leg unless the
-  // transfer's destination is where the counterparty relationship sits.
-  side: t.toAccountId === ACCOUNTS[0].id ? "to" : "from",
+  side: t.type === "transfer" ? "to" : "from",
+  currency: money.currencyCode(t.currency),
 }));
 
 describe("class-F figures agree to eight decimals, SQL against money.ts", () => {
@@ -134,27 +140,22 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
     expect(sqlSide).toEqual(tsSide);
   });
 
-  it("§7 counterparty balance", async () => {
-    // §7 — Σ −signed(t, side), side resolved the way `debtRows` above resolves
-    // it: the destination leg when the counterparty's own account is the
-    // transfer's target, the source leg otherwise.
-    const rows = await scratch.db
-      .select({
-        balance: sql<string>`coalesce(sum(
-          case
-            when ${transactions.toAccountId} = ${ACCOUNTS[0].id} then -${transactions.toAmount}
-            else -${signedFromLeg}
-          end
-        ), 0)::numeric(20,8)::text`,
-      })
-      .from(transactions)
-      .where(sql`${transactions.counterpartyId} = ${COUNTERPARTY.id} and ${live}`);
-    const sqlSide = rows[0]?.balance;
+  it("§7 counterparty balance, per currency", async () => {
+    // Both sides import production code now — `counterpartyBalances`
+    // (SQL) and `money.counterpartyBalance` (the fold) — rather than an
+    // inline CASE nothing else imports.
+    const sqlRows = await counterpartyBalances(scratch.db);
+    const sqlSide = sqlRows
+      .filter((r) => r.counterpartyId === COUNTERPARTY.id)
+      .map(({ currency, balance }) => ({ currency, balance }));
 
     const tsSide = money.counterpartyBalance(debtRows);
 
-    expect(sqlSide).toBe(tsSide);
-    expect(tsSide).toBe("150.00000000");
+    expect(sqlSide).toEqual(tsSide);
+    expect(tsSide).toEqual([
+      { currency: "PLN", balance: "150.00000000" },
+      { currency: "USD", balance: "30.00000000" },
+    ]);
   });
 
   it("excludes soft-deleted rows on both sides", async () => {

@@ -357,17 +357,33 @@ export type DebtRow = {
   amountOriginal: Money;
   toAmount?: Money | null;
   side: "from" | "to";
+  /** `coalesce(debt_currency, currency)` (§7) — resolved by the caller, same as `side`. */
+  currency: CurrencyCode;
 };
 
+export type CounterpartyBalanceRow = { currency: CurrencyCode; balance: Money };
+
 /**
- * §7 — `Σ −signed(t, side)` where `side` is the leg carrying the counterparty.
- * The caller resolves the side from `counterparty_id` against `account_id` /
- * `to_account_id`; this fold only sums. The negation is the whole rule (§6.6).
+ * §7 — `balance(c, ccy) = Σ −signed(t, side)`, **one row per currency the
+ * counterparty holds a balance in**. A debt in PLN and a debt in EUR are not
+ * fungible: summing them into a single figure invents an exchange rate
+ * nobody agreed to. `side` is the leg carrying the counterparty and
+ * `currency` is `coalesce(debt_currency, currency)` — the caller resolves
+ * both from `counterparty_id` against the row, the same way it already
+ * resolves `side`; this fold only sums and groups. The negation is the whole
+ * rule (§6.6).
  */
-export const counterpartyBalance = (rows: readonly DebtRow[]): Money => {
-  let total = dec(0);
-  for (const row of rows) total = total.plus(dec(debtDelta(row, row.side)));
-  return toMoney(total);
+export const counterpartyBalance = (
+  rows: readonly DebtRow[],
+): readonly CounterpartyBalanceRow[] => {
+  const byCurrency = new Map<CurrencyCode, Decimal>();
+  for (const row of rows) {
+    const prior = byCurrency.get(row.currency) ?? dec(0);
+    byCurrency.set(row.currency, prior.plus(dec(debtDelta(row, row.side))));
+  }
+  return [...byCurrency.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, total]) => ({ currency, balance: toMoney(total) }));
 };
 
 /** §8 — a clearing balance is an ordinary balance. Same function, named for the reader. */
