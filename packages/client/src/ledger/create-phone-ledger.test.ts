@@ -5,6 +5,7 @@ import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import type { FieldError } from "../transport/field-errors.ts";
 import {
+  type CreateAccountDraft,
   createPhoneLedger,
   type PhoneAccount,
   type PhoneLedgerPort,
@@ -51,6 +52,21 @@ function expenseDraft(accountId: string, amount = "10"): QuickAddDraft {
     isBusiness: false,
     counterpartyId: null,
     counterpartyRole: null,
+  };
+}
+
+/** The minimal path — a name and a currency, every other field at its default. */
+function minimalDraft(name: string, currency: CurrencyCode): CreateAccountDraft {
+  return {
+    name,
+    currency,
+    kind: "other",
+    ownership: "own",
+    isBusiness: false,
+    openingBalance: "0",
+    openingDate: null,
+    memo: "",
+    groupId: null,
   };
 }
 
@@ -159,7 +175,7 @@ describe("phone ledger controller", () => {
 
   it("creates an account in the currency it was given, through the shared defaults", () => {
     const { controller, createAccount } = harness();
-    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
 
     expect(accountId).toBe(controller.getSnapshot().accounts[0]?.id);
     expect(createAccount.mock.calls[0]?.[0]).toMatchObject({
@@ -244,7 +260,7 @@ describe("phone ledger controller", () => {
 
   it("creates one captured expense and refreshes the subtotals and Recent", () => {
     const { controller, capture, createTransaction } = harness();
-    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
     const transactionId = idOf(controller.createTransaction(expenseDraft(accountId)));
 
     expect(capture).toHaveBeenCalledTimes(2);
@@ -269,7 +285,7 @@ describe("phone ledger controller", () => {
    */
   it("carries income, category, date, note, business and counterparty through to the write", () => {
     const { controller, createTransaction } = harness();
-    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
 
     controller.createTransaction({
       type: "income",
@@ -297,7 +313,7 @@ describe("phone ledger controller", () => {
 
   it.each(["0", "-1"])("rejects the non-positive amount %s before writing", (amount) => {
     const { controller, createTransaction } = harness();
-    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
     const result = controller.createTransaction(expenseDraft(accountId, amount));
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
       { path: "amountOriginal", message: "Amount must be greater than zero" },
@@ -363,7 +379,7 @@ describe("phone ledger controller", () => {
 
   it("resets, refreshes, and notifies once", () => {
     const { controller, reset } = harness();
-    controller.createAccount("Bank A · PLN", PLN);
+    controller.createAccount(minimalDraft("Bank A · PLN", PLN));
     const listener = vi.fn();
     controller.subscribe(listener);
 
@@ -378,7 +394,7 @@ describe("phone ledger controller", () => {
     const diagnostics: object[] = [];
     const { controller } = harness((event) => diagnostics.push(event));
 
-    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
     controller.createTransaction(expenseDraft(accountId));
 
     expect(diagnostics).toContainEqual({

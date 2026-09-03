@@ -18,7 +18,17 @@ function handleCancel() {
 }
 
 /** `create_account`'s own field paths — everything else lands at form level. */
-const KNOWN_PATHS = ["name", "currency"];
+const KNOWN_PATHS = [
+  "name",
+  "currency",
+  "kind",
+  "ownership",
+  "isBusiness",
+  "openingBalance",
+  "openingDate",
+  "memo",
+  "groupId",
+];
 
 /**
  * A refusal's own text, resolving a known `messageKey` through `useT()` first
@@ -54,7 +64,7 @@ export default function NewAccount() {
 
   const handleSave = useCallback(
     (draft: CreateAccountDraft) => {
-      const result = ledger.createAccount(draft.name, draft.currency);
+      const result = ledger.createAccount(draft);
       if (!("id" in result)) {
         const resolved = result.fieldErrors.map((error) => ({
           path: error.path,
@@ -87,6 +97,7 @@ export default function NewAccount() {
         <CreateAccountForm
           currencies={snapshot.currencies}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
+          groups={snapshot.groups}
           onCancel={handleCancel}
           onSave={handleSave}
         />

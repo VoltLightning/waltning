@@ -47,7 +47,8 @@ import { zAccountingDate, zCurrencyCode, zId, zMoney, zPivotPerUnit } from "../z
  * fix is moving the value sets down into `core` and having `schema` import
  * them, which is a change to `packages/schema` and belongs in its own diff.
  */
-const ACCOUNT_KIND = [
+/** Exported so a `kind` picker can enumerate the same values the input accepts. */
+export const ACCOUNT_KIND = [
   "cash",
   "bank",
   "card",

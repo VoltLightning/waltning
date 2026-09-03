@@ -69,7 +69,19 @@ describe("usePhoneLedger", () => {
     };
 
     const { result, unmount } = renderHook(() => usePhoneLedger(controller));
-    act(() => controller.createAccount("Bank A · PLN", currencyCode("PLN")));
+    act(() =>
+      controller.createAccount({
+        name: "Bank A · PLN",
+        currency: currencyCode("PLN"),
+        kind: "other",
+        ownership: "own",
+        isBusiness: false,
+        openingBalance: "0",
+        openingDate: null,
+        memo: "",
+        groupId: null,
+      }),
+    );
     expect(result.current.accounts).toHaveLength(1);
 
     unmount();
