@@ -718,6 +718,16 @@ describe("supersede_transaction", () => {
     expect(parsed.replacement.id).toBe(TXN_ID_2);
     expect(parsed.replacement.source).toBe("import");
   });
+
+  it("refuses a replacement that reuses the id it supersedes", () => {
+    expect(() =>
+      supersedeTransactionInput.parse({
+        supersedesId: TXN_ID,
+        supersedesVersion: 1,
+        replacement: { ...expense, id: TXN_ID, source: "import" },
+      }),
+    ).toThrow();
+  });
 });
 
 describe("categorize_batch", () => {

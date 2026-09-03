@@ -686,11 +686,23 @@ export type SetTransactionLinesInput = z.output<typeof setTransactionLinesInput>
  * records which it superseded. The receipt reattachment `operations.md`
  * mentions is server-side.
  */
-export const supersedeTransactionInput = z.object({
-  supersedesId: zId<"transactions">(),
-  supersedesVersion: z.number().int().positive(),
-  replacement: createTransactionInput,
-});
+export const supersedeTransactionInput = z
+  .object({
+    supersedesId: zId<"transactions">(),
+    supersedesVersion: z.number().int().positive(),
+    replacement: createTransactionInput,
+  })
+  /**
+   * The replacement is a new row. Allowing `replacement.id === supersedesId`
+   * would have the executor soft-delete a row and then upsert onto that same
+   * id — `insertTransaction`'s upsert never touches `deleted_at`, so the
+   * "replacement" would land already deleted, an outcome nothing downstream
+   * of this schema expects.
+   */
+  .refine((v) => v.replacement.id !== v.supersedesId, {
+    path: ["replacement", "id"],
+    message: "the replacement must be a different row from the one it supersedes",
+  });
 export type SupersedeTransactionInput = z.output<typeof supersedeTransactionInput>;
 
 /* ── categorize_batch ───────────────────────────────────────────────────── */
