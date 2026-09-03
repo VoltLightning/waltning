@@ -88,6 +88,7 @@ export default function Today() {
     </Card>
   ) : (
     <EmptyState
+      variant="first-run"
       title={t("shell.noAccounts")}
       body={t("shell.noAccountsBody")}
       primaryAction={createAccountAction}
