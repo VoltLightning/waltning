@@ -14,13 +14,16 @@ import { createAccountExecutor } from "../accounts/create-account.executor.ts";
 import { defineLocalExecutor, localRegistry } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema } from "../schema-map.ts";
+import { categorizeBatchExecutor } from "../transactions/categorize-batch.executor.ts";
 import { createTransactionExecutor } from "../transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "../transactions/delete-transaction.executor.ts";
+import { setTransactionLinesExecutor } from "../transactions/set-transaction-lines.executor.ts";
+import { supersedeTransactionExecutor } from "../transactions/supersede-transaction.executor.ts";
 import { updateTransactionExecutor } from "../transactions/update-transaction.executor.ts";
 import { type Capture, type LocalTx, writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
 
-const { currencies, outbox, transactions } = ledgerSchema;
+const { categories, currencies, outbox, transactionLines, transactions } = ledgerSchema;
 const PLN = currencyCode("PLN");
 const capture: Capture = { timeZone: "Europe/Warsaw", offsetMinutes: 120 };
 const ACCOUNT = id<"accounts">("00000000-0000-4000-8000-00000000000a");
@@ -201,5 +204,258 @@ describe("a crash between the two stores", () => {
     const entriesAfterReopen = stores.ledger.outbox.db.select().from(outbox).all();
     expect(entriesAfterReopen).toHaveLength(3);
     expect(readTxn()?.payee).toBe(before?.payee);
+  });
+});
+
+describe("set_transaction_lines", () => {
+  const readLines = () =>
+    stores.ledger.replica.db
+      .select()
+      .from(transactionLines)
+      .where(eq(transactionLines.transactionId, TXN))
+      .all();
+
+  it("replaces the whole set, and refuses lines that do not sum to the transaction", () => {
+    const v = () => readTxn()?.version ?? 0;
+
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000a1"),
+            description: "Espresso",
+            amount: "10",
+          },
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000a2"),
+            description: "Croissant",
+            amount: "8",
+          },
+        ],
+      },
+    });
+    expect(readLines()).toHaveLength(2);
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          transactionId: TXN,
+          version: v(),
+          lines: [
+            {
+              id: id<"transactionLines">("00000000-0000-4000-8000-0000000000a3"),
+              description: "Wrong",
+              amount: "1",
+            },
+          ],
+        },
+      }),
+    ).toThrow(/sum/);
+
+    // The refused write left the previous two lines in place.
+    expect(readLines()).toHaveLength(2);
+  });
+
+  it("removes every line when handed an empty set, regardless of the transaction's amount", () => {
+    const v = () => readTxn()?.version ?? 0;
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000b1"),
+            description: "Whole thing",
+            amount: "18",
+          },
+        ],
+      },
+    });
+
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { transactionId: TXN, version: v(), lines: [] },
+    });
+
+    expect(readLines()).toHaveLength(0);
+  });
+
+  it("refuses a stale version", () => {
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { transactionId: TXN, version: 999, lines: [] },
+      }),
+    ).toThrow(/stale/);
+  });
+});
+
+describe("supersede_transaction", () => {
+  it("soft-deletes the old row and lands the replacement in one write", () => {
+    const NEW = id<"transactions">("00000000-0000-4000-8000-000000000002");
+
+    writeLocally(stores.ledger, {
+      executor: supersedeTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        supersedesId: TXN,
+        supersedesVersion: readTxn()?.version ?? 0,
+        replacement: {
+          id: NEW,
+          date: "2026-09-01",
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: "18.5",
+          currency: PLN,
+          payee: "Coffee",
+          source: "import",
+        },
+      },
+    });
+
+    expect(readTxn()?.deletedAt).not.toBeNull();
+    const replacement = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, NEW))
+      .get();
+    expect(replacement?.amountOriginal).toBe("18.50000000");
+    expect(replacement?.source).toBe("import");
+  });
+
+  it("refuses a stale version on the row being replaced", () => {
+    const NEW = id<"transactions">("00000000-0000-4000-8000-000000000003");
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: supersedeTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          supersedesId: TXN,
+          supersedesVersion: 999,
+          replacement: {
+            id: NEW,
+            date: "2026-09-01",
+            type: "expense",
+            accountId: ACCOUNT,
+            amountOriginal: "18.5",
+            currency: PLN,
+            payee: "Coffee",
+            source: "import",
+          },
+        },
+      }),
+    ).toThrow(/stale/);
+    expect(readTxn()?.deletedAt).toBeNull();
+  });
+});
+
+describe("categorize_batch", () => {
+  const CATEGORY = id<"categories">("00000000-0000-4000-8000-0000000000c1");
+  const TXN2 = id<"transactions">("00000000-0000-4000-8000-000000000004");
+  const TRANSFER_ACCOUNT = id<"accounts">("00000000-0000-4000-8000-00000000000b");
+
+  beforeEach(() => {
+    stores.ledger.replica.db
+      .insert(categories)
+      .values({ id: CATEGORY, name: "Groceries", kind: "expense", isLeaf: true })
+      .run();
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN2,
+        date: "2026-09-02",
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: "5",
+        currency: PLN,
+        payee: "Bread",
+      },
+    });
+  });
+
+  it("sets one category on every named id", () => {
+    writeLocally(stores.ledger, {
+      executor: categorizeBatchExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { transactionIds: [TXN, TXN2], categoryId: CATEGORY },
+    });
+
+    expect(readTxn()?.categoryId).toBe(CATEGORY);
+    const other = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, TXN2))
+      .get();
+    expect(other?.categoryId).toBe(CATEGORY);
+  });
+
+  it("refuses the whole batch when one named id is missing, and categorises nothing", () => {
+    const MISSING = id<"transactions">("00000000-0000-4000-8000-0000000000ff");
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: categorizeBatchExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { transactionIds: [TXN, MISSING], categoryId: CATEGORY },
+      }),
+    ).toThrow(/categorize_batch/);
+
+    expect(readTxn()?.categoryId).toBeNull();
+  });
+
+  it("refuses a transfer — only income and expense carry a category", () => {
+    writeLocally(stores.ledger, {
+      executor: createAccountExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TRANSFER_ACCOUNT, name: "Bank B · PLN", currency: PLN },
+    });
+    const TRANSFER = id<"transactions">("00000000-0000-4000-8000-000000000005");
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TRANSFER,
+        date: "2026-09-02",
+        type: "transfer",
+        accountId: ACCOUNT,
+        amountOriginal: "5",
+        currency: PLN,
+        toAccountId: TRANSFER_ACCOUNT,
+        toAmount: "5",
+        toCurrency: PLN,
+      },
+    });
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: categorizeBatchExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { transactionIds: [TRANSFER], categoryId: CATEGORY },
+      }),
+    ).toThrow(/categorize_batch/);
   });
 });

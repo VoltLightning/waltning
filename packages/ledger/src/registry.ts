@@ -14,9 +14,12 @@ import { mergeCategoriesExecutor } from "./categories/merge-categories.executor.
 import { renameCategoryExecutor } from "./categories/rename-category.executor.ts";
 import { reparentCategoryExecutor } from "./categories/reparent-category.executor.ts";
 import { localRegistry } from "./executor.ts";
-import { createTransactionExecutor } from "./transactions/create-transaction.executor.ts";
 // ── A2 · transaction operations — the phone half ──────────────────────────
+import { categorizeBatchExecutor } from "./transactions/categorize-batch.executor.ts";
+import { createTransactionExecutor } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
+import { setTransactionLinesExecutor } from "./transactions/set-transaction-lines.executor.ts";
+import { supersedeTransactionExecutor } from "./transactions/supersede-transaction.executor.ts";
 import { updateTransactionExecutor } from "./transactions/update-transaction.executor.ts";
 // ── end A2 block ───────────────────────────────────────────────────────────
 
@@ -43,5 +46,8 @@ export const ledgerRegistry = localRegistry([
   // ── A2 · transaction operations — the phone half ─────────────────────────
   updateTransactionExecutor,
   deleteTransactionExecutor,
+  setTransactionLinesExecutor,
+  supersedeTransactionExecutor,
+  categorizeBatchExecutor,
   // ── end A2 block ─────────────────────────────────────────────────────────
 ]);
