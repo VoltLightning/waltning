@@ -2,14 +2,32 @@ import type { PhoneCapturableAccount } from "@waltning/client/ledger/create-phon
 import { parseQuickAddRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import type { FieldError } from "@waltning/client/transport/field-errors";
+import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { id } from "@waltning/core/id";
+import { useT } from "@waltning/ui/i18n/provider";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 type QuickAddDraft = { amount: string; accountId: string | null };
 type SavableQuickAddDraft = { amount: string; accountId: string };
+
+/** `create_transaction`'s own field paths — everything else lands at form level. */
+const KNOWN_PATHS = ["amountOriginal", "accountId"];
+
+/**
+ * A refusal's own text, resolving the one `messageKey` the controller sets
+ * (`transactions.needsRate`, on an uncapturable account) through `useT()` —
+ * it cannot call the hook itself (`packages/client` is not a component).
+ */
+function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
+  if (error.messageKey === "transactions.needsRate") {
+    return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
+  }
+  return error.message;
+}
 
 function handleCancel() {
   router.back();
@@ -42,6 +60,7 @@ function handleCreateAccount(next: QuickAddDraft) {
 }
 
 export default function QuickAdd() {
+  const t = useT();
   const raw = useLocalSearchParams<{
     amount?: string | string[];
     accountId?: string | string[];
@@ -52,15 +71,22 @@ export default function QuickAdd() {
   // lands in this list the moment the router returns here.
   const snapshot = usePhoneLedger(ledger);
   const accounts = snapshot.accounts.map(toChoice);
+  const [fieldErrors, setFieldErrors] = useState<ReturnType<typeof mapFieldErrors>>();
   const handleSave = useCallback(
     (next: SavableQuickAddDraft) => {
       const result = ledger.createExpense(next.amount, id<"accounts">(next.accountId));
-      // The next commit renders `result.fieldErrors` on the form; this one
-      // only stops a refusal from being treated as a save.
-      if (!("id" in result)) return;
+      if (!("id" in result)) {
+        const resolved = result.fieldErrors.map((error) => ({
+          path: error.path,
+          message: resolveFieldErrorMessage(t, error),
+        }));
+        setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
+        return;
+      }
+      setFieldErrors(undefined);
       router.dismissTo("/");
     },
-    [ledger],
+    [ledger, t],
   );
 
   return (
@@ -72,6 +98,7 @@ export default function QuickAdd() {
           accounts={accounts}
           initialAmount={draft.amount}
           {...(draft.accountId ? { initialAccountId: draft.accountId } : {})}
+          {...(fieldErrors === undefined ? {} : { fieldErrors })}
           onCancel={handleCancel}
           onCreateAccount={handleCreateAccount}
           onSave={handleSave}

@@ -19,6 +19,7 @@ import { Text, View } from "react-native";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
+import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { TextField } from "../primitives/text-field";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -38,11 +39,22 @@ export type CreateAccountFormProps = {
    * itself better than one that crashes.
    */
   currencies: readonly CreateAccountCurrency[];
+  /**
+   * A refusal from the last save attempt, matched onto `name` / `currency` —
+   * this form's own known paths (`mapFieldErrors`, `architecture/12`).
+   * Absent before a first attempt, and on every render that did not refuse.
+   */
+  fieldErrors?: FieldErrorMap;
   onCancel: () => void;
   onSave: (draft: CreateAccountDraft) => void;
 };
 
-export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccountFormProps) {
+export function CreateAccountForm({
+  currencies,
+  fieldErrors,
+  onCancel,
+  onSave,
+}: CreateAccountFormProps) {
   const t = useT();
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState<CurrencyCode | null>(currencies[0]?.code ?? null);
@@ -51,11 +63,29 @@ export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccoun
   const handleSave = useCallback(() => {
     if (currency) onSave({ name: trimmed, currency });
   }, [currency, onSave, trimmed]);
+  const nameError = fieldErrors?.byField["name"]?.[0];
+  const currencyError = fieldErrors?.byField["currency"]?.[0];
 
   return (
     <View style={styles.root}>
+      {fieldErrors && fieldErrors.formLevel.length > 0 ? (
+        <View style={styles.formLevel} accessibilityRole="alert">
+          <Text style={styles.formLevelHeading}>{t("common.couldNotSave")}</Text>
+          {fieldErrors.formLevel.map((message) => (
+            <Text key={message} style={styles.formLevelMessage}>
+              {message}
+            </Text>
+          ))}
+        </View>
+      ) : null}
       {/* 120 is the shared operation contract's cap, stated where it binds. */}
-      <TextField label={t("common.name")} value={name} onChangeText={setName} maxLength={120} />
+      <TextField
+        label={t("common.name")}
+        value={name}
+        onChangeText={setName}
+        maxLength={120}
+        {...(nameError === undefined ? {} : { error: nameError })}
+      />
       <Text style={styles.label}>{t("accounts.currency")}</Text>
       <View style={styles.currencies}>
         {currencies.map((candidate) => (
@@ -67,6 +97,7 @@ export function CreateAccountForm({ currencies, onCancel, onSave }: CreateAccoun
           />
         ))}
       </View>
+      {currencyError === undefined ? null : <Text style={styles.fieldError}>{currencyError}</Text>}
       <View style={styles.actions}>
         <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
         <Button
@@ -111,5 +142,9 @@ const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
   label: { color: theme.textMuted, ...text.ui("kicker") },
   currencies: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
+  fieldError: { color: theme.dangerText, ...text.ui("caption") },
+  formLevel: { gap: space.xs },
+  formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
+  formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

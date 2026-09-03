@@ -34,6 +34,7 @@ export const pl: Messages = {
     autoFilled: " ·auto",
     autoFilledLabel: "{{field}}: {{value}}, wypełnione automatycznie",
     fieldValue: "{{field}}: {{value}}",
+    couldNotSave: "Nie udało się zapisać",
   },
   accounts: {
     currency: "Waluta",

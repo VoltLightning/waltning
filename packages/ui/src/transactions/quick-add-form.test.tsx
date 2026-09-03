@@ -146,3 +146,47 @@ it("says nothing about rates before an account is chosen", () => {
   );
   expect(screen.queryByText(/needs an exchange rate/)).toBeNull();
 });
+
+it("renders two errors from one map on their own fields", () => {
+  render(
+    <QuickAddForm
+      accounts={accounts}
+      fieldErrors={{
+        byField: { amountOriginal: ["must be positive"], accountId: ["choose one"] },
+        formLevel: [],
+      }}
+      onCancel={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("must be positive")).toBeDefined();
+  expect(screen.getByText("choose one")).toBeDefined();
+});
+
+it("renders an unknown path at form level, under an alert", () => {
+  render(
+    <QuickAddForm
+      accounts={accounts}
+      fieldErrors={{ byField: {}, formLevel: ["date: not accepted"] }}
+      onCancel={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  const alert = screen.getByRole("alert");
+  expect(alert.textContent).toContain("Couldn't save");
+  expect(alert.textContent).toContain("date: not accepted");
+});
+
+it("renders nothing extra with no fieldErrors prop", () => {
+  render(
+    <QuickAddForm
+      accounts={accounts}
+      onCancel={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+});
