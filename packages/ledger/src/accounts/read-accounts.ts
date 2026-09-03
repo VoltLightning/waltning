@@ -17,9 +17,12 @@ export type LocalAccountSummary = {
   balance: Money;
 };
 
-export function readAccounts<TRun, TSchema extends typeof ledgerSchema>(
+export type LocalAccountForNetWorth = LocalAccountSummary & { ownership: "own" | "shared" };
+
+/** Every active account with its ownership — what §3 needs and the summary does not carry. */
+export function readAccountsForNetWorth<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
-): readonly LocalAccountSummary[] {
+): readonly LocalAccountForNetWorth[] {
   const active = db
     .select({
       id: accounts.id,
@@ -27,6 +30,7 @@ export function readAccounts<TRun, TSchema extends typeof ledgerSchema>(
       kind: accounts.kind,
       currency: accounts.currency,
       decimals: currencies.decimals,
+      ownership: accounts.ownership,
       openingBalance: accounts.openingBalance,
       sort: accounts.sort,
     })
@@ -37,53 +41,39 @@ export function readAccounts<TRun, TSchema extends typeof ledgerSchema>(
     .all();
 
   const activeIds = new Set(active.map((account) => account.id));
-  const balances = new Map<Id<"accounts">, Money>(
-    active.map((account) => [account.id, account.openingBalance]),
-  );
 
-  if (activeIds.size > 0) {
-    const rows = db
-      .select({
-        type: transactions.type,
-        accountId: transactions.accountId,
-        toAccountId: transactions.toAccountId,
-        amountOriginal: transactions.amountOriginal,
-        toAmount: transactions.toAmount,
-      })
-      .from(transactions)
-      .where(
-        and(
-          isNull(transactions.deletedAt),
-          or(
-            inArray(transactions.accountId, [...activeIds]),
-            inArray(transactions.toAccountId, [...activeIds]),
-          ),
-        ),
-      )
-      .all();
+  const rows =
+    activeIds.size > 0
+      ? db
+          .select({
+            type: transactions.type,
+            accountId: transactions.accountId,
+            toAccountId: transactions.toAccountId,
+            amountOriginal: transactions.amountOriginal,
+            toAmount: transactions.toAmount,
+          })
+          .from(transactions)
+          .where(
+            and(
+              isNull(transactions.deletedAt),
+              or(
+                inArray(transactions.accountId, [...activeIds]),
+                inArray(transactions.toAccountId, [...activeIds]),
+              ),
+            ),
+          )
+          .all()
+      : [];
 
-    for (const transaction of rows) {
-      if (activeIds.has(transaction.accountId)) {
-        const prior = balances.get(transaction.accountId);
-        if (prior !== undefined) {
-          balances.set(transaction.accountId, money.add(prior, money.signed(transaction, "from")));
-        }
-      }
+  return active.map(({ openingBalance, sort: _sort, ...account }) => ({
+    ...account,
+    // §2, through the one fold the phone and the differential test share.
+    balance: money.accountBalance(openingBalance, account.id, rows),
+  }));
+}
 
-      if (transaction.toAccountId !== null && activeIds.has(transaction.toAccountId)) {
-        const prior = balances.get(transaction.toAccountId);
-        if (prior !== undefined) {
-          balances.set(transaction.toAccountId, money.add(prior, money.signed(transaction, "to")));
-        }
-      }
-    }
-  }
-
-  return active.map(({ openingBalance: _openingBalance, sort: _sort, ...account }) => {
-    const balance = balances.get(account.id);
-    if (balance === undefined) {
-      throw new Error(`the balance fold was not initialized for account ${account.id}`);
-    }
-    return { ...account, balance };
-  });
+export function readAccounts<TRun, TSchema extends typeof ledgerSchema>(
+  db: ReplicaDb<TRun, TSchema>,
+): readonly LocalAccountSummary[] {
+  return readAccountsForNetWorth(db).map(({ ownership: _ownership, ...rest }) => rest);
 }

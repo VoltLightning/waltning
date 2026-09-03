@@ -295,4 +295,98 @@ export const debtDelta = (
   side: "from" | "to",
 ): Money => neg(signed(tx, side));
 
+/* ── The class-F folds — computations.md §2, §3, §7, §8 ──────────────────── */
+
+/**
+ * The rows a balance is folded over: both legs of a transfer reach the fold,
+ * and the fold decides which leg belongs to which account. Named `LegRow`
+ * rather than "transaction" because a transaction contributes to two
+ * accounts with two different amounts (§7.2), and a type that carried only
+ * `amountOriginal` could not express the destination.
+ */
+export type LegRow = {
+  type: TxnType;
+  accountId: string;
+  toAccountId?: string | null;
+  amountOriginal: Money;
+  toAmount?: Money | null;
+};
+
+/**
+ * §2 — `opening_balance + Σ signed(from) + Σ to_amount`, in the account's own
+ * currency. **Never `SUM(amount_pivot)`**: that column exists only on the
+ * source leg. Full precision throughout; the caller rounds at the boundary.
+ *
+ * This is the phone's copy of the SQL in `packages/db/src/figures/`, and
+ * `differential.test.ts` is what keeps the two equal.
+ */
+export const accountBalance = (
+  openingBalance: Money,
+  accountId: string,
+  rows: readonly LegRow[],
+): Money => {
+  let total = dec(openingBalance);
+  for (const row of rows) {
+    if (row.accountId === accountId) total = total.plus(dec(signed(row, "from")));
+    if (row.toAccountId === accountId) total = total.plus(dec(signed(row, "to")));
+  }
+  return toMoney(total);
+};
+
+export type BalanceRow = { ownership: "own" | "shared"; balance: Money };
+
+/**
+ * §3 — `mine` over `ownership = 'own'`, `ours` over every account. Business
+ * accounts are **in** `mine`: the scope partition (§6.7) is a transaction-level
+ * filter and cannot partition a balance composed of rows on both sides of it.
+ * Receivables are excluded by construction — they are not accounts.
+ */
+export const netWorth = (balances: readonly BalanceRow[]): { mine: Money; ours: Money } => {
+  let mine = dec(0);
+  let ours = dec(0);
+  for (const { ownership, balance } of balances) {
+    const b = dec(balance);
+    ours = ours.plus(b);
+    if (ownership === "own") mine = mine.plus(b);
+  }
+  return { mine: toMoney(mine), ours: toMoney(ours) };
+};
+
+export type DebtRow = {
+  type: TxnType;
+  amountOriginal: Money;
+  toAmount?: Money | null;
+  side: "from" | "to";
+  /** `coalesce(debt_currency, currency)` (§7) — resolved by the caller, same as `side`. */
+  currency: CurrencyCode;
+};
+
+export type CounterpartyBalanceRow = { currency: CurrencyCode; balance: Money };
+
+/**
+ * §7 — `balance(c, ccy) = Σ −signed(t, side)`, **one row per currency the
+ * counterparty holds a balance in**. A debt in PLN and a debt in EUR are not
+ * fungible: summing them into a single figure invents an exchange rate
+ * nobody agreed to. `side` is the leg carrying the counterparty and
+ * `currency` is `coalesce(debt_currency, currency)` — the caller resolves
+ * both from `counterparty_id` against the row, the same way it already
+ * resolves `side`; this fold only sums and groups. The negation is the whole
+ * rule (§6.6).
+ */
+export const counterpartyBalance = (
+  rows: readonly DebtRow[],
+): readonly CounterpartyBalanceRow[] => {
+  const byCurrency = new Map<CurrencyCode, Decimal>();
+  for (const row of rows) {
+    const prior = byCurrency.get(row.currency) ?? dec(0);
+    byCurrency.set(row.currency, prior.plus(dec(debtDelta(row, row.side))));
+  }
+  return [...byCurrency.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, total]) => ({ currency, balance: toMoney(total) }));
+};
+
+/** §8 — a clearing balance is an ordinary balance. Same function, named for the reader. */
+export const clearingBalance = accountBalance;
+
 export { Decimal };

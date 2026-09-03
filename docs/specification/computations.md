@@ -31,7 +31,7 @@ from:
 | Figure | Class | Why |
 |---|---|---|
 | §2 Account balance | **F** | Signed entries summed over the complete replica |
-| §3 Net worth, mine and ours | **F** | A sum of account balances |
+| §3 Net worth, mine and ours | **F** | A sum of account balances, per currency until a display currency exists to sum across |
 | §4 Display conversion | **R** | The replica carries each row's already-converted display amount |
 | §4a FX margin | **S** | Needs both reference rates; a stale one makes the margin identically zero |
 | §5 Period spend | **R** for the base figure · **S** for shared-boundary netting | Netting needs `to_amount_pivot`, and getting it wrong silently uses the source amount |
@@ -145,12 +145,23 @@ a plain sum.
 
 ## 3 · Net worth — *mine* and *ours*
 
-The review found `Mine` defined two incompatible ways. Resolved:
+The review found `Mine` defined two incompatible ways. Resolved, **per
+currency**:
 
 ```
-mine(d) = Σ balance_display(a, d)  over accounts where ownership = 'own'
-ours(d) = Σ balance_display(a, d)  over ALL accounts
+mine(ccy)  = Σ balance(a)  over accounts where currency = ccy AND ownership = 'own'
+ours(ccy)  = Σ balance(a)  over accounts where currency = ccy
 ```
+
+**Not `balance_display(a, d)` summed across currencies.** There is no display
+currency yet and no rate to sum across (§4: "display currency is a client
+preference applied at render time"), so `money.ts`'s `netWorth` and the
+server's SQL counterpart both fold `balance(a)` (§2) — an account's own
+currency, unconverted — into one `{mine, ours}` pair *per currency held*, the
+same call the Today screen's `CurrencyTotals` makes and for the same reason:
+inventing a rate here to force a single cross-currency figure is H21 with
+nothing to check it against. A single-figure `mine`/`ours` becomes possible
+once a display currency and its rate exist to convert through.
 
 **Business accounts are included in `mine`.** The scope *partition* (§6.7) is a
 transaction-level filter — `own AND NOT is_business` — and is a different thing
@@ -297,6 +308,18 @@ signs by obligation, and they are exact opposites.
 `side` is the leg carrying the counterparty. For a transfer that is not always
 `from` — a repayment out of a receivable is a transfer *into* your bank, and
 using the source leg inverts the sign. **`debtDelta` must take the side.**
+
+**`side` is resolved from `type` alone: `'to'` for `transfer`, `'from'`
+otherwise.** Nothing on the row marks *which* of its two accounts is "the
+counterparty's" — a debt-role transfer is an ordinary transfer between two
+real, owned/shared accounts that also happens to carry `counterparty_id` —
+so this cannot be read off `account_id` versus `to_account_id` case by case.
+Every debt-role transfer this repository's fixtures or the Money Manager
+migration produce is a repayment landing on the `to` leg; there is no shipped
+example of the reverse, and none is currently constructible through S05 or
+S14 (both only ever create single-leg `income`/`expense` debt rows). If a
+transfer-shaped debt with the counterparty on the `from` leg is ever needed,
+this rule — and both implementations of it — changes together.
 
 `debt_currency` and `debt_amount` exist so a settlement can discharge a balance
 in a currency other than the one that changed hands (S14). Where null, the
