@@ -103,9 +103,9 @@ Transactions list* · *S09 Transaction detail* · *S19 Settings · Categories*.
 
 **Shape.** Serial start, then parallel:
 
-- **C1 · shell + states** (one agent, blocks the rest). `TabBar` (5 + raised
-  `+`), `BottomSheet`, `Shell(hero)`, and D4's eleven state components. Route
-  tree grows the tabs S04 §3 draws: Today · Ledger · `+` · Calendar · Debt.
+- **C1 · shell + states** (one agent, blocks the rest). `TabBar` (five tabs; the `+` is not in it — it floats,
+  and landed ahead of the stack), `BottomSheet`, `Shell(hero)`, and D4's eleven
+  state components. Route tree grows the tabs S04 §3 draws.
   Calendar and Debt are stubs that render `EmptyState` until their arcs.
 - **C2–C6 · one screen each**, parallel agents, each composed in its plan from
   the spec page's §3 layout, §4 component table, §5 reads and §6 states —

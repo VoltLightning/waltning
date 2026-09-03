@@ -9,6 +9,7 @@
     "./appearance/*": "./src/appearance/*.ts",
     "./connectivity/*": "./src/connectivity/*.ts",
     "./currencies/*": "./src/currencies/*.ts",
+    "./device/*": "./src/device/*.ts",
     "./ledger/*": "./src/ledger/*.ts",
     "./ledger/ledger-provider": "./src/ledger/ledger-provider.tsx",
     "./query/*": "./src/query/*.ts",

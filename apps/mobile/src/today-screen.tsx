@@ -1,10 +1,12 @@
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
+import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Card } from "@waltning/ui/shell/card";
 import { CurrencyTotals } from "@waltning/ui/shell/currency-totals";
+import type { FloatPosition } from "@waltning/ui/shell/float-geometry";
 import { TodayFrame } from "@waltning/ui/shell/today-frame";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import {
@@ -14,7 +16,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo } from "react";
 import { useColorScheme } from "react-native";
-import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
+import { appearance, floatPosition, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
 
 function handleCreateAccount() {
@@ -27,6 +29,11 @@ function handlePreference(next: "system" | "light" | "dark") {
 
 function handleAdd() {
   router.push("/quick-add");
+}
+
+/** A drop is a device preference (§2.9): stored here, never a registry operation. */
+function handleFloatPosition(next: FloatPosition) {
+  return floatPosition.set(next);
 }
 
 /**
@@ -71,6 +78,7 @@ export default function Today() {
     systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
   );
   const { message } = useLocalSearchParams<{ message?: string }>();
+  const float = useDevicePreference(floatPosition);
   const hasAccounts = snapshot.accounts.length > 0;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
 
@@ -106,6 +114,8 @@ export default function Today() {
       body={body}
       addDisabled={!hasAccounts}
       onAdd={handleAdd}
+      floatPosition={float.value}
+      onFloatPositionChange={handleFloatPosition}
     />
   );
 }

@@ -3,6 +3,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
+import { createDevicePreference } from "@waltning/client/device/create-device-preference";
+import {
+  type FloatPosition,
+  parseFloatPosition,
+  serializeFloatPosition,
+} from "@waltning/ui/shell/float-geometry";
 import { getLocales } from "expo-localization";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
@@ -13,6 +19,18 @@ export const appearance = createAppearance(
     get: () => AsyncStorage.getItem(APPEARANCE_KEY),
     set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
   },
+  mobileDiagnostics,
+);
+
+const FLOAT_POSITION_KEY = "waltning.floatPosition";
+
+/** Where the floating add button sits on this device — §2.9's device preference. */
+export const floatPosition = createDevicePreference<FloatPosition>(
+  {
+    get: () => AsyncStorage.getItem(FLOAT_POSITION_KEY),
+    set: (value) => AsyncStorage.setItem(FLOAT_POSITION_KEY, value),
+  },
+  { parse: parseFloatPosition, serialize: serializeFloatPosition },
   mobileDiagnostics,
 );
 

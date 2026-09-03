@@ -46,6 +46,8 @@ export const pl: Messages = {
   },
   shell: {
     today: "Dziś",
+    add: "Dodaj",
+    showAdd: "Pokaż przycisk dodawania",
     mine: "moje",
     ours: "nasze",
     noAccounts: "Brak kont",

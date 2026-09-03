@@ -13,7 +13,11 @@ export type ClientAction =
   | "reset_preview"
   | "change_appearance";
 
-export type ClientStateUpdate = "phone_ledger_refresh" | "appearance_hydrate";
+export type ClientStateUpdate =
+  | "phone_ledger_refresh"
+  | "appearance_hydrate"
+  | "device_preference_hydrate"
+  | "device_preference_write";
 
 type ClientLifecycle<Scope extends string, Name extends object> =
   | ({ scope: Scope; phase: "start" } & Name)

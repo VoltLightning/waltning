@@ -12,7 +12,7 @@
 | `DualTotal` | **The two headline figures** — *mine* dominant, *ours* secondary beneath (`SPEC.md` §6.7). Never a toggle: showing one at a time invites reading the wrong number. Degrades to a single figure when no shared account exists |
 | `ContributionRow` | An inflow to a shared account, attributed to a counterparty (`counterparty_role = 'contribution'`). Reads as a contribution, never a debt — no settle action, no ageing. The role is what keeps it out of `counterparty_balances`, so this is a rendering of a distinction the data already makes, not one the component invents |
 | `BottomSheet` | 170px from top; search, content, **pinned footer** |
-| `TabBar` | 5 tabs + raised `+`. Duotone icons, ≥44px targets |
+| `TabBar` | Five tabs, duotone icons, ≥44px targets. **The add button is not in it** — it floats above the whole screen and parks on the bottom edge (`02-tokens` §2.9), so the bar never has to make room for it |
 | `Dock` | Bottom-anchored composer: mode row, keypad, full-width Save |
 
 ### 5.2 Rows

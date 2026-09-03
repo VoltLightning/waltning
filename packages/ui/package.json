@@ -14,6 +14,7 @@
     "./primitives/*": "./src/primitives/*.tsx",
     "./review/*": "./src/review/*.tsx",
     "./shell/*": "./src/shell/*.tsx",
+    "./shell/float-geometry": "./src/shell/float-geometry.ts",
     "./states/*": "./src/states/*.tsx",
     "./theme/fonts": "./src/theme/fonts.ts",
     "./theme/provider": "./src/theme/provider.tsx",

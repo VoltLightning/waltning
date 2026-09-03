@@ -53,8 +53,9 @@ tab bar → S10, S11, S12, S03.
 │                                    251,04 zł    │
 │                                       Show all →│
 └─────────────────────────────────────────────────┘
-┌ tab bar · 5 + raised ＋ ────────────────────────┐
-│  Today   Ledger   ＋   Calendar   Debt          │
+│                                          (＋)   │  ← floats, §2.9
+┌ tab bar · 5 ───────────────────────────────────┐
+│  Today   Ledger   Calendar   Debt   Settings    │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -94,7 +95,7 @@ materialisation is the final save: the row appears as ordinary ledger data with
 no sync-status marker.
 
 Under the disposable preview profile, S04 renders one combined USD total, five
-Recent rows, the Create account first-run action, a raised `+`, and the
+Recent rows, the Create account first-run action, the floating `+`, and the
 appearance action. That profile omits the tab bar, period figures, voice, scan,
 sync state, shared totals, and FX presentation.
 
@@ -118,7 +119,8 @@ happened*.
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `TransactionRow` | Recent; `TransferRow` for transfers; `BIZ` tag where business |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
-| `TabBar` | 5 tabs + raised `+`, all ≥44px |
+| `TabBar` | 5 tabs, all ≥44px. `+` is not one of them |
+| `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
 | `EmptyState(first-run)` | No accounts — offers create and import |
 | `AppearanceButton` | Header action; opens the appearance sheet |
 | `BottomSheet(appearance)` | Radio choices: System, Light, Dark |
@@ -150,7 +152,7 @@ keeps it fast and what makes it safe to render from cache offline.
 ## 7. Interaction
 
 ### Mobile
-`+` is the raised tab-bar action, reachable by thumb from either hand. Pull to
+`+` floats and is placed by the thumb that uses it — dragged to either side, or parked on the bottom edge — so it is reachable from either hand by construction. Pull to
 refresh re-syncs rates and balances. Recent rows swipe to categorize (short) and
 to edit (long) — never to delete (`design-system/05` §5.6). Haptic on save
 arrival.

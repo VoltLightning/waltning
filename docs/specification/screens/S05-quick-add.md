@@ -15,8 +15,8 @@ routes is fastest right now.
 
 | From | Via | Back to |
 |---|---|---|
-| S04 | Raised `+` | S04 on save |
-| Any tab | Raised `+` | The tab you came from |
+| S04 | Floating `+` | S04 on save |
+| Any tab | Floating `+` | The tab you came from |
 | S04 | say-a-transaction row | S04 — opens in voice mode |
 | Any tab | `+` **long-press** → Expense · Transfer · Income | Transfer opens its own composer, not this one |
 | S13 | *Add transaction* | S13, prefilled with the counterparty |

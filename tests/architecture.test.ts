@@ -399,6 +399,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "appearance",
       "connectivity",
       "currencies",
+      "device",
       "ledger",
       "query",
       "transactions",
