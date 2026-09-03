@@ -26,17 +26,19 @@ export type LocalGroup = {
 export function readGroups<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
 ): readonly LocalGroup[] {
-  return db
-    .select({
-      id: accountGroups.id,
-      name: accountGroups.name,
-      institution: accountGroups.institution,
-      sort: accountGroups.sort,
-    })
-    .from(accountGroups)
-    // Archived groups are kept for the accounts that still name them (§6.9);
-    // nothing offers one for a new account, and no list shows one.
-    .where(eq(accountGroups.archived, false))
-    .orderBy(asc(accountGroups.sort), asc(accountGroups.name), asc(accountGroups.id))
-    .all();
+  return (
+    db
+      .select({
+        id: accountGroups.id,
+        name: accountGroups.name,
+        institution: accountGroups.institution,
+        sort: accountGroups.sort,
+      })
+      .from(accountGroups)
+      // Archived groups are kept for the accounts that still name them (§6.9);
+      // nothing offers one for a new account, and no list shows one.
+      .where(eq(accountGroups.archived, false))
+      .orderBy(asc(accountGroups.sort), asc(accountGroups.name), asc(accountGroups.id))
+      .all()
+  );
 }
