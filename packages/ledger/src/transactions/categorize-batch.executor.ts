@@ -61,9 +61,20 @@ function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactio
     .returning()
     .all();
 
-  if (updated.length !== input.transactionIds.length) {
+  /**
+   * **Compared against the distinct id count, not the array length.**
+   * `IN (…)` matches a row at most once no matter how many times its id is
+   * repeated in the list, so the affected-row count is naturally deduped —
+   * comparing it against a non-deduped length would refuse a harmless batch
+   * that names the same id twice. `categorizeBatchInput` already dedupes on
+   * the way in, so this `Set` is normally a no-op; computed again here rather
+   * than trusted, because the invariant this check protects — one row per
+   * distinct id — is the executor's to keep regardless of what upstream did.
+   */
+  const distinctIds = new Set(input.transactionIds).size;
+  if (updated.length !== distinctIds) {
     throw new Error(
-      `categorize_batch: named ${input.transactionIds.length} transactions, ${updated.length} ` +
+      `categorize_batch: named ${distinctIds} distinct transactions, ${updated.length} ` +
         "were live income or expense rows — one is missing, deleted, or a transfer/adjustment " +
         "(transactions_category_shape)",
     );

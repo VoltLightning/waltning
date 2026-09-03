@@ -27,7 +27,8 @@
  */
 
 import { z } from "zod";
-import { dec } from "../money.ts";
+import type { Id } from "../id.ts";
+import { type CurrencyCode, dec, type Money, type TxnType } from "../money.ts";
 import { zAccountingDate, zCurrencyCode, zId, zMoney, zPivotPerUnit } from "../zod.ts";
 
 /* ── the enumerations, restated ──────────────────────────────────────────── */
@@ -159,6 +160,65 @@ export const createAccountInput = z
 
 export type CreateAccountInput = z.output<typeof createAccountInput>;
 export type AccountKind = CreateAccountInput["kind"];
+
+/* ── transaction shape ───────────────────────────────────────────────────── */
+
+/**
+ * The fields two `type`-shape CHECKs (§6.5) read: `transactions_transfer_shape`
+ * and `transactions_category_shape`. Every column, never a patch — "toAmount
+ * is absent" only means something once you know what the *row* is about to
+ * read after a write, not what one caller happened to send.
+ */
+export type TransactionShape = {
+  type: TxnType;
+  categoryId?: Id<"categories"> | null | undefined;
+  toAccountId?: Id<"accounts"> | null | undefined;
+  toAmount?: Money | null | undefined;
+  toCurrency?: CurrencyCode | null | undefined;
+};
+
+export type TransactionShapeIssue = { field: keyof TransactionShape; message: string };
+
+/**
+ * The two `type`-shape CHECKs, checked once and read by both writers.
+ *
+ * `create_transaction`'s `.superRefine` below and `update_transaction`'s
+ * executor (`packages/ledger`) both call this — the first on a whole new
+ * row, the second on the row a patch would produce — because a duplicated
+ * copy of `transactions_transfer_shape` and `transactions_category_shape` is
+ * exactly how a create path and a patch path drift: the create schema was
+ * refusing a category on a transfer years before an executor existed that
+ * could patch `type`'s partner fields without ever going through it.
+ *
+ * Returns every violation rather than throwing, so a Zod `.superRefine` can
+ * turn each into a field-level issue at the edge, and a SQLite executor —
+ * which has no Zod context to add an issue to — can turn the same list into
+ * one error naming every offending key.
+ */
+export function transactionShapeIssues(row: TransactionShape): TransactionShapeIssue[] {
+  const issues: TransactionShapeIssue[] = [];
+  const isTransfer = row.type === "transfer";
+  const present = <T>(v: T | null | undefined): v is T => v !== undefined && v !== null;
+
+  for (const field of ["toAccountId", "toAmount", "toCurrency"] as const) {
+    if (present(row[field]) === isTransfer) continue;
+    issues.push({
+      field,
+      message: isTransfer
+        ? "a transfer stores both legs — §7.5 stores the destination amount rather than deriving it"
+        : "only a transfer has a destination leg (transactions_transfer_shape)",
+    });
+  }
+
+  if (present(row.categoryId) && row.type !== "income" && row.type !== "expense") {
+    issues.push({
+      field: "categoryId",
+      message: "only income and expense carry a category (transactions_category_shape)",
+    });
+  }
+
+  return issues;
+}
 
 /* ── create_transaction ──────────────────────────────────────────────────── */
 
@@ -306,23 +366,14 @@ export const createTransactionInput = z
     }
 
     /**
-     * The three transfer-shape CHECKs, as one statement each way.
-     *
-     * Both directions matter. A missing destination is a transfer that vanishes
-     * into one account; a destination on an expense is a field the reader
-     * cannot see and the CHECK rejects at drain.
+     * The transfer-shape and category-shape CHECKs, read from the one
+     * function `update_transaction`'s executor also calls — see
+     * `transactionShapeIssues` above for why a shared function rather than a
+     * second copy.
      */
     const isTransfer = t.type === "transfer";
-    for (const field of ["toAccountId", "toAmount", "toCurrency"] as const) {
-      const present = t[field] !== undefined;
-      if (present === isTransfer) continue;
-      ctx.addIssue({
-        code: "custom",
-        path: [field],
-        message: isTransfer
-          ? "a transfer stores both legs — §7.5 stores the destination amount rather than deriving it"
-          : "only a transfer has a destination leg (transactions_transfer_shape)",
-      });
+    for (const issue of transactionShapeIssues(t)) {
+      ctx.addIssue({ code: "custom", path: [issue.field], message: issue.message });
     }
 
     /** `to_fx_rate` follows the destination leg it values, when it is supplied. */
@@ -355,14 +406,8 @@ export const createTransactionInput = z
       });
     }
 
-    /** `transactions_category_shape` — TAXONOMY R1 lives on the leaf check, not here. */
-    if (t.categoryId !== undefined && t.type !== "income" && t.type !== "expense") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["categoryId"],
-        message: "only income and expense carry a category (transactions_category_shape)",
-      });
-    }
+    // `transactions_category_shape` is one of the issues `transactionShapeIssues`
+    // already added above. TAXONOMY R1 lives on the leaf check, not here.
 
     /**
      * `transactions_counterparty_role_shape` — *"a counterparty reference must
@@ -709,7 +754,22 @@ export type SupersedeTransactionInput = z.output<typeof supersedeTransactionInpu
 
 /** The bulk path. One category over many ids; a `DiffCard` states the count. */
 export const categorizeBatchInput = z.object({
-  transactionIds: z.array(zId<"transactions">()).min(1).max(5000),
+  transactionIds: z
+    .array(zId<"transactions">())
+    .min(1)
+    .max(5000)
+    /**
+     * **Deduped, not refused.** A batch built by merging two selections, or
+     * a multi-select that double-registers a tap, names the same id twice
+     * with no different intent behind it — the same "twice is once"
+     * idempotency an executor's own upsert already gives a replayed entry
+     * (`create-account.executor.ts`). A `.refine` that rejected duplicates
+     * would make a harmless batch fail for a reason nobody watching the
+     * screen could see; deduping here means the executor's affected-row
+     * count — one row per distinct id — is never compared against an
+     * inflated total.
+     */
+    .transform((ids) => Array.from(new Set(ids))),
   categoryId: zId<"categories">(),
 });
 export type CategorizeBatchInput = z.output<typeof categorizeBatchInput>;

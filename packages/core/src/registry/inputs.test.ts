@@ -747,4 +747,12 @@ describe("categorize_batch", () => {
     });
     expect(parsed.transactionIds).toEqual([TXN_ID, TXN_ID_2]);
   });
+
+  it("dedupes a repeated id rather than refusing the batch", () => {
+    const parsed = categorizeBatchInput.parse({
+      transactionIds: [TXN_ID, TXN_ID_2, TXN_ID],
+      categoryId: CATEGORY_ID,
+    });
+    expect(parsed.transactionIds).toEqual([TXN_ID, TXN_ID_2]);
+  });
 });

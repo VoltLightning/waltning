@@ -10,6 +10,7 @@
  */
 
 import {
+  transactionShapeIssues,
   type UpdateTransactionInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
@@ -54,6 +55,33 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   if (current.version !== input.version) {
     throw new Error(
       `update_transaction: stale version — read ${input.version}, row is at ${current.version}`,
+    );
+  }
+
+  /**
+   * **Checked against the row the patch would produce, not against the patch
+   * alone.** `type` is never a patchable field — a `type` change is a
+   * supersede — so it is always `current.type`; every other shape field falls
+   * back to the current row's value when the patch does not touch it.
+   * `transactionShapeIssues` is the same function `createTransactionInput`'s
+   * `.superRefine` calls, so an expense cannot be patched into a
+   * transfer-shaped row (or a transfer into a categorised one) any more than
+   * a fresh create could produce one — the two paths cannot drift because
+   * there is only one rule to drift from.
+   */
+  const merged = {
+    type: current.type,
+    categoryId: "categoryId" in input.patch ? input.patch.categoryId : current.categoryId,
+    toAccountId: "toAccountId" in input.patch ? input.patch.toAccountId : current.toAccountId,
+    toAmount: "toAmount" in input.patch ? input.patch.toAmount : current.toAmount,
+    toCurrency: "toCurrency" in input.patch ? input.patch.toCurrency : current.toCurrency,
+  };
+  const shapeIssues = transactionShapeIssues(merged);
+  if (shapeIssues.length > 0) {
+    throw new Error(
+      `update_transaction: patch would violate the transaction shape — ${shapeIssues
+        .map((issue) => `${issue.field}: ${issue.message}`)
+        .join("; ")}`,
     );
   }
 

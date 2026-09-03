@@ -122,6 +122,92 @@ describe("update_transaction", () => {
       }),
     ).toThrow(/deleted/);
   });
+
+  it("refuses a patch that would turn the expense into a transfer-shaped row", () => {
+    const OTHER_ACCOUNT = id<"accounts">("00000000-0000-4000-8000-00000000000c");
+    writeLocally(stores.ledger, {
+      executor: createAccountExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: OTHER_ACCOUNT, name: "Bank B · PLN", currency: PLN },
+    });
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: updateTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          id: TXN,
+          version: readTxn()?.version ?? 0,
+          // TXN is still `type: "expense"` — the patch never touches `type`,
+          // so naming a destination leg produces a row Postgres's
+          // transactions_transfer_shape would refuse.
+          patch: { toAccountId: OTHER_ACCOUNT, toAmount: "18", toCurrency: PLN },
+        },
+      }),
+    ).toThrow(/shape/);
+
+    // Refused, not half-applied.
+    const after = readTxn();
+    expect(after?.toAccountId).toBeNull();
+    expect(after?.version).toBe(1);
+  });
+
+  it("refuses a patch that would set a category on a transfer", () => {
+    const OTHER_ACCOUNT = id<"accounts">("00000000-0000-4000-8000-00000000000d");
+    const TRANSFER = id<"transactions">("00000000-0000-4000-8000-000000000008");
+    writeLocally(stores.ledger, {
+      executor: createAccountExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: OTHER_ACCOUNT, name: "Bank C · PLN", currency: PLN },
+    });
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TRANSFER,
+        date: "2026-09-02",
+        type: "transfer",
+        accountId: ACCOUNT,
+        amountOriginal: "5",
+        currency: PLN,
+        toAccountId: OTHER_ACCOUNT,
+        toAmount: "5",
+        toCurrency: PLN,
+      },
+    });
+    const CATEGORY = id<"categories">("00000000-0000-4000-8000-0000000000c2");
+    stores.ledger.replica.db
+      .insert(categories)
+      .values({ id: CATEGORY, name: "Groceries", kind: "expense", isLeaf: true })
+      .run();
+
+    const before = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, TRANSFER))
+      .get();
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: updateTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { id: TRANSFER, version: before?.version ?? 0, patch: { categoryId: CATEGORY } },
+      }),
+    ).toThrow(/shape/);
+
+    const after = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, TRANSFER))
+      .get();
+    expect(after?.categoryId).toBeNull();
+    expect(after?.version).toBe(before?.version);
+  });
 });
 
 describe("delete_transaction", () => {
@@ -364,6 +450,125 @@ describe("supersede_transaction", () => {
     ).toThrow(/stale/);
     expect(readTxn()?.deletedAt).toBeNull();
   });
+
+  it("refuses a replacement id that already names a live row — it must not clobber it", () => {
+    const OTHER = id<"transactions">("00000000-0000-4000-8000-000000000006");
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: OTHER,
+        date: "2026-09-01",
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: "42",
+        currency: PLN,
+        payee: "Rent",
+      },
+    });
+    const otherBefore = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, OTHER))
+      .get();
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: supersedeTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          supersedesId: TXN,
+          supersedesVersion: readTxn()?.version ?? 0,
+          replacement: {
+            // Names an unrelated, already-existing row rather than a new one.
+            id: OTHER,
+            date: "2026-09-01",
+            type: "expense",
+            accountId: ACCOUNT,
+            amountOriginal: "18.5",
+            currency: PLN,
+            payee: "Coffee",
+            source: "import",
+          },
+        },
+      }),
+    ).toThrow(/replacement/);
+
+    // Neither row moved: the superseded row is untouched, and the unrelated
+    // row was not overwritten.
+    expect(readTxn()?.deletedAt).toBeNull();
+    const otherAfter = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, OTHER))
+      .get();
+    expect(otherAfter).toEqual(otherBefore);
+  });
+
+  it("refuses a replacement id that names a soft-deleted row — it must not resurrect it", () => {
+    const OTHER = id<"transactions">("00000000-0000-4000-8000-000000000007");
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: OTHER,
+        date: "2026-09-01",
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: "42",
+        currency: PLN,
+        payee: "Rent",
+      },
+    });
+    writeLocally(stores.ledger, {
+      executor: deleteTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: OTHER,
+        version:
+          stores.ledger.replica.db
+            .select()
+            .from(transactions)
+            .where(eq(transactions.id, OTHER))
+            .get()?.version ?? 0,
+      },
+    });
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: supersedeTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          supersedesId: TXN,
+          supersedesVersion: readTxn()?.version ?? 0,
+          replacement: {
+            id: OTHER,
+            date: "2026-09-01",
+            type: "expense",
+            accountId: ACCOUNT,
+            amountOriginal: "18.5",
+            currency: PLN,
+            payee: "Coffee",
+            source: "import",
+          },
+        },
+      }),
+    ).toThrow(/replacement/);
+
+    expect(readTxn()?.deletedAt).toBeNull();
+    // Still deleted — a refused write must not bring it back to life.
+    const otherAfter = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, OTHER))
+      .get();
+    expect(otherAfter?.deletedAt).not.toBeNull();
+  });
 });
 
 describe("categorize_batch", () => {
@@ -457,5 +662,16 @@ describe("categorize_batch", () => {
         input: { transactionIds: [TRANSFER], categoryId: CATEGORY },
       }),
     ).toThrow(/categorize_batch/);
+  });
+
+  it("accepts a batch that names the same id twice — a repeat is not a missing row", () => {
+    writeLocally(stores.ledger, {
+      executor: categorizeBatchExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { transactionIds: [TXN, TXN], categoryId: CATEGORY },
+    });
+
+    expect(readTxn()?.categoryId).toBe(CATEGORY);
   });
 });

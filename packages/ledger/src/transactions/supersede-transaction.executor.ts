@@ -55,6 +55,29 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
     );
   }
 
+  /**
+   * **The replacement must be a new row.** `insertTransaction`'s upsert is
+   * keyed on the primary key alone (§14.6's replay rule for `create_transaction`
+   * — "twice is once"), which is right for replaying the *same* entry twice
+   * and wrong here: an id that already names another transaction would be
+   * silently overwritten with no version check at all, and if that row was
+   * soft-deleted, the overwrite brings it back live. Checked against the
+   * table directly rather than only against `supersedesId` — the input
+   * schema already refuses that one case, but a *different* existing id is
+   * not decidable from the input alone.
+   */
+  const collision = tx
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(eq(transactions.id, input.replacement.id))
+    .get();
+  if (collision) {
+    throw new Error(
+      `supersede_transaction: replacement id ${input.replacement.id} already names a row — ` +
+        "the replacement must be new",
+    );
+  }
+
   const deleted = tx
     .update(transactions)
     .set({ deletedAt: new Date(), version: old.version + 1, updatedAt: new Date() })
