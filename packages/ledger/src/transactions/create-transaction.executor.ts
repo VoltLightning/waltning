@@ -62,13 +62,12 @@ export const createTransactionExecutor = defineLocalExecutor<
 });
 
 /**
- * **Exported.** `reconcile_account` (`packages/ledger/src/accounts/reconcile-account.executor.ts`)
- * writes its one `adjustment` row through this same function rather than a
- * second `insert(transactions)` — one write path for the table, not two that
- * can drift on which columns default and which upsert on conflict. A2's
- * `supersede_transaction` imports it for the same reason; whichever of A2/A3
- * merges second drops its own duplicate export in the rebase (both plans name
- * this exact line).
+ * **Exported.** `reconcile_account` (`accounts/reconcile-account.executor.ts`)
+ * writes its one `adjustment` row through this same function, and
+ * `supersede_transaction` (`supersede-transaction.executor.ts`) lands its
+ * replacement row through it in the same write that soft-deletes the
+ * original — one write path for the table, not three that can drift on which
+ * columns default and which upsert on conflict.
  */
 export function insertTransaction(
   input: CreateTransactionInput,

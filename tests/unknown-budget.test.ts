@@ -114,6 +114,26 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
   },
+  "packages/ledger/src/transactions/update-transaction.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
+  },
+  "packages/ledger/src/transactions/delete-transaction.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
+  },
+  "packages/ledger/src/transactions/set-transaction-lines.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
+  },
+  "packages/ledger/src/transactions/supersede-transaction.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
+  },
+  "packages/ledger/src/transactions/categorize-batch.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
+  },
   "packages/ledger/src/executor.ts": {
     max: 3,
     why: "two raw-payload doors (`invoke`, `mintedIds`) taking JSON off a disk, which is exactly as trustworthy as JSON off a wire, and one widened `Row` in a constraint position — a registry is heterogeneous and TypeScript has no existential type for `returns something`",
