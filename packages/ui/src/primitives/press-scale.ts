@@ -21,56 +21,45 @@
  * scale is a transform, so it never touches the JS thread mid-gesture.
  */
 
-import { useCallback, useRef } from "react";
-import { Animated, Easing } from "react-native";
+import { useCallback } from "react";
+import type { ViewStyle } from "react-native";
+import {
+  type AnimatedStyle,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { motion } from "../tokens.ts";
+import { easing } from "./easing.ts";
 
 const PRESSED = 0.97;
 
-/** The two curves, parsed once. `motion.*.easing` is a CSS string for the web. */
-function bezier(easing: string) {
-  const inner = /cubic-bezier\(([^)]+)\)/.exec(easing)?.[1];
-  const [x1, y1, x2, y2] = (inner ?? "").split(",").map(Number);
-  // A token that is not a cubic-bezier — `linear`, or a typo — falls back to
-  // a plain ease-out rather than to `NaN` control points, which `Easing.bezier`
-  // would accept and render as no animation at all.
-  if (x1 === undefined || y1 === undefined || x2 === undefined || y2 === undefined) {
-    return Easing.out(Easing.quad);
-  }
-  if ([x1, y1, x2, y2].some(Number.isNaN)) return Easing.out(Easing.quad);
-  return Easing.bezier(x1, y1, x2, y2);
-}
-
-const EASE_IN = bezier(motion.base.easing);
-const EASE_OUT = bezier(motion.fast.easing);
-
 export type PressScale = {
-  /** Spread onto the `Animated.View` that wraps the `Pressable`. */
-  style: { transform: { scale: Animated.Value }[] };
+  style: AnimatedStyle<ViewStyle>;
   onPressIn: () => void;
   onPressOut: () => void;
 };
 
+/**
+ * On the UI thread, as everything that moves here is: the shared value is
+ * written from a press handler and read by the style worklet, and the JS
+ * thread being busy with a list never makes a press feel late.
+ */
 export function usePressScale(): PressScale {
-  const scale = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
 
   const onPressIn = useCallback(() => {
-    Animated.timing(scale, {
-      toValue: PRESSED,
-      duration: motion.base.duration,
-      easing: EASE_IN,
-      useNativeDriver: true,
-    }).start();
+    scale.value = withTiming(PRESSED, { duration: motion.base.duration, easing: easing.base });
   }, [scale]);
 
   const onPressOut = useCallback(() => {
-    Animated.timing(scale, {
-      toValue: 1,
-      duration: motion.fast.duration,
-      easing: EASE_OUT,
-      useNativeDriver: true,
-    }).start();
+    scale.value = withTiming(1, { duration: motion.fast.duration, easing: easing.fast });
   }, [scale]);
 
-  return { style: { transform: [{ scale }] }, onPressIn, onPressOut };
+  // The dependency array is not optional on the web: without the Babel plugin
+  // Reanimated cannot see the closure, and the array is how it learns which
+  // shared values the style reads.
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }), [scale]);
+
+  return { style, onPressIn, onPressOut };
 }

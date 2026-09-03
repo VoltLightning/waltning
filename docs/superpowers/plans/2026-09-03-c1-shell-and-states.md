@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - `packages/ui` names no platform beyond `react-native`; `expo-router` appears only under `apps/mobile/app/`. Route files compose and define no hooks (`makeStyles` excepted).
-- `makeStyles` only; tokens only (`space`, `radius`, `type`); no raw numbers (conformance test); §2.4 shape rule: `sm` rects for controls, `pill` only for the radio, the switch, and **the floating add button** — the raised `+` on the tab bar is that button's home for now (the floating/docking behaviour is F's card).
+- `makeStyles` only; tokens only (`space`, `radius`, `type`); no raw numbers (conformance test); §2.4 shape rule: `sm` rects for controls, `pill` only for the radio, the switch, and **the floating add button** — which exists (`shell/floating-add.tsx`) and is **not** part of the tab bar: the bar is five tabs, and `TodayFrame` already mounts the button above everything.
 - Every visible word: `en.ts` + `pl.ts`. Every animation: transform/opacity only, `motion.*` tokens, `useReducedMotion` branch.
 - Every new component: story per state, render test, axe-clean (the visual suite runs axe on every story).
 - Branch `feature/c1-shell-and-states` off `main` **after A1–A4/B1–B3 have merged** (C1 is wave 2; it rebases on whatever landed).
@@ -34,11 +34,11 @@ Per §5.4/§8.4/§8.5: `MatchWarning` (candidate row + its balance via `<Amount>
 
 ### Task 4: `TabBar` and `Shell(hero)`
 
-`shell/tab-bar.tsx`: `TabBar({ items: readonly { name; label; icon: ReactNode; active }[]; onSelect(name); onAdd(); addDisabled? })` — five targets ≥ 44px, the raised `+` in the middle (56px, `radius.pill`, `elevation.float`), safe-area bottom from `useSafeArea()`. `shell/shell.tsx`: `Shell({ leading, trailing, hero, children })` — the sage band (`theme.shell`) holding the header row and `DualTotal`; `TodayFrame` is refactored to compose `Shell` (behaviour unchanged, its tests still pass). Stories; a test that every tab is a `tab` role with `aria-selected`. Commit.
+`shell/tab-bar.tsx`: `TabBar({ items: readonly { name; label; icon: ReactNode; active }[]; onSelect(name) })` — five targets ≥ 44px, safe-area bottom from `useSafeArea()`. No `+`: the add button floats (`floating-add.tsx`) and the tabs layout mounts it over the tab slot, so it clears the bar by the bar's height plus the inset (§2.9 "clears … a tab bar when one exists" — pass the bar's height as the bottom inset to `FloatingAdd`'s `SafeAreaProvider`, or extend `FloatBounds`; decide in the PR). `shell/shell.tsx`: `Shell({ leading, trailing, hero, children })` — the sage band (`theme.shell`) holding the header row and `DualTotal`; `TodayFrame` is refactored to compose `Shell` (behaviour unchanged, its tests still pass). Stories; a test that every tab is a `tab` role with `aria-selected`. Commit.
 
 ### Task 5: The route tree
 
-`apps/mobile/app/(tabs)/_layout.tsx` — `Tabs` from `expo-router/ui` with `TabList`/`TabTrigger`/`TabSlot`, rendering `<TabBar>`; `(tabs)/index.tsx` (Today), `(tabs)/ledger.tsx` (S10 stub → `EmptyState(range)` until C4), `(tabs)/calendar.tsx`, `(tabs)/debt.tsx` (stubs). `quick-add` and `account/new` stay as stack routes above the tabs (the root `Stack` gets a `(tabs)` screen with `headerShown: false`). The `+` pushes `/quick-add`. Route titles via `t("routes.*")` — add `routes.ledger/calendar/debt` in both languages. `phone-preview-presentation.test.ts` and `screens.test.tsx` updated for the new path. Verify in Chrome against `expo start --web` before the PR (the same headers/worker setup #78 landed). Commit `"Tabs at the bottom, and moving between them works"`.
+`apps/mobile/app/(tabs)/_layout.tsx` — `Tabs` from `expo-router/ui` with `TabList`/`TabTrigger`/`TabSlot`, rendering `<TabBar>` and, above the slot, `<FloatingAdd>` wired to the `floatPosition` device preference exactly as `today-screen.tsx` does today (move the wiring up; `TodayFrame` drops its `floatPosition` props); `(tabs)/index.tsx` (Today), `(tabs)/ledger.tsx` (S10 stub → `EmptyState(range)` until C4), `(tabs)/calendar.tsx`, `(tabs)/debt.tsx` (stubs). `quick-add` and `account/new` stay as stack routes above the tabs (the root `Stack` gets a `(tabs)` screen with `headerShown: false`). The `+` pushes `/quick-add`. Route titles via `t("routes.*")` — add `routes.ledger/calendar/debt` in both languages. `phone-preview-presentation.test.ts` and `screens.test.tsx` updated for the new path. Verify in Chrome against `expo start --web` before the PR (the same headers/worker setup #78 landed). Commit `"Tabs at the bottom, and moving between them works"`.
 
 ### Task 6: Gate and PR
 

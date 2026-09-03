@@ -462,6 +462,29 @@ export const motionFrequency = {
   rare: "sheet",
 } as const satisfies Record<string, keyof typeof motion>;
 
+/* ── 2.9 The two moving parts of the screen ─────────────────────────────── */
+
+/**
+ * **The add button floats.** §2.9 fixes its geometry: a 56px circle — the only
+ * circle on the screen — inset by 16px plus the safe area, and a 44×22 tab
+ * when it is parked on the bottom edge. The numbers live here rather than in
+ * the component because the tab bar (when one exists) and the header both
+ * have to know how much room the button needs, and two copies of `56` are the
+ * same number until one of them changes.
+ *
+ * `band` is how far past its resting floor the button has to be pushed before
+ * a drop parks it. The floor is where the default position sits, so a drop
+ * *at* the floor must float — otherwise putting the button back where it
+ * started would park it. One tab-height past it, and the gesture is "push it
+ * off the bottom" rather than a pixel-hunt for an invisible line.
+ */
+export const floating = {
+  size: 56,
+  inset: 16,
+  tab: { width: 44, height: 22 },
+  band: 22,
+} as const;
+
 /* ── §10 Accessibility ───────────────────────────────────────────────────── */
 
 /**

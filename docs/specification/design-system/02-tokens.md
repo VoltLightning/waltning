@@ -369,6 +369,10 @@ case is the keypad — a capture is a dozen taps several times a day, and a
 keypad that animates feels slow by the second week. The sheet that holds it may
 rise; the keys inside it may not.
 
+**The library is Reanimated, the gestures are gesture-handler, and nothing
+else moves anything** (`architecture/11` §8b). A token here is a duration and
+a curve; `primitives/easing.ts` turns the curve into a Reanimated easing once.
+
 **Every animation needs the `motion-none` branch.** The waveform, the mic halo,
 and the sheet rise are all currently unbranched (§10).
 
@@ -389,9 +393,13 @@ the header, over everything — so nothing ever pushes it away. Default
 position: bottom-right, inset by 16px **plus the device's safe-area insets**
 (`useSafeAreaInsets()` natively, `env(safe-area-inset-*)` on web), so it
 clears the home indicator, the gesture bar, and a tab bar when one exists.
-Drag it anywhere and it stays exactly where it is dropped — no edge snapping,
-no forbidden zones; the only constraint is the safe area. Drag it into the
-bottom band and it docks as a 44×22 tab with a chevron, at the column it was
+Drag it and let go: it settles against the **nearer side edge**, 16px in plus
+the inset, at the height it was dropped — the height is the user's, the side
+is the nearer one, and it never rests on the edge itself. The settle is a
+spring with a visible bounce, and the bounce is bounded: its damping is solved
+from the distance so the overshoot is at most half the inset, which is what
+keeps a desk-width throw from carrying it through the wall. Push it off the
+bottom and it docks as a 44×22 tab with a chevron, at the column it was
 dropped, sitting on top of the safe area rather than inside it. Tap the tab
 and it returns to its last floating position, not the default. Position and
 docked state are a **device preference** — stored like the appearance

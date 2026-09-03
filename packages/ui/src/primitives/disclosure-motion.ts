@@ -13,42 +13,50 @@
  * `motion-none` branch.
  */
 
-import { useEffect, useRef } from "react";
-import { Animated } from "react-native";
+import { useEffect } from "react";
+import type { ViewStyle } from "react-native";
+import {
+  type AnimatedStyle,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { motion } from "../tokens.ts";
 import { easing } from "./easing.ts";
 import { useReducedMotion } from "./reduced-motion.ts";
 
 export type DisclosureMotion = {
-  /** Interpolated: "0deg" closed, "180deg" open. */
-  rotate: Animated.AnimatedInterpolation<string>;
-  /** The panel's opacity, restarted from 0 on each open. */
-  reveal: Animated.Value;
+  /** The chevron: turns half a circle as the panel opens. */
+  chevron: AnimatedStyle<ViewStyle>;
+  /** The panel: fades in on open — opacity only, never a height (§2.7). */
+  panel: AnimatedStyle<ViewStyle>;
 };
 
 export function useDisclosureMotion(open: boolean): DisclosureMotion {
   const reduced = useReducedMotion();
-  const turn = useRef(new Animated.Value(0)).current;
-  const reveal = useRef(new Animated.Value(0)).current;
+  const turn = useSharedValue(open ? 1 : 0);
+  const reveal = useSharedValue(open ? 1 : 0);
 
   useEffect(() => {
-    Animated.timing(turn, {
-      toValue: open ? 1 : 0,
+    turn.value = withTiming(open ? 1 : 0, {
       duration: reduced ? motion.none.duration : motion.move.duration,
       easing: easing.move,
-      useNativeDriver: true,
-    }).start();
+    });
     if (open) {
-      reveal.setValue(0);
-      Animated.timing(reveal, {
-        toValue: 1,
+      reveal.value = 0;
+      reveal.value = withTiming(1, {
         duration: reduced ? motion.none.duration : motion.fast.duration,
         easing: easing.fast,
-        useNativeDriver: true,
-      }).start();
+      });
     }
   }, [open, reduced, reveal, turn]);
 
-  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
-  return { rotate, reveal };
+  // Dependency arrays: on the web without the Babel plugin they are how
+  // Reanimated learns which shared values a style reads.
+  const chevron = useAnimatedStyle(
+    () => ({ transform: [{ rotate: `${turn.value * 180}deg` }] }),
+    [turn],
+  );
+  const panel = useAnimatedStyle(() => ({ opacity: reveal.value }), [reveal]);
+  return { chevron, panel };
 }

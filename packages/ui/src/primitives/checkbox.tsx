@@ -18,8 +18,9 @@
  * every theme, in `textOnAccent` because it sits on the accent fill.
  */
 
-import { useCallback, useEffect, useRef } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { useCallback, useEffect } from "react";
+import { Pressable, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, motion, radius, space, touchTarget } from "../tokens.ts";
@@ -44,21 +45,26 @@ export function Checkbox({ label, checked, onChange, hint, disabled = false }: C
   const { hovered, focused, handlers } = useInteraction();
   const reduced = useReducedMotion();
 
-  const pop = useRef(new Animated.Value(checked ? 1 : 0)).current;
+  const pop = useSharedValue(checked ? 1 : 0);
 
   useEffect(() => {
     if (checked) {
-      pop.setValue(0.4);
-      Animated.timing(pop, {
-        toValue: 1,
+      pop.value = 0.4;
+      pop.value = withTiming(1, {
         duration: reduced ? motion.none.duration : motion.fast.duration,
         easing: easing.fast,
-        useNativeDriver: true,
-      }).start();
+      });
     } else {
-      pop.setValue(0);
+      pop.value = 0;
     }
   }, [checked, pop, reduced]);
+
+  // Opacity tracks the same value as scale, so the mark cannot be caught
+  // mid-pop at full size and zero presence.
+  const markMotion = useAnimatedStyle(
+    () => ({ opacity: pop.value, transform: [{ scale: pop.value }, { rotate: "-45deg" }] }),
+    [pop],
+  );
 
   const handlePress = useCallback(() => onChange(!checked), [checked, onChange]);
 
@@ -81,14 +87,7 @@ export function Checkbox({ label, checked, onChange, hint, disabled = false }: C
       ]}
     >
       <View style={[styles.box, checked ? styles.boxChecked : null]}>
-        <Animated.View
-          style={[
-            styles.mark,
-            // Opacity tracks the same value as scale, so the mark cannot be
-            // caught mid-pop at full size and zero presence.
-            { opacity: pop, transform: [{ scale: pop }, { rotate: "-45deg" }] },
-          ]}
-        />
+        <Animated.View style={[styles.mark, markMotion]} />
       </View>
       <View style={styles.copy}>
         <Text style={styles.label}>{label}</Text>

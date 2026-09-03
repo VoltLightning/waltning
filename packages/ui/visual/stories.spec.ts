@@ -97,6 +97,11 @@ test.describe("contrast", () => {
     for (const theme of THEMES) {
       test(`${story.title}/${story.name} · ${theme}`, async ({ page }) => {
         await open(page, story.id, theme);
+        // Contrast is a property of the resting state. A panel that fades in
+        // over `motion.fast` reads as lighter ink for its first frames, and
+        // axe caught a select's option list at 4.38:1 mid-fade — a number no
+        // reader ever sees. Longer than the longest token (`sheet`, 320ms).
+        await page.waitForTimeout(500);
         await page.addScriptTag({ content: axeSource });
 
         const violations = await page.evaluate(async () => {

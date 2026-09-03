@@ -45,7 +45,9 @@
  */
 
 import { useCallback, useState } from "react";
-import { Animated, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import type { ViewStyle } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { useTheme } from "../theme/provider";
@@ -228,7 +230,7 @@ function Disclosure({
   const t = useT();
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
-  const { rotate, reveal } = useDisclosureMotion(open);
+  const { chevron, panel: panelStyle } = useDisclosureMotion(open);
 
   const toggleOpen = useCallback(() => onOpenChange(!open), [onOpenChange, open]);
   const filled = display !== undefined;
@@ -256,12 +258,12 @@ function Disclosure({
         <Text numberOfLines={1} style={[styles.value, filled ? null : styles.valuePlaceholder]}>
           {filled ? display : placeholder}
         </Text>
-        <Animated.View style={[styles.chevron, { transform: [{ rotate }] }]}>
+        <Animated.View style={[styles.chevron, chevron]}>
           <View style={styles.chevronMark} />
         </Animated.View>
       </Pressable>
       {open ? (
-        <PanelBlock reveal={reveal} search={search}>
+        <PanelBlock reveal={panelStyle} search={search}>
           {panel}
         </PanelBlock>
       ) : null}
@@ -270,7 +272,7 @@ function Disclosure({
 }
 
 type PanelBlockProps = {
-  reveal: Animated.Value;
+  reveal: AnimatedStyle<ViewStyle>;
   search: { query: string; onQueryChange: (query: string) => void } | undefined;
   children: React.ReactNode;
 };
@@ -278,7 +280,7 @@ type PanelBlockProps = {
 function PanelBlock({ reveal, search, children }: PanelBlockProps) {
   const styles = useStyles();
   return (
-    <Animated.View style={[styles.panel, { opacity: reveal }]}>
+    <Animated.View style={[styles.panel, reveal]}>
       {search === undefined ? null : (
         <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
       )}
@@ -323,7 +325,7 @@ function MultiSelectField({
   panel,
 }: MultiSelectFieldProps) {
   const styles = useStyles();
-  const { rotate, reveal } = useDisclosureMotion(open);
+  const { chevron, panel: panelStyle } = useDisclosureMotion(open);
   const { hovered, focused, handlers } = useInteraction();
 
   const toggleOpen = useCallback(() => onOpenChange(!open), [onOpenChange, open]);
@@ -362,13 +364,13 @@ function MultiSelectField({
               {placeholder}
             </Text>
           ) : null}
-          <Animated.View style={[styles.chevron, { transform: [{ rotate }] }]}>
+          <Animated.View style={[styles.chevron, chevron]}>
             <View style={styles.chevronMark} />
           </Animated.View>
         </Pressable>
       </View>
       {open ? (
-        <PanelBlock reveal={reveal} search={search}>
+        <PanelBlock reveal={panelStyle} search={search}>
           {panel}
         </PanelBlock>
       ) : null}

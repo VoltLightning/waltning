@@ -36,7 +36,7 @@ function noop() {}
 const meta = {
   title: "Shell/TodayFrame",
   component: TodayFrame,
-  args: { appearanceAction: null, onAdd: noop },
+  args: { appearanceAction: null, onAdd: noop, floatPosition: null, onFloatPositionChange: noop },
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof TodayFrame>;
 

@@ -149,11 +149,20 @@ describe("the frame clears the device's chrome", () => {
   function renderFrame(insets: SafeAreaInsets) {
     const { container } = render(
       <SafeAreaProvider insets={insets}>
-        <TodayFrame appearanceAction={null} total={null} body={null} onAdd={noop} />
+        <TodayFrame
+          appearanceAction={null}
+          total={null}
+          body={null}
+          onAdd={noop}
+          floatPosition={null}
+          onFloatPositionChange={noop}
+        />
       </SafeAreaProvider>,
     );
     const root = container.firstElementChild;
-    return { shell: root?.firstElementChild ?? null, panel: root?.lastElementChild ?? null };
+    // Shell, then panel, then the floating button's layer — so the panel is
+    // the second child, not the last.
+    return { shell: root?.firstElementChild ?? null, panel: root?.children[1] ?? null };
   }
 
   it("adds the top inset to the shell's own padding", () => {
@@ -214,7 +223,14 @@ describe("the shell owns the strip it clears", () => {
     const { container } = render(
       <ThemeProvider name="light">
         <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
-          <TodayFrame appearanceAction={null} total={null} body={null} onAdd={noop} />
+          <TodayFrame
+            appearanceAction={null}
+            total={null}
+            body={null}
+            onAdd={noop}
+            floatPosition={null}
+            onFloatPositionChange={noop}
+          />
         </SafeAreaProvider>
       </ThemeProvider>,
     );

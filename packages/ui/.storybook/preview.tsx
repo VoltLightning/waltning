@@ -16,6 +16,7 @@
 
 import type { Decorator, Preview } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ThemeProvider } from "../src/theme/provider";
 import type { ThemeName } from "../src/theme/roles.ts";
 import { makeStyles } from "../src/theme/styles.ts";
@@ -97,23 +98,29 @@ const withTheme: Decorator = (Story, context) => {
   const appearance = (context.globals["appearance"] ?? "light") as Appearance;
   const inset = context.parameters["layout"] !== "fullscreen";
 
+  // The gesture root outermost, as in the app: a story with a drag in it —
+  // the floating button — needs the same root the phone has.
   if (appearance === "both") {
     return (
-      <SideBySide>
-        <Panel name="light" inset={inset}>
-          <Story />
-        </Panel>
-        <Panel name="dark" inset={inset}>
-          <Story />
-        </Panel>
-      </SideBySide>
+      <GestureHandlerRootView>
+        <SideBySide>
+          <Panel name="light" inset={inset}>
+            <Story />
+          </Panel>
+          <Panel name="dark" inset={inset}>
+            <Story />
+          </Panel>
+        </SideBySide>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <Panel name={appearance} inset={inset}>
-      <Story />
-    </Panel>
+    <GestureHandlerRootView>
+      <Panel name={appearance} inset={inset}>
+        <Story />
+      </Panel>
+    </GestureHandlerRootView>
   );
 };
 

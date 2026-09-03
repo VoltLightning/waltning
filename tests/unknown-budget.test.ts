@@ -63,6 +63,14 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the drizzle schema-map constraint, named once. It is not the `LocalDb` alias `write.ts` refuses: it answers only for the schema map, never for the driver's run-result, and every declaration still carries both type parameters",
   },
+  "packages/ui/src/shell/float-geometry.ts": {
+    max: 2,
+    why: "JSON off the disk — the stored button position, which is exactly as trustworthy as JSON off a wire and is checked field by field before it becomes a position",
+  },
+  "packages/ui/.vitest/reanimated.ts": {
+    max: 1,
+    why: "a CommonJS mock with no declared type, cast once to the module it stands in for",
+  },
   "packages/ledger/src/outbox.ts": {
     max: 1,
     why: "the queued payload is the operation's validated input as JSON, and the outbox is deliberately not allowed an opinion about its shape — the drain's upcasters are",

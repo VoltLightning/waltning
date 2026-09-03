@@ -103,9 +103,9 @@ Transactions list* · *S09 Transaction detail* · *S19 Settings · Categories*.
 
 **Shape.** Serial start, then parallel:
 
-- **C1 · shell + states** (one agent, blocks the rest). `TabBar` (5 + raised
-  `+`), `BottomSheet`, `Shell(hero)`, and D4's eleven state components. Route
-  tree grows the tabs S04 §3 draws: Today · Ledger · `+` · Calendar · Debt.
+- **C1 · shell + states** (one agent, blocks the rest). `TabBar` (five tabs; the `+` is not in it — it floats,
+  and landed ahead of the stack), `BottomSheet`, `Shell(hero)`, and D4's eleven
+  state components. Route tree grows the tabs S04 §3 draws.
   Calendar and Debt are stubs that render `EmptyState` until their arcs.
 - **C2–C6 · one screen each**, parallel agents, each composed in its plan from
   the spec page's §3 layout, §4 component table, §5 reads and §6 states —
@@ -143,12 +143,33 @@ Lands after D so the debt tab has something behind it.
 *install and pin the stack choices* (closes as each lands). One agent each,
 off `main`, whenever an agent is free.
 
-### DESK · one PR, last
+### DESK · the desk is designed; five PRs build it
 
-Reads every spec page's *Web — ≥1024px* section for the screens C–E built and
-adds the desk composition: a breakpoint hook in `packages/ui` (`useBreakpoint`
-over `useWindowDimensions` — no platform named), a sidebar `Shell(desk)`,
-tables where the spec says table. The phone composition is untouched.
+The design is the canvas *Waltning Desk Layout* (2026-09-03): a top band
+shell — brand, nav, the add action as a **command bar** on `N`, currency chip,
+scope segment — with the hero sharing a row with the period figures; a
+12-column widget grid for the dashboard; the ledger as a table with a
+persistent filter rail. **No floating add button at desk width.** The
+sidebar alternate on that canvas is dropped. Below the breakpoint the web
+build renders the phone composition unchanged (`architecture/14` §14.4).
+
+**In arc 1** — everything the desk can show from the phone-alone ledger:
+
+| PR | Builds | Needs | Out of it |
+|---|---|---|---|
+| **DESK1 · breakpoint + band** | `useBreakpoint()` in `packages/ui` over `useWindowDimensions` (no platform named); `shell/desk-band.tsx` — brand, nav slot, command-bar slot, `CurrencyChip`, scope `SegmentControl`, hero row (`DualTotal`: mine/ours from A1's `netWorth`); the collapsed one-row form for non-landing routes; `apps/mobile` switches the tab layout to the band at ≥1024 and the nav links are `expo-router` links composed there | C1 | The FX chip (no rates in arc 1 — it renders only when a rate source exists) · the spent / net / business triple beside the hero (`computations.md` §5 and §12 are class R/S and arc-full: the slot exists, empty until then) |
+| **DESK2 · command bar** | S05 web: `N` from anywhere opens a one-line composer; D1's `parseCapture` resolves amount, account, category, date and payee into chips as you type; `Tab` walks the chips, `Enter` saves through `createTransaction`, `Esc` discards; B1's field errors land under the bar | DESK1, D1, D2 (category proposal), B1, B3 | *Interpret with model* — there is no model in arc 1; an unresolved line shows what did not resolve, and that is all |
+| **DESK3 · ledger table + rail** | S10 web: date · payee · category · account · scope · amount, sortable by header; the rail — search (`/`), period stepper, accounts, categories, scope; `J`/`K` move, `Enter` opens S09, `F` focuses the rail; shift-click selects a range and *Categorise n selected* runs A2's `categorize_batch` behind one confirm; a filter arriving from a chart is shown as a chip, never applied silently. A plain `FlatList` — this PR is the first honest data point for the *dense-table primitives* risk, not its answer | DESK1, C4 (S10 phone), A2 | Virtualised/resizable columns, the `apps/web` fork decision (E9) |
+| **DESK4 · dashboard v1** | S01 with the widgets whose figures exist on the device: balances (A1), recent, debt (E3), spend by category, income vs expense; each header states period and scope; the unallocated banner; a default `dashboard_layouts` row seeded by migration, read but not yet rearranged (S24). Spend-by-category and income-vs-expense are **replica folds in `money.ts`, classed S**, written the way A1 wrote the class-F ones — with the split-lines trap (`computations.md` §6: a four-line transaction counts once) tested — so the server SQL that arrives with E9 has a differential test to meet | DESK1, A1, A2 (lines), C4, E3 | Targets (§11), system health (nothing to report yet), rearranging (S24), the charts' hover/tooltip layer |
+| **DESK5 · the other screens at width** | S16 accounts as a sortable table (opening balance column; edit through the existing form, not inline); S19 categories tree with room; S09 detail opening as a right panel over the ledger | DESK3, C3, C5, C6 | Inline cell editing |
+
+**Out of arc 1, unchanged on `#e9`:** FX status and rates, the period figures
+in the hero, the keyboard layer beyond DESK2/DESK3's keys, dense-table
+primitives, the fork decision, targets.
+
+**Cadence changes.** DESK1 no longer waits for everything: it needs only C1
+and joins **wave 3**. DESK2–DESK4 are parallel in **wave 5** once their
+inputs land; DESK5 closes the arc.
 
 ## 4. What every PR must satisfy
 
@@ -185,8 +206,8 @@ point at one list:
 - **The orchestrator** (this session) writes plans, dispatches, rebases the
   stack when a lower PR merges, and composes screens. It does not implement.
 - **Cadence.** Wave 1: A1–A4, B1–B3, D1–D2, F (as many as parallel budget
-  allows) — all off `main`. Wave 2: C1. Wave 3: C2–C6, D3. Wave 4: D4–D5, E.
-  Wave 5: DESK.
+  allows) — all off `main`. Wave 2: C1. Wave 3: C2–C6, D3, DESK1. Wave 4:
+  D4–D5, E. Wave 5: DESK2–DESK4, then DESK5.
 
 ## 6. Risks named now
 
@@ -201,4 +222,4 @@ point at one list:
   only compose from what exists; the visual suite baselines every story; the
   orchestrator reviews screenshots before merge.
 - **Rebase cascades.** Kept small by basing everything possible on `main`.
-  Only C→D→E→DESK is a true chain.
+  Only C→D→E→DESK is a true chain, and DESK1 leaves it.

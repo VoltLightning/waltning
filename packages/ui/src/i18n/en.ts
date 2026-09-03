@@ -60,6 +60,10 @@ export const en = {
   },
   shell: {
     today: "Today",
+    /** The floating add button. A verb, because a `+` has no name a screen reader can say. */
+    add: "Add",
+    /** The parked tab that brings the add button back. */
+    showAdd: "Show the add button",
     /** §6.7 — lower case, deliberately: a label beneath a figure, not a heading. */
     mine: "mine",
     ours: "ours",
