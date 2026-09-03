@@ -3671,8 +3671,8 @@ spare.
 **There is no day-aggregate tier, and none is needed.** The calendar promises
 virtualized scroll across ~2 100 days; with the whole ledger resident, its day,
 week, month and year nets are **R**-class figures (below), computed directly
-from the transaction rows the replica always covers completely — a property
-that used to hold for 90 days and now holds for the whole history since 2020.
+from the transaction rows the replica always covers completely, across the
+whole history since 2020 — not a 90-day slice of it.
 
 **There is nothing left to bound.** The earlier tiers protected a row
 referenced by a pending outbox entry with a union clause against its own
