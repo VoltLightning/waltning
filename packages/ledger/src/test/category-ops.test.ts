@@ -28,7 +28,8 @@ import type { Capture, LocalTx, LocalWriteResult } from "../write.ts";
 import { writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
 
-const { accounts, categories, outbox, transactionLines, transactions } = schema;
+const { accounts, categories, outbox, recurringTransactions, transactionLines, transactions } =
+  schema;
 
 const PLN = currencyCode("PLN");
 const ACCOUNT = id<"accounts">("11111111-1111-4111-8111-111111111111");
@@ -277,6 +278,32 @@ describe("convert_leaf_group", () => {
     ).toThrow(/1 transaction/);
   });
 
+  it("refuses converting a leaf to a group when only a recurring rule references it", () => {
+    // A leaf with zero `transactions`/`transaction_lines` rows but a live
+    // `recurring_transactions.category_id` — the reference the FK check must
+    // not miss just because no occurrence has posted yet.
+    s.ledger.replica.db
+      .insert(recurringTransactions)
+      .values({
+        id: id<"recurringTransactions">("cccccccc-9999-4999-8999-999999999999"),
+        type: "expense",
+        accountId: ACCOUNT,
+        categoryId: EATING_OUT,
+        amountOriginal: money.toMoney("9.99"),
+        currency: PLN,
+        rrule: "FREQ=MONTHLY",
+      })
+      .run();
+
+    expect(() =>
+      write(convertLeafGroupExecutor, {
+        id: EATING_OUT,
+        version: category(EATING_OUT)?.version,
+        to: "group",
+      }),
+    ).toThrow(/1 transaction/);
+  });
+
   it("refuses converting a group with children to a leaf", () => {
     expect(() =>
       write(convertLeafGroupExecutor, {
@@ -385,6 +412,32 @@ describe("merge_categories", () => {
       .where(eq(transactionLines.id, line))
       .all()[0];
     expect(movedLine?.categoryId).toBe(GROCERIES);
+  });
+
+  it("moves a recurring rule on the loser to the winner", () => {
+    const rule = id<"recurringTransactions">("eeeeeeee-9999-4999-8999-999999999999");
+    s.ledger.replica.db
+      .insert(recurringTransactions)
+      .values({
+        id: rule,
+        type: "expense",
+        accountId: ACCOUNT,
+        categoryId: EATING_OUT,
+        amountOriginal: money.toMoney("9.99"),
+        currency: PLN,
+        rrule: "FREQ=MONTHLY",
+      })
+      .run();
+
+    const result = write(mergeCategoriesExecutor, { loserId: EATING_OUT, winnerId: GROCERIES });
+
+    expect(result.row.movedRecurring).toBe(1);
+    const moved = s.ledger.replica.db
+      .select({ categoryId: recurringTransactions.categoryId })
+      .from(recurringTransactions)
+      .where(eq(recurringTransactions.id, rule))
+      .all()[0];
+    expect(moved?.categoryId).toBe(GROCERIES);
   });
 
   it("refuses merging into itself at the schema", () => {

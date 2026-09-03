@@ -469,6 +469,13 @@ describe("reorderAccountsInput", () => {
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("ids");
   });
+
+  it("refuses a duplicate id — two rows tied on sort is not an order", () => {
+    const result = reorderAccountsInput.safeParse({ ids: [ACCOUNT_ID, ACCOUNT_ID] });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("ids");
+  });
 });
 
 describe("createGroupInput", () => {
@@ -491,6 +498,13 @@ describe("updateGroupInput", () => {
 describe("reorderGroupsInput", () => {
   it("refuses an empty list", () => {
     const result = reorderGroupsInput.safeParse({ ids: [] });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("ids");
+  });
+
+  it("refuses a duplicate id", () => {
+    const result = reorderGroupsInput.safeParse({ ids: [GROUP_ID, GROUP_ID] });
 
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("ids");

@@ -19,6 +19,7 @@ import type { z } from "zod";
 import { archiveAccountExecutor } from "../accounts/archive-account.executor.ts";
 import { archiveGroupExecutor } from "../accounts/archive-group.executor.ts";
 import { createGroupExecutor } from "../accounts/create-group.executor.ts";
+import { readGroups } from "../accounts/read-groups.ts";
 import { reconcileAccountExecutor } from "../accounts/reconcile-account.executor.ts";
 import { reorderAccountsExecutor } from "../accounts/reorder-accounts.executor.ts";
 import { reorderGroupsExecutor } from "../accounts/reorder-groups.executor.ts";
@@ -230,41 +231,61 @@ describe("reorder_groups", () => {
 /* ── archive_group ───────────────────────────────────────────────────────── */
 
 describe("archive_group", () => {
-  it("deletes the row once nothing names it — no archived column exists to flip", () => {
+  it("flips the flag rather than deleting the row — §6.9, reference data is archived", () => {
     write(createGroupExecutor, { id: GROUP_B, name: "Bank B" });
 
-    write(archiveGroupExecutor, { id: GROUP_B });
+    const result = write(archiveGroupExecutor, { id: GROUP_B });
 
+    expect(result.row.archived).toBe(true);
+    // The row still exists — this is the whole point of the fix. A caller
+    // that read it by id before archiving reads the same id after.
     const rows = s.ledger.replica.db
       .select()
       .from(accountGroups)
       .where(eq(accountGroups.id, GROUP_B))
       .all();
-    expect(rows).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.archived).toBe(true);
   });
 
   it("refuses while a live account still names it", () => {
     expect(() => write(archiveGroupExecutor, { id: GROUP_A })).toThrow(/account\(s\) still name/);
-    // The group survives — the SQLite FK would have refused the delete
-    // anyway, but this is the clear message rather than a raw constraint
-    // error.
     const rows = s.ledger.replica.db
       .select()
       .from(accountGroups)
       .where(eq(accountGroups.id, GROUP_A))
       .all();
-    expect(rows).toHaveLength(1);
+    expect(rows[0]?.archived).toBe(false);
   });
 
-  it("refuses while only an archived account still names it", () => {
+  it("succeeds while only archived accounts still name it — a flag has no foreign key to violate", () => {
     const before = account(ACCOUNT_A);
     write(archiveAccountExecutor, { id: ACCOUNT_A, version: before?.version });
 
-    // An archived account is not "live", but the FK still points at the
-    // group — deleting it would either orphan the reference or throw a raw
-    // SQLite constraint error, so this refuses it with a clear message
-    // instead of narrowing the check to "live" accounts only.
-    expect(() => write(archiveGroupExecutor, { id: GROUP_A })).toThrow(/account\(s\) still name/);
+    // Unlike a delete, archiving the group leaves ACCOUNT_A's `group_id`
+    // referencing a row that still exists — nothing to orphan, nothing for
+    // the FK to refuse.
+    const result = write(archiveGroupExecutor, { id: GROUP_A });
+
+    expect(result.row.archived).toBe(true);
+  });
+
+  it("refuses a group that is already archived", () => {
+    write(createGroupExecutor, { id: GROUP_B, name: "Bank B" });
+    write(archiveGroupExecutor, { id: GROUP_B });
+
+    expect(() => write(archiveGroupExecutor, { id: GROUP_B })).toThrow(/already archived/);
+  });
+});
+
+describe("readGroups", () => {
+  it("excludes archived groups", () => {
+    write(createGroupExecutor, { id: GROUP_B, name: "Bank B" });
+    write(archiveGroupExecutor, { id: GROUP_B });
+
+    const rows = readGroups(s.ledger.replica.db);
+
+    expect(rows.map((row) => row.id)).toEqual([GROUP_A]);
   });
 });
 

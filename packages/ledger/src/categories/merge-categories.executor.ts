@@ -1,19 +1,22 @@
 /**
  * `merge_categories`, on the device — J12: *"not reversible in one step."*
  *
- * Every `transactions` and `transaction_lines` row naming `loserId` is
- * repointed to `winnerId`, then the loser is archived (never deleted — §6.9).
- * No version field on the input: unlike `rename_category` or
- * `reparent_category`, this write is not a compare-and-swap on one row's
- * state, it is a bulk repoint whose safety comes from the `refine` on the
- * input (a category cannot merge into itself) and the checks below, not from
- * a version a caller could have raced against.
+ * Every `transactions`, `transaction_lines` and `recurring_transactions` row
+ * naming `loserId` is repointed to `winnerId`, then the loser is archived
+ * (never deleted — §6.9). No version field on the input: unlike
+ * `rename_category` or `reparent_category`, this write is not a
+ * compare-and-swap on one row's state, it is a bulk repoint whose safety
+ * comes from the `refine` on the input (a category cannot merge into itself)
+ * and the checks below, not from a version a caller could have raced
+ * against.
  *
  * **`category_mappings`** — S19 §7 says the merge is recorded there so a bad
  * translation is corrected by re-running rather than by editing thousands of
- * rows. That table does not exist in `packages/schema` yet, on either
- * dialect — this executor moves the rows and archives the loser, and the
- * mapping record is left to whichever PR adds the table.
+ * rows. That table exists server-side (`packages/db/src/schema.ts`), but not
+ * in `packages/schema` — the phone's SQLite replica has no `category_mappings`
+ * table to write, because `schema-map.ts` only pulls in what `packages/schema`
+ * declares. This executor moves the rows and archives the loser; the mapping
+ * record is the server operation's to write, once one exists.
  */
 
 import { type MergeCategoriesInput, mergeCategoriesInput } from "@waltning/core/registry/inputs";
@@ -23,13 +26,14 @@ import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
 
-const { categories, transactionLines, transactions } = schema;
+const { categories, recurringTransactions, transactionLines, transactions } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export type MergeCategoriesResult = {
   loser: LocalCategoryRow;
   movedTransactions: number;
   movedLines: number;
+  movedRecurring: number;
 };
 
 export const mergeCategoriesExecutor = defineLocalExecutor<
@@ -77,6 +81,16 @@ function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCateg
     .returning({ id: transactionLines.id })
     .all().length;
 
+  // A real FK (`recurring-transactions.sqlite.ts`) — a rule with no
+  // occurrence posted yet still names the loser, and a merge that skipped it
+  // would leave the rule posting into an archived category forever after.
+  const movedRecurring = tx
+    .update(recurringTransactions)
+    .set({ categoryId: input.winnerId })
+    .where(eq(recurringTransactions.categoryId, input.loserId))
+    .returning({ id: recurringTransactions.id })
+    .all().length;
+
   const [archivedLoser] = tx
     .update(categories)
     .set({ archived: true, version: sql`${categories.version} + 1`, updatedAt: new Date() })
@@ -87,5 +101,5 @@ function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCateg
     throw new Error("merge_categories: the loser row changed between read and write");
   }
 
-  return { loser: archivedLoser, movedTransactions, movedLines };
+  return { loser: archivedLoser, movedTransactions, movedLines, movedRecurring };
 }

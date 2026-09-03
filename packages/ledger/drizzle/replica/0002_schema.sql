@@ -1,0 +1,1 @@
+ALTER TABLE `account_groups` ADD `archived` integer DEFAULT false NOT NULL;

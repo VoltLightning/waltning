@@ -1,28 +1,21 @@
 /**
  * `archive_group`, on the device — S16 §5.
  *
- * **Named to match the server operation; behaves like a delete.** `CLAUDE.md`'s
- * *"archive, never delete"* is stated about `accounts` (§6.9 — history
- * references them). `account_groups` carries no history of its own: nothing
- * but `accounts.group_id` ever points at one, and `packages/schema` never gave
- * either dialect's `account_groups` table an `archived` column — checked in
- * `account-groups.pg.ts` and `account-groups.sqlite.ts`, both of which declare
- * only `id`, `name`, `institution`, `sort`. There is no flag this executor
- * could set even if it wanted one, so the operation the registry calls
- * "archive" is a delete underneath, and this file says so rather than
- * inventing a column `packages/schema` deliberately does not have.
+ * **Flips `account_groups.archived`, never deletes.** `SPEC.md` §6.9:
+ * reference data is archived, not deleted — the rule already holds for
+ * `accounts` and `categories`, and `account_groups` gained the same column
+ * (`account-groups.pg.ts`, `account-groups.sqlite.ts`) so `archive_group`
+ * could actually mean archive.
  *
- * **Refused while *any* account still names it, archived or not** — not only
- * a live one, which is what the plan's own shorthand says and what the FK
- * would enforce anyway: `accounts.group_id` references `account_groups.id`
- * `ON DELETE no action` (`ddl.ts`), so a group an archived account still names
- * would fail this delete with a raw SQLite constraint violation rather than
- * the clear refusal a caller can render. Checking every account, not only the
- * live ones, is what keeps the two in agreement.
+ * **Refused only while a *live* account still names it** — an archived
+ * account may keep naming an archived group; a flag has no foreign key to
+ * violate, so there is nothing to orphan the way a delete would have.
+ * `readGroups` (`read-groups.ts`) is what excludes an archived group from
+ * S16's list, the same way `readAccounts` excludes an archived account.
  */
 
 import { type ArchiveGroupInput, archiveGroupInput } from "@waltning/core/registry/inputs";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
@@ -44,26 +37,35 @@ export const archiveGroupExecutor = defineLocalExecutor<
 });
 
 function archiveGroup(input: ArchiveGroupInput, tx: ReplicaTx): LocalGroupRow {
+  const [current] = tx.select().from(accountGroups).where(eq(accountGroups.id, input.id)).all();
+  if (!current) {
+    throw new Error(`archive_group: no group ${input.id}`);
+  }
+  if (current.archived) {
+    throw new Error(`archive_group: ${input.id} is already archived`);
+  }
+
   const referring = tx
     .select({ id: accounts.id })
     .from(accounts)
-    .where(eq(accounts.groupId, input.id))
+    .where(and(eq(accounts.groupId, input.id), eq(accounts.archived, false)))
     .all();
   if (referring.length > 0) {
     throw new Error(
-      `archive_group: ${referring.length} account(s) still name group ${input.id} — ` +
+      `archive_group: ${referring.length} live account(s) still name group ${input.id} — ` +
         "a group with accounts cannot vanish under them",
     );
   }
 
-  const [deleted] = tx
-    .delete(accountGroups)
+  const [updated] = tx
+    .update(accountGroups)
+    .set({ archived: true })
     .where(eq(accountGroups.id, input.id))
     .returning()
     .all();
 
-  if (!deleted) {
-    throw new Error(`archive_group: no group ${input.id}`);
+  if (!updated) {
+    throw new Error("archive_group: the row changed between read and write");
   }
-  return deleted;
+  return updated;
 }

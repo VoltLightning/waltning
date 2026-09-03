@@ -16,7 +16,7 @@ import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
 
-const { categories, transactionLines, transactions } = schema;
+const { categories, recurringTransactions, transactionLines, transactions } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const convertLeafGroupExecutor = defineLocalExecutor<
@@ -77,6 +77,13 @@ function convertLeafGroup(input: ConvertLeafGroupInput, tx: ReplicaTx): LocalCat
   return updated;
 }
 
+/**
+ * Every live reference to a category — not only posted transactions and
+ * their lines, but `recurring_transactions.category_id` too. A rule with no
+ * occurrence posted yet is a real FK (`recurring-transactions.sqlite.ts`, and
+ * in `schema-map.ts`'s ledger map) that a leaf→group conversion must not
+ * silently strand behind a group that can no longer hold it.
+ */
 function referenceCount(categoryId: Id<"categories">, tx: ReplicaTx): number {
   const [{ value: txnCount } = { value: 0 }] = tx
     .select({ value: count() })
@@ -88,5 +95,10 @@ function referenceCount(categoryId: Id<"categories">, tx: ReplicaTx): number {
     .from(transactionLines)
     .where(eq(transactionLines.categoryId, categoryId))
     .all();
-  return txnCount + lineCount;
+  const [{ value: recurringCount } = { value: 0 }] = tx
+    .select({ value: count() })
+    .from(recurringTransactions)
+    .where(eq(recurringTransactions.categoryId, categoryId))
+    .all();
+  return txnCount + lineCount + recurringCount;
 }

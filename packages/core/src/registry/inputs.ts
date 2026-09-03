@@ -433,8 +433,19 @@ export const archiveAccountInput = z.object({
 });
 export type ArchiveAccountInput = z.output<typeof archiveAccountInput>;
 
-/** `reorder_accounts` — the whole ordered list; `sort` becomes each id's index. */
-export const reorderAccountsInput = z.object({ ids: z.array(zId<"accounts">()).min(1) });
+/**
+ * `reorder_accounts` — the whole ordered list; `sort` becomes each id's
+ * index. A repeated id is refused rather than silently ties every duplicate
+ * on one `sort` value — the executor writes `sort = index` per id in the
+ * list, so two entries for the same account would leave it wherever the
+ * later write landed and say nothing about why.
+ */
+export const reorderAccountsInput = z
+  .object({ ids: z.array(zId<"accounts">()).min(1) })
+  .refine((v) => new Set(v.ids).size === v.ids.length, {
+    message: "ids must be unique",
+    path: ["ids"],
+  });
 export type ReorderAccountsInput = z.output<typeof reorderAccountsInput>;
 
 /**
@@ -470,15 +481,20 @@ export const updateGroupInput = z
   });
 export type UpdateGroupInput = z.output<typeof updateGroupInput>;
 
-export const reorderGroupsInput = z.object({ ids: z.array(zId<"accountGroups">()).min(1) });
+/** Same shape and the same duplicate refusal as `reorderAccountsInput`, over `account_groups`. */
+export const reorderGroupsInput = z
+  .object({ ids: z.array(zId<"accountGroups">()).min(1) })
+  .refine((v) => new Set(v.ids).size === v.ids.length, {
+    message: "ids must be unique",
+    path: ["ids"],
+  });
 export type ReorderGroupsInput = z.output<typeof reorderGroupsInput>;
 
 /**
- * `archive_group` — named to match the server operation, though the local
- * executor's real behaviour is closer to a delete than to `archive_account`'s
- * soft flag. See `archive-group.executor.ts` for why: `account_groups` has no
- * `archived` column on either dialect, because a group carries no history of
- * its own (§6.9 is about `accounts`, which do).
+ * `archive_group` — S16 §5. Flips `account_groups.archived`, same shape as
+ * `archive_account` (§6.9: reference data is archived, never deleted). No
+ * `version` here — `account_groups` carries no version column, matching
+ * `updateGroupInput`.
  */
 export const archiveGroupInput = z.object({ id: zId<"accountGroups">() });
 export type ArchiveGroupInput = z.output<typeof archiveGroupInput>;

@@ -15,6 +15,13 @@
       "when": 1787340482327,
       "tag": "0001_database_objects",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788463483264,
+      "tag": "0002_schema",
+      "breakpoints": true
     }
   ]
 }

@@ -221,6 +221,7 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`recurring_id\`) REFERENCES \`recurring_transactions\`(\`id\`) ON UPDATE no action ON DELETE no action
 )`,
   `INSERT INTO \`local_meta\` (\`id\`, \`applied_seq\`) VALUES (1, 0)`,
+  `ALTER TABLE \`account_groups\` ADD \`archived\` integer DEFAULT false NOT NULL`,
 ];
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */
