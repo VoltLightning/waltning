@@ -56,3 +56,38 @@ it("stays rendered with no currencies, and cannot save", () => {
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
   expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
 });
+
+it("renders two errors from one map on their own fields", () => {
+  render(
+    <CreateAccountForm
+      currencies={currencies}
+      fieldErrors={{
+        byField: { name: ["too short"], currency: ["not held by the ledger"] },
+        formLevel: [],
+      }}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("too short")).toBeDefined();
+  expect(screen.getByText("not held by the ledger")).toBeDefined();
+});
+
+it("renders an unknown path at form level, under an alert", () => {
+  render(
+    <CreateAccountForm
+      currencies={currencies}
+      fieldErrors={{ byField: {}, formLevel: ["externalId: already used"] }}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  const alert = screen.getByRole("alert");
+  expect(alert.textContent).toContain("Couldn't save");
+  expect(alert.textContent).toContain("externalId: already used");
+});
+
+it("renders nothing extra with no fieldErrors prop", () => {
+  render(<CreateAccountForm currencies={currencies} onCancel={vi.fn()} onSave={vi.fn()} />);
+  expect(screen.queryByRole("alert")).toBeNull();
+});

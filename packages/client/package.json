@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "@trpc/client": "^11.18.0",
-    "@waltning/core": "workspace:*"
+    "@waltning/core": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

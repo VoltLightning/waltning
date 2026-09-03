@@ -6,6 +6,7 @@ import { AmountField, parseAmount } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
+import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
@@ -34,6 +35,13 @@ export type QuickAddFormProps = {
   accounts: readonly QuickAddAccount[];
   initialAmount?: string;
   initialAccountId?: string;
+  /**
+   * A refusal from the last save attempt, matched onto `amountOriginal` /
+   * `accountId` — the input schema's own paths, so a controller refusal and a
+   * server one bind to the same field the same way (`mapFieldErrors`,
+   * `architecture/12`). Absent before a first attempt.
+   */
+  fieldErrors?: FieldErrorMap;
   onCancel: () => void;
   onCreateAccount: (draft: { amount: string; accountId: string | null }) => void;
   onSave: (draft: { amount: string; accountId: string }) => void;
@@ -43,6 +51,7 @@ export function QuickAddForm({
   accounts,
   initialAmount = "",
   initialAccountId,
+  fieldErrors,
   onCancel,
   onCreateAccount,
   onSave,
@@ -69,9 +78,20 @@ export function QuickAddForm({
   const handleSave = useCallback(() => {
     if (accountId && !blocked) onSave({ amount, accountId });
   }, [accountId, amount, blocked, onSave]);
+  const accountError = fieldErrors?.byField["accountId"]?.[0];
 
   return (
     <View style={styles.root}>
+      {fieldErrors && fieldErrors.formLevel.length > 0 ? (
+        <View style={styles.formLevel} accessibilityRole="alert">
+          <Text style={styles.formLevelHeading}>{t("common.couldNotSave")}</Text>
+          {fieldErrors.formLevel.map((message) => (
+            <Text key={message} style={styles.formLevelMessage}>
+              {message}
+            </Text>
+          ))}
+        </View>
+      ) : null}
       {/* No account chosen yet, so no currency is known — and a placeholder
           currency here would be a figure labelled in something the money is
           not. The field carries the label alone until one is picked. */}
@@ -80,6 +100,7 @@ export function QuickAddForm({
         {...(selected ? { currency: selected.currency } : {})}
         initial={initialAmount}
         onChange={handleAmountChange}
+        error={fieldErrors?.byField["amountOriginal"]?.[0]}
       />
       <Text style={styles.label}>{t("transactions.account")}</Text>
       <View style={styles.accounts}>
@@ -99,7 +120,9 @@ export function QuickAddForm({
         <Text style={styles.blocked}>
           {t("transactions.needsRate", { currency: selected.currency })}
         </Text>
-      ) : null}
+      ) : accountError === undefined ? null : (
+        <Text style={styles.fieldError}>{accountError}</Text>
+      )}
       <Button label={t("accounts.create")} onPress={handleCreateAccount} variant="secondary" />
       <View style={styles.actions}>
         <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
@@ -145,5 +168,9 @@ const useStyles = makeStyles((theme) => ({
   label: { color: theme.textMuted, ...text.ui("kicker") },
   accounts: { gap: space.md },
   blocked: { color: theme.textMuted, ...text.ui("caption") },
+  fieldError: { color: theme.dangerText, ...text.ui("caption") },
+  formLevel: { gap: space.xs },
+  formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
+  formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

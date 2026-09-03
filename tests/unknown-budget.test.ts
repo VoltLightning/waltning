@@ -139,6 +139,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "a catch binding — the e2e probe reports whatever a failed fetch threw, and narrowing it would mean guessing at the shape of a failure it exists to discover",
   },
+  "packages/client/src/transport/field-errors.ts": {
+    max: 1,
+    why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
+  },
 };
 
 /**

@@ -43,6 +43,8 @@ export const en = {
     autoFilled: " ·auto",
     autoFilledLabel: "{{field}}: {{value}}, filled automatically",
     fieldValue: "{{field}}: {{value}}",
+    /** Heading over a form's unmatched errors — architecture/12. */
+    couldNotSave: "Couldn't save",
   },
   accounts: {
     currency: "Currency",

@@ -10,6 +10,7 @@ import {
   createTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
+import { type FieldError, fieldErrorsFromZod } from "../transport/field-errors.ts";
 
 export type PhoneCapture = {
   date: AccountingDate;
@@ -120,8 +121,14 @@ export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
   refresh: () => void;
-  createAccount: (name: string, currency: CurrencyCode) => Id<"accounts">;
-  createExpense: (amount: string, accountId: Id<"accounts">) => Id<"transactions">;
+  createAccount: (
+    name: string,
+    currency: CurrencyCode,
+  ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
+  createExpense: (
+    amount: string,
+    accountId: Id<"accounts">,
+  ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
   reset: () => void;
 };
 
@@ -218,19 +225,27 @@ export function createPhoneLedger(
       });
       try {
         const capture = runtime.capture();
-        const input = createAccountInput.parse({
+        const parsed = createAccountInput.safeParse({
           id: runtime.id<"accounts">(),
           name,
           currency,
         });
-        port.createAccount(input, capture);
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_account",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.createAccount(parsed.data, capture);
         refresh();
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "create_account",
           phase: "success",
         });
-        return input.id;
+        return { id: parsed.data.id };
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -249,7 +264,16 @@ export function createPhoneLedger(
       });
       try {
         const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
-        if (!account) throw new Error("Choose an account before saving");
+        if (!account) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_expense",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [{ path: "accountId", message: "Choose an account before saving" }],
+          };
+        }
 
         /**
          * **Refused here, so it cannot throw from inside the write.**
@@ -263,18 +287,39 @@ export function createPhoneLedger(
          * and a silent loss.
          */
         if (!account.capturable) {
-          throw new Error(
-            `${account.currency} needs an exchange rate before an expense can be recorded in it`,
-          );
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_expense",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "accountId",
+                message: `${account.currency} needs an exchange rate before an expense can be recorded in it`,
+                messageKey: "transactions.needsRate",
+                params: { currency: account.currency },
+              },
+            ],
+          };
         }
 
         const normalized = money.toMoney(amount);
         if (money.dec(normalized).lte(0)) {
-          throw new Error("Expense amount must be greater than zero");
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_expense",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [
+              { path: "amountOriginal", message: "Expense amount must be greater than zero" },
+            ],
+          };
         }
 
         const capture = runtime.capture();
-        const input = createTransactionInput.parse({
+        const parsed = createTransactionInput.safeParse({
           id: runtime.id<"transactions">(),
           date: capture.date,
           type: "expense",
@@ -282,14 +327,22 @@ export function createPhoneLedger(
           amountOriginal: normalized,
           currency: account.currency,
         });
-        port.createTransaction(input, capture);
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_expense",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.createTransaction(parsed.data, capture);
         refresh();
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "create_expense",
           phase: "success",
         });
-        return input.id;
+        return { id: parsed.data.id };
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",

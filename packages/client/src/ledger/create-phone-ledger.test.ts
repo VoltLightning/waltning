@@ -1,14 +1,23 @@
 import { accountingDate } from "@waltning/core/date";
-import { type IdTable, id } from "@waltning/core/id";
+import { type Id, type IdTable, id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
+import type { FieldError } from "../transport/field-errors.ts";
 import {
   createPhoneLedger,
   type PhoneAccount,
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
 } from "./create-phone-ledger.ts";
+
+/** Unwraps the write result in a test, or fails with the refusal's field errors. */
+function idOf<Table extends IdTable>(
+  result: { id: Id<Table> } | { fieldErrors: readonly FieldError[] },
+): Id<Table> {
+  if ("id" in result) return result.id;
+  throw new Error(`expected an id, got field errors: ${JSON.stringify(result.fieldErrors)}`);
+}
 
 /**
  * Two currencies, neither of them the pivot. A fixture holding only USD would
@@ -128,7 +137,7 @@ describe("phone ledger controller", () => {
 
   it("creates an account in the currency it was given, through the shared defaults", () => {
     const { controller, createAccount } = harness();
-    const accountId = controller.createAccount("Bank A · PLN", PLN);
+    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
 
     expect(accountId).toBe(controller.getSnapshot().accounts[0]?.id);
     expect(createAccount.mock.calls[0]?.[0]).toMatchObject({
@@ -207,8 +216,8 @@ describe("phone ledger controller", () => {
 
   it("creates one captured expense and refreshes the subtotals and Recent", () => {
     const { controller, capture, createTransaction } = harness();
-    const accountId = controller.createAccount("Bank A · PLN", PLN);
-    const transactionId = controller.createExpense("10", accountId);
+    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const transactionId = idOf(controller.createExpense("10", accountId));
 
     expect(capture).toHaveBeenCalledTimes(2);
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
@@ -227,8 +236,11 @@ describe("phone ledger controller", () => {
 
   it.each(["0", "-1"])("rejects the non-positive expense %s before writing", (amount) => {
     const { controller, createTransaction } = harness();
-    const accountId = controller.createAccount("Bank A · PLN", PLN);
-    expect(() => controller.createExpense(amount, accountId)).toThrow(/greater than zero/);
+    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
+    const result = controller.createExpense(amount, accountId);
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "amountOriginal", message: "Expense amount must be greater than zero" },
+    ]);
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
@@ -260,17 +272,30 @@ describe("phone ledger controller", () => {
     });
 
     expect(controller.getSnapshot().accounts[0]?.capturable).toBe(false);
-    expect(() =>
-      controller.createExpense("10", id<"accounts">("11111111-1111-4111-8111-111111111111")),
-    ).toThrow(/PLN needs an exchange rate/);
+    const result = controller.createExpense(
+      "10",
+      id<"accounts">("11111111-1111-4111-8111-111111111111"),
+    );
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "accountId",
+        message: "PLN needs an exchange rate before an expense can be recorded in it",
+        messageKey: "transactions.needsRate",
+        params: { currency: "PLN" },
+      },
+    ]);
     expect(port.createTransaction).not.toHaveBeenCalled();
   });
 
   it("rejects a missing account before writing", () => {
     const { controller, createTransaction } = harness();
-    expect(() =>
-      controller.createExpense("10", id<"accounts">("99999999-9999-4999-8999-999999999999")),
-    ).toThrow(/Choose an account/);
+    const result = controller.createExpense(
+      "10",
+      id<"accounts">("99999999-9999-4999-8999-999999999999"),
+    );
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "accountId", message: "Choose an account before saving" },
+    ]);
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
@@ -291,7 +316,7 @@ describe("phone ledger controller", () => {
     const diagnostics: object[] = [];
     const { controller } = harness((event) => diagnostics.push(event));
 
-    const accountId = controller.createAccount("Bank A · PLN", PLN);
+    const accountId = idOf(controller.createAccount("Bank A · PLN", PLN));
     controller.createExpense("10", accountId);
 
     expect(diagnostics).toContainEqual({
