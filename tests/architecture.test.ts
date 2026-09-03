@@ -423,7 +423,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "registry",
       "trpc",
     ],
-    "packages/core/src": ["registry"],
+    "packages/core/src": ["capture", "registry"],
     // Foundation (`transport`, `query`) plus one folder per domain.
     "packages/client/src": [
       "accounts",
