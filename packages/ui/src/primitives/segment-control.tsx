@@ -14,11 +14,12 @@
  * together regardless of what is selected here.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { useInteraction } from "./interaction.ts";
 
 export type Segment = {
   value: string;
@@ -58,11 +59,9 @@ type SegmentOptionProps = {
 };
 
 function SegmentOption({ segment, active, onChange }: SegmentOptionProps) {
-  const [focused, setFocused] = useState(false);
+  const { hovered, focused, handlers } = useInteraction();
   const styles = useStyles();
   const handlePress = useCallback(() => onChange(segment.value), [onChange, segment.value]);
-  const handleFocus = useCallback(() => setFocused(true), []);
-  const handleBlur = useCallback(() => setFocused(false), []);
 
   return (
     <Pressable
@@ -72,9 +71,15 @@ function SegmentOption({ segment, active, onChange }: SegmentOptionProps) {
         segment.count === undefined ? segment.label : `${segment.label}, ${segment.count} items`
       }
       onPress={handlePress}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      style={[styles.segment, active ? styles.active : null, focused ? styles.focused : null]}
+      {...handlers}
+      style={[
+        styles.segment,
+        // The active segment already sits lifted on `surface`; hovering it
+        // promises nothing, so only a resting segment answers the pointer.
+        hovered && !active ? styles.hovered : null,
+        active ? styles.active : null,
+        focused ? styles.focused : null,
+      ]}
     >
       <Text style={[styles.label, active ? styles.labelActive : null]}>{segment.label}</Text>
       {segment.count === undefined ? null : (
@@ -89,7 +94,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     backgroundColor: theme.subtleFill,
     borderRadius: radius.pill,
-    padding: 2,
+    padding: space.xxs,
   },
   segment: {
     flex: 1,
@@ -101,6 +106,7 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: radius.pill,
     paddingHorizontal: space.xl,
   },
+  hovered: { backgroundColor: theme.hoverFill },
   active: { backgroundColor: theme.surface },
   focused: {
     outlineWidth: focus.width,

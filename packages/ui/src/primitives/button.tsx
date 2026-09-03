@@ -18,11 +18,12 @@
  * destructive one.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { ActivityIndicator, Animated, Pressable, Text, View } from "react-native";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { useInteraction } from "./interaction.ts";
 import { usePressScale } from "./press-scale.ts";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -38,7 +39,14 @@ export type ButtonProps = {
   loading?: boolean;
 };
 
-/** §3.1: sm 32 · md 40 · lg 48. */
+/**
+ * §3.1: sm 32 · md 40 · lg 48 — and until now two of the three were lies.
+ * The base style carried `minHeight: 44` for the §10 floor, and in Yoga a
+ * minHeight beats a smaller height, so `sm` and `md` both rendered at 44 and
+ * nobody had chosen that. The floor belongs to the *touch target*, not the
+ * drawn box: `hitSlop` fills the difference, which is `IconButton`'s pattern
+ * and now §2.4's stated rule.
+ */
 const HEIGHT: Record<ButtonSize, number> = { sm: 32, md: 40, lg: 48 };
 
 export function Button({
@@ -51,30 +59,27 @@ export function Button({
 }: ButtonProps) {
   const inactive = disabled || loading;
 
-  /**
-   * Tracked here rather than read from Pressable's state callback, which only
-   * reports `pressed` in React Native core — `focused` exists on web alone. A
-   * ring that appears on one surface and not the other is worse than none: it
-   * looks handled.
-   */
-  const [focused, setFocused] = useState(false);
+  const { hovered, focused, handlers } = useInteraction();
   const styles = useStyles();
   const ink = styles[INK_STYLE[variant]];
-  const handleFocus = useCallback(() => setFocused(true), []);
-  const handleBlur = useCallback(() => setFocused(false), []);
   const press = usePressScale();
+  const slop = Math.max(0, (touchTarget.min - HEIGHT[size]) / 2);
   const pressableStyle = useCallback(
     () => [
       styles.base,
       { height: HEIGHT[size] },
       styles[VARIANT_STYLE[variant]],
+      // The outlined variants take `hoverFill` under a pointer; `primary` is a
+      // solid fill and gets its liveliness from the press scale alone — a
+      // second green for its hover would be a new role for one state.
+      hovered && !inactive && variant !== "primary" ? styles.hovered : null,
       // §2.6: on **every** interactive element, never removed and never
       // replaced by a colour change alone — a colour-only focus state is
       // invisible to exactly the people it exists for.
       focused ? styles.focused : null,
       inactive ? styles.inactive : null,
     ],
-    [focused, inactive, size, styles, variant],
+    [focused, hovered, inactive, size, styles, variant],
   );
 
   return (
@@ -87,8 +92,8 @@ export function Button({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
+        {...handlers}
+        hitSlop={slop}
         style={pressableStyle}
       >
         {/*
@@ -134,6 +139,7 @@ const useStyles = makeStyles((theme) => ({
   inkGhost: { color: theme.textMuted },
   inkDanger: { color: theme.dangerText },
 
+  hovered: { backgroundColor: theme.hoverFill },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,
@@ -141,7 +147,6 @@ const useStyles = makeStyles((theme) => ({
   },
 
   base: {
-    minHeight: touchTarget.min,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: space.x3,

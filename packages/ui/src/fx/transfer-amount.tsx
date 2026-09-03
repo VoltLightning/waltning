@@ -103,7 +103,7 @@ const useStyles = makeStyles((theme) => ({
   route: { color: theme.textMuted, ...text.ui("caption") },
   arrow: { color: theme.accentIcon },
   amounts: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
-  rates: { gap: 2 },
+  rates: { gap: space.xxs },
   rate: {
     color: theme.textMuted,
     ...text.mono("caption"),

@@ -249,7 +249,12 @@ were not monospaced.
 
 ### 2.3 Spacing
 
-4px base. Permitted steps: **4 · 6 · 8 · 10 · 12 · 14 · 16 · 20 · 22 · 26 · 34 · 44 · 52**.
+4px base. Permitted steps: **2 · 4 · 6 · 8 · 10 · 12 · 14 · 16 · 20 · 22 · 26 · 34 · 44 · 52**.
+
+The 2 is the tight pair — a label and the hint directly under it — and it was
+added the honest way: `gap: 2` had been hand-written in five components before
+anyone noticed the scale had no step for it. A repeated off-scale value is a
+missing token, not five mistakes.
 
 The ladder is deliberately coarse above 16 — the existing mockups use 22, 26,
 34, 44 and 52 for board and card padding, and rounding those to a strict 8-grid
@@ -268,6 +273,28 @@ blur read as a consumer app; a tool is squarer.
 | `radius-md` | `12px` | Cards, inset boxes |
 | `radius-lg` | `16px` | Sheets; the ground panel lifting over the shell |
 | `radius-icon` | `13 / 18 / 28px` | App icon at 56 / 120 / 512 |
+
+**The shape rule, stated rather than implied.** Two families, and adjacency in
+one form is the point where the difference must read as designed: **pills are
+compact value-carriers** — chip, tag, classification pill, segment,
+multi-select token — and **soft rectangles (`sm`) hold or submit** — buttons,
+inputs, selection-row highlights. `md` is a card, `lg` a sheet, `xs` a
+glyph-scale box (a checkbox). No control invents a radius between these.
+
+**Control metrics, the ones that drifted before they were written down:**
+
+| Class | Horizontal padding | Vertical |
+|---|---|---|
+| Field (text, amount, select) | `x2` 14 | 44 min-height carries it |
+| Button | `x3` 16 | height by size |
+| Chip / token | `x3` 16 / `xl` 12 | 44 / 36+hitSlop |
+| Marker (tag, pill) | `lg` 10 | `xs` 4 |
+| Selection row (toggle, checkbox, radio) | `md` 8 | `sm` 6 |
+
+A control whose visual height sits under the 44 floor reaches it with
+`hitSlop`, never by lying about its height — `IconButton` set the pattern, and
+§3.1's `sm 32` / `md 40` were silently rendering at 44 until the button
+adopted it.
 
 ### 2.5 Elevation
 

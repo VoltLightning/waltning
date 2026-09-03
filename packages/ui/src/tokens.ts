@@ -316,6 +316,13 @@ export const maxFontScale: Partial<Record<TypeStep, number>> = {
  * would visibly change the designs.
  */
 export const space = {
+  /**
+   * The tight pair: a label and the hint directly under it. Earned its place
+   * the usual way — `gap: 2` was hand-written in five components before anyone
+   * noticed the scale had no step for it, and a repeated off-scale value is a
+   * missing token, not five mistakes.
+   */
+  xxs: 2,
   xs: 4,
   sm: 6,
   md: 8,

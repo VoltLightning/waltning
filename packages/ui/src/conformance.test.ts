@@ -215,3 +215,29 @@ describe("a component names a scale step, never a size (§2.2)", () => {
     expect(offenders, "components naming a font family directly").toEqual([]);
   });
 });
+
+describe("spacing and radius come from the scale (§2.3, §2.4)", () => {
+  /**
+   * The census that motivated this found nine raw numbers, and the telling
+   * part was that five of them were the *same* number: `gap: 2`, hand-written
+   * in five components because the scale had no step for the tight pair. A
+   * missing token collects hand-written copies until someone counts them —
+   * this is the counter, left running.
+   *
+   * Margins are deliberately exempt: the drawn marks (check, chevron, cross)
+   * use small negative margins as optical nudges, which are glyph geometry
+   * like their widths — and widths are not spacing either. Zero is exempt
+   * because `paddingRight: 0` is the absence of padding, not a value the
+   * scale should hold — the same argument `"transparent"` won above.
+   */
+  it("no component writes a raw gap, padding, or radius", () => {
+    const LITERAL = /\b(gap|padding[A-Za-z]*|borderRadius):\s*(?!0[,}\s])[0-9]/;
+
+    const offenders = all
+      .filter((c) => LITERAL.test(c.text.replace(/^\s*\*.*$/gm, "").replace(/^\s*\/\/.*$/gm, "")))
+      .map((c) => c.name);
+
+    expect(offenders, "components with an off-scale spacing or radius value").toEqual([]);
+    expect(all.length, "components found").toBeGreaterThan(8);
+  });
+});

@@ -27,6 +27,11 @@ export const en = {
     close: "Close",
     name: "Name",
     loading: "Loading…",
+    search: "Search…",
+    /** A filter that matched nothing must say so — an empty panel reads as broken. */
+    noMatches: "Nothing matches.",
+    /** A token's whole accessible name — the visible label plus the verb. */
+    remove: "Remove {{value}}",
     /**
      * The product's name. In the catalogue and identical in every language,
      * because the rule that no word reaches a screen except through here is
@@ -38,12 +43,6 @@ export const en = {
     autoFilled: " ·auto",
     autoFilledLabel: "{{field}}: {{value}}, filled automatically",
     fieldValue: "{{field}}: {{value}}",
-    /**
-     * The chip's spoken value. A chip renders its value visually and this is
-     * what a screen reader announces, so the selection has to be *said* — a
-     * highlighted border is not information to someone who cannot see it.
-     */
-    chipSelected: "{{value}} · selected",
   },
   accounts: {
     currency: "Currency",

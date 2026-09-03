@@ -132,7 +132,8 @@ function AccountChoice({ account, selected, onSelect }: AccountChoiceProps) {
   return (
     <Chip
       placeholder={t("transactions.account")}
-      value={selected ? t("common.chipSelected", { value: account.name }) : account.name}
+      value={account.name}
+      selected={selected}
       onPress={handleSelect}
       machineFilled={false}
     />
