@@ -14,7 +14,7 @@
 
 ## Global Constraints
 
-Same as A2. Branch `feature/a3-structural-ops` off `main`. **A2 and A3 both append to `inputs.ts` and `registry.ts`** — keep your additions in their own clearly-delimited block so the rebase is a trivial merge.
+Same as A2. Branch `feature/a3-structural-ops` off `main`. **A2 and A3 both append to `inputs.ts` and `registry.ts`** — keep your additions in their own clearly-delimited block so the rebase is a trivial merge. `insertTransaction` in `create-transaction.executor.ts:64` is module-private: **export it** (A2 does the same; whichever merges second drops its duplicate in the rebase).
 
 ---
 
