@@ -1,5 +1,5 @@
 {
-  "id": "ac3c31db-1747-4892-86bf-6fae65318df2",
+  "id": "a5f6270c-d5ab-4ce0-976e-0e16b515d79f",
   "prevId": "699edae2-95e1-47db-9971-fa44fa2c1ccd",
   "version": "7",
   "dialect": "postgresql",
@@ -1165,16 +1165,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "name_folded": {
-          "name": "name_folded",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "generated": {
-            "as": "lower(translate(btrim(\"name\"), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))",
-            "type": "stored"
-          }
-        },
         "kind": {
           "name": "kind",
           "type": "counterparty_kind",
@@ -1249,14 +1239,13 @@
           "name": "counterparties_name_uq",
           "columns": [
             {
-              "expression": "name_folded",
-              "isExpression": false,
+              "expression": "lower(btrim(\"name\"))",
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
           "isUnique": true,
-          "where": "not \"counterparties\".\"archived\"",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1422,22 +1411,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "counterparty_merges_loser_open_uq": {
-          "name": "counterparty_merges_loser_open_uq",
-          "columns": [
-            {
-              "expression": "loser_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"counterparty_merges\".\"unmerged_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1471,12 +1444,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "counterparty_merges_winner_ne_loser": {
-          "name": "counterparty_merges_winner_ne_loser",
-          "value": "\"counterparty_merges\".\"winner_id\" <> \"counterparty_merges\".\"loser_id\""
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.currencies": {
@@ -3413,6 +3381,21 @@
           "columns": [
             {
               "expression": "receipt_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transaction_lines_category_idx": {
+          "name": "transaction_lines_category_idx",
+          "columns": [
+            {
+              "expression": "category_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

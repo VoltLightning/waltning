@@ -88,8 +88,9 @@ export const transactionsColumns = () => ({
 });
 
 /**
- * **R2 M4** — one index, the exception to "the nine indexes stay in
- * `packages/db`". `readCounterpartyBalances` and `balancesForCounterparty`
+ * Two indexes, the exceptions to "the nine indexes stay in `packages/db`".
+ * `transactions_category_idx` backs the category reads on the phone.
+ * **R2 M4** — `readCounterpartyBalances` and `balancesForCounterparty`
  * (`packages/ledger/src/counterparties/read-counterparty-balances.ts`) both
  * scan `transactions` by `counterparty_id` on every settlement, every archive
  * gate, and every §7 read — the same predicate Postgres already indexes

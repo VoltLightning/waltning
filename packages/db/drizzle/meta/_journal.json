@@ -71,6 +71,13 @@
       "when": 1788537589570,
       "tag": "0009_transactions_to_amount_and_fee_positive",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788538704467,
+      "tag": "0010_counterparty_name_folded",
+      "breakpoints": true
     }
   ]
 }
