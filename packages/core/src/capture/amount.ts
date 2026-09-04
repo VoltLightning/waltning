@@ -2,7 +2,7 @@
  * The amount grammar: the FIRST number in the text, plus an optional currency
  * token immediately after it.
  *
- * D1's rule (`docs/superpowers/plans/2026-09-03-d1-capture-grammar.md`, Task
+ * The grammar's rule (`docs/specification/screens/S05-quick-add.md` §3, amount
  * 1): the first number found is the amount — `"2 coffees 18"` binds to `2`,
  * not `18`. That is a known, surprising cost of a grammar with no concept of
  * "which number looks like a price" (tier 1.5 — D2 — is where a model or a

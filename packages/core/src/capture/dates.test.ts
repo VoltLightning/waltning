@@ -1,6 +1,6 @@
 /**
  * Date parsing — Task 3 of
- * `docs/superpowers/plans/2026-09-03-d1-capture-grammar.md`.
+ * `docs/specification/screens/S05-quick-add.md` §3.
  *
  * `TODAY` is fixed to a Thursday (2026-09-03), computed with `Date.UTC`
  * rather than assumed by eye, so the weekday fixtures below are checked

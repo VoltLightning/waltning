@@ -1,6 +1,6 @@
 /**
  * Name matching — Task 2 of
- * `docs/superpowers/plans/2026-09-03-d1-capture-grammar.md`.
+ * `docs/specification/screens/S05-quick-add.md` §3.
  */
 
 import { describe, expect, it } from "vitest";

@@ -3,7 +3,7 @@
  *
  * Amount first (`amount.ts`), then account, category and date bind by name
  * or pattern, and whatever text is left over is the payee. No model, no
- * fuzzy match (tier 1.5 is D2 — `docs/superpowers/plans/2026-09-03-d1-capture-grammar.md`
+ * fuzzy match (the fuzzy tier is the payee memory — `screens/S05-quick-add.md` §3
  * names it explicitly). When the shape does not resolve, the reason says
  * which piece is missing, so the screen can offer *interpret with model*
  * instead of silently spending 2–5s (`screens/S05-quick-add.md` §3).

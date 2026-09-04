@@ -1,6 +1,6 @@
 /**
  * `parseCapture` — Task 4 of
- * `docs/superpowers/plans/2026-09-03-d1-capture-grammar.md`. The examples
+ * `docs/specification/screens/S05-quick-add.md` §3. The examples
  * below are the card's own: `"coffee 18 cash"`, `flows/J02-daily-capture.md`
  * and `screens/S05-quick-add.md` §3's `"48.90 cash coffee yesterday"` and
  * `"1 240,50 zł taxi Bank A wczoraj"`.

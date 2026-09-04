@@ -126,6 +126,11 @@ apps/*/android/
 # never assumes it. tests/agent-docs.test.ts proves this pattern ignores.
 docs/agents/*.local.md
 
+
+# Working documents live in the Obsidian vault, never in the repo.
+docs/superpowers/
+CONTEXT.md
+
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .ai-rulez/.generated-manifest.json
 .claude/

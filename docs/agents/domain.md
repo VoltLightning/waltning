@@ -3,20 +3,19 @@
 How the engineering skills should consume this repo's domain documentation.
 
 **This repo is specification-first, and the specification came before these
-conventions.** `CONTEXT.md` is therefore a *router*, not a description — the
-domain is defined in `SPEC.md` and `docs/specification/`, and restating any of
-it here would create a second copy that drifts. That is the repo's own working
+conventions.** The domain is defined in `SPEC.md` and `docs/specification/`,
+and restating any of it elsewhere would create a second copy that drifts. That is the repo's own working
 rule: nothing is duplicated; a rule lives in one place and everything else
 references it.
 
 ## Before exploring, read these
 
-- **`CONTEXT.md`** at the repo root — a short map of the domain vocabulary and
-  where each part of the specification lives.
+- **`docs/specification/README.md`** — the map of where each part of the
+  specification lives, and `SPEC.md` Appendix B for the vocabulary.
 - **`docs/adr/`** — read the decision records that touch the area you are about
   to work in.
-- Then follow `CONTEXT.md` into whichever of `SPEC.md` or
-  `docs/specification/` actually answers your question.
+- Then follow the map into whichever of `SPEC.md` or `docs/specification/`
+  actually answers your question.
 
 If `docs/adr/` doesn't exist yet, **proceed silently**. Don't flag its absence
 and don't propose creating it upfront — `/domain-modeling` creates records
@@ -24,15 +23,16 @@ lazily, when a decision is genuinely resolved.
 
 ## Layout
 
-Single-context. One `CONTEXT.md` at the root covers the whole system.
+Single-context. One specification covers the whole system.
 
 ```
 /
-├── CONTEXT.md                       ← the router
 ├── SPEC.md                          ← the system: data model, FX, security, tax
 ├── docs/
+│   ├── TAXONOMY.md                  ← the category tree
 │   ├── adr/                         ← decision records, created lazily
 │   └── specification/               ← the interface
+│       ├── README.md                ← the map
 │       ├── operations.md            ← every write in the system
 │       ├── computations.md          ← every derived figure
 │       ├── architecture/01–10       ← containers … code structure

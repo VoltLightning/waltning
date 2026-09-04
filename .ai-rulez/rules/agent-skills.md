@@ -16,6 +16,6 @@ are gitignored, personal, and never described in a commit, PR or the wiki.
 - **Triage labels** — the five defaults: `needs-triage`, `needs-info`,
   `ready-for-agent`, `ready-for-human`, `wontfix`.
   `docs/agents/triage-labels.md`
-- **Domain docs** — single-context. `CONTEXT.md` routes into `SPEC.md` and
-  `docs/specification/` rather than restating them; ADRs go in `docs/adr/`,
+- **Domain docs** — single-context. `docs/specification/README.md` maps into
+  `SPEC.md` and `docs/specification/`; nothing restates them; ADRs go in `docs/adr/`,
   written lazily. `docs/agents/domain.md`

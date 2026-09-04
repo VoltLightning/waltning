@@ -19,7 +19,7 @@ system it is built from, every user journey, and every screen.
 | 10 | [`architecture/`](architecture/) — the engineering view: containers, components, domain model, sequences, deployment, budgets, test strategy |
 
 **Outside this folder:** [`SPEC.md`](../../SPEC.md) is the system specification
-— architecture, data model, FX semantics, tax layer. [`TAXONOMY.md`](../../TAXONOMY.md)
+— architecture, data model, FX semantics, tax layer. [`TAXONOMY.md`](../TAXONOMY.md)
 is the category tree. This folder specifies the *interface*; those specify what
 sits underneath it.
 

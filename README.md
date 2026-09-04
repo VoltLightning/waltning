@@ -234,7 +234,7 @@ decide it fits you.
 | [`SPEC.md`](SPEC.md) | The full design: architecture, data model, FX, security, tax — with the reasoning |
 | [`docs/specification/`](docs/specification/) | Operations, computations, the journeys, the screens, the design system |
 | [`docs/specification/defects.md`](docs/specification/defects.md) | Findings from the adversarial reviews, and their status |
-| [`TAXONOMY.md`](TAXONOMY.md) | The category tree, built from five years of real data |
+| [`TAXONOMY.md`](docs/TAXONOMY.md) | The category tree, built from five years of real data |
 | [Wiki](https://github.com/VoltLightning/waltning/wiki) | A gentler orientation — where to start and why things are the way they are |
 
 The stack is TypeScript throughout: Hono, tRPC, and Drizzle over PostgreSQL 16;
