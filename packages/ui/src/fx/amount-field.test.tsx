@@ -6,6 +6,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { I18nProvider } from "../i18n/provider";
 import { AmountField, parseAmount } from "./amount-field";
 
 function noop() {}
@@ -43,5 +44,37 @@ describe("parseAmount — comma decimal", () => {
   it("renders with a currency affix", () => {
     render(<AmountField label="Amount" currency="PLN" onChange={noop} />);
     expect(screen.getByText("PLN")).toBeDefined();
+  });
+});
+
+describe("AmountField — hero variant", () => {
+  it("renders the raw typed string with the locale's decimal mark", () => {
+    render(<AmountField variant="hero" label="Amount" currency="PLN" value="48,90" />);
+    expect(screen.getByText("48.90")).toBeDefined();
+    expect(screen.getByText("PLN")).toBeDefined();
+  });
+
+  it("follows the Polish decimal mark under the Polish locale", () => {
+    render(
+      <I18nProvider locale="pl">
+        <AmountField variant="hero" label="Amount" currency="PLN" value="48,90" />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("48,90")).toBeDefined();
+  });
+
+  it("shows 0 at rest, never a blank hero", () => {
+    render(<AmountField variant="hero" label="Amount" value="" />);
+    expect(screen.getByText("0")).toBeDefined();
+  });
+
+  it("carries no affix when the currency is not yet known", () => {
+    render(<AmountField variant="hero" label="Amount" value="48,90" />);
+    expect(screen.queryByText("PLN")).toBeNull();
+  });
+
+  it("has no editable input — the value is read out, not typed", () => {
+    render(<AmountField variant="hero" label="Amount" currency="PLN" value="48,90" />);
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 });
