@@ -169,7 +169,7 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
     amount: "12.50",
     accountId: account.id,
     categoryId: category.id,
-    payee: "Costa",
+    payee: "Corner Café",
     date: addDays(today, -1),
     note: "",
     isBusiness: false,

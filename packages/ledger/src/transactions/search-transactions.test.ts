@@ -100,7 +100,7 @@ describe("searchTransactions — text", () => {
   });
 
   it("never lets a purely alphabetic query match on amount alone", () => {
-    insertExpense({ payee: "Costa" });
+    insertExpense({ payee: "Corner Café" });
 
     // No digit in the needle — the amount check must not fire on an empty
     // digit string, or every row would match every text search.

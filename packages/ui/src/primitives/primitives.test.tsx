@@ -108,16 +108,13 @@ describe("a role reaches the pixel, not just the style object", () => {
    * **The property that makes re-theming a one-line change**, and the reason it
    * is asserted on the *computed* colour rather than on the stylesheet.
    *
-   * `Tag` applies its fill inline; `Chip` applies its through the stylesheet,
-   * which react-native-web compiles to an injected CSS class. A check against
-   * rendered markup therefore sees a colour for one and a class name for the
-   * other — which is how a first attempt at this test passed for `Tag` and
-   * reported `Chip` as broken when nothing was.
+   * `Tag` applies its fill inline, which react-native-web renders as a colour
+   * a check against rendered markup can read directly.
    *
    * Amber is the case worth pinning: `design-system/02` gives it one meaning —
-   * *asserted or aged rather than observed* (P4) — across a manual override, an
-   * estimated rate, an unsettled item and a stale figure. One meaning has to be
-   * one line, or the four drift apart.
+   * *asserted or aged rather than observed* (P4) — across a manual override,
+   * an estimated rate, an unsettled item and a stale figure. One meaning has
+   * to be one line, or those drift apart.
    */
   it("repointing `assertedFill` moves every asserted surface", () => {
     const amberish = { ...light, assertedFill: "rgb(255, 153, 0)" };
@@ -125,16 +122,41 @@ describe("a role reaches the pixel, not just the style object", () => {
     render(
       <ThemeProvider theme={amberish}>
         <Tag variant="warn">Estimated</Tag>
-        <Chip placeholder="Category" value="Groceries" machineFilled onPress={noop} />
       </ThemeProvider>,
     );
 
     const tag = screen.getByText("Estimated").parentElement as HTMLElement;
-    const chip = screen.getByLabelText(/filled automatically/i);
 
     expect(getComputedStyle(tag).backgroundColor).toBe("rgb(255, 153, 0)");
-    expect(getComputedStyle(chip).backgroundColor).toBe("rgb(255, 153, 0)");
     // Non-vacuous: the shipped value must not already be this.
     expect(light.assertedFill).not.toBe(amberish.assertedFill);
+  });
+
+  /**
+   * S05 §8's two-ambers rule (H1/L): a machine-filled `Chip` used to share
+   * `assertedFill` with the test above, which made the estimated-rate
+   * marker one amber among several rather than the only one (P4). It now
+   * carries its own accent tint — this pins that repointing *that* token
+   * moves the chip, and repointing `assertedFill` alone does not.
+   */
+  it("a machine-filled `Chip` moves with `accentFillBorder`, not `assertedFill`", () => {
+    const amberish = { ...light, assertedFill: "rgb(255, 153, 0)" };
+    const { unmount } = render(
+      <ThemeProvider theme={amberish}>
+        <Chip placeholder="Category" value="Groceries" machineFilled onPress={noop} />
+      </ThemeProvider>,
+    );
+    const chipUnderAmberish = screen.getByLabelText(/filled automatically/i);
+    expect(getComputedStyle(chipUnderAmberish).backgroundColor).not.toBe("rgb(255, 153, 0)");
+    unmount();
+
+    const accented = { ...light, accentFillBorder: "rgb(255, 153, 0)" };
+    render(
+      <ThemeProvider theme={accented}>
+        <Chip placeholder="Category" value="Groceries" machineFilled onPress={noop} />
+      </ThemeProvider>,
+    );
+    const chipUnderAccented = screen.getByLabelText(/filled automatically/i);
+    expect(getComputedStyle(chipUnderAccented).borderColor).toBe("rgb(255, 153, 0)");
   });
 });

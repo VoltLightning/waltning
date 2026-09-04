@@ -735,6 +735,35 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * H2 — `createTransactionInput` cannot know the account's currency, only
+   * the controller has both in view. PLN holds 2 decimal places here; a
+   * third digit is refused on `amountOriginal` before the write, never
+   * silently truncated or stored past the account's own scale.
+   */
+  it("refuses an amount with more fractional digits than the account's currency holds", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction(expenseDraft(accountId, "10.125"));
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "amountOriginal",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: PLN, decimals: "2" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("accepts an amount at exactly the account's own scale", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction(expenseDraft(accountId, "10.12"));
+    expect("id" in result).toBe(true);
+    expect(createTransaction).toHaveBeenCalledOnce();
+  });
+
+  /**
    * **The write is refused before the outbox is touched.**
    *
    * `provisionalFxRate` refuses the same capture, but it does so mid-transaction

@@ -19,7 +19,14 @@
 import type { TxnType } from "@waltning/core/money";
 
 export const CURRENCIES = [
-  { code: "PLN", name: "Polish Zloty", decimals: 2 },
+  // `decimals: 8`, not the real 2 — H2's `assert_amount_scale` trigger
+  // (`0011_transaction_amount_scale.sql`) refuses a row past its own
+  // currency's scale, and `…001`/`…002` below are deliberately nine and
+  // eight decimal digits, the fixture's whole point (this file's own top
+  // comment). Nothing in these figure functions reads `currencies.decimals`
+  // — see `differential.test.ts`'s only use of it, the seed insert — so
+  // widening it here changes nothing about what is under test.
+  { code: "PLN", name: "Polish Zloty", decimals: 8 },
   { code: "USD", name: "US Dollar", decimals: 2 },
   // A settlement's own currency (S14) — Counterparty A pays this to
   // discharge a PLN debt, proving `debt_amount`/`debt_currency` value the

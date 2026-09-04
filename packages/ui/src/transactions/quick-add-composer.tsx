@@ -85,9 +85,22 @@ export type QuickAddComposerProps = {
   /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
   onOpenAccountPicker: () => void;
   categories: readonly QuickAddComposerCategory[];
+  /**
+   * The draft's effective category — the screen's own pick, or (H1) a
+   * proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` it has applied on the
+   * draft's behalf. `categoryAutoFilled` is what tells the two apart.
+   */
   categoryId: string | null;
   /** D2's own proposal, already computed by the screen — this composer never proposes. */
   categoryProposal?: CategoryProposal;
+  /**
+   * True only while `categoryId` is the proposal's own id, applied without a
+   * tap — never true for a category a person actually picked, even one that
+   * happens to match the proposal (H1, S05 §8's P2 trail).
+   */
+  categoryAutoFilled?: boolean;
+  /** P2's Undo — clears the automatic pick, shown only while `categoryAutoFilled`. */
+  onUndoCategory?: () => void;
   onOpenCategoryPicker: () => void;
   payee: string;
   onPayeeChange: (payee: string) => void;
@@ -130,6 +143,8 @@ export function QuickAddComposer({
   categories,
   categoryId,
   categoryProposal,
+  categoryAutoFilled = false,
+  onUndoCategory,
   onOpenCategoryPicker,
   payee,
   onPayeeChange,
@@ -179,19 +194,31 @@ export function QuickAddComposer({
         )
       : undefined;
   const categoryValue = pickedCategory?.name ?? proposedCategory?.name;
-  const categoryMachineFilled = pickedCategory === undefined && proposedCategory !== undefined;
+  /**
+   * Amber (P2) either while a below-threshold proposal is shown but not
+   * applied, or (H1) while `categoryId` itself is the applied proposal —
+   * `categoryAutoFilled` names the second case, since `pickedCategory` finds
+   * an applied proposal by id exactly the way it finds a real pick.
+   */
+  const categoryMachineFilled =
+    categoryAutoFilled || (pickedCategory === undefined && proposedCategory !== undefined);
   /**
    * §14's display threshold — below it, the chip alone (already amber, P2's
    * trail marker on every machine-filled value) is not enough: a guess this
-   * unsure needs the words, not only the tint (P5). At or above, the plain
-   * machine-filled chip already says "something chose this" and a proposal
-   * that confident is not the thing P4's amber exists to flag.
+   * unsure needs the words, not only the tint (P5). At or above, `categoryAutoFilled`
+   * is true instead and `categoryFromHistory` below carries the trail — a
+   * proposal that confident is not the thing this caption exists to flag.
    */
   const categoryLowConfidence =
+    !categoryAutoFilled &&
     categoryMachineFilled &&
     categoryProposal !== undefined &&
     categoryProposal !== null &&
     categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD;
+  /** H1, S05 §8's P2 trail — the caption and Undo for an applied proposal. */
+  const categoryFromHistory = !categoryAutoFilled
+    ? undefined
+    : t("categories.fromHistory", { payee });
 
   const notePreview =
     note.trim() === ""
@@ -305,6 +332,14 @@ export function QuickAddComposer({
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
       {!categoryLowConfidence ? null : (
         <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
+      )}
+      {categoryFromHistory === undefined ? null : (
+        <View style={styles.trailRow}>
+          <Text style={styles.trailCaption}>{categoryFromHistory}</Text>
+          {onUndoCategory === undefined ? null : (
+            <Button label={t("states.undo")} onPress={onUndoCategory} variant="ghost" size="sm" />
+          )}
+        </View>
       )}
       {payeeError === undefined ? null : <Text style={styles.fieldError}>{payeeError}</Text>}
       {dateError === undefined ? null : <Text style={styles.fieldError}>{dateError}</Text>}
@@ -583,6 +618,9 @@ const useStyles = makeStyles((theme) => ({
   lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
   /** §14.6's own caption — a fact about now, not an error (`quick-add-form.tsx`'s `blocked`, matched). */
   needsRate: { color: theme.textMuted, ...text.ui("caption") },
+  /** H1, S05 §8's P2 trail row — the caption and Undo beside it. */
+  trailRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   counterparty: { gap: space.x3 },
   typeToggle: {
     flexDirection: "row",

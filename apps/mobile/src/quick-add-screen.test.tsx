@@ -59,9 +59,18 @@ const SHARED_ACCOUNT = {
   ownership: "shared" as const,
 };
 
+/** H2 — a smaller-scale account than `ACCOUNT`'s two decimal places. */
+const JPY_ACCOUNT = {
+  ...ACCOUNT,
+  id: id<"accounts">("55555555-5555-4555-8555-555555555555"),
+  name: "Cash · JPY",
+  currency: currencyCode("JPY"),
+  decimals: 0,
+};
+
 const COUNTERPARTY = {
   id: id<"counterparties">("44444444-4444-4444-8444-444444444444"),
-  name: "Costa",
+  name: "Corner Café",
   kind: "person" as const,
   settlementCurrency: null,
   contact: null,
@@ -209,6 +218,41 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
   });
 
   /**
+   * M1 — `parseAmount` used to accept a trailing separator with nothing typed
+   * after it, so an account chip alone was enough to enable Save on an amount
+   * that was never finished.
+   */
+  it("keeps Save disabled on a trailing separator with nothing typed after it (M1)", () => {
+    withLedger();
+
+    tapKeys("4", "8", ".");
+    pickCashAccount();
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+
+    tapKeys("9", "0");
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+  });
+
+  /**
+   * H2 — the composer never silently truncates a typed figure. `48.90` has
+   * two fractional digits; `Cash · JPY` holds none, so the switch is refused
+   * outright, the account chip keeps naming `Cash · PLN`, and the reason is
+   * stated rather than the amount quietly losing its cents.
+   */
+  it("refuses an account switch to a smaller scale, keeping the amount and naming why (H2)", () => {
+    withLedger({ accounts: [ACCOUNT, JPY_ACCOUNT] });
+
+    tapKeys("4", "8", ".", "9", "0");
+    pickCashAccount();
+    fireEvent.click(screen.getByRole("button", { name: /^Account/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · JPY" }));
+
+    expect(screen.getByRole("button", { name: "Account: Cash · PLN" })).toBeDefined();
+    expect(screen.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
+    expect(screen.getByText("48.90")).toBeDefined();
+  });
+
+  /**
    * §6.7's guarantee, held across a mid-draft account switch — the finding
    * this covers: `composerIsBusiness` is state this screen owns, and it does
    * not clear itself just because the account chip changed underneath it.
@@ -249,10 +293,10 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "+ Person" }));
     fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Costa" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Corner Café" }));
 
     expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
-    expect(screen.getByText("Costa · role?")).toBeDefined();
+    expect(screen.getByText("Corner Café · role?")).toBeDefined();
     expect(createTransaction).not.toHaveBeenCalled();
   });
 

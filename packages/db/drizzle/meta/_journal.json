@@ -78,6 +78,13 @@
       "when": 1788542997394,
       "tag": "0010_counterparty_name_folded",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788589200000,
+      "tag": "0011_transaction_amount_scale",
+      "breakpoints": true
     }
   ]
 }

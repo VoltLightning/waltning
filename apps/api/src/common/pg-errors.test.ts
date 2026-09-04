@@ -237,6 +237,15 @@ describe("every other guard is identifiable", () => {
 
     await s.sql`DELETE FROM transactions`;
   });
+
+  /** H2 — `0011_transaction_amount_scale.sql`. PLN holds two decimal places. */
+  it("WA016 · an amount holds more decimals than its own currency", async () => {
+    const error = await refusal(
+      `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
+       VALUES ('2026-01-01', 'expense', '${ACC_PLN}', 10.125, 'PLN', 1)`,
+    );
+    expect(error.details?.constraint).toBe(TRIGGER.AMOUNT_SCALE);
+  });
 });
 
 describe("Postgres's own refusals", () => {

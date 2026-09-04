@@ -108,6 +108,8 @@ export const pl: Messages = {
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",
     deferredNoRate:
       "Zapisano — zostanie wycenione, gdy tylko będzie znany kurs wymiany dla {{currency}}.",
+    tooManyDecimals:
+      "Waluta {{currency}} ma {{decimals}} miejsc po przecinku — ta kwota ma więcej.",
     expense: "Wydatek",
     income: "Przychód",
     category: "Kategoria",
@@ -274,6 +276,7 @@ export const pl: Messages = {
     useLeaf: "Użyj „{{name}}”",
     suggested: "Sugerowana",
     lowConfidence: "Niska pewność — sprawdź przed użyciem.",
+    fromHistory: "Z Twojej historii: {{payee}}",
     noMatchTitle: "Brak pasującej kategorii",
     noMatchBody: "Nic nie pasuje do „{{query}}”.",
     chooseGroup: "Wybierz grupę",

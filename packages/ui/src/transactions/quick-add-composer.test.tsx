@@ -129,6 +129,32 @@ it("stops showing the proposal marker once a real category is picked", () => {
   ).toBeNull();
 });
 
+it("shows the P2 trail and Undo when the draft holds an applied proposal (H1, S05 §8)", () => {
+  const onUndoCategory = vi.fn();
+  render(
+    <QuickAddComposer
+      {...props({
+        payee: "Corner Café",
+        categoryId: "cat-eating-out",
+        categoryProposal: {
+          categoryId: "cat-eating-out",
+          confidence: 1,
+          basis: "exact",
+          neighbours: [],
+        },
+        categoryAutoFilled: true,
+        onUndoCategory,
+      })}
+    />,
+  );
+  expect(
+    screen.getByRole("button", { name: "Category: Eating out, filled automatically" }),
+  ).toBeDefined();
+  expect(screen.getByText("From your history: Corner Café")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(onUndoCategory).toHaveBeenCalledOnce();
+});
+
 it("lets someone type a payee through its own sheet", () => {
   const onPayeeChange = vi.fn();
   render(<QuickAddComposer {...props({ onPayeeChange })} />);

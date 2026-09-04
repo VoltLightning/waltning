@@ -75,7 +75,7 @@ export function Chip({
       filled ? styles.filled : styles.empty,
       selected === true ? styles.selected : null,
       machineFilled ? styles.machine : null,
-      // Under the machine amber the neutral hover would read as a state
+      // Under the machine tint the neutral hover would read as a state
       // change; the pointer answer there is the press scale alone.
       hovered && !disabled && !machineFilled ? styles.hovered : null,
       focused ? styles.focused : null,
@@ -150,8 +150,14 @@ const useStyles = makeStyles((theme) => ({
   filled: { borderColor: theme.borderInteractive, backgroundColor: theme.subtleFill },
   /** The pick: the same fill, edge and mark as a select's chosen row. */
   selected: { borderColor: theme.accentFillBorder, backgroundColor: theme.accentFill },
-  /** Amber: asserted rather than chosen (P4), one meaning with every other amber. */
-  machine: { borderColor: theme.assertedBorder, backgroundColor: theme.assertedFill },
+  /**
+   * Accent-tinted outline, not amber: `assertedFill`/`assertedText` are P4's
+   * one meaning, the estimated-rate marker, and a machine-filled chip is not
+   * that (S05 §8, the two-ambers rule). `subtleFill` matches the ordinary
+   * `filled` chip's own background — only the accent border marks this one
+   * as sourced rather than chosen.
+   */
+  machine: { borderColor: theme.accentFillBorder, backgroundColor: theme.subtleFill },
   hovered: { backgroundColor: theme.hoverFill },
   focused: {
     outlineWidth: focus.width,
@@ -163,7 +169,8 @@ const useStyles = makeStyles((theme) => ({
   textEmpty: { color: theme.textMuted },
   textFilled: { color: theme.text },
   textSelected: { color: theme.accentText, ...text.ui("body", 600) },
-  marker: { color: theme.assertedText, ...text.ui("caption") },
+  /** The `·auto` marker's own ink — accent, matching `machine`'s border (P4's amber stays FX-only). */
+  marker: { color: theme.accentText, ...text.ui("caption") },
   check: {
     width: 11,
     height: 6,

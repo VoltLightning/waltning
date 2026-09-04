@@ -60,6 +60,8 @@ export const SQLSTATE = {
   ACCOUNT_CURRENCY_CHANGE: "WA013",
   ACCOUNT_MADE_SHARED: "WA014",
   LINES_SUM: "WA015",
+  /** H2 — an amount past its own currency's own decimal scale (`0011_transaction_amount_scale.sql`). */
+  AMOUNT_SCALE: "WA016",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -85,6 +87,7 @@ export const TRIGGER = {
   BUSINESS_NOT_SHARED_TARGET: "transactions_business_not_shared_target",
   ACCOUNT_CHANGE_SAFE: "accounts_change_safe",
   LINES_SUM: "transaction_lines_sum_matches",
+  AMOUNT_SCALE: "transactions_amount_scale_matches_currency",
 } as const;
 
 /**
@@ -128,6 +131,8 @@ export const GUARDS: Record<GuardState, Guard> = {
   // The client still sees one refusal for one intention, because the whole
   // split is one operation.
   [SQLSTATE.LINES_SUM]: { code: "validation", constraint: TRIGGER.LINES_SUM },
+
+  [SQLSTATE.AMOUNT_SCALE]: { code: "validation", constraint: TRIGGER.AMOUNT_SCALE },
 };
 
 /**

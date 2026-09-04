@@ -94,11 +94,17 @@ export function parseAmount(input: string): string | null {
   const normalized = trimmed.replace(",", ".");
   if (!/^-?\d*\.?\d*$/.test(normalized)) return null;
   if (!/\d/.test(normalized)) return null;
-  // M3 — "5," normalizes to "5.", a shape `zMoney` refuses (its regex
+  // M3/M1 — "5," normalizes to "5.", a shape `zMoney` refuses (its regex
   // requires a digit after the mark once one is typed). A trailing
   // separator is still mid-entry, the same "not yet a number" state as "."
   // alone, and belongs on the same side of the refusal.
   if (normalized.endsWith(".")) return null;
+  // M1 — `zMoney`'s own refine (`dec(v).abs().lt("1000000000000")`): at most
+  // twelve integer digits. Past that the schema would refuse the write
+  // anyway; catching it here keeps Save disabled instead of enabled on a
+  // figure the account never held.
+  const integerDigits = normalized.replace("-", "").split(".")[0]?.length ?? 0;
+  if (integerDigits > 12) return null;
 
   return normalized;
 }

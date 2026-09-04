@@ -12,7 +12,8 @@ import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
-import { proposeCategory } from "@waltning/core/capture/payee-memory";
+import { PROPOSAL_DISPLAY_THRESHOLD, proposeCategory } from "@waltning/core/capture/payee-memory";
+import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
@@ -59,6 +60,12 @@ const KNOWN_PATHS = [
 function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
   if (error.messageKey === "transactions.needsRate") {
     return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
+  }
+  if (error.messageKey === "transactions.tooManyDecimals") {
+    return t("transactions.tooManyDecimals", {
+      currency: error.params?.["currency"] ?? "",
+      decimals: error.params?.["decimals"] ?? "",
+    });
   }
   if (error.messageKey === "transactions.sharedNeverBusiness") {
     return t("transactions.sharedNeverBusiness");
@@ -223,6 +230,13 @@ export default function QuickAdd() {
     accounts.some((account) => account.id === draft.accountId) ? (draft.accountId ?? null) : null,
   );
   const [composerCategoryId, setComposerCategoryId] = useState<string | null>(null);
+  /**
+   * H1 — S05 §8's Undo, for a proposal the draft applied on its own. Reset
+   * whenever the payee's fold changes (`handleComposerPayeeChange` below):
+   * a different payee earns its own proposal a fresh chance, rather than
+   * inheriting a dismissal that was never about it.
+   */
+  const [categoryProposalDismissed, setCategoryProposalDismissed] = useState(false);
   const [composerPayee, setComposerPayee] = useState("");
   const [composerDate, setComposerDate] = useState<string>(today);
   const [composerNote, setComposerNote] = useState("");
@@ -266,6 +280,22 @@ export default function QuickAdd() {
     () => proposeCategory(payeeFold, ledger.listPayeeHistory()) ?? undefined,
     [ledger, payeeFold],
   );
+  /**
+   * H1 — a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` **is** the
+   * draft's category the moment it fills, not only a suggestion the sheet
+   * has to confirm (S05 §8). `composerCategoryId` (a real pick) always wins;
+   * short of that, the effective category is the proposal's own id, exactly
+   * the pattern `effectiveAccountId`/`lastUsedAccountId` already keeps for
+   * the account chip.
+   */
+  const categoryAutoFilled =
+    composerCategoryId === null &&
+    categoryProposal !== undefined &&
+    categoryProposal.confidence >= PROPOSAL_DISPLAY_THRESHOLD &&
+    !categoryProposalDismissed;
+  const effectiveCategoryId =
+    composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
+  const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);
 
   const handleKey = useCallback(
     (key: KeypadKey) =>
@@ -286,13 +316,36 @@ export default function QuickAdd() {
    * would carry `isBusiness: true` into a shared account exactly the way
    * `ScopeSegments` exists to prevent, just reached from the other chip.
    */
+  /**
+   * H2 — an account switch to a smaller scale never silently changes the
+   * typed figure. `createTransaction`'s own `transactions.tooManyDecimals`
+   * refusal (`create-phone-ledger.ts`) is what a Save would hit; this is the
+   * same fact, caught the moment the switch itself would have made it true,
+   * so the draft never carries an amount its new account cannot hold. The
+   * switch is refused outright — the account stays as it was — rather than
+   * truncating the amount on the person's behalf.
+   */
   const handleComposerAccountChange = useCallback(
     (next: string) => {
-      setComposerAccountId(next);
       const account = composerAccounts.find((candidate) => candidate.id === next);
+      const parsedAmount = parseAmount(composerAmountRaw);
+      if (
+        account !== undefined &&
+        parsedAmount !== null &&
+        money.dec(parsedAmount).decimalPlaces() > account.decimals
+      ) {
+        const message = t("transactions.tooManyDecimals", {
+          currency: account.currency,
+          decimals: String(account.decimals),
+        });
+        setFieldErrors(mapFieldErrors([{ path: "accountId", message }], KNOWN_PATHS));
+        return;
+      }
+      setFieldErrors(undefined);
+      setComposerAccountId(next);
       if (account?.ownership === "shared") setComposerIsBusiness(false);
     },
-    [composerAccounts],
+    [composerAccounts, composerAmountRaw, t],
   );
   const handlePickComposerAccount = useCallback(
     (next: string) => {
@@ -339,7 +392,10 @@ export default function QuickAdd() {
     setComposerCategoryId(next);
     setComposerCategorySheet((current) => ({ ...current, open: false }));
   }, []);
-  const handleComposerPayeeChange = useCallback((next: string) => setComposerPayee(next), []);
+  const handleComposerPayeeChange = useCallback((next: string) => {
+    setComposerPayee(next);
+    setCategoryProposalDismissed(false);
+  }, []);
   const handleComposerDateChange = useCallback((next: string) => setComposerDate(next), []);
   const handleComposerBusinessChange = useCallback(
     (next: boolean) => setComposerIsBusiness(next),
@@ -390,7 +446,7 @@ export default function QuickAdd() {
       type: composerType,
       amount,
       accountId: effectiveAccountId,
-      categoryId: composerCategoryId,
+      categoryId: effectiveCategoryId,
       payee: composerPayee,
       date: composerDate,
       note: composerNote,
@@ -430,7 +486,7 @@ export default function QuickAdd() {
     router.dismissTo("/");
   }, [
     composerAmountRaw,
-    composerCategoryId,
+    effectiveCategoryId,
     composerCounterpartyId,
     composerCounterpartyRole,
     composerDate,
@@ -550,8 +606,10 @@ export default function QuickAdd() {
           accountMachineFilled={accountMachineFilled}
           onOpenAccountPicker={handleOpenComposerAccountPicker}
           categories={snapshot.categories}
-          categoryId={composerCategoryId}
+          categoryId={effectiveCategoryId}
           {...(categoryProposal === undefined ? {} : { categoryProposal })}
+          categoryAutoFilled={categoryAutoFilled}
+          onUndoCategory={handleUndoCategory}
           onOpenCategoryPicker={handleComposerOpenCategoryPicker}
           payee={composerPayee}
           onPayeeChange={handleComposerPayeeChange}

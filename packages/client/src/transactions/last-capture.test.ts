@@ -38,6 +38,16 @@ describe("createLastCapturePreference", () => {
     await pref.hydrate();
     expect(pref.getSnapshot()).toEqual({ value: null, hydrated: true });
   });
+
+  /** M2 — a capture stamped in the future is not a fact this device can trust. */
+  it("rejects a stored value stamped in the future", async () => {
+    const futureAt = Date.now() + 60 * 60 * 1000;
+    const pref = createLastCapturePreference(
+      memoryStore(JSON.stringify({ accountId: "account-a", at: futureAt })),
+    );
+    await pref.hydrate();
+    expect(pref.getSnapshot()).toEqual({ value: null, hydrated: true });
+  });
 });
 
 describe("useLastUsedAccount — S05 §9.2's four-hour window", () => {
@@ -79,6 +89,23 @@ describe("useLastUsedAccount — S05 §9.2's four-hour window", () => {
     // simply is not found.
     const { result: archived } = renderHook(() => useLastUsedAccount(pref, 1000, ACCOUNTS));
     expect(archived.current).toBeNull();
+  });
+
+  /**
+   * M2 — a bare `age >= WINDOW` check lets a backwards clock produce a
+   * negative age, which reads as "just captured" and reopens a window that
+   * should have stayed closed. `set` bypasses `parseLastCapture` (it writes
+   * the in-memory value directly), so this is the one way to hold a
+   * future-`at` value in the hook under test without the parser's own guard
+   * intercepting it first.
+   */
+  it("does not fill the account when the clock has moved behind the stored capture", async () => {
+    const pref = createLastCapturePreference(memoryStore());
+    await act(async () => {
+      await pref.set({ accountId: "account-a", at: 10_000 });
+    });
+    const { result } = renderHook(() => useLastUsedAccount(pref, 5_000, ACCOUNTS));
+    expect(result.current).toBeNull();
   });
 
   it("is null before anything has ever been captured", () => {

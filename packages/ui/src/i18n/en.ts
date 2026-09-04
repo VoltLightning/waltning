@@ -158,6 +158,13 @@ export const en = {
      * simply not valued yet, so the wording says "saved", never "failed".
      */
     deferredNoRate: "Saved — it will be valued once an exchange rate for {{currency}} is known.",
+    /**
+     * H2 — `createTransactionInput`'s `amountOriginal` cannot know the
+     * account's currency, only the controller can: refused here, on
+     * `amountOriginal`, rather than let a figure past the decimal places its
+     * own currency holds.
+     */
+    tooManyDecimals: "{{currency}} holds {{decimals}} decimal places — this amount has more.",
     expense: "Expense",
     income: "Income",
     category: "Category",
@@ -418,6 +425,13 @@ export const en = {
     suggested: "Suggested",
     /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */
     lowConfidence: "Low confidence — check before using.",
+    /**
+     * §14, P2's own trail — the caption under a category chip that filled
+     * itself from a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD`, so the
+     * value reads as sourced rather than as a black box (S05 §8). Paired with
+     * `common.undo` on the same row.
+     */
+    fromHistory: "From your history: {{payee}}",
     noMatchTitle: "No matching category",
     noMatchBody: 'Nothing here matches "{{query}}".',
     /** The create row's group chooser, shown when no group chip narrowed the sheet first. */

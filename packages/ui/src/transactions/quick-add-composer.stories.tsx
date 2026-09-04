@@ -86,12 +86,22 @@ export const ReadyToSave: Story = {
   args: { raw: "48,90", accountId: "account-a" },
 };
 
-/** D2's proposal, confident — the category chip fills machine (P2) before anyone taps it. */
+/**
+ * H1, D2's proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` — it **is** the
+ * draft's category, not only a suggestion the sheet has to confirm: the chip
+ * fills machine (P2), and the trail underneath names where it came from with
+ * an Undo (S05 §8). `categoryId` and `categoryAutoFilled` are the screen's
+ * own computed state, not something a person tapped — the same pairing
+ * `quick-add-screen.tsx` derives from `composerCategoryId` and the proposal.
+ */
 export const WithProposal: Story = {
   args: {
     raw: "48,90",
     accountId: "account-a",
     payee: "Corner shop",
+    categoryId: "cat-eating-out",
+    categoryAutoFilled: true,
+    onUndoCategory: noop,
     categoryProposal: {
       categoryId: "cat-eating-out",
       confidence: 0.92,
@@ -135,13 +145,13 @@ export const WithCounterparty: Story = {
   args: {
     raw: "48,90",
     accountId: "account-a",
-    counterparties: [{ id: "cp-a", name: "Costa" }],
+    counterparties: [{ id: "cp-a", name: "Corner Café" }],
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole("button", { name: "+ Person" }));
     await userEvent.click(await canvas.findByRole("button", { name: "Counterparty" }));
-    await userEvent.click(await canvas.findByRole("radio", { name: "Costa" }));
+    await userEvent.click(await canvas.findByRole("radio", { name: "Corner Café" }));
     await expect(canvas.findByRole("radiogroup", { name: "Role" })).resolves.toBeDefined();
   },
 };

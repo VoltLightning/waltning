@@ -23,9 +23,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LAST_USED_WINDOW_MS } from "@waltning/client/transactions/last-capture";
-import { currencyCode } from "@waltning/core/money";
+import { currencyCode, forDisplay, toMoney } from "@waltning/core/money";
+import { deleteTransactionInput } from "@waltning/core/registry/inputs";
+import { defineLocalExecutor, localRegistry } from "@waltning/ledger/executor";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
+import { type LocalTx, writeLocally } from "@waltning/ledger/write";
+import { decimalMark } from "@waltning/ui/i18n/locales";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
+import type Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { lastCapture } from "../platform";
 import type { JourneyRouterStub } from "./journey-harness";
@@ -125,6 +130,31 @@ function readOutboxEntries(ledger: JourneyLedger) {
   return ledger.scratch.ledger.outbox.db.select().from(ledgerSchema.outbox).all();
 }
 
+/**
+ * M3 — the two assertions in the test above hold on every *successful*
+ * write, whether or not the entry genuinely committed before the row: a
+ * bug that reordered `write.ts`'s two commits would still leave both rows
+ * behind Save and pass them. Proving the crash-window shape needs a write
+ * that actually fails between the two commits — this executor is that
+ * failure, registered on its own so nothing about the journey's real
+ * `create_transaction` executor is touched.
+ */
+type JourneyTx = LocalTx<Database.RunResult, typeof ledgerSchema>;
+// `deleteTransactionInput`'s own tiny `{id, version}` shape, reused rather
+// than a bespoke schema — this executor never applies it, so any already-
+// registered input schema does the job and nothing here needs its own
+// dependency on `zod` directly.
+const crashesAfterIntent = defineLocalExecutor<typeof deleteTransactionInput, never, JourneyTx>({
+  operation: "j02_crash_after_intent",
+  opVersion: 1,
+  input: deleteTransactionInput,
+  mints: () => [],
+  apply: (): never => {
+    throw new Error("the replica half failed");
+  },
+});
+const CRASH_REGISTRY = localRegistry<JourneyTx>([crashesAfterIntent]);
+
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -189,6 +219,39 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
   });
 
   /**
+   * M3 — the test above only ever runs the happy path: whatever order
+   * `write.ts` actually commits in, a *successful* write leaves both an
+   * entry and a row behind Save, so that assertion cannot fail on ordering.
+   * This one forces the failure §14.6 names — the crash between the two
+   * commits — over the same journey ledger, and checks the shape that
+   * survives it: the outbox entry exists, and `local_meta.applied_seq`
+   * never advanced to claim a row that was never written.
+   */
+  it("keeps the outbox entry and holds the watermark back when the replica half fails (architecture/14 §14.6)", async () => {
+    const { ledger } = setupJourney();
+    const appliedSeqBefore = readAppliedSeq(ledger);
+    const entriesBefore = readOutboxEntries(ledger).length;
+
+    expect(() =>
+      writeLocally(ledger.scratch.ledger, {
+        executor: crashesAfterIntent,
+        registry: CRASH_REGISTRY,
+        input: { id: "11111111-1111-4111-8111-111111111111", version: 1 },
+        capture: deviceRuntime().capture(),
+      }),
+    ).toThrow("the replica half failed");
+
+    const entries = readOutboxEntries(ledger);
+    expect(entries.length).toBe(entriesBefore + 1);
+    const entry = entries.find((row) => row.operation === "j02_crash_after_intent");
+    if (!entry) throw new Error("the outbox holds no entry for the forced crash");
+    // The watermark stayed behind the entry it should have caught up to —
+    // the crash-window shape, not merely "nothing changed".
+    expect(readAppliedSeq(ledger)).toBe(appliedSeqBefore);
+    expect(readAppliedSeq(ledger)).toBeLessThan(entry.seq);
+  });
+
+  /**
    * The same script, cold: `lastCapture` outside the four-hour window
    * (S05 §9.2), so the account chip opens empty and Save stays disabled
    * until it is chosen. Choosing a chip that starts empty is always two
@@ -232,6 +295,16 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
    */
   const MACHINE_BUDGET_MS = 3000;
 
+  /**
+   * M4 — RTL's `waitFor` defaults to a 1 s timeout, well under
+   * `MACHINE_BUDGET_MS`: a write path slower than the budget but faster than
+   * one second would still pass, because the assertion itself gave up first.
+   * Passing the budget (plus slack for the assertion's own retry granularity)
+   * as this `waitFor`'s own timeout is what makes `MACHINE_BUDGET_MS` the
+   * actual gate rather than a number nothing enforces.
+   */
+  const WAIT_FOR_TIMEOUT = { timeout: MACHINE_BUDGET_MS + 500 };
+
   /** One full run of the warm script, `performance.now()` from `+` to Today showing the new row. */
   async function timeOneCapture(): Promise<number> {
     const { ledger, fixture, stub } = setupJourney();
@@ -248,7 +321,14 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Eating out" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(document.body.textContent ?? "").toContain("48.90"));
+    // The harness never wraps `I18nProvider`, so `useLocale()` falls back to
+    // `"en"` (`provider.tsx`'s own doc) — `decimalMark("en")` rather than a
+    // hardcoded `"."` is what keeps this assertion honest if that ever changes.
+    const expected = forDisplay(toMoney("48.90"), 2, decimalMark("en"));
+    await waitFor(
+      () => expect(document.body.textContent ?? "").toContain(expected),
+      WAIT_FOR_TIMEOUT,
+    );
     const elapsed = performance.now() - start;
 
     // Each run mounts its own tree — RTL only auto-cleans up `afterEach` the
@@ -263,13 +343,14 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
   });
 
   /**
-   * D2's whole point: the payee chip's fold matches the fixture's prior
-   * "Costa" capture exactly, so the category chip fills as a proposal at
-   * confidence 1 before the category chip is ever tapped — and accepting it
-   * is the one tap on the proposal row itself, never a second confirm and
-   * never a search through the flat leaf list.
+   * H1 — a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` **is** the
+   * draft's category the moment it fills, never only a suggestion the sheet
+   * has to confirm: the payee chip's fold matches the fixture's prior
+   * "Corner Café" capture exactly (confidence 1), so this test never opens
+   * the category sheet at all — Save alone is enough, and the P2 trail
+   * (S05 §8) says where the value came from and offers Undo.
    */
-  it("proposes Eating out at confidence 1 from the payee, and accepting it costs one tap (D2)", async () => {
+  it("saves the proposed category without opening the sheet, confidence at threshold (H1, D2)", async () => {
     const { ledger, fixture, stub } = setupJourney();
     await lastCapture.set({ accountId: fixture.cashAccountId, at: Date.now() });
 
@@ -283,7 +364,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "+ Payee" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
-      target: { value: "Costa" },
+      target: { value: "Corner Café" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
@@ -292,21 +373,17 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     expect(
       screen.getByRole("button", { name: "Category: Eating out, filled automatically" }),
     ).toBeDefined();
+    // P2's trail: what produced it, in one line, with Undo (S05 §8).
+    expect(screen.getByText("From your history: Corner Café")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
-    expect(screen.getByRole("button", { name: "Suggested: Eating out" })).toBeDefined();
-    expect(screen.getByText("100%")).toBeDefined();
-
-    // Accepting: one tap on the proposal row, and the sheet closes on its own.
-    fireEvent.click(screen.getByRole("button", { name: "Suggested: Eating out" }));
-    expect(screen.getByRole("button", { name: "Category: Eating out" })).toBeDefined();
-
+    // No tap on the sheet, no tap on the proposal row — straight to Save.
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
 
     const rows = readTransactions(ledger);
     const captured = rows.find(
-      (row) => row.payee === "Costa" && row.amountOriginal === "48.90000000",
+      (row) => row.payee === "Corner Café" && row.amountOriginal === "48.90000000",
     );
     expect(captured?.categoryId).toBe(fixture.eatingOutCategoryId);
   });

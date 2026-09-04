@@ -52,6 +52,21 @@ describe("parseAmount — comma decimal", () => {
     expect(parseAmount("-5,")).toBeNull();
   });
 
+  it("refuses a trailing separator with nothing typed after it (M1)", () => {
+    // "48," and "0," are not yet amounts — `zMoney`'s own regex requires at
+    // least one digit after the point, and Save must agree before the write
+    // ever sees them.
+    expect(parseAmount("48,")).toBeNull();
+    expect(parseAmount("0,")).toBeNull();
+    expect(parseAmount("48.")).toBeNull();
+  });
+
+  it("refuses more than twelve integer digits, matching zMoney's own refine (M1)", () => {
+    expect(parseAmount("999999999999")).toBe("999999999999"); // twelve nines — the boundary itself
+    expect(parseAmount("1000000000000")).toBeNull(); // thirteen digits
+    expect(parseAmount("1234567890123,45")).toBeNull();
+  });
+
   it("renders with a currency affix", () => {
     render(<AmountField label="Amount" currency="PLN" onChange={noop} />);
     expect(screen.getByText("PLN")).toBeDefined();

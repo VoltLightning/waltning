@@ -2484,6 +2484,32 @@ export function createPhoneLedger(
           };
         }
 
+        /**
+         * H2 — `createTransactionInput` validates the amount's own shape, but
+         * has no account in view and so cannot know *which* currency's scale
+         * applies; the controller does, the same reason `account.capturable`
+         * above is checked here rather than left to the schema. Refused on
+         * `amountOriginal` before the write, not discovered as a silently
+         * truncated figure the day someone reads the row back.
+         */
+        if (money.dec(normalized).decimalPlaces() > account.decimals) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_transaction",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "amountOriginal",
+                message: `${account.currency} holds ${account.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: { currency: account.currency, decimals: String(account.decimals) },
+              },
+            ],
+          };
+        }
+
         const capture = runtime.capture();
         const parsed = createTransactionInput.safeParse({
           id: runtime.id<"transactions">(),
