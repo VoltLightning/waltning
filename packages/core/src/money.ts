@@ -11,6 +11,7 @@
 // decimal.js's namespace declaration rather than the constructable class.
 import { Decimal as GlobalDecimal } from "decimal.js";
 import type { AccountingDate } from "./date.ts";
+import { daysBetween } from "./date.ts";
 
 /**
  * A **private** Decimal constructor, not the global one.
@@ -563,14 +564,208 @@ export type ClearingAccountRow = {
  * §8 — every clearing account whose `clearingBalance` is non-zero. **A
  * filter, not a fold**: the caller has already folded each clearing
  * account's own rows into `balance` the way `readAccountsForNetWorth` does
- * for §3, so this only asks which of those balances are non-zero. FIFO
- * attribution — which unconsumed transaction is the oldest, for the banner
- * to name — is `find_unsettled`'s own job and class **S** ("largest-remainder
- * allocation must not be reimplemented," §0): arc-phone's banner names the
- * account and the amount, not the transaction.
+ * for §3, so this only asks which of those balances are non-zero.
+ *
+ * **FIFO attribution — which transaction is the oldest unconsumed one — is
+ * `fifoOldestOpen`'s job below, not this filter's.** It used to read "stays
+ * server-only": that was true only because nothing on the phone folded the
+ * account's own legs through FIFO yet. §0's class-**S** line is narrower —
+ * "largest-remainder allocation must not be reimplemented" — and names the
+ * *split*, never the *pointer* to the oldest row. The replica holds the
+ * whole history the same way it does for §7's ageing (§0's own
+ * reclassification note there), so `readUnsettledClearing` calls
+ * `fifoOldestOpen` over each account's legs to fill in that pointer.
  */
 export const unsettledClearing = (
   balances: readonly ClearingAccountRow[],
 ): readonly ClearingAccountRow[] => balances.filter((row) => !isZero(row.balance));
+
+/* ── The FIFO fold — computations.md §7 ageing and §8 attribution, one algorithm ── */
+
+export type FifoDelta<TId extends string> = { id: TId; date: AccountingDate; delta: Money };
+export type FifoOldest<TId extends string> = { id: TId; date: AccountingDate };
+
+/**
+ * The oldest row still carrying a positive, unconsumed remainder — FIFO,
+ * ordered `(date, id)`.
+ *
+ * **One algorithm, two readers.** §7's ageing needs "the oldest still-open
+ * `debt` row for a company"; §8's `find_unsettled` needs "the oldest still-
+ * unconsumed inflow to a clearing account" — the same shape, "the oldest row
+ * a queue of later opposite-signed rows has not yet fully eaten," so this is
+ * one function rather than two copies that could drift.
+ *
+ * **Which deltas *open* and which *consume* is decided once, by the sign of
+ * the final balance** — never a running mid-stream sign, and never a type
+ * check on the row. A delta sharing the final balance's sign opens (§8:
+ * "inflows opened, outflows consume" reads as exactly this, when the final
+ * balance is the ordinary positive-unallocated case); a delta of the
+ * opposite sign draws down the oldest open row first, then the next.
+ *
+ * Returns `null` when the balance is zero — nothing is unconsumed because
+ * nothing is owed. Otherwise the returned row's remainder is strictly
+ * positive: a row exactly exhausted by consumption is never "still open."
+ */
+export function fifoOldestOpen<TId extends string>(
+  deltas: readonly FifoDelta<TId>[],
+): FifoOldest<TId> | null {
+  const total = deltas.reduce((acc, row) => acc.plus(dec(row.delta)), dec(0));
+  if (total.isZero()) return null;
+  const finalSign = total.isPositive() ? 1 : -1;
+
+  const sorted = [...deltas].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.id === b.id) return 0;
+    return a.id < b.id ? -1 : 1;
+  });
+
+  const open: { id: TId; date: AccountingDate; remaining: Decimal }[] = [];
+  for (const row of sorted) {
+    const amount = dec(row.delta);
+    if (amount.isZero()) continue;
+    const sign = amount.isPositive() ? 1 : -1;
+    if (sign === finalSign) {
+      open.push({ id: row.id, date: row.date, remaining: amount.abs() });
+      continue;
+    }
+    let toConsume = amount.abs();
+    // `.gt(0)`, never `.isPositive()`: decimal.js's zero carries a stored
+    // sign (`new Decimal(0).isPositive()` is `true`), so a subtraction that
+    // lands on exact zero never trips the loop's exit condition — it keeps
+    // "consuming" a zero remainder against the next open row forever. Found
+    // by running the exact case below (lend 200, lend 300, a repay of 200
+    // that exactly exhausts the first): the process pegged a core at 100%
+    // CPU and never returned.
+    while (toConsume.gt(0) && open.length > 0) {
+      // biome-ignore lint/style/noNonNullAssertion: guarded by `open.length > 0` above.
+      const oldest = open[0]!;
+      if (oldest.remaining.lte(toConsume)) {
+        toConsume = toConsume.minus(oldest.remaining);
+        open.shift();
+      } else {
+        oldest.remaining = oldest.remaining.minus(toConsume);
+        toConsume = dec(0);
+      }
+    }
+  }
+
+  const oldest = open[0];
+  return oldest ? { id: oldest.id, date: oldest.date } : null;
+}
+
+/**
+ * §7's ageing buckets. `days` is `ageInDays`'s output — this only buckets.
+ * The label rule ("*old*, never *overdue*") belongs to the screen, not here:
+ * without a `payment_terms_days` field this function has no way to know a
+ * debt is late, only how long it has stood open.
+ */
+export type AgeBucket = "0-30" | "31-60" | "61-90" | "90+";
+
+export const ageBucket = (days: number): AgeBucket => {
+  if (days <= 30) return "0-30";
+  if (days <= 60) return "31-60";
+  if (days <= 90) return "61-90";
+  return "90+";
+};
+
+/**
+ * §7's ageing figure: whole days from the oldest still-open `debt` row to
+ * `today`. Bare-string day arithmetic through `date.ts`'s `daysBetween` —
+ * never a `Date` diff in this module.
+ */
+export const ageInDays = (oldestDate: AccountingDate, today: AccountingDate): number =>
+  daysBetween(oldestDate, today);
+
+/**
+ * S12's two direction totals — *they owe you*, *you owe* — per currency,
+ * **never summed across people**: a receivable from one counterparty and a
+ * payable to another do not net against each other just because they share
+ * a currency, so this sums the *positive* balances into `theyOwe` and the
+ * *magnitude* of the negative ones into `youOwe`, both non-negative.
+ *
+ * Takes the same `CounterpartyBalanceRow[]` shape `counterpartyBalance`
+ * above produces — one row per counterparty per currency — so the caller
+ * folds every counterparty's balances into one list and hands it here
+ * directly.
+ */
+export type DirectionTotalRow = { currency: CurrencyCode; theyOwe: Money; youOwe: Money };
+
+export const directionTotals = (
+  rows: readonly CounterpartyBalanceRow[],
+): readonly DirectionTotalRow[] => {
+  const byCurrency = new Map<CurrencyCode, { theyOwe: Decimal; youOwe: Decimal }>();
+  for (const { currency, balance } of rows) {
+    const bucket = byCurrency.get(currency) ?? { theyOwe: dec(0), youOwe: dec(0) };
+    const b = dec(balance);
+    if (b.isPositive()) bucket.theyOwe = bucket.theyOwe.plus(b);
+    else if (b.isNegative()) bucket.youOwe = bucket.youOwe.plus(b.abs());
+    byCurrency.set(currency, bucket);
+  }
+  return [...byCurrency.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, { theyOwe, youOwe }]) => ({
+      currency,
+      theyOwe: toMoney(theyOwe),
+      youOwe: toMoney(youOwe),
+    }));
+};
+
+/**
+ * §8's largest-remainder allocation, as a pure function — J08's group-bill
+ * split. **Never `total × (1/n)`**: that leaves dust in the same direction
+ * every time (three ways on 185,00 never sums back to 185,00), and the
+ * clearing invariant (§6.4: "a clearing account should trend to zero") would
+ * never clear again.
+ *
+ * Floor each share at the currency's scale, then hand out the remainder one
+ * minor unit at a time, by descending fractional part, ties by ascending
+ * index. **Total-preserving by construction** — `sum(shares) === total`,
+ * always, because every minor unit floored away is handed to exactly one
+ * share before this returns.
+ */
+export const allocateLargestRemainder = (
+  total: Money,
+  weights: readonly number[],
+  decimals: number,
+): readonly Money[] => {
+  if (weights.length === 0) return [];
+  const weightSum = weights.reduce((sum, w) => sum + w, 0);
+  if (!(weightSum > 0)) {
+    throw new Error("allocateLargestRemainder: weights must sum to a positive number");
+  }
+
+  const scale = new Decimal(10).pow(decimals);
+  const totalUnits = dec(total).times(scale);
+  const exactUnits = weights.map((w) => totalUnits.times(w).dividedBy(weightSum));
+  const floorUnits = exactUnits.map((s) => s.toDecimalPlaces(0, Decimal.ROUND_DOWN));
+  const remainders = exactUnits.map((s, i) => s.minus(floorUnits[i] as Decimal));
+
+  const distributed = floorUnits.reduce((acc, f) => acc.plus(f), dec(0));
+  // Whole minor units left to hand out. `total` is presumed to already sit at
+  // the currency's own scale (`decimals`) — the realistic input, and the one
+  // every worked example in §8 and J08 §5 uses — which makes this an exact
+  // non-negative integer; `ROUND_HALF_UP` only guards the last place against
+  // representation noise, never invents units.
+  let leftover = totalUnits.minus(distributed).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+
+  const order = weights
+    .map((_, index) => index)
+    .sort((a, b) => {
+      // biome-ignore lint/style/noNonNullAssertion: `order`'s indices are exactly `remainders`'s.
+      const byRemainder = remainders[b]!.cmp(remainders[a]!);
+      return byRemainder !== 0 ? byRemainder : a - b;
+    });
+
+  const units = [...floorUnits];
+  for (let k = 0; k < order.length && leftover > 0; k += 1) {
+    // biome-ignore lint/style/noNonNullAssertion: `order` is a permutation of `units`'s own indices.
+    const index = order[k]!;
+    // biome-ignore lint/style/noNonNullAssertion: same permutation guarantee as above.
+    units[index] = units[index]!.plus(1);
+    leftover -= 1;
+  }
+
+  return units.map((u) => toMoney(u.dividedBy(scale)));
+};
 
 export { Decimal };

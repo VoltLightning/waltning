@@ -99,7 +99,8 @@ export function addDays(date: AccountingDate, n: number): AccountingDate {
  * (`readCoverage`) both ask "how many days apart", never "how many
  * milliseconds" — so this is the same `Date.UTC` day-count device `addDays`
  * uses, not a subtraction of two instants that would need a timezone this
- * file does not have.
+ * file does not have. `money.ts`'s `ageInDays` is this, named for §7's
+ * ageing — a company's debt is *old* as of `today`, never *overdue*.
  */
 export function daysBetween(a: AccountingDate, b: AccountingDate): number {
   const [ay, am, ad] = a.split("-").map(Number) as [number, number, number];

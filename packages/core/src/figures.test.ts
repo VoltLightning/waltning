@@ -226,3 +226,129 @@ describe("unsettledClearing — §8", () => {
     expect(money.unsettledClearing(balances)).toEqual([]);
   });
 });
+
+describe("fifoOldestOpen — §7 ageing and §8 attribution", () => {
+  const d = accountingDate;
+
+  it("lend 200, repay 200 → nothing unconsumed", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: "lend", date: d("2026-08-01"), delta: m("200") },
+      { id: "repay", date: d("2026-08-10"), delta: m("-200") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toBeNull();
+  });
+
+  it("lend 200, lend 300, repay 200 → the 300's row, not the 200's", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: "lend200", date: d("2026-08-01"), delta: m("200") },
+      { id: "lend300", date: d("2026-08-02"), delta: m("300") },
+      { id: "repay200", date: d("2026-08-03"), delta: m("-200") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({ id: "lend300", date: d("2026-08-02") });
+  });
+
+  it("consumes the oldest open row first, in date order rather than list order", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: "second", date: d("2026-08-02"), delta: m("100") },
+      { id: "first", date: d("2026-08-01"), delta: m("100") },
+      { id: "consume", date: d("2026-08-03"), delta: m("-100") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({ id: "second", date: d("2026-08-02") });
+  });
+
+  it("§8's own reading: inflows open, outflows consume, FIFO", () => {
+    // Two inflows to a clearing account, one allocation out — the shared
+    // plan's decision on what J08's group bill looks like on the ledger.
+    const rows: money.FifoDelta<string>[] = [
+      { id: "inflow1", date: d("2026-08-01"), delta: m("120") },
+      { id: "inflow2", date: d("2026-08-05"), delta: m("80") },
+      { id: "allocation", date: d("2026-08-06"), delta: m("-120") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({ id: "inflow2", date: d("2026-08-05") });
+  });
+
+  it("is null over no rows", () => {
+    expect(money.fifoOldestOpen([])).toBeNull();
+  });
+});
+
+describe("ageBucket — §7", () => {
+  it("buckets 0-30 / 31-60 / 61-90 / 90+ at the edges", () => {
+    expect(money.ageBucket(0)).toBe("0-30");
+    expect(money.ageBucket(30)).toBe("0-30");
+    expect(money.ageBucket(31)).toBe("31-60");
+    expect(money.ageBucket(60)).toBe("31-60");
+    expect(money.ageBucket(61)).toBe("61-90");
+    expect(money.ageBucket(90)).toBe("61-90");
+    expect(money.ageBucket(91)).toBe("90+");
+  });
+});
+
+describe("ageInDays — §7", () => {
+  it("counts whole calendar days, never through Date arithmetic on a clock", () => {
+    expect(money.ageInDays(accountingDate("2026-08-01"), accountingDate("2026-08-31"))).toBe(30);
+    expect(money.ageInDays(accountingDate("2026-08-01"), accountingDate("2026-08-01"))).toBe(0);
+  });
+});
+
+describe("directionTotals — S12", () => {
+  const PLN = money.currencyCode("PLN");
+  const EUR = money.currencyCode("EUR");
+
+  it("sums positives into theyOwe and the magnitude of negatives into youOwe, per currency", () => {
+    const rows: money.CounterpartyBalanceRow[] = [
+      { currency: PLN, balance: m("200") }, // Nina owes 200 PLN
+      { currency: PLN, balance: m("-50") }, // you owe Marek 50 PLN
+      { currency: EUR, balance: m("-30") }, // you owe Nina 30 EUR
+    ];
+    expect(money.directionTotals(rows)).toEqual([
+      { currency: EUR, theyOwe: "0.00000000", youOwe: "30.00000000" },
+      { currency: PLN, theyOwe: "200.00000000", youOwe: "50.00000000" },
+    ]);
+  });
+
+  it("never nets two people's balances in the same currency against each other", () => {
+    // 200 owed to you and 200 you owe, same currency, different people —
+    // theyOwe and youOwe both carry the full figure, not a netted zero.
+    const rows: money.CounterpartyBalanceRow[] = [
+      { currency: PLN, balance: m("200") },
+      { currency: PLN, balance: m("-200") },
+    ];
+    expect(money.directionTotals(rows)).toEqual([
+      { currency: PLN, theyOwe: "200.00000000", youOwe: "200.00000000" },
+    ]);
+  });
+
+  it("is empty over no rows", () => {
+    expect(money.directionTotals([])).toEqual([]);
+  });
+});
+
+describe("allocateLargestRemainder — §8, J08 §5", () => {
+  it("185.00 three equal ways: 61.67 / 61.67 / 61.66, summing exactly", () => {
+    const shares = money.allocateLargestRemainder(m("185.00"), [1, 1, 1], 2);
+    expect(shares).toEqual(["61.67000000", "61.67000000", "61.66000000"]);
+    expect(money.sum([...shares])).toBe("185.00000000");
+  });
+
+  it("100.00 three equal ways: 33.34 / 33.33 / 33.33 (J08 §5)", () => {
+    const shares = money.allocateLargestRemainder(m("100.00"), [1, 1, 1], 2);
+    expect(shares).toEqual(["33.34000000", "33.33000000", "33.33000000"]);
+    expect(money.sum([...shares])).toBe("100.00000000");
+  });
+
+  it("weighted 2:1:1 still sums exactly", () => {
+    const shares = money.allocateLargestRemainder(m("100.00"), [2, 1, 1], 2);
+    expect(money.sum([...shares])).toBe("100.00000000");
+    expect(money.dec(shares[0] ?? "0").gte(shares[1] ?? "0")).toBe(true);
+  });
+
+  it("never total × (1/n) — the three-way split is not a single repeated figure", () => {
+    const shares = money.allocateLargestRemainder(m("10.00"), [1, 1, 1], 2);
+    expect(new Set(shares).size).toBeGreaterThan(1);
+  });
+
+  it("is empty over no weights", () => {
+    expect(money.allocateLargestRemainder(m("10"), [], 2)).toEqual([]);
+  });
+});
