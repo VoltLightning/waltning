@@ -6,7 +6,7 @@
  * one file because all three screens share the same counterparty fixture.
  */
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneAccount,
@@ -30,6 +30,20 @@ vi.mock("expo-router", () => ({
   },
   useLocalSearchParams: () => useLocalSearchParams(),
 }));
+
+// L2 — spies on `emitClientDiagnostic` while keeping the module's other
+// exports (`clientFailure`) real, so `debt-screen.tsx`'s own totals-failure
+// effect can be counted rather than only observed through its render output.
+const emitClientDiagnosticSpy = vi.fn();
+vi.mock("@waltning/client/diagnostics", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@waltning/client/diagnostics")>();
+  return {
+    ...actual,
+    get emitClientDiagnostic() {
+      return emitClientDiagnosticSpy;
+    },
+  };
+});
 
 import CounterpartyDetail from "./counterparty-detail-screen";
 import CounterpartyEditor from "./counterparty-editor-screen";
@@ -202,6 +216,7 @@ beforeEach(() => {
   router.back.mockClear();
   router.dismissTo.mockClear();
   useLocalSearchParams.mockReturnValue({});
+  emitClientDiagnosticSpy.mockClear();
 });
 
 describe("Debt (S12)", () => {
@@ -250,6 +265,49 @@ describe("Debt (S12)", () => {
     // M — the executor's own English (`/disagree on decimals/`) is
     // diagnostics-only now; a person sees the fixed, translated `why`.
     expect(screen.getByText("Something went wrong totalling what's owed.")).toBeDefined();
+  });
+
+  /**
+   * L2 — the diagnostic used to sit inside the `useMemo` that computes
+   * `directionTotalsResult`, so it re-fired every time that memo recomputed
+   * for the *same* still-failing reason (here: a refresh triggered
+   * elsewhere, e.g. by another screen, bumping `snapshot.revision` — H1 —
+   * without the underlying decimals conflict changing at all). Moved to an
+   * effect keyed on the failure's own message, it must emit once for the
+   * one distinct failure, not once per render that still happens to fail.
+   */
+  it("emits the totals-failure diagnostic once per distinct failure, not once per render (L2)", () => {
+    const marekRow: PhoneCounterpartyBalance = {
+      ...NINA_ROW,
+      counterpartyId: MAREK,
+      name: "Marek",
+      decimals: 3,
+      balance: toMoney("-120.00000000"),
+    };
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY, { ...NINA_COUNTERPARTY, id: MAREK }],
+        listCounterpartyBalances: () => [NINA_ROW, marekRow],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Couldn't load your counterparties")).toBeDefined();
+
+    const totalsCalls = () =>
+      emitClientDiagnosticSpy.mock.calls.filter(
+        ([, event]) => (event as { update?: string }).update === "counterparty_direction_totals",
+      );
+    expect(totalsCalls()).toHaveLength(1);
+
+    // A second refresh, still failing the same way — never a second emission
+    // for a reason already reported.
+    act(() => controller.refresh());
+    expect(screen.getByText("Couldn't load your counterparties")).toBeDefined();
+    expect(totalsCalls()).toHaveLength(1);
   });
 
   /**
@@ -336,6 +394,23 @@ describe("Debt (S12)", () => {
     expect(screen.queryByText("No one yet")).toBeNull();
   });
 
+  /**
+   * M1 — an *empty* `currencies` list (the first `refresh()` still in
+   * flight) is not the same state as a non-empty one missing its pivot: the
+   * old guard fired for both and lied about why, showing "Couldn't read your
+   * currencies" while the replica simply had not loaded yet.
+   */
+  it("shows a loading skeleton, never the no-pivot error, while currencies has not loaded yet", () => {
+    const controller = controllerOf(basePort({ listCurrencies: () => [] }));
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.getAllByRole("progressbar", { name: "Loading debts" })).not.toHaveLength(0);
+    expect(screen.queryByText("Couldn't read your currencies")).toBeNull();
+  });
+
   it("shows the first-run empty state with nothing on the ledger", () => {
     const controller = controllerOf(basePort());
     render(
@@ -410,6 +485,52 @@ describe("Debt (S12)", () => {
     fireEvent.click(screen.getByText("You owe"));
     expect(screen.getByText("Nina")).toBeDefined();
   });
+
+  /**
+   * H1 — `balances` used to be memoised on `[ledger, today]` alone, both
+   * stable across a session, so a `refresh()` triggered elsewhere (here: a
+   * settle, called straight through the controller the way S13's own sheet
+   * would) never invalidated it. Nina must drop off the list the moment her
+   * one balance settles, not go on showing under a toast that never
+   * appeared here — the list itself is the evidence the refresh landed.
+   */
+  it("drops a counterparty from the list once a settle elsewhere refreshes the ledger", () => {
+    let settled = false;
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => (settled ? [] : [NINA_ROW]),
+        listAccounts: () => [CASH_PLN],
+        settleDebt: () => {
+          settled = true;
+          return { residual: toMoney("0"), overSettled: false };
+        },
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Nina")).toBeDefined();
+
+    act(() => {
+      controller.settleDebt({
+        counterpartyId: NINA,
+        accountId: CASH_PLN.id,
+        date: TODAY,
+        amount: "840",
+        currency: PLN,
+        dischargesCurrency: PLN,
+        dischargesAmount: "840",
+        note: "",
+        categoryId: null,
+      });
+    });
+
+    expect(screen.queryByText("Nina")).toBeNull();
+    expect(screen.getByText("All settled")).toBeDefined();
+  });
 });
 
 describe("CounterpartyDetail (S13)", () => {
@@ -445,6 +566,24 @@ describe("CounterpartyDetail (S13)", () => {
     );
     expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
     expect(screen.queryByText("Nina")).toBeNull();
+  });
+
+  /**
+   * M1 — an *empty* `currencies` list (the first `refresh()` still in
+   * flight) is not the same state as a non-empty one missing its pivot: the
+   * old guard fired for both and lied about why.
+   */
+  it("shows a loading skeleton, never the no-pivot error, while currencies has not loaded yet", () => {
+    const controller = controllerOf(basePort({ listCurrencies: () => [] }));
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(
+      screen.getAllByRole("progressbar", { name: "Loading counterparty ledger" }),
+    ).not.toHaveLength(0);
+    expect(screen.queryByText("Couldn't read your currencies")).toBeNull();
   });
 
   it("shows the card, the ledger, and defaults history to debt rows", () => {
@@ -657,6 +796,60 @@ describe("CounterpartyDetail (S13)", () => {
 
     // P5 — the residual named in words, never a bare sign.
     expect(screen.getByText("Settled. 790.00 PLN they owe you.")).toBeDefined();
+  });
+
+  /**
+   * H1 — `balances` used to be memoised on `[ledger, today]` alone, both
+   * stable across the sheet's own lifetime, so `settleDebt` → `refresh()`
+   * never invalidated it: the `BalanceLedger` behind the sheet kept showing
+   * the pre-settle 840,00 row under the very toast confirming it was gone.
+   * Settling the whole balance here, against a mutable port that reflects
+   * the write, must leave the card reading "All settled", not the stale row.
+   */
+  it("shows the fresh balance behind the toast — settling in full clears the stale row (H1)", () => {
+    let settled = false;
+    const settleDebt = vi.fn<PhoneLedgerPort["settleDebt"]>(() => {
+      settled = true;
+      return { residual: toMoney("0"), overSettled: false };
+    });
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => (settled ? [] : [NINA_ROW]),
+        listAccounts: () => [CASH_PLN],
+        settleDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    fireEvent.click(sheet.getByRole("button", { name: "Into" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Amount: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "8" }));
+    fireEvent.click(sheet.getByRole("button", { name: "4" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "8" }));
+    fireEvent.click(sheet.getByRole("button", { name: "4" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
+
+    expect(settleDebt).toHaveBeenCalledOnce();
+    expect(screen.getByText("Settled. 0.00 PLN settled.")).toBeDefined();
+    // The card behind the (now dismissed) sheet re-reads the ledger — the
+    // stale 840,00 row is gone, replaced by `BalanceLedger`'s own "All
+    // settled" (its own body text, distinct from the history section's).
+    expect(screen.getByText("Nothing open with them right now.")).toBeDefined();
+    expect(screen.queryByText("840.00", { exact: false })).toBeNull();
   });
 
   /**

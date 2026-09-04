@@ -294,10 +294,12 @@ export function SettleSheet({
   const accountCaption = accountNeedsRate ?? accountError;
 
   const saveDisabled =
-    // M — nothing open to discharge; explicit rather than resting solely on
-    // `dischargesCurrency === null` below, which a stale caller could still
-    // pass non-null for a balance that has since settled.
-    openBalances.length === 0 ||
+    // L1 — the *picked* currency must itself be open, not merely "something
+    // is": `openBalances.length === 0` passed even when `dischargesCurrency`
+    // named a balance that had since settled (dust) while a different
+    // currency was still open — armed Settle on a discharge that no longer
+    // exists. `.some` over the picked currency catches that stale pick too.
+    !openBalances.some((row) => row.currency === dischargesCurrency) ||
     dischargesCurrency === null ||
     accountId === null ||
     money.isZero(amount) ||

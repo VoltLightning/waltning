@@ -221,6 +221,8 @@ export const pl: Messages = {
     emptySettledBody: "Nikt nic teraz nie jest winien.",
     loadFailedTitle: "Nie udało się wczytać kontrahentów",
     loadFailedWhy: "Coś poszło nie tak podczas odczytu księgi długów.",
+    loadingDebts: "Wczytywanie długów",
+    loadingLedger: "Wczytywanie rozliczenia z kontrahentem",
     noPivotTitle: "Nie udało się odczytać walut",
     noPivotWhy: "Ta księga ma waluty, ale żadna nie jest oznaczona jako referencyjna.",
     totalsInconsistentWhy: "Coś poszło nie tak przy sumowaniu sald.",
@@ -228,7 +230,8 @@ export const pl: Messages = {
     ledgerSettled: "Wszystko rozliczone",
     ledgerSettledBody: "Nic teraz nie jest z nimi otwarte.",
     historySettled: "Wszystko rozliczone",
-    historySettledBody: "Jeszcze bez rozliczeń: {{name}}.",
+    /** L4 — debt rows, not settlements: `rozliczeń` (settlements) mistranslated the English "debt rows"; `pozycji dłużnych` is the correct term. */
+    historySettledBody: "Jeszcze bez pozycji dłużnych: {{name}}.",
     atRateDate: "@ {{rate}} · {{date}}",
     settledToast: "Rozliczono. {{amount}} {{currency}} {{direction}}.",
     addTransaction: "Dodaj transakcję",

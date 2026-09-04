@@ -39,10 +39,11 @@ import { GroundPanel } from "@waltning/ui/shell/card";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { Skeleton } from "@waltning/ui/states/skeleton";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
@@ -116,7 +117,18 @@ export default function Debt() {
   const today = deviceRuntime().capture().date;
   const [segment, setSegment] = useState<DirectionSegment>("all");
 
-  const balances = useMemo(() => ledger.listCounterpartyBalances(today), [ledger, today]);
+  // H1 — `snapshot.revision` in deps: `listCounterpartyBalances` is a live
+  // controller read, never cached in the snapshot, so a `useMemo` keyed only
+  // on `[ledger, today]` (both stable across a session) never recomputes —
+  // `settleDebt` → `refresh()` bumps `revision` but this stays the pre-write
+  // answer forever after. `revision` is the one dependency that actually
+  // means "a write could have changed this", the same reasoning
+  // `useCounterpartyHistory` already carries.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot.revision` invalidates this memo by identity, not by being read in the body.
+  const balances = useMemo(
+    () => ledger.listCounterpartyBalances(today),
+    [ledger, snapshot.revision, today],
+  );
   // M2 — `money.directionTotals` throws on a genuine invariant violation
   // (two rows naming one currency at two different `decimals`), and a throw
   // inside a `useMemo` that runs above every guard below must not take the
@@ -126,19 +138,32 @@ export default function Debt() {
   // `totalsInconsistentWhy` key below).
   const directionTotalsResult = useMemo(():
     | { ok: true; rows: readonly money.DirectionTotalRow[] }
-    | { ok: false } => {
+    | { ok: false; reason: ReturnType<typeof clientFailure> } => {
     try {
       return { ok: true, rows: money.directionTotals(balances) };
     } catch (error) {
-      emitClientDiagnostic(mobileDiagnostics, {
-        scope: "client_state",
-        update: "counterparty_direction_totals",
-        phase: "failure",
-        error: clientFailure(error),
-      });
-      return { ok: false };
+      return { ok: false, reason: clientFailure(error) };
     }
   }, [balances]);
+  // L2 — the diagnostic itself moved out of the `useMemo` above and into an
+  // effect keyed on the failure's own reason (its message, never the result
+  // object's identity): a `useMemo` may run during a render React discards
+  // without committing, so a side effect inside one can fire more than once
+  // for the same failure, or for a failure nobody ever saw rendered. An
+  // effect runs once per commit, and keying on the message rather than the
+  // object means it fires once per *distinct* failure, not once per render
+  // that still happens to be failing.
+  const totalsFailureReason = directionTotalsResult.ok ? undefined : directionTotalsResult.reason;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the failure's own message, not `totalsFailureReason`'s own identity — emits once per distinct failure, not once per render still failing the same way.
+  useEffect(() => {
+    if (totalsFailureReason === undefined) return;
+    emitClientDiagnostic(mobileDiagnostics, {
+      scope: "client_state",
+      update: "counterparty_direction_totals",
+      phase: "failure",
+      error: totalsFailureReason,
+    });
+  }, [totalsFailureReason?.message]);
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
 
   const rows = useMemo((): readonly DebtRow[] => {
@@ -246,12 +271,15 @@ export default function Debt() {
   }
 
   // H — nothing enforces the bootstrap that would make this unreachable: a
-  // non-empty `currencies` list with no `isPivot` row is `architecture/09`'s
+  // *non-empty* `currencies` list with no `isPivot` row is `architecture/09`'s
   // bootstrap guarantee broken, and must never render as "All settled" (the
   // rows below are empty without a pivot) or as the totals above them, which
   // read straight off `balances` and know nothing about `pivot`. No retry
-  // action — it would only re-read the same broken replica.
-  if (pivot === undefined) {
+  // action — it would only re-read the same broken replica. M1 — `currencies`
+  // still *empty* is a different state (below): the replica simply has not
+  // finished its first `refresh()` yet, and this guard used to fire for both,
+  // lying about "no pivot" while the truth was "not loaded yet".
+  if (snapshot.currencies.length > 0 && pivot === undefined) {
     return (
       <GroundPanel>
         <ErrorState
@@ -259,6 +287,27 @@ export default function Debt() {
           what={t("counterparties.noPivotTitle")}
           why={t("counterparties.noPivotWhy")}
         />
+      </GroundPanel>
+    );
+  }
+
+  // M1 — the loading state (S12 §6: "Skeleton rows; totals resolve last
+  // rather than showing a wrong number"), never the empty state, while the
+  // first `refresh()` is still in flight: `currencies` starts empty and only
+  // ever reads whole from `port.listCurrencies()` (`create-phone-ledger.ts`),
+  // so an empty list here means "not loaded yet", not "genuinely zero
+  // currencies" (a replica always bootstraps at least one).
+  if (snapshot.currencies.length === 0) {
+    return (
+      <GroundPanel>
+        <View style={styles.root}>
+          <View style={styles.totals}>
+            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+          </View>
+          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+        </View>
       </GroundPanel>
     );
   }

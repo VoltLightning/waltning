@@ -111,7 +111,16 @@ export default function CounterpartyEditor() {
     : { name: "", kind: "person", settlementCurrency: null, contact: "", note: "" };
 
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
-  const balances = useMemo(() => ledger.listCounterpartyBalances(today), [ledger, today]);
+  // H1 — `snapshot.revision` in deps (same reasoning as `debt-screen.tsx`
+  // and `counterparty-detail-screen.tsx`): `listCounterpartyBalances` is a
+  // live controller read, never cached in the snapshot, so a merge or a
+  // settle elsewhere never invalidates a near-match candidate's balance here
+  // without it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot.revision` invalidates this memo by identity, not by being read in the body.
+  const balances = useMemo(
+    () => ledger.listCounterpartyBalances(today),
+    [ledger, snapshot.revision, today],
+  );
 
   const matches = useMemo((): readonly CounterpartyFormCandidate[] => {
     if (blurredName.trim() === "" || !pivot) return [];

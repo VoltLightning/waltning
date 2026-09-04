@@ -85,3 +85,12 @@ export const MultipleBalances: Story = {
     ],
   },
 };
+
+/** L3 — every held balance is dust at its own currency's scale (M1's own filter, empty): nothing here for Settle to discharge, and Settle itself stays disabled. */
+export const NothingToSettle: Story = {
+  args: {
+    balances: [{ currency: "EUR", balance: toMoney("0.004"), decimals: 2 }],
+    dischargesCurrency: null,
+    referenceRate: undefined,
+  },
+};

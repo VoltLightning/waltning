@@ -328,10 +328,15 @@ export const en = {
     emptySettledBody: "Nobody owes anything right now.",
     loadFailedTitle: "Couldn't load your counterparties",
     loadFailedWhy: "Something went wrong reading the debt ledger.",
+    /** M1 — the loading state (S12 §6, S13 §6), never the no-pivot error, while `currencies` is still empty and the first `refresh()` has not landed. */
+    loadingDebts: "Loading debts",
+    loadingLedger: "Loading counterparty ledger",
     /**
      * H — a non-empty `currencies` list with no `isPivot` row is an invariant
      * violation (`architecture/09`'s bootstrap guarantee), never a state to
-     * silently render past as "All settled" or a blank screen.
+     * silently render past as "All settled" or a blank screen. M1 — this is
+     * distinct from `currencies` being empty (still loading, above): only a
+     * *non-empty* list missing its pivot is the invariant violation.
      */
     noPivotTitle: "Couldn't read your currencies",
     noPivotWhy: "This ledger holds currencies but none is marked as the reference one.",

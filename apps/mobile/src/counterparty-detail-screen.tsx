@@ -56,6 +56,7 @@ import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { Skeleton } from "@waltning/ui/states/skeleton";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -230,7 +231,16 @@ export default function CounterpartyDetail() {
     snapshot.counterparties.find((candidate) => candidate.id === rawId) ??
     snapshot.archivedCounterparties.find((candidate) => candidate.id === rawId);
 
-  const balances = useMemo(() => ledger.listCounterpartyBalances(today), [ledger, today]);
+  // H1 — `snapshot.revision` in deps (same reasoning as `debt-screen.tsx`):
+  // `listCounterpartyBalances` is a live controller read, never cached in
+  // the snapshot, so without `revision` here `settleDebt` → `refresh()`
+  // never invalidates this memo — the screen kept showing the pre-settle
+  // balance under the very toast confirming it had changed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot.revision` invalidates this memo by identity, not by being read in the body.
+  const balances = useMemo(
+    () => ledger.listCounterpartyBalances(today),
+    [ledger, snapshot.revision, today],
+  );
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
   const group = useMemo(
     () => groupByCounterparty(balances).find((candidate) => candidate.counterpartyId === rawId),
@@ -301,6 +311,13 @@ export default function CounterpartyDetail() {
   // §6 — the reference rate for the picked pair, or `undefined` offline with
   // nothing held: the same shape `transfer-screen.tsx`'s own `referenceRate`
   // takes, `readCrossRate`'s pivot leg making same-currency pairs trivial too.
+  // H1 — `snapshot.revision` in deps: `readCrossRate` is another live
+  // controller read this screen calls directly, driven here only by the
+  // person's own picks (`settleDischargesCurrency`, `settleAccount`) —
+  // without `revision`, a rate that only became available after a write (or
+  // a refresh that pulled fresh coverage) never reaches an already-open
+  // sheet.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot.revision` invalidates this memo by identity, not by being read in the body.
   const settleReferenceRate = useMemo(() => {
     if (settleDischargesCurrency === null || settleAccount === undefined) return undefined;
     const result = ledger.readCrossRate({
@@ -310,7 +327,7 @@ export default function CounterpartyDetail() {
     });
     if (result === null) return undefined;
     return { rate: result.rate, source: result.source, date: result.asOf };
-  }, [ledger, settleDischargesCurrency, settleAccount, today]);
+  }, [ledger, settleDischargesCurrency, settleAccount, snapshot.revision, today]);
 
   const handleToggleHistory = useCallback(() => setShowAllRows((current) => !current), []);
   const handleOpenRow = useCallback((transactionId: string) => {
@@ -443,12 +460,15 @@ export default function CounterpartyDetail() {
   }
 
   // H — nothing enforces the bootstrap that would make this unreachable: a
-  // non-empty `currencies` list with no `isPivot` row is `architecture/09`'s
+  // *non-empty* `currencies` list with no `isPivot` row is `architecture/09`'s
   // bootstrap guarantee broken, and must never render as a blank screen —
   // `figures` is `null` exactly when `pivot` is, so this also resolves the
   // old `!figures` half of the guard below. No retry action — it would only
-  // re-read the same broken replica.
-  if (pivot === undefined) {
+  // re-read the same broken replica. M1 — `currencies` still *empty* is a
+  // different state (below): the replica has not finished its first
+  // `refresh()` yet, and this guard used to fire for both, lying about "no
+  // pivot" while the truth was "not loaded yet".
+  if (snapshot.currencies.length > 0 && pivot === undefined) {
     return (
       <GroundPanel>
         <ErrorState
@@ -456,6 +476,21 @@ export default function CounterpartyDetail() {
           what={t("counterparties.noPivotTitle")}
           why={t("counterparties.noPivotWhy")}
         />
+      </GroundPanel>
+    );
+  }
+
+  // M1 — S13 §6's own loading state ("Skeleton ledger rows"), never the
+  // blank screen an unresolved `pivot`/`figures` would otherwise fall
+  // through to on the very first render, while `currencies` has not loaded.
+  if (snapshot.currencies.length === 0) {
+    return (
+      <GroundPanel>
+        <Card>
+          <Skeleton shape="hero" label={t("counterparties.loadingLedger")} />
+          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
+          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
+        </Card>
       </GroundPanel>
     );
   }

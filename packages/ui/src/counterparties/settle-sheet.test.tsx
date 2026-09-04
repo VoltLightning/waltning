@@ -114,6 +114,24 @@ it("shows nothing to settle and disables Settle when every balance is dust", () 
   expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
 });
 
+/**
+ * L1 — `saveDisabled`'s guard must check whether the *picked* currency is
+ * itself still open, not merely whether `openBalances` is non-empty: a
+ * stale `dischargesCurrency` naming a since-settled (dust) balance must
+ * disable Settle even while a different currency (GBP) remains genuinely
+ * open — `openBalances.length === 0` alone missed exactly this case.
+ */
+it("disables Settle when the picked currency is dust, even with another balance still open (L1)", () => {
+  renderSheet({
+    balances: [
+      { currency: "PLN", balance: toMoney("0.004"), decimals: 2 },
+      { currency: "GBP", balance: toMoney("-45"), decimals: 2 },
+    ],
+    dischargesCurrency: "PLN",
+  });
+  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+});
+
 it("marks the result an estimate and stamps it once the snapshot is older than the session", () => {
   renderSheet({ stale: true, stampedAt: new Date("2026-08-12T14:20:00Z").getTime() });
   expect(screen.getByText("remaining (estimated)")).toBeDefined();
