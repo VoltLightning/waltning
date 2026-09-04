@@ -50,8 +50,7 @@ const meta = {
     accounts: ACCOUNTS,
     accountId: null,
     accountMachineFilled: false,
-    onAccountChange: noop,
-    onCreateAccount: noop,
+    onOpenAccountPicker: noop,
     categories: CATEGORIES,
     categoryId: null,
     onOpenCategoryPicker: noop,
@@ -121,19 +120,14 @@ export const LowConfidence: Story = {
   },
 };
 
-/** §9.2's four-hour window, still open — the account chip fills machine, carrying the trail. */
+/**
+ * §9.2's four-hour window, still open — the account chip fills machine,
+ * carrying the trail. The "from your last capture" line itself now lives in
+ * `AccountPicker`'s own *Recent* tile (`accounts/account-picker.stories.tsx`
+ * — `WithLastUsed`), the sheet this chip only ever asks the screen to open.
+ */
 export const LastUsedAccount: Story = {
-  args: {
-    raw: "48,90",
-    accountId: "account-a",
-    accountMachineFilled: true,
-    accountMachineFilledAt: new Date("2026-09-03T14:20:00").getTime(),
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByText("Cash · PLN"));
-    await expect(canvas.findByText(/From your last capture/)).resolves.toBeDefined();
-  },
+  args: { raw: "48,90", accountId: "account-a", accountMachineFilled: true },
 };
 
 /** §6.6 — a counterparty offered once the ledger holds one, its role picked in the same sheet. */

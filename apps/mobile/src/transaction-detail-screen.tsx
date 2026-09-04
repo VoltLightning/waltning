@@ -36,6 +36,7 @@ import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { id as brandId } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
+import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import {
   CategorySheet,
   type CategorySheetCreateDraft,
@@ -87,8 +88,37 @@ function toFields(detail: PhoneTransactionDetail): TransactionFields {
   };
 }
 
-function toFieldsCardAccount(account: PhoneCapturableAccount) {
-  return { id: account.id, name: account.name };
+/**
+ * The replica's account onto `AccountPicker`'s own choice shape — grouped,
+ * kind-ordered, S16 §3. `FieldsCard`'s own `accounts` prop is widened to the
+ * same shape (`fields-card.tsx`'s own doc), so this one mapping answers both
+ * the card's "what is the current pick called" lookup and the sheet itself —
+ * no second, narrower mapper only for the card.
+ */
+function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
+  return {
+    id: account.id,
+    name: account.name,
+    currency: account.currency,
+    decimals: account.decimals,
+    kind: account.kind,
+    capturable: account.capturable,
+    ownership: account.ownership,
+    groupId: account.groupId,
+    archived: account.archived,
+  };
+}
+
+/**
+ * The escape to account creation — unlike `quick-add-screen.tsx`'s, this
+ * screen has no restorable route shape for the transaction being edited
+ * (`parseNewAccountRoute` only carries `quick-add`'s own amount/account
+ * pair), so creating an account mid-edit lands on the accounts list rather
+ * than resuming this draft — the same gap `transfer-screen.tsx`'s own escape
+ * names.
+ */
+function handleCreateAccountFromDetail() {
+  router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
 }
 
 function handleBack() {
@@ -111,6 +141,13 @@ export default function TransactionDetail() {
   const [fieldsErrors, setFieldsErrors] = useState<ReturnType<typeof mapFieldErrors>>();
   const [linesErrors, setLinesErrors] = useState<ReturnType<typeof mapFieldErrors>>();
   const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  /**
+   * `AccountPicker` (`accounts/`) is a sibling domain — the same rule
+   * `CategorySheet` already keeps. `null` until a pick is made; `FieldsCard`
+   * reads `detail.accountId` until then (`effectiveAccountId`, below).
+   */
+  const [pickedAccountId, setPickedAccountId] = useState<string | null>(null);
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
   const refetch = useCallback(() => {
     if (!transactionId) return;
@@ -119,6 +156,12 @@ export default function TransactionDetail() {
 
   const handleOpenCategoryPicker = useCallback(() => setCategorySheetOpen(true), []);
   const handleDismissCategorySheet = useCallback(() => setCategorySheetOpen(false), []);
+  const handleOpenAccountPicker = useCallback(() => setAccountPickerOpen(true), []);
+  const handleDismissAccountPicker = useCallback(() => setAccountPickerOpen(false), []);
+  const handlePickAccount = useCallback((next: string) => {
+    setPickedAccountId(next);
+    setAccountPickerOpen(false);
+  }, []);
 
   const handlePickCategory = useCallback(
     (categoryId: string) => {
@@ -196,6 +239,14 @@ export default function TransactionDetail() {
       detail ? snapshot.accounts.filter((account) => account.currency === detail.currency) : [],
     [detail, snapshot.accounts],
   );
+  const pickerAccounts = useMemo(
+    () => sameCurrencyAccounts.map(toPickerChoice),
+    [sameCurrencyAccounts],
+  );
+  const pickerGroups = useMemo(
+    () => snapshot.groups.map((group) => ({ id: group.id, name: group.name })),
+    [snapshot.groups],
+  );
 
   if (!detail) {
     return (
@@ -209,6 +260,8 @@ export default function TransactionDetail() {
       </GroundPanel>
     );
   }
+
+  const effectiveAccountId = pickedAccountId ?? detail.accountId;
 
   return (
     <GroundPanel>
@@ -224,7 +277,9 @@ export default function TransactionDetail() {
       <Card>
         <FieldsCard
           fields={toFields(detail)}
-          accounts={sameCurrencyAccounts.map(toFieldsCardAccount)}
+          accounts={pickerAccounts}
+          accountId={effectiveAccountId}
+          onOpenAccountPicker={handleOpenAccountPicker}
           today={today}
           categoryId={detail.categoryId}
           categoryName={detail.categoryName}
@@ -251,6 +306,15 @@ export default function TransactionDetail() {
         onPick={handlePickCategory}
         onCreate={handleCreateCategory}
         onDismiss={handleDismissCategorySheet}
+      />
+      <AccountPicker
+        visible={accountPickerOpen}
+        accounts={pickerAccounts}
+        groups={pickerGroups}
+        accountId={effectiveAccountId}
+        onPick={handlePickAccount}
+        onCreateAccount={handleCreateAccountFromDetail}
+        onDismiss={handleDismissAccountPicker}
       />
     </GroundPanel>
   );

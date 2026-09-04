@@ -28,7 +28,7 @@ const meta = {
     activeField: "amount",
     onActiveFieldChange: noop,
     accountId: "acc-cash-pln",
-    onAccountChange: noop,
+    onOpenAccountPicker: noop,
     referenceRate: { rate: pivotPerUnit("4.3120"), source: "nbp", date: "2026-08-10" },
     note: "",
     onNoteChange: noop,

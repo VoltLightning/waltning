@@ -686,7 +686,7 @@ describe("QuickAdd", () => {
     expect(screen.getByText("Bank A · PLN")).toBeDefined();
   });
 
-  it("offers the ledger's accounts inline at the desk breakpoint (QuickAddForm's own fallback)", () => {
+  it("offers the ledger's accounts via AccountPicker at the desk breakpoint (QuickAddForm's own fallback)", () => {
     // `use-breakpoint.test.tsx`'s own pattern: `Dimensions.get`'s initial
     // read only re-measures on the process's first call, so a width set
     // after some earlier render needs a real `resize` event, not just the
@@ -698,6 +698,7 @@ describe("QuickAdd", () => {
     act(() => window.dispatchEvent(new Event("resize")));
     withLedger(<QuickAdd />, fakeController([PLN_ACCOUNT]));
 
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(screen.getByText("Bank A · PLN")).toBeDefined();
   });
 });

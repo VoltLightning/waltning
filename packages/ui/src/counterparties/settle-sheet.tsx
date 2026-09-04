@@ -17,6 +17,12 @@
  * currently editing; tapping the other one moves it (S31 §7, the same
  * interaction this sheet borrows).
  *
+ * **The "Into"/"From" account is opened, never rendered, here.**
+ * `AccountPicker` (`accounts/`) is a sibling domain — `counterparties/` may
+ * not import it any more than it may import `transactions/` — so this only
+ * ever calls `onOpenAccountPicker`, and the screen composes the sheet, wiring
+ * its own pick straight onto `accountId` (`architecture/11`).
+ *
  * **The rate is derived, never typed** (§6, correcting §3's own stale
  * mockup): `amount` (what changed hands, in the "Into"/"From" account's own
  * currency) and `dischargesAmount` (how much of the picked balance this
@@ -35,10 +41,10 @@ import { AmountField } from "../fx/amount-field";
 import { decimalMark } from "../i18n/locales.ts";
 import { useLocale, useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
+import { Chip } from "../primitives/chip";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { RadioGroup, type RadioGroupProps } from "../primitives/radio";
 import { RateField } from "../primitives/rate-field";
-import { Select, type SelectOption } from "../primitives/select";
 import { TextField } from "../primitives/text-field";
 import { BottomSheet } from "../shell/bottom-sheet";
 import { text } from "../theme/fonts.ts";
@@ -87,7 +93,8 @@ export type SettleSheetProps = {
   onActiveFieldChange: (field: SettleSheetField) => void;
 
   accountId: string | null;
-  onAccountChange: (accountId: string) => void;
+  /** Opens `AccountPicker` (`accounts/`) — the screen composes it, this only ever asks. */
+  onOpenAccountPicker: () => void;
 
   /** `readCrossRate` for the currently picked pair — `undefined` with nothing held (offline, S14 §6). */
   referenceRate?: SettleSheetReferenceRate | undefined;
@@ -143,7 +150,7 @@ export function SettleSheet({
   activeField,
   onActiveFieldChange,
   accountId,
-  onAccountChange,
+  onOpenAccountPicker,
   referenceRate,
   note,
   onNoteChange,
@@ -238,11 +245,6 @@ export function SettleSheet({
     return [first, second, ...rest];
   }, [balances, balanceLabel, balanceHint]);
 
-  const accountOptions: readonly SelectOption[] = accounts.map((row) => ({
-    value: row.id,
-    label: accountLabel(row.name, row.currency),
-  }));
-
   const intoLabel = sign < 0 ? t("transactions.from") : t("counterparties.into");
 
   const dischargesError = fieldErrors?.byField["discharges.currency"]?.[0];
@@ -303,12 +305,11 @@ export function SettleSheet({
           />
         )}
 
-        <Select
-          label={intoLabel}
+        <Chip
           placeholder={intoLabel}
-          options={accountOptions}
-          value={accountId}
-          onChange={onAccountChange}
+          value={account === undefined ? undefined : accountLabel(account.name, account.currency)}
+          onPress={onOpenAccountPicker}
+          machineFilled={false}
         />
         {accountError === undefined ? null : <Text style={styles.fieldError}>{accountError}</Text>}
 

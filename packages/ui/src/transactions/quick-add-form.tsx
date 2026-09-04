@@ -81,7 +81,21 @@ export type QuickAddFormProps = {
   /** The device's local `AccountingDate` (§7.0a) — the date field's default. */
   today: string;
   initialAmount?: string;
-  initialAccountId?: string;
+  /**
+   * The chosen account, or `null` before one is picked — **controlled**, the
+   * same reason `categoryId` is: `AccountPicker` (`accounts/`) is a sibling
+   * domain, composed by the screen and not by this form (`architecture/11`),
+   * so a pick has to travel back in through a prop rather than living in
+   * local state.
+   */
+  accountId: string | null;
+  /**
+   * Opens `AccountPicker`, carrying the amount typed so far — the escape to
+   * account creation the sheet's own footer offers needs it, and this form is
+   * the only place that amount lives (S05's own account-chip rule: shown,
+   * never hidden, even uncapturable).
+   */
+  onOpenAccountPicker: (current: { amount: string }) => void;
   /**
    * The chosen leaf, or `null` before one is picked — **controlled**, unlike
    * every other field here. S06's sheet is composed by the screen, not by
@@ -105,7 +119,6 @@ export type QuickAddFormProps = {
    */
   fieldErrors?: FieldErrorMap;
   onCancel: () => void;
-  onCreateAccount: (draft: { amount: string; accountId: string | null }) => void;
   onSave: (draft: QuickAddDraft) => void;
 };
 
@@ -115,19 +128,16 @@ export function QuickAddForm({
   counterparties,
   today,
   initialAmount = "",
-  initialAccountId,
+  accountId,
+  onOpenAccountPicker,
   categoryId,
   onOpenCategoryPicker,
   fieldErrors,
   onCancel,
-  onCreateAccount,
   onSave,
 }: QuickAddFormProps) {
   const t = useT();
   const [amount, setAmount] = useState(parseAmount(initialAmount) ?? "");
-  const [accountId, setAccountId] = useState<string | null>(
-    accounts.some((account) => account.id === initialAccountId) ? (initialAccountId ?? null) : null,
-  );
   const [type, setType] = useState<"expense" | "income">("expense");
   const [moreOpen, setMoreOpen] = useState(false);
   const [date, setDate] = useState(today);
@@ -158,9 +168,9 @@ export function QuickAddForm({
   }
 
   const handleAmountChange = useCallback((next: string | null) => setAmount(next ?? ""), []);
-  const handleCreateAccount = useCallback(
-    () => onCreateAccount({ amount, accountId }),
-    [accountId, amount, onCreateAccount],
+  const handleOpenAccountPicker = useCallback(
+    () => onOpenAccountPicker({ amount }),
+    [amount, onOpenAccountPicker],
   );
   const handleTypeChange = useCallback((next: string) => {
     setType(next === "income" ? "income" : "expense");
@@ -250,17 +260,12 @@ export function QuickAddForm({
         onChange={handleAmountChange}
         error={fieldErrors?.byField["amountOriginal"]?.[0]}
       />
-      <Text style={styles.label}>{t("transactions.account")}</Text>
-      <View style={styles.accounts}>
-        {accounts.map((account) => (
-          <AccountChoice
-            key={account.id}
-            account={account}
-            selected={account.id === accountId}
-            onSelect={setAccountId}
-          />
-        ))}
-      </View>
+      <Chip
+        placeholder={t("transactions.account")}
+        value={selected?.name}
+        onPress={handleOpenAccountPicker}
+        machineFilled={false}
+      />
       {/* Under the picker, not under Save: the reason belongs to the choice
           that caused it, and Save being dim is the consequence rather than the
           thing to explain. */}
@@ -271,7 +276,6 @@ export function QuickAddForm({
       ) : accountError === undefined ? null : (
         <Text style={styles.fieldError}>{accountError}</Text>
       )}
-      <Button label={t("accounts.create")} onPress={handleCreateAccount} variant="secondary" />
 
       <SegmentControl segments={typeSegments} value={type} onChange={handleTypeChange} />
       <Chip
@@ -344,36 +348,8 @@ function isCounterpartyRole(value: string): value is CounterpartyRole {
   return (COUNTERPARTY_ROLES as readonly string[]).includes(value);
 }
 
-type AccountChoiceProps = {
-  account: QuickAddAccount;
-  selected: boolean;
-  onSelect: (accountId: string) => void;
-};
-
-/**
- * An uncapturable account is still selectable, and that is deliberate. Making
- * the chip `disabled` would say *this account is unavailable* with no way to
- * ask why; letting it be chosen puts the reason on the screen the moment
- * someone wonders.
- */
-function AccountChoice({ account, selected, onSelect }: AccountChoiceProps) {
-  const t = useT();
-  const handleSelect = useCallback(() => onSelect(account.id), [account.id, onSelect]);
-  return (
-    <Chip
-      placeholder={t("transactions.account")}
-      value={account.name}
-      selected={selected}
-      onPress={handleSelect}
-      machineFilled={false}
-    />
-  );
-}
-
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
-  label: { color: theme.textMuted, ...text.ui("kicker") },
-  accounts: { gap: space.md },
   blocked: { color: theme.textMuted, ...text.ui("caption") },
   more: { gap: space.x3 },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },

@@ -165,14 +165,20 @@ function tapKeys(...glyphs: readonly string[]) {
   for (const glyph of glyphs) fireEvent.click(screen.getByRole("button", { name: glyph }));
 }
 
+/**
+ * `AccountPicker` (`accounts/`) — a tile's own accessible name is the
+ * account's name alone, matching every other call site's tiles
+ * (`account-picker.test.tsx`), not the `Chip`'s "Account: …" convention its
+ * own trigger button still carries before a pick.
+ */
 function pickCashAccount() {
   fireEvent.click(screen.getByRole("button", { name: "Account" }));
-  fireEvent.click(screen.getByRole("radio", { name: "Account: Cash · PLN" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
 }
 
 function pickSharedAccount() {
   fireEvent.click(screen.getByRole("button", { name: /^Account/ }));
-  fireEvent.click(screen.getByRole("radio", { name: "Account: Joint · PLN" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Joint · PLN" }));
 }
 
 beforeEach(() => {
@@ -242,21 +248,26 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
-  it("lands a refusal under the chip it names, without discarding the draft", () => {
-    // An uncapturable currency is a refusal the client controller itself
-    // raises, before the write — no port throw to simulate.
-    withLedger({ capturable: false });
+  /**
+   * `M` — one Save rule across the three composers: the desk form (`QuickAddForm`'s
+   * `blocked`) already disables Save the moment an uncapturable account is
+   * picked; this composer used to let Save be tapped and only bounce
+   * afterwards.
+   */
+  it("disables Save and shows the needsRate caption the moment an uncapturable account is picked (SPEC.md §14.6)", () => {
+    const createTransaction = vi.fn();
+    withLedger({ createTransaction, capturable: false });
 
     tapKeys("4", "8", ".", "9", "0");
     pickCashAccount();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
       screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
     ).toBeDefined();
-    expect(router.dismissTo).not.toHaveBeenCalled();
-    // The typed amount survives the refusal — nothing here re-empties the draft.
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    // The typed amount stays put — nothing here empties the draft.
     expect(screen.getByText("48.90")).toBeDefined();
+    expect(createTransaction).not.toHaveBeenCalled();
   });
 
   /**

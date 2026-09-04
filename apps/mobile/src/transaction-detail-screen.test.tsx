@@ -42,6 +42,8 @@ type FakeDetail = ReturnType<PhoneLedgerPort["getTransaction"]>;
  * below wants an `updateTransaction` that always refuses, not one this
  * harness's own version bookkeeping would have to be tricked into.
  */
+const ACCOUNT_B = id<"accounts">("55555555-5555-4555-8555-555555555555");
+
 function fakeController(
   initial: NonNullable<FakeDetail> | null,
   overrides: Partial<PhoneLedgerPort> = {},
@@ -53,6 +55,24 @@ function fakeController(
         id: ACCOUNT,
         name: "Cash · PLN",
         kind: "other",
+        currency: PLN,
+        decimals: 2,
+        balance: toMoney("0"),
+        groupId: null,
+        ownership: "own",
+        isBusiness: false,
+        archived: false,
+        capturable: true,
+        expectedBalance: null,
+        version: 1,
+        openingBalance: toMoney("0"),
+        openingDate: null,
+        memo: "",
+      },
+      {
+        id: ACCOUNT_B,
+        name: "Bank A · PLN",
+        kind: "bank",
         currency: PLN,
         decimals: 2,
         balance: toMoney("0"),
@@ -94,6 +114,12 @@ function fakeController(
       row = {
         ...row,
         ...("payee" in input.patch ? { payee: input.patch.payee ?? row.payee } : {}),
+        ...("accountId" in input.patch
+          ? {
+              accountId: input.patch.accountId ?? row.accountId,
+              accountName: input.patch.accountId === ACCOUNT_B ? "Bank A · PLN" : row.accountName,
+            }
+          : {}),
         version: row.version + 1,
       };
     },
@@ -226,6 +252,24 @@ describe("TransactionDetail", () => {
     expect(screen.getByRole("alert").textContent).toBe(
       "This transaction changed elsewhere — reload it before saving.",
     );
+  });
+
+  /**
+   * `L` — the account row used to hold a flat `Select`; it now escapes to
+   * `AccountPicker` (`accounts/`) the same way `category` already does,
+   * grouped and capturable-tinted (`account-picker.test.tsx` covers the
+   * sheet itself).
+   */
+  it("reassigns the account through AccountPicker, and the pick reads back", () => {
+    withLedger(<TransactionDetail />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Account: Cash · PLN" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Bank A · PLN" }));
+    expect(screen.getByRole("button", { name: "Account: Bank A · PLN" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("button", { name: "Account: Bank A · PLN" })).toBeDefined();
   });
 
   it("Delete removes the row and returns to Today with a toast", () => {

@@ -14,9 +14,27 @@ import { TransferComposer } from "./transfer-composer";
 
 function noop() {}
 
-const USD_ACCOUNT = { id: "acc-usd", name: "Household · USD", currency: "USD", decimals: 2 };
-const PLN_ACCOUNT = { id: "acc-pln", name: "Cash · PLN", currency: "PLN", decimals: 2 };
-const SAVINGS_ACCOUNT = { id: "acc-pln-2", name: "Savings · PLN", currency: "PLN", decimals: 2 };
+const USD_ACCOUNT = {
+  id: "acc-usd",
+  name: "Household · USD",
+  currency: "USD",
+  decimals: 2,
+  capturable: true,
+};
+const PLN_ACCOUNT = {
+  id: "acc-pln",
+  name: "Cash · PLN",
+  currency: "PLN",
+  decimals: 2,
+  capturable: true,
+};
+const SAVINGS_ACCOUNT = {
+  id: "acc-pln-2",
+  name: "Savings · PLN",
+  currency: "PLN",
+  decimals: 2,
+  capturable: true,
+};
 
 const meta = {
   title: "Transactions/TransferComposer",
@@ -24,9 +42,9 @@ const meta = {
   args: {
     accounts: [USD_ACCOUNT, PLN_ACCOUNT, SAVINGS_ACCOUNT],
     fromAccountId: "acc-usd",
-    onFromAccountChange: noop,
+    onOpenFromAccountPicker: noop,
     toAccountId: "acc-pln",
-    onToAccountChange: noop,
+    onOpenToAccountPicker: noop,
     onSwap: noop,
     amountRaw: "150",
     toAmountRaw: "565,20",
