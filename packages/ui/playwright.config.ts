@@ -13,9 +13,28 @@
  * a static file server is not worth a new dependency.
  */
 
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 6007;
+/**
+ * **One port per checkout.** `reuseExistingServer` is right for one person on
+ * one machine — a rebuild does not wait for a second preview server — and
+ * wrong for parallel worktrees on a fixed port: worktree B's suite reused
+ * worktree A's server and screenshotted A's stories against B's baselines.
+ * The port is derived from this file's own path, the same way the test
+ * database template is, so each checkout reuses only its own server.
+ */
+const PORT =
+  6007 +
+  (Number.parseInt(
+    createHash("sha1")
+      .update(fileURLToPath(import.meta.url))
+      .digest("hex")
+      .slice(0, 6),
+    16,
+  ) %
+    900);
 
 export default defineConfig({
   testDir: "./visual",
