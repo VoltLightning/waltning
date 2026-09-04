@@ -106,7 +106,7 @@ const file = [
   HEADER,
   block(
     "REPLICA_DDL",
-    `/** The thirteen shared tables, plus \`local_meta\` and its one row. */`,
+    `/** The fifteen shared tables, plus \`local_meta\` and its one row. */`,
     statementsIn(new URL("../drizzle/replica", here)),
   ),
   block(

@@ -18,7 +18,7 @@
  * `index("outbox_pending_by_seq")` and the phone did not have it.
  */
 
-/** The thirteen shared tables, plus `local_meta` and its one row. */
+/** The fifteen shared tables, plus `local_meta` and its one row. */
 export const REPLICA_DDL: readonly string[] = [
   `CREATE TABLE \`account_groups\` (
 	\`id\` text PRIMARY KEY NOT NULL,
