@@ -84,6 +84,7 @@ function fakeController(
         symbol: "zł",
         decimals: 2,
         capturable: overrides.capturable ?? true,
+        isPivot: true,
       },
     ],
     listGroups: () => [],

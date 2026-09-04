@@ -89,7 +89,7 @@ function fakeController(
       },
     ],
     listCurrencies: () => [
-      { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
+      { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true, isPivot: true },
     ],
     listGroups: () => [],
     listRecent: () => [],

@@ -11,7 +11,7 @@ import {
   type TransactionSearchCursor,
 } from "./search-transactions.ts";
 
-const { accounts, categories, currencies, transactions } = ledgerSchema;
+const { accounts, categories, counterparties, currencies, transactions } = ledgerSchema;
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -161,6 +161,55 @@ describe("searchTransactions — structural filters, alone and combined", () => 
       to: accountingDate("2026-08-12"),
     });
     expect(result.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
+  });
+
+  it("filters by counterparty — E4's S13 history, any role", () => {
+    const nina = id<"counterparties">("00000000-0000-4000-8000-0000000000d1");
+    stores.ledger.replica.db
+      .insert(counterparties)
+      .values([{ id: nina, name: "Nina", kind: "person" }])
+      .run();
+    insertExpense({
+      id: "00000000-0000-4000-8000-000000000004",
+      payee: "Lent for tickets",
+      counterpartyId: nina,
+      counterpartyRole: "debt",
+      date: accountingDate("2026-08-20"),
+    });
+
+    const result = searchTransactions(stores.ledger.replica.db, { counterpartyId: nina });
+    expect(result.rows.map((r) => r.payee)).toEqual(["Lent for tickets"]);
+    expect(result.rows[0]?.counterpartyRole).toBe("debt");
+  });
+
+  it("filters by counterparty role — S13's debts-only default", () => {
+    const nina = id<"counterparties">("00000000-0000-4000-8000-0000000000d2");
+    stores.ledger.replica.db
+      .insert(counterparties)
+      .values([{ id: nina, name: "Nina", kind: "person" }])
+      .run();
+    insertExpense({
+      id: "00000000-0000-4000-8000-000000000005",
+      payee: "Dinner, split four ways",
+      counterpartyId: nina,
+      counterpartyRole: "debt",
+      date: accountingDate("2026-08-06"),
+    });
+    insertExpense({
+      id: "00000000-0000-4000-8000-000000000006",
+      payee: "Just involved",
+      counterpartyId: nina,
+      counterpartyRole: "reference",
+      date: accountingDate("2026-08-07"),
+    });
+
+    const debtOnly = searchTransactions(stores.ledger.replica.db, {
+      counterpartyId: nina,
+      counterpartyRole: "debt",
+    });
+    const every = searchTransactions(stores.ledger.replica.db, { counterpartyId: nina });
+    expect(debtOnly.rows.map((r) => r.payee)).toEqual(["Dinner, split four ways"]);
+    expect(every.rows.length).toBe(2);
   });
 
   it("combines every filter with AND", () => {

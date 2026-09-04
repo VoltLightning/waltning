@@ -42,6 +42,12 @@ export type TextFieldProps = {
   disabled?: boolean;
   autoFocus?: boolean;
   /**
+   * Fires on blur, after the field's own focus ring already cleared. S15 §7:
+   * the near-match check runs on blur of the name field, "not on every
+   * keystroke — warning while someone is still typing `Ann` is noise."
+   */
+  onBlur?: () => void;
+  /**
    * `label` becomes the accessible name only — no visible `<Text>` above the
    * field. For a field whose `placeholder` already carries the label (a
    * search field stating what it searches), a kicker line repeating the same
@@ -63,6 +69,7 @@ export function TextField({
   counter = false,
   disabled = false,
   autoFocus = false,
+  onBlur,
   hideLabel = false,
 }: TextFieldProps) {
   const styles = useStyles();
@@ -72,7 +79,10 @@ export function TextField({
   // Named here so the JSX passes a reference (architecture/11 bans inline
   // functions in JSX), and so focus/blur reach both the ring and the caller.
   const handleFocus = useCallback(() => handlers.onFocus(), [handlers]);
-  const handleBlur = useCallback(() => handlers.onBlur(), [handlers]);
+  const handleBlur = useCallback(() => {
+    handlers.onBlur();
+    onBlur?.();
+  }, [handlers, onBlur]);
 
   const message = error ?? hint;
   const showCounter = counter && maxLength !== undefined;

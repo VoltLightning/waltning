@@ -50,15 +50,19 @@ export function parseQuickAddRoute(params: {
   amount?: RouteValue;
   accountId?: RouteValue;
   type?: RouteValue;
+  /** S15's own return trip — `counterparty/new`'s `returnTo: "quick-add"` (E4). */
+  counterpartyId?: RouteValue;
 }): {
   amount: string;
   accountId: string | undefined;
   type: "expense" | "income" | undefined;
+  counterpartyId: string | undefined;
 } {
   return {
     amount: one(params.amount) ?? "",
     accountId: one(params.accountId),
     type: quickAddType(params.type),
+    counterpartyId: one(params.counterpartyId),
   };
 }
 

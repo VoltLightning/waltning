@@ -61,6 +61,13 @@ export type TransactionRowProps = {
    */
   type?: TransactionType;
   isBusiness?: boolean;
+  /**
+   * §5.5's own note — "with role markers" — the row's counterparty role
+   * (S13's history), already resolved to a word by the caller. Neutral, text
+   * rather than a new colour: the role is a fact about the row, not a
+   * severity.
+   */
+  roleTag?: string;
   /** S09: tap the row, see everything the ledger knows about it. Omit to keep the row inert. */
   onPress?: () => void;
 };
@@ -88,6 +95,7 @@ export function TransactionRow({
   decimals = 2,
   type: transactionType,
   isBusiness = false,
+  roleTag,
   onPress,
 }: TransactionRowProps) {
   const meta = [account, category].filter(Boolean).join(" · ");
@@ -111,6 +119,7 @@ export function TransactionRow({
               payee, so the fallback is a dash rather than nothing. */}
           <Text style={styles.payee}>{payee || "—"}</Text>
           {isBusiness ? <Tag variant="biz">biz</Tag> : null}
+          {roleTag === undefined ? null : <Tag>{roleTag}</Tag>}
         </View>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
       </View>

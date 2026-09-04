@@ -43,11 +43,12 @@ describe("phone preview route state", () => {
   });
 
   it("accepts an empty quick-add draft and only scalar route values", () => {
-    expect(parseQuickAddRoute({})).toEqual({ amount: "", accountId: undefined, type: undefined });
+    expect(parseQuickAddRoute({})).toEqual({ amount: "", accountId: undefined, type: undefined, counterpartyId: undefined });
     expect(parseQuickAddRoute({ amount: ["1", "2"], accountId: ["a", "b"] })).toEqual({
       amount: "",
       accountId: undefined,
       type: undefined,
+      counterpartyId: undefined,
     });
   });
 
@@ -56,6 +57,12 @@ describe("phone preview route state", () => {
     expect(parseQuickAddRoute({ type: "expense" }).type).toBe("expense");
     expect(parseQuickAddRoute({ type: "transfer" }).type).toBeUndefined();
     expect(parseQuickAddRoute({ type: ["income", "expense"] }).type).toBeUndefined();
+  });
+
+  it("carries S15's counterparty return trip alongside the amount and account", () => {
+    expect(
+      parseQuickAddRoute({ amount: "10.25", accountId: "account-a", counterpartyId: "cp-1" }),
+    ).toEqual({ amount: "10.25", accountId: "account-a", type: undefined, counterpartyId: "cp-1" });
   });
 
   it("reads the transaction id, or undefined for a missing or duplicated segment", () => {

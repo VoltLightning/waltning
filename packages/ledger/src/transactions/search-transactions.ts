@@ -4,7 +4,7 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
-import type { TxnType } from "@waltning/schema/enums";
+import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
 import { and, desc, eq, gte, inArray, isNull, lte, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
@@ -24,6 +24,10 @@ export type TransactionSearchFilter = {
   scope?: TransactionSearchScope;
   from?: AccountingDate;
   to?: AccountingDate;
+  /** S13's whole history — every row naming this counterparty, any role. */
+  counterpartyId?: Id<"counterparties">;
+  /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
+  counterpartyRole?: CounterpartyRole;
 };
 
 export type TransactionSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
@@ -50,6 +54,8 @@ export type LocalSearchTransaction = {
   toDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
+  /** `null` off any row with no counterparty at all — the ordinary case. */
+  counterpartyRole: CounterpartyRole | null;
 };
 
 export type CurrencyTotal = {
@@ -159,6 +165,12 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
       : undefined,
     categoryIds.length > 0 ? inArray(transactions.categoryId, categoryIds) : undefined,
     scopeCondition(scope),
+    filter.counterpartyId !== undefined
+      ? eq(transactions.counterpartyId, filter.counterpartyId)
+      : undefined,
+    filter.counterpartyRole !== undefined
+      ? eq(transactions.counterpartyRole, filter.counterpartyRole)
+      : undefined,
   ];
 
   const rows = db
@@ -181,6 +193,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
       toDecimals: toCurrencies.decimals,
       isBusiness: transactions.isBusiness,
       isCapital: transactions.isCapital,
+      counterpartyRole: transactions.counterpartyRole,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))

@@ -27,6 +27,7 @@ describe("usePhoneLedger", () => {
             symbol: "zł",
             decimals: 2,
             capturable: true,
+            isPivot: true,
           },
         ],
         listGroups: () => [],

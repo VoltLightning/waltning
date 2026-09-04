@@ -131,6 +131,14 @@ export type PhoneCurrency = {
    * the ordinary state of a phone that has never synced (§14.6).
    */
   capturable: boolean;
+  /**
+   * §7.0 — the one currency `fx_rates` is quoted against. Stands in for the
+   * *display currency* until the header toggle §7.0 names exists: S12/S13's
+   * `net in {display}` (`SPEC.md` §6.6) resolves against whichever currency
+   * this marks, matching `computations.md` §4.6's own fallback ("when
+   * display equals pivot, that join is skipped").
+   */
+  isPivot: boolean;
 };
 
 /**
@@ -324,6 +332,10 @@ export type PhoneSearchFilter = {
   scope?: PhoneTransactionScope;
   from?: AccountingDate;
   to?: AccountingDate;
+  /** S13's whole history — every row naming this counterparty, any role. */
+  counterpartyId?: Id<"counterparties">;
+  /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
+  counterpartyRole?: "debt" | "contribution" | "reference";
 };
 
 export type PhoneSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
@@ -351,6 +363,8 @@ export type PhoneSearchTransaction = {
   toDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
+  /** `null` off any row with no counterparty at all — the ordinary case. */
+  counterpartyRole: "debt" | "contribution" | "reference" | null;
 };
 
 export type PhoneCurrencyTotal = {
@@ -782,6 +796,8 @@ export type TransactionFilterDraft = {
   scope?: PhoneTransactionScope;
   from?: string;
   to?: string;
+  counterpartyId?: string;
+  counterpartyRole?: "debt" | "contribution" | "reference";
 };
 
 export type TransactionSearchCursorDraft = { date: string; id: string };
@@ -1625,6 +1641,10 @@ export function createPhoneLedger(
           ...(filter.to !== undefined && isAccountingDate(filter.to)
             ? { to: accountingDate(filter.to) }
             : {}),
+          ...(filter.counterpartyId !== undefined
+            ? { counterpartyId: id<"counterparties">(filter.counterpartyId) }
+            : {}),
+          ...(filter.counterpartyRole ? { counterpartyRole: filter.counterpartyRole } : {}),
         },
         cursor
           ? { date: accountingDate(cursor.date), id: id<"transactions">(cursor.id) }

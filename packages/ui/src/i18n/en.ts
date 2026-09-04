@@ -219,6 +219,8 @@ export const en = {
     addNote: "+ Note",
     /** D4b's chip row, empty — offered only when the ledger holds a counterparty (S05 §5). */
     addPerson: "+ Person",
+    /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
+    newCounterparty: "+ New person or company",
     /** D4b's scope chip label — Mine · Shared · Business, `shell.scope*`'s own words. */
     scope: "Scope",
     /** The scope sheet's own `SegmentControl` — why *Business* is unreachable for a shared account (§6.7). */
@@ -347,6 +349,71 @@ export const en = {
     collisionsTitle: "Possibly the same category",
     collisionsReview: "Review",
   },
+  /** S12, S13, S15 (E4) — `SPEC.md` §6.6, §6.7. */
+  counterparties: {
+    /** `DebtDirectionTag` — text, never colour alone (P5). */
+    owesYou: "owes you",
+    youOwe: "you owe",
+    settled: "settled",
+    kindPerson: "person",
+    kindCompany: "company",
+    settlesIn: "settles in {{currency}}",
+    /** `AgeingBar` — O15: *old*, never *overdue* (no `payment_terms_days` field exists). */
+    ageingDays: "{{days}} days · old",
+    /* ── S12 · the register ─────────────────────────────────────────────── */
+    segmentAll: "All",
+    segmentTheyOwe: "They owe",
+    segmentYouOwe: "You owe",
+    /** The two direction totals — §6.6, never summed across people. */
+    theyOweTotal: "they owe you",
+    youOweTotal: "you owe",
+    unallocated: "{{amount}} {{currency}} unallocated",
+    unallocatedNamed: "{{amount}} {{currency}} unallocated · {{payee}} · {{date}}",
+    allocate: "Allocate",
+    add: "+ Add",
+    emptyFirstRunTitle: "No one yet",
+    emptyFirstRunBody: "Add a person or company to track what you owe, or what they owe you.",
+    /** Distinct from `first-run` — a success, not a blank (S12 §6). */
+    emptySettledTitle: "All settled",
+    emptySettledBody: "Nobody owes anything right now.",
+    loadFailedTitle: "Couldn't load your counterparties",
+    loadFailedWhy: "Something went wrong reading the debt ledger.",
+    /* ── S13 · one person's whole position ──────────────────────────────── */
+    netIn: "net in {{currency}}",
+    /** P1 — the derived total's own rate and date, never shown without both. */
+    atRateDate: "@ {{rate}} · {{date}}",
+    settle: "Settle",
+    /** E5 has not merged yet — the button routes to a `Toast` naming this. */
+    settleComingSoon: "Settling isn't built yet — it's coming in a later update.",
+    addTransaction: "Add transaction",
+    history: "History",
+    /** S13 §3's own toggle — the count it is hiding is stated, never silent. */
+    debtsOnlyToggle: "debts only · {{count}} other rows",
+    allRowsToggle: "showing every row",
+    /** `TransactionRow`'s `roleTag` — the same three values `transactions."role.*"` names, kept short for a tag. */
+    "role.debt": "debt",
+    "role.contribution": "contribution",
+    "role.reference": "reference",
+    unmerge: "Unmerge",
+    unmergeToast: "Merge undone — the record is restored.",
+    /* ── S15 · create and edit ───────────────────────────────────────────── */
+    contact: "Contact",
+    archive: "Archive",
+    archivedToast: "Counterparty archived.",
+    create: "Create",
+    pickerTitle: "Counterparty",
+    pickerSearchPlaceholder: "Search people and companies",
+    pickerRecent: "Recent",
+    pickerNew: "+ New",
+    pickerNoMatches: "No one matches.",
+    /** The six writes' refusal `messageKey`s (`create-phone-ledger.ts`) — `architecture/12`. */
+    nameCollision: "A counterparty with this name already exists.",
+    staleVersion: "This counterparty changed elsewhere — reload and try again.",
+    openBalance: "Archiving is for settled relationships — this still has an open balance.",
+    mergeNoCounterparty: "One of these counterparties could not be found.",
+    mergeArchived: "One of these counterparties is already archived.",
+    mergeNotFound: "That merge could not be found, or was already undone.",
+  },
   shell: {
     today: "Today",
     /** The floating add button. A verb, because a `+` has no name a screen reader can say. */
@@ -451,6 +518,7 @@ export const en = {
   settleDebt: {
     noCounterparty: "This counterparty no longer exists.",
     nothingToSettle: "There is nothing open in this currency to settle.",
+<<<<<<< HEAD
     currencies: "Currencies",
     rates: "Exchange rates",
   },
@@ -566,6 +634,12 @@ export const en = {
     clearManual: "Clear manual",
     rateWriteFailed: "That didn't save.",
     rerateNotOffered: "Re-rate from the desk once a server exists.",
+=======
+    /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
+    counterparty: "Counterparty",
+    newCounterparty: "New counterparty",
+    editCounterparty: "Edit counterparty",
+>>>>>>> 5c0eabc (WIP E4: filters, isPivot, near-matches/counterpartyNet, first components)
   },
   states: {
     /**

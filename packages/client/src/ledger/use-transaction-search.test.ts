@@ -32,6 +32,7 @@ function row(n: number): PhoneSearchTransaction {
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
+    counterpartyRole: null,
   };
 }
 

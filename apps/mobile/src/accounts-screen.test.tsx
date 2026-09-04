@@ -66,8 +66,8 @@ function fakeController(rows: readonly Row[]) {
     listAccounts: (options) =>
       options?.includeArchived ? accounts : accounts.filter((a) => !a.archived),
     listCurrencies: () => [
-      { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
-      { code: USD, name: "US dollar", symbol: "$", decimals: 2, capturable: true },
+      { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true, isPivot: true },
+      { code: USD, name: "US dollar", symbol: "$", decimals: 2, capturable: true, isPivot: false },
     ],
     listGroups: () => [],
     listRecent: () => [],

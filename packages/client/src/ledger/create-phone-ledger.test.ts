@@ -53,13 +53,21 @@ function idOf<Table extends IdTable>(
  * exists for.
  */
 const CURRENCIES = [
-  { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
+  {
+    code: currencyCode("PLN"),
+    name: "Polish Złoty",
+    symbol: "zł",
+    decimals: 2,
+    capturable: true,
+    isPivot: true,
+  },
   {
     code: currencyCode("BYN"),
     name: "Belarusian Ruble",
     symbol: "Br",
     decimals: 2,
     capturable: true,
+    isPivot: false,
   },
 ];
 
@@ -699,7 +707,7 @@ describe("phone ledger controller", () => {
         account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "0"),
       ],
       listCurrencies: () => [
-        { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: false },
+        { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: false, isPivot: false },
       ],
       listGroups: () => [],
       listRecent: () => [],

@@ -105,6 +105,12 @@ export type QuickAddComposerProps = {
   onCounterpartyChange: (counterpartyId: string) => void;
   counterpartyRole: CounterpartyRole | null;
   onCounterpartyRoleChange: (role: CounterpartyRole) => void;
+  /**
+   * S15's *+ New* escape — the counterparty sheet's own footer, the same
+   * shape `onCreateAccount` already gives the account sheet. Optional: a
+   * screen that has not wired S15 yet (a story, an older test) still renders.
+   */
+  onCreateCounterparty?: () => void;
   /** `create_transaction`'s own field paths — same keys `QuickAddForm` resolves. */
   fieldErrors?: FieldErrorMap;
   onCancel: () => void;
@@ -138,6 +144,7 @@ export function QuickAddComposer({
   onCounterpartyChange,
   counterpartyRole,
   onCounterpartyRoleChange,
+  onCreateCounterparty,
   fieldErrors,
   onCancel,
 }: QuickAddComposerProps) {
@@ -368,6 +375,13 @@ export function QuickAddComposer({
           counterpartyRole={counterpartyRole}
           onCounterpartyRoleChange={onCounterpartyRoleChange}
         />
+        {onCreateCounterparty ? (
+          <Button
+            label={t("transactions.newCounterparty")}
+            onPress={onCreateCounterparty}
+            variant="secondary"
+          />
+        ) : null}
       </BottomSheet>
     </View>
   );

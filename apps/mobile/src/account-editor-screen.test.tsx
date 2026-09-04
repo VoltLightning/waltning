@@ -60,7 +60,7 @@ function fakeController(overrides: {
   const port: PhoneLedgerPort = {
     listAccounts: () => [ACCOUNT],
     listCurrencies: () => [
-      { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
+      { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true, isPivot: true },
     ],
     listGroups: () => [],
     listRecent: () => [],
