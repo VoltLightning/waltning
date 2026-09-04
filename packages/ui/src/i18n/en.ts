@@ -438,6 +438,9 @@ export const en = {
     categories: "Categories",
     /** S31's own nav title. */
     transfer: "Transfer",
+
+    currencies: "Currencies",
+    rates: "Exchange rates",
   },
   /**
    * `settle_debt`'s refusals (H9), resolved through `useT()` the same way

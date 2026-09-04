@@ -284,6 +284,9 @@ export const pl: Messages = {
     settings: "Ustawienia",
     categories: "Kategorie",
     transfer: "Przelew",
+
+    currencies: "Waluty",
+    rates: "Kursy wymiany",
   },
   settleDebt: {
     noCounterparty: "Ten kontrahent już nie istnieje.",

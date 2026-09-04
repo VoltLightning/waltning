@@ -130,6 +130,7 @@ function fakeController(overrides: {
     convertLeafGroup: vi.fn(),
     mergeCategories: vi.fn(),
     archiveCategory: vi.fn(),
+    readCrossRate: vi.fn(() => null),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

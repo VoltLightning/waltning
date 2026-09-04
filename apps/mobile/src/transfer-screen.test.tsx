@@ -142,6 +142,7 @@ function fakeController(
     convertLeafGroup: vi.fn(),
     mergeCategories: vi.fn(),
     archiveCategory: vi.fn(),
+    listCurrencySettings: vi.fn(() => []),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {
