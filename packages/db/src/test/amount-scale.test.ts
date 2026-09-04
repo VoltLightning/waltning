@@ -1,11 +1,14 @@
 /**
- * H2 — a transaction cannot hold more decimal places than its own currency.
+ * H2 — a transaction cannot hold more decimal places than its own currency,
+ * in any of the three amount/currency pairs it can carry: `amount_original`
+ * (every row), `to_amount` (a transfer's destination leg, §7.5) and
+ * `debt_amount` (S14's settlement coalesce).
  *
  * `create-phone-ledger.ts`'s controller already refuses this before a write
  * ever leaves the phone (`transactions.tooManyDecimals`), but a client-side
  * refusal is not a guarantee (`CLAUDE.md`: "New guarantee → new
- * constraint"). `0011_transaction_amount_scale.sql` is that constraint; this
- * is what breaks it once to prove it fires.
+ * constraint"). `0012_transaction_scale_and_category_kind.sql` is that
+ * constraint; this is what breaks it once to prove it fires.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -17,6 +20,9 @@ const ACCOUNT = "11111111-1111-1111-1111-111111111111";
 
 const JPY_ACCOUNT = "33333333-3333-3333-3333-333333333333";
 
+/** The transfer destination leg's own account — a second currency, USD. */
+const USD_ACCOUNT = "44444444-4444-4444-4444-444444444444";
+
 beforeAll(async () => {
   s = await scratchDatabase("amountscale");
   // Placeholder data only — an invented bank in an invented currency.
@@ -24,10 +30,13 @@ beforeAll(async () => {
   await s.sql.unsafe(`
     INSERT INTO currencies (code, name, is_pivot, decimals) VALUES ('PLN', 'Zloty', true, 2);
     INSERT INTO currencies (code, name, decimals) VALUES ('JPY', 'Yen', 0);
+    INSERT INTO currencies (code, name, decimals) VALUES ('USD', 'Dollar', 2);
     INSERT INTO accounts (id, name, kind, currency, ownership)
       VALUES ('${ACCOUNT}', 'Bank A · PLN', 'bank', 'PLN', 'own');
     INSERT INTO accounts (id, name, kind, currency, ownership)
-      VALUES ('${JPY_ACCOUNT}', 'Bank A · JPY', 'bank', 'JPY', 'own');`);
+      VALUES ('${JPY_ACCOUNT}', 'Bank A · JPY', 'bank', 'JPY', 'own');
+    INSERT INTO accounts (id, name, kind, currency, ownership)
+      VALUES ('${USD_ACCOUNT}', 'Bank B · USD', 'bank', 'USD', 'own');`);
 }, 60_000);
 
 afterAll(async () => {
@@ -100,6 +109,64 @@ describe("a transaction's amount fits its currency's own scale", () => {
     // JPY holds zero decimal places; 500 (padded to 500.00000000 by the
     // column) has none either. This is the row `scale()` alone would flag by
     // mistake, and `trim_scale` is what keeps it admitted.
+    expect(code).toBeNull();
+  });
+
+  /** M — the trigger used to check `amount_original` only; extended to `to_amount`. */
+  it("refuses three decimal places on to_amount, the transfer's destination leg (WA016)", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO transactions
+          (id, account_id, to_account_id, date, type,
+           amount_original, currency, to_amount, to_currency, fx_rate, to_fx_rate)
+        VALUES
+          ('${id}', '${ACCOUNT}', '${USD_ACCOUNT}', '2026-01-01', 'transfer',
+           48.90, 'PLN', 10.125, 'USD', 0.25, 1)`),
+    );
+    expect(code, "10.125 against USD's two decimal places must be refused").toBe("WA016");
+  });
+
+  it("admits to_amount at exactly the destination currency's own scale", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO transactions
+          (id, account_id, to_account_id, date, type,
+           amount_original, currency, to_amount, to_currency, fx_rate, to_fx_rate)
+        VALUES
+          ('${id}', '${ACCOUNT}', '${USD_ACCOUNT}', '2026-01-01', 'transfer',
+           48.90, 'PLN', 10.12, 'USD', 0.25, 1)`),
+    );
+    expect(code).toBeNull();
+  });
+
+  /** M — extended to `debt_amount`, S14's settlement coalesce. */
+  it("refuses three decimal places on debt_amount (WA016)", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO transactions
+          (id, account_id, date, type, amount_original, currency, fx_rate,
+           debt_currency, debt_amount)
+        VALUES
+          ('${id}', '${ACCOUNT}', '2026-01-01', 'expense', 10, 'PLN', 1,
+           'PLN', 10.125)`),
+    );
+    expect(code, "10.125 against PLN's two decimal places must be refused").toBe("WA016");
+  });
+
+  it("admits debt_amount at exactly its own currency's scale", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO transactions
+          (id, account_id, date, type, amount_original, currency, fx_rate,
+           debt_currency, debt_amount)
+        VALUES
+          ('${id}', '${ACCOUNT}', '2026-01-01', 'expense', 10, 'PLN', 1,
+           'PLN', 10.12)`),
+    );
     expect(code).toBeNull();
   });
 });

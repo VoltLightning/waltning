@@ -13,9 +13,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneAccount,
+  type PhoneCategory,
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
@@ -85,6 +87,8 @@ function fakeController(
     capturable?: boolean;
     accounts?: readonly PhoneAccount[];
     counterparties?: PhoneLedgerPort["listCounterparties"];
+    categories?: readonly PhoneCategory[];
+    payeeHistory?: readonly PayeeHistoryRow[];
   } = {},
 ) {
   const port: PhoneLedgerPort = {
@@ -101,10 +105,10 @@ function fakeController(
     ],
     listGroups: () => [],
     listRecent: () => [],
-    listCategories: () => [],
+    listCategories: () => overrides.categories ?? [],
     listCategoryTree: () => [],
     listCounterparties: overrides.counterparties ?? (() => []),
-    listPayeeHistory: () => [],
+    listPayeeHistory: () => overrides.payeeHistory ?? [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
@@ -320,6 +324,53 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     // The typed amount stays put — nothing here empties the draft.
     expect(screen.getByText("48.90")).toBeDefined();
     expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * M — `categoryProposalDismissed` used to reset on every payee keystroke
+   * (`handleComposerPayeeChange`'s own raw-text reset), so retyping a payee
+   * whose *fold* comes back unchanged silently revived a proposal someone
+   * had just dismissed with Undo. "CORNER CAFÉ" folds identically to
+   * "Corner Café" (`fold`'s own case-only rule here), so this exercises the
+   * no-op-in-fold case directly rather than a byte-identical retype.
+   */
+  it("keeps the Undo dismissal after retyping the same fold (M)", () => {
+    const category: PhoneCategory = {
+      id: id<"categories">("77777777-7777-4777-8777-777777777777"),
+      name: "Eating out",
+      kind: "expense",
+    };
+    const history: PayeeHistoryRow[] = [
+      { payee: "Corner Café", categoryId: category.id, date: accountingDate("2026-08-01") },
+    ];
+    withLedger({ categories: [category], payeeHistory: history });
+
+    tapKeys("4", "8", ".", "9", "0");
+    pickCashAccount();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Payee" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
+      target: { value: "Corner Café" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(
+      screen.getByRole("button", { name: "Category: Eating out, filled automatically" }),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
+
+    // Retype — different raw text, the same fold. The chip already carries
+    // "Corner Café" as its value, so its accessible name is no longer the
+    // bare "+ Payee" placeholder.
+    fireEvent.click(screen.getByRole("button", { name: /^\+ Payee/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
+      target: { value: "CORNER CAFÉ" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
   });
 
   /**

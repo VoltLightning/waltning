@@ -60,8 +60,10 @@ export const SQLSTATE = {
   ACCOUNT_CURRENCY_CHANGE: "WA013",
   ACCOUNT_MADE_SHARED: "WA014",
   LINES_SUM: "WA015",
-  /** H2 — an amount past its own currency's own decimal scale (`0011_transaction_amount_scale.sql`). */
+  /** H2 — an amount past its own currency's own decimal scale (`0012_transaction_scale_and_category_kind.sql`). */
   AMOUNT_SCALE: "WA016",
+  /** H1-b — a category's own kind disagrees with the transaction's type (`0012_transaction_scale_and_category_kind.sql`). */
+  CATEGORY_KIND_MATCHES_TYPE: "WA017",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -88,6 +90,7 @@ export const TRIGGER = {
   ACCOUNT_CHANGE_SAFE: "accounts_change_safe",
   LINES_SUM: "transaction_lines_sum_matches",
   AMOUNT_SCALE: "transactions_amount_scale_matches_currency",
+  CATEGORY_KIND_MATCHES_TYPE: "transactions_category_kind_matches_type",
 } as const;
 
 /**
@@ -133,6 +136,11 @@ export const GUARDS: Record<GuardState, Guard> = {
   [SQLSTATE.LINES_SUM]: { code: "validation", constraint: TRIGGER.LINES_SUM },
 
   [SQLSTATE.AMOUNT_SCALE]: { code: "validation", constraint: TRIGGER.AMOUNT_SCALE },
+
+  [SQLSTATE.CATEGORY_KIND_MATCHES_TYPE]: {
+    code: "validation",
+    constraint: TRIGGER.CATEGORY_KIND_MATCHES_TYPE,
+  },
 };
 
 /**

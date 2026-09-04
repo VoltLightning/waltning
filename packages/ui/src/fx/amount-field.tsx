@@ -103,8 +103,15 @@ export function parseAmount(input: string): string | null {
   // twelve integer digits. Past that the schema would refuse the write
   // anyway; catching it here keeps Save disabled instead of enabled on a
   // figure the account never held.
-  const integerDigits = normalized.replace("-", "").split(".")[0]?.length ?? 0;
-  if (integerDigits > 12) return null;
+  //
+  // L — counted by *significance*, not by character: `zMoney`'s refine
+  // compares the numeric value, so "0000000000001" (thirteen characters, one
+  // significant digit) is nowhere near the cap it describes — a bare
+  // `.length` would have refused it anyway, disabling Save on a figure the
+  // schema was always going to accept.
+  const integerPart = normalized.replace("-", "").split(".")[0] ?? "";
+  const significantIntegerDigits = integerPart.replace(/^0+(?=\d)/, "").length;
+  if (significantIntegerDigits > 12) return null;
 
   return normalized;
 }

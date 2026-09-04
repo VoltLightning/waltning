@@ -32,7 +32,7 @@ import {
 } from "@waltning/ui/transactions/quick-add-composer";
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
@@ -69,6 +69,11 @@ function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError)
   }
   if (error.messageKey === "transactions.sharedNeverBusiness") {
     return t("transactions.sharedNeverBusiness");
+  }
+  if (error.messageKey === "transactions.categoryKindMismatch") {
+    const kind =
+      error.params?.["type"] === "income" ? t("transactions.income") : t("transactions.expense");
+    return t("transactions.categoryKindMismatch", { type: kind });
   }
   return error.message;
 }
@@ -232,9 +237,9 @@ export default function QuickAdd() {
   const [composerCategoryId, setComposerCategoryId] = useState<string | null>(null);
   /**
    * H1 — S05 §8's Undo, for a proposal the draft applied on its own. Reset
-   * whenever the payee's fold changes (`handleComposerPayeeChange` below):
-   * a different payee earns its own proposal a fresh chance, rather than
-   * inheriting a dismissal that was never about it.
+   * whenever the payee's *fold* changes (the effect beside `payeeFold`
+   * below): a different payee earns its own proposal a fresh chance, rather
+   * than inheriting a dismissal that was never about it.
    */
   const [categoryProposalDismissed, setCategoryProposalDismissed] = useState(false);
   const [composerPayee, setComposerPayee] = useState("");
@@ -270,6 +275,18 @@ export default function QuickAdd() {
   );
 
   const payeeFold = useMemo(() => fold(composerPayee), [composerPayee]);
+  /**
+   * M — reset the Undo dismissal only when the payee's *fold* actually
+   * changes, not on every keystroke. `handleComposerPayeeChange` used to
+   * reset `categoryProposalDismissed` on raw text, so a no-op edit — retype
+   * the same fold, or a keystroke `fold` collapses away (case, punctuation,
+   * whitespace) — silently revived a proposal someone had just dismissed
+   * with S05 §8's own Undo.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: payeeFold is the trigger; the effect body reads no value from it
+  useEffect(() => {
+    setCategoryProposalDismissed(false);
+  }, [payeeFold]);
   // `payeeFold` (not `composerPayee`) is both the dependency and the value
   // `proposeCategory` is given: `fold` is idempotent, so this is the same
   // match `proposeCategory`'s own internal fold would produce, and it is what
@@ -281,18 +298,40 @@ export default function QuickAdd() {
     [ledger, payeeFold],
   );
   /**
+   * H1-b — the proposal's own category kind, read off the replica the same
+   * way `pickedCategory`/`proposedCategory` already gate by `kind === type`
+   * inside `QuickAddComposer` (`transactions_category_shape`, §7's own
+   * rule: a category attaches to income or expense, never either
+   * interchangeably). `proposeCategory` itself carries no `kind` — the
+   * category tree is a client concern (`payee-memory.ts`'s own doc) — so
+   * this is the one lookup that answers it.
+   */
+  const proposedCategoryKind = categoryProposal
+    ? snapshot.categories.find((category) => category.id === categoryProposal.categoryId)?.kind
+    : undefined;
+  /**
    * H1 — a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` **is** the
    * draft's category the moment it fills, not only a suggestion the sheet
    * has to confirm (S05 §8). `composerCategoryId` (a real pick) always wins;
    * short of that, the effective category is the proposal's own id, exactly
    * the pattern `effectiveAccountId`/`lastUsedAccountId` already keeps for
    * the account chip.
+   *
+   * H1-b — and only while the proposal's own kind still matches
+   * `composerType`. Without this, switching Expense→Income after an expense
+   * proposal auto-filled left `effectiveCategoryId` naming the stale
+   * expense leaf while the chip itself rendered empty (`QuickAddComposer`'s
+   * own `pickedCategory` already filters by kind) — Save would have sent an
+   * income row carrying an expense category, invisibly. A type switch needs
+   * no separate "clear" action: this is derived fresh from `composerType`
+   * every render, so the mismatch alone is what turns it off.
    */
   const categoryAutoFilled =
     composerCategoryId === null &&
     categoryProposal !== undefined &&
     categoryProposal.confidence >= PROPOSAL_DISPLAY_THRESHOLD &&
-    !categoryProposalDismissed;
+    !categoryProposalDismissed &&
+    proposedCategoryKind === composerType;
   const effectiveCategoryId =
     composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
   const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);
@@ -394,7 +433,6 @@ export default function QuickAdd() {
   }, []);
   const handleComposerPayeeChange = useCallback((next: string) => {
     setComposerPayee(next);
-    setCategoryProposalDismissed(false);
   }, []);
   const handleComposerDateChange = useCallback((next: string) => setComposerDate(next), []);
   const handleComposerBusinessChange = useCallback(
@@ -607,7 +645,20 @@ export default function QuickAdd() {
           onOpenAccountPicker={handleOpenComposerAccountPicker}
           categories={snapshot.categories}
           categoryId={effectiveCategoryId}
-          {...(categoryProposal === undefined ? {} : { categoryProposal })}
+          /*
+           * M — withheld once dismissed, not only while `categoryAutoFilled`
+           * is false for some other reason: the composer's own "shown, not
+           * yet applied" state (S05 §8's amber, pre-`categoryAutoFilled`)
+           * cannot otherwise tell "never applied" apart from "Undo just
+           * dismissed it", and showed the proposal machine-filled again the
+           * instant Undo ran, at or above §14's threshold, defeating Undo
+           * outright. `CategorySheet` below still gets the proposal
+           * regardless — a deliberate open of the sheet is not the passive
+           * auto-fill Undo exists to reverse.
+           */
+          {...(categoryProposal === undefined || categoryProposalDismissed
+            ? {}
+            : { categoryProposal })}
           categoryAutoFilled={categoryAutoFilled}
           onUndoCategory={handleUndoCategory}
           onOpenCategoryPicker={handleComposerOpenCategoryPicker}

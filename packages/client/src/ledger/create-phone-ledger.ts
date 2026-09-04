@@ -2343,6 +2343,49 @@ export function createPhoneLedger(
           };
         }
 
+        /**
+         * M — the H2 guarantee (`createTransaction`, above) checked
+         * `amount_original` only; `settle_debt`'s own `discharges` maps onto
+         * `debt_amount`/`debt_currency` (S14's settlement coalesce) and can
+         * carry the same defect, in a currency that need not be any
+         * account's own — `snapshot.currencies`, not `snapshot.accounts`,
+         * is what has its scale. Matches the extended
+         * `assert_amount_scale` trigger
+         * (`0012_transaction_scale_and_category_kind.sql`).
+         */
+        const dischargesCurrency = snapshot.currencies.find(
+          (candidate) => candidate.code === draft.dischargesCurrency,
+        );
+        if (
+          dischargesCurrency !== undefined &&
+          money.dec(money.toMoney(draft.dischargesAmount)).decimalPlaces() >
+            dischargesCurrency.decimals
+        ) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
+          });
+          return {
+            fieldErrors: [
+              {
+                // `settleDebtInput`'s own nested path (`discharges.amount`,
+                // `discharges: z.object({...})`), matching `settle-sheet.tsx`'s
+                // own `byField["discharges.currency"]` read of the schema's
+                // own refusal on the sibling field.
+                path: "discharges.amount",
+                message: `${dischargesCurrency.code} holds ${dischargesCurrency.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: {
+                  currency: dischargesCurrency.code,
+                  decimals: String(dischargesCurrency.decimals),
+                },
+              },
+            ],
+          };
+        }
+
         const capture = runtime.capture();
 
         // R2 H4 — `type` is read here, from the balance the controller can
@@ -2493,10 +2536,14 @@ export function createPhoneLedger(
          * truncated figure the day someone reads the row back.
          */
         if (money.dec(normalized).decimalPlaces() > account.decimals) {
+          // L — a refusal is not a success: `phase` used to read "success" on
+          // every early return here, which reported a validation bounce the
+          // same way a completed write would.
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
           });
           return {
             fieldErrors: [
@@ -2508,6 +2555,76 @@ export function createPhoneLedger(
               },
             ],
           };
+        }
+
+        /**
+         * M — the H2 guarantee above checked `amountOriginal` only; a
+         * transfer's destination leg (§7.5) can carry the same defect in its
+         * own currency, and the client-side check must cover the same
+         * ground the extended `assert_amount_scale` trigger now does
+         * (`0012_transaction_scale_and_category_kind.sql`). Only checked
+         * when the destination account is known locally, matching the
+         * source account's own guard above.
+         */
+        if (draft.toAmount !== undefined && draft.toAccountId !== undefined) {
+          const toAccount = snapshot.accounts.find(
+            (candidate) => candidate.id === draft.toAccountId,
+          );
+          if (
+            toAccount !== undefined &&
+            money.dec(money.toMoney(draft.toAmount)).decimalPlaces() > toAccount.decimals
+          ) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.tooManyDecimals")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "toAmount",
+                  message: `${toAccount.currency} holds ${toAccount.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: { currency: toAccount.currency, decimals: String(toAccount.decimals) },
+                },
+              ],
+            };
+          }
+        }
+
+        /**
+         * H1-b — `createTransactionInput` has no category tree in view and
+         * so cannot know a category's own `kind`; the controller does
+         * (`snapshot.categories`), the same reason the two checks above live
+         * here rather than in the schema. Refused on `categoryId` before the
+         * write — the guarantee this mirrors is
+         * `transactions_category_kind_matches_type`
+         * (`0012_transaction_scale_and_category_kind.sql`), broken once
+         * there to prove it fires even if this refusal is ever bypassed.
+         */
+        if (draft.categoryId !== null && (draft.type === "income" || draft.type === "expense")) {
+          const category = snapshot.categories.find(
+            (candidate) => candidate.id === draft.categoryId,
+          );
+          if (category !== undefined && category.kind !== draft.type) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.categoryKindMismatch")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "categoryId",
+                  message: `This category doesn't match ${draft.type}`,
+                  messageKey: "transactions.categoryKindMismatch",
+                  params: { type: draft.type },
+                },
+              ],
+            };
+          }
         }
 
         const capture = runtime.capture();

@@ -83,7 +83,7 @@
       "idx": 11,
       "version": "7",
       "when": 1788589200000,
-      "tag": "0011_transaction_amount_scale",
+      "tag": "0012_transaction_scale_and_category_kind",
       "breakpoints": true
     }
   ]

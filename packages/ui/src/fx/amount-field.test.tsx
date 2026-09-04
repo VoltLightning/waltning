@@ -67,6 +67,20 @@ describe("parseAmount — comma decimal", () => {
     expect(parseAmount("1234567890123,45")).toBeNull();
   });
 
+  /**
+   * L — the twelve-digit cap counts by *significance*, not by character:
+   * `zMoney`'s own refine compares the numeric value, so a run of leading
+   * zeros must not count toward the cap the way `.length` alone would.
+   */
+  it("does not count leading zeros toward the twelve-digit cap (L)", () => {
+    expect(parseAmount("0000000000001")).toBe("0000000000001"); // 1 significant digit, 13 characters
+    expect(parseAmount("00000000000000000001,50")).toBe("00000000000000000001.50");
+    // Twelve significant digits, padded with a leading zero — still admitted.
+    expect(parseAmount("0999999999999")).toBe("0999999999999");
+    // Thirteen significant digits, once the leading zero is stripped — still refused.
+    expect(parseAmount("09999999999999")).toBeNull();
+  });
+
   it("renders with a currency affix", () => {
     render(<AmountField label="Amount" currency="PLN" onChange={noop} />);
     expect(screen.getByText("PLN")).toBeDefined();

@@ -238,13 +238,22 @@ describe("every other guard is identifiable", () => {
     await s.sql`DELETE FROM transactions`;
   });
 
-  /** H2 — `0011_transaction_amount_scale.sql`. PLN holds two decimal places. */
+  /** H2 — `0012_transaction_scale_and_category_kind.sql`. PLN holds two decimal places. */
   it("WA016 · an amount holds more decimals than its own currency", async () => {
     const error = await refusal(
       `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
        VALUES ('2026-01-01', 'expense', '${ACC_PLN}', 10.125, 'PLN', 1)`,
     );
     expect(error.details?.constraint).toBe(TRIGGER.AMOUNT_SCALE);
+  });
+
+  /** H1-b — `0012_transaction_scale_and_category_kind.sql`. `CAT_LEAF` is `expense`. */
+  it("WA017 · a category's own kind disagrees with the transaction's type", async () => {
+    const error = await refusal(
+      `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, category_id)
+       VALUES ('2026-01-01', 'income', '${ACC_OWN}', 10, 'USD', 1, '${CAT_LEAF}')`,
+    );
+    expect(error.details?.constraint).toBe(TRIGGER.CATEGORY_KIND_MATCHES_TYPE);
   });
 });
 

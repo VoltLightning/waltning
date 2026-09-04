@@ -113,6 +113,8 @@ export const pl: Messages = {
     expense: "Wydatek",
     income: "Przychód",
     category: "Kategoria",
+    categorySuggested: "Sugerowana: {{name}}",
+    categoryKindMismatch: "Ta kategoria nie pasuje do: {{type}}.",
     noCategory: "Brak kategorii",
     more: "Więcej",
     date: "Data",

@@ -168,6 +168,21 @@ export const en = {
     expense: "Expense",
     income: "Income",
     category: "Category",
+    /**
+     * H1-a — §14's display threshold, below which a proposal is a
+     * suggestion, never a value: the category chip's own placeholder while
+     * `categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD`, in the
+     * placeholder's own ink (never machine-filled) rather than the chip
+     * silently carrying the guess.
+     */
+    categorySuggested: "Suggested: {{name}}",
+    /**
+     * H1-b — `categories.kind` disagrees with `type` (income/expense). The
+     * controller refuses this before the write (`transactions_category_
+     * kind_matches_type`'s own guarantee), the same rule a type switch after
+     * an auto-fill exists to prevent from ever reaching here.
+     */
+    categoryKindMismatch: "This category doesn't match {{type}}.",
     noCategory: "No category",
     more: "More",
     date: "Date",
@@ -429,7 +444,7 @@ export const en = {
      * §14, P2's own trail — the caption under a category chip that filled
      * itself from a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD`, so the
      * value reads as sourced rather than as a black box (S05 §8). Paired with
-     * `common.undo` on the same row.
+     * `states.undo` on the same row.
      */
     fromHistory: "From your history: {{payee}}",
     noMatchTitle: "No matching category",

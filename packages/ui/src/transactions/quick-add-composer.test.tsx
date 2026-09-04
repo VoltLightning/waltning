@@ -155,6 +155,35 @@ it("shows the P2 trail and Undo when the draft holds an applied proposal (H1, S0
   expect(onUndoCategory).toHaveBeenCalledOnce();
 });
 
+/**
+ * M — the trail used to interpolate the just-typed `payee` verbatim; a
+ * neighbours-basis proposal can win on a fold match against a differently
+ * spelled history row (S05 §8), and the trail names *where the pick came
+ * from* — the history's own spelling — not an echo of what was just typed.
+ */
+it("names the trail from the proposal's own neighbour, not the typed payee (M)", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        payee: "corner cafe",
+        categoryId: "cat-eating-out",
+        categoryProposal: {
+          categoryId: "cat-eating-out",
+          confidence: 0.9,
+          basis: "neighbours",
+          neighbours: [
+            { payee: "Corner Café", similarity: 0.8 },
+            { payee: "Corner Cafe Ltd", similarity: 0.5 },
+          ],
+        },
+        categoryAutoFilled: true,
+      })}
+    />,
+  );
+  expect(screen.getByText("From your history: Corner Café")).toBeDefined();
+  expect(screen.queryByText("From your history: corner cafe")).toBeNull();
+});
+
 it("lets someone type a payee through its own sheet", () => {
   const onPayeeChange = vi.fn();
   render(<QuickAddComposer {...props({ onPayeeChange })} />);
@@ -327,6 +356,35 @@ it("shows a proposal's low-confidence marker only below §14's threshold", () =>
     />,
   );
   expect(screen.getByText("Low confidence — check before using.")).toBeDefined();
+});
+
+/**
+ * H1-a — below §14's display threshold, `categoryValue` used to fall back to
+ * the proposal's own name regardless of confidence, so the chip read as
+ * filled (an accent border, the proposal's name in the filled ink) even
+ * though nothing had picked it. The chip must instead read as a suggestion:
+ * the placeholder itself names it, in the placeholder's own ink, never
+ * machine-filled.
+ */
+it("shows a below-threshold proposal as a suggestion, never as the chip's value (H1-a)", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        categoryProposal: {
+          categoryId: "cat-eating-out",
+          confidence: 0.57,
+          basis: "neighbours",
+          neighbours: [{ payee: "corner cafe", similarity: 0.5 }],
+        },
+      })}
+    />,
+  );
+  // The suggestion is the chip's placeholder, not its value — "Eating out"
+  // never reads as a filled category, and there is no auto-filled marker.
+  const category = screen.getByRole("button", { name: "Suggested: Eating out" });
+  expect(category).toBeDefined();
+  expect(category.textContent).not.toContain("auto");
+  expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
 });
 
 it("shows a 'role?' suffix on the counterparty chip while the role is unresolved (§6.6)", () => {

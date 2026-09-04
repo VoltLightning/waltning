@@ -389,6 +389,52 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
   });
 
   /**
+   * H1-b — the auto-fill used to ignore `composerType`: switching to Income
+   * after an expense proposal auto-filled left the chip empty but still
+   * sent the stale expense leaf's id on Save. `Eating out` is `kind:
+   * "expense"` (the fixture above), so once the type toggle reads
+   * "Income" the proposal no longer matches and the draft's category must
+   * go back to unset, not silently keep the expense category.
+   */
+  it("clears an auto-filled category when the type switches away from its own kind (H1-b)", async () => {
+    const { ledger, fixture, stub } = setupJourney();
+    await lastCapture.set({ accountId: fixture.cashAccountId, at: Date.now() });
+
+    render(<JourneyHarness controller={ledger.controller} stub={stub} />);
+    await settleLayout();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    for (const glyph of ["4", "8", ".", "9", "0"]) {
+      fireEvent.click(screen.getByRole("button", { name: glyph }));
+    }
+    fireEvent.click(screen.getByRole("button", { name: "+ Payee" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
+      target: { value: "Corner Café" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Auto-filled, expense side (this file's own test above pins this state).
+    expect(
+      screen.getByRole("button", { name: "Category: Eating out, filled automatically" }),
+    ).toBeDefined();
+
+    // The type toggle — top-right, S05 §9.1's own escape hatch.
+    fireEvent.click(screen.getByRole("button", { name: "Expense" }));
+
+    // The chip goes back to plain, unfilled — `Eating out` is an expense
+    // category and no longer matches `type: "income"`.
+    expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+
+    const rows = readTransactions(ledger);
+    const captured = rows.find((row) => row.payee === "Corner Café" && row.type === "income");
+    expect(captured?.categoryId).toBeNull();
+  });
+
+  /**
    * §14.6: a capture on a currency the replica cannot value is refused
    * *before* Save, with the currency named — the refusal asked in advance
    * (`readCurrencies#capturable`) rather than thrown from inside the write,

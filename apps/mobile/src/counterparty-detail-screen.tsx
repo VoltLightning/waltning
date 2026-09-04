@@ -194,6 +194,17 @@ function resolveSettleFieldErrorMessage(t: ReturnType<typeof useT>, error: Field
   if (error.messageKey === "transactions.needsRate") {
     return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
   }
+  // M — the same guard `quick-add-screen.tsx`'s own `resolveFieldErrorMessage`
+  // resolves for `createTransaction`'s `amountOriginal`/`toAmount`: this is
+  // `settleDebt`'s own `discharges.amount` past `discharges.currency`'s own
+  // decimal scale (`0012_transaction_scale_and_category_kind.sql`'s
+  // `debt_amount`/`debt_currency` pair).
+  if (error.messageKey === "transactions.tooManyDecimals") {
+    return t("transactions.tooManyDecimals", {
+      currency: error.params?.["currency"] ?? "",
+      decimals: error.params?.["decimals"] ?? "",
+    });
+  }
   // C1 — an executor refusal `settleDebtRefusal` does not recognise now
   // carries `common.couldNotSave` rather than `null`, so it never falls
   // through to the raw English `refusalFromThrow` would otherwise print.
