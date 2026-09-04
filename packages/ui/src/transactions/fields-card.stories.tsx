@@ -12,8 +12,24 @@ import { FieldsCard } from "./fields-card";
 function noop() {}
 
 const ACCOUNTS = [
-  { id: "account-a", name: "Cash · PLN" },
-  { id: "account-b", name: "Bank A · PLN" },
+  {
+    id: "account-a",
+    name: "Cash · PLN",
+    currency: "PLN",
+    kind: "cash" as const,
+    capturable: true,
+    ownership: "own" as const,
+    groupId: null,
+  },
+  {
+    id: "account-b",
+    name: "Bank A · PLN",
+    currency: "PLN",
+    kind: "bank" as const,
+    capturable: true,
+    ownership: "own" as const,
+    groupId: null,
+  },
 ];
 
 const meta = {
@@ -29,6 +45,8 @@ const meta = {
       isBusiness: false,
     },
     accounts: ACCOUNTS,
+    accountId: "account-a",
+    onOpenAccountPicker: noop,
     today: "2026-08-06",
     categoryId: "cat-eating-out",
     categoryName: "Eating out",

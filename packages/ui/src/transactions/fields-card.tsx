@@ -22,10 +22,11 @@
  * spec is the one that should have said this and did not; it changes
  * alongside this file rather than silently.
  *
- * **Category and scope never accordion.** `category` opens `CategorySheet`
- * — composed by the screen, never by this card (`architecture/11`: a domain
- * does not import a sibling domain) — the same escape `QuickAddForm` already
- * uses, so its chevron never turns. `isBusiness` is a `Toggle`, already a
+ * **Category, account and scope never accordion.** `category` opens
+ * `CategorySheet` and `account` opens `AccountPicker` — both composed by the
+ * screen, never by this card (`architecture/11`: a domain does not import a
+ * sibling domain), the same escape `QuickAddForm`/`QuickAddComposer` already
+ * use — so neither chevron ever turns. `isBusiness` is a `Toggle`, already a
  * direct, one-tap control; wrapping it behind a row that has to be tapped
  * open first would cost a tap for nothing.
  *
@@ -36,6 +37,7 @@
  */
 
 import { isAccountingDate } from "@waltning/core/date";
+import type { AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -46,14 +48,30 @@ import { useDisclosureMotion } from "../primitives/disclosure-motion.ts";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { useInteraction } from "../primitives/interaction.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
-import { Select } from "../primitives/select";
 import { TextField } from "../primitives/text-field";
 import { Toggle } from "../primitives/toggle";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, hairline, space, touchTarget } from "../tokens.ts";
 
-export type FieldsCardAccount = { id: string; name: string };
+/**
+ * One account this card can name — structural, matching `AccountPicker`'s own
+ * `AccountPickerAccount` rather than importing it (`accounts/` is a sibling
+ * domain, `architecture/11`). Widened past `{id, name}` so the same list the
+ * screen already builds for `AccountPicker` (grouped, capturable-tinted) also
+ * answers this card's own "what is the current pick called" lookup, rather
+ * than a second, narrower mapping existing only for this card.
+ */
+export type FieldsCardAccount = {
+  id: string;
+  name: string;
+  currency: string;
+  kind: AccountKind;
+  capturable: boolean;
+  ownership: "own" | "shared";
+  groupId: string | null;
+  archived?: boolean;
+};
 
 /** The saved values this card diffs every draft against. */
 export type TransactionFields = {
@@ -78,6 +96,15 @@ export type TransactionFieldsPatch = {
 export type FieldsCardProps = {
   fields: TransactionFields;
   accounts: readonly FieldsCardAccount[];
+  /**
+   * The account pick, controlled from the screen — `categoryId`'s own
+   * contract. `AccountPicker` (`accounts/`) is a sibling domain, composed by
+   * the screen and not by this card (`architecture/11`), so a pick travels
+   * back in through this prop rather than living in local state the way it
+   * once did.
+   */
+  accountId: string;
+  onOpenAccountPicker: () => void;
   /** The device's local `AccountingDate` (§7.0a) — `DateField`'s shortcuts. */
   today: string;
   /**
@@ -93,11 +120,13 @@ export type FieldsCardProps = {
   onSave: (patch: TransactionFieldsPatch) => void;
 };
 
-type OpenField = "account" | "date" | "payee" | "note";
+type OpenField = "date" | "payee" | "note";
 
 export function FieldsCard({
   fields,
   accounts,
+  accountId,
+  onOpenAccountPicker,
   today,
   categoryId,
   categoryName,
@@ -111,7 +140,6 @@ export function FieldsCard({
 
   const [open, setOpen] = useState<ReadonlySet<OpenField>>(new Set());
   const [date, setDate] = useState(fields.date);
-  const [accountId, setAccountId] = useState(fields.accountId);
   const [payee, setPayee] = useState(fields.payee);
   const [note, setNote] = useState(fields.note);
   const [isBusiness, setIsBusiness] = useState(fields.isBusiness);
@@ -124,18 +152,13 @@ export function FieldsCard({
       return next;
     });
   }, []);
-  const handleToggleAccount = useCallback(() => toggleField("account"), [toggleField]);
   const handleToggleDate = useCallback(() => toggleField("date"), [toggleField]);
   const handleTogglePayee = useCallback(() => toggleField("payee"), [toggleField]);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
 
   const dateValid = isAccountingDate(date);
-  const accountOptions = useMemo(
-    () => accounts.map((account) => ({ value: account.id, label: account.name })),
-    [accounts],
-  );
   const selectedAccountName =
-    accounts.find((account) => account.id === accountId)?.name ?? fields.accountId;
+    accounts.find((account) => account.id === accountId)?.name ?? accountId;
 
   const patch = useMemo<TransactionFieldsPatch>(() => {
     const next: TransactionFieldsPatch = {};
@@ -196,17 +219,8 @@ export function FieldsCard({
         label={t("transactions.account")}
         value={selectedAccountName}
         placeholder={t("transactions.account")}
-        open={open.has("account")}
-        onPress={handleToggleAccount}
-      >
-        <Select
-          label={t("transactions.account")}
-          placeholder={t("transactions.account")}
-          options={accountOptions}
-          value={accountId}
-          onChange={setAccountId}
-        />
-      </FieldDisclosureRow>
+        onPress={onOpenAccountPicker}
+      />
 
       <View style={styles.separated}>
         <Toggle label={t("transactions.business")} value={isBusiness} onChange={setIsBusiness} />

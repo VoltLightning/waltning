@@ -14,8 +14,8 @@ import { TransferComposer, type TransferComposerProps } from "./transfer-compose
 
 const BASE_PROPS: TransferComposerProps = {
   accounts: [
-    { id: "acc-usd", name: "Household · USD", currency: "USD", decimals: 2 },
-    { id: "acc-pln", name: "Cash · PLN", currency: "PLN", decimals: 2 },
+    { id: "acc-usd", name: "Household · USD", currency: "USD", decimals: 2, capturable: true },
+    { id: "acc-pln", name: "Cash · PLN", currency: "PLN", decimals: 2, capturable: true },
   ],
   fromAccountId: "acc-usd",
   onOpenFromAccountPicker: vi.fn(),
@@ -63,7 +63,7 @@ it("collapses to one amount for a same-currency transfer — no rate panel, no s
     toAccountId: "acc-pln-2",
     accounts: [
       ...BASE_PROPS.accounts,
-      { id: "acc-pln-2", name: "Savings · PLN", currency: "PLN", decimals: 2 },
+      { id: "acc-pln-2", name: "Savings · PLN", currency: "PLN", decimals: 2, capturable: true },
     ],
     fromAccountId: "acc-pln",
     amountRaw: "150",
@@ -112,6 +112,31 @@ it("opens the from/to account picker through a callback rather than a sheet of i
   expect(onOpenFromAccountPicker).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "To: Cash · PLN" }));
   expect(onOpenToAccountPicker).toHaveBeenCalledOnce();
+});
+
+/**
+ * §14.6 — the *From* leg's own refusal: `create_transaction` declines on
+ * `accountId` before the write when the account holds no rate. This is
+ * `H` — the composer used to destructure every other `byField` entry and
+ * silently drop this one.
+ */
+it("shows the needsRate caption under the From chip when its account can't be captured (SPEC.md §14.6)", () => {
+  renderComposer({
+    accounts: [
+      { id: "acc-usd", name: "Household · USD", currency: "USD", decimals: 2, capturable: false },
+      { id: "acc-pln", name: "Cash · PLN", currency: "PLN", decimals: 2, capturable: true },
+    ],
+  });
+  expect(
+    screen.getByText("USD needs an exchange rate before a transaction can be recorded in it."),
+  ).toBeDefined();
+});
+
+it("renders byField.accountId under the From chip when the controller refuses it", () => {
+  renderComposer({
+    fieldErrors: { byField: { accountId: ["Some other refusal"] }, formLevel: [] },
+  });
+  expect(screen.getByText("Some other refusal")).toBeDefined();
 });
 
 it("cancels through the header ✕", () => {

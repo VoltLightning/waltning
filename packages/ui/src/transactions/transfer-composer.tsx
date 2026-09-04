@@ -57,6 +57,8 @@ export type TransferComposerAccount = {
   name: string;
   currency: string;
   decimals: number;
+  /** Whether an expense against this account can be valued (S05, §14.6) — shown either way. */
+  capturable: boolean;
 };
 
 export type TransferComposerReferenceRate = {
@@ -182,6 +184,18 @@ export function TransferComposer({
   const toAccountError = fieldErrors?.byField["toAccountId"]?.[0];
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
   const toAmountError = fieldErrors?.byField["toAmount"]?.[0];
+  // §14.6 — declined before the write, with the currency named: the
+  // controller refuses `create_transaction` on `accountId` (the *from* leg)
+  // the moment the account holds no rate, and this is the one place that
+  // refusal is ever rendered. `fromNeedsRate` covers it proactively, the
+  // moment the picker names an uncapturable account; `accountIdError` is the
+  // fallback for whatever else `byField.accountId` might carry.
+  const accountIdError = fieldErrors?.byField["accountId"]?.[0];
+  const fromNeedsRate =
+    from !== undefined && !from.capturable
+      ? t("transactions.needsRate", { currency: from.currency })
+      : undefined;
+  const fromCaption = fromNeedsRate ?? accountIdError;
 
   return (
     <View style={styles.root}>
@@ -194,12 +208,15 @@ export function TransferComposer({
       </View>
 
       <View style={styles.chipRow}>
-        <Chip
-          placeholder={t("transactions.from")}
-          value={from?.name}
-          onPress={onOpenFromAccountPicker}
-          machineFilled={false}
-        />
+        <View style={styles.fromColumn}>
+          <Chip
+            placeholder={t("transactions.from")}
+            value={from?.name}
+            onPress={onOpenFromAccountPicker}
+            machineFilled={false}
+          />
+          {fromCaption === undefined ? null : <Text style={styles.needsRate}>{fromCaption}</Text>}
+        </View>
         <IconButton label={t("transactions.swapDirection")} onPress={onSwap}>
           <SwapArrow />
         </IconButton>
@@ -355,7 +372,10 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.md,
   },
+  fromColumn: { gap: space.xs },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
+  /** §14.6's own caption — a fact about now, not an error (`quick-add-form.tsx`'s `blocked`, matched). */
+  needsRate: { color: theme.textMuted, ...text.ui("caption") },
   marginRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   marginLabel: { color: theme.textMuted, ...text.ui("body") },
   swap: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },

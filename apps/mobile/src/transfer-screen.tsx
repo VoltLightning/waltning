@@ -52,12 +52,14 @@ function toComposerAccount(account: {
   name: string;
   currency: string;
   decimals: number;
+  capturable: boolean;
 }): TransferComposerAccount {
   return {
     id: account.id,
     name: account.name,
     currency: account.currency,
     decimals: account.decimals,
+    capturable: account.capturable,
   };
 }
 
@@ -235,12 +237,17 @@ export default function Transfer() {
   const sameAccount = fromAccountId !== null && fromAccountId === toAccountId;
   const parsedAmount = parseAmount(amountRaw);
   const parsedToAmount = parseAmount(toAmountRaw);
+  // §14.6 — refused before the write on an uncapturable *From* account; Save
+  // stays disabled the same way it already does for every other refusal this
+  // screen can see coming, rather than letting a tap reach the controller
+  // only to bounce.
   const saveDisabled =
     parsedAmount === null ||
     fromAccountId === null ||
     toAccountId === null ||
     sameAccount ||
-    parsedToAmount === null;
+    parsedToAmount === null ||
+    fromAccount?.capturable === false;
 
   const handleSave = useCallback(() => {
     if (parsedAmount === null || fromAccountId === null || toAccountId === null) return;

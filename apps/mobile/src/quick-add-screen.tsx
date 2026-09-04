@@ -354,9 +354,15 @@ export default function QuickAdd() {
   // `create_transaction`'s own refine and refuse — Save stays disabled here so
   // the reason is visible on the chip (`counterpartyValue`'s "role?" suffix)
   // before the person ever taps it, not after.
+  //
+  // §14.6, the same rule: `selectedComposerAccount.capturable === false` is
+  // knowable the moment the account chip fills, not only once
+  // `create_transaction` bounces it — `QuickAddForm`'s own `blocked` already
+  // disables the desk fallback's Save this way; this matches it.
   const composerSaveDisabled =
     parseAmount(composerAmountRaw) === null ||
     effectiveAccountId === null ||
+    selectedComposerAccount?.capturable === false ||
     (composerCounterpartyId !== null && composerCounterpartyRole === null);
   const handleComposerSave = useCallback(() => {
     const amount = parseAmount(composerAmountRaw);

@@ -211,7 +211,17 @@ export function QuickAddComposer({
         : pickedCounterparty.name;
 
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
+  // §14.6 — the same proactive caption `QuickAddForm`'s own `blocked` text
+  // already carries on the desk fallback: an uncapturable account is a fact
+  // knowable the moment it is picked, not only after `create_transaction`
+  // bounces it. `accountError` stays the fallback for whatever else
+  // `byField.accountId` might carry.
   const accountError = fieldErrors?.byField["accountId"]?.[0];
+  const accountNeedsRate =
+    selectedAccount !== undefined && !selectedAccount.capturable
+      ? t("transactions.needsRate", { currency: selectedAccount.currency })
+      : undefined;
+  const accountCaption = accountNeedsRate ?? accountError;
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
   const payeeError = fieldErrors?.byField["payee"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
@@ -283,7 +293,7 @@ export function QuickAddComposer({
           />
         )}
       </View>
-      {accountError === undefined ? null : <Text style={styles.fieldError}>{accountError}</Text>}
+      {accountCaption === undefined ? null : <Text style={styles.needsRate}>{accountCaption}</Text>}
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
       {!categoryLowConfidence ? null : (
         <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
@@ -556,6 +566,8 @@ const useStyles = makeStyles((theme) => ({
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   /** §14 — text, not tint alone (P5); `theme.textMuted`, the same colour `CategorySheet`'s own caption uses. */
   lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
+  /** §14.6's own caption — a fact about now, not an error (`quick-add-form.tsx`'s `blocked`, matched). */
+  needsRate: { color: theme.textMuted, ...text.ui("caption") },
   counterparty: { gap: space.x3 },
   typeToggle: {
     flexDirection: "row",

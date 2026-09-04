@@ -63,12 +63,19 @@ function fakeController(
   overrides: {
     createTransaction?: PhoneLedgerPort["createTransaction"];
     accounts?: readonly PhoneAccount[];
+    capturableUsd?: boolean;
   } = {},
 ) {
   const port: PhoneLedgerPort = {
     listAccounts: () => overrides.accounts ?? [HOUSEHOLD, CASH],
     listCurrencies: () => [
-      { code: USD, name: "US Dollar", symbol: "$", decimals: 2, capturable: true },
+      {
+        code: USD,
+        name: "US Dollar",
+        symbol: "$",
+        decimals: 2,
+        capturable: overrides.capturableUsd ?? true,
+      },
       { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
     ],
     listGroups: () => [],
@@ -240,6 +247,22 @@ describe("Transfer — the phone path", () => {
     });
     expect(draft?.toFxRate).toBeUndefined();
     expect(router.dismissTo).toHaveBeenCalledWith("/");
+  });
+
+  /**
+   * `H` — the controller refuses `create_transaction` on `accountId` (the
+   * *from* leg) before the write when the account holds no rate (§14.6);
+   * Save must not be tappable while that refusal is already knowable.
+   */
+  it("disables Save and shows the needsRate caption when the From account can't be captured (SPEC.md §14.6)", () => {
+    withLedger({ capturableUsd: false });
+    pickFrom("Household · USD");
+    pickTo("Cash · PLN");
+
+    expect(
+      screen.getByText("USD needs an exchange rate before a transaction can be recorded in it."),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
   });
 
   it("collapses to one amount for a same-currency transfer", () => {

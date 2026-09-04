@@ -201,6 +201,34 @@ it("renders a field error under the chip it names", () => {
   expect(screen.getByText("Choose an account before saving")).toBeDefined();
 });
 
+/**
+ * §14.6 — the same proactive caption `QuickAddForm`'s own `blocked` text
+ * already shows on the desk fallback, the moment the picked account holds no
+ * rate rather than only after a save attempt bounces it.
+ */
+it("shows the needsRate caption the moment an uncapturable account is picked (SPEC.md §14.6)", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        accounts: [
+          {
+            id: "account-a",
+            name: "Cash · PLN",
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            capturable: false,
+            ownership: "own",
+          },
+        ],
+        accountId: "account-a",
+      })}
+    />,
+  );
+  expect(
+    screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
+  ).toBeDefined();
+});
+
 it("flips expense and income on one tap — the keypad path's only escape hatch (S05 §9.1)", () => {
   const onTypeChange = vi.fn();
   render(<QuickAddComposer {...props({ onTypeChange })} />);
