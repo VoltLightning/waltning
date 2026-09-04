@@ -5,7 +5,7 @@ import { DebtDirectionTag } from "./debt-direction-tag";
 const meta = {
   title: "Counterparties/DebtDirectionTag",
   component: DebtDirectionTag,
-  args: { balance: toMoney("840.00000000") },
+  args: { balance: toMoney("840.00000000"), decimals: 2 },
 } satisfies Meta<typeof DebtDirectionTag>;
 
 export default meta;

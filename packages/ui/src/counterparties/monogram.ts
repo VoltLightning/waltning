@@ -21,7 +21,7 @@ import { fold } from "@waltning/core/capture/names";
 import type { Theme } from "../theme/roles.ts";
 import { color } from "../tokens.ts";
 
-/** Five steps, skipping the near-white and near-black ends of the ramp. */
+/** Six steps, skipping the near-white and near-black ends of the ramp. */
 const RAMP_STEPS: readonly [string, number][] = [
   [color.green200, 200],
   [color.green300, 300],
@@ -40,11 +40,20 @@ export type Monogram = {
   ink: string;
 };
 
-/** A small, stable hash — sum of code points is enough for six ramp steps. */
+/**
+ * djb2 — a small, stable hash that reads *order*, not just membership (L2).
+ * A sum of code points gives every anagram of a name the same hash (`Nina`
+ * and `Iann` land on the same ramp step, which is not "deterministic per
+ * name", it is "deterministic per multiset of characters") — djb2 folds each
+ * character in with a multiply-and-add, so two names sharing every letter but
+ * not their order land on different steps almost always.
+ */
 function hashOf(s: string): number {
-  let total = 0;
-  for (let i = 0; i < s.length; i++) total += s.codePointAt(i) ?? 0;
-  return total;
+  let hash = 5381;
+  for (const grapheme of s) {
+    hash = (hash * 33 + (grapheme.codePointAt(0) ?? 0)) >>> 0;
+  }
+  return hash;
 }
 
 /**
@@ -61,8 +70,13 @@ export function monogramFor(name: string, theme: Theme): Monogram {
   const folded = fold(trimmed);
   const [fill, step] = RAMP_STEPS[hashOf(folded) % RAMP_STEPS.length] ??
     RAMP_STEPS[0] ?? [color.green300, 300];
+  // The first *grapheme*, not the first UTF-16 code unit (L2) —
+  // `trimmed[0]` on a name outside the BMP (an emoji, or a character built
+  // from a surrogate pair) would return half of it, an unpaired surrogate no
+  // font renders as a letter.
+  const firstGrapheme = Array.from(trimmed)[0];
   return {
-    letter: trimmed === "" ? "?" : (trimmed[0]?.toUpperCase() ?? "?"),
+    letter: trimmed === "" ? "?" : (firstGrapheme?.toUpperCase() ?? "?"),
     fill,
     ink: step >= 500 ? theme.textOnAccent : DARK_INK,
   };

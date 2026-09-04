@@ -705,12 +705,20 @@ export const ageInDays = (oldestDate: AccountingDate, today: AccountingDate): nu
  * than `money.cmp` directly, the same "no component outside the design
  * system formats money" rule `tests/architecture.test.ts` holds packages/ui
  * to (P5, §6.6).
+ *
+ * **Compares at the currency's own scale, not the full 8-dp stored value**
+ * (H2). Every render rounds a balance to `decimals` before showing it — a
+ * residual of `0.00000001` PLN is `0,00 PLN` on screen, and reading it at
+ * full precision called that "owes you" beside a figure that reads zero.
+ * `decimals` is required, not defaulted: a caller with no currency's own
+ * scale on hand has not resolved enough to ask this question yet.
  */
 export type DebtDirection = "theyOwe" | "youOwe" | "settled";
 
-export const debtDirection = (balance: Money): DebtDirection => {
-  if (isZero(balance)) return "settled";
-  return cmp(balance, toMoney("0")) > 0 ? "theyOwe" : "youOwe";
+export const debtDirection = (balance: Money, decimals: number): DebtDirection => {
+  const rounded = round(balance, decimals);
+  if (isZero(rounded)) return "settled";
+  return cmp(rounded, toMoney("0")) > 0 ? "theyOwe" : "youOwe";
 };
 
 /**
@@ -725,32 +733,51 @@ export const debtDirection = (balance: Money): DebtDirection => {
  * folds every counterparty's balances into one list and hands it here
  * directly.
  *
- * **A currency whose totals both land on zero is omitted, not returned as a
- * `0.00000000` / `0.00000000` row.** That happens when every counterparty
- * holding that currency is exactly settled — nothing to show S12, and a
- * zero/zero row would render as an empty line with a currency label and
- * nothing under it.
+ * **A currency whose totals both land on zero *at that currency's own scale*
+ * is omitted, not returned as a `0.00000000` / `0.00000000` row (H2).** That
+ * happens when every counterparty holding that currency is exactly settled —
+ * or settled once sub-minor-unit dust is rounded away the same way the row
+ * itself renders — and a zero/zero row would render as an empty line with a
+ * currency label and nothing under it. `decimals` rides along on the output
+ * row too, so a caller never has to re-derive a currency's own scale to
+ * render the figure it was just handed (H4).
  */
-export type DirectionTotalRow = { currency: CurrencyCode; theyOwe: Money; youOwe: Money };
+export type DirectionTotalRow = {
+  currency: CurrencyCode;
+  theyOwe: Money;
+  youOwe: Money;
+  decimals: number;
+};
+
+/** `directionTotals`' own input — `CounterpartyBalanceRow` plus the currency's scale, already on every `§7` row it reads. */
+export type DirectionTotalInputRow = CounterpartyBalanceRow & { decimals: number };
 
 export const directionTotals = (
-  rows: readonly CounterpartyBalanceRow[],
+  rows: readonly DirectionTotalInputRow[],
 ): readonly DirectionTotalRow[] => {
-  const byCurrency = new Map<CurrencyCode, { theyOwe: Decimal; youOwe: Decimal }>();
-  for (const { currency, balance } of rows) {
-    const bucket = byCurrency.get(currency) ?? { theyOwe: dec(0), youOwe: dec(0) };
+  const byCurrency = new Map<
+    CurrencyCode,
+    { theyOwe: Decimal; youOwe: Decimal; decimals: number }
+  >();
+  for (const { currency, balance, decimals } of rows) {
+    const bucket = byCurrency.get(currency) ?? { theyOwe: dec(0), youOwe: dec(0), decimals };
     const b = dec(balance);
     if (b.isPositive()) bucket.theyOwe = bucket.theyOwe.plus(b);
     else if (b.isNegative()) bucket.youOwe = bucket.youOwe.plus(b.abs());
     byCurrency.set(currency, bucket);
   }
   return [...byCurrency.entries()]
-    .filter(([, { theyOwe, youOwe }]) => !(theyOwe.isZero() && youOwe.isZero()))
+    .filter(([, { theyOwe, youOwe, decimals }]) => {
+      const roundedTheyOwe = round(toMoney(theyOwe), decimals);
+      const roundedYouOwe = round(toMoney(youOwe), decimals);
+      return !(isZero(roundedTheyOwe) && isZero(roundedYouOwe));
+    })
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([currency, { theyOwe, youOwe }]) => ({
+    .map(([currency, { theyOwe, youOwe, decimals }]) => ({
       currency,
       theyOwe: toMoney(theyOwe),
       youOwe: toMoney(youOwe),
+      decimals,
     }));
 };
 

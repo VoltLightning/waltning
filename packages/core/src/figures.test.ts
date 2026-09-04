@@ -319,26 +319,26 @@ describe("directionTotals — S12", () => {
   const EUR = money.currencyCode("EUR");
 
   it("sums positives into theyOwe and the magnitude of negatives into youOwe, per currency", () => {
-    const rows: money.CounterpartyBalanceRow[] = [
-      { currency: PLN, balance: m("200") }, // Nina owes 200 PLN
-      { currency: PLN, balance: m("-50") }, // you owe Marek 50 PLN
-      { currency: EUR, balance: m("-30") }, // you owe Nina 30 EUR
+    const rows: money.DirectionTotalInputRow[] = [
+      { currency: PLN, balance: m("200"), decimals: 2 }, // Nina owes 200 PLN
+      { currency: PLN, balance: m("-50"), decimals: 2 }, // you owe Marek 50 PLN
+      { currency: EUR, balance: m("-30"), decimals: 2 }, // you owe Nina 30 EUR
     ];
     expect(money.directionTotals(rows)).toEqual([
-      { currency: EUR, theyOwe: "0.00000000", youOwe: "30.00000000" },
-      { currency: PLN, theyOwe: "200.00000000", youOwe: "50.00000000" },
+      { currency: EUR, theyOwe: "0.00000000", youOwe: "30.00000000", decimals: 2 },
+      { currency: PLN, theyOwe: "200.00000000", youOwe: "50.00000000", decimals: 2 },
     ]);
   });
 
   it("never nets two people's balances in the same currency against each other", () => {
     // 200 owed to you and 200 you owe, same currency, different people —
     // theyOwe and youOwe both carry the full figure, not a netted zero.
-    const rows: money.CounterpartyBalanceRow[] = [
-      { currency: PLN, balance: m("200") },
-      { currency: PLN, balance: m("-200") },
+    const rows: money.DirectionTotalInputRow[] = [
+      { currency: PLN, balance: m("200"), decimals: 2 },
+      { currency: PLN, balance: m("-200"), decimals: 2 },
     ];
     expect(money.directionTotals(rows)).toEqual([
-      { currency: PLN, theyOwe: "200.00000000", youOwe: "200.00000000" },
+      { currency: PLN, theyOwe: "200.00000000", youOwe: "200.00000000", decimals: 2 },
     ]);
   });
 
@@ -347,13 +347,22 @@ describe("directionTotals — S12", () => {
   });
 
   it("omits a currency whose balances net to exactly zero — a settled counterparty's row", () => {
-    const rows: money.CounterpartyBalanceRow[] = [
-      { currency: PLN, balance: m("0") }, // fully settled — theyOwe and youOwe both stay zero
-      { currency: EUR, balance: m("30") },
+    const rows: money.DirectionTotalInputRow[] = [
+      { currency: PLN, balance: m("0"), decimals: 2 }, // fully settled — theyOwe and youOwe both stay zero
+      { currency: EUR, balance: m("30"), decimals: 2 },
     ];
     expect(money.directionTotals(rows)).toEqual([
-      { currency: EUR, theyOwe: "30.00000000", youOwe: "0.00000000" },
+      { currency: EUR, theyOwe: "30.00000000", youOwe: "0.00000000", decimals: 2 },
     ]);
+  });
+
+  /** H2 — sub-minor-unit dust rounds to zero at the currency's own scale, so the currency is omitted. */
+  it("omits a currency whose balances net to dust that rounds to zero at its own scale", () => {
+    const rows: money.DirectionTotalInputRow[] = [
+      { currency: PLN, balance: m("0.00000001"), decimals: 2 },
+      { currency: PLN, balance: m("-0.00000001"), decimals: 2 },
+    ];
+    expect(money.directionTotals(rows)).toEqual([]);
   });
 });
 

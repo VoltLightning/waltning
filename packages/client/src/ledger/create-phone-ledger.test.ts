@@ -402,6 +402,7 @@ describe("phone ledger controller", () => {
   it("starts with no accounts, no subtotals, and no Recent", () => {
     const { controller } = harness();
     expect(controller.getSnapshot()).toEqual({
+      revision: 1,
       accounts: [],
       archivedAccounts: [],
       currencies: CURRENCIES,
@@ -419,6 +420,14 @@ describe("phone ledger controller", () => {
       unsettledClearing: [],
       distinctCounterpartyPairs: [],
     });
+  });
+
+  /** H1/M2 — `revision` is the "at least one `refresh()` has completed" signal, and a write bumps it. */
+  it("starts at revision 1 (the constructor's own refresh) and bumps on every write", () => {
+    const { controller } = harness();
+    expect(controller.getSnapshot().revision).toBe(1);
+    controller.createAccount(minimalDraft("Bank A · PLN", PLN));
+    expect(controller.getSnapshot().revision).toBe(2);
   });
 
   it("creates an account in the currency it was given, through the shared defaults", () => {

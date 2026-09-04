@@ -677,6 +677,18 @@ export type PhoneDirectionTotal = money.DirectionTotalRow;
 export type PhonePayeeHistoryRow = PayeeHistoryRow;
 
 export type PhoneLedgerSnapshot = {
+  /**
+   * How many times `refresh()` has completed, success or failure — `0` until
+   * the very first one has (H1). A screen that derives state from another
+   * field of this snapshot (`currencies`, say, to find the pivot) cannot
+   * tell "the replica genuinely holds nothing" from "no `refresh()` has run
+   * yet" by looking at that field alone; `revision > 0` is that distinction,
+   * named once here rather than re-derived per screen. It also doubles as
+   * `useMemo`'s own invalidation key for a read outside the snapshot itself
+   * (`searchTransactions`, on demand) — a write bumps it exactly when a
+   * memoised read has gone stale (M2).
+   */
+  revision: number;
   accounts: readonly PhoneCapturableAccount[];
   /**
    * Empty until `loadArchived()` runs — S16's register loads them lazily,
@@ -1551,6 +1563,7 @@ export function createPhoneLedger(
   runtime: PhoneLedgerRuntime,
 ): PhoneLedgerController {
   let snapshot: PhoneLedgerSnapshot = {
+    revision: 0,
     accounts: [],
     archivedAccounts: [],
     currencies: [],
@@ -1603,6 +1616,7 @@ export function createPhoneLedger(
       const fullCategoryTree = port.listFullCategoryTree();
       const categoryUsage = port.listCategoryUsage();
       snapshot = {
+        revision: snapshot.revision + 1,
         accounts: accounts.map((account) => ({
           ...account,
           capturable: capturable.has(account.currency),
@@ -1637,11 +1651,18 @@ export function createPhoneLedger(
         error: clientFailure(error),
       });
       // S04 §6: the hero keeps its last known figure rather than blanking, so
-      // this spreads the prior snapshot instead of replacing it — only `error`
-      // is new. Listeners still fire: a screen already mounted needs to hear
-      // about this exactly as it hears about a success, or `ErrorState` never
-      // appears until something unrelated re-renders it.
-      snapshot = { ...snapshot, error: clientFailure(error).message };
+      // this spreads the prior snapshot instead of replacing it — only
+      // `error` and `revision` are new (H1 — a failed attempt still counts as
+      // one, or a screen gated on `revision > 0` would wait forever behind an
+      // error `refresh()` never recovers from). Listeners still fire: a
+      // screen already mounted needs to hear about this exactly as it hears
+      // about a success, or `ErrorState` never appears until something
+      // unrelated re-renders it.
+      snapshot = {
+        ...snapshot,
+        revision: snapshot.revision + 1,
+        error: clientFailure(error).message,
+      };
       for (const listener of listeners) listener();
       throw error;
     }

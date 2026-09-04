@@ -382,8 +382,14 @@ export const en = {
     emptySettledBody: "Nobody owes anything right now.",
     loadFailedTitle: "Couldn't load your counterparties",
     loadFailedWhy: "Something went wrong reading the debt ledger.",
+    /** H1 — the loading state (S12 §6, S13 §6), never the empty state, while the first `refresh()` is still in flight. */
+    loadingDebts: "Loading debts",
+    loadingLedger: "Loading counterparty ledger",
     /* ── S13 · one person's whole position ──────────────────────────────── */
     netIn: "net in {{currency}}",
+    /** L3 — a fully settled counterparty's own ledger card (S13 §6), distinct from `emptySettledTitle`/`Body` above only in that this sits inside `BalanceLedger`, not the screen. */
+    allSettled: "All settled",
+    allSettledBody: "Nothing open with them right now.",
     /** P1 — the derived total's own rate and date, never shown without both. */
     atRateDate: "@ {{rate}} · {{date}}",
     /** S13 — after a successful settle: the residual, named in words, never a bare sign (P5). */

@@ -9,7 +9,13 @@ import {
 
 const PLN = currencyCode("PLN");
 const EUR = currencyCode("EUR");
+const JPY = currencyCode("JPY");
 const TODAY = accountingDate("2026-09-04");
+
+const PLN_EUR_CURRENCIES = [
+  { code: PLN, decimals: 2 },
+  { code: EUR, decimals: 2 },
+];
 
 describe("resolveCounterpartyFigures", () => {
   /**
@@ -32,7 +38,7 @@ describe("resolveCounterpartyFigures", () => {
     const readRate = () => null;
     const rateOf = makeRateOf(readRate, EUR, TODAY);
 
-    const figures = resolveCounterpartyFigures(nina, EUR, rateOf);
+    const figures = resolveCounterpartyFigures(nina, EUR, rateOf, PLN_EUR_CURRENCIES);
 
     expect(figures.value).toBeNull();
     expect(figures.display).toBeNull();
@@ -59,7 +65,7 @@ describe("resolveCounterpartyFigures", () => {
       pair.quote === "EUR" ? { rate: eurPerPln, asOf: TODAY } : null;
     const rateOf = makeRateOf(readRate, PLN, TODAY);
 
-    const figures = resolveCounterpartyFigures(nina, PLN, rateOf);
+    const figures = resolveCounterpartyFigures(nina, PLN, rateOf, PLN_EUR_CURRENCIES);
     if (figures.value === null) throw new Error("expected a complete net");
     if (figures.display === null) throw new Error("expected a display equivalent");
 
@@ -78,10 +84,108 @@ describe("resolveCounterpartyFigures", () => {
     };
     const rateOf = makeRateOf(() => null, PLN, TODAY);
 
-    const figures = resolveCounterpartyFigures(cashOnly, PLN, rateOf);
+    const figures = resolveCounterpartyFigures(cashOnly, PLN, rateOf, PLN_EUR_CURRENCIES);
 
     expect(figures.value).toBe(toMoney("50"));
     expect(figures.display).toBeNull();
+  });
+
+  /** H3 — decimals come from `snapshot.currencies`, never a default, for a settlement currency held by nobody. */
+  it("takes decimals from the currency list, not a default, when the settlement currency is not among held balances (H3)", () => {
+    const jpySettling = {
+      settlementCurrency: JPY,
+      balances: [{ currency: PLN, balance: toMoney("25200"), decimals: 2 }],
+    };
+    const readRate = (pair: { base: string; quote: string }) =>
+      pair.quote === "JPY" ? { rate: unitsPerPivot("0.025"), asOf: TODAY } : null;
+    const rateOf = makeRateOf(readRate, PLN, TODAY);
+    const currencies = [
+      { code: PLN, decimals: 2 },
+      { code: JPY, decimals: 0 },
+    ];
+
+    const figures = resolveCounterpartyFigures(jpySettling, PLN, rateOf, currencies);
+
+    expect(figures.decimals).toBe(0);
+  });
+
+  /** H3 — the display leg (settlement → pivot) carries the pivot's own scale too, not a default. */
+  it("carries the display currency's own scale (H3)", () => {
+    const eightDpCurrency = currencyCode("BTC");
+    const holder = {
+      settlementCurrency: eightDpCurrency,
+      balances: [{ currency: eightDpCurrency, balance: toMoney("1.23456789"), decimals: 8 }],
+    };
+    const readRate = (pair: { base: string; quote: string }) =>
+      pair.quote === "BTC" ? { rate: unitsPerPivot("0.00001"), asOf: TODAY } : null;
+    const rateOf = makeRateOf(readRate, PLN, TODAY);
+    const currencies = [
+      { code: PLN, decimals: 2 },
+      { code: eightDpCurrency, decimals: 8 },
+    ];
+
+    const figures = resolveCounterpartyFigures(holder, PLN, rateOf, currencies);
+    if (figures.display === null) throw new Error("expected a display equivalent");
+
+    expect(figures.display.decimals).toBe(2);
+  });
+
+  /** M3 — deterministic without a settlement currency: the pivot wins if held. */
+  it("prefers the pivot when the counterparty has no settlement currency and holds it (M3)", () => {
+    const noPreference = {
+      settlementCurrency: null,
+      balances: [
+        { currency: EUR, balance: toMoney("10"), decimals: 2 },
+        { currency: PLN, balance: toMoney("500"), decimals: 2 },
+      ],
+    };
+    const rateOf = makeRateOf(() => ({ rate: unitsPerPivot("1"), asOf: TODAY }), PLN, TODAY);
+
+    const figures = resolveCounterpartyFigures(noPreference, PLN, rateOf, PLN_EUR_CURRENCIES);
+
+    expect(figures.currency).toBe(PLN);
+  });
+
+  /** M3 — no settlement currency, pivot not held: the largest absolute balance wins, row order irrelevant. */
+  it("prefers the largest absolute balance when the pivot is not held (M3)", () => {
+    const usd = currencyCode("USD");
+    const noPreference = {
+      settlementCurrency: null,
+      balances: [
+        { currency: EUR, balance: toMoney("10"), decimals: 2 },
+        { currency: usd, balance: toMoney("-500"), decimals: 2 },
+      ],
+    };
+    const rateOf = makeRateOf(() => ({ rate: unitsPerPivot("1"), asOf: TODAY }), PLN, TODAY);
+    const currencies = [...PLN_EUR_CURRENCIES, { code: usd, decimals: 2 }];
+
+    const figures = resolveCounterpartyFigures(noPreference, PLN, rateOf, currencies);
+
+    expect(figures.currency).toBe(usd);
+  });
+
+  /** M3 — a tie in magnitude breaks by currency code, not by row order. */
+  it("breaks a magnitude tie by currency code (M3)", () => {
+    const usd = currencyCode("USD");
+    const rowOrderA = {
+      settlementCurrency: null,
+      balances: [
+        { currency: usd, balance: toMoney("100"), decimals: 2 },
+        { currency: EUR, balance: toMoney("-100"), decimals: 2 },
+      ],
+    };
+    const rowOrderB = {
+      settlementCurrency: null,
+      balances: [
+        { currency: EUR, balance: toMoney("-100"), decimals: 2 },
+        { currency: usd, balance: toMoney("100"), decimals: 2 },
+      ],
+    };
+    const rateOf = makeRateOf(() => ({ rate: unitsPerPivot("1"), asOf: TODAY }), PLN, TODAY);
+    const currencies = [...PLN_EUR_CURRENCIES, { code: usd, decimals: 2 }];
+
+    expect(resolveCounterpartyFigures(rowOrderA, PLN, rateOf, currencies).currency).toBe(EUR);
+    expect(resolveCounterpartyFigures(rowOrderB, PLN, rateOf, currencies).currency).toBe(EUR);
   });
 });
 

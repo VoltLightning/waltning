@@ -2,7 +2,8 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
-import { beforeEach, describe, expect, it } from "vitest";
+import Database from "better-sqlite3";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ledgerSchema } from "../schema-map.ts";
 import { type ScratchStores, scratchStores } from "../test/stores.ts";
 import {
@@ -249,6 +250,30 @@ describe("searchTransactions — paging", () => {
     expect(seen).toHaveLength(total);
     expect(new Set(seen).size).toBe(total);
     expect(pages).toBe(Math.ceil(total / SEARCH_PAGE_SIZE));
+  });
+
+  /**
+   * M2 — the page query pushes `LIMIT` into SQL rather than reading every
+   * matching row and slicing a page off in JS. 200 rows, page size 50:
+   * counting the rows the page returns would pass either way (both
+   * implementations answer 50), so this inspects the SQL SQLite actually
+   * executes instead, via `better-sqlite3`'s own `prepare` — the one call
+   * both paths must go through.
+   */
+  it("pushes a LIMIT into the page query, for a text-free filter", () => {
+    for (let i = 0; i < 200; i++) {
+      insertExpense({
+        id: `20000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        date: accountingDate(`2026-01-${String((i % 28) + 1).padStart(2, "0")}`),
+      });
+    }
+
+    const prepareSpy = vi.spyOn(Database.prototype, "prepare");
+    searchTransactions(stores.ledger.replica.db, {});
+    const statements = prepareSpy.mock.calls.map(([sql]) => String(sql));
+    prepareSpy.mockRestore();
+
+    expect(statements.some((sql) => /\blimit\b/i.test(sql))).toBe(true);
   });
 });
 

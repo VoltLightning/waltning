@@ -22,6 +22,29 @@ describe("monogramFor", () => {
     expect(monogramFor("   ", light).letter).toBe("?");
   });
 
+  /**
+   * L2 — the first *grapheme*, not the first UTF-16 code unit. A name whose
+   * first character sits outside the BMP is a surrogate pair in JS string
+   * indexing; `trimmed[0]` returns half of it (an unpaired surrogate, which
+   * renders as nothing or "�"), `Array.from(trimmed)[0]` returns the whole
+   * character.
+   */
+  it("uses the first grapheme, not the first UTF-16 code unit, for a name outside the BMP", () => {
+    const mathematicalBoldA = "\u{1D4D0}cme"; // MATHEMATICAL BOLD SCRIPT CAPITAL A
+    expect([...mathematicalBoldA][0]?.length).toBe(2); // a surrogate pair, in JS string units
+    expect(monogramFor(mathematicalBoldA, light).letter).toBe("\u{1D4D0}".toUpperCase());
+  });
+
+  /**
+   * L2 — a sum-of-code-points hash gives every anagram the same step, which
+   * is not deterministic *per name*: `Nina` and `Iann` share every letter.
+   * djb2 folds in each character's position, so the two names land on
+   * different steps.
+   */
+  it("does not collide two anagrams onto the same step", () => {
+    expect(monogramFor("Nina", light).fill).not.toBe(monogramFor("Iann", light).fill);
+  });
+
   it("pairs every fill with an ink that is legible on it (Treemap's own rule)", () => {
     for (const name of ["Nina", "Marek", "Acme", "Cash", "Q", "Zzz"]) {
       const { fill, ink } = monogramFor(name, light);
@@ -31,9 +54,9 @@ describe("monogramFor", () => {
   });
 
   it("resolves the light-ink steps through the theme, not a hard-coded colour", () => {
-    // "Acme" folds to a step ≥ 500 under this hash — light ink — so the
+    // "Nina" folds to a step ≥ 500 under djb2 (L2) — light ink — so the
     // theme's own `textOnAccent` role is what has to answer, per theme.
-    const name = "Acme";
+    const name = "Nina";
     expect(monogramFor(name, light).ink).toBe(light.textOnAccent);
     expect(monogramFor(name, dark).ink).toBe(dark.textOnAccent);
   });

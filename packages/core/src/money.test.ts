@@ -258,3 +258,45 @@ describe("§4a / §7.5 — FX margin on a transfer", () => {
     expect(result.realizedRate).toBe("1.00000000");
   });
 });
+
+/** H2 — a residual that rounds to zero at the currency's own scale reads as settled, never a direction. */
+describe("debtDirection — rounded to the currency's own scale (H2)", () => {
+  it("reads sub-minor-unit dust as settled, not a direction", () => {
+    expect(money.debtDirection(money.toMoney("0.00000001"), 2)).toBe("settled");
+    expect(money.debtDirection(money.toMoney("-0.00000001"), 2)).toBe("settled");
+  });
+
+  it("still reads a real balance in either direction", () => {
+    expect(money.debtDirection(money.toMoney("120.50"), 2)).toBe("theyOwe");
+    expect(money.debtDirection(money.toMoney("-120.50"), 2)).toBe("youOwe");
+  });
+
+  it("rounds at the currency's own scale, not a fixed one — a JPY (0dp) residual under 0.5 is settled", () => {
+    expect(money.debtDirection(money.toMoney("0.4"), 0)).toBe("settled");
+    expect(money.debtDirection(money.toMoney("0.6"), 0)).toBe("theyOwe");
+  });
+});
+
+describe("directionTotals — dust at scale (H2, H4)", () => {
+  it("omits a currency whose totals both round to zero at its own scale", () => {
+    const rows = [
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("0.00000001"), decimals: 2 },
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("-0.00000001"), decimals: 2 },
+    ];
+    expect(money.directionTotals(rows)).toEqual([]);
+  });
+
+  it("carries decimals on every row it returns (H4)", () => {
+    const rows = [
+      { currency: money.currencyCode("JPY"), balance: money.toMoney("500"), decimals: 0 },
+    ];
+    expect(money.directionTotals(rows)).toEqual([
+      {
+        currency: "JPY",
+        theyOwe: money.toMoney("500"),
+        youOwe: money.toMoney("0"),
+        decimals: 0,
+      },
+    ]);
+  });
+});

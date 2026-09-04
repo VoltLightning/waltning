@@ -70,7 +70,7 @@ function StackedBalanceLine({ line }: StackedBalanceLineProps) {
   return (
     <View style={styles.stackedLine}>
       <Amount value={line.balance} currency={line.currency} decimals={line.decimals ?? 2} />
-      <DebtDirectionTag balance={line.balance} />
+      <DebtDirectionTag balance={line.balance} decimals={line.decimals ?? 2} />
     </View>
   );
 }
@@ -116,7 +116,9 @@ export function CounterpartyRow({
             <Text style={styles.name} numberOfLines={1}>
               {name}
             </Text>
-            {settlement.value === null ? null : <DebtDirectionTag balance={settlement.value} />}
+            {settlement.value === null ? null : (
+              <DebtDirectionTag balance={settlement.value} decimals={settlement.decimals ?? 2} />
+            )}
           </View>
           <Text style={styles.meta}>
             {t(kind === "company" ? "counterparties.kindCompany" : "counterparties.kindPerson")}

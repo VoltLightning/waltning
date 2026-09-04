@@ -38,6 +38,7 @@ import { GroundPanel } from "@waltning/ui/shell/card";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { Skeleton } from "@waltning/ui/states/skeleton";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
@@ -99,8 +100,10 @@ function handleAdd() {
  */
 function matchesDirectionSegment(row: DebtRow, segment: DirectionSegment): boolean {
   if (segment === "all") return true;
-  if (row.figures.value !== null) return money.debtDirection(row.figures.value) === segment;
-  return row.balances.some((line) => money.debtDirection(line.balance) === segment);
+  if (row.figures.value !== null) {
+    return money.debtDirection(row.figures.value, row.figures.decimals) === segment;
+  }
+  return row.balances.some((line) => money.debtDirection(line.balance, line.decimals) === segment);
 }
 
 export default function Debt() {
@@ -111,6 +114,12 @@ export default function Debt() {
   const snapshot = usePhoneLedger(ledger);
   const today = deviceRuntime().capture().date;
   const [segment, setSegment] = useState<DirectionSegment>("all");
+
+  // H1 — at least one `refresh()` has completed, success or failure. Before
+  // that, `currencies` (and every other list) is the initial snapshot's own
+  // empty placeholder, not "the replica genuinely holds nothing" — the two
+  // must never render the same way (a loading state, never the empty state).
+  const hydrated = snapshot.revision > 0;
 
   const balances = useMemo(() => ledger.listCounterpartyBalances(today), [ledger, today]);
   const directionTotals = useMemo(() => money.directionTotals(balances), [balances]);
@@ -123,22 +132,22 @@ export default function Debt() {
       counterpartyId: group.counterpartyId,
       name: group.name,
       kind: group.kind,
-      figures: resolveCounterpartyFigures(group, pivot, rateOf),
+      figures: resolveCounterpartyFigures(group, pivot, rateOf, snapshot.currencies),
       balances: group.balances,
       ageDays: group.ageDays,
       ageBucket: group.ageBucket,
     }));
-  }, [balances, ledger.readRate, pivot, today]);
+  }, [balances, ledger.readRate, pivot, snapshot.currencies, today]);
 
   const visibleRows = useMemo(() => {
     const filtered = rows.filter((row) => matchesDirectionSegment(row, segment));
-    // S12 §3: companies by age desc, then by name.
-    return [...filtered].sort((a, b) => {
-      if (a.kind === "company" && b.kind === "company") return (b.ageDays ?? 0) - (a.ageDays ?? 0);
-      if (a.kind === "company" && b.kind !== "company") return -1;
-      if (a.kind !== "company" && b.kind === "company") return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // S12 §3's own mock: one list, sorted by name — kind is never a sort
+    // key. A company still carries its own `AgeingBar` (O15) beside its row,
+    // but that is a per-row decoration, not a grouping the list performs (L1
+    // — the prior comment claimed "companies by age desc, then by name", which
+    // matched neither the mock, which lists a person first, nor the code,
+    // which had no name tiebreak for two companies of the same age).
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [rows, segment]);
 
   const unsettled = snapshot.unsettledClearing[0];
@@ -207,6 +216,24 @@ export default function Debt() {
     );
   }
 
+  // H1 — a loading state (S12 §6: "Skeleton rows; totals resolve last rather
+  // than showing a wrong number"), never the empty state a `[]` `rows` and a
+  // `[]` `counterparties` would otherwise render as.
+  if (!hydrated) {
+    return (
+      <GroundPanel>
+        <View style={styles.root}>
+          <View style={styles.totals}>
+            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+          </View>
+          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+        </View>
+      </GroundPanel>
+    );
+  }
+
   if (snapshot.counterparties.length === 0 && snapshot.archivedCounterparties.length === 0) {
     return (
       <GroundPanel>
@@ -231,7 +258,13 @@ export default function Debt() {
               <Text style={styles.totalLabel}>
                 {t("counterparties.theyOweTotal")} · {total.currency}
               </Text>
-              <Amount value={total.theyOwe} currency={total.currency} size="small" kind="income" />
+              <Amount
+                value={total.theyOwe}
+                currency={total.currency}
+                decimals={total.decimals}
+                size="small"
+                kind="income"
+              />
             </View>
           ))}
           {directionTotals.map((total) => (
@@ -239,7 +272,13 @@ export default function Debt() {
               <Text style={styles.totalLabel}>
                 {t("counterparties.youOweTotal")} · {total.currency}
               </Text>
-              <Amount value={total.youOwe} currency={total.currency} size="small" kind="spend" />
+              <Amount
+                value={total.youOwe}
+                currency={total.currency}
+                decimals={total.decimals}
+                size="small"
+                kind="spend"
+              />
             </View>
           ))}
         </View>

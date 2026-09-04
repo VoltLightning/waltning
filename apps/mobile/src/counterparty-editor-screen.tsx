@@ -125,12 +125,16 @@ export default function CounterpartyEditor() {
     }).filter((match) => !dismissedIds.has(match.candidate.id));
 
     const rateOf = makeRateOf(ledger.readRate, pivot, today);
+    // M2 — grouped once for every candidate, not once *per* candidate: this
+    // never depends on which candidate is being resolved.
+    const groups = groupByCounterparty(balances);
     return ranked.map(({ candidate }) => {
-      const group = groupByCounterparty(balances).find((g) => g.counterpartyId === candidate.id);
+      const group = groups.find((g) => g.counterpartyId === candidate.id);
       const figures = resolveCounterpartyFigures(
         { settlementCurrency: group?.settlementCurrency ?? null, balances: group?.balances ?? [] },
         pivot,
         rateOf,
+        snapshot.currencies,
       );
       const transactionCount = ledger.searchTransactions({ counterpartyId: candidate.id }).total
         .count;
@@ -151,6 +155,7 @@ export default function CounterpartyEditor() {
     ledger,
     pivot,
     snapshot.counterparties,
+    snapshot.currencies,
     snapshot.distinctCounterpartyPairs,
     today,
   ]);

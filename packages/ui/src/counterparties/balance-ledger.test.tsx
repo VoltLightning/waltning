@@ -69,6 +69,13 @@ describe("BalanceLedger", () => {
     expect(screen.queryByText("@", { exact: false })).toBeNull();
   });
 
+  /** L3 — no rows is S13 §6's own "All settled" state, never a `net 0,00` block. */
+  it("shows the All settled state, not a zero net block, when there are no rows", () => {
+    render(<BalanceLedger rows={[]} settlementCurrency="EUR" settlementNet={toMoney("0")} />);
+    expect(screen.getByText("All settled")).toBeDefined();
+    expect(screen.queryByText("net in EUR")).toBeNull();
+  });
+
   it("shows only the settlement net, no display line, without a display rate", () => {
     render(
       <BalanceLedger

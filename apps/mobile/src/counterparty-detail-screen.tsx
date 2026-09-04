@@ -36,6 +36,7 @@ import {
 } from "@waltning/client/counterparties/counterparty-figures";
 import type { PhoneSearchTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import { useCounterpartyHistory } from "@waltning/client/ledger/use-counterparty-history";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { type FieldError, mapFieldErrors } from "@waltning/client/transport/field-errors";
@@ -51,6 +52,7 @@ import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { Skeleton } from "@waltning/ui/states/skeleton";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -178,6 +180,11 @@ export default function CounterpartyDetail() {
   const [settleNote, setSettleNote] = useState("");
   const [settleFieldErrors, setSettleFieldErrors] = useState<ReturnType<typeof mapFieldErrors>>();
 
+  // H1 — at least one `refresh()` has completed, success or failure. Gates
+  // the loading branch below, which must render before anything derived from
+  // `pivot`/`figures` is asked to stand in for "nothing is open".
+  const hydrated = snapshot.revision > 0;
+
   const counterparty =
     snapshot.counterparties.find((candidate) => candidate.id === rawId) ??
     snapshot.archivedCounterparties.find((candidate) => candidate.id === rawId);
@@ -197,14 +204,14 @@ export default function CounterpartyDetail() {
       { settlementCurrency, balances: group?.balances ?? [] },
       pivot,
       rateOf,
+      snapshot.currencies,
     );
-  }, [counterparty?.settlementCurrency, group, ledger.readRate, pivot, today]);
+  }, [counterparty?.settlementCurrency, group, ledger.readRate, pivot, snapshot.currencies, today]);
 
-  const debtHistory = ledger.searchTransactions({
-    counterpartyId: rawId,
-    counterpartyRole: "debt",
-  });
-  const everyHistory = ledger.searchTransactions({ counterpartyId: rawId });
+  // M2 — memoised on `[ledger, counterpartyId, revision]`; previously two
+  // unmemoised `searchTransactions` calls in this render body, re-run on
+  // every keystroke into the settle sheet's keypad.
+  const { debtHistory, everyHistory } = useCounterpartyHistory(ledger, rawId, snapshot.revision);
   const otherCount = everyHistory.total.count - debtHistory.total.count;
   const historyRows = showAllRows ? everyHistory.rows : debtHistory.rows;
 
@@ -305,7 +312,9 @@ export default function CounterpartyDetail() {
     setSettleVisible(false);
 
     // P5 — the residual named in words, never a bare sign.
-    const direction = t(`counterparties.${settleResidualDirection(result.residual)}`);
+    const direction = t(
+      `counterparties.${settleResidualDirection(result.residual, settleDischargesDecimals)}`,
+    );
     setSettledToastMessage(
       t("counterparties.settledToast", {
         amount: money.forDisplay(money.abs(result.residual), settleDischargesDecimals, mark),
@@ -352,6 +361,21 @@ export default function CounterpartyDetail() {
           why={t("counterparties.loadFailedWhy")}
           action={{ label: t("common.retry"), onPress: ledger.refresh }}
         />
+      </GroundPanel>
+    );
+  }
+
+  // H1 — S13 §6's own loading state ("Skeleton ledger rows"), never the
+  // `return null` an unresolved `pivot`/`figures` would otherwise fall
+  // through to on the very first render.
+  if (!hydrated) {
+    return (
+      <GroundPanel>
+        <Card>
+          <Skeleton shape="hero" label={t("counterparties.loadingLedger")} />
+          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
+          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
+        </Card>
       </GroundPanel>
     );
   }

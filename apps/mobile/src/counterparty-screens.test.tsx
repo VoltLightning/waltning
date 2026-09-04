@@ -12,6 +12,7 @@ import {
   type PhoneAccount,
   type PhoneCounterparty,
   type PhoneCounterpartyBalance,
+  type PhoneLedgerController,
   type PhoneLedgerPort,
   type PhoneSearchPage,
 } from "@waltning/client/ledger/create-phone-ledger";
@@ -40,6 +41,7 @@ const EUR = currencyCode("EUR");
 const TODAY = accountingDate("2026-09-03");
 const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
 const MAREK = id<"counterparties">("22222222-2222-4222-8222-222222222222");
+const ACME = id<"counterparties">("44444444-4444-4444-8444-444444444444");
 
 const NINA_ROW: PhoneCounterpartyBalance = {
   counterpartyId: NINA,
@@ -194,6 +196,22 @@ function controllerOf(port: PhoneLedgerPort) {
   });
 }
 
+/**
+ * H1 — a controller reporting `revision: 0`, as if no `refresh()` has
+ * completed yet. Every real `PhoneLedgerController` bumps `revision` past 0
+ * synchronously in its own constructor, so this wraps a real one and
+ * overrides just the one field a screen's loading branch reads, rather than
+ * hand-building the whole port surface a second time.
+ */
+function unhydratedController(port: PhoneLedgerPort): PhoneLedgerController {
+  const real = controllerOf(port);
+  // `useSyncExternalStore` requires a referentially stable `getSnapshot`
+  // result across calls that have not actually changed — computed once here,
+  // never inline in the returned closure, or React reports an infinite loop.
+  const snapshot = { ...real.getSnapshot(), revision: 0 };
+  return { ...real, getSnapshot: () => snapshot };
+}
+
 beforeEach(() => {
   router.push.mockClear();
   router.back.mockClear();
@@ -216,6 +234,77 @@ describe("Debt (S12)", () => {
     );
     expect(screen.getByText("Nina")).toBeDefined();
     expect(screen.getByText("owes you")).toBeDefined();
+  });
+
+  /**
+   * L1 — one list, sorted by name, kind never a sort key. `Zeta Corp` sorts
+   * alphabetically after both persons — a kind-first sort (the prior "companies
+   * by age desc, then by name" comment) would put it first regardless, so this
+   * name deliberately does not share the prior bug's blind spot the way an
+   * `Acme`/`Marek`/`Nina` fixture would (alphabetically-first company, same
+   * result under either rule).
+   */
+  it("sorts every row by name alone, persons and companies in one list", () => {
+    const marekRow: PhoneCounterpartyBalance = {
+      ...NINA_ROW,
+      counterpartyId: MAREK,
+      name: "Marek",
+      balance: toMoney("-120.00000000"),
+    };
+    const zetaRow: PhoneCounterpartyBalance = {
+      ...NINA_ROW,
+      counterpartyId: ACME,
+      name: "Zeta Corp",
+      kind: "company",
+      balance: toMoney("4200.00000000"),
+      ageDays: 62,
+      bucket: "61-90",
+    };
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [
+          NINA_COUNTERPARTY,
+          { ...NINA_COUNTERPARTY, id: MAREK, name: "Marek" },
+          { ...NINA_COUNTERPARTY, id: ACME, name: "Zeta Corp", kind: "company" },
+        ],
+        listCounterpartyBalances: () => [NINA_ROW, marekRow, zetaRow],
+      }),
+    );
+    const { container } = render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    const text = container.textContent ?? "";
+    const marekIndex = text.indexOf("Marek");
+    const ninaIndex = text.indexOf("Nina");
+    const zetaIndex = text.indexOf("Zeta");
+    expect(marekIndex).toBeGreaterThanOrEqual(0);
+    expect(ninaIndex).toBeGreaterThan(marekIndex);
+    expect(zetaIndex).toBeGreaterThan(ninaIndex);
+  });
+
+  /**
+   * H1 — the loading state (S12 §6), never "All settled", while the pivot
+   * is unresolved and no `refresh()` has completed. Live debts exist
+   * (`listCounterpartyBalances` answers a real balance) — the bug rendered
+   * the empty state right over them.
+   */
+  it("shows a loading skeleton, never the empty state, before the first refresh has completed", () => {
+    const controller = unhydratedController(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.queryByText("All settled")).toBeNull();
+    expect(screen.queryByText("No one yet")).toBeNull();
+    expect(screen.getAllByLabelText("Loading debts").length).toBeGreaterThan(0);
   });
 
   it("shows the first-run empty state with nothing on the ledger", () => {
@@ -296,6 +385,23 @@ describe("Debt (S12)", () => {
 
 describe("CounterpartyDetail (S13)", () => {
   beforeEach(() => useLocalSearchParams.mockReturnValue({ id: NINA }));
+
+  /** H1 — S13 §6's own loading state, never the `return null` an unresolved `figures` fell through to. */
+  it("shows a loading skeleton, never a blank screen, before the first refresh has completed", () => {
+    const controller = unhydratedController(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.queryByText("Nina")).toBeNull();
+    expect(screen.getAllByLabelText("Loading counterparty ledger").length).toBeGreaterThan(0);
+  });
 
   it("shows the card, the ledger, and defaults history to debt rows", () => {
     const controller = controllerOf(
@@ -388,7 +494,11 @@ describe("CounterpartyDetail (S13)", () => {
       </LedgerProvider>,
     );
     expect(screen.getByText("Nina")).toBeDefined();
-    expect(screen.getByText("All settled")).toBeDefined();
+    // L3 — two distinct "All settled" states legitimately coexist here: the
+    // ledger card itself (`BalanceLedger`, no rows) and the history section
+    // below it (no `debt` rows to list) — both real, both empty for their
+    // own reason.
+    expect(screen.getAllByText("All settled")).toHaveLength(2);
   });
 
   /** The BLOCKER (finding 1), on S13 — no net line when the fold is incomplete. */

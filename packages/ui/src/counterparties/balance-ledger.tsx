@@ -19,6 +19,14 @@
  * rate is actually from, never `today`, the same distinction `FxAmount`'s
  * own header draws. `counterparties.atRateDate` states both beneath the
  * converted figure.
+ *
+ * **No rows is `S13 §6`'s own "All settled" state, not a `net 0,00` block**
+ * (L3) — a fully settled counterparty still has a settlement currency and a
+ * complete (zero) net, so `settlementNet` alone cannot tell "genuinely
+ * nothing open" from "every held currency happens to sum to zero"; `rows`
+ * being empty is the one signal that actually means the former. The
+ * counterparty card and history around this component are untouched — only
+ * the ledger block itself swaps for the empty state.
  */
 
 import type { Money, PivotPerUnit } from "@waltning/core/money";
@@ -59,12 +67,21 @@ export function BalanceLedger({
   const t = useT();
   const styles = useStyles();
 
+  if (rows.length === 0) {
+    return (
+      <View style={styles.root}>
+        <Text style={styles.allSettledTitle}>{t("counterparties.allSettled")}</Text>
+        <Text style={styles.allSettledBody}>{t("counterparties.allSettledBody")}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       {rows.map((row) => (
         <View key={row.currency} style={styles.row}>
           <Amount value={row.balance} currency={row.currency} decimals={row.decimals ?? 2} />
-          <DebtDirectionTag balance={row.balance} />
+          <DebtDirectionTag balance={row.balance} decimals={row.decimals ?? 2} />
         </View>
       ))}
       {settlementNet === null ? null : (
@@ -120,4 +137,6 @@ const useStyles = makeStyles((theme) => ({
   netLabel: { color: theme.textMuted, ...text.ui("bodySm", 600) },
   netFigure: { alignItems: "flex-end", gap: space.xs },
   rateDate: { color: theme.textMuted, ...text.ui("caption") },
+  allSettledTitle: { color: theme.text, ...text.ui("body", 600) },
+  allSettledBody: { color: theme.textMuted, ...text.ui("bodySm") },
 }));
