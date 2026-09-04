@@ -636,9 +636,9 @@ export function fifoOldestOpen<TId extends string>(
     // by running the exact case below (lend 200, lend 300, a repay of 200
     // that exactly exhausts the first): the process pegged a core at 100%
     // CPU and never returned.
-    while (toConsume.gt(0) && open.length > 0) {
-      // biome-ignore lint/style/noNonNullAssertion: guarded by `open.length > 0` above.
-      const oldest = open[0]!;
+    while (toConsume.gt(0)) {
+      const oldest = open[0];
+      if (!oldest) break;
       if (oldest.remaining.lte(toConsume)) {
         toConsume = toConsume.minus(oldest.remaining);
         open.shift();
@@ -736,36 +736,36 @@ export const allocateLargestRemainder = (
 
   const scale = new Decimal(10).pow(decimals);
   const totalUnits = dec(total).times(scale);
-  const exactUnits = weights.map((w) => totalUnits.times(w).dividedBy(weightSum));
-  const floorUnits = exactUnits.map((s) => s.toDecimalPlaces(0, Decimal.ROUND_DOWN));
-  const remainders = exactUnits.map((s, i) => s.minus(floorUnits[i] as Decimal));
 
-  const distributed = floorUnits.reduce((acc, f) => acc.plus(f), dec(0));
+  // One record per weight, its own remainder carried alongside it rather
+  // than in a second array indexed back into this one — nothing here reads
+  // an array cell TypeScript cannot prove is there.
+  const shares = weights.map((weight, index) => {
+    const exact = totalUnits.times(weight).dividedBy(weightSum);
+    const floor = exact.toDecimalPlaces(0, Decimal.ROUND_DOWN);
+    return { index, floor, remainder: exact.minus(floor) };
+  });
+
+  const distributed = shares.reduce((acc, share) => acc.plus(share.floor), dec(0));
   // Whole minor units left to hand out. `total` is presumed to already sit at
   // the currency's own scale (`decimals`) — the realistic input, and the one
   // every worked example in §8 and J08 §5 uses — which makes this an exact
   // non-negative integer; `ROUND_HALF_UP` only guards the last place against
   // representation noise, never invents units.
-  let leftover = totalUnits.minus(distributed).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+  const leftover = Math.max(
+    0,
+    totalUnits.minus(distributed).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber(),
+  );
 
-  const order = weights
-    .map((_, index) => index)
-    .sort((a, b) => {
-      // biome-ignore lint/style/noNonNullAssertion: `order`'s indices are exactly `remainders`'s.
-      const byRemainder = remainders[b]!.cmp(remainders[a]!);
-      return byRemainder !== 0 ? byRemainder : a - b;
-    });
+  const byDescendingRemainder = [...shares].sort((a, b) => {
+    const byRemainder = b.remainder.cmp(a.remainder);
+    return byRemainder !== 0 ? byRemainder : a.index - b.index;
+  });
+  const getsExtraUnit = new Set(byDescendingRemainder.slice(0, leftover).map((s) => s.index));
 
-  const units = [...floorUnits];
-  for (let k = 0; k < order.length && leftover > 0; k += 1) {
-    // biome-ignore lint/style/noNonNullAssertion: `order` is a permutation of `units`'s own indices.
-    const index = order[k]!;
-    // biome-ignore lint/style/noNonNullAssertion: same permutation guarantee as above.
-    units[index] = units[index]!.plus(1);
-    leftover -= 1;
-  }
-
-  return units.map((u) => toMoney(u.dividedBy(scale)));
+  return shares.map(({ index, floor }) =>
+    toMoney((getsExtraUnit.has(index) ? floor.plus(1) : floor).dividedBy(scale)),
+  );
 };
 
 export { Decimal };
