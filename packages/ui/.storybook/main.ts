@@ -30,9 +30,24 @@ const reanimatedWebUtils = {
   name: "waltning:reanimated-web-utils",
   enforce: "pre" as const,
   transform(_code: string, id: string) {
-    if (!id.includes("react-native-reanimated") || !id.includes("js-reanimated/webUtils")) {
-      return null;
+    if (!id.includes("react-native-reanimated")) return null;
+    /**
+     * `scripts/validate-worklets-version.js` is CommonJS — `require`s of
+     * `semver` and a JSON file — reached through an ESM `import … default`
+     * from `platform-specific/workletsVersion.js`. The build's Rollup handles
+     * that; the dev server, with Reanimated kept out of pre-bundling (below),
+     * serves the file raw and the import has no `default`, so every story
+     * that animates hangs on Storybook's spinner. The check itself guards a
+     * pairing pnpm already pins (`react-native-worklets` is Expo SDK 57's
+     * bundled version), so in dev it answers *ok* and the build keeps the real one.
+     */
+    if (id.includes("scripts/validate-worklets-version")) {
+      return {
+        code: "export default function validateWorkletsVersion() { return { ok: true }; }",
+        map: null,
+      };
     }
+    if (!id.includes("js-reanimated/webUtils")) return null;
     return {
       code: [
         'import createReactDOMStyle from "react-native-web/dist/exports/StyleSheet/compiler/createReactDOMStyle";',
@@ -103,6 +118,11 @@ const config: StorybookConfig = {
     plugins: [reanimatedWebUtils, ...(config.plugins ?? [])],
     optimizeDeps: {
       ...config.optimizeDeps,
+      // `@react-native/normalize-colors` is CommonJS and reached only through
+      // react-native-web's `processColor`; the dev server's scan does not always
+      // discover it, and an un-bundled CJS module has no `default` export — the
+      // page then hangs on a spinner. Pre-bundling it is the whole fix.
+      include: [...(config.optimizeDeps?.include ?? []), "@react-native/normalize-colors"],
       exclude: [...(config.optimizeDeps?.exclude ?? []), "react-native-reanimated"],
     },
   }),
