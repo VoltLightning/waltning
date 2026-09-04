@@ -12,6 +12,14 @@
  * A path the form does not know about still has to land somewhere, or a
  * refusal a person cannot see is a refusal that never happened. It surfaces
  * at form level instead of vanishing.
+ *
+ * **An empty path is not an unknown one.** `""` is how a caller states a
+ * refusal that names no field at all — S09's stale-version and lines-sum
+ * refusals are exactly this, the whole row is stale or the whole set does
+ * not sum, never one field of it — so it prints bare, the message alone.
+ * A real unknown path (`lines.2.amount` when the form only knows `amount`)
+ * still gets the `path: message` prefix, because *that* case is a form
+ * genuinely missing context a reader benefits from seeing.
  */
 
 import { ZodError } from "zod";
@@ -58,7 +66,7 @@ export function mapFieldErrors(
       if (messages) messages.push(error.message);
       else byField[error.path] = [error.message];
     } else {
-      formLevel.push(`${error.path}: ${error.message}`);
+      formLevel.push(error.path === "" ? error.message : `${error.path}: ${error.message}`);
     }
   }
 

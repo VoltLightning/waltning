@@ -176,6 +176,8 @@ export const en = {
     lines: "Breakdown",
     addLine: "+ Add",
     lineDescription: "Description",
+    /** A line's own row, before it has a description — distinct from the `lineDescription` field label its editor opens with. */
+    newLine: "New line",
     total: "Total",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",

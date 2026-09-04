@@ -122,6 +122,7 @@ export const pl: Messages = {
     lines: "Rozbicie",
     addLine: "+ Dodaj",
     lineDescription: "Opis",
+    newLine: "Nowa pozycja",
     total: "Razem",
     notFound: "Ta transakcja już nie istnieje.",
   },

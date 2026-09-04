@@ -13,7 +13,7 @@ const FIELDS: TransactionFields = {
   date: "2026-08-06",
   accountId: "account-a",
   categoryId: "cat-eating-out",
-  payee: "Costa",
+  payee: "Café A",
   note: "",
   isBusiness: false,
 };
@@ -36,12 +36,12 @@ function renderCard(overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) {
   return { onSave, onOpenCategoryPicker };
 }
 
-it("shows every field's current value as a chip", () => {
+it("shows every field's current value as a row — label left, value right", () => {
   renderCard();
   expect(screen.getByRole("button", { name: "Category: Eating out" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Date: 2026-08-06" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Account: Cash · PLN" })).toBeDefined();
-  expect(screen.getByRole("button", { name: "Payee: Costa" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
 });
 
 it("opens CategorySheet through the screen's own callback, never inline", () => {
@@ -58,14 +58,14 @@ it("Save starts disabled — nothing has changed yet", () => {
 it("Save sends only the field that changed", () => {
   const { onSave } = renderCard();
 
-  fireEvent.click(screen.getByRole("button", { name: "Payee: Costa" }));
-  fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Costa Coffee" } });
+  fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
+  fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
 
   const save = screen.getByRole("button", { name: "Save" });
   expect(save).toHaveProperty("disabled", false);
   fireEvent.click(save);
 
-  expect(onSave).toHaveBeenCalledWith({ payee: "Costa Coffee" });
+  expect(onSave).toHaveBeenCalledWith({ payee: "Bakery A" });
 });
 
 it("carries a category change (set by the screen once the sheet picks one) alongside a field change, in one patch", () => {

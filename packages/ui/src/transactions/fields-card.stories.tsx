@@ -1,6 +1,7 @@
 /**
- * `FieldsCard` — S09's editable fields, each behind a `Chip`. `Opened` drives
- * a field open the way a person taps one; `Changed` goes one step further and
+ * `FieldsCard` — S09's editable fields, each a labelled row: kicker left,
+ * value right, a drawn chevron, a hairline between rows. `Opened` drives a
+ * field open the way a person taps one; `Changed` goes one step further and
  * enables `Save`, which is the *Done when* every field-level test checks.
  */
 
@@ -23,7 +24,7 @@ const meta = {
       date: "2026-08-06",
       accountId: "account-a",
       categoryId: "cat-eating-out",
-      payee: "Costa",
+      payee: "Café A",
       note: "",
       isBusiness: false,
     },
@@ -46,7 +47,7 @@ export const Default: Story = {};
 export const Opened: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole("button", { name: "Payee: Costa" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "Payee: Café A" }));
     await expect(canvas.findByLabelText("Payee")).resolves.toBeDefined();
   },
 };
@@ -55,9 +56,9 @@ export const Opened: Story = {
 export const Changed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole("button", { name: "Payee: Costa" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "Payee: Café A" }));
     const field = await canvas.findByLabelText("Payee");
-    fireEvent.change(field, { target: { value: "Costa Coffee" } });
+    fireEvent.change(field, { target: { value: "Bakery A" } });
     await expect(canvas.findByRole("button", { name: "Save" })).resolves.not.toHaveProperty(
       "disabled",
       true,

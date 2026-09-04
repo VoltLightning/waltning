@@ -607,7 +607,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       id: TXN,
       date: accountingDate("2026-08-06"),
       type: "expense",
-      payee: "Costa",
+      payee: "Café A",
       note: "",
       isBusiness: false,
       accountId: id<"accounts">("22222222-2222-4222-8222-222222222222"),
@@ -716,20 +716,20 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
   it("getTransaction reads through the port, unmodified", () => {
     const { controller, getTransaction } = detailHarness();
     const result = controller.getTransaction(TXN);
-    expect(result?.payee).toBe("Costa");
+    expect(result?.payee).toBe("Café A");
     expect(getTransaction).toHaveBeenCalledWith(TXN);
   });
 
   it("updateTransaction patches with the version it was given, and refreshes on success", () => {
     const { controller, updateTransaction } = detailHarness();
-    const result = controller.updateTransaction(TXN, 1, { payee: "Costa Coffee" });
+    const result = controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
     expect(idOf(result)).toBe(TXN);
     expect(updateTransaction.mock.calls[0]?.[0]).toMatchObject({
       id: TXN,
       version: 1,
-      patch: { payee: "Costa Coffee" },
+      patch: { payee: "Café A · Downtown" },
     });
-    expect(controller.getTransaction(TXN)?.payee).toBe("Costa Coffee");
+    expect(controller.getTransaction(TXN)?.payee).toBe("Café A · Downtown");
   });
 
   /**
@@ -741,7 +741,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
    */
   it("a stale version on update reaches fieldErrors with transactions.changedElsewhere", () => {
     const { controller } = detailHarness();
-    controller.updateTransaction(TXN, 1, { payee: "Costa Coffee" });
+    controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
 
     const result = controller.updateTransaction(TXN, 1, { payee: "Someone else's edit" });
 
@@ -763,7 +763,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
 
   it("a stale version on delete reaches fieldErrors, not a throw", () => {
     const { controller } = detailHarness();
-    controller.updateTransaction(TXN, 1, { payee: "Costa Coffee" });
+    controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
 
     const result = controller.deleteTransaction(TXN, 1);
 

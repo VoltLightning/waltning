@@ -36,8 +36,16 @@ const PLN = currencyCode("PLN");
 
 type FakeDetail = ReturnType<PhoneLedgerPort["getTransaction"]>;
 
-/** One transaction, version-checked the way the real executors are. */
-function fakeController(initial: NonNullable<FakeDetail> | null) {
+/**
+ * One transaction, version-checked the way the real executors are.
+ * `overrides` replaces individual port methods — the stale-version test
+ * below wants an `updateTransaction` that always refuses, not one this
+ * harness's own version bookkeeping would have to be tricked into.
+ */
+function fakeController(
+  initial: NonNullable<FakeDetail> | null,
+  overrides: Partial<PhoneLedgerPort> = {},
+) {
   let row = initial;
   const port: PhoneLedgerPort = {
     listAccounts: () => [
@@ -93,6 +101,7 @@ function fakeController(initial: NonNullable<FakeDetail> | null) {
     }),
     categorizeBatch: () => undefined,
     reset: vi.fn(),
+    ...overrides,
   };
   return createPhoneLedger(port, {
     capture: () => ({
@@ -109,7 +118,7 @@ const DETAIL: NonNullable<FakeDetail> = {
   id: id<"transactions">(TXN),
   date: accountingDate("2026-08-06"),
   type: "expense",
-  payee: "Costa",
+  payee: "Café A",
   note: "",
   isBusiness: false,
   accountId: ACCOUNT,
@@ -138,19 +147,43 @@ describe("TransactionDetail", () => {
   it("shows the hero amount and the fields of the row it was pushed for", () => {
     withLedger(<TransactionDetail />);
     expect(screen.getByText("-48.90")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Payee: Costa" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
   });
 
   it("saves a changed field, and the new value reads back", () => {
     withLedger(<TransactionDetail />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee: Costa" }));
-    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Costa Coffee" } });
+    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
+    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Café A · Downtown" } });
     // The only `Save` on screen: `LinesCard` renders none while it holds no
     // lines and none have been added.
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.getByRole("button", { name: "Payee: Costa Coffee" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Payee: Café A · Downtown" })).toBeDefined();
+  });
+
+  /**
+   * `mapFieldErrors` used to print `": message"` for a refusal naming no
+   * field — `refusalFromThrow`'s own `path: ""` — because its form-level
+   * fallback always prefixed the path. Fixed in
+   * `packages/client/src/transport/field-errors.ts`; this is the same
+   * refusal reaching the actual screen, alert text asserted exactly.
+   */
+  it("a stale version reaches the screen as the bare message — no leading colon", () => {
+    const controller = fakeController(DETAIL, {
+      updateTransaction: () => {
+        throw new Error("update_transaction: stale version — read 1, row is at 2");
+      },
+    });
+    withLedger(<TransactionDetail />, controller);
+
+    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
+    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("alert").textContent).toBe(
+      "This transaction changed elsewhere — reload it before saving.",
+    );
   });
 
   it("Delete removes the row and returns to Today with a toast", () => {

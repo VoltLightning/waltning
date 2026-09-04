@@ -24,12 +24,15 @@ const LINES: readonly LinesCardLine[] = [
 
 const TOTAL = money.toMoney("48.90");
 
-it("shows every line as a chip, and the live sum checked against the total", () => {
+it("shows every line as a row — description, its category muted beneath, the amount through <Amount>", () => {
   const onSave = vi.fn();
   render(<LinesCard lines={LINES} total={TOTAL} currency="PLN" onSave={onSave} />);
 
-  expect(screen.getByRole("button", { name: /Groceries · 42.10/ })).toBeDefined();
-  expect(screen.getByRole("button", { name: /Household supplies · 6.80/ })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Groceries" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Household supplies" })).toBeDefined();
+  expect(screen.getByText("Household")).toBeDefined();
+  expect(screen.getByText("42.10")).toBeDefined();
+  expect(screen.getByText("6.80")).toBeDefined();
   expect(screen.getByText("✓")).toBeDefined();
 });
 
@@ -44,9 +47,27 @@ it("Save starts disabled — nothing has changed yet", () => {
   expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
 });
 
+/**
+ * A change alone does not enable `Save` — the sum has to check out too.
+ * `set_transaction_lines` would refuse the write anyway (§10.3), but a
+ * button offering an attempt it can only fail is worse than one that stays
+ * off until the figure agrees.
+ */
+it("Save stays disabled while a change leaves the sum unbalanced", () => {
+  render(<LinesCard lines={LINES} total={TOTAL} currency="PLN" onSave={vi.fn()} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Groceries" }));
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "1.00" } });
+
+  expect(screen.getByText("≠")).toBeDefined();
+  expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+});
+
 it("+ Add opens a fresh line, and Save sends the whole set with a new id", () => {
   const onSave = vi.fn();
-  render(<LinesCard lines={LINES} total={TOTAL} currency="PLN" onSave={onSave} />);
+  // The new line's amount is folded into `total` too — Save now stays off
+  // while the sum is unbalanced, so this fixture has to add up.
+  render(<LinesCard lines={LINES} total={money.toMoney("52.40")} currency="PLN" onSave={onSave} />);
 
   fireEvent.click(screen.getByRole("button", { name: "+ Add" }));
   fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Coffee" } });
@@ -71,7 +92,7 @@ it("removing a line down to none is a legitimate save — no breakdown", () => {
     />,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: /Groceries · 42.10/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Groceries" }));
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 

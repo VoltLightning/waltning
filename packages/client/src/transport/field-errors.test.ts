@@ -22,6 +22,19 @@ describe("mapFieldErrors", () => {
     expect(map.formLevel).toHaveLength(1);
   });
 
+  /**
+   * S09's own case: `update_transaction`'s stale-version refusal names no
+   * field (`refusalFromThrow` in `create-phone-ledger.ts` sends `path: ""`),
+   * so it prints bare — never `": the row moved"` with a leading colon.
+   */
+  it("prints an empty path's message bare, with no leading colon", () => {
+    const map = mapFieldErrors(
+      [{ path: "", message: "the row moved under the writer" }],
+      ["payee", "date"],
+    );
+    expect(map.formLevel).toEqual(["the row moved under the writer"]);
+  });
+
   it("collects several messages on one field in order", () => {
     const map = mapFieldErrors(
       [
