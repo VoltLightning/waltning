@@ -39,9 +39,13 @@ import { writeLocally } from "@waltning/ledger/write";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { useSyncExternalStore } from "react";
+import CounterpartyDetail from "../counterparty-detail-screen";
+import Debt from "../debt-screen";
 import QuickAdd from "../quick-add-screen";
+import SettingsRatesScreen from "../settings-rates-screen";
 import { TabsShell } from "../tabs-shell";
 import Today from "../today-screen";
+import Transfer from "../transfer-screen";
 
 type Run = Database.RunResult;
 
@@ -80,6 +84,10 @@ export type JourneyFixture = {
   cashAccountId: string;
   eatingOutCategoryId: string;
   priorTransactionId: string;
+  /** A second, pivot-currency account — J07's "into a different currency" settle leg, J16's transfer legs. */
+  usdAccountId: string;
+  /** Owes `100.00 PLN` (J07 §2's own precondition — the lend already recorded, never seeded as a raw balance). */
+  counterpartyId: string;
 };
 
 /**
@@ -174,20 +182,74 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
     );
   }
 
+  // J07/J16's second leg — the pivot currency, always capturable (§7.0), so a
+  // settle or a transfer into it never trips the uncapturable-account guard
+  // by accident.
+  const usdAccount = controller.createAccount({
+    name: "Bank B · USD",
+    currency: currencyCode("USD"),
+    kind: "bank",
+    ownership: "own",
+    isBusiness: false,
+    openingBalance: "0",
+    openingDate: null,
+    memo: "",
+    groupId: null,
+  });
+  if (!("id" in usdAccount)) {
+    throw new Error(
+      `journey fixture: usd account refused — ${JSON.stringify(usdAccount.fieldErrors)}`,
+    );
+  }
+
+  // J07 §2's precondition — a counterparty already carrying an open debt, the
+  // lend itself booked through the same write S05's own role chip makes
+  // (`counterpartyRole: "debt"`), never a raw balance row.
+  const counterparty = controller.createCounterparty({
+    name: "Placeholder",
+    kind: "person",
+    settlementCurrency: currencyCode("PLN"),
+    contact: null,
+    note: "",
+  });
+  if (!("id" in counterparty)) {
+    throw new Error(
+      `journey fixture: counterparty refused — ${JSON.stringify(counterparty.fieldErrors)}`,
+    );
+  }
+  const lend = controller.createTransaction({
+    type: "expense",
+    amount: "100.00",
+    accountId: account.id,
+    categoryId: category.id,
+    payee: "Placeholder",
+    date: today,
+    note: "",
+    isBusiness: false,
+    counterpartyId: counterparty.id,
+    counterpartyRole: "debt",
+  });
+  if (!("id" in lend)) {
+    throw new Error(`journey fixture: lend refused — ${JSON.stringify(lend.fieldErrors)}`);
+  }
+
   return {
     cashAccountId: account.id,
     eatingOutCategoryId: category.id,
     priorTransactionId: prior.id,
+    usdAccountId: usdAccount.id,
+    counterpartyId: counterparty.id,
   };
 }
 
-export type JourneyRoute = "today" | "quick-add";
+export type JourneyRoute = "today" | "quick-add" | "debt" | "counterparty" | "transfer" | "rates";
 
 /**
- * The two shapes `router.push`/`dismissTo` are ever called with across this
- * journey's own screens — a bare path (`tabs-shell.tsx`'s `"/quick-add"`,
- * `quick-add-screen.tsx`'s `"/"`) or `{ pathname, params }` (the account
- * escape hatch, never scripted here — see the stub's own doc below).
+ * The shapes `router.push`/`dismissTo` are ever called with across these
+ * journeys' own screens — a bare path (`tabs-shell.tsx`'s `"/quick-add"`,
+ * `quick-add-screen.tsx`'s `"/"`, `debt-screen.tsx`'s `` `/counterparty/${id}` ``)
+ * or `{ pathname, params }` (the account escape hatch, never scripted here —
+ * see the stub's own doc below).
  */
 type RouteTarget = string | { readonly pathname: string };
 
@@ -198,35 +260,52 @@ export type JourneyRouterStub = {
     back: () => void;
     dismissTo: (target: RouteTarget) => void;
   };
-  /** `useLocalSearchParams`'s own mock — always empty; this journey never opens Quick add prefilled. */
-  useLocalSearchParams: () => Record<string, never>;
+  /** `useLocalSearchParams`'s own mock — `{ id }` once a script has navigated to `counterparty`, empty otherwise. */
+  useLocalSearchParams: () => Record<string, string>;
   subscribe: (listener: () => void) => () => void;
   getRoute: () => JourneyRoute;
+  /**
+   * Test-only — jumps straight to `route` with `useLocalSearchParams()` set
+   * to `params` until the next navigation, for the routes these journeys
+   * reach with no scripted tap to get there (S12's own tab, and every screen
+   * a `_layout.tsx` this harness does not mount would otherwise route to).
+   * Never called from inside a screen — only from a journey's own script.
+   */
+  pushWithParams: (route: JourneyRoute, params?: Record<string, string>) => void;
 };
 
 /**
- * `push("/quick-add")` and `dismissTo("/")` are the only two calls this
- * journey's own screens make — `tabs-shell.tsx`'s `handleAdd` and
- * `quick-add-screen.tsx`'s own Save. `back()` is J02's `✕` discard, wired the
- * same way rather than left a no-op. Anything else throws loudly: a route
- * this journey never scripted is a bug in the script, not a screen to render.
+ * `push("/quick-add")`, `push(\`/counterparty/${id}\`)` and `dismissTo("/")`
+ * are the calls these journeys' own screens make — `tabs-shell.tsx`'s
+ * `handleAdd`, `debt-screen.tsx`'s `handleSelect`, and
+ * `quick-add-screen.tsx`'s own Save. `back()` is J02's `✕` discard and
+ * `transfer-screen.tsx`'s own Cancel, wired the same way rather than left a
+ * no-op. Anything else throws loudly: a route this journey never scripted is
+ * a bug in the script, not a screen to render.
  */
 export function createJourneyRouterStub(): JourneyRouterStub {
   let route: JourneyRoute = "today";
+  let params: Record<string, string> = {};
   const listeners = new Set<() => void>();
   const notify = () => {
     for (const listener of listeners) listener();
   };
-  const go = (next: JourneyRoute) => {
+  const go = (next: JourneyRoute, nextParams: Record<string, string> = {}) => {
     route = next;
+    params = nextParams;
     notify();
   };
+  const COUNTERPARTY_PREFIX = "/counterparty/";
 
   return {
     router: {
       push: (target) => {
         if (target === "/quick-add") {
           go("quick-add");
+          return;
+        }
+        if (typeof target === "string" && target.startsWith(COUNTERPARTY_PREFIX)) {
+          go("counterparty", { id: target.slice(COUNTERPARTY_PREFIX.length) });
           return;
         }
         throw new Error(`journey harness: unscripted router.push(${JSON.stringify(target)})`);
@@ -240,7 +319,8 @@ export function createJourneyRouterStub(): JourneyRouterStub {
         throw new Error(`journey harness: unscripted router.dismissTo(${JSON.stringify(target)})`);
       },
     },
-    useLocalSearchParams: () => ({}),
+    useLocalSearchParams: () => params,
+    pushWithParams: (nextRoute, nextParams = {}) => go(nextRoute, nextParams),
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -254,13 +334,31 @@ export type JourneyHarnessProps = {
   stub: JourneyRouterStub;
 };
 
-/** `TabsShell`, not the bare screens — the `+` this journey taps is its furniture, not either screen's own. */
+/**
+ * `TabsShell` for the tab-bar screens (`today`, `debt`) — the `+` J02's own
+ * journey taps is its furniture, not either screen's own, and `Debt` is
+ * `app/(tabs)/debt.tsx`, the same tab group. `counterparty`, `transfer` and
+ * `rates` are stack pushes in the real app (`app/counterparty/[id].tsx`,
+ * `app/transfer.tsx`, `app/settings/rates.tsx` — none under `(tabs)`), so
+ * they render bare here, the same way `quick-add.tsx` — also a stack push —
+ * is kept inside `TabsShell` only for the floating `+` J02 needs and no
+ * other screen here does.
+ */
 export function JourneyHarness({ controller, stub }: JourneyHarnessProps) {
   const route = useSyncExternalStore(stub.subscribe, stub.getRoute, stub.getRoute);
-  const slot = route === "today" ? <Today /> : <QuickAdd />;
   return (
     <LedgerProvider controller={controller}>
-      <TabsShell slot={slot} />
+      {route === "counterparty" ? (
+        <CounterpartyDetail />
+      ) : route === "transfer" ? (
+        <Transfer />
+      ) : route === "rates" ? (
+        <SettingsRatesScreen />
+      ) : (
+        <TabsShell
+          slot={route === "today" ? <Today /> : route === "debt" ? <Debt /> : <QuickAdd />}
+        />
+      )}
     </LedgerProvider>
   );
 }
