@@ -211,7 +211,7 @@ point at one list:
   off `main`. Wave 3b, once D3 and D4a merge: C3–C6. Wave 4a, off `main`:
   D4b (S05 on the Dock), E1 (§7/§8 figures), E2 (counterparty and settlement
   ops), E3 (§4/§4a, rates, FX ops). Wave 4b: D5 (after D4b), E4 (S15, S12,
-  S13), E5 (S14, S31), E6 (S17, S18). Wave 4c: J07 and J16 acceptance. Wave 5:
+  S13), E5 (S14, S31), E6 (S17, S18). Wave 4c: the retroactive review's fixes (`plans/2026-09-04-retro-review-findings.md`, R1–R6), then J07 and J16 acceptance. Wave 5:
   DESK2–DESK4, then DESK5. The wave-3 plans share
   `plans/2026-09-04-wave-3-shared.md`; wave 4's share
   `plans/2026-09-04-wave-4-shared.md`, which also moves the gate to the
