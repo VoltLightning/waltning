@@ -158,21 +158,37 @@ describe("journeys and invariants", () => {
    * filename or a bare number, optionally followed by a section marker —
    * `§14.6`, `§9`, `§4a`, or a bare `H15`. `SPEC.md` and `computations.md`
    * take the same optional marker with no directory prefix.
+   *
+   * The gap before the marker is `\s*\*?\s*`, not `\s+`: a `Proves:` line
+   * wraps inside a `/** … *\/` comment, so `SPEC.md` and its `§7.0` can sit
+   * on different lines with only a continuation `*` between them
+   * (`pivot-change.journey.test.ts`'s actual header). At most one literal
+   * `*` is allowed in that gap, so this still cannot bridge two unrelated
+   * words of prose — only a JSDoc line-wrap boundary is all-whitespace(-and-
+   * one-star) enough to match.
    */
   const CITATION_RE =
-    /(?:\b(architecture|screens|flows)\/([A-Za-z0-9][\w.-]*)|\b(SPEC\.md)\b|\b(computations\.md)\b)(?:\s+(§[\w.]+|H\d+))?/g;
+    /(?:\b(architecture|screens|flows)\/([A-Za-z0-9][\w.-]*)|\b(SPEC\.md)\b|\b(computations\.md)\b)(?:\s*\*?\s*(§[\w.]+|H\d+))?/g;
 
   /**
    * Every citation the block comment attempts, resolved or not. Only one
    * needs to resolve — the rest of `Proves:` is often prose about a citation
    * the *brief* got wrong, quoted to explain the correction, and that quoted
    * text can itself look like a citation without being one.
+   *
+   * `SPEC.md` and `computations.md` resolve **only** through a heading — a
+   * bare mention of either filename, with no section marker, proves
+   * nothing (both files exist regardless of what the comment says next to
+   * them). `flows/`, `screens/` and `architecture/` citations keep the
+   * file-existence fallback: those name one specific document each, so
+   * citing the file without a section is still a real, checkable claim.
    */
   function resolveCitations(text: string): { resolved: string[]; attempted: string[] } {
     const resolved: string[] = [];
     const attempted: string[] = [];
     for (const [whole, prefix, pathToken, specMd, compMd, marker] of text.matchAll(CITATION_RE)) {
       let filePath: string;
+      const requiresHeading = Boolean(specMd || compMd);
       if (prefix && pathToken) {
         const dir = join(specRoot, prefix);
         const file = pathToken.endsWith(".md") ? pathToken : fileStartingWith(dir, pathToken);
@@ -186,12 +202,18 @@ describe("journeys and invariants", () => {
       }
       const fileExists = existsSync(filePath);
       const token = marker?.startsWith("§") ? marker.slice(1) : marker;
-      const headingFound = !token || (fileExists && headingTokensOf(filePath).has(token));
+      const headingHasToken =
+        Boolean(token) && fileExists && headingTokensOf(filePath).has(token ?? "");
+      const ok = token ? headingHasToken : !requiresHeading && fileExists;
       attempted.push(
         `${(whole ?? "").trim()} → file ${fileExists ? "exists" : "missing"}` +
-          (token ? `, heading "${token}" ${headingFound ? "found" : "missing"}` : ""),
+          (token
+            ? `, heading "${token}" ${headingHasToken ? "found" : "missing"}`
+            : requiresHeading
+              ? " (no section marker — SPEC.md/computations.md require one)"
+              : ""),
       );
-      if (fileExists && headingFound) resolved.push((whole ?? "").trim());
+      if (ok) resolved.push((whole ?? "").trim());
     }
     return { resolved, attempted };
   }
@@ -209,6 +231,30 @@ describe("journeys and invariants", () => {
     expect(resolveCitations("SPEC.md §6.5 table").resolved).toEqual(["SPEC.md §6.5"]);
     expect(resolveCitations("architecture/99-nowhere.md §1").resolved).toEqual([]);
     expect(resolveCitations("docs/nonexistent.md §99").resolved).toEqual([]);
+
+    // A bare mention of SPEC.md/computations.md, with no section marker, is
+    // not a citation — both files exist regardless of what the prose says.
+    expect(
+      resolveCitations("nothing in particular, but SPEC.md is a file, and computations.md is too.")
+        .resolved,
+    ).toEqual([]);
+    // flows/screens/architecture keep the file-existence fallback: naming
+    // one specific document, with no section, is still a real claim.
+    expect(resolveCitations("flows/J02-daily-capture.md, unspecified section").resolved).toEqual([
+      "flows/J02-daily-capture.md",
+    ]);
+
+    // A JSDoc line-wrap between the filename and its marker must still
+    // resolve through the heading, not fall back to file-existence-only.
+    expect(resolveCitations("SPEC.md\n * §7.0 table").resolved).toEqual(["SPEC.md\n * §7.0"]);
+    expect(resolveCitations("computations.md\n * §4a margin").resolved).toEqual([
+      "computations.md\n * §4a",
+    ]);
+    // The wrap tolerance is one continuation `*`, not arbitrary prose — a
+    // real paragraph break must not bridge two unrelated citations.
+    expect(
+      resolveCitations("SPEC.md is mentioned here.\n\nElsewhere, §7.0 is unrelated.").resolved,
+    ).toEqual([]);
   });
 
   it("every file's first block comment cites a real spec section and states its findings", () => {
