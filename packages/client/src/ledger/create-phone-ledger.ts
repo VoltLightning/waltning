@@ -1,18 +1,26 @@
 import { fold } from "@waltning/core/capture/names";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
 import { type Id, type IdTable, id } from "@waltning/core/id";
-import type { CurrencyCode, Money } from "@waltning/core/money";
+import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
   type AccountKind,
+  type AddCurrencyInput,
   type ArchiveAccountInput,
+  type ArchiveCurrencyInput,
+  addCurrencyInput,
   archiveAccountInput,
+  archiveCurrencyInput,
   type CategorizeBatchInput,
+  type ChangePivotInput,
+  type ClearManualRateInput,
   type CreateAccountInput,
   type CreateCategoryInput,
   type CreateGroupInput,
   type CreateTransactionInput,
   categorizeBatchInput,
+  changePivotInput,
+  clearManualRateInput,
   createAccountInput,
   createCategoryInput,
   createGroupInput,
@@ -21,7 +29,13 @@ import {
   deleteTransactionInput,
   type ReconcileAccountInput,
   reconcileAccountInput,
+  type SetManualRateInput,
+  type SetPinnedInput,
+  type SetRateSourceInput,
   type SetTransactionLinesInput,
+  setManualRateInput,
+  setPinnedInput,
+  setRateSourceInput,
   setTransactionLinesInput,
   type UpdateAccountInput,
   type UpdateTransactionInput,
@@ -277,6 +291,38 @@ export type PhoneTransactionDetail = {
   lines: readonly PhoneTransactionLine[];
 };
 
+/**
+ * §4's rate for one pair, as of a date — `readRate`'s answer, structural for
+ * the same reason `PhoneCurrency` is (no `@waltning/ledger` import).
+ */
+export type PhoneRate = {
+  rate: UnitsPerPivot;
+  source: string;
+  /** The rate row's own date — the day it was actually published or set. */
+  asOf: AccountingDate;
+  /** `date − asOf`. `0` means the rate is exact for the day asked about. */
+  carriedDays: number;
+};
+
+/** S17 §8's coverage figure, per currency — `readCoverage`'s answer. */
+export type PhoneCoverage = {
+  code: CurrencyCode;
+  source: string | null;
+  firstDate: AccountingDate;
+  lastDate: AccountingDate;
+  days: number;
+  coveragePct: number;
+};
+
+/** One row of S18's rate table — `listFxRates`'s answer. */
+export type PhoneFxRateRow = {
+  base: CurrencyCode;
+  quote: CurrencyCode;
+  date: AccountingDate;
+  rate: UnitsPerPivot;
+  source: string;
+};
+
 export type PhoneLedgerPort = {
   /** `includeArchived` — default `false`. S16's register loads them lazily, behind its own toggle. */
   listAccounts: (options?: { includeArchived?: boolean }) => readonly PhoneAccount[];
@@ -306,6 +352,34 @@ export type PhoneLedgerPort = {
   archiveAccount: (input: ArchiveAccountInput, capture: PhoneCapture) => void;
   reconcileAccount: (input: ReconcileAccountInput, capture: PhoneCapture) => void;
   createGroup: (input: CreateGroupInput, capture: PhoneCapture) => void;
+  /* ── E3 · FX ──────────────────────────────────────────────────────────── */
+  /** §7.7, as of a date — `undefined` past the ten-day carry cap, or with no rate held. */
+  readRate: (pair: {
+    base: CurrencyCode;
+    quote: CurrencyCode;
+    date: AccountingDate;
+  }) => PhoneRate | null;
+  /** S17 §8, on demand — not carried in the snapshot; a settings screen asks for it. */
+  readCoverage: (today: AccountingDate) => readonly PhoneCoverage[];
+  /** S18's table, on demand, one pair at a time. */
+  listFxRates: (range: {
+    base: CurrencyCode;
+    quote: CurrencyCode;
+    from: AccountingDate;
+    to: AccountingDate;
+  }) => readonly PhoneFxRateRow[];
+  addCurrency: (input: AddCurrencyInput, capture: PhoneCapture) => void;
+  archiveCurrency: (input: ArchiveCurrencyInput, capture: PhoneCapture) => void;
+  setRateSource: (input: SetRateSourceInput, capture: PhoneCapture) => void;
+  setPinned: (input: SetPinnedInput, capture: PhoneCapture) => void;
+  /** §7.0 — refused by the executor while any transaction exists (S29a). */
+  changePivot: (input: ChangePivotInput, capture: PhoneCapture) => void;
+  setManualRate: (
+    input: SetManualRateInput,
+    capture: PhoneCapture,
+  ) => { written: number; replacedManual: number };
+  clearManualRate: (input: ClearManualRateInput, capture: PhoneCapture) => { deleted: number };
+  /* ── end E3 block ─────────────────────────────────────────────────────── */
   reset: () => void;
 };
 
@@ -554,6 +628,34 @@ export type CreateGroupDraft = {
   institution: string | null;
 };
 
+/* ── E3 · FX drafts ──────────────────────────────────────────────────────── */
+
+export type AddCurrencyDraft = {
+  code: string;
+  name: string;
+  symbol?: string;
+  symbolPosition?: "P" | "S";
+  decimals?: number;
+  rateSource?: string | null;
+  pinned?: boolean;
+};
+
+export type ArchiveCurrencyDraft = { code: string; version: number };
+export type SetRateSourceDraft = { code: string; version: number; rateSource: string | null };
+export type SetPinnedDraft = { code: string; version: number; pinned: boolean };
+export type ChangePivotDraft = { code: string };
+
+export type SetManualRateDraft = {
+  base: string;
+  quote: string;
+  from: string;
+  to: string;
+  rate: string;
+  overwriteManual?: boolean;
+};
+
+export type ClearManualRateDraft = { base: string; quote: string; from: string; to: string };
+
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
@@ -622,6 +724,41 @@ export type PhoneLedgerController = {
   ) => { id: Id<"accountGroups"> } | { fieldErrors: readonly FieldError[] };
   /** S16's archived toggle — the one query nobody pays for until they ask. */
   loadArchived: () => void;
+  /* ── E3 · FX ──────────────────────────────────────────────────────────── */
+  readRate: (pair: {
+    base: CurrencyCode;
+    quote: CurrencyCode;
+    date: AccountingDate;
+  }) => PhoneRate | null;
+  readCoverage: (today: AccountingDate) => readonly PhoneCoverage[];
+  listFxRates: (range: {
+    base: CurrencyCode;
+    quote: CurrencyCode;
+    from: AccountingDate;
+    to: AccountingDate;
+  }) => readonly PhoneFxRateRow[];
+  addCurrency: (
+    draft: AddCurrencyDraft,
+  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  archiveCurrency: (
+    draft: ArchiveCurrencyDraft,
+  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  setRateSource: (
+    draft: SetRateSourceDraft,
+  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  setPinned: (
+    draft: SetPinnedDraft,
+  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  changePivot: (
+    draft: ChangePivotDraft,
+  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  setManualRate: (
+    draft: SetManualRateDraft,
+  ) => { written: number; replacedManual: number } | { fieldErrors: readonly FieldError[] };
+  clearManualRate: (
+    draft: ClearManualRateDraft,
+  ) => { deleted: number } | { fieldErrors: readonly FieldError[] };
+  /* ── end E3 block ─────────────────────────────────────────────────────── */
   reset: () => void;
 };
 
@@ -1434,6 +1571,342 @@ export function createPhoneLedger(
         throw error;
       }
     },
+    /* ── E3 · FX ──────────────────────────────────────────────────────────── */
+    readRate: (pair) => port.readRate(pair),
+    readCoverage: (today) => port.readCoverage(today),
+    listFxRates: (range) => port.listFxRates(range),
+    addCurrency: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "add_currency",
+        phase: "start",
+      });
+      try {
+        const parsed = addCurrencyInput.safeParse({
+          code: draft.code,
+          name: draft.name,
+          symbol: draft.symbol,
+          symbolPosition: draft.symbolPosition,
+          decimals: draft.decimals,
+          rateSource: draft.rateSource ?? null,
+          pinned: draft.pinned,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "add_currency",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.addCurrency(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "add_currency",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "add_currency",
+          phase: "success",
+        });
+        return { code: parsed.data.code };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "add_currency",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    archiveCurrency: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "archive_currency",
+        phase: "start",
+      });
+      try {
+        const parsed = archiveCurrencyInput.safeParse({ code: draft.code, version: draft.version });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "archive_currency",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.archiveCurrency(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "archive_currency",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "archive_currency",
+          phase: "success",
+        });
+        return { code: parsed.data.code };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "archive_currency",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    setRateSource: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "set_rate_source",
+        phase: "start",
+      });
+      try {
+        const parsed = setRateSourceInput.safeParse({
+          code: draft.code,
+          version: draft.version,
+          rateSource: draft.rateSource,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_rate_source",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.setRateSource(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_rate_source",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_rate_source",
+          phase: "success",
+        });
+        return { code: parsed.data.code };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_rate_source",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    setPinned: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "set_pinned",
+        phase: "start",
+      });
+      try {
+        const parsed = setPinnedInput.safeParse({
+          code: draft.code,
+          version: draft.version,
+          pinned: draft.pinned,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_pinned",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.setPinned(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_pinned",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_pinned",
+          phase: "success",
+        });
+        return { code: parsed.data.code };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_pinned",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    changePivot: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "change_pivot",
+        phase: "start",
+      });
+      try {
+        const parsed = changePivotInput.safeParse({ code: draft.code });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "change_pivot",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.changePivot(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "change_pivot",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "change_pivot",
+          phase: "success",
+        });
+        return { code: parsed.data.code };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "change_pivot",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    setManualRate: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "set_manual_rate",
+        phase: "start",
+      });
+      try {
+        const parsed = setManualRateInput.safeParse({
+          base: draft.base,
+          quote: draft.quote,
+          from: draft.from,
+          to: draft.to,
+          rate: draft.rate,
+          overwriteManual: draft.overwriteManual,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_manual_rate",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        let result: { written: number; replacedManual: number };
+        try {
+          result = port.setManualRate(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_manual_rate",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_manual_rate",
+          phase: "success",
+        });
+        return result;
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_manual_rate",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    clearManualRate: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "clear_manual_rate",
+        phase: "start",
+      });
+      try {
+        const parsed = clearManualRateInput.safeParse({
+          base: draft.base,
+          quote: draft.quote,
+          from: draft.from,
+          to: draft.to,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "clear_manual_rate",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        let result: { deleted: number };
+        try {
+          result = port.clearManualRate(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "clear_manual_rate",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "clear_manual_rate",
+          phase: "success",
+        });
+        return result;
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "clear_manual_rate",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    /* ── end E3 block ─────────────────────────────────────────────────────── */
     reset: () => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",

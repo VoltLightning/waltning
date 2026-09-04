@@ -20,8 +20,6 @@ import type { Id } from "../id.ts";
 import type { CurrencyCode, Money, PivotPerUnit, TxnType, UnitsPerPivot } from "../money.ts";
 // A3's own import from "./inputs.ts" — kept separate from A2's above so a
 // rebase against A2's append is a line-level merge, not a symbol-level one.
-// E3's own import — kept separate so a rebase against A2/A3's appends stays
-// a line-level merge.
 import {
   type AccountKind,
   type ArchiveAccountInput,

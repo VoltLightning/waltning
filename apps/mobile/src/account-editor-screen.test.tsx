@@ -88,6 +88,16 @@ function fakeController(overrides: {
     updateTransaction: () => undefined,
     deleteTransaction: () => undefined,
     setTransactionLines: () => undefined,
+    readRate: () => null,
+    readCoverage: () => [],
+    listFxRates: () => [],
+    addCurrency: vi.fn(),
+    archiveCurrency: vi.fn(),
+    setRateSource: vi.fn(),
+    setPinned: vi.fn(),
+    changePivot: vi.fn(),
+    setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
+    clearManualRate: vi.fn(() => ({ deleted: 0 })),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

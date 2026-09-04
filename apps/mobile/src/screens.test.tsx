@@ -179,6 +179,16 @@ function fakeController(
     archiveAccount: () => undefined,
     reconcileAccount: () => undefined,
     createGroup: () => undefined,
+    readRate: () => null,
+    readCoverage: () => [],
+    listFxRates: () => [],
+    addCurrency: () => undefined,
+    archiveCurrency: () => undefined,
+    setRateSource: () => undefined,
+    setPinned: () => undefined,
+    changePivot: () => undefined,
+    setManualRate: () => ({ written: 0, replacedManual: 0 }),
+    clearManualRate: () => ({ deleted: 0 }),
     reset: () => {
       accounts = [];
     },
@@ -441,6 +451,16 @@ describe("Today", () => {
       archiveAccount: vi.fn(),
       reconcileAccount: vi.fn(),
       createGroup: vi.fn(),
+      readRate: vi.fn(() => null),
+      readCoverage: vi.fn(() => []),
+      listFxRates: vi.fn(() => []),
+      addCurrency: vi.fn(),
+      archiveCurrency: vi.fn(),
+      setRateSource: vi.fn(),
+      setPinned: vi.fn(),
+      changePivot: vi.fn(),
+      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
+      clearManualRate: vi.fn(() => ({ deleted: 0 })),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

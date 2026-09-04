@@ -20,7 +20,14 @@ export type ClientAction =
   | "reconcile_account"
   | "create_group"
   | "reset_preview"
-  | "change_appearance";
+  | "change_appearance"
+  | "add_currency"
+  | "archive_currency"
+  | "set_rate_source"
+  | "set_pinned"
+  | "change_pivot"
+  | "set_manual_rate"
+  | "clear_manual_rate";
 
 export type ClientStateUpdate =
   | "phone_ledger_refresh"
