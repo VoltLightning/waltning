@@ -199,7 +199,7 @@ it("shows the role picker once a counterparty is controlled in", () => {
       })}
     />,
   );
-  fireEvent.click(screen.getByText("Counterparty A"));
+  fireEvent.click(screen.getByText(/Counterparty A/));
   expect(screen.getByRole("radiogroup", { name: "Role" })).toBeDefined();
   expect(screen.getByRole("radio", { name: "Debt — expected back" })).toBeDefined();
 });
@@ -242,6 +242,84 @@ it("toggles isBusiness through the scope sheet's segment control", () => {
   fireEvent.click(screen.getByText("Mine"));
   fireEvent.click(screen.getByRole("tab", { name: "Business" }));
   expect(onBusinessChange).toHaveBeenCalledWith(true);
+});
+
+it("makes Business unreachable for a shared account (SPEC.md §6.7)", () => {
+  const onBusinessChange = vi.fn();
+  render(<QuickAddComposer {...props({ accountId: "account-shared", onBusinessChange })} />);
+  fireEvent.click(screen.getByText("Shared"));
+  const business = screen.getByRole("tab", { name: /Business/ });
+  expect(business.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(business);
+  expect(onBusinessChange).not.toHaveBeenCalled();
+});
+
+it("names the reason Business is unreachable, not the generic 'later'", () => {
+  render(<QuickAddComposer {...props({ accountId: "account-shared" })} />);
+  fireEvent.click(screen.getByText("Shared"));
+  expect(
+    screen.getByRole("tab", { name: "Business, A shared account is never business." }),
+  ).toBeDefined();
+});
+
+it("shows a proposal's low-confidence marker only below §14's threshold", () => {
+  const { rerender } = render(
+    <QuickAddComposer
+      {...props({
+        categoryProposal: {
+          categoryId: "cat-eating-out",
+          confidence: 0.92,
+          basis: "exact",
+          neighbours: [],
+        },
+      })}
+    />,
+  );
+  expect(screen.queryByText("Low confidence — check before using.")).toBeNull();
+
+  rerender(
+    <QuickAddComposer
+      {...props({
+        categoryProposal: {
+          categoryId: "cat-eating-out",
+          confidence: 0.6,
+          basis: "neighbours",
+          neighbours: [],
+        },
+      })}
+    />,
+  );
+  expect(screen.getByText("Low confidence — check before using.")).toBeDefined();
+});
+
+it("shows a 'role?' suffix on the counterparty chip while the role is unresolved (§6.6)", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        counterparties: [{ id: "cp-a", name: "Counterparty A" }],
+        counterpartyId: "cp-a",
+        counterpartyRole: null,
+      })}
+    />,
+  );
+  expect(screen.getByRole("button", { name: /Counterparty A · role\?/ })).toBeDefined();
+});
+
+it("renders a controller refusal on counterpartyRole under the counterparty chip", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        counterparties: [{ id: "cp-a", name: "Counterparty A" }],
+        counterpartyId: "cp-a",
+        counterpartyRole: null,
+        fieldErrors: {
+          byField: { counterpartyRole: ["a counterparty and its role travel together (§6.6)"] },
+          formLevel: [],
+        },
+      })}
+    />,
+  );
+  expect(screen.getByText("a counterparty and its role travel together (§6.6)")).toBeDefined();
 });
 
 it("calls onCancel from the ✕", () => {

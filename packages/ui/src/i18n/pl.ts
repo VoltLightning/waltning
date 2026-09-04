@@ -110,6 +110,7 @@ export const pl: Messages = {
     counterparty: "Kontrahent",
     noCounterparty: "Brak kontrahenta",
     role: "Rola",
+    counterpartyRoleMissing: "{{name}} · rola?",
     "role.debt": "Dług — do zwrotu",
     "role.contribution": "Wkład na konto wspólne",
     "role.reference": "Tylko udział — bez zobowiązania",
@@ -146,6 +147,7 @@ export const pl: Messages = {
     addNote: "+ Notatka",
     addPerson: "+ Osoba",
     scope: "Zakres",
+    sharedNeverBusiness: "Konto wspólne nigdy nie jest firmowe.",
     lastCapture: "Z ostatniego zapisu, {{time}}",
     changedElsewhere:
       "Ta transakcja zmieniła się gdzie indziej — wczytaj ją ponownie przed zapisaniem.",

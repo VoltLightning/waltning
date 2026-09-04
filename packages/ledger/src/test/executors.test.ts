@@ -46,6 +46,7 @@ const ACCOUNT_USD = id<"accounts">("11111111-1111-4111-8111-111111111111");
 const ACCOUNT_PLN = id<"accounts">("22222222-2222-4222-8222-222222222222");
 const ACCOUNT_CHF = id<"accounts">("33333333-3333-4333-8333-333333333333");
 const ACCOUNT_NEW = id<"accounts">("44444444-4444-4444-8444-444444444444");
+const ACCOUNT_SHARED_PLN = id<"accounts">("55555555-5555-4555-8555-555555555555");
 const TXN_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const TXN_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
@@ -101,6 +102,7 @@ function seed() {
       { id: ACCOUNT_USD, name: "Bank A · USD", currency: USD },
       { id: ACCOUNT_PLN, name: "Bank B · PLN", currency: PLN },
       { id: ACCOUNT_CHF, name: "Bank C · CHF", currency: CHF },
+      { id: ACCOUNT_SHARED_PLN, name: "Joint · PLN", currency: PLN, ownership: "shared" },
     ])
     .run();
 
@@ -226,6 +228,33 @@ describe("create_transaction materialises and records its intent", () => {
 
     expect(entries()).toHaveLength(0);
     expect(txnRows()).toHaveLength(0);
+  });
+
+  /**
+   * `SPEC.md` §6.7's client-side mirror of `assert_business_not_shared`
+   * (`0001_database_objects.sql` ~L243) — the replica has no cross-table
+   * trigger of its own, so `insertTransaction`'s own `assertBusinessNotShared`
+   * is what stands in its place (`create-transaction.executor.ts`'s own
+   * comment).
+   */
+  it("refuses a business row into a shared account (SPEC.md §6.7)", () => {
+    expect(() =>
+      write(createTransactionExecutor, {
+        ...expenseInput(TXN_A, ACCOUNT_SHARED_PLN, "PLN"),
+        isBusiness: true,
+      }),
+    ).toThrow(/cannot sit in a shared account/);
+
+    // The refusal is inside `apply`, reached only after `writeLocally` commits
+    // the outbox entry (§14.6: intent first) — the same shape the cross-
+    // currency refusal below takes, not the schema-level refusal above.
+    expect(entries()).toHaveLength(1);
+    expect(txnRows()).toHaveLength(0);
+  });
+
+  it("still allows a non-business row into the same shared account", () => {
+    const result = write(createTransactionExecutor, expenseInput(TXN_A, ACCOUNT_SHARED_PLN, "PLN"));
+    expect(result.row.isBusiness).toBe(false);
   });
 });
 

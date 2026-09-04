@@ -38,18 +38,16 @@ export function TabBar({ items, onSelect }: TabBarProps) {
   const styles = useStyles();
   const insets = useSafeArea();
 
+  // Computed rather than in `useStyles`: the inset is per-device — `dock.tsx`'s
+  // own `clearance` is the same shape, a plain object beside the JSX.
+  const clearance = {
+    paddingBottom: space.xs + insets.bottom,
+    paddingLeft: insets.left,
+    paddingRight: insets.right,
+  };
+
   return (
-    <View
-      accessibilityRole="tablist"
-      style={[
-        styles.bar,
-        {
-          paddingBottom: space.xs + insets.bottom,
-          paddingLeft: insets.left,
-          paddingRight: insets.right,
-        },
-      ]}
-    >
+    <View accessibilityRole="tablist" style={[styles.bar, clearance]}>
       {items.map((item) => (
         <TabBarTarget key={item.name} item={item} onSelect={onSelect} />
       ))}

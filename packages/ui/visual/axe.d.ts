@@ -14,7 +14,11 @@ declare global {
   interface Window {
     axe: {
       run: (
-        context: string,
+        // A bare selector, or the element itself — `stories.spec.ts`'s own
+        // scoping to `[role="dialog"]` when a story opens one resolves the
+        // element with `document.querySelector` rather than pass its
+        // selector string back through, so `context` has to accept both.
+        context: string | Element,
         options: { runOnly: { type: "rule"; values: string[] } },
       ) => Promise<{ violations: AxeViolation[] }>;
     };

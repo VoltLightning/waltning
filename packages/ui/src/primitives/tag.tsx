@@ -54,15 +54,21 @@ export function Tag({ variant = "neutral", children }: TagProps) {
   const t = useTheme();
   const styles = useStyles();
 
+  // Computed rather than in `useStyles`: the colour is per-`variant`, a prop,
+  // not a theme-scale constant — `dock.tsx`'s own `clearance` is the same
+  // shape, a plain object built beside the JSX rather than inline inside it.
+  const fill = { backgroundColor: t[FILL[variant]] };
+  const ink = { color: t[INK[variant]] };
+
   return (
-    <View style={[styles.tag, { backgroundColor: t[FILL[variant]] }]}>
+    <View style={[styles.tag, fill]}>
       {/*
         Casing is `textTransform` alone, never `.toUpperCase()` in JavaScript.
         Two mechanisms doing one job is one that eventually disagrees — and the
         CSS form is also the accessible one: a screen reader announces the
         original text rather than spelling out capitals.
       */}
-      <Text style={[styles.text, { color: t[INK[variant]] }]}>{children}</Text>
+      <Text style={[styles.text, ink]}>{children}</Text>
     </View>
   );
 }

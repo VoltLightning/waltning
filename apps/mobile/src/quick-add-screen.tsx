@@ -59,6 +59,9 @@ function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError)
   if (error.messageKey === "transactions.needsRate") {
     return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
   }
+  if (error.messageKey === "transactions.sharedNeverBusiness") {
+    return t("transactions.sharedNeverBusiness");
+  }
   return error.message;
 }
 
@@ -210,9 +213,23 @@ export default function QuickAdd() {
   const handleComposerTypeChange = useCallback((next: "expense" | "income") => {
     setComposerType(next);
   }, []);
-  const handleComposerAccountChange = useCallback((next: string) => {
-    setComposerAccountId(next);
-  }, []);
+  /**
+   * **§6.7's guarantee, held across a mid-draft account switch.** Picking
+   * *Business* happens on an own account (`ScopeSegments` refuses the tap on
+   * a shared one), but `composerIsBusiness` is state this screen owns
+   * independently of the account chip — switching the account chip to a
+   * shared account afterwards does not touch it on its own. Left alone, Save
+   * would carry `isBusiness: true` into a shared account exactly the way
+   * `ScopeSegments` exists to prevent, just reached from the other chip.
+   */
+  const handleComposerAccountChange = useCallback(
+    (next: string) => {
+      setComposerAccountId(next);
+      const account = composerAccounts.find((candidate) => candidate.id === next);
+      if (account?.ownership === "shared") setComposerIsBusiness(false);
+    },
+    [composerAccounts],
+  );
   const handleComposerCreateAccount = useCallback(() => {
     router.push({
       pathname: "/account/new",
@@ -265,8 +282,14 @@ export default function QuickAdd() {
     ]);
   }, [accountMachineFilled, handleDiscard, t]);
 
+  // §6.6, never defaulted: a counterparty picked with no role would reach
+  // `create_transaction`'s own refine and refuse — Save stays disabled here so
+  // the reason is visible on the chip (`counterpartyValue`'s "role?" suffix)
+  // before the person ever taps it, not after.
   const composerSaveDisabled =
-    parseAmount(composerAmountRaw) === null || effectiveAccountId === null;
+    parseAmount(composerAmountRaw) === null ||
+    effectiveAccountId === null ||
+    (composerCounterpartyId !== null && composerCounterpartyRole === null);
   const handleComposerSave = useCallback(() => {
     const amount = parseAmount(composerAmountRaw);
     if (amount === null || effectiveAccountId === null) return;
@@ -373,14 +396,17 @@ export default function QuickAdd() {
     );
   }
 
+  // Computed rather than in the stylesheet: the inset is per-device, the same
+  // reason `dock.tsx`'s own `clearance` is computed beside its `useStyles` call
+  // rather than folded into it.
+  const horizontalInsets = {
+    paddingLeft: space.x5 + insets.left,
+    paddingRight: space.x5 + insets.right,
+  };
+
   return (
     <View style={styles.root}>
-      <View
-        style={[
-          styles.scroll,
-          { paddingLeft: space.x5 + insets.left, paddingRight: space.x5 + insets.right },
-        ]}
-      >
+      <View style={[styles.scroll, horizontalInsets]}>
         <QuickAddComposer
           raw={composerAmountRaw}
           type={composerType}

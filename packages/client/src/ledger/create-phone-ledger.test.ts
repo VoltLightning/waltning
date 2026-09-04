@@ -129,6 +129,14 @@ function harness(diagnostics?: (event: object) => void) {
   const createTransaction = vi.fn<PhoneLedgerPort["createTransaction"]>((input) => {
     const account = accounts.find((candidate) => candidate.id === input.accountId);
     if (!account) throw new Error("fixture account missing");
+    // `create-transaction.executor.ts`'s own `assertBusinessNotShared` (§6.7) —
+    // the fixture mirrors the executor's refusal the same way `updateAccount`
+    // above mirrors `update_account`'s.
+    if (input.isBusiness && account.ownership === "shared") {
+      throw new Error(
+        "create_transaction: a business transaction cannot sit in a shared account (SPEC.md §6.7, §13.1)",
+      );
+    }
     accounts = accounts.map((candidate) =>
       candidate.id === input.accountId
         ? { ...candidate, balance: money.sub(candidate.balance, input.amountOriginal) }
@@ -542,6 +550,34 @@ describe("phone ledger controller", () => {
       counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       counterpartyRole: "reference",
     });
+  });
+
+  /**
+   * §6.7's phone mirror — `create-transaction.executor.ts`'s own
+   * `assertBusinessNotShared`, reached here through the same
+   * refusal-to-field-error path `updateAccount`'s "never business" already
+   * takes, named onto `isBusiness` (the field the composer's scope chip
+   * renders it under) rather than `updateAccount`'s own `accounts.sharedNotBusiness`.
+   */
+  it("refuses a business transaction into a shared account, naming isBusiness", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(
+      controller.createAccount({ ...minimalDraft("Joint · PLN", PLN), ownership: "shared" }),
+    );
+
+    const result = controller.createTransaction({ ...expenseDraft(accountId), isBusiness: true });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "isBusiness",
+        message: expect.stringContaining("cannot sit in a shared account"),
+        messageKey: "transactions.sharedNeverBusiness",
+      },
+    ]);
+    // The refused write left no captured row behind — the port's own
+    // `createTransaction` threw before returning, so nothing landed in Recent.
+    expect(createTransaction).toHaveBeenCalledOnce();
+    expect(controller.getSnapshot().recent).toEqual([]);
   });
 
   it.each(["0", "-1"])("rejects the non-positive amount %s before writing", (amount) => {

@@ -119,13 +119,27 @@ test.describe("contrast", () => {
         await page.addScriptTag({ content: axeSource });
 
         const violations = await page.evaluate(async () => {
+          // The same target `screenshotTarget` resolves to, re-derived here
+          // because `page.evaluate` runs in the browser and cannot close over
+          // a `Locator`. A story that opens a `Modal` — `CategorySheet`'s own
+          // sheet, first exercised in D4a — dims everything behind the scrim
+          // to `#ece5d7`'s composite (4.47:1), a contrast nobody reads, since
+          // it sits under an opaque sheet. Scoping to the dialog when one is
+          // open is what keeps that dimmed backdrop out of the run rather
+          // than raising the tolerance or excluding the rule.
+          const dialog = document.querySelector('[role="dialog"]');
+          const target = dialog ?? document.querySelector("#storybook-root");
+          if (target === null) {
+            throw new Error("stories.spec.ts: no #storybook-root to scope axe to");
+          }
+
           // `addon-a11y` ships in this build and runs its own axe on story
           // render; two axe instances share one page and axe refuses to run
           // concurrently. The addon's pass finishes in milliseconds — wait it
           // out rather than lose a real contrast check to a timing race.
           for (let attempt = 0; ; attempt += 1) {
             try {
-              const results = await window.axe.run("#storybook-root", {
+              const results = await window.axe.run(target, {
                 runOnly: { type: "rule", values: ["color-contrast"] },
               });
               return results.violations.flatMap((v) =>

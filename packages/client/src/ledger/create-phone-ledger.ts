@@ -980,6 +980,30 @@ function accountWriteRefusal(error: unknown): FieldError | null {
   return null;
 }
 
+/**
+ * `create_transaction`'s own §6.7 mirror
+ * (`create-transaction.executor.ts`'s `assertBusinessNotShared`) — named onto
+ * `isBusiness`, the field `QuickAddComposer`'s scope chip actually renders it
+ * under. A different message from `accountWriteRefusal`'s own "never
+ * business" (that one is about the *account*, S16's editor; this one is about
+ * the *row*, reached only if a caller somehow got past `ScopeSegments` and
+ * the screen's own account-switch reset), so it carries its own `messageKey`.
+ */
+function createTransactionRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (
+    error.message.includes("cannot sit in a shared account") ||
+    error.message.includes("cannot move into a shared account")
+  ) {
+    return {
+      path: "isBusiness",
+      message: error.message,
+      messageKey: "transactions.sharedNeverBusiness",
+    };
+  }
+  return null;
+}
+
 /** `reconcile_account`'s one refusal — S16 §5: a zero difference lands on `observedBalance`. */
 function reconcileAccountRefusal(error: unknown): FieldError | null {
   if (!(error instanceof Error)) return null;
@@ -1896,7 +1920,18 @@ export function createPhoneLedger(
           });
           return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
         }
-        port.createTransaction(parsed.data, capture);
+        try {
+          port.createTransaction(parsed.data, capture);
+        } catch (refusal) {
+          const fieldError = createTransactionRefusal(refusal);
+          if (!fieldError) throw refusal;
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_transaction",
+            phase: "success",
+          });
+          return { fieldErrors: [fieldError] };
+        }
         refresh();
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",

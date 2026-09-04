@@ -5,6 +5,20 @@ import { jaccard, trigrams } from "./trigrams.ts";
 const MIN_SIMILARITY = 0.2;
 const DEFAULT_K = 7;
 
+/**
+ * `computations.md` §14's display threshold. At or above this, a proposal
+ * renders as a confirmed-looking match; below it, every caller must show the
+ * amber low-confidence marker rather than let a guess read as a fact.
+ *
+ * **The one constant, imported everywhere it is checked** — `CategorySheet`
+ * (`packages/ui/src/categories/category-sheet.tsx`) and `QuickAddComposer`
+ * (`packages/ui/src/transactions/quick-add-composer.tsx`) both gate on this
+ * same number; `transactions/` may not import `categories/` (`architecture/11`
+ * — no module imports a sibling module), so the constant lives here, in the
+ * foundation both already depend on, rather than in either domain.
+ */
+export const PROPOSAL_DISPLAY_THRESHOLD = 0.85;
+
 export type PayeeHistoryRow = {
   payee: string;
   categoryId: string;

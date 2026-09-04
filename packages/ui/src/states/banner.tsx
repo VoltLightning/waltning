@@ -49,12 +49,14 @@ export function Banner({ tone, message, action }: BannerProps) {
   const t = useTheme();
   const styles = useStyles();
 
+  // Computed rather than in `useStyles`: the colour is per-`tone`, a prop —
+  // `tag.tsx`'s own `fill`/`ink` are the same shape, built beside the JSX.
+  const fill = { backgroundColor: t[FILL[tone]], borderColor: t[BORDER[tone]] };
+  const ink = { color: t[INK[tone]] };
+
   return (
-    <View
-      accessibilityRole="alert"
-      style={[styles.root, { backgroundColor: t[FILL[tone]], borderColor: t[BORDER[tone]] }]}
-    >
-      <Text style={[styles.message, { color: t[INK[tone]] }]}>{message}</Text>
+    <View accessibilityRole="alert" style={[styles.root, fill]}>
+      <Text style={[styles.message, ink]}>{message}</Text>
       {action ? <Button {...action} variant="secondary" size="sm" /> : null}
     </View>
   );

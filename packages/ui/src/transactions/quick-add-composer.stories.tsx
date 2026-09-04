@@ -102,7 +102,11 @@ export const WithProposal: Story = {
   },
 };
 
-/** Below §14's 0.85 threshold — still shown, still machine-filled; the low-confidence marker lives in `CategorySheet`. */
+/**
+ * Below §14's `PROPOSAL_DISPLAY_THRESHOLD` (0.85) — still shown, still
+ * machine-filled, but with `categories.lowConfidence` under the chip too, the
+ * one thing that visibly separates this from `WithProposal` above.
+ */
 export const LowConfidence: Story = {
   args: {
     raw: "48,90",

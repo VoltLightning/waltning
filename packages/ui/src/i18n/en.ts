@@ -151,6 +151,8 @@ export const en = {
     counterparty: "Counterparty",
     noCounterparty: "No counterparty",
     role: "Role",
+    /** §6.6 — the counterparty chip's own value while a role is unresolved. Never defaulted. */
+    counterpartyRoleMissing: "{{name}} · role?",
     /** §6.6 — what naming a counterparty on this row means. */
     "role.debt": "Debt — expected back",
     "role.contribution": "Contribution to a shared account",
@@ -211,6 +213,8 @@ export const en = {
     addPerson: "+ Person",
     /** D4b's scope chip label — Mine · Shared · Business, `shell.scope*`'s own words. */
     scope: "Scope",
+    /** The scope sheet's own `SegmentControl` — why *Business* is unreachable for a shared account (§6.7). */
+    sharedNeverBusiness: "A shared account is never business.",
     /** D4b's account sheet, machine-filled only — `useLastUsedAccount`'s own window (S05 §9.2). */
     lastCapture: "From your last capture, {{time}}",
     /**

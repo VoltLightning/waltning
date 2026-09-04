@@ -28,7 +28,10 @@
  * its own.
  */
 
-import type { CategoryProposal } from "@waltning/core/capture/payee-memory";
+import {
+  type CategoryProposal,
+  PROPOSAL_DISPLAY_THRESHOLD,
+} from "@waltning/core/capture/payee-memory";
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -181,6 +184,18 @@ export function QuickAddComposer({
       : undefined;
   const categoryValue = pickedCategory?.name ?? proposedCategory?.name;
   const categoryMachineFilled = pickedCategory === undefined && proposedCategory !== undefined;
+  /**
+   * §14's display threshold — below it, the chip alone (already amber, P2's
+   * trail marker on every machine-filled value) is not enough: a guess this
+   * unsure needs the words, not only the tint (P5). At or above, the plain
+   * machine-filled chip already says "something chose this" and a proposal
+   * that confident is not the thing P4's amber exists to flag.
+   */
+  const categoryLowConfidence =
+    categoryMachineFilled &&
+    categoryProposal !== undefined &&
+    categoryProposal !== null &&
+    categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD;
 
   const notePreview =
     note.trim() === ""
@@ -192,6 +207,20 @@ export function QuickAddComposer({
   const pickedCounterparty = counterparties.find(
     (counterparty) => counterparty.id === counterpartyId,
   );
+  /**
+   * **§6.6, never defaulted.** A counterparty with no role is not a smaller
+   * claim than one with a role — `createTransactionInput`'s own refine
+   * reports the mismatch, and this chip is where a person sees why: the name
+   * alone would read as "picked and done," so an unresolved role is spelled
+   * out on the chip itself rather than left to a form-level error nobody
+   * connects to this field.
+   */
+  const counterpartyValue =
+    pickedCounterparty === undefined
+      ? undefined
+      : counterpartyRole === null
+        ? t("transactions.counterpartyRoleMissing", { name: pickedCounterparty.name })
+        : pickedCounterparty.name;
 
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
   const accountError = fieldErrors?.byField["accountId"]?.[0];
@@ -199,6 +228,9 @@ export function QuickAddComposer({
   const payeeError = fieldErrors?.byField["payee"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
   const counterpartyError = fieldErrors?.byField["counterpartyId"]?.[0];
+  const counterpartyRoleError = fieldErrors?.byField["counterpartyRole"]?.[0];
+  /** §6.7's mirror (`create-transaction.executor.ts`'s own refusal), named onto the field the scope chip actually renders. */
+  const scopeError = fieldErrors?.byField["isBusiness"]?.[0];
 
   return (
     <View style={styles.root}>
@@ -257,7 +289,7 @@ export function QuickAddComposer({
         {counterparties.length === 0 ? null : (
           <Chip
             placeholder={t("transactions.addPerson")}
-            value={pickedCounterparty?.name}
+            value={counterpartyValue}
             onPress={handleOpenCounterpartySheet}
             machineFilled={false}
           />
@@ -265,10 +297,17 @@ export function QuickAddComposer({
       </View>
       {accountError === undefined ? null : <Text style={styles.fieldError}>{accountError}</Text>}
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
+      {!categoryLowConfidence ? null : (
+        <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
+      )}
       {payeeError === undefined ? null : <Text style={styles.fieldError}>{payeeError}</Text>}
       {dateError === undefined ? null : <Text style={styles.fieldError}>{dateError}</Text>}
+      {scopeError === undefined ? null : <Text style={styles.fieldError}>{scopeError}</Text>}
       {counterpartyError === undefined ? null : (
         <Text style={styles.fieldError}>{counterpartyError}</Text>
+      )}
+      {counterpartyRoleError === undefined ? null : (
+        <Text style={styles.fieldError}>{counterpartyRoleError}</Text>
       )}
 
       <BottomSheet
@@ -465,12 +504,23 @@ type ScopeSegmentsProps = {
  *
  * **`Shared` is read-only** — a shared account's scope is a fact about the
  * account, not a choice this draft makes, so a shared account's segment
- * control has nothing else to offer and an own account's has nothing to say
- * about `Shared`. Neither is expressed through `Segment#disabled`: that flag
- * carries `common.later` in its accessible name (`segment-control.tsx`'s own
- * comment) — "named but not yet reachable" — which is the wrong claim for
- * *"not applicable to this account"*. `onPick` simply never fires for the
- * segment that does not apply.
+ * control has nothing else to say about `Mine`, and an own account's has
+ * nothing to say about `Shared`. `onPick` simply never fires for `Shared`:
+ * `common.later`'s "named but not yet reachable" would be the wrong claim for
+ * *"not applicable to this account"*, so `Shared` stays a plain, un-disabled
+ * segment that this component's own `handleChange` never routes anywhere.
+ *
+ * **`Business` is different: it is a §6.7 guarantee, not a shrug.** A shared
+ * account is never business (`accounts_shared_not_business`,
+ * `transactions_business_not_shared`) — picking it must be impossible, not
+ * merely a tap this component declines to forward, because a caller reading
+ * `isBusiness` off this sheet needs to be able to trust it never became `true`
+ * here. So `Business` **is** `Segment#disabled` when the account is shared,
+ * carrying its own reason (`transactions.sharedNeverBusiness`) rather than
+ * `common.later` — the one case where naming *why* it is unreachable is more
+ * honest than pretending it is merely unbuilt. `handleChange` also never
+ * routes `"business"` while `shared`, so the guarantee holds even if a caller
+ * somehow reached this handler around the disabled control.
  */
 function ScopeSegments({ shared, isBusiness, onPick }: ScopeSegmentsProps) {
   const t = useT();
@@ -478,17 +528,23 @@ function ScopeSegments({ shared, isBusiness, onPick }: ScopeSegmentsProps) {
     () => [
       { value: "mine", label: t("shell.scopeMine") },
       { value: "shared", label: t("shell.scopeShared") },
-      { value: "business", label: t("shell.scopeBusiness") },
+      {
+        value: "business",
+        label: t("shell.scopeBusiness"),
+        ...(shared === true
+          ? { disabled: true, disabledReason: t("transactions.sharedNeverBusiness") }
+          : {}),
+      },
     ],
-    [t],
+    [t, shared],
   );
   const value = shared === true ? "shared" : isBusiness ? "business" : "mine";
   const handleChange = useCallback(
     (next: string) => {
-      if (next === "business") onPick(true);
+      if (next === "business" && shared !== true) onPick(true);
       else if (next === "mine") onPick(false);
     },
-    [onPick],
+    [onPick, shared],
   );
   return <SegmentControl segments={segments} value={value} onChange={handleChange} />;
 }
@@ -562,6 +618,8 @@ const useStyles = makeStyles((theme) => ({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
+  /** §14 — text, not tint alone (P5); `theme.textMuted`, the same colour `CategorySheet`'s own caption uses. */
+  lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
   hint: { color: theme.textMuted, ...text.ui("caption") },
   accountScroll: { maxHeight: touchTarget.min * 6 },
   accountList: { gap: space.md, paddingBottom: space.md },
