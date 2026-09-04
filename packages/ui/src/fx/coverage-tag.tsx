@@ -67,8 +67,12 @@ export function CoverageTag({
   // M3 — `complete` decides on real quotes over calendar days, never on
   // `days`, which a dead source carried every day to today fills without a
   // single fresh quote.
-  const complete = realDays === calendarDays;
+  // H — a currency added today, with `calendarDays === 0`, satisfies
+  // `realDays === calendarDays` at `0 === 0` without a single quote held —
+  // the same false "complete" `nothingHeld` exists to rule out below. Gated
+  // on it so *no rates yet* and *set for later* stay amber, never neutral.
   const nothingHeld = days === 0;
+  const complete = !nothingHeld && realDays === calendarDays;
   // H2 — rows exist, but none is a real quote: no date to state, and no
   // percentage that would read as a fill nobody can vouch for.
   const noRealQuote = !nothingHeld && realDays === 0;
@@ -79,7 +83,7 @@ export function CoverageTag({
   const onlyFutureRows = nothingHeld && futureRows > 0;
 
   const label = onlyFutureRows
-    ? t("fx.noRatesYetFuture", { n: String(futureRows) })
+    ? t("fx.noRatesYetFuture", { count: futureRows })
     : nothingHeld
       ? t("fx.noRatesYet")
       : noRealQuote

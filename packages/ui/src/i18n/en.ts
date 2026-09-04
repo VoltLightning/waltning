@@ -464,8 +464,22 @@ export const en = {
     coverageTitle: "Coverage",
     /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
     noRatesYet: "no rates yet · set one by hand",
-    /** L7 — the only rows held are future-dated (M4 excludes them from `days`): rates are set, just none due yet. */
-    noRatesYetFuture: "no rates yet · {{n}} set for later",
+    /**
+     * L7 — the only rows held are future-dated (M4 excludes them from
+     * `days`): rates are set, just none due yet.
+     *
+     * i18next's real `count`-driven suffixes, not the `resultsOne`/`resultsMany`
+     * flat pair — English's two categories collapse onto one string here, but
+     * Polish's four (`i18n.test.tsx`) each say something different, and only
+     * `_one`/`_few`/`_many`/`_other` can hold four. `en.ts` still carries all
+     * four keys: `Messages` is the mapped type over *this* file's keys, so a
+     * language with more grammar than English needs the same key set here,
+     * even where English has nothing new to say for it.
+     */
+    noRatesYetFuture_one: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_few: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_many: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_other: "no rates yet · {{count}} set for later",
     /** H2 — rows held, but none a real quote (every one `carried_forward`): no date exists to state. */
     noQuoteYet: "no quote yet",
     /** `RateField` — `03` §3.7. */
