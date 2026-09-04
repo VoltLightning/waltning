@@ -168,3 +168,21 @@ export function resolveCounterpartyFigures(
 
   return { currency: preferred, value: fold.value, decimals, display };
 }
+
+/**
+ * `settle_debt`'s own residual (H9), as a direction rather than a sign — P5:
+ * a screen states this in words, never a bare `+`/`-`. The three values are
+ * `en.ts`'s own key suffixes under `counterparties.*`
+ * (`theyOweYou`/`youOweThem`/`settled`), so a screen resolves one straight
+ * through `useT()` without restating the comparison.
+ *
+ * **Here, not in the screen.** `money.cmp` outside `packages/ui` is exactly
+ * what `tests/architecture.test.ts`'s "no component formats money by hand"
+ * rule refuses — a screen's own `.tsx` is scanned, `packages/client`'s `.ts`
+ * is where this sign check belongs instead.
+ */
+export function settleResidualDirection(residual: Money): "theyOweYou" | "youOweThem" | "settled" {
+  const sign = money.cmp(residual, money.ZERO);
+  if (sign === 0) return "settled";
+  return sign > 0 ? "theyOweYou" : "youOweThem";
+}

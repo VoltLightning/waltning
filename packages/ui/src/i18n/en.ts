@@ -386,8 +386,8 @@ export const en = {
     netIn: "net in {{currency}}",
     /** P1 — the derived total's own rate and date, never shown without both. */
     atRateDate: "@ {{rate}} · {{date}}",
-    /** E5 has not merged yet — the button routes to a `Toast` naming this. */
-    settleComingSoon: "Settling isn't built yet — it's coming in a later update.",
+    /** S13 — after a successful settle: the residual, named in words, never a bare sign (P5). */
+    settledToast: "Settled. {{amount}} {{currency}} {{direction}}.",
     addTransaction: "Add transaction",
     history: "History",
     /** S13 §3's own toggle — the count it is hiding is stated, never silent. */

@@ -257,7 +257,7 @@ export const pl: Messages = {
     loadFailedWhy: "Coś poszło nie tak podczas odczytu księgi długów.",
     netIn: "saldo w {{currency}}",
     atRateDate: "@ {{rate}} · {{date}}",
-    settleComingSoon: "Rozliczanie nie jest jeszcze gotowe — pojawi się w kolejnej aktualizacji.",
+    settledToast: "Rozliczono. {{amount}} {{currency}} {{direction}}.",
     addTransaction: "Dodaj transakcję",
     history: "Historia",
     debtsOnlyToggle: "tylko długi · {{count}} innych wierszy",

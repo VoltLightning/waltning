@@ -6,9 +6,10 @@
  * one file because all three screens share the same counterparty fixture.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import {
   createPhoneLedger,
+  type PhoneAccount,
   type PhoneCounterparty,
   type PhoneCounterpartyBalance,
   type PhoneLedgerPort,
@@ -60,6 +61,25 @@ const NINA_COUNTERPARTY: PhoneCounterparty = {
   contact: null,
   note: "",
   archived: false,
+  version: 1,
+};
+
+/** S14's own "Into"/"From" picker — one capturable account, in the balance's own currency. */
+const CASH_PLN: PhoneAccount = {
+  id: id<"accounts">("33333333-3333-4333-8333-333333333333"),
+  name: "Cash · PLN",
+  kind: "cash",
+  currency: PLN,
+  decimals: 2,
+  balance: toMoney("0"),
+  groupId: null,
+  ownership: "own",
+  isBusiness: false,
+  archived: false,
+  expectedBalance: null,
+  openingBalance: toMoney("0"),
+  openingDate: null,
+  memo: "",
   version: 1,
 };
 
@@ -297,11 +317,12 @@ describe("CounterpartyDetail (S13)", () => {
     expect(screen.getByText("debts only · 1 other rows")).toBeDefined();
   });
 
-  it("routes Settle to a Toast naming it, until E5 merges", () => {
+  it("opens the SettleSheet when Settle is tapped", () => {
     const controller = controllerOf(
       basePort({
         listCounterparties: () => [NINA_COUNTERPARTY],
         listCounterpartyBalances: () => [NINA_ROW],
+        listAccounts: () => [CASH_PLN],
       }),
     );
     render(
@@ -310,9 +331,53 @@ describe("CounterpartyDetail (S13)", () => {
       </LedgerProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
-    expect(
-      screen.getByText("Settling isn't built yet — it's coming in a later update."),
-    ).toBeDefined();
+    expect(screen.getByText("Settling with Nina")).toBeDefined();
+  });
+
+  it("settles through the sheet — counterpartyId, the picked discharges, and the toast", () => {
+    const settleDebt = vi.fn<PhoneLedgerPort["settleDebt"]>(() => ({
+      residual: toMoney("790.00"),
+      overSettled: false,
+    }));
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listAccounts: () => [CASH_PLN],
+        settleDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    fireEvent.click(sheet.getByRole("button", { name: "Into" }));
+    fireEvent.click(sheet.getByRole("radio", { name: "Cash · PLN" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Amount: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "5" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "5" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
+
+    expect(settleDebt).toHaveBeenCalledOnce();
+    const input = settleDebt.mock.calls[0]?.[0];
+    expect(input).toMatchObject({
+      counterpartyId: NINA,
+      accountId: CASH_PLN.id,
+      discharges: { currency: PLN, amount: toMoney("50") },
+    });
+
+    // P5 — the residual named in words, never a bare sign.
+    expect(screen.getByText("Settled. 790.00 PLN they owe you.")).toBeDefined();
   });
 
   it("shows the all-settled empty state, keeping the card, when nothing is open", () => {
