@@ -1,7 +1,8 @@
 /**
- * Proves: SPEC.md §7.2 (a figure never holds more places than its currency),
- * CLAUDE.md "every 'must never' gets both a service check (good error) and
- * a constraint (holds when code is wrong)".
+ * Proves: SPEC.md §6.5 "Integrity constraints" (`currencies_decimals_sane` —
+ * a figure never holds more places than its currency), CLAUDE.md "every
+ * 'must never' gets both a service check (good error) and a constraint
+ * (holds when code is wrong)".
  *
  * Findings: R4 C1-r3, R4 H-r4 (mirror parity).
  *

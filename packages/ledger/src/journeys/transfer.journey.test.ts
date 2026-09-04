@@ -1,8 +1,8 @@
 /**
- * Proves: flows/J16-move-money.md §2–§4, computations.md §12.2 (a fee is a
- * stated cost, in the source currency, ≥ 0 — distinct from the rate margin),
- * SPEC.md §7.5 (a transfer stores both legs; the destination amount is
- * copied from the input and never derived).
+ * Proves: flows/J16-move-money.md §2–§4, computations.md §4a "FX margin on a
+ * transfer" (a fee is a stated cost, in the source currency, ≥ 0 — distinct
+ * from the rate margin), SPEC.md §7.5 (a transfer stores both legs; the
+ * destination amount is copied from the input and never derived).
  *
  * Findings: R5 H1, R5 H3, R4 M2-r4 (fee sign), R4 H3-r4 (line scale),
  * R4 H1-r4 (malformed fee).
