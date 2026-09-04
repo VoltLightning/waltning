@@ -284,6 +284,15 @@ describe("createTransactionInput", () => {
     expect(parsed.fxRate).toBe("0.248564000000");
   });
 
+  // BLOCKER — same hole as `setManualRateInput.rate`, on the reciprocal
+  // brand: a zero or negative `fxRate` makes `toPivotByDivision` return
+  // `Infinity` (or a flipped sign) branded as `Money`.
+  it.each(["0", "-1", "0.0"])("refuses an fxRate of %s", (fxRate) => {
+    const result = createTransactionInput.safeParse({ ...expense, fxRate });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("fxRate");
+  });
+
   describe("the sign convention", () => {
     it("refuses a negative expense", () => {
       // §7.2 — stored amounts are positive and `type` carries direction. A
@@ -834,6 +843,19 @@ describe("setManualRateInput", () => {
     const result = setManualRateInput.safeParse({ ...range, from: "2026-01-05", rate: "1" });
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("to");
+  });
+
+  // BLOCKER — a zero or negative manual rate makes `toPivotByDivision`
+  // return `Infinity` (or a flipped sign) branded as `Money`.
+  it.each(["0", "-1", "0.0"])("refuses a rate of %s", (rate) => {
+    const result = setManualRateInput.safeParse({ ...range, rate });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("rate");
+  });
+
+  it("accepts the smallest positive rate", () => {
+    const parsed = setManualRateInput.parse({ ...range, rate: "0.000000000001" });
+    expect(String(parsed.rate)).toBe("0.000000000001");
   });
 });
 

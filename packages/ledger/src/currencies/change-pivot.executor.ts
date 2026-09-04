@@ -2,11 +2,13 @@
  * `change_pivot`, on the device — §7.0 *"genuinely rare, and the one heavy
  * operation left"*.
  *
- * **Refused while any transaction exists.** Every stamped `fx_rate` in the
- * ledger is pivot-per-unit against the *current* pivot; re-basing them onto
- * a new one is a full re-rating of history, and a phone alone has no series
- * to re-rate against — there is no re-rating on a phone alone. So this is
- * the first-run step (S29a), before the first capture, or nothing.
+ * **Refused while any live transaction exists** — `deleted_at is null`,
+ * `computations.md` §1's T, the same filter every other read in this file
+ * uses. Every stamped `fx_rate` in the ledger is pivot-per-unit against the
+ * *current* pivot; re-basing them onto a new one is a full re-rating of
+ * history, and a phone alone has no series to re-rate against — there is no
+ * re-rating on a phone alone. So this is the first-run step (S29a), before
+ * the first capture, or nothing.
  *
  * **The rewrite, in one pass per date.** `fx_rates` holds `(base = P, quote
  * = X, rate = r)` meaning `1 P = r X` (§4, units-per-pivot). For a date
@@ -22,7 +24,7 @@
 
 import { dec, type UnitsPerPivot, unitsPerPivot } from "@waltning/core/money";
 import { type ChangePivotInput, changePivotInput } from "@waltning/core/registry/inputs";
-import { eq, sql } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
@@ -65,6 +67,7 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
   const [{ n: txnCount } = { n: 0 }] = tx
     .select({ n: sql<number>`count(*)` })
     .from(transactions)
+    .where(isNull(transactions.deletedAt))
     .all();
   if (txnCount > 0) {
     throw new Error(

@@ -15,11 +15,18 @@
 
 import { type AccountingDate, daysBetween } from "@waltning/core/date";
 import type { CurrencyCode, UnitsPerPivot } from "@waltning/core/money";
-import { and, asc, desc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, ne } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
 const { currencies, fxRates } = ledgerSchema;
+
+/**
+ * The server's own carried-forward marker (`packages/db/src/fx/sources.ts`'s
+ * `fillForward`) — a row with this source is not itself an origin, only a
+ * copy of the nearest real quote's rate.
+ */
+const CARRIED_FORWARD = "carried_forward";
 
 /** §7.7 — a dead source eventually leaves genuine holes past this many days. */
 export const MAX_CARRY_DAYS = 10;
@@ -43,6 +50,16 @@ export type LocalRate = {
  * `create_transaction`'s own provisional-rate resolution once it grows a
  * date-aware path) decides what "no rate" means for it; this function only
  * answers what the replica actually holds.
+ *
+ * **The cap does not chain.** `fillForward` (`packages/db/src/fx/sources.ts`)
+ * already stores up to `MAX_CARRY_DAYS` `carried_forward` rows past a real
+ * quote, each stamped with its own date. Measuring `carriedDays` from the
+ * *latest stored row* rather than from the real quote it descends from would
+ * let a dead source be read up to `2 × MAX_CARRY_DAYS` stale before this
+ * ever refuses it — the ten-day cap applied twice, once by the server's fill
+ * and once here, instead of once in total. So when the latest row is itself
+ * `carried_forward`, this walks back to the nearest row with a real source
+ * and measures — and reports — from *that* row instead.
  */
 export function readRate<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
@@ -58,10 +75,29 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
 
   if (!row) return undefined;
 
-  const carriedDays = daysBetween(row.date, date);
+  let origin = row;
+  if (row.source === CARRIED_FORWARD) {
+    const [real] = db
+      .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
+      .from(fxRates)
+      .where(
+        and(
+          eq(fxRates.base, base),
+          eq(fxRates.quote, quote),
+          lte(fxRates.date, row.date),
+          ne(fxRates.source, CARRIED_FORWARD),
+        ),
+      )
+      .orderBy(desc(fxRates.date))
+      .limit(1)
+      .all();
+    if (real) origin = real;
+  }
+
+  const carriedDays = daysBetween(origin.date, date);
   if (carriedDays > MAX_CARRY_DAYS) return undefined;
 
-  return { rate: row.rate, source: row.source, asOf: row.date, carriedDays };
+  return { rate: row.rate, source: origin.source, asOf: origin.date, carriedDays };
 }
 
 export type LocalCoverage = {

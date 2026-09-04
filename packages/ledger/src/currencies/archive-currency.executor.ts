@@ -9,6 +9,12 @@
  * columns the way §14.7 asks. A constraint that is declared and does not
  * ship is worse than one that was never declared, so this stays a plain
  * `throw` rather than a comment claiming a guarantee this file cannot make.
+ *
+ * **Only live accounts count.** An archived account's currency is not a
+ * reference that blocks archiving — an archived account is already excluded
+ * from every balance and figure that would need the currency to keep
+ * meaning, the same reason a soft-deleted transaction is excluded below;
+ * counting it would refuse to archive a currency nothing live actually uses.
  */
 
 import { type ArchiveCurrencyInput, archiveCurrencyInput } from "@waltning/core/registry/inputs";
@@ -67,7 +73,11 @@ function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurre
     .from(transactions)
     .where(
       and(
-        or(eq(transactions.currency, input.code), eq(transactions.toCurrency, input.code)),
+        or(
+          eq(transactions.currency, input.code),
+          eq(transactions.toCurrency, input.code),
+          eq(transactions.debtCurrency, input.code),
+        ),
         isNull(transactions.deletedAt),
       ),
     )

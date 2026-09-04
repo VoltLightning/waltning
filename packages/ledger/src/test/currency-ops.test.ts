@@ -27,6 +27,7 @@ import type { LocalExecutor } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { createTransactionExecutor } from "../transactions/create-transaction.executor.ts";
+import { deleteTransactionExecutor } from "../transactions/delete-transaction.executor.ts";
 import type { Capture, LocalTx, LocalWriteResult } from "../write.ts";
 import { writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
@@ -163,6 +164,33 @@ describe("archive_currency", () => {
     write(archiveCurrencyExecutor, { code: "EUR", version: 1 });
     expect(() => write(archiveCurrencyExecutor, { code: "EUR", version: 1 })).toThrow();
   });
+
+  // BLOCKER — a live transaction can reference a currency through
+  // `debt_currency` alone (§7, `coalesce(debt_currency, currency)`): a
+  // `currency: USD` transaction with `counterpartyRole: 'debt'` and
+  // `debtCurrency: EUR` names EUR, and archiving EUR must be refused just as
+  // it would be if EUR were the transaction's own `currency`.
+  it("refuses a currency a live transaction references only through debt_currency", () => {
+    s.ledger.replica.db
+      .insert(transactions)
+      .values({
+        id: TXN,
+        date: accountingDate("2026-03-12"),
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: money.toMoney("10.00"),
+        currency: USD,
+        fxRate: money.pivotPerUnit("1"),
+        counterpartyRole: "debt",
+        debtCurrency: EUR,
+        debtAmount: money.toMoney("10.00"),
+      })
+      .run();
+
+    expect(() => write(archiveCurrencyExecutor, { code: "EUR", version: 1 })).toThrow(
+      /live transaction/,
+    );
+  });
 });
 
 /* ── set_rate_source / set_pinned ────────────────────────────────────────── */
@@ -210,6 +238,23 @@ describe("change_pivot", () => {
 
   it("refuses a currency that is already the pivot", () => {
     expect(() => write(changePivotExecutor, { code: "PLN" })).toThrow(/already the pivot/);
+  });
+
+  // SHOULD-FIX — `computations.md` §1's T: a soft-deleted transaction is not
+  // live and must not count against "any transaction exists", the same rule
+  // every other read in this file already applies with `deleted_at is null`.
+  it("is allowed once the only transaction has been soft-deleted", () => {
+    write(createTransactionExecutor, {
+      id: TXN,
+      date: accountingDate("2026-03-12"),
+      type: "expense",
+      accountId: ACCOUNT,
+      amountOriginal: money.toMoney("10.00"),
+      currency: PLN,
+    });
+    write(deleteTransactionExecutor, { id: TXN, version: 1 });
+
+    expect(() => write(changePivotExecutor, { code: "USD" })).not.toThrow();
   });
 
   /**
@@ -467,6 +512,59 @@ describe("readRate", () => {
       date: accountingDate("2026-01-10"),
     });
     expect(rate).toBeUndefined();
+  });
+
+  // SHOULD-FIX — `fillForward` (`packages/db/src/fx/sources.ts`) stores up to
+  // ten `carried_forward` rows *past* a real quote, each stamped with its own
+  // date. Measuring `carriedDays` from the latest stored row (itself a
+  // `carried_forward` row) rather than from the real quote it was carried
+  // from lets a dead pair be read up to ~20 days stale before being refused.
+  describe("carry-forward chains through stored carried_forward rows", () => {
+    beforeEach(() => {
+      // A real quote on day 0, then `fillForward`'s own ten carried rows —
+      // exactly what the server would have written for a source that died
+      // after 2026-02-01.
+      s.ledger.replica.db
+        .insert(fxRates)
+        .values([
+          {
+            base: PLN,
+            quote: EUR,
+            date: accountingDate("2026-02-01"),
+            rate: money.unitsPerPivot("4.00"),
+            source: "nbp",
+          },
+          ...Array.from({ length: 10 }, (_, i) => ({
+            base: PLN,
+            quote: EUR,
+            date: accountingDate(`2026-02-${String(2 + i).padStart(2, "0")}`),
+            rate: money.unitsPerPivot("4.00"),
+            source: "carried_forward" as const,
+          })),
+        ])
+        .run();
+    });
+
+    it("measures carriedDays from the real quote, not the last carried row", () => {
+      const rate = readRate(s.ledger.replica.db, {
+        base: PLN,
+        quote: EUR,
+        date: accountingDate("2026-02-11"),
+      });
+      expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+      expect(rate?.source).toBe("nbp");
+      expect(rate?.asOf).toBe(accountingDate("2026-02-01"));
+      expect(rate?.carriedDays).toBe(10);
+    });
+
+    it("refuses one day past the real quote's ten-day cap", () => {
+      const rate = readRate(s.ledger.replica.db, {
+        base: PLN,
+        quote: EUR,
+        date: accountingDate("2026-02-12"),
+      });
+      expect(rate).toBeUndefined();
+    });
   });
 });
 

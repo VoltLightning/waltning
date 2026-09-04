@@ -300,6 +300,8 @@ function harness(diagnostics?: (event: object) => void) {
     createGroup,
     balanceAsOf,
     reset,
+    /** The raw port — the FX methods have no fixture state of their own to assert through, so tests spy on this directly. */
+    port,
   };
 }
 
@@ -813,6 +815,165 @@ describe("phone ledger controller", () => {
       expect(balanceAsOf).toHaveBeenCalledWith(accountId, accountingDate("2026-08-15"));
       expect(result).toBe(money.toMoney("0"));
     });
+  });
+});
+
+describe("phone ledger controller — FX (E3)", () => {
+  it("addCurrency: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
+    const { controller, port } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+
+    (port.addCurrency as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("add_currency: CHF already exists, live");
+    });
+    const refused = controller.addCurrency({ code: "CHF", name: "Swiss Franc" });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.stringContaining("already exists") },
+    ]);
+    expect(listener).not.toHaveBeenCalled();
+
+    const result = controller.addCurrency({ code: "CHF", name: "Swiss Franc" });
+    expect(result).toEqual({ code: currencyCode("CHF") });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("archiveCurrency: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
+    const { controller, port } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+
+    (port.archiveCurrency as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("archive_currency: PLN is the pivot — change_pivot before archiving it");
+    });
+    const refused = controller.archiveCurrency({ code: "PLN", version: 1 });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.stringContaining("is the pivot") },
+    ]);
+    expect(listener).not.toHaveBeenCalled();
+
+    const result = controller.archiveCurrency({ code: "BYN", version: 1 });
+    expect(result).toEqual({ code: currencyCode("BYN") });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("setRateSource: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
+    const { controller, port } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+
+    (port.setRateSource as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("set_rate_source: stale version — read 1, row is at 2");
+    });
+    const refused = controller.setRateSource({ code: "PLN", version: 1, rateSource: "nbp" });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      {
+        path: "",
+        message: expect.stringContaining("stale version"),
+        messageKey: "transactions.changedElsewhere",
+      },
+    ]);
+    expect(listener).not.toHaveBeenCalled();
+
+    const result = controller.setRateSource({ code: "PLN", version: 1, rateSource: "nbp" });
+    expect(result).toEqual({ code: currencyCode("PLN") });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("setPinned: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
+    const { controller, port } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+
+    (port.setPinned as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("set_pinned: stale version — read 1, row is at 2");
+    });
+    const refused = controller.setPinned({ code: "PLN", version: 1, pinned: true });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      {
+        path: "",
+        message: expect.stringContaining("stale version"),
+        messageKey: "transactions.changedElsewhere",
+      },
+    ]);
+    expect(listener).not.toHaveBeenCalled();
+
+    const result = controller.setPinned({ code: "PLN", version: 1, pinned: true });
+    expect(result).toEqual({ code: currencyCode("PLN") });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("changePivot: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
+    const { controller, port } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+
+    (port.changePivot as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("change_pivot: refused — a phone alone cannot re-rate existing transactions");
+    });
+    const refused = controller.changePivot({ code: "USD" });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.stringContaining("cannot re-rate") },
+    ]);
+    expect(listener).not.toHaveBeenCalled();
+
+    const result = controller.changePivot({ code: "USD" });
+    expect(result).toEqual({ code: currencyCode("USD") });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("setManualRate: a throwing port maps to fieldErrors, a success calls refresh and returns written/replacedManual", () => {
+    const { controller, port } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    const range = { base: "USD", quote: "PLN", from: "2026-01-01", to: "2026-01-03" };
+
+    (port.setManualRate as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("set_manual_rate: a manual rate already exists for 2026-01-01");
+    });
+    const refused = controller.setManualRate({ ...range, rate: "3.8100" });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.stringContaining("already exists") },
+    ]);
+    expect(listener).not.toHaveBeenCalled();
+
+    (port.setManualRate as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({
+      written: 3,
+      replacedManual: 0,
+    }));
+    const result = controller.setManualRate({ ...range, rate: "3.8100" });
+    expect(result).toEqual({ written: 3, replacedManual: 0 });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("clearManualRate: a throwing port maps to fieldErrors, a success calls refresh and returns deleted", () => {
+    const { controller, port } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    const range = { base: "USD", quote: "PLN", from: "2026-01-05", to: "2026-01-01" };
+
+    // The range itself is invalid (end before start) on the first call — a
+    // schema refusal, never reaching the port at all.
+    const schemaRefused = controller.clearManualRate(range);
+    expect("fieldErrors" in schemaRefused).toBe(true);
+    expect(port.clearManualRate).not.toHaveBeenCalled();
+
+    const validRange = { base: "USD", quote: "PLN", from: "2026-01-01", to: "2026-01-05" };
+    (port.clearManualRate as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("clear_manual_rate: refused");
+    });
+    const refused = controller.clearManualRate(validRange);
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.stringContaining("refused") },
+    ]);
+    expect(listener).not.toHaveBeenCalled();
+
+    (port.clearManualRate as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({
+      deleted: 5,
+    }));
+    const result = controller.clearManualRate(validRange);
+    expect(result).toEqual({ deleted: 5 });
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 });
 
