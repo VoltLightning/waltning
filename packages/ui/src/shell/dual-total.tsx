@@ -19,9 +19,19 @@
  * **Lives only on the shell**, like `CurrencyTotals` — `emphasis="shell"` on
  * both `<Amount>`s and `shellTextMuted` on the labels, not the `text`/
  * `textMuted` a component sitting on `ground` would reach for. Nothing had
- * ever rendered this component under axe until its own story did — it has no
- * caller yet (`DualTotal` is E9's hero, once a display currency exists) — and
- * the light-ground inks measured 1.48:1 and 1.58:1 against the shell's green.
+ * ever rendered this component under axe until its own story did, before it
+ * had a caller — the light-ground inks measured 1.48:1 and 1.58:1 against the
+ * shell's green. `DeskBand` is its first real caller, at `size="band"`, ahead
+ * of the display-currency hero this component is written for (E9); until
+ * then it renders whatever single-currency figure its caller has.
+ *
+ * **`size="compact"` is a different shape, not a smaller `"band"`.** It is
+ * `DeskBand`'s *collapsed* row — one line tall, no room for two stacked
+ * kickers-plus-figures — so *mine* and *ours* sit side by side with no
+ * label at all: `displayThree` beside a smaller, `shellMuted` figure. That
+ * is the same move §2.9 already makes for the phone header's own collapse
+ * (title and tag left, the total right, one row), applied to the pair this
+ * component draws instead of a single total.
  */
 
 import type * as money from "@waltning/core/money";
@@ -45,17 +55,59 @@ export type DualTotalProps = {
   ours: money.Money | null;
   currency: string;
   decimals?: number;
+  /**
+   * `"shell"` (the default) is the phone's full-width hero — `mine` at
+   * `displayHero`. `"band"` is `DeskBand`'s expanded row (`02-tokens` §2.10):
+   * `mine` at `displayOne`, one step down, because a figure sharing a row
+   * with nav and a scope control has no 54px to spend. `ours` stays
+   * `displayTwo` in both — it is already the secondary line, and the row
+   * that shrank *mine* is the one it was already smaller than. `"compact"`
+   * is `DeskBand`'s *collapsed* row — a different shape, not a smaller
+   * `"band"`; see the file doc.
+   */
+  size?: "shell" | "band" | "compact";
 };
 
-export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps) {
+const MINE_SIZE = { shell: "hero", band: "medium" } as const;
+
+export function DualTotal({ mine, ours, currency, decimals = 2, size = "shell" }: DualTotalProps) {
   const t = useT();
   const styles = useStyles();
+
+  if (size === "compact") {
+    return (
+      <View style={styles.compactBlock}>
+        <Amount
+          value={mine}
+          currency={currency}
+          decimals={decimals}
+          size="compact"
+          emphasis="shell"
+        />
+        {ours === null ? null : (
+          <Amount
+            value={ours}
+            currency={currency}
+            decimals={decimals}
+            size="small"
+            emphasis="shellMuted"
+          />
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.block}>
       <View>
         <Text style={styles.label}>{t("shell.mine")}</Text>
-        <Amount value={mine} currency={currency} decimals={decimals} size="hero" emphasis="shell" />
+        <Amount
+          value={mine}
+          currency={currency}
+          decimals={decimals}
+          size={MINE_SIZE[size]}
+          emphasis="shell"
+        />
       </View>
       {ours === null ? null : (
         <View>
@@ -75,6 +127,7 @@ export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps
 
 const useStyles = makeStyles((theme) => ({
   block: { gap: space.xl },
+  compactBlock: { flexDirection: "row", alignItems: "baseline", gap: space.lg },
   label: {
     color: theme.shellTextMuted,
     ...text.ui("kicker"),

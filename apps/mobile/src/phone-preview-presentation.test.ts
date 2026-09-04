@@ -14,6 +14,10 @@ const nativeLedger = readFileSync(resolve(app, "../src/phone-ledger.native.ts"),
 const webLedger = readFileSync(resolve(app, "../src/phone-ledger.web.ts"), "utf8");
 const english = readFileSync(resolve(app, "../../../packages/ui/src/i18n/en.ts"), "utf8");
 const tabsLayout = readFileSync(resolve(app, "(tabs)/_layout.tsx"), "utf8");
+// The `+` handler and the phone/desk furniture switch (`DESK1`) moved out of
+// the route file and into `tabs-shell.tsx` — see that file's own doc for why
+// `(tabs)/_layout.tsx` stays the one file naming `expo-router`'s tab JSX.
+const tabsShell = readFileSync(resolve(app, "../src/tabs-shell.tsx"), "utf8");
 
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
@@ -24,7 +28,10 @@ describe("phone-alone preview presentation", () => {
     // `FloatingAdd` above the whole tab slot, so it survives a tab switch
     // rather than remounting with this screen.
     expect(today).not.toContain("FloatingAdd");
-    expect(tabsLayout).toContain('router.push("/quick-add")');
+    expect(tabsShell).toContain('router.push("/quick-add")');
+    // The route file composes `<TabsShell>` and wires none of it itself.
+    expect(tabsLayout).toContain("<TabsShell");
+    expect(tabsLayout).not.toContain('router.push("/quick-add")');
     // The hero is a list of subtotals, not a figure. `snapshot.total` was a
     // `money.sum` over every balance labelled USD, which only held because a
     // throw refused any account that was not in dollars.

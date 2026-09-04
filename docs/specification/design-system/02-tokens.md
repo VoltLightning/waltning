@@ -416,3 +416,17 @@ tapped — which opens the header without scrolling the list. The transition is
 while the compact figure rises in. Reduced motion gets an instant swap. The
 floating button is above the header in both states and never reflows when it
 folds. At desk width the threshold is larger; the behaviour is the same.
+
+### 2.10 The desk breakpoint
+
+**1024px, and one value for the whole app.** Every screen's web column is
+already written against it — `screens/S01-dashboard.md` and its siblings each
+draw a *"Web — ≥1024px"* layout, and `architecture/14` §14.4 states the
+consequence: *"web-only" that meant "needs a browser" becomes "needs the
+width."* This section makes that number a token rather than a figure repeated
+in eighteen spec pages and copied into a media query by hand: `breakpoint.desk`
+in `tokens.ts`, read through `useBreakpoint()` over `useWindowDimensions` — the
+same device-reads-itself shape every other platform value in this file takes.
+One threshold, because a phone that has crossed it renders the desk shell
+(`05-composites.md` §5.1's `DeskBand`) and a phone that has not renders the
+composition it always has; there is no third width.
