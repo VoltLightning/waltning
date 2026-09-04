@@ -22,12 +22,13 @@ import {
   CalendarTabIcon,
   DebtTabIcon,
   LedgerTabIcon,
+  SettingsTabIcon,
   TodayTabIcon,
 } from "@waltning/ui/shell/tab-icons";
 import { useTabTrigger } from "expo-router/ui";
 import { useCallback } from "react";
 
-type TabName = "today" | "ledger" | "calendar" | "debt";
+type TabName = "today" | "ledger" | "calendar" | "debt" | "settings";
 
 export function useTabBarItems(): {
   items: readonly TabBarItem[];
@@ -38,11 +39,13 @@ export function useTabBarItems(): {
   const ledger = useTabTrigger({ name: "ledger" });
   const calendar = useTabTrigger({ name: "calendar" });
   const debt = useTabTrigger({ name: "debt" });
+  const settings = useTabTrigger({ name: "settings" });
 
   const todayActive = today.trigger?.isFocused ?? false;
   const ledgerActive = ledger.trigger?.isFocused ?? false;
   const calendarActive = calendar.trigger?.isFocused ?? false;
   const debtActive = debt.trigger?.isFocused ?? false;
+  const settingsActive = settings.trigger?.isFocused ?? false;
 
   const items: readonly TabBarItem[] = [
     {
@@ -69,6 +72,12 @@ export function useTabBarItems(): {
       icon: <DebtTabIcon active={debtActive} />,
       active: debtActive,
     },
+    {
+      name: "settings",
+      label: t("routes.settings"),
+      icon: <SettingsTabIcon active={settingsActive} />,
+      active: settingsActive,
+    },
   ];
 
   const onSelect = useCallback(
@@ -78,10 +87,11 @@ export function useTabBarItems(): {
         ledger: ledger.switchTab,
         calendar: calendar.switchTab,
         debt: debt.switchTab,
+        settings: settings.switchTab,
       };
       triggers[name as TabName]?.(name, {});
     },
-    [today, ledger, calendar, debt],
+    [today, ledger, calendar, debt, settings],
   );
 
   return { items, onSelect };

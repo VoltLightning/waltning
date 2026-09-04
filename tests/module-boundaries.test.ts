@@ -112,7 +112,8 @@ const FOUNDATION = new Set([
    * category. D4a's `CategorySheet` is the first module to compose one of
    * these — the wave-3 shared plan says explicitly to build "over
    * `BottomSheet`" and to compose `EmptyState` rather than reinvent it — and
-   * hit this test unpromoted, which is the gap this closes.
+   * hit this test unpromoted, which is the gap this closes. C6's own
+   * `categories/` sheets (rename, move, merge) lean on the same promotion.
    *
    * The direction still runs one way: neither folder imports a domain (verified
    * below, same as `fx`), so a domain depending on either is a floor, not a

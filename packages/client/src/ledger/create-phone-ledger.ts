@@ -1,20 +1,31 @@
 import { fold } from "@waltning/core/capture/names";
+import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
-import { type Id, type IdTable, id } from "@waltning/core/id";
+import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
   type AccountKind,
+  type ArchiveCategoryInput,
+  archiveCategoryInput,
   type CategorizeBatchInput,
+  type ConvertLeafGroupInput,
   type CreateAccountInput,
   type CreateCategoryInput,
   type CreateTransactionInput,
   categorizeBatchInput,
+  convertLeafGroupInput,
   createAccountInput,
   createCategoryInput,
   createTransactionInput,
   type DeleteTransactionInput,
   deleteTransactionInput,
+  type MergeCategoriesInput,
+  mergeCategoriesInput,
+  type RenameCategoryInput,
+  type ReparentCategoryInput,
+  renameCategoryInput,
+  reparentCategoryInput,
   type SetTransactionLinesInput,
   setTransactionLinesInput,
   type UpdateTransactionInput,
@@ -136,6 +147,51 @@ export type PhoneCategoryNode = {
   kind: "income" | "expense";
   isLeaf: boolean;
   sort: number;
+};
+
+/**
+ * `PhoneCategoryNode`, plus what a picker never needs and S19's editor
+ * always does — `archived` and the compare-and-swap `version` every
+ * structural write below takes. `listCategoryTree`/`PhoneCategoryNode`
+ * above stay archived-excluded and version-free, matching their one
+ * consumer today (S06's picker, where an archived category must never
+ * appear — `TAXONOMY.md` R2); this is the *other* read, for the one screen
+ * where "offerable" is not the question.
+ */
+export type PhoneFullCategoryNode = {
+  id: Id<"categories">;
+  parentId: Id<"categories"> | null;
+  name: string;
+  kind: "income" | "expense";
+  isLeaf: boolean;
+  archived: boolean;
+  sort: number;
+  depth: number;
+  version: number;
+};
+
+/**
+ * A near-duplicate pair — S19's collision finder (§9.2: *"trigram
+ * similarity, ranked"*). Leaf-versus-leaf only: `merge_categories` refuses a
+ * group on either side, so every candidate here is one the screen can
+ * actually act on by opening the merge sheet.
+ */
+export type PhoneCategoryCollision = {
+  a: { id: Id<"categories">; name: string; usageCount: number };
+  b: { id: Id<"categories">; name: string; usageCount: number };
+  score: number;
+};
+
+/**
+ * S19's merge preview, exact — see `readCategoryReferenceCounts`. Read on
+ * demand, matching `readPeriodSpend`'s own precedent below: this is a query
+ * against one category, not a value every subscriber needs recomputed on
+ * every write.
+ */
+export type PhoneCategoryReferenceCounts = {
+  transactions: number;
+  lines: number;
+  rules: number;
 };
 
 /**
@@ -264,6 +320,12 @@ export type PhoneLedgerPort = {
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
   listCategoryTree: () => readonly PhoneCategoryNode[];
+  /** The whole tree, archived rows included — S19's editor. See `PhoneFullCategoryNode`. */
+  listFullCategoryTree: () => readonly PhoneFullCategoryNode[];
+  /** How many live rows touch each category — see `readCategoryUsage`. */
+  listCategoryUsage: () => ReadonlyMap<Id<"categories">, number>;
+  /** The merge preview's exact pre-write counts — see `readCategoryReferenceCounts`. */
+  readCategoryReferenceCounts: (categoryId: Id<"categories">) => PhoneCategoryReferenceCounts;
   listCounterparties: () => readonly PhoneCounterparty[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
@@ -279,6 +341,11 @@ export type PhoneLedgerPort = {
   updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
   deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
+  renameCategory: (input: RenameCategoryInput, capture: PhoneCapture) => void;
+  reparentCategory: (input: ReparentCategoryInput, capture: PhoneCapture) => void;
+  convertLeafGroup: (input: ConvertLeafGroupInput, capture: PhoneCapture) => void;
+  mergeCategories: (input: MergeCategoriesInput, capture: PhoneCapture) => void;
+  archiveCategory: (input: ArchiveCategoryInput, capture: PhoneCapture) => void;
   reset: () => void;
 };
 
@@ -332,6 +399,10 @@ export type PhoneLedgerSnapshot = {
   recent: readonly PhoneRecentTransaction[];
   categories: readonly PhoneCategory[];
   categoryTree: readonly PhoneCategoryNode[];
+  /** The whole tree, archived rows included — S19's editor. */
+  fullCategoryTree: readonly PhoneFullCategoryNode[];
+  categoryUsage: ReadonlyMap<Id<"categories">, number>;
+  categoryCollisions: readonly PhoneCategoryCollision[];
   counterparties: readonly PhoneCounterparty[];
   /**
    * Ordered by the account list, so the currency of your first account leads.
@@ -475,6 +546,20 @@ export type TransactionLineDraft = {
   amount: string;
   categoryId?: string | null;
 };
+/** What S19's rename sheet can save. */
+export type RenameCategoryDraft = { id: string; name: string };
+
+/** What S19's move sheet can save — `parentId: null` moves to the root. */
+export type MoveCategoryDraft = { id: string; parentId: string | null };
+
+/** What S19's actions sheet can save for *Convert to group/leaf*. */
+export type ConvertCategoryDraft = { id: string; to: "leaf" | "group" };
+
+/** What S19's merge sheet can save, once the preview is confirmed. */
+export type MergeCategoryDraft = { loserId: string; winnerId: string };
+
+/** What S19's actions sheet can save for *Archive*. */
+export type ArchiveCategoryDraft = { id: string };
 
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
@@ -490,6 +575,21 @@ export type PhoneLedgerController = {
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
   createCategory: (
     draft: CreateCategoryDraft,
+  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
+  renameCategory: (
+    draft: RenameCategoryDraft,
+  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
+  moveCategory: (
+    draft: MoveCategoryDraft,
+  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
+  convertCategory: (
+    draft: ConvertCategoryDraft,
+  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
+  mergeCategories: (
+    draft: MergeCategoryDraft,
+  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
+  archiveCategory: (
+    draft: ArchiveCategoryDraft,
   ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
   /**
    * §5, on demand — not through the observable snapshot. `period` is the
@@ -524,6 +624,8 @@ export type PhoneLedgerController = {
     version: number,
     lines: readonly TransactionLineDraft[],
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
+  /** S19's merge sheet, on demand — the same "not through the snapshot" call. */
+  readCategoryReferenceCounts: (categoryId: string) => PhoneCategoryReferenceCounts;
   reset: () => void;
 };
 
@@ -572,6 +674,88 @@ function subtotalsOf(accounts: readonly PhoneAccount[]): readonly PhoneCurrencyS
   return [...byCurrency.values()];
 }
 
+/**
+ * S19 §9.2's near-duplicate threshold — decided here rather than in the spec,
+ * which names the mechanism (*"trigram similarity, ranked"*) but not a
+ * number. `0.2` is D2's own threshold for a *loose* proposal (`Ania` should
+ * surface `Nina`); a collision finder that flags a merge candidate wants to
+ * be considerably more confident before naming two categories as possibly
+ * the same thing, so this sits above it — but not so far above it that it
+ * misses §9.2's own worked example: `jaccard(trigrams("groceries"),
+ * trigrams("grocery"))` is `0.5` under this padding scheme, and a threshold
+ * that let the spec's own motivating pair through unflagged would not be
+ * doing its job.
+ */
+const COLLISION_THRESHOLD = 0.4;
+
+/**
+ * S19's collision finder. **Not scoped to one parent** — §9.2's own example
+ * is `Groceries`/`Grocery`, "created months apart... under different
+ * groups", which the sibling-uniqueness index cannot catch because it is
+ * scoped to one parent (J12 §5). Scoped to **kind** and to **leaves**:
+ * `merge_categories` refuses a group on either side, so a candidate outside
+ * that scope is one the merge sheet could never act on.
+ */
+function collisionsOf(
+  tree: readonly PhoneFullCategoryNode[],
+  usage: ReadonlyMap<Id<"categories">, number>,
+): readonly PhoneCategoryCollision[] {
+  const leaves = tree.filter((node) => node.isLeaf && !node.archived);
+  const grams = leaves.map((leaf) => trigrams(fold(leaf.name)));
+  const collisions: PhoneCategoryCollision[] = [];
+
+  for (let i = 0; i < leaves.length; i++) {
+    const a = leaves[i];
+    const aGrams = grams[i];
+    if (!a || !aGrams) continue;
+    for (let j = i + 1; j < leaves.length; j++) {
+      const b = leaves[j];
+      const bGrams = grams[j];
+      if (!b || !bGrams || b.kind !== a.kind) continue;
+      const score = jaccard(aGrams, bGrams);
+      if (score < COLLISION_THRESHOLD) continue;
+      collisions.push({
+        a: { id: a.id, name: a.name, usageCount: usage.get(a.id) ?? 0 },
+        b: { id: b.id, name: b.name, usageCount: usage.get(b.id) ?? 0 },
+        score,
+      });
+    }
+  }
+
+  return collisions.sort((x, y) => y.score - x.score);
+}
+
+/** The category a draft names, or `undefined` — every write below refuses on a miss. */
+function findCategory(
+  tree: readonly PhoneFullCategoryNode[],
+  id: string,
+): PhoneFullCategoryNode | undefined {
+  return tree.find((node) => node.id === id);
+}
+
+/**
+ * Whether `targetParentId` is `categoryId` itself or one of its descendants —
+ * `reparent_category`'s own `wouldCycle`, walked over the snapshot instead of
+ * the replica so the refusal lands as a `fieldError` rather than a throw.
+ */
+function wouldCycle(
+  tree: readonly PhoneFullCategoryNode[],
+  targetParentId: string,
+  categoryId: string,
+): boolean {
+  let cursor: string | null = targetParentId;
+  const seen = new Set<string>();
+
+  while (cursor !== null) {
+    if (cursor === categoryId) return true;
+    if (seen.has(cursor)) return false;
+    seen.add(cursor);
+    const node = findCategory(tree, cursor);
+    cursor = node?.parentId ?? null;
+  }
+  return false;
+}
+
 export function createPhoneLedger(
   port: PhoneLedgerPort,
   runtime: PhoneLedgerRuntime,
@@ -583,6 +767,9 @@ export function createPhoneLedger(
     recent: [],
     categories: [],
     categoryTree: [],
+    fullCategoryTree: [],
+    categoryUsage: new Map(),
+    categoryCollisions: [],
     counterparties: [],
     subtotals: [],
     netWorth: [],
@@ -603,6 +790,8 @@ export function createPhoneLedger(
       const capturable = new Set(
         currencies.filter((currency) => currency.capturable).map((currency) => currency.code),
       );
+      const fullCategoryTree = port.listFullCategoryTree();
+      const categoryUsage = port.listCategoryUsage();
       snapshot = {
         accounts: accounts.map((account) => ({
           ...account,
@@ -613,6 +802,9 @@ export function createPhoneLedger(
         recent: port.listRecent(5),
         categories: port.listCategories(),
         categoryTree: port.listCategoryTree(),
+        fullCategoryTree,
+        categoryUsage,
+        categoryCollisions: collisionsOf(fullCategoryTree, categoryUsage),
         counterparties: port.listCounterparties(),
         subtotals: subtotalsOf(accounts),
         netWorth: port.listNetWorth(),
@@ -718,6 +910,8 @@ export function createPhoneLedger(
       }
     },
     getTransaction: (id) => port.getTransaction(id),
+    readCategoryReferenceCounts: (categoryId) =>
+      port.readCategoryReferenceCounts(brandId<"categories">(categoryId)),
     createAccount: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
@@ -1085,6 +1279,337 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "set_transaction_lines",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    renameCategory: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "rename_category",
+        phase: "start",
+      });
+      try {
+        const current = findCategory(snapshot.fullCategoryTree, draft.id);
+        if (!current) {
+          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
+        }
+
+        /**
+         * **Refused here, before the write.** The executor has no
+         * field-scoped refusal channel — same pattern `createCategory` uses
+         * for the identical sibling-uniqueness index (J12 §5), scoped to
+         * parent and kind and excluding the node's own current name.
+         */
+        const target = fold(draft.name);
+        const collision = snapshot.fullCategoryTree.find(
+          (node) =>
+            node.id !== current.id &&
+            node.parentId === current.parentId &&
+            node.kind === current.kind &&
+            fold(node.name) === target,
+        );
+        if (collision) {
+          return {
+            fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+          };
+        }
+
+        const capture = runtime.capture();
+        const parsed = renameCategoryInput.safeParse({
+          id: draft.id,
+          version: current.version,
+          name: draft.name,
+        });
+        if (!parsed.success) {
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.renameCategory(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "rename_category",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "rename_category",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    moveCategory: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "reparent_category",
+        phase: "start",
+      });
+      try {
+        const current = findCategory(snapshot.fullCategoryTree, draft.id);
+        if (!current) {
+          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
+        }
+
+        if (draft.parentId !== null) {
+          const parent = findCategory(snapshot.fullCategoryTree, draft.parentId);
+          if (!parent) {
+            return { fieldErrors: [{ path: "parentId", message: "Choose a group" }] };
+          }
+          if (parent.isLeaf) {
+            return {
+              fieldErrors: [{ path: "parentId", message: `"${parent.name}" is not a group` }],
+            };
+          }
+          if (parent.kind !== current.kind) {
+            return {
+              fieldErrors: [
+                {
+                  path: "parentId",
+                  message: `"${parent.name}" is a ${parent.kind} group — refused across kinds`,
+                },
+              ],
+            };
+          }
+          if (wouldCycle(snapshot.fullCategoryTree, draft.parentId, draft.id)) {
+            return {
+              fieldErrors: [
+                {
+                  path: "parentId",
+                  message: `"${parent.name}" is inside "${current.name}" — that would make the tree a cycle`,
+                },
+              ],
+            };
+          }
+        }
+
+        const capture = runtime.capture();
+        const parsed = reparentCategoryInput.safeParse({
+          id: draft.id,
+          version: current.version,
+          parentId: draft.parentId,
+        });
+        if (!parsed.success) {
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.reparentCategory(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "reparent_category",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "reparent_category",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    convertCategory: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "convert_leaf_group",
+        phase: "start",
+      });
+      try {
+        const current = findCategory(snapshot.fullCategoryTree, draft.id);
+        if (!current) {
+          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
+        }
+
+        if (draft.to === "group") {
+          /**
+           * **The same usage count the `Tag` already shows the person**, not
+           * a second, raw reference count — the number this refusal names is
+           * the one they have already seen, and the executor stays the final
+           * authority if a leftover reference this count does not see (a
+           * split transaction's now-unused top-level category, §6) still
+           * refuses the write.
+           */
+          const referenced = snapshot.categoryUsage.get(current.id) ?? 0;
+          if (referenced > 0) {
+            return {
+              fieldErrors: [
+                {
+                  path: "id",
+                  message: `${referenced} transaction(s) use "${current.name}" — recategorise or merge first`,
+                },
+              ],
+            };
+          }
+        } else {
+          const children = snapshot.fullCategoryTree.filter(
+            (node) => node.parentId === current.id,
+          ).length;
+          if (children > 0) {
+            return {
+              fieldErrors: [
+                {
+                  path: "id",
+                  message: `"${current.name}" has ${children} categor${children === 1 ? "y" : "ies"} inside it`,
+                },
+              ],
+            };
+          }
+        }
+
+        const capture = runtime.capture();
+        const parsed = convertLeafGroupInput.safeParse({
+          id: draft.id,
+          version: current.version,
+          to: draft.to,
+        });
+        if (!parsed.success) {
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.convertLeafGroup(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "convert_leaf_group",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "convert_leaf_group",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    mergeCategories: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "merge_categories",
+        phase: "start",
+      });
+      try {
+        const loser = findCategory(snapshot.fullCategoryTree, draft.loserId);
+        const winner = findCategory(snapshot.fullCategoryTree, draft.winnerId);
+        if (!loser || !winner) {
+          return {
+            fieldErrors: [{ path: "winnerId", message: "Choose a category to merge into" }],
+          };
+        }
+        if (loser.id === winner.id) {
+          return { fieldErrors: [{ path: "winnerId", message: "Choose a different category" }] };
+        }
+        if (loser.archived) {
+          return {
+            fieldErrors: [{ path: "loserId", message: `"${loser.name}" is already archived` }],
+          };
+        }
+        if (winner.archived) {
+          return {
+            fieldErrors: [{ path: "winnerId", message: `"${winner.name}" is archived` }],
+          };
+        }
+        if (!loser.isLeaf || !winner.isLeaf) {
+          return {
+            fieldErrors: [
+              { path: "winnerId", message: "Only leaves hold transactions — refused on a group" },
+            ],
+          };
+        }
+        if (loser.kind !== winner.kind) {
+          return {
+            fieldErrors: [
+              {
+                path: "winnerId",
+                message: `"${winner.name}" is ${winner.kind}, "${loser.name}" is ${loser.kind} — refused across kinds`,
+              },
+            ],
+          };
+        }
+
+        const capture = runtime.capture();
+        const parsed = mergeCategoriesInput.safeParse({
+          loserId: draft.loserId,
+          winnerId: draft.winnerId,
+        });
+        if (!parsed.success) {
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.mergeCategories(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "merge_categories",
+          phase: "success",
+        });
+        return { id: parsed.data.winnerId };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "merge_categories",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    archiveCategory: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "archive_category",
+        phase: "start",
+      });
+      try {
+        const current = findCategory(snapshot.fullCategoryTree, draft.id);
+        if (!current) {
+          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
+        }
+        if (current.archived) {
+          return {
+            fieldErrors: [{ path: "id", message: `"${current.name}" is already archived` }],
+          };
+        }
+        if (!current.isLeaf) {
+          const unarchivedChildren = snapshot.fullCategoryTree.filter(
+            (node) => node.parentId === current.id && !node.archived,
+          ).length;
+          if (unarchivedChildren > 0) {
+            return {
+              fieldErrors: [
+                {
+                  path: "id",
+                  message: `"${current.name}" has ${unarchivedChildren} unarchived categor${unarchivedChildren === 1 ? "y" : "ies"} inside it`,
+                },
+              ],
+            };
+          }
+        }
+
+        const capture = runtime.capture();
+        const parsed = archiveCategoryInput.safeParse({ id: draft.id, version: current.version });
+        if (!parsed.success) {
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.archiveCategory(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "archive_category",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "archive_category",
           phase: "failure",
           error: clientFailure(error),
         });

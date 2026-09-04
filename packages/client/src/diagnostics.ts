@@ -15,6 +15,11 @@ export type ClientAction =
   | "update_transaction"
   | "delete_transaction"
   | "set_transaction_lines"
+  | "rename_category"
+  | "reparent_category"
+  | "convert_leaf_group"
+  | "merge_categories"
+  | "archive_category"
   | "reset_preview"
   | "change_appearance";
 

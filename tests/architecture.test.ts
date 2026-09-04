@@ -438,7 +438,8 @@ describe("every src/ is organised by domain, not by layer", () => {
     ],
     // Foundation (`primitives`, `fx`, `theme`, `i18n`) plus one folder per
     // domain. The full target is thirteen; seven exist because seven have
-    // components. `i18n` is foundation by the same property as `fx`: a
+    // components — `categories` (D4a/C6) joined `accounts`, `review` and
+    // `transactions`. `i18n` is foundation by the same property as `fx`: a
     // language is not a domain, and every domain needs one.
     "packages/ui/src": [
       "accounts",
