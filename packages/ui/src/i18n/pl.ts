@@ -135,6 +135,11 @@ export const pl: Messages = {
     loadFailedWhy: "Coś poszło nie tak podczas odczytu księgi.",
     accountFilterFrom: "Z {{account}}",
     payee: "Sprzedawca",
+    addPayee: "+ Sprzedawca",
+    addNote: "+ Notatka",
+    addPerson: "+ Osoba",
+    scope: "Zakres",
+    lastCapture: "Z ostatniego zapisu, {{time}}",
     changedElsewhere:
       "Ta transakcja zmieniła się gdzie indziej — wczytaj ją ponownie przed zapisaniem.",
     delete: "Usuń",

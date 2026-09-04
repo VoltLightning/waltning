@@ -192,8 +192,18 @@ export const en = {
     loadFailedWhy: "Something went wrong reading the ledger.",
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
     accountFilterFrom: "From {{account}}",
-    /** S09's `FieldsCard` — not offered on Quick add, which reads it from D2. */
+    /** S09's `FieldsCard`, and D4b's own chip label — a person types it there, D2 only ever reads it back. */
     payee: "Payee",
+    /** D4b's chip row, empty — S05 §3: `[+ payee]`, typed, optional. */
+    addPayee: "+ Payee",
+    /** D4b's chip row, empty. */
+    addNote: "+ Note",
+    /** D4b's chip row, empty — offered only when the ledger holds a counterparty (S05 §5). */
+    addPerson: "+ Person",
+    /** D4b's scope chip label — Mine · Shared · Business, `shell.scope*`'s own words. */
+    scope: "Scope",
+    /** D4b's account sheet, machine-filled only — `useLastUsedAccount`'s own window (S05 §9.2). */
+    lastCapture: "From your last capture, {{time}}",
     /**
      * S09: `update_transaction`, `delete_transaction` and
      * `set_transaction_lines` all refuse a stale version the same way — the
