@@ -22,6 +22,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { createAccountExecutor } from "../accounts/create-account.executor.ts";
+import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
 import { recoverOnLaunch } from "../recover.ts";
@@ -305,6 +306,31 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(entries()).toHaveLength(1);
     expect(txnRows()).toHaveLength(0);
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+  });
+
+  /**
+   * E3's own "Done when": `readCurrencies.capturable` answers `false` for a
+   * pair with no rate (proven above, by the throw), and answers `true` the
+   * moment `set_manual_rate` gives it one — end to end, through the real
+   * `set_manual_rate` executor and the real `create_transaction` executor,
+   * not a fixture row inserted by hand.
+   */
+  it("succeeds once set_manual_rate has priced the pair, and values from that rate", () => {
+    write(setManualRateExecutor, {
+      base: "USD",
+      quote: "CHF",
+      from: "2026-03-12",
+      to: "2026-03-12",
+      rate: "0.90",
+    });
+
+    const result = write(createTransactionExecutor, expenseInput(TXN_A, ACCOUNT_CHF, "CHF"));
+
+    // fx_rates is USD→CHF at 0.90 units-per-pivot; the transaction's own
+    // fx_rate is pivot-per-unit — the reciprocal, 1 ÷ 0.90.
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("0.90")));
+    expect(entries()).toHaveLength(2); // the manual rate's entry, then the capture's
+    expect(txnRows()).toHaveLength(1);
   });
 
   it("refuses rather than guessing when the replica names no pivot currency", () => {

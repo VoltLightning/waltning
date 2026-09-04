@@ -207,9 +207,7 @@ describe("§4 — display conversion", () => {
 
   it("from_pivot is from_pivot: p × rate, not p ÷ rate", () => {
     // 100 pivot units at 3 units-per-pivot is 300, never 33.33…
-    expect(money.fromPivot(money.toMoney("100.00"), money.unitsPerPivot("3"))).toBe(
-      "300.00000000",
-    );
+    expect(money.fromPivot(money.toMoney("100.00"), money.unitsPerPivot("3"))).toBe("300.00000000");
   });
 });
 

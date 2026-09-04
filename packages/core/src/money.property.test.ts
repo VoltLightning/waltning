@@ -26,9 +26,7 @@ const positiveMoneyArb = moneyArb.filter((m) => !money.isZero(m));
  */
 const rateArb = fc
   .tuple(fc.bigInt({ min: 1n, max: 999_999n }), fc.bigInt({ min: 0n, max: 999_999_999_999n }))
-  .map(([whole, frac]) =>
-    money.unitsPerPivot(`${whole}.${frac.toString().padStart(12, "0")}`),
-  );
+  .map(([whole, frac]) => money.unitsPerPivot(`${whole}.${frac.toString().padStart(12, "0")}`));
 
 const txArb = fc.record({
   type: fc.constantFrom(

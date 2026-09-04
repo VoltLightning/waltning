@@ -20,16 +20,22 @@ import type { Id } from "../id.ts";
 import type { CurrencyCode, Money, PivotPerUnit, TxnType, UnitsPerPivot } from "../money.ts";
 // A3's own import from "./inputs.ts" — kept separate from A2's above so a
 // rebase against A2's append is a line-level merge, not a symbol-level one.
+// E3's own import — kept separate so a rebase against A2/A3's appends stays
+// a line-level merge.
 import {
   type AccountKind,
   type ArchiveAccountInput,
+  addCurrencyInput,
   archiveAccountInput,
   archiveCategoryInput,
+  archiveCurrencyInput,
   archiveGroupInput,
   type CreateAccountInput,
   type CreateCategoryInput,
   type CreateTransactionInput,
   categorizeBatchInput,
+  changePivotInput,
+  clearManualRateInput,
   createAccountInput,
   createCategoryInput,
   createGroupInput,
@@ -41,23 +47,15 @@ import {
   reorderAccountsInput,
   reorderGroupsInput,
   reparentCategoryInput,
+  setManualRateInput,
+  setPinnedInput,
+  setRateSourceInput,
   setTransactionLinesInput,
   supersedeTransactionInput,
   type UpdateAccountInput,
   updateAccountInput,
   updateGroupInput,
   updateTransactionInput,
-} from "./inputs.ts";
-// E3's own import — kept separate so a rebase against A2/A3's appends stays
-// a line-level merge.
-import {
-  addCurrencyInput,
-  archiveCurrencyInput,
-  changePivotInput,
-  clearManualRateInput,
-  setManualRateInput,
-  setPinnedInput,
-  setRateSourceInput,
 } from "./inputs.ts";
 
 /* ── compile-time assertions ─────────────────────────────────────────────────
