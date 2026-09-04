@@ -274,6 +274,43 @@ describe("a failure between the two commits keeps the intent", () => {
     expect(entry?.state).toBe("blocked");
     expect(entry?.blockedKind).toBe("terminal");
     expect(entry?.blockedReason).toBe("the replica half failed");
+    // R2 M4 — `refused`, never `recover.ts`'s `replay_halted`: this write's
+    // own `apply` rejected it, so it will refuse identically on any retry.
+    expect(entry?.blockedDisposition).toBe("refused");
+  });
+
+  /**
+   * R2 L1 — if marking the entry `blocked` itself throws, the caller must
+   * not lose the refusal that got it there: it travels as `cause` rather
+   * than being swallowed by whatever broke the second write.
+   */
+  it("attaches the original refusal as `cause` when marking it blocked also fails", () => {
+    const blockWriteError = new Error("outbox db is locked");
+    const updateSpy = vi.spyOn(s.ledger.outbox.db, "update").mockImplementation(() => {
+      throw blockWriteError;
+    });
+
+    let caught: unknown;
+    try {
+      writeLocally(s.ledger, { executor: refuses, registry, input: input("txn-1"), capture });
+    } catch (e) {
+      caught = e;
+    } finally {
+      updateSpy.mockRestore();
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as Error;
+    expect(err.message).toContain("failed to mark");
+    expect(err.message).toContain("outbox db is locked");
+    expect(err.cause).toBeInstanceOf(Error);
+    expect((err.cause as Error).message).toBe("the replica half failed");
+
+    // The block-write never landed, so the entry is exactly as the first
+    // commit left it — `pending`, not silently stuck looking sendable, but
+    // also not misreported as `blocked`.
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
   });
 
   it("reports which commit boundary failed with the complete cause chain", () => {

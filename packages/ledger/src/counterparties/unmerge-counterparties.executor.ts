@@ -18,14 +18,24 @@
  * never overwritten by an unmerge that has nothing to do with it. Counted
  * among `skipped` alongside the soft-deleted case, for the same reason: there
  * is nothing on the winner left to take back.
+ *
+ * **Refuses a folded-name collision before un-archiving the loser (R2 H1).**
+ * `counterparties_name_uq` is partial — it only covers unarchived rows — so a
+ * fresh counterparty can legally take the loser's old name while it sits
+ * archived. Flipping `archived` back to `false` here would then hit the raw
+ * SQLite `UNIQUE constraint failed` mid-transaction, and the whole unmerge —
+ * transaction restores included — would abort with it. Checked the same way
+ * `create_counterparty` and `update_counterparty` check it: `name_folded`
+ * against every *other* live row, named in the refusal.
  */
 
 import type { Id } from "@waltning/core/id";
 import { unmergeCounterpartiesInput } from "@waltning/core/registry/inputs";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
+import { chunkIds } from "./chunk-ids.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
 import type { LocalCounterpartyMergeRow } from "./merge-counterparties.executor.ts";
 
@@ -67,27 +77,64 @@ function unmergeCounterparties(
     throw new Error(`unmerge_counterparties: ${mergeId} was already unmerged`);
   }
 
+  // R2 H1 — `counterparties_name_uq` only covers unarchived rows, so a fresh
+  // counterparty may legally have taken the loser's old name while it sat
+  // archived. Un-archiving it below would then hit the raw SQLite collision
+  // mid-transaction and abort the whole unmerge, restores included — checked
+  // first instead, the same way `create_counterparty`/`update_counterparty` do.
+  const [loserRow] = tx
+    .select({ name: counterparties.name, nameFolded: counterparties.nameFolded })
+    .from(counterparties)
+    .where(eq(counterparties.id, merge.loserId))
+    .all();
+  if (!loserRow) {
+    throw new Error(`unmerge_counterparties: no counterparty ${merge.loserId}`);
+  }
+  const [collision] = tx
+    .select({ id: counterparties.id, name: counterparties.name })
+    .from(counterparties)
+    .where(
+      and(
+        eq(counterparties.nameFolded, loserRow.nameFolded),
+        eq(counterparties.archived, false),
+        ne(counterparties.id, merge.loserId),
+      ),
+    )
+    .all();
+  if (collision) {
+    throw new Error(
+      `unmerge_counterparties: un-archiving "${loserRow.name}" collides with existing ` +
+        `counterparty "${collision.name}" (${collision.id}) — counterparties_name_uq`,
+    );
+  }
+
   const movedIds = merge.movedTransactionIds;
 
   // R2 H1 — restores only a named row still on the winner. Anything else
   // named — soft-deleted, or reassigned to a third counterparty since the
   // merge — is not repointed, and both cases are counted as `skipped` below
   // rather than silently overwritten.
+  //
+  // R2 M3 — chunked: `inArray` binds one SQLite variable per id, and a merge
+  // that moved more than `SQLITE_MAX_VARIABLE_NUMBER` (999) would otherwise
+  // throw "too many SQL variables" instead of restoring anything.
   const restored =
     movedIds.length === 0
       ? []
-      : tx
-          .update(transactions)
-          .set({ counterpartyId: merge.loserId })
-          .where(
-            and(
-              inArray(transactions.id, movedIds),
-              isNull(transactions.deletedAt),
-              eq(transactions.counterpartyId, merge.winnerId),
-            ),
-          )
-          .returning({ id: transactions.id })
-          .all();
+      : chunkIds(movedIds).flatMap((batch) =>
+          tx
+            .update(transactions)
+            .set({ counterpartyId: merge.loserId })
+            .where(
+              and(
+                inArray(transactions.id, batch),
+                isNull(transactions.deletedAt),
+                eq(transactions.counterpartyId, merge.winnerId),
+              ),
+            )
+            .returning({ id: transactions.id })
+            .all(),
+        );
 
   const skipped = movedIds.length - restored.length;
 

@@ -24,7 +24,7 @@
  * phone-alone launch would sweep the entire history.
  */
 
-import { asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, ne, or } from "drizzle-orm";
 import type { AnyLocalExecutor, LocalRegistry } from "./executor.ts";
 import { advanceAppliedSeq, readAppliedSeq } from "./migrate.ts";
 import type { Ledger, LedgerSchema } from "./open.ts";
@@ -89,6 +89,15 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
   // Ordered, and the ordering is load-bearing: an entry may create a row a
   // later entry updates, so replaying out of order applies an update to
   // something that does not exist yet.
+  //
+  // R2 M4 — a `refused` entry (`write.ts`'s own catch) is skipped here. Its
+  // `apply` already threw once, on this exact payload; replaying it every
+  // launch would repeat the identical refusal and re-halt everything behind
+  // it forever, for a row that was never applied and creates nothing later
+  // entries could depend on. A `replay_halted` entry (`recover.ts`'s own
+  // `haltAt`) is **not** skipped — it keeps halting replay behind it exactly
+  // as before, since it may hold a row a later entry depends on, and an app
+  // update may yet supply the executor that was missing.
   const outstanding = ledger.outbox.db
     .select({
       id: outbox.id,
@@ -97,7 +106,16 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
       payload: outbox.payload,
     })
     .from(outbox)
-    .where(gt(outbox.seq, applied))
+    .where(
+      and(
+        gt(outbox.seq, applied),
+        or(
+          ne(outbox.state, "blocked"),
+          isNull(outbox.blockedDisposition),
+          ne(outbox.blockedDisposition, "refused"),
+        ),
+      ),
+    )
     .orderBy(asc(outbox.seq))
     .all();
 
@@ -123,9 +141,11 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
         advanceAppliedSeq(tx, entry.seq);
       });
     } catch (error) {
-      // `catch` bindings are `unknown` because the language gives no choice.
-      const reason = error instanceof Error ? error.message : String(error);
-      return haltAt(ledger, entry, replayed, requeued, reason);
+      // `catch` bindings are `unknown` because the language gives no choice —
+      // normalised to a real `Error` right here so `haltAt` below never has
+      // to hold one.
+      const asError = error instanceof Error ? error : new Error(String(error));
+      return haltAt(ledger, entry, replayed, requeued, asError.message, asError);
     }
 
     replayed.push(entry.id);
@@ -157,7 +177,9 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
  * Note this blocks *local replay*, which is not the same as blocking the drain:
  * the entry can still be sent, and the server does not need the phone to have
  * applied it. That asymmetry is why `blockedReason` exists separately from
- * `lastError`.
+ * `lastError`, and why `blockedDisposition` (R2 M4) is written `replay_halted`
+ * here, never `refused` — `write.ts`'s catch is the one that means "never
+ * send"; this one means "local replay stalled, the drain may still succeed."
  */
 function haltAt<TRun, TSchema extends LedgerSchema>(
   ledger: Ledger<TRun, TSchema>,
@@ -165,12 +187,32 @@ function haltAt<TRun, TSchema extends LedgerSchema>(
   replayed: readonly string[],
   requeued: readonly string[],
   reason: string,
+  /** The error that made replay fail, when there was one — see R2 L1 below. */
+  cause?: Error,
 ): LaunchRecovery {
-  ledger.outbox.db
-    .update(outbox)
-    .set({ state: "blocked", blockedKind: "terminal", blockedReason: reason })
-    .where(eq(outbox.id, entry.id))
-    .run();
+  try {
+    ledger.outbox.db
+      .update(outbox)
+      .set({
+        state: "blocked",
+        blockedKind: "terminal",
+        blockedDisposition: "replay_halted",
+        blockedReason: reason,
+      })
+      .where(eq(outbox.id, entry.id))
+      .run();
+  } catch (blockError) {
+    // R2 L1 — without this, a failure to *record* the halt loses the halt
+    // itself: the caller sees only "could not mark it blocked" and never
+    // learns why replay stopped at this entry in the first place. The
+    // original replay failure travels as `cause`, real object and stack
+    // included when there was one, a fresh `Error(reason)` otherwise.
+    throw new Error(
+      `recoverOnLaunch: failed to mark ${entry.id} blocked after a replay failure — ` +
+        (blockError instanceof Error ? blockError.message : String(blockError)),
+      { cause: cause ?? new Error(reason) },
+    );
+  }
 
   return {
     requeued,

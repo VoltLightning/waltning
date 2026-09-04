@@ -164,10 +164,11 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       await scratch.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance, kind)
         values (${a.id}, ${a.name}, ${a.currency}, ${a.ownership}, ${a.isBusiness}, ${a.opening}, ${a.kind})`;
     }
-    await scratch.sql`insert into counterparties (id, name, name_folded, kind)
-      values (${COUNTERPARTY.id}, ${COUNTERPARTY.name}, lower(${COUNTERPARTY.name}), 'person'),
-             (${COMPANY.id}, ${COMPANY.name}, lower(${COMPANY.name}), 'company'),
-             (${FLIPCO.id}, ${FLIPCO.name}, lower(${FLIPCO.name}), 'company')`;
+    // R2 H2 — no name_folded column: it is GENERATED ALWAYS AS (…) STORED now.
+    await scratch.sql`insert into counterparties (id, name, kind)
+      values (${COUNTERPARTY.id}, ${COUNTERPARTY.name}, 'person'),
+             (${COMPANY.id}, ${COMPANY.name}, 'company'),
+             (${FLIPCO.id}, ${FLIPCO.name}, 'company')`;
     for (const t of TRANSACTIONS) {
       await scratch.sql`insert into transactions
         (id, date, type, account_id, to_account_id, amount_original, to_amount,

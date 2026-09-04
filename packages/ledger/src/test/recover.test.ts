@@ -16,7 +16,7 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import type Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineLocalExecutor, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
@@ -199,6 +199,9 @@ describe("an entry that cannot be replayed stops replay, and says why", () => {
     expect(blocked?.state).toBe("blocked");
     expect(blocked?.blockedKind).toBe("terminal");
     expect(blocked?.blockedReason).toContain("an_operation_this_build_forgot");
+    // R2 M4 — `replay_halted`, never `write.ts`'s `refused`: local replay is
+    // what stalled, not the write itself. The drain may still send it.
+    expect(blocked?.blockedDisposition).toBe("replay_halted");
   });
 
   it("leaves the watermark below it, so nothing claims the missing effect landed", () => {
@@ -224,5 +227,91 @@ describe("an entry that cannot be replayed stops replay, and says why", () => {
     // could not replay it is not the app that gets to discard it.
     expect(entry).toBeDefined();
     expect(entry?.payload).toEqual({ id: "txn-1", amount_original: "18.00000000" });
+  });
+
+  /**
+   * R2 L1 — if marking the entry `blocked` itself throws, the replay
+   * failure that got it there must not be lost either: it travels as
+   * `cause` rather than being swallowed by whatever broke the second write.
+   */
+  it("attaches the original replay failure as `cause` when marking it blocked also fails", () => {
+    intentOnly(1, "txn-1", "an_operation_this_build_forgot");
+    const blockWriteError = new Error("outbox db is locked");
+    const updateSpy = vi.spyOn(s.ledger.outbox.db, "update").mockImplementation(() => {
+      throw blockWriteError;
+    });
+
+    let caught: unknown;
+    try {
+      recoverOnLaunch(s.ledger, registry);
+    } catch (e) {
+      caught = e;
+    } finally {
+      updateSpy.mockRestore();
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as Error;
+    expect(err.message).toContain("failed to mark");
+    expect(err.message).toContain("outbox db is locked");
+    expect(err.cause).toBeInstanceOf(Error);
+    expect((err.cause as Error).message).toContain("an_operation_this_build_forgot");
+  });
+});
+
+/**
+ * R2 M4 — `blocked(terminal)` used to mean two different things: `write.ts`'s
+ * own refusal ("never send") and this file's own replay halt ("send later").
+ * `blockedDisposition` names which, and `outstanding`'s query reads it.
+ */
+describe("a `refused` entry is skipped on later launches", () => {
+  it("does not re-attempt it, and lets entries behind it replay past it", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2");
+    intentOnly(3, "txn-3");
+    // Simulate `write.ts` having already refused entry 2, on an earlier
+    // launch — a folded-name collision or a stale version, say.
+    s.ledger.outbox.db
+      .update(outbox)
+      .set({
+        state: "blocked",
+        blockedKind: "terminal",
+        blockedDisposition: "refused",
+        blockedReason: "refused before this launch",
+      })
+      .where(eq(outbox.seq, 2))
+      .run();
+
+    const recovery = recoverOnLaunch(s.ledger, registry);
+
+    // Not re-halted: a `refused` entry's `apply` would only throw the same
+    // way again, so it is not retried at all, and entries 1 and 3 replay.
+    expect(recovery.halted).toBeNull();
+    expect(recovery.replayed).toHaveLength(2);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+    // It created nothing when it was refused, so there is nothing for a
+    // later entry to depend on — the watermark is free to jump past it.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(3);
+
+    const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(entry2?.state).toBe("blocked");
+    expect(entry2?.blockedDisposition).toBe("refused");
+  });
+
+  it("still halts on a `replay_halted` entry, on every launch, never skipping it", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "an_operation_this_build_forgot");
+    intentOnly(3, "txn-3");
+
+    const first = recoverOnLaunch(s.ledger, registry);
+    expect(first.halted?.seq).toBe(2);
+    expect(first.replayed).toHaveLength(1);
+
+    // A second launch tries again rather than silently accepting the halt —
+    // an app update may since have supplied the missing executor.
+    const second = recoverOnLaunch(s.ledger, registry);
+    expect(second.halted?.seq).toBe(2);
+    expect(second.replayed).toEqual([]);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1"]);
   });
 });

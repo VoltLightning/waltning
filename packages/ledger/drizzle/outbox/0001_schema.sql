@@ -1,0 +1,1 @@
+ALTER TABLE `outbox` ADD `blocked_disposition` text;

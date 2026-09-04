@@ -242,15 +242,48 @@ export const categoryMappings = pgTable(
  * Counterparties — §6.6
  * ------------------------------------------------------------------ */
 
-export const counterparties = pgTable("counterparties", counterpartiesColumns(), (t) => [
-  // R2 C1/M3 — indexed on `name_folded` (stored, written by the operation —
-  // see `counterparties.pg.ts`) rather than `normalized(t.name)`: the two
-  // engines now share one normalisation, `fold()`, instead of Postgres
-  // enforcing a stricter rule than the SQLite replica that captures offline
-  // can check. Partial, excluding archived rows, so an old name is free for
-  // reuse once its owner is archived (§9.2 — history stays under the old row).
-  uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
-]);
+/**
+ * `name_folded`'s Postgres-only fold, reused by the migration's collision
+ * pre-check (R2 M2) as well as this column's own `GENERATED ALWAYS AS`.
+ * Kept as one string, not retyped in two places: the migration is
+ * hand-checked SQL and cannot `import` this, but a reviewer comparing them
+ * can at least diff identical text.
+ */
+export const FOLD_SQL = `lower(translate(btrim("name"), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))`;
+
+export const counterparties = pgTable(
+  "counterparties",
+  {
+    ...counterpartiesColumns(),
+    /**
+     * `GENERATED ALWAYS AS (…) STORED`, not app-written (R2 H2).
+     *
+     * The shared column (`counterparties.pg.ts`) is a plain `text` — SQLite
+     * has no generated columns (`packages/ledger`'s kit says so directly:
+     * "This table is the one exception to 'constraints stay in
+     * `packages/db`.'"), so the replica keeps writing it at capture time,
+     * the only place it *can* be kept honest offline. Postgres does not
+     * share that limit: a raw `insert into counterparties` that skipped
+     * `name_folded` — or supplied a stale one — used to write straight
+     * past `counterparties_name_uq` and nothing caught it. Generated here
+     * instead, so the column cannot exist without being this fold of
+     * `name`, ever, regardless of what wrote the row. `lower()`/`translate()`
+     * /`btrim()` on `text` are IMMUTABLE under this database's collation
+     * (`docker-compose.yml`'s `--icu-locale=und-x-icu`) — checked directly
+     * against a live instance before committing to this over a trigger.
+     */
+    nameFolded: text("name_folded").notNull().generatedAlwaysAs(sql.raw(FOLD_SQL)),
+  },
+  (t) => [
+    // R2 C1/M3 — indexed on `name_folded` rather than `normalized(t.name)`:
+    // the two engines now share one normalisation, `fold()`, instead of
+    // Postgres enforcing a stricter rule than the SQLite replica that
+    // captures offline can check. Partial, excluding archived rows, so an
+    // old name is free for reuse once its owner is archived (§9.2 —
+    // history stays under the old row).
+    uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
+  ],
+);
 
 /**
  * `merge_counterparties` / `unmerge_counterparties` — S15 §9.2. The record of

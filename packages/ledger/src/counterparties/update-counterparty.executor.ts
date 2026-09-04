@@ -90,6 +90,34 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
     }
   }
 
+  // R2 H1 — `counterparties_name_uq` only covers unarchived rows, so a fresh
+  // counterparty may legally have taken this row's name while it sat
+  // archived. Un-archiving it (`patch.archived === false`) would then hit the
+  // raw SQLite collision instead of a refusal naming the row it collides
+  // with — checked here, the same as `unmerge_counterparties`'s own
+  // pre-check. Skipped when `nameFolded` is already set above: that check
+  // just ran against the same target value a renamed patch would un-archive
+  // into, so running it twice would only repeat the same query.
+  if (input.patch.archived === false && nameFolded === undefined) {
+    const [archiveCollision] = tx
+      .select({ id: counterparties.id, name: counterparties.name })
+      .from(counterparties)
+      .where(
+        and(
+          eq(counterparties.nameFolded, current.nameFolded),
+          eq(counterparties.archived, false),
+          ne(counterparties.id, input.id),
+        ),
+      )
+      .all();
+    if (archiveCollision) {
+      throw new Error(
+        `update_counterparty: un-archiving "${current.name}" collides with existing ` +
+          `counterparty "${archiveCollision.name}" (${archiveCollision.id}) — counterparties_name_uq`,
+      );
+    }
+  }
+
   const willArchive = input.patch.archived === true && !current.archived;
   if (willArchive) {
     const balances = balancesForCounterparty(tx, input.id);

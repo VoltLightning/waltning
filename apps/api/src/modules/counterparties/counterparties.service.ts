@@ -11,9 +11,15 @@
  * duplicate would still arrive as `validation`, just carrying Postgres's own
  * wording. It exists because the useful sentence here mentions case and
  * whitespace, and the shared translator has no way to know that.
+ *
+ * **`name_folded` is never set here (R2 H2).** It is `GENERATED ALWAYS AS
+ * (…) STORED` in `packages/db/src/schema.ts` now — Postgres refuses an
+ * insert that supplies a value for a generated column outright, so this
+ * would not compile past the type and would not run past the database
+ * either way. `fold()` still runs on the phone (`create-counterparty.executor.ts`),
+ * where SQLite has no generated columns to lean on.
  */
 
-import { fold } from "@waltning/core/capture/names";
 import type { CurrencyCode } from "@waltning/core/money";
 import type { DbHandle } from "@waltning/db/client";
 import { counterparties } from "@waltning/db/schema";
@@ -43,13 +49,6 @@ export async function insertCounterparty(
       .insert(counterparties)
       .values({
         name: input.name,
-        // R2 C1 — the stored fold `counterparties_name_uq` now indexes; see
-        // `counterparties.pg.ts`. Trimmed explicitly: `fold()` itself never
-        // trims (`capture/names.ts` — trimming would change a string's
-        // length, which `findName`'s span matching relies on staying fixed),
-        // so this is the one place responsible for it, the same way
-        // `lower(btrim(name))` used to trim regardless of the caller.
-        nameFolded: fold(input.name.trim()),
         kind: input.kind,
         settlementCurrency: input.settlementCurrency ?? null,
         contact: input.contact ?? null,

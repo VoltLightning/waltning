@@ -28,6 +28,19 @@ import { sqliteKit as k } from "./kit.ts";
  * case-fold plus the nine Polish diacritics) runs in JavaScript at write
  * time instead, on both engines, so the two spellings are the same folded
  * string before either index ever sees them.
+ *
+ * **Postgres computes this column now (`GENERATED ALWAYS AS (…) STORED`,
+ * `packages/db/src/schema.ts`, R2 H2); this one stays app-written.** Not an
+ * oversight — SQLite has no portable equivalent of Postgres's `translate()`,
+ * which the fold expression needs for the nine Polish diacritics, so a
+ * `GENERATED ALWAYS AS` expression here would need a custom scalar function
+ * registered on the connection, invisible to `drizzle-kit`'s plain-SQL
+ * migration diffing and to `packages/ledger/tools/embed-ddl.ts`, which only
+ * ever reproduces columns, affinities, `primary key` and `not null` from
+ * that SQL. `create_counterparty`/`update_counterparty` writing it directly
+ * — the same `fold()` Postgres's generated expression mirrors — is what
+ * keeps the two engines in agreement without a JS function neither
+ * `drizzle-kit` nor the DDL embedder can see.
  */
 export const counterpartiesColumns = () => ({
   id: k.id<"counterparties">("id"),

@@ -12,6 +12,7 @@ import { accountingDate } from "@waltning/core/date";
 import { type Id, id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
+import { randomId } from "@waltning/core/random";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
@@ -242,6 +243,36 @@ describe("update_counterparty", () => {
 
     expect(result.row.archived).toBe(true);
   });
+
+  /**
+   * R2 H1 — `counterparties_name_uq` is partial (unarchived rows only), so a
+   * fresh "Ola" is legal while the archived one sits out of the index. Without
+   * the pre-check, un-archiving would hit the raw SQLite collision instead of
+   * a refusal naming the live row.
+   */
+  it("refuses un-archiving into a folded-name collision with a live counterparty", () => {
+    const before = counterparty(OLA);
+    write(updateCounterpartyExecutor, {
+      id: OLA,
+      version: before?.version,
+      patch: { archived: true },
+    });
+    write(createCounterpartyExecutor, {
+      id: "cdcdcdcd-1111-4cdc-8cdc-cdcdcdcdcdcd",
+      name: "Ola",
+    });
+    const archived = counterparty(OLA);
+
+    expect(() =>
+      write(updateCounterpartyExecutor, {
+        id: OLA,
+        version: archived?.version,
+        patch: { archived: false },
+      }),
+    ).toThrow(/un-archiving "Ola" collides with existing counterparty "Ola"/);
+    // Refused, not half-applied — still archived.
+    expect(counterparty(OLA)?.archived).toBe(true);
+  });
 });
 
 /* ── merge_counterparties / unmerge_counterparties ───────────────────────── */
@@ -407,6 +438,88 @@ describe("merge_counterparties", () => {
   });
 
   /**
+   * R2 L3 — a live transaction the controller never named at all (not a
+   * reassignment H5 would catch — one that simply was not on the moved
+   * list) must not be silently archived out of view; the merge refuses
+   * instead of leaving it stranded on an archived counterparty.
+   */
+  it("refuses to archive the loser when a live transaction still names it", () => {
+    debtRow({
+      id: "c1c1c1c1-1111-4c1c-8c1c-c1c1c1c1c1c1",
+      type: "income",
+      amount: "10",
+      counterpartyId: OLA,
+    });
+
+    expect(() =>
+      write(mergeCounterpartiesExecutor, {
+        mergeId: "c2c2c2c2-2222-4c2c-8c2c-c2c2c2c2c2c2",
+        winnerId: MAREK,
+        loserId: OLA,
+        // The controller never named the row above — an omission, not a
+        // reassignment.
+        movedTransactionIds: [],
+      }),
+    ).toThrow(/still has a live transaction .* after the move — refusing to archive/);
+
+    expect(counterparty(OLA)?.archived).toBe(false);
+  });
+
+  /**
+   * R2 M3 — `inArray` binds one SQLite variable per id; 1 200 crosses
+   * `SQLITE_MAX_VARIABLE_NUMBER` (999) in one statement. Chunked at 500,
+   * both the stale-id check and the move itself see every id across three
+   * batches rather than throwing "too many SQL variables".
+   */
+  it("moves 1 200 transactions — past SQLite's single-statement variable limit", () => {
+    const ids = Array.from({ length: 1200 }, () => randomId());
+    s.ledger.replica.db
+      .insert(transactions)
+      .values(
+        ids.map((txnId) => ({
+          id: id<"transactions">(txnId),
+          date: accountingDate("2026-08-01"),
+          type: "income" as const,
+          accountId: ACCOUNT,
+          amountOriginal: money.toMoney("1"),
+          currency: EUR,
+          fxRate: money.pivotPerUnit("1"),
+          counterpartyId: OLA,
+          counterpartyRole: "debt" as const,
+        })),
+      )
+      .run();
+
+    const merge = write(mergeCounterpartiesExecutor, {
+      mergeId: "c3c3c3c3-3333-4c3c-8c3c-c3c3c3c3c3c3",
+      winnerId: MAREK,
+      loserId: OLA,
+      movedTransactionIds: ids,
+    });
+
+    expect(merge.row.movedTransactions).toBe(1200);
+    expect(
+      s.ledger.replica.db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.counterpartyId, MAREK))
+        .all(),
+    ).toHaveLength(1200);
+
+    const result = write(unmergeCounterpartiesExecutor, { mergeId: merge.row.merge.id });
+
+    expect(result.row.restoredTransactions).toBe(1200);
+    expect(result.row.skipped).toBe(0);
+    expect(
+      s.ledger.replica.db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.counterpartyId, OLA))
+        .all(),
+    ).toHaveLength(1200);
+  });
+
+  /**
    * R2 M1 — distinct-pairs are transitive: whoever the loser was recorded
    * distinct from, the winner now stands in for.
    */
@@ -536,6 +649,47 @@ describe("unmerge_counterparties", () => {
       .all()[0];
     // Untouched — still NINA's, never overwritten back to OLA.
     expect(row?.counterpartyId).toBe(NINA);
+  });
+
+  /**
+   * R2 H1 — the same collision `update_counterparty` refuses, reached from
+   * unmerge instead: a new "Ola" is legal while the merged-away one sits
+   * archived, and un-archiving it here must refuse by the same rule rather
+   * than hit the raw SQLite `UNIQUE constraint failed` and abort the whole
+   * unmerge, transaction restores included.
+   */
+  it("refuses to un-archive into a folded-name collision, and restores nothing", () => {
+    debtRow({
+      id: "b1b1b1b1-1111-4b1b-8b1b-b1b1b1b1b1b1",
+      type: "income",
+      amount: "10",
+      counterpartyId: OLA,
+    });
+    const merge = write(mergeCounterpartiesExecutor, {
+      mergeId: "b2b2b2b2-2222-4b2b-8b2b-b2b2b2b2b2b2",
+      winnerId: MAREK,
+      loserId: OLA,
+      movedTransactionIds: ["b1b1b1b1-1111-4b1b-8b1b-b1b1b1b1b1b1"],
+    });
+    // Legal while OLA sits archived — the partial index does not see it.
+    write(createCounterpartyExecutor, {
+      id: "b3b3b3b3-3333-4b3b-8b3b-b3b3b3b3b3b3",
+      name: "Ola",
+    });
+
+    expect(() => write(unmergeCounterpartiesExecutor, { mergeId: merge.row.merge.id })).toThrow(
+      /un-archiving "Ola" collides with existing counterparty "Ola"/,
+    );
+
+    // Refused, not half-applied: still archived, the merge still open, and
+    // the moved transaction still on the winner.
+    expect(counterparty(OLA)?.archived).toBe(true);
+    const row = s.ledger.replica.db
+      .select({ counterpartyId: transactions.counterpartyId })
+      .from(transactions)
+      .where(eq(transactions.id, id<"transactions">("b1b1b1b1-1111-4b1b-8b1b-b1b1b1b1b1b1")))
+      .all()[0];
+    expect(row?.counterpartyId).toBe(MAREK);
   });
 });
 

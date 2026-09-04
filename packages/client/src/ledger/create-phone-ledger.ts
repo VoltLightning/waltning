@@ -2310,6 +2310,13 @@ export function createPhoneLedger(
         // see right now, and carried on the payload rather than left for the
         // executor to derive at apply time (which may run after other writes
         // have moved the balance the sheet showed).
+        //
+        // R2 L2 — compared at `balance.decimals`, the same rounding
+        // `settle-debt.executor.ts` applies before it reads the live sign.
+        // An unrounded compare here could pick a `type` a raw dust balance
+        // agrees with but the executor's own rounded read does not — the
+        // write would then meet H4's "the balance moved, reload" refusal for
+        // a balance that, in every unit either side renders, never moved.
         const balance = port
           .listCounterpartyBalances(capture.date)
           .find(
@@ -2318,7 +2325,9 @@ export function createPhoneLedger(
               row.currency === draft.dischargesCurrency,
           );
         const type: "income" | "expense" =
-          balance && money.cmp(balance.balance, money.ZERO) < 0 ? "expense" : "income";
+          balance && money.cmp(money.round(balance.balance, balance.decimals), money.ZERO) < 0
+            ? "expense"
+            : "income";
 
         // R2 H3 — the same overwrite `createTransaction` makes below: the
         // account's own currency, never the draft's, so a stale or

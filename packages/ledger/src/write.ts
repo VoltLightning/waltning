@@ -254,15 +254,45 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
     // stale `update_counterparty` version, any executor's own `apply`
     // failing) used to leave the outbox entry `pending`: real, unsent, and
     // drainable — the drain would resend the same refused write forever, and
-    // the watermark would never catch up to explain why. Marked `blocked`
-    // the same way `recover.ts`'s own replay failure is (`haltAt`), and in
-    // this same catch — the entry never gets a chance to look sendable.
+    // the watermark would never catch up to explain why. Marked `blocked`,
+    // in this same catch — the entry never gets a chance to look sendable.
+    //
+    // R2 M4 — `blockedDisposition: "refused"`, never `"replay_halted"`
+    // (`recover.ts`'s own halt): this write's own `apply` rejected it, so it
+    // will refuse identically on any retry or on a server. `outbox.ts`
+    // documents the distinction `recover.ts`'s `outstanding` query reads.
     const reason = error instanceof Error ? error.message : String(error);
-    ledger.outbox.db
-      .update(outbox)
-      .set({ state: "blocked", blockedKind: "terminal", blockedReason: reason })
-      .where(eq(outbox.id, enqueued.entryId))
-      .run();
+    try {
+      ledger.outbox.db
+        .update(outbox)
+        .set({
+          state: "blocked",
+          blockedKind: "terminal",
+          blockedDisposition: "refused",
+          blockedReason: reason,
+        })
+        .where(eq(outbox.id, enqueued.entryId))
+        .run();
+    } catch (blockError) {
+      // R2 L1 — the entry would otherwise be left `pending`, silently, if
+      // marking it `blocked` itself failed: the caller sees only this write's
+      // own error and never learns the entry it queued is still sitting there
+      // looking sendable. The original refusal travels as `cause` rather than
+      // being swallowed.
+      const blockReason = blockError instanceof Error ? blockError.message : String(blockError);
+      emitLedgerDiagnostic(diagnostics, {
+        scope: "local_write",
+        phase: "failure",
+        boundary: "replica",
+        operation: executor.operation,
+        seq: enqueued.seq,
+        error: describeLedgerError(blockError),
+      });
+      throw new Error(
+        `local_write: failed to mark ${enqueued.entryId} blocked after a refusal — ${blockReason}`,
+        { cause: error },
+      );
+    }
 
     emitLedgerDiagnostic(diagnostics, {
       scope: "local_write",

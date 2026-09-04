@@ -17,6 +17,14 @@
  * wrong owner: unmerging A→B after C exists hands A's transactions back to
  * B, which C has since absorbed. Refused whenever either id already appears,
  * as either role, on a merge that is still open (`unmerged_at is null`).
+ *
+ * **Asserts the loser is actually empty before archiving it (R2 L3).** The
+ * H5 stale check above only catches a *named* id reassigned away from the
+ * loser; it says nothing about a live row the controller never named at all
+ * — one captured after the sheet read the loser's transactions, say. Rather
+ * than archive a counterparty that still has a live transaction pointing at
+ * it (invisible from then on — S12 only lists unarchived counterparties),
+ * this refuses the whole merge instead.
  */
 
 import {
@@ -27,6 +35,7 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
+import { chunkIds } from "./chunk-ids.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
 
 const {
@@ -133,11 +142,16 @@ function mergeCounterparties(
   // silently dropping it from the moved set would move a different set than
   // the controller — and the person — saw.
   if (input.movedTransactionIds.length > 0) {
-    const named = tx
-      .select({ id: transactions.id, counterpartyId: transactions.counterpartyId })
-      .from(transactions)
-      .where(inArray(transactions.id, input.movedTransactionIds))
-      .all();
+    // R2 M3 — chunked: a single `inArray` over every moved id binds one
+    // SQLite variable per id, and a move past `SQLITE_MAX_VARIABLE_NUMBER`
+    // (999) would throw "too many SQL variables" instead of this refusal.
+    const named = chunkIds(input.movedTransactionIds).flatMap((batch) =>
+      tx
+        .select({ id: transactions.id, counterpartyId: transactions.counterpartyId })
+        .from(transactions)
+        .where(inArray(transactions.id, batch))
+        .all(),
+    );
     const counterpartyById = new Map(named.map((row) => [row.id, row.counterpartyId]));
     const stale = input.movedTransactionIds.filter(
       (id) => counterpartyById.get(id) !== input.loserId,
@@ -150,15 +164,37 @@ function mergeCounterparties(
     }
   }
 
+  // R2 M3 — chunked for the same reason as the stale check above.
   const movedRows =
     input.movedTransactionIds.length === 0
       ? []
-      : tx
-          .update(transactions)
-          .set({ counterpartyId: input.winnerId })
-          .where(inArray(transactions.id, input.movedTransactionIds))
-          .returning({ id: transactions.id })
-          .all();
+      : chunkIds(input.movedTransactionIds).flatMap((batch) =>
+          tx
+            .update(transactions)
+            .set({ counterpartyId: input.winnerId })
+            .where(inArray(transactions.id, batch))
+            .returning({ id: transactions.id })
+            .all(),
+        );
+
+  // R2 L3 — the H5 stale check above only catches a *named* id reassigned
+  // away from the loser; it says nothing about a live transaction the
+  // controller never named at all. Asserted straight after the move rather
+  // than trusted: archiving a counterparty that still holds a live
+  // transaction would make that row's counterparty vanish from S12, which
+  // only lists unarchived rows. Refused, not archived, if one turns up.
+  const [stillLive] = tx
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.counterpartyId, input.loserId), isNull(transactions.deletedAt)))
+    .limit(1)
+    .all();
+  if (stillLive) {
+    throw new Error(
+      `merge_counterparties: ${input.loserId} still has a live transaction ` +
+        `(${stillLive.id}) after the move — refusing to archive it`,
+    );
+  }
 
   // R2 M1 — a recurring rule has no per-write "which ones moved" list the
   // way a transaction does (there is no `unmerge` half for these — S15 §9.2

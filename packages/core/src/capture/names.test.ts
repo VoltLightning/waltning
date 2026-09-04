@@ -12,6 +12,27 @@ describe("fold", () => {
     expect(fold("gotówka")).toBe("gotowka");
     expect(fold("Łódź")).toBe("lodz");
   });
+
+  /**
+   * R2 M1 — `ó` decomposed (`o` plus a combining acute, U+006F U+0301) never
+   * matched `DIACRITICS`' precomposed key (U+00F3), so a name typed on an IME
+   * that produces decomposed input missed the fold entirely. `normalize("NFC")`
+   * closes it: both spellings of "Józef" fold identically.
+   *
+   * Built from explicit code points rather than typed literals — a source
+   * file can silently normalise a pasted decomposed character on save, which
+   * would make this test pass for the wrong reason.
+   */
+  it("folds NFD input the same as its NFC spelling", () => {
+    const precomposed = "Józef"; // "ó" as one code point
+    const decomposed = "Józef"; // "o" plus a combining acute
+    expect(precomposed).not.toBe(decomposed);
+    expect(precomposed.length).toBe(5);
+    expect(decomposed.length).toBe(6);
+
+    expect(fold(decomposed)).toBe("jozef");
+    expect(fold(precomposed)).toBe(fold(decomposed));
+  });
 });
 
 describe("longest match wins", () => {

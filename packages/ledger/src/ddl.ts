@@ -291,4 +291,5 @@ export const OUTBOX_DDL: readonly string[] = [
 	\`id\` integer PRIMARY KEY NOT NULL,
 	\`issued\` integer NOT NULL
 )`,
+  `ALTER TABLE \`outbox\` ADD \`blocked_disposition\` text`,
 ];

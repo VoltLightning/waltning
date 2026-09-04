@@ -53,6 +53,35 @@ export const BLOCKED_KIND = ["terminal", "repairable"] as const;
 export type BlockedKind = (typeof BLOCKED_KIND)[number];
 
 /**
+ * Why an entry became `blocked`, as it matters to the drain (R2 M4).
+ *
+ * **A second axis, not a second name for `blockedKind`.** `blockedKind` asks
+ * whether this clears itself; this asks whether it may ever leave the phone.
+ * Both `write.ts`'s refusal and `recover.ts`'s replay halt used to write the
+ * identical `blocked(terminal)`, and that conflated two different situations
+ * a caller cannot tell apart from the row alone:
+ *
+ * - **`refused`** — the local `apply` itself threw (a folded-name collision,
+ *   a stale version, any executor's own check). The write never took effect
+ *   here, and it would refuse identically on a retry or on a server for the
+ *   same reason — sending it is not "not yet", it is never. `write.ts` sets
+ *   this in the same catch that marks the entry `blocked`.
+ * - **`replay_halted`** — this device's own local replay could not apply an
+ *   entry that *did* land in the outbox (`recover.ts`'s `haltAt`: no local
+ *   executor for the operation, most often an older build against a payload
+ *   a newer one wrote). The write itself is not invalid — the phone just
+ *   cannot re-derive its local effect right now — so a server may still
+ *   accept it; only *local* replay stops here, never the drain.
+ *
+ * `recover.ts`'s `outstanding` query reads this to skip a `refused` entry on
+ * every later launch (R2 M4) — replaying it would only repeat the identical
+ * refusal — while a `replay_halted` entry keeps halting replay behind it,
+ * exactly as before, since an app update may yet supply the missing executor.
+ */
+export const BLOCKED_DISPOSITION = ["refused", "replay_halted"] as const;
+export type BlockedDisposition = (typeof BLOCKED_DISPOSITION)[number];
+
+/**
  * A queued payload: the operation's validated input, as JSON and nothing more.
  *
  * Named rather than written twice, because the column below and the dependency
@@ -141,6 +170,14 @@ export const outbox = sqliteTable(
      * type is what refuses a third kind, and the test pins that.
      */
     blockedKind: text("blocked_kind", { enum: BLOCKED_KIND }),
+
+    /**
+     * Whether this may ever be sent — see `BLOCKED_DISPOSITION` above.
+     * Null except while `state` is `blocked`, the same lifetime as
+     * `blockedKind`, and the same compile-time-only guarantee: nothing in
+     * this table's DDL stops a raw insert from writing a third string.
+     */
+    blockedDisposition: text("blocked_disposition", { enum: BLOCKED_DISPOSITION }),
 
     /**
      * What to tell the person, latched at the moment it blocked.

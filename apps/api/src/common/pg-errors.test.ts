@@ -240,11 +240,18 @@ describe("every other guard is identifiable", () => {
 });
 
 describe("Postgres's own refusals", () => {
+  /**
+   * R2 H2 — `name_folded` is `GENERATED ALWAYS AS (…) STORED` now, never
+   * supplied by an insert (Postgres refuses a value for a generated column
+   * outright). Naming only `name` here is the point: the raw, un-normalised
+   * spelling is what a caller actually has, and the index must still catch
+   * it without anything computing the fold on this test's behalf.
+   */
   it("maps a unique violation and names the index", async () => {
-    await s.sql`INSERT INTO counterparties (name, name_folded, kind) VALUES ('Placeholder One', 'placeholder one', 'person')`;
+    await s.sql`INSERT INTO counterparties (name, kind) VALUES ('Placeholder One', 'person')`;
 
     const error = await refusal(
-      `INSERT INTO counterparties (name, name_folded, kind) VALUES ('  placeholder one  ', 'placeholder one', 'person')`,
+      `INSERT INTO counterparties (name, kind) VALUES ('  placeholder one  ', 'person')`,
     );
     expect(error.code).toBe("validation");
     // The normalized-name index, which is the one that actually holds.
