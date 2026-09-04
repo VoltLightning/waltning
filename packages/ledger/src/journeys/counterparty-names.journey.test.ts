@@ -11,7 +11,8 @@
  * `packages/schema/src/counterparties.sqlite.ts` and the executor it backs
  * (`create-counterparty.executor.ts`), not in a numbered spec heading.
  * Findings: R2 C1, R2 H1-r3 (NFD), R2 M3 (archived name is free), R2 M1-r4
- * (trim set).
+ * (trim set), R2 H6 (a refused entry is a visible blocked state, never a
+ * silent pending row).
  */
 import type { Id } from "@waltning/core/id";
 import { describe, expect, it } from "vitest";
@@ -29,28 +30,13 @@ function counterpartyRows(j: ReturnType<typeof openJourney>) {
 }
 
 /**
- * A refused create still commits its outbox entry — §14.1's "intent commits
- * first" runs before `apply` ever sees the collision. `write.ts` never marks
- * that entry `blocked`: only `recover.ts`'s replay does that, on a later
- * launch this journey never triggers (`openJourney` never relaunches here).
- * So the entry a refusal leaves behind reads `pending` with `blockedKind`
- * still `null` — the insert's own default, never overridden — not the
- * `blocked` a reader might guess from `capture-deferred.journey.test.ts`'s
- * unrelated (genuinely deferred) case.
+ * What the spec actually guarantees on a refusal — `architecture/08` H15:
+ * a blocked outbox entry is a visible state, never a silent drop (R2 H6
+ * covers what main does instead).
  */
-function assertRefused(
-  j: ReturnType<typeof openJourney>,
-  before: number,
-  cpBId: Id<"counterparties">,
-) {
+function assertRefused(j: ReturnType<typeof openJourney>, cpBId: Id<"counterparties">) {
   const rows = counterpartyRows(j);
   expect(rows.some((r) => r.id === cpBId)).toBe(false);
-
-  const entries = outboxEntries(j);
-  expect(entries).toHaveLength(before + 1);
-  const last = entries.at(-1);
-  expect(last?.state).toBe("pending");
-  expect(last?.blockedKind).toBeNull();
 }
 
 describe("create_counterparty — S15 §6's folded-name guard", () => {
@@ -81,7 +67,7 @@ describe("create_counterparty — S15 §6's folded-name guard", () => {
           j.capture,
         ),
       ).toThrow();
-      assertRefused(j, 1, ID.cpB);
+      assertRefused(j, ID.cpB);
     } finally {
       j.close();
     }
@@ -118,7 +104,7 @@ describe("create_counterparty — S15 §6's folded-name guard", () => {
           j.capture,
         ),
       ).toThrow();
-      assertRefused(j, 1, ID.cpB);
+      assertRefused(j, ID.cpB);
     } finally {
       j.close();
     }
@@ -151,7 +137,7 @@ describe("create_counterparty — S15 §6's folded-name guard", () => {
           j.capture,
         ),
       ).toThrow();
-      assertRefused(j, 1, ID.cpB);
+      assertRefused(j, ID.cpB);
     } finally {
       j.close();
     }
@@ -261,7 +247,45 @@ describe("create_counterparty — S15 §6's folded-name guard", () => {
           j.capture,
         ),
       ).toThrow();
-      assertRefused(j, 1, ID.cpB);
+      assertRefused(j, ID.cpB);
+    } finally {
+      j.close();
+    }
+  });
+
+  it.fails("R2 H6 — a refused counterparty is a visible blocked entry, never a pending row", () => {
+    const j = setup();
+    try {
+      j.session.createCounterparty(
+        {
+          id: ID.cpA,
+          name: "Anna Placeholder",
+          kind: "person",
+          settlementCurrency: null,
+          contact: null,
+          note: "",
+        },
+        j.capture,
+      );
+      expect(() =>
+        j.session.createCounterparty(
+          {
+            id: ID.cpB,
+            name: "anna placeholder",
+            kind: "person",
+            settlementCurrency: null,
+            contact: null,
+            note: "",
+          },
+          j.capture,
+        ),
+      ).toThrow();
+
+      const entries = outboxEntries(j);
+      expect(entries).toHaveLength(2);
+      const refusedEntry = entries[1];
+      expect(refusedEntry?.state).toBe("blocked");
+      expect(refusedEntry?.blockedKind).not.toBeNull();
     } finally {
       j.close();
     }
