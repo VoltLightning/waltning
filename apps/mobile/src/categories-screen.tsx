@@ -19,6 +19,7 @@ import type {
   MoveCategoryDraft,
   RenameCategoryDraft,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { useCategoryReferenceCounts } from "@waltning/client/ledger/use-category-reference-counts";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { id as brandId } from "@waltning/core/id";
@@ -37,7 +38,7 @@ import { Toast, UndoToast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 type ActionsState = {
@@ -59,11 +60,31 @@ type MergeState = {
 };
 type SheetState = ActionsState | RenameState | MoveState | MergeState | null;
 
-type ToastState = { message: string; undo?: () => void } | null;
+type ToastState = { message: string; undo?: () => void; token: number } | null;
 
-/** Uncategorized is found by name at the root — the seed names it, nothing brands it. */
+/**
+ * Uncategorized, matched by the seed's own tag first — once sync lands and
+ * carries `externalId` down to the phone's replica, `externalId ===
+ * "seed:uncategorized"` (`packages/db/src/seed/run.ts` writes `seed:<key>`)
+ * will name this exact row, and no shape assumption will be needed at all.
+ *
+ * The shape match below is what actually matches today: arc-phone has no
+ * sync, so nothing sets `externalId` on the phone's own categories yet, and
+ * this fallback runs for every node. It has to be the *whole* seeded shape,
+ * not name alone (M1) or name-plus-`isLeaf` (M2): sibling uniqueness is
+ * `(parent, kind, name)`, so the one legal duplicate — same `parent`, same
+ * `name`, different `kind` — is a perfectly reachable "Uncategorized" leaf
+ * that isn't this row, and dropping `kind` from the match swept it into
+ * this one and hid it from the tree entirely.
+ */
 function isUncategorized(node: CategoryTreeNode): boolean {
-  return node.parentId === null && node.name.trim().toLowerCase() === "uncategorized";
+  if (node.externalId === "seed:uncategorized") return true;
+  return (
+    node.parentId === null &&
+    node.kind === "expense" &&
+    node.isLeaf &&
+    node.name.trim().toLowerCase() === "uncategorized"
+  );
 }
 
 /**
@@ -106,6 +127,13 @@ export default function CategoriesScreen() {
   const [showArchived, setShowArchived] = useState(false);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toast, setToast] = useState<ToastState>(null);
+  // The `UndoToast` window's own `resetKey` (H1) — incremented on every show
+  // so two toasts sharing a message still each get a fresh 8 s.
+  const toastTokenRef = useRef(0);
+  const showToast = useCallback((state: Omit<NonNullable<ToastState>, "token">) => {
+    toastTokenRef.current += 1;
+    setToast({ ...state, token: toastTokenRef.current });
+  }, []);
 
   // A refusal always names itself (every controller refusal returns exactly
   // one `fieldErrors` entry) — `couldNotSave` only guards the shape, never
@@ -127,6 +155,7 @@ export default function CategoriesScreen() {
         archived: node.archived,
         depth: node.depth,
         usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
+        externalId: node.externalId,
       })),
     [snapshot.fullCategoryTree, snapshot.categoryUsage],
   );
@@ -191,10 +220,10 @@ export default function CategoriesScreen() {
       return;
     }
     setSheet(null);
-    setToast({
+    showToast({
       message: t(to === "group" ? "categories.convertToGroup" : "categories.convertToLeaf"),
     });
-  }, [sheet, ledger, t, messageOf]);
+  }, [sheet, ledger, t, messageOf, showToast]);
 
   const handleArchive = useCallback(() => {
     if (sheet?.type !== "actions") return;
@@ -208,8 +237,8 @@ export default function CategoriesScreen() {
     // No `restore_category` operation exists (`operations.md`) — a plain
     // `Toast`, per wave-3-shared.md's named gap, not an `UndoToast` this
     // screen cannot honour.
-    setToast({ message: t("categories.archive") });
-  }, [sheet, ledger, t, messageOf]);
+    showToast({ message: t("categories.archive") });
+  }, [sheet, ledger, t, messageOf, showToast]);
 
   const handleSaveRename = useCallback(
     (name: string) => {
@@ -222,14 +251,14 @@ export default function CategoriesScreen() {
         return;
       }
       setSheet(null);
-      setToast({
+      showToast({
         message: t("categories.rename"),
         undo: () => {
           ledger.renameCategory({ id: sheet.category.id, name: oldName });
         },
       });
     },
-    [sheet, ledger, t, messageOf],
+    [sheet, ledger, t, messageOf, showToast],
   );
 
   const handleSaveMove = useCallback(
@@ -243,7 +272,7 @@ export default function CategoriesScreen() {
         return;
       }
       setSheet(null);
-      setToast({
+      showToast({
         message: t("categories.move"),
         ...(before
           ? {
@@ -254,7 +283,7 @@ export default function CategoriesScreen() {
           : {}),
       });
     },
-    [sheet, ledger, nodes, t, messageOf],
+    [sheet, ledger, nodes, t, messageOf, showToast],
   );
 
   const handleConfirmMerge = useCallback(
@@ -268,9 +297,9 @@ export default function CategoriesScreen() {
       }
       setSheet(null);
       // Not reversible in one step (J12 §5) — a plain `Toast`, never `UndoToast`.
-      setToast({ message: t("categories.merge") });
+      showToast({ message: t("categories.merge") });
     },
-    [sheet, ledger, t, messageOf],
+    [sheet, ledger, t, messageOf, showToast],
   );
 
   const handleReviewCollision = useCallback(
@@ -318,10 +347,15 @@ export default function CategoriesScreen() {
       .map((node) => ({ id: node.id, name: node.name }));
   }, [sheet, nodes]);
 
-  const mergeCounts =
-    sheet?.type === "merge"
-      ? ledger.readCategoryReferenceCounts(sheet.loser.id)
-      : { transactions: 0, lines: 0, rules: 0 };
+  // M2 — was a direct `ledger.readCategoryReferenceCounts` call in the
+  // render body: three unindexed scans on every re-render the sheet was
+  // open for, a search keystroke included. `useCategoryReferenceCounts`
+  // memoises on `[ledger, categoryId, revision]`.
+  const mergeCounts = useCategoryReferenceCounts(
+    ledger,
+    sheet?.type === "merge" ? sheet.loser.id : undefined,
+    snapshot.revision,
+  );
 
   return (
     <GroundPanel>
@@ -393,9 +427,14 @@ export default function CategoriesScreen() {
       />
 
       {toast === null ? null : toast.undo ? (
-        <UndoToast message={toast.message} onUndo={handleUndo} onDismiss={handleDismissToast} />
+        <UndoToast
+          message={toast.message}
+          onUndo={handleUndo}
+          onDismiss={handleDismissToast}
+          token={toast.token}
+        />
       ) : (
-        <Toast message={toast.message} onDismiss={handleDismissToast} />
+        <Toast message={toast.message} onDismiss={handleDismissToast} token={toast.token} />
       )}
     </GroundPanel>
   );

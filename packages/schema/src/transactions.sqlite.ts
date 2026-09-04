@@ -1,3 +1,4 @@
+import { index } from "drizzle-orm/sqlite-core";
 import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
@@ -27,8 +28,11 @@ import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
  * person. A field the phone cannot hold is a field the phone cannot conflict
  * on, and it would be shown a row missing figures it is expected to check.
  *
- * The nine indexes, eight foreign-key behaviours and every check stay in
- * `packages/db`.
+ * Most indexes, all eight foreign-key behaviours and every check stay in
+ * `packages/db`. **`category_id` is the one exception (M2)** — S19's merge
+ * preview reads it straight off the replica, on every render the merge
+ * sheet is open for, and an unindexed scan there is a phone-side cost this
+ * file can remove even while the rest of the index set stays server-only.
  */
 export const transactionsColumns = () => ({
   id: k.id<"transactions">("id"),
@@ -83,4 +87,6 @@ export const transactionsColumns = () => ({
   deletedAt: k.timestamp("deleted_at"),
 });
 
-export const transactions = k.table("transactions", transactionsColumns());
+export const transactions = k.table("transactions", transactionsColumns(), (t) => [
+  index("transactions_category_idx").on(t.categoryId),
+]);

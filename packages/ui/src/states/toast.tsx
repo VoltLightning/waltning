@@ -4,10 +4,15 @@
  * `Toast`: a message, 4 s, dismiss. `UndoToast`: a message, an `Undo`, 8 s.
  * **Rapid repeats collapse into one toast with a count** rather than stacking
  * — the caller re-renders the same `UndoToast` with a new `message`/`count`
- * pair, and `count` both restarts the 8 s window (via `useTimer`'s
- * `resetKey`) and renders as `×3` beside it, so *"3 rows accepted · Undo"*
+ * pair, and `count` renders as `×3` beside it, so *"3 rows accepted · Undo"*
  * reads as one growing action rather than three toasts fighting for the same
- * corner of the screen.
+ * corner of the screen. **`token`, not `message`/`count`, is each window's
+ * `resetKey` (H1)** — two shows can share a message and a count (or
+ * neither), so only a value the caller is required to change on every show
+ * re-arms `useTimer` reliably. `Toast` takes the same required `token` for
+ * the same reason: a plain toast re-shown with an identical `message` (the
+ * same validation error twice, say) is otherwise indistinguishable from a
+ * re-render of the one already on screen.
  *
  * **It floats — the owner's own words: *"not pronounced, should be easier to
  * distinguish from the main UI"*.** It used to be a flush, full-width bar on
@@ -36,7 +41,7 @@
  * primitive built for a different surface.
  */
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   runOnJS,
@@ -71,12 +76,29 @@ const ENTER_OFFSET = 8;
  * reverse of the entrance before calling it — so the toast is still on
  * screen, animating out, for the moment between the tap and the unmount,
  * rather than vanishing the instant the caller flips its `visible` state.
+ *
+ * **`exiting` gates `exit()` to its first call (C1).** A manual dismiss/undo
+ * and the auto-expiry timer can both reach `exit()` for the same toast — the
+ * timer's own cancellation (`use-timer.ts`) closes that race for the normal
+ * case, but reduced motion's `onComplete()` runs synchronously with nothing
+ * async to interrupt, so a double-tap on the action reaches `exit()` twice
+ * before either caller can know the first already fired. Once `exiting` is
+ * set, every later call — timer or a second tap — is a no-op: it can neither
+ * re-fire the caller's callback nor restart/overwrite the one animation
+ * already in flight.
  */
-function useToastMotion(reduced: boolean) {
+function useToastMotion<TResetKey>(reduced: boolean, resetKey?: TResetKey) {
   const ty = useSharedValue(reduced ? 0 : ENTER_OFFSET);
   const opacity = useSharedValue(reduced ? 1 : 0);
+  const exiting = useRef(false);
 
+  // Re-arms when `reduced` changes or the caller's `resetKey` changes (a
+  // fresh `token` on a repeat, H1) — a re-render with neither is the same
+  // toast instance and must not replay the slide. `resetKey` is not read in
+  // the body, same as `useTimer`'s own — it is the re-arm signal itself.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey re-arms the entrance by identity, not by being read.
   useEffect(() => {
+    exiting.current = false;
     if (reduced) {
       ty.value = 0;
       opacity.value = 1;
@@ -86,9 +108,7 @@ function useToastMotion(reduced: boolean) {
     opacity.value = 0;
     ty.value = withTiming(0, { duration: motion.move.duration, easing: easing.move });
     opacity.value = withTiming(1, { duration: motion.move.duration, easing: easing.move });
-    // Re-arms only when `reduced` changes — a re-render of the same toast
-    // instance (a repeat collapsing into it) does not replay the slide.
-  }, [reduced, ty, opacity]);
+  }, [reduced, resetKey, ty, opacity]);
 
   const style = useAnimatedStyle(
     () => (reduced ? {} : { transform: [{ translateY: ty.value }], opacity: opacity.value }),
@@ -97,6 +117,8 @@ function useToastMotion(reduced: boolean) {
 
   const exit = useCallback(
     (onComplete: () => void) => {
+      if (exiting.current) return;
+      exiting.current = true;
       if (reduced) {
         onComplete();
         return;
@@ -159,17 +181,29 @@ function StatusMark() {
 export type ToastProps = {
   message: string;
   onDismiss: () => void;
+  /**
+   * Incremented by the caller on every show (H1) — the same re-arm signal
+   * `UndoToast.token` is. `message` alone under-counts: two shows can carry
+   * the same text (a repeated validation error, the same archive message
+   * twice), and `useTimer`/`useToastMotion` keyed on it would then treat the
+   * second show as a no-op re-render instead of a fresh 4 s window.
+   */
+  token: number;
 };
 
-export function Toast({ message, onDismiss }: ToastProps) {
+export function Toast({ message, onDismiss, token }: ToastProps) {
   const t = useT();
   const styles = useStyles();
   const reduced = useReducedMotion();
   const insets = useSafeArea();
-  const toastMotion = useToastMotion(reduced);
+  const toastMotion = useToastMotion(reduced, token);
+  const cancelRef = useRef<() => void>(() => {});
 
-  const handleDismiss = useCallback(() => toastMotion.exit(onDismiss), [toastMotion, onDismiss]);
-  useTimer(TOAST_MS, handleDismiss, message);
+  const handleDismiss = useCallback(() => {
+    cancelRef.current();
+    toastMotion.exit(onDismiss);
+  }, [toastMotion, onDismiss]);
+  cancelRef.current = useTimer(TOAST_MS, handleDismiss, token);
 
   // Computed rather than cached in `useStyles`: the inset is per-device, and
   // a theme-keyed cache would hand the second device the first one's home
@@ -196,18 +230,34 @@ export type UndoToastProps = {
   onDismiss: () => void;
   /** Rapid repeats collapse into one toast; the count they collapsed to. */
   count?: number;
+  /**
+   * Incremented by the caller on every show (H1) — the 8 s window's own
+   * `resetKey`. Two toasts sharing a `message` (and no `count` change) were
+   * indistinguishable to `useTimer`, so the second show did not re-arm the
+   * window and could dismiss almost immediately. `token` is required rather
+   * than derived from `message`/`count` because those two are allowed to
+   * repeat identically between shows; `token` never does.
+   */
+  token: number;
 };
 
-export function UndoToast({ message, onUndo, onDismiss, count }: UndoToastProps) {
+export function UndoToast({ message, onUndo, onDismiss, count, token }: UndoToastProps) {
   const t = useT();
   const styles = useStyles();
   const reduced = useReducedMotion();
   const insets = useSafeArea();
-  const toastMotion = useToastMotion(reduced);
+  const toastMotion = useToastMotion(reduced, token);
+  const cancelRef = useRef<() => void>(() => {});
 
-  const handleDismiss = useCallback(() => toastMotion.exit(onDismiss), [toastMotion, onDismiss]);
-  const handleUndo = useCallback(() => toastMotion.exit(onUndo), [toastMotion, onUndo]);
-  useTimer(UNDO_MS, handleDismiss, count ?? message);
+  const handleDismiss = useCallback(() => {
+    cancelRef.current();
+    toastMotion.exit(onDismiss);
+  }, [toastMotion, onDismiss]);
+  const handleUndo = useCallback(() => {
+    cancelRef.current();
+    toastMotion.exit(onUndo);
+  }, [toastMotion, onUndo]);
+  cancelRef.current = useTimer(UNDO_MS, handleDismiss, token);
 
   const floatPosition = { left: space.x3, right: space.x3, bottom: insets.bottom + space.x3 };
 

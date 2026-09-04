@@ -290,7 +290,7 @@ describe("TransactionDetail", () => {
 
     expect(router.dismissTo).toHaveBeenCalledWith({
       pathname: "/",
-      params: { message: "Transaction deleted." },
+      params: { message: "Transaction deleted.", nonce: expect.any(String) },
     });
   });
 

@@ -14,7 +14,7 @@ function noop() {}
 const meta = {
   title: "States/Toast",
   component: Toast,
-  args: { message: "Saved", onDismiss: noop },
+  args: { message: "Saved", onDismiss: noop, token: 1 },
   decorators: [withFrame],
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof Toast>;

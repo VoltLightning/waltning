@@ -44,8 +44,23 @@ export default function Accounts() {
   const snapshot = usePhoneLedger(ledger);
   // `archive_account` has no undo (the shared wave-3 plan says why — no
   // `restore_*` operation exists), so this is a plain `Toast`, not `UndoToast`.
-  const { message } = useLocalSearchParams<{ message?: string }>();
+  // The screen can stay mounted across two archives in a row
+  // (`account-editor-screen.tsx`'s `dismissTo`), so `message` has to be read
+  // on every arrival, not once at mount — and `nonce` (that same push's own
+  // `Date.now()`) is what tells a genuinely new arrival apart from a
+  // re-render, even when the message text repeats. Both updates happen
+  // during render — the endorsed pattern for adjusting state from a changed
+  // prop — so the new toast is already showing by the time this render
+  // commits.
+  const { message, nonce } = useLocalSearchParams<{ message?: string; nonce?: string }>();
+  const [lastNonce, setLastNonce] = useState(nonce);
   const [toast, setToast] = useState<string | null>(message ?? null);
+  const [toastToken, setToastToken] = useState(1);
+  if (nonce !== lastNonce) {
+    setLastNonce(nonce);
+    setToast(message ?? null);
+    setToastToken((token) => token + 1);
+  }
 
   const handleSelectAccount = useCallback((id: string) => {
     router.push(`/accounts/${id}`);
@@ -63,7 +78,9 @@ export default function Accounts() {
         onCreateAccount={handleCreateAccount}
         onTransferFrom={handleTransferFrom}
       />
-      {toast === null ? null : <Toast message={toast} onDismiss={handleDismissToast} />}
+      {toast === null ? null : (
+        <Toast message={toast} onDismiss={handleDismissToast} token={toastToken} />
+      )}
     </GroundPanel>
   );
 }

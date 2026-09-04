@@ -105,12 +105,26 @@ export default function Today() {
     appearance,
     systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
   );
-  const { message } = useLocalSearchParams<{ message?: string }>();
-  // A route param, not local state: the message arrives once, on the push
-  // that carried it (`account-creation-screen.tsx`'s own convention, and
-  // C5's own `deleteTransaction` toast) — dismissing it is the *only* time
-  // this needs state, and `undefined` there just means "still showing".
+  const { message, nonce } = useLocalSearchParams<{ message?: string; nonce?: string }>();
+  // A route param, not local state — but the screen can stay mounted across
+  // two pushes that both carry the same `message` (delete two transactions
+  // in a row from S09), and the router hands back a *new* params object
+  // each time without `nonce` changing identity by itself. `nonce` is the
+  // pushing screen's own `Date.now()` (`transaction-detail-screen.tsx`), so
+  // comparing it to the last-seen value — during render, the endorsed
+  // pattern for adjusting state from a changed prop — tells an arrival from
+  // a re-render apart from a genuinely new push, even when the message text
+  // repeats. `toastToken` re-arms `Toast`'s window (H1); `toastDismissed`
+  // resets so the new arrival actually shows instead of staying dismissed
+  // from the last one.
+  const [lastNonce, setLastNonce] = useState(nonce);
+  const [toastToken, setToastToken] = useState(1);
   const [toastDismissed, setToastDismissed] = useState(false);
+  if (nonce !== lastNonce) {
+    setLastNonce(nonce);
+    setToastToken((token) => token + 1);
+    setToastDismissed(false);
+  }
   const handleDismissToast = useCallback(() => setToastDismissed(true), []);
   const hasAccounts = snapshot.accounts.length > 0;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
@@ -289,7 +303,7 @@ export default function Today() {
   const body = (
     <>
       {typeof message === "string" && !toastDismissed ? (
-        <Toast message={message} onDismiss={handleDismissToast} />
+        <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
       ) : null}
       {ledgerBody}
     </>

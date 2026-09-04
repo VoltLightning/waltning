@@ -49,7 +49,7 @@ import { Toast } from "@waltning/ui/states/toast";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 
 /**
@@ -100,6 +100,12 @@ export default function CounterpartyEditor() {
   const [blurredName, setBlurredName] = useState("");
   const [dismissedIds, setDismissedIds] = useState<ReadonlySet<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+  // The toast's own re-arm token (`useTimer`/`useToastMotion`'s `resetKey`,
+  // H1) — two shows can repeat an identical message (the same validation
+  // error twice), and the ref is bumped synchronously before the state
+  // setter that triggers the re-render, so the new value is already
+  // current by the time it's read.
+  const toastTokenRef = useRef(0);
 
   const currencies = useMemo(
     () => snapshot.currencies.map((currency) => ({ code: currency.code, name: currency.name })),
@@ -248,6 +254,7 @@ export default function CounterpartyEditor() {
           loserId: counterparty.id,
         });
         if (!("id" in result)) {
+          toastTokenRef.current += 1;
           setToast(result.fieldErrors[0]?.message ?? t("common.couldNotSave"));
           return;
         }
@@ -267,6 +274,7 @@ export default function CounterpartyEditor() {
           bId: candidateId,
         });
         if (!("aId" in result)) {
+          toastTokenRef.current += 1;
           setToast(result.fieldErrors[0]?.message ?? t("common.couldNotSave"));
         }
       }
@@ -291,6 +299,7 @@ export default function CounterpartyEditor() {
           (error) => error.messageKey === "counterparties.openBalance",
         );
         if (openBalance) {
+          toastTokenRef.current += 1;
           setToast(resolveFieldErrorMessage(t, openBalance));
           return;
         }
@@ -366,7 +375,9 @@ export default function CounterpartyEditor() {
           onSave={handleSave}
         />
       </Card>
-      {toast === null ? null : <Toast message={toast} onDismiss={handleDismissToast} />}
+      {toast === null ? null : (
+        <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
+      )}
     </GroundPanel>
   );
 }

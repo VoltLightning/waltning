@@ -16,7 +16,7 @@ function noop() {}
 const meta = {
   title: "States/UndoToast",
   component: UndoToast,
-  args: { message: "Row deleted", onUndo: noop, onDismiss: noop },
+  args: { message: "Row deleted", onUndo: noop, onDismiss: noop, token: 1 },
   decorators: [withFrame],
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof UndoToast>;

@@ -53,6 +53,15 @@ export function readCategoryUsage<TRun, TSchema extends typeof ledgerSchema>(
     .where(isNull(transactions.deletedAt))
     .all();
 
+  // Every transaction that has *any* line at all — independent of whether
+  // that line carries a category. §6's own fork is "does a breakdown exist"
+  // (`WHERE NOT EXISTS (SELECT 1 FROM transaction_lines …)`), not "does a
+  // breakdown exist with a category" — a transaction split into lines that
+  // are all still uncategorized has a breakdown, and must not fall back to
+  // its own (possibly stale) header category just because none of its lines
+  // happen to carry one yet.
+  const hasLines = new Set(lineRows.map((row) => row.transactionId));
+
   const categoriesByTransaction = new Map<string, Set<Id<"categories">>>();
   for (const row of lineRows) {
     if (row.categoryId === null) continue;
@@ -64,9 +73,8 @@ export function readCategoryUsage<TRun, TSchema extends typeof ledgerSchema>(
     for (const categoryId of categories) touch(categoryId);
   }
 
-  // Lines win where they exist (§6) — a transaction already counted through
-  // its lines does not also count through its own (possibly stale) category.
-  const hasLines = categoriesByTransaction;
+  // Lines win where they exist (§6) — a transaction with lines never falls
+  // back to its own category, whether or not those lines tallied anything.
   const txnRows = db
     .select({ id: transactions.id, categoryId: transactions.categoryId })
     .from(transactions)

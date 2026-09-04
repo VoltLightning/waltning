@@ -203,7 +203,7 @@ describe("AccountEditorScreen", () => {
     expect(archiveAccount.mock.calls[0]?.[0]).toMatchObject({ id: ACCOUNT.id, version: 3 });
     expect(router.dismissTo).toHaveBeenCalledWith({
       pathname: "/accounts",
-      params: { message: "Account archived." },
+      params: { message: "Account archived.", nonce: expect.any(String) },
     });
   });
 

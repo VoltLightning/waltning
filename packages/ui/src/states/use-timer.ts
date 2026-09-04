@@ -12,20 +12,29 @@
  * caller's callback closes over fresh props on every render, and re-arming the
  * timer whenever *that* identity changes — rather than only when `resetKey`
  * does — would restart the countdown on every unrelated re-render.
+ *
+ * **Returns a `cancel`.** A manual dismiss/undo races the scheduled
+ * `setTimeout` — the caller's effect cleanup only runs on the *next* render,
+ * which is too late to stop an already-queued expiry from also firing. The
+ * caller cancels explicitly, before it starts its own exit, so a stray
+ * expiry can never land after a manual one already has (C1).
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
-export function useTimer(durationMs: number, onExpire: () => void, resetKey: unknown): void {
+export function useTimer(durationMs: number, onExpire: () => void, resetKey: unknown): () => void {
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
+  const idRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // `resetKey` is not read in the body — it is the re-arm signal itself, the
   // one dependency this hook exists to add. Removing it (the lint's own
   // suggested fix) would delete the rapid-repeat behaviour it implements.
   // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey re-arms the timer by identity, not by being read.
   useEffect(() => {
-    const id = setTimeout(() => onExpireRef.current(), durationMs);
-    return () => clearTimeout(id);
+    idRef.current = setTimeout(() => onExpireRef.current(), durationMs);
+    return () => clearTimeout(idRef.current);
   }, [durationMs, resetKey]);
+
+  return useCallback(() => clearTimeout(idRef.current), []);
 }

@@ -129,6 +129,7 @@ type FakeCategory = {
   sort: number;
   depth: number;
   version: number;
+  externalId: string | null;
 };
 
 /** A category fixture, `version: 1` unless a test bumps it — plain string ids, branded here. */
@@ -146,6 +147,7 @@ function fakeCategory(
     sort: 0,
     depth: 0,
     version: 1,
+    externalId: null,
     ...overrides,
     id: id<"categories">(overrides.id),
     parentId: overrides.parentId ? id<"categories">(overrides.parentId) : null,
@@ -685,6 +687,48 @@ describe("Today", () => {
     expect(screen.getByText("Couldn't refresh")).toBeDefined();
     expect(screen.getByText("mine")).toBeDefined();
   });
+
+  /**
+   * Two deletes from S09, 3 s apart, both landing on the mounted Today —
+   * `transaction-detail-screen.tsx`'s `dismissTo` carries the same message
+   * text each time, distinguished only by `nonce`. Before the fix, a
+   * constant `token` left the first toast's 4 s window running underneath —
+   * the second confirmation would vanish 1 s later instead of living its
+   * own full window.
+   */
+  it("re-arms the toast's window when a second delete arrives with the same message", () => {
+    vi.useFakeTimers();
+    try {
+      useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "1" });
+      const { rerender } = withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+      expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
+
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "2" });
+      rerender(
+        <LedgerProvider controller={fakeController([PLN_ACCOUNT])}>
+          <Today />
+        </LedgerProvider>,
+      );
+      expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
+
+      // The un-rearmed bug: the first window would expire 1 s from here.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(screen.getByRole("alert")).toBeDefined();
+
+      // The re-armed window lives its own full 4 s from the second arrival.
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("QuickAdd", () => {
@@ -887,5 +931,27 @@ describe("CategoriesScreen", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Merge" }).slice(-1)[0] as HTMLElement);
 
     expect(screen.queryByText("This can't be undone in one step")).toBeNull();
+  });
+
+  // M2 — matching by name and `isLeaf` alone, with no `kind` check, swept a
+  // same-named-and-shaped sibling into the seeded leaf's own "apart, not in
+  // the tree" treatment. Sibling uniqueness is `(parent, kind, name)`, so
+  // the *reachable* legal duplicate is one that differs only in `kind` — an
+  // "Uncategorized" income leaf at the root, alongside the seeded expense
+  // one. (A same-`kind` root also named "Uncategorized" — leaf or group —
+  // would collide with the seeded row on that same constraint and could
+  // never reach the replica in the first place.)
+  it("keeps a same-named root leaf of a different kind visible in the tree, apart from the seeded one", () => {
+    const incomeLeaf = "88888888-8888-4888-8888-888888888888";
+    const treeWithDuplicate = [
+      ...tree,
+      fakeCategory({ id: incomeLeaf, name: "Uncategorized", kind: "income", isLeaf: true }),
+    ];
+    withLedger(<CategoriesScreen />, fakeController([], [], treeWithDuplicate, usage));
+
+    // The seeded expense leaf still shows apart, and the income leaf still
+    // shows in the tree body — two rows, not one collapsed into the other.
+    expect(screen.getAllByText("Uncategorized")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Uncategorized actions" })).toBeDefined();
   });
 });
