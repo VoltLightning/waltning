@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+import { I18nProvider } from "../i18n/provider";
 import { RateEditor } from "./rate-editor";
 
 function noop() {}
@@ -64,6 +65,54 @@ it("a manual row in range asks for a second, explicit confirmation before writin
 
   fireEvent.click(screen.getByRole("button", { name: "Overwrite and set" }));
   expect(onSubmit).toHaveBeenCalledWith(true);
+});
+
+// L10 — the confirm-overwrite message's own `{{rate}}` follows the reader's
+// decimal mark, like every other rendered rate.
+it("L10 — the second confirmation's rate follows the locale's own decimal mark", () => {
+  render(
+    <I18nProvider locale="pl">
+      <RateEditor
+        {...BASE_PROPS}
+        existingRows={[{ date: "2026-08-02", source: "manual" }]}
+        onSubmit={noop}
+      />
+    </I18nProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Ustaw kurs" }));
+  expect(screen.getByText(/0,0104 RUB za USD/)).toBeDefined();
+});
+
+// L11 — `setManualRateInput`'s own 366-day cap, restated here so the range
+// is refused before a submit round trip.
+it("L11 — a range past 366 days states the cap and refuses to submit", () => {
+  render(
+    <RateEditor
+      {...BASE_PROPS}
+      from="2025-01-01"
+      to="2026-01-02" // 367 days inclusive.
+      existingRows={[]}
+      onSubmit={noop}
+    />,
+  );
+  expect(screen.getByText("A manual rate range cannot exceed 366 days.")).toBeDefined();
+  expect(screen.getByRole("button", { name: "Set rate" })).toHaveProperty("disabled", true);
+});
+
+it("L11 — a range of exactly 366 days is allowed", () => {
+  const onSubmit = vi.fn();
+  render(
+    <RateEditor
+      {...BASE_PROPS}
+      from="2025-01-01"
+      to="2026-01-01" // 366 days inclusive.
+      existingRows={[]}
+      onSubmit={onSubmit}
+    />,
+  );
+  expect(screen.queryByText(/cannot exceed/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
+  expect(onSubmit).toHaveBeenCalledWith(false);
 });
 
 it("carried-forward rows count separately from manual and absent", () => {

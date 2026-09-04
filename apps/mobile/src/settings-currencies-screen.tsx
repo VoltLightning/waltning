@@ -22,6 +22,7 @@ import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger"
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import type { FieldError } from "@waltning/client/transport/field-errors";
 import { CoverageTag } from "@waltning/ui/fx/coverage-tag";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
@@ -50,7 +51,7 @@ type CurrencyRowData = {
   version: number;
 };
 
-type CurrencyRowCoverage = { pct: number; lastDate?: string };
+type CurrencyRowCoverage = { days: number; calendarDays: number; pct: number; lastDate?: string };
 
 type CurrencyRowProps = {
   row: CurrencyRowData;
@@ -109,9 +110,11 @@ function CurrencyRow({
         </Text>
         {coverage ? (
           <CoverageTag
+            days={coverage.days}
+            calendarDays={coverage.calendarDays}
             pct={coverage.pct}
             lastDate={coverage.lastDate}
-            {...(coverage.pct <= 0 ? { onPress: handleViewRates } : {})}
+            {...(coverage.days === 0 ? { onPress: handleViewRates } : {})}
           />
         ) : null}
       </View>
@@ -141,6 +144,17 @@ function CurrencyRow({
   );
 }
 
+/**
+ * `change_pivot`'s two refusals (C1), resolved through `useT()` —
+ * `packages/client` cannot call it itself. Same shape `account-editor-
+ * screen.tsx` uses for `update_account`'s own refusals.
+ */
+function resolvePivotErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
+  if (error.messageKey === "fx.pivotAlreadyPivot") return t("fx.pivotAlreadyPivot");
+  if (error.messageKey === "fx.pivotChangeRefused") return t("fx.pivotChangeRefused");
+  return error.message;
+}
+
 type Draft = { code: string; name: string; symbol: string };
 
 const EMPTY_DRAFT: Draft = { code: "", name: "", symbol: "" };
@@ -167,7 +181,12 @@ export default function SettingsCurrenciesScreen() {
       new Map<string, CurrencyRowCoverage>(
         coverage.map((row) => [
           row.code,
-          { pct: row.coveragePct, ...(row.days > 0 ? { lastDate: row.lastDate } : {}) },
+          {
+            days: row.days,
+            calendarDays: row.calendarDays,
+            pct: row.coveragePct,
+            ...(row.days > 0 ? { lastDate: row.lastDate } : {}),
+          },
         ]),
       ),
     [coverage],
@@ -177,6 +196,7 @@ export default function SettingsCurrenciesScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [pivotConfirmOpen, setPivotConfirmOpen] = useState(false);
+  const [pivotTargetCode, setPivotTargetCode] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
 
   const symbolPositionOptions: SelectOption[] = useMemo(
@@ -191,6 +211,15 @@ export default function SettingsCurrenciesScreen() {
 
   const pivotRow = rows.find((row) => row.isPivot);
   const otherRows = rows.filter((row) => !row.isPivot);
+
+  // C1 — `otherRows` is already non-pivot, non-archived (`listCurrencySettings`'s
+  // own default). Defaults to the first candidate so the flow works with one
+  // tap when there is only one, and stays a real choice past that.
+  const pivotTargetOptions: SelectOption[] = useMemo(
+    () => otherRows.map((row) => ({ value: row.code, label: row.code })),
+    [otherRows],
+  );
+  const selectedPivotTarget = pivotTargetCode ?? otherRows[0]?.code ?? null;
 
   const handleTogglePinned = useCallback(
     (code: string, version: number, next: boolean) => {
@@ -304,16 +333,20 @@ export default function SettingsCurrenciesScreen() {
     handleCloseEdit();
   }, [ledger, editDraft, rows, handleCloseEdit, t]);
 
+  const handleChangePivotTarget = useCallback((value: string) => setPivotTargetCode(value), []);
   const handleOpenPivotConfirm = useCallback(() => setPivotConfirmOpen(true), []);
   const handleCancelPivotConfirm = useCallback(() => setPivotConfirmOpen(false), []);
   const handleConfirmPivotChange = useCallback(() => {
     setPivotConfirmOpen(false);
-    if (!pivotRow) return;
-    const result = ledger.changePivot({ code: pivotRow.code });
+    if (!selectedPivotTarget) return;
+    // C1 — the *target*, non-pivot currency, never `pivotRow.code` (the
+    // current pivot): the executor refuses that as "already the pivot".
+    const result = ledger.changePivot({ code: selectedPivotTarget });
     if ("fieldErrors" in result) {
-      setToast(result.fieldErrors[0]?.message ?? t("fx.pivotChangeRefused"));
+      const [fieldError] = result.fieldErrors;
+      setToast(fieldError ? resolvePivotErrorMessage(t, fieldError) : t("fx.pivotChangeRefused"));
     }
-  }, [ledger, pivotRow, t]);
+  }, [ledger, selectedPivotTarget, t]);
 
   const addAction = (
     <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
@@ -338,11 +371,21 @@ export default function SettingsCurrenciesScreen() {
         {pivotRow ? (
           <View style={styles.pivotRow}>
             <Text style={styles.pivotLabel}>{t("fx.pivotLabel", { code: pivotRow.code })}</Text>
+            {otherRows.length > 0 ? (
+              <Select
+                label={t("fx.pivotTarget")}
+                placeholder={t("fx.pivotTargetPlaceholder")}
+                options={pivotTargetOptions}
+                value={selectedPivotTarget}
+                onChange={handleChangePivotTarget}
+              />
+            ) : null}
             <Button
               label={t("fx.changePivot")}
               onPress={handleOpenPivotConfirm}
               variant="ghost"
               size="sm"
+              disabled={selectedPivotTarget === null}
             />
           </View>
         ) : null}

@@ -16,7 +16,7 @@
 import { type AccountingDate, daysBetween } from "@waltning/core/date";
 import type { CurrencyCode, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
 import { dec, pivotPerUnit, unitsPerPivot } from "@waltning/core/money";
-import { and, asc, desc, eq, gte, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
@@ -108,7 +108,11 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
   let origin: { date: AccountingDate; source: string } = row;
   if (row.source === CARRIED_FORWARD) {
     const real = findOrigin(db, { base, quote, asOf: row.date });
-    if (real) origin = real;
+    // No locatable origin (C2) — `change_pivot` can drop the bridge row a
+    // carried date descends from while leaving the carried row itself; that
+    // is a refusal, never a `carriedDays: 0` that reads as an exact quote.
+    if (!real) return undefined;
+    origin = real;
   }
 
   const carriedDays = daysBetween(origin.date, date);
@@ -122,8 +126,15 @@ export type LocalCoverage = {
   source: string | null;
   firstDate: AccountingDate;
   lastDate: AccountingDate;
+  /** Rows held. Never the decision variable itself — see `days`/`calendarDays` below (H3). */
   days: number;
-  /** Rows ÷ calendar days from `firstDate` to `today`, an integer 0–100 (S17 §8). */
+  /** Calendar days from `firstDate` to `today`, inclusive. `0` only when `days` is also `0`. */
+  calendarDays: number;
+  /**
+   * Display-only (H3) — `CoverageTag` decides *no rates yet* on `days === 0`
+   * and *complete* on `days === calendarDays`, never on this rounding.
+   * Floored while incomplete, so 2,075/2,080 reads `99%`, never `100%`.
+   */
   coveragePct: number;
 };
 
@@ -151,38 +162,52 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
     .where(and(eq(currencies.archived, false), eq(currencies.isPivot, false)))
     .all();
 
+  const [pivotRow] = db
+    .select({ code: currencies.code })
+    .from(currencies)
+    .where(eq(currencies.isPivot, true))
+    .all();
+  const pivot = pivotRow?.code;
+
   return currencyRows.map(({ code, rateSource }) => {
-    const rateRows = db
-      .select({ date: fxRates.date })
-      .from(fxRates)
-      .where(eq(fxRates.quote, code))
-      .orderBy(fxRates.date)
-      .all();
-
-    if (rateRows.length === 0) {
-      return {
-        code,
-        source: rateSource,
-        firstDate: today,
-        lastDate: today,
-        days: 0,
-        coveragePct: 0,
-      };
-    }
-
-    const firstDate = rateRows[0]?.date as AccountingDate;
-    const lastDate = rateRows[rateRows.length - 1]?.date as AccountingDate;
-    const calendarDays = daysBetween(firstDate, today) + 1;
-    const coveragePct = calendarDays <= 0 ? 0 : Math.round((rateRows.length / calendarDays) * 100);
-
-    return {
+    const empty: LocalCoverage = {
       code,
       source: rateSource,
-      firstDate,
-      lastDate,
-      days: rateRows.length,
-      coveragePct: Math.min(100, Math.max(0, coveragePct)),
+      firstDate: today,
+      lastDate: today,
+      days: 0,
+      calendarDays: 0,
+      coveragePct: 0,
     };
+    // No pivot set at all — vacuous, same empty answer as a currency with
+    // no rows (`fx_rates` is always stored `base = pivot`, §4).
+    if (!pivot) return empty;
+
+    // One aggregate, never `.all()`'d rows (M7) — `min`/`max` sort correctly
+    // on the bare `YYYY-MM-DD` text SQLite stores. `lastRealDate` excludes
+    // `carried_forward` (H4, S17 §8: *last quote date*, not last held row).
+    const [agg] = db
+      .select({
+        n: sql<number>`count(*)`,
+        firstDate: sql<string | null>`min(${fxRates.date})`,
+        lastRealDate: sql<
+          string | null
+        >`max(case when ${fxRates.source} <> ${CARRIED_FORWARD} then ${fxRates.date} else null end)`,
+      })
+      .from(fxRates)
+      .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot)))
+      .all();
+
+    const days = agg?.n ?? 0;
+    if (days === 0 || !agg?.firstDate) return empty;
+
+    const firstDate = agg.firstDate as AccountingDate;
+    const lastDate = (agg.lastRealDate ?? agg.firstDate) as AccountingDate;
+    const calendarDays = daysBetween(firstDate, today) + 1;
+    const coveragePct =
+      calendarDays <= 0 ? 0 : days >= calendarDays ? 100 : Math.floor((days / calendarDays) * 100);
+
+    return { code, source: rateSource, firstDate, lastDate, days, calendarDays, coveragePct };
   });
 }
 
@@ -196,8 +221,12 @@ export type LocalRateRow = {
    * Only present when `source === "carried_forward"` — `readRate`'s own
    * figure, per row. `RateTable` (`04` §4.6) needs it to state a carried
    * row's own age (*carried · 3 d*) rather than the bare enum.
+   *
+   * `null` (C2) means the origin is unlocatable — `change_pivot` dropped
+   * the bridge row this carried date descends from. Never `0`, which would
+   * read as an exact quote rather than an age nobody can state.
    */
-  carriedDays?: number;
+  carriedDays?: number | null;
 };
 
 /**
@@ -243,9 +272,12 @@ export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
   return rows.map((row) => {
     if (row.source !== CARRIED_FORWARD) return row;
     const origin = findOrigin(db, { base, quote, asOf: row.date });
-    // `exactOptionalPropertyTypes` — an *absent* key, not a present one set
-    // to `undefined`, matching `LocalRateRow.carriedDays`'s own `?:`.
-    return origin ? { ...row, carriedDays: daysBetween(origin.date, row.date) } : row;
+    // No locatable origin (C2) is `carriedDays: null`, explicitly — never
+    // the row unchanged, which `RateTable` would read as `?? 0` and render
+    // as an exact quote.
+    return origin
+      ? { ...row, carriedDays: daysBetween(origin.date, row.date) }
+      : { ...row, carriedDays: null };
   });
 }
 

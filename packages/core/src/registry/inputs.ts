@@ -27,6 +27,7 @@
  */
 
 import { z } from "zod";
+import { type AccountingDate, daysBetween } from "../date.ts";
 import type { Id } from "../id.ts";
 import { type CurrencyCode, dec, type Money, type TxnType } from "../money.ts";
 import {
@@ -883,6 +884,15 @@ const RATE_RANGE_ISSUE = {
   path: ["to"],
 };
 
+/** L11 — a manual rate range caps at a year (366, leap-inclusive): unbounded, one `manual` row per day writes as many rows as the range is long. */
+const MAX_MANUAL_RATE_RANGE_DAYS = 366;
+const manualRateRangeWithinCap = (v: { from: AccountingDate; to: AccountingDate }) =>
+  daysBetween(v.from, v.to) + 1 <= MAX_MANUAL_RATE_RANGE_DAYS;
+const MANUAL_RATE_RANGE_ISSUE = {
+  message: `a manual rate range cannot exceed ${MAX_MANUAL_RATE_RANGE_DAYS} days`,
+  path: ["to"],
+};
+
 /**
  * `set_manual_rate` — §7.6 level 2, *"correct a bad or missing provider
  * figure… a range writes one `manual` row per day across it"*. `base` must
@@ -906,7 +916,8 @@ export const setManualRateInput = z
     message: "a rate needs two different currencies",
     path: ["quote"],
   })
-  .refine(rateRangeOrdered, RATE_RANGE_ISSUE);
+  .refine(rateRangeOrdered, RATE_RANGE_ISSUE)
+  .refine(manualRateRangeWithinCap, MANUAL_RATE_RANGE_ISSUE);
 export type SetManualRateInput = z.output<typeof setManualRateInput>;
 
 /** `clear_manual_rate` — §7.6's undo: deletes `manual` rows only, never a synced one. */

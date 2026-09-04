@@ -448,6 +448,8 @@ export type PhoneCoverage = {
   firstDate: AccountingDate;
   lastDate: AccountingDate;
   days: number;
+  /** Calendar days from `firstDate` to today, inclusive (H3) — `CoverageTag`'s own decision variable, with `days`. */
+  calendarDays: number;
   coveragePct: number;
 };
 
@@ -458,8 +460,11 @@ export type PhoneFxRateRow = {
   date: AccountingDate;
   rate: UnitsPerPivot;
   source: string;
-  /** Only present on a `carried_forward` row — `RateTable`'s own age marker. */
-  carriedDays?: number;
+  /**
+   * Only present on a `carried_forward` row — `RateTable`'s own age marker.
+   * `null` (C2) means the origin is unlocatable; never `0`.
+   */
+  carriedDays?: number | null;
 };
 
 export type PhoneLedgerPort = {
@@ -1350,6 +1355,21 @@ function settleDebtRefusal(error: unknown): FieldError | null {
       message: error.message,
       messageKey: "settleDebt.nothingToSettle",
     };
+  }
+  return null;
+}
+
+/**
+ * `change_pivot`'s two refusals (C1) — already-the-pivot and the txn-count
+ * gate are different situations and get their own text, never one fallback.
+ */
+function changePivotRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("is already the pivot")) {
+    return { path: "", message: error.message, messageKey: "fx.pivotAlreadyPivot" };
+  }
+  if (error.message.includes("refused — a phone alone cannot re-rate")) {
+    return { path: "", message: error.message, messageKey: "fx.pivotChangeRefused" };
   }
   return null;
 }
@@ -2752,12 +2772,13 @@ export function createPhoneLedger(
         try {
           port.changePivot(parsed.data, runtime.capture());
         } catch (writeError) {
+          const fieldError = changePivotRefusal(writeError);
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "change_pivot",
             phase: "success",
           });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {

@@ -109,6 +109,7 @@ function fakeController(overrides: {
           firstDate: accountingDate("2020-11-25"),
           lastDate: accountingDate("2026-09-02"),
           days: 2100,
+          calendarDays: 2100,
           coveragePct: 100,
         },
       ]),
@@ -158,7 +159,9 @@ beforeEach(() => {
 
 it("renders a row per non-pivot currency, and the pivot read-only", () => {
   withLedger();
-  expect(screen.getByText("PLN")).toBeDefined();
+  // "PLN" also renders as the pivot-change target Select's default value
+  // (C1) — at least one match is the row's own code.
+  expect(screen.getAllByText("PLN").length).toBeGreaterThan(0);
   expect(screen.getByText("Polish Złoty")).toBeDefined();
   // USD is the pivot — not in the row list, stated in the read-only line instead.
   expect(screen.queryByText("US Dollar")).toBeNull();
@@ -199,13 +202,38 @@ it("adding a currency writes through add_currency and closes the sheet", () => {
   );
 });
 
-it("changing the pivot is gated behind a confirmation", () => {
-  const changePivot = vi.fn(() => ({ code: "USD" }));
+it("changing the pivot writes the chosen target, never the current pivot (C1)", () => {
+  // PLN is the fixture's only non-pivot row (USD is the pivot) — the target
+  // `Select` defaults to it, so no explicit choice is needed for one candidate.
+  const changePivot = vi.fn(() => ({ code: "PLN" }));
   withLedger({ changePivot });
   fireEvent.click(screen.getByText("Change pivot"));
   expect(changePivot).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
-  expect(changePivot).toHaveBeenCalledWith({ code: "USD" }, expect.anything());
+  expect(changePivot).toHaveBeenCalledWith({ code: "PLN" }, expect.anything());
+});
+
+it("maps the executor's two refusals to their own texts, never one fallback (C1)", () => {
+  const alreadyPivot = vi.fn(() => {
+    throw new Error("change_pivot: PLN is already the pivot");
+  });
+  withLedger({ changePivot: alreadyPivot });
+  fireEvent.click(screen.getByText("Change pivot"));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
+  expect(screen.getByText("That currency is already the pivot.")).toBeDefined();
+});
+
+it("states the transaction-count refusal with its own text (C1)", () => {
+  const refused = vi.fn(() => {
+    throw new Error(
+      "change_pivot: refused — a phone alone cannot re-rate existing transactions; " +
+        "change the pivot before the first capture (S29a)",
+    );
+  });
+  withLedger({ changePivot: refused });
+  fireEvent.click(screen.getByText("Change pivot"));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
+  expect(screen.getByText("The pivot can't change while a transaction exists.")).toBeDefined();
 });
 
 it("the pivot confirmation states the refusal before offering, not after", () => {
@@ -240,6 +268,7 @@ it("a currency with no rates yet says so, and opens S18 with the pair preselecte
         firstDate: accountingDate("2026-09-03"),
         lastDate: accountingDate("2026-09-03"),
         days: 0,
+        calendarDays: 0,
         coveragePct: 0,
       },
     ],

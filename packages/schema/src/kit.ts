@@ -48,6 +48,7 @@ import {
   bigint as pgBigint,
   boolean as pgBoolean,
   date as pgDate,
+  index as pgIndex,
   integer as pgInteger,
   jsonb as pgJsonb,
   numeric as pgNumeric,
@@ -58,6 +59,7 @@ import {
   uuid as pgUuid,
 } from "drizzle-orm/pg-core";
 import {
+  index as sqliteIndex,
   integer as sqliteInteger,
   sqliteTable,
   text as sqliteText,
@@ -80,6 +82,7 @@ import {
 export const pgKit = {
   table: pgTable,
   uniqueIndex: pgUniqueIndex,
+  index: pgIndex,
   text: pgText,
   integer: pgInteger,
   boolean: pgBoolean,
@@ -167,6 +170,7 @@ export const pgKit = {
 export const sqliteKit = {
   table: sqliteTable,
   uniqueIndex: sqliteUniqueIndex,
+  index: sqliteIndex,
   text: sqliteText,
   integer: sqliteInteger,
   boolean: (name: string) => sqliteInteger(name, { mode: "boolean" }),

@@ -31,4 +31,8 @@ export const fxRatesColumns = () => ({
  */
 export const fxRates = k.table("fx_rates", fxRatesColumns(), (t) => [
   k.uniqueIndex("fx_rates_pk").on(t.base, t.quote, t.date),
+  // `readCoverage` (M7) aggregates on `quote = ? and base = ?` — the PK's
+  // own btree leads with `base`, so a coverage scan without this walks the
+  // whole table.
+  k.index("fx_rates_quote_date_idx").on(t.quote, t.date),
 ]);

@@ -35,6 +35,9 @@ const { currencies, fxRates, transactions } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 type LocalFxRateRow = typeof fxRates.$inferSelect;
 
+/** See `read-rate.ts`'s own copy — the server's carried-forward marker. */
+const CARRIED_FORWARD = "carried_forward";
+
 export const changePivotExecutor = defineLocalExecutor<
   typeof changePivotInput,
   LocalCurrencyRow,
@@ -84,6 +87,36 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
     byDate.set(row.date, bucket);
   }
 
+  // A carried-forward row's own date rarely matches its origin's — it holds
+  // a copy of the nearest earlier real quote. Traced here, per quote, oldest
+  // first, the same walk-back `findOrigin` (`read-rate.ts`) does at read
+  // time — needed below to tell an orphaned carried row from one whose
+  // origin survives the rewrite (C2).
+  const realByQuote = new Map<string, LocalFxRateRow[]>();
+  for (const row of rows) {
+    if (row.source === CARRIED_FORWARD) continue;
+    const bucket = realByQuote.get(row.quote) ?? [];
+    bucket.push(row);
+    realByQuote.set(row.quote, bucket);
+  }
+  for (const bucket of realByQuote.values()) bucket.sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  function originDateOf(quote: string, date: string): string | undefined {
+    let found: string | undefined;
+    for (const row of realByQuote.get(quote) ?? []) {
+      if (row.date > date) break;
+      found = row.date;
+    }
+    return found;
+  }
+
+  // Dates a bridge rate to the new pivot survives on — computed before the
+  // delete below so a carried row's origin can be checked against it.
+  const bridgeDates = new Set<string>();
+  for (const [date, dateRows] of byDate) {
+    if (dateRows.some((row) => row.quote === newPivot.code)) bridgeDates.add(date);
+  }
+
   tx.delete(fxRates).where(eq(fxRates.base, oldPivot.code)).run();
 
   for (const dateRows of byDate.values()) {
@@ -93,6 +126,13 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
 
     for (const row of dateRows) {
       if (row.quote === newPivot.code) continue; // consumed into the reciprocal row below
+      if (row.source === CARRIED_FORWARD) {
+        const origin = originDateOf(row.quote, row.date);
+        // An orphaned carried-forward child (C2) — its origin's own date had
+        // no bridge and was dropped above, so this row's rate would now
+        // trace to nothing. §7.6: the table never holds an invented figure.
+        if (origin === undefined || !bridgeDates.has(origin)) continue;
+      }
       const rebased: UnitsPerPivot = unitsPerPivot(dec(row.rate).dividedBy(k));
       tx.insert(fxRates)
         .values({

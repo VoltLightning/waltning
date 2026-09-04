@@ -113,8 +113,21 @@ export function RateField({
   const { focused, handlers } = useInteraction();
   const locale = useLocale();
   // Seeded once, from whatever `value` held at mount — see the docstring for
-  // why this never re-syncs from `value` afterward.
-  const [text, setText] = useState(() => (editable ? String(value) : ""));
+  // why this never re-syncs from `value` afterward. Through `formatRate`
+  // (L10), so a Polish reader opening an existing rate to edit sees `4,0231`,
+  // not the storage form's `4.0231` echoed back unformatted.
+  const [text, setText] = useState(() => {
+    if (!editable || value === "") return "";
+    try {
+      return formatRate(String(value), locale, decimals);
+    } catch {
+      // A caller can still seed a raw, unparsed string outside `parseRate`'s
+      // own contract (a stale draft, say) — falls back to it unformatted
+      // rather than crashing the mount over a value already headed for the
+      // field's own inline refusal.
+      return String(value);
+    }
+  });
   const [invalid, setInvalid] = useState(false);
 
   const handleChangeText = useCallback(

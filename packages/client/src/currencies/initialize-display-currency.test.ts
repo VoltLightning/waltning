@@ -39,19 +39,20 @@ describe("initializeDisplayCurrencyFromLedger", () => {
     expect(pref.getSnapshot().currency).toBe(PLN);
   });
 
-  it("falls back to the live pivot when nothing is pinned — never the seed constant", async () => {
-    const pref = createDisplayCurrencyPreference(
-      { get: async () => null, set: async () => undefined },
-      // The seed constant this controller was built with — a fresh device's
-      // bootstrap value, deliberately not EUR, so a pass here proves the
-      // live reader won, not the constructor argument.
-      USD,
-    );
+  // M6 — nothing pinned is never "write the pivot". A write here would
+  // persist today's pivot and freeze the header on it across every future
+  // launch, surviving a later `change_pivot` that never touches this store —
+  // `getSnapshot`'s own `value ?? pivot` fallback already answers "nothing
+  // chosen" without writing anything.
+  it("M6 — nothing pinned writes nothing; getSnapshot's own fallback answers instead", async () => {
+    const set = vi.fn(async () => undefined);
+    const pref = createDisplayCurrencyPreference({ get: async () => null, set }, USD);
     await initializeDisplayCurrencyFromLedger(pref, () => [
       { code: PLN, pinned: false, isPivot: false },
       { code: EUR, pinned: false, isPivot: true },
     ]);
-    expect(pref.getSnapshot().currency).toBe(EUR);
+    expect(set).not.toHaveBeenCalled();
+    expect(pref.getSnapshot()).toEqual({ currency: USD, hydrated: true });
   });
 
   it("never overwrites a stored choice — the hydration race a naive call would lose", async () => {

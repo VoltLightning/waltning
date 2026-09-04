@@ -31,17 +31,21 @@ import { accountingDate, daysBetween } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import { useT } from "../i18n/provider";
+import { useLocale, useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { RateField } from "../primitives/rate-field";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
+import { formatRate } from "./format-rate.ts";
 
 export type RateEditorRow = {
   date: string;
   source: string;
 };
+
+/** L11 — `setManualRateInput`'s own cap, restated here so the range is refused before a submit round trip. */
+const MAX_RANGE_DAYS = 366;
 
 export type RateEditorProps = {
   /** The pivot — shown, never chosen here (`SPEC.md` §7.0). */
@@ -73,6 +77,7 @@ export function RateEditor({
   disabled = false,
 }: RateEditorProps) {
   const t = useT();
+  const locale = useLocale();
   const styles = useStyles();
   const [confirming, setConfirming] = useState(false);
 
@@ -98,7 +103,9 @@ export function RateEditor({
   // prop, not its state — a caller could still hand it `"0"` directly, and
   // the contract behind `onSubmit` deserves the same refusal here that a
   // typed zero gets in the field (`fx.ratePositive`'s own reasoning).
-  const canSubmit = rate !== "" && !disabled && money.cmp(money.toMoney(rate), money.ZERO) > 0;
+  const rangeTooLong = counts.totalDays > MAX_RANGE_DAYS;
+  const canSubmit =
+    rate !== "" && !disabled && !rangeTooLong && money.cmp(money.toMoney(rate), money.ZERO) > 0;
 
   return (
     <View style={styles.root}>
@@ -124,9 +131,22 @@ export function RateEditor({
         </Text>
       </View>
 
+      {rangeTooLong ? (
+        <Text style={styles.warning}>
+          {t("fx.rateEditorRangeTooLong", { max: String(MAX_RANGE_DAYS) })}
+        </Text>
+      ) : null}
+
       {confirming ? (
         <Text style={styles.warning}>
-          {t("fx.rateEditorConfirmOverwrite", { count: counts.manual, rate, quote, base })}
+          {t("fx.rateEditorConfirmOverwrite", {
+            count: counts.manual,
+            // L10 — through the locale's own decimal mark, like every other
+            // rendered rate — never `rate`'s raw, always-dot storage form.
+            rate: formatRate(rate, locale),
+            quote,
+            base,
+          })}
         </Text>
       ) : null}
 

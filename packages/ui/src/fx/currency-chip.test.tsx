@@ -46,6 +46,17 @@ it("marks every pinned currency, with the active one distinct", () => {
   expect(screen.getByText("USD")).toBeDefined();
 });
 
+// M6 — the active currency (the live pivot, say) can be outside the pinned
+// set entirely. It still has to render, marked, rather than vanish.
+it("M6 — an active currency outside the pinned set is appended and marked", () => {
+  render(<CurrencyChip pinned={[{ code: "PLN" }, { code: "EUR" }]} active="USD" onChange={noop} />);
+  expect(screen.getByText("PLN")).toBeDefined();
+  expect(screen.getByText("EUR")).toBeDefined();
+  const active = screen.getByText("USD");
+  expect(active).toBeDefined();
+  expect(getComputedStyle(active).borderBottomColor).not.toBe("rgba(0, 0, 0, 0)");
+});
+
 it("marks the active currency with its own 2px accent bar, not weight alone", () => {
   render(<CurrencyChip pinned={[{ code: "PLN" }, { code: "USD" }]} active="USD" onChange={noop} />);
   const active = screen.getByText("USD");

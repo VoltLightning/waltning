@@ -52,6 +52,13 @@ it("shows the rate panel and margin for a cross-currency pair", () => {
   expect(screen.getAllByText((_, element) => element?.textContent === "6.30 PLN")).toHaveLength(2);
 });
 
+// L9 — a rate has no unit of its own; the realized `RateField` states which
+// way it reads, destination per source.
+it("states the realized rate's own unit — the destination currency per the source", () => {
+  renderComposer();
+  expect(screen.getByText("PLN per USD")).toBeDefined();
+});
+
 it("adds the stated fee into the total, distinct from the margin", () => {
   renderComposer({ fee: "5,00" });
   expect(screen.getByText((_, element) => element?.textContent === "6.30 PLN")).toBeDefined();

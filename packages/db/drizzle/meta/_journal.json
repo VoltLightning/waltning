@@ -57,6 +57,13 @@
       "when": 1788502789610,
       "tag": "0007_counterparty_merges_and_distinct_pairs",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788521834665,
+      "tag": "0008_fx_rates_quote_date_index",
+      "breakpoints": true
     }
   ]
 }

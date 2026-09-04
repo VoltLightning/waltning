@@ -10,16 +10,23 @@
  * history still renders through them (a transaction booked in a currency
  * archived since keeps showing its symbol), so refusing the write there
  * would leave a stale symbol with no way back short of un-archiving.
+ *
+ * **A `decimals` decrease is refused while anything live still holds the
+ * currency (H5).** Growing precision never loses information; shrinking it
+ * does — `4.20` in a 2dp currency truncated to 0dp reads as `4`, a figure
+ * nobody typed. `archive_currency`'s own live-reference count, reused
+ * exactly: only a live (non-archived) account or a live (not soft-deleted)
+ * transaction counts, the same `computations.md` §1 T filter.
  */
 
 import { type UpdateCurrencyInput, updateCurrencyInput } from "@waltning/core/registry/inputs";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
 
-const { currencies } = schema;
+const { accounts, currencies, transactions } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const updateCurrencyExecutor = defineLocalExecutor<
@@ -43,6 +50,35 @@ function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrency
     throw new Error(
       `update_currency: stale version — read ${input.version}, row is at ${current.version}`,
     );
+  }
+
+  if (input.patch.decimals !== undefined && input.patch.decimals < current.decimals) {
+    const [{ n: liveAccounts } = { n: 0 }] = tx
+      .select({ n: sql<number>`count(*)` })
+      .from(accounts)
+      .where(and(eq(accounts.currency, input.code), eq(accounts.archived, false)))
+      .all();
+    const [{ n: liveTransactions } = { n: 0 }] = tx
+      .select({ n: sql<number>`count(*)` })
+      .from(transactions)
+      .where(
+        and(
+          or(
+            eq(transactions.currency, input.code),
+            eq(transactions.toCurrency, input.code),
+            eq(transactions.debtCurrency, input.code),
+          ),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .all();
+    const live = liveAccounts + liveTransactions;
+    if (live > 0) {
+      throw new Error(
+        `update_currency: refused — decimals cannot shrink from ${current.decimals} to ` +
+          `${input.patch.decimals} while ${input.code} still names ${live} live account(s)/transaction(s)`,
+      );
+    }
   }
 
   const [updated] = tx

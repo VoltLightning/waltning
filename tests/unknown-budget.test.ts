@@ -158,6 +158,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "a CommonJS mock with no declared type, cast once to the module it stands in for",
   },
+  "packages/ui/src/i18n/en.ts": {
+    max: 1,
+    why: "fx.rateTableCarriedUnknown (C2) — the English word in a carried-forward row's own age label, never a TypeScript unknown",
+  },
   "packages/ui/src/states/use-timer.ts": {
     max: 1,
     why: "the timer's re-arm signal is compared only by identity across renders — a constraint position for a deliberately heterogeneous value, the same shape as a dependency array",
@@ -243,8 +247,8 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
   },
   "packages/client/src/ledger/create-phone-ledger.ts": {
-    max: 8,
-    why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal and settleDebtRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
+    max: 9,
+    why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal, settleDebtRefusal and changePivotRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
   },
   // E2 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per executor file — the driver's

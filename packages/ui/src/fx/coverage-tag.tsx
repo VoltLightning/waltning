@@ -32,7 +32,11 @@ import { makeStyles } from "../theme/styles.ts";
 import { focus, touchTarget } from "../tokens.ts";
 
 export type CoverageTagProps = {
-  /** 0–100, `readCoverage`'s own figure. */
+  /** Rows held. The decision variable (H3), with `calendarDays` — never `pct`, which is display-only. */
+  days: number;
+  /** Calendar days from the first held rate to today, inclusive. */
+  calendarDays: number;
+  /** 0–100, `readCoverage`'s own figure — display-only, floored while incomplete. */
   pct: number;
   /** The most recent date a rate is actually held for — required below 100%. */
   lastDate?: string | undefined;
@@ -40,12 +44,12 @@ export type CoverageTagProps = {
   onPress?: () => void;
 };
 
-export function CoverageTag({ pct, lastDate, onPress }: CoverageTagProps) {
+export function CoverageTag({ days, calendarDays, pct, lastDate, onPress }: CoverageTagProps) {
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
-  const complete = pct >= 100;
-  const nothingHeld = pct <= 0;
+  const complete = days === calendarDays;
+  const nothingHeld = days === 0;
 
   const label = nothingHeld
     ? t("fx.noRatesYet")

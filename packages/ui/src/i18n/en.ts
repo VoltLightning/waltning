@@ -478,6 +478,8 @@ export const en = {
     rateTableSourceHeader: "Source",
     /** A `carried_forward` row's own tag — its age, never the raw enum. */
     rateTableCarried: "Carried · {{count}} d",
+    /** C2 — the origin is unlocatable (`change_pivot` can drop it). Never `0 d`, which would read as exact. */
+    rateTableCarriedUnknown: "Carried · age unknown",
     /**
      * `RateEditor` — `04` §4.7. `{{quote}} per {{base}}` states which way the
      * figure reads (`SPEC.md` §4: `fx_rates.rate` is units of the quote per
@@ -494,6 +496,8 @@ export const en = {
       "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rate(s) set by hand.",
     rateEditorSubmit: "Set rate",
     rateEditorConfirmSubmit: "Overwrite and set",
+    /** L11 — `setManualRateInput`'s own cap, restated where the range is picked. */
+    rateEditorRangeTooLong: "A manual rate range cannot exceed {{max}} days.",
     /** S17. */
     addCurrency: "Add currency",
     currencyCode: "Code",
@@ -507,6 +511,8 @@ export const en = {
     sourceNbrb: "NBRB",
     sourceNbg: "NBG",
     sourceManual: "Manual",
+    /** L8 — an unrecognised source, plainly, never the `manual` fallback it used to be. */
+    sourceUnknown: "Unknown",
     archiveCurrency: "Archive",
     currencyArchiveRefused: "Couldn't archive this currency.",
     currencyWriteFailed: "That didn't save.",
@@ -524,6 +530,11 @@ export const en = {
       "The pivot is the technical hub every rate is stored against. Refused once any transaction exists — a phone alone has no way to re-rate the history that would leave behind. Changing it is rare, audited, and never something moving abroad requires.",
     pivotConfirmSubmit: "Yes, change it",
     pivotChangeRefused: "The pivot can't change while a transaction exists.",
+    /** C1 — the executor's other refusal: the chosen code is already the pivot. */
+    pivotAlreadyPivot: "That currency is already the pivot.",
+    /** C1 — the target `Select` in the pivot-change flow, ahead of the confirm dialog. */
+    pivotTarget: "New pivot",
+    pivotTargetPlaceholder: "Choose a currency",
     /** S18. */
     pairLabel: "Quote, against {{base}}",
     pairPlaceholder: "Choose a currency",

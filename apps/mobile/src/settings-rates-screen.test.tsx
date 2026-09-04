@@ -119,6 +119,7 @@ function fakeController(overrides: {
         firstDate: accountingDate("2020-11-25"),
         lastDate: accountingDate("2026-09-02"),
         days: 2100,
+        calendarDays: 2100,
         coveragePct: 100,
       },
     ],

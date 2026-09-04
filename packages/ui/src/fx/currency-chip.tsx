@@ -51,6 +51,10 @@ export function CurrencyChip({ pinned, active, onChange, onExpand }: CurrencyChi
 
   const cycles = pinned.length <= CYCLE_LIMIT;
   const index = pinned.findIndex((currency) => currency.code === active);
+  // M6 — `active` can be outside `pinned` (the live pivot, after a
+  // `change_pivot` the pinned set never followed). Appended, not dropped —
+  // marking nothing would read as "no active currency", which is false.
+  const shown = index === -1 ? [...pinned, { code: active }] : pinned;
 
   const cycleNext = useCallback(() => {
     if (pinned.length < 2) return;
@@ -77,7 +81,7 @@ export function CurrencyChip({ pinned, active, onChange, onExpand }: CurrencyChi
       style={[styles.chip, focused ? styles.focused : null]}
     >
       <View style={styles.row}>
-        {pinned.map((currency) => (
+        {shown.map((currency) => (
           <Text
             key={currency.code}
             style={[styles.code, currency.code === active ? styles.codeActive : null]}

@@ -265,7 +265,12 @@ export default function SettingsRatesScreen() {
         {shownCoverage.map((row) => (
           <View key={row.code} style={styles.coverageRow}>
             <Text style={styles.coverageCode}>{row.code}</Text>
-            <CoverageTag pct={row.coveragePct} lastDate={row.days > 0 ? row.lastDate : undefined} />
+            <CoverageTag
+              days={row.days}
+              calendarDays={row.calendarDays}
+              pct={row.coveragePct}
+              lastDate={row.days > 0 ? row.lastDate : undefined}
+            />
           </View>
         ))}
       </Card>

@@ -71,15 +71,18 @@ export type RateTableSourceRow = {
   date: string;
   rate: string;
   source: string;
-  /** Only meaningful when `source === "carried_forward"` — `readRate`'s own figure. */
-  carriedDays?: number;
+  /**
+   * Only meaningful when `source === "carried_forward"` — `readRate`'s own
+   * figure. `null` (C2) means the origin is unlocatable; never `0`.
+   */
+  carriedDays?: number | null;
 };
 
 type RenderRow = {
   date: string;
   rate: string | null;
   source: string | null;
-  carriedDays: number | undefined;
+  carriedDays: number | null | undefined;
 };
 
 export type RateTableProps = {
@@ -173,9 +176,14 @@ function RateTableRowView({
     row.source !== null && row.source in SOURCE_LABEL_KEYS
       ? SOURCE_LABEL_KEYS[row.source as keyof typeof SOURCE_LABEL_KEYS]
       : undefined;
+  // L8 — an unrecognised source states so plainly; it is not `manual` just
+  // because that used to be the fallback. C2 — an unlocatable origin states
+  // its age as unknown, never `0`, which would read as an exact quote.
   const sourceLabel = isCarried
-    ? t("fx.rateTableCarried", { count: row.carriedDays ?? 0 })
-    : t(sourceKey ?? "fx.sourceManual");
+    ? row.carriedDays == null
+      ? t("fx.rateTableCarriedUnknown")
+      : t("fx.rateTableCarried", { count: row.carriedDays })
+    : t(sourceKey ?? "fx.sourceUnknown");
 
   return (
     <Pressable

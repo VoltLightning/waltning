@@ -182,6 +182,10 @@ export const fxRates = pgTable("fx_rates", fxRatesColumns(), (t) => [
   }),
   check("fx_rates_rate_positive", sql`${t.rate} > 0`),
   check("fx_rates_distinct", sql`${t.base} <> ${t.quote}`),
+  // `readCoverage` (M7) filters on `quote = ? and base = ?` and aggregates —
+  // the PK's own btree leads with `base`, so a coverage scan without this
+  // walks the whole table.
+  index("fx_rates_quote_date_idx").on(t.quote, t.date),
 ]);
 
 /* ------------------------------------------------------------------ *

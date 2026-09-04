@@ -81,6 +81,17 @@ describe("RateField", () => {
     expect(screen.getByText("PLN per USD")).toBeDefined();
   });
 
+  // L10 — an editable field's own seeded text follows the reader's decimal
+  // mark, never the always-dot storage form echoed back unformatted.
+  it("seeds the editable buffer through the locale's own decimal mark", () => {
+    render(
+      <I18nProvider locale="pl">
+        <RateField label="Manual rate" value="4.2810" editable onChange={vi.fn()} />
+      </I18nProvider>,
+    );
+    expect(screen.getByLabelText("Manual rate")).toHaveProperty("value", "4,2810");
+  });
+
   it("emits the parsed rate as it is typed", () => {
     const onChange = vi.fn();
     render(<RateField label="Manual rate" value="" editable onChange={onChange} />);
