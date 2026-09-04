@@ -16,6 +16,8 @@ const currencies: readonly CreateAccountCurrency[] = [
 
 const groups: readonly CreateAccountGroup[] = [{ id: "group-1", name: "Household" }];
 
+const TODAY = "2026-09-03";
+
 /** The minimal draft — every field but name and currency at its default. */
 const minimal = {
   kind: "other",
@@ -29,7 +31,13 @@ const minimal = {
 
 it("offers every currency the ledger holds and rejects a whitespace-only name", () => {
   render(
-    <CreateAccountForm currencies={currencies} groups={[]} onCancel={vi.fn()} onSave={vi.fn()} />,
+    <CreateAccountForm
+      currencies={currencies}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
   );
   expect(screen.getByText(/PLN/)).toBeDefined();
   expect(screen.getByText(/BYN/)).toBeDefined();
@@ -41,7 +49,13 @@ it("offers every currency the ledger holds and rejects a whitespace-only name", 
 it("trims the name and saves it with the chosen currency, through the shared defaults", () => {
   const onSave = vi.fn();
   render(
-    <CreateAccountForm currencies={currencies} groups={[]} onCancel={vi.fn()} onSave={onSave} />,
+    <CreateAccountForm
+      currencies={currencies}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={onSave}
+    />,
   );
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "  Bank A  " } });
   fireEvent.click(screen.getByRole("radio", { name: /BYN/ }));
@@ -58,7 +72,13 @@ it("trims the name and saves it with the chosen currency, through the shared def
 it("preselects the first currency it was given, not a hardcoded one", () => {
   const onSave = vi.fn();
   render(
-    <CreateAccountForm currencies={currencies} groups={[]} onCancel={vi.fn()} onSave={onSave} />,
+    <CreateAccountForm
+      currencies={currencies}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={onSave}
+    />,
   );
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
   screen.getByRole("button", { name: "Save" }).click();
@@ -67,7 +87,13 @@ it("preselects the first currency it was given, not a hardcoded one", () => {
 
 it("prevents a name longer than the shared 120-character contract", () => {
   render(
-    <CreateAccountForm currencies={currencies} groups={[]} onCancel={vi.fn()} onSave={vi.fn()} />,
+    <CreateAccountForm
+      currencies={currencies}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
   );
   expect(screen.getByLabelText("Name").getAttribute("maxlength")).toBe("120");
 });
@@ -77,7 +103,15 @@ it("prevents a name longer than the shared 120-character contract", () => {
  * rebuilt. A dead Save button explains itself; a crash does not.
  */
 it("stays rendered with no currencies, and cannot save", () => {
-  render(<CreateAccountForm currencies={[]} groups={[]} onCancel={vi.fn()} onSave={vi.fn()} />);
+  render(
+    <CreateAccountForm
+      currencies={[]}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
   expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
 });
@@ -91,6 +125,7 @@ it("collapses seven fields behind More details by default", () => {
   render(
     <CreateAccountForm
       currencies={currencies}
+      today={TODAY}
       groups={groups}
       onCancel={vi.fn()}
       onSave={vi.fn()}
@@ -109,6 +144,7 @@ it("switching ownership to shared forces business off and disables the toggle", 
   render(
     <CreateAccountForm
       currencies={currencies}
+      today={TODAY}
       groups={groups}
       onCancel={vi.fn()}
       onSave={vi.fn()}
@@ -132,6 +168,7 @@ it("an invalid opening date blocks Save with the field error", () => {
   render(
     <CreateAccountForm
       currencies={currencies}
+      today={TODAY}
       groups={groups}
       onCancel={vi.fn()}
       onSave={vi.fn()}
@@ -151,6 +188,7 @@ it("reaches onSave with the whole draft once More details is filled in", () => {
   render(
     <CreateAccountForm
       currencies={currencies}
+      today={TODAY}
       groups={groups}
       onCancel={vi.fn()}
       onSave={onSave}
@@ -194,6 +232,7 @@ it("renders two errors from one map on their own fields", () => {
   render(
     <CreateAccountForm
       currencies={currencies}
+      today={TODAY}
       groups={groups}
       fieldErrors={{
         byField: { name: ["too short"], currency: ["not held by the ledger"] },
@@ -211,6 +250,7 @@ it("renders an unknown path at form level, under an alert", () => {
   render(
     <CreateAccountForm
       currencies={currencies}
+      today={TODAY}
       groups={groups}
       fieldErrors={{ byField: {}, formLevel: ["externalId: already used"] }}
       onCancel={vi.fn()}
@@ -226,6 +266,7 @@ it("renders nothing extra with no fieldErrors prop", () => {
   render(
     <CreateAccountForm
       currencies={currencies}
+      today={TODAY}
       groups={groups}
       onCancel={vi.fn()}
       onSave={vi.fn()}

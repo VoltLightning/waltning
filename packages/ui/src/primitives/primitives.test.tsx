@@ -61,6 +61,29 @@ describe("accessible names", () => {
     );
     expect(screen.getByLabelText("All, 42 items")).toBeDefined();
   });
+
+  /**
+   * `Dock`'s mode row: a segment named but not yet built. `accessibilityHint`
+   * has no DOM equivalent under `react-native-web`, so the reason has to
+   * reach the label itself — `getByLabelText` is what proves it does.
+   */
+  it("a disabled segment says why in its own label, and refuses the press", () => {
+    const onChange = vi.fn();
+    render(
+      <SegmentControl
+        segments={[
+          { value: "keypad", label: "Keypad" },
+          { value: "voice", label: "Voice", disabled: true },
+        ]}
+        value="keypad"
+        onChange={onChange}
+      />,
+    );
+    const voice = screen.getByLabelText("Voice, Later");
+    expect(voice.getAttribute("aria-disabled")).toBe("true");
+    voice.click();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 describe("Button", () => {

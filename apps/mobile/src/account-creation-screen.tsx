@@ -1,3 +1,4 @@
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseNewAccountRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -55,6 +56,10 @@ export default function NewAccount() {
   }>();
   const target = parseNewAccountRoute(raw);
   const invalidMessage = target.valid ? null : target.message;
+  // The device's own calendar (§7.0a) — `DateField`'s shortcut row. Same call
+  // `quick-add-screen.tsx` makes; `deviceRuntime` reads `Intl`/`Date` only,
+  // never a platform API.
+  const today = deviceRuntime().capture().date;
 
   useEffect(() => {
     if (invalidMessage) {
@@ -96,6 +101,7 @@ export default function NewAccount() {
       <Card>
         <CreateAccountForm
           currencies={snapshot.currencies}
+          today={today}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
           groups={snapshot.groups}
           onCancel={handleCancel}

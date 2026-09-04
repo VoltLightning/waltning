@@ -47,6 +47,22 @@ export const en = {
     couldNotSave: "Couldn't save",
     note: "Note",
     memo: "Memo",
+    /** `SearchField`'s clear control — shown only once there is a value to clear. */
+    clear: "Clear",
+    /** `Keypad`'s delete key. */
+    delete: "Delete",
+    /** `DateField`'s second shortcut chip. The first reuses `shell.today`. */
+    yesterday: "Yesterday",
+    /**
+     * `SearchField`'s live result count. Two flat forms rather than i18next's
+     * plural suffixes — the catalogue carries none of those yet (`i18n.test.tsx`
+     * proves the machinery, not a real message), so this picks between the two
+     * this product actually needs: one match, or any other count including zero.
+     */
+    resultsOne: "{{count}} result",
+    resultsMany: "{{count}} results",
+    /** A `Dock` mode that has no screen yet — the accessibility hint on top of `disabled`. */
+    later: "Later",
   },
   accounts: {
     currency: "Currency",

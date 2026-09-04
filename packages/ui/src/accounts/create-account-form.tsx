@@ -36,6 +36,7 @@ import type { Messages } from "../i18n/en.ts";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
+import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { RadioGroup } from "../primitives/radio";
 import { Select } from "../primitives/select";
@@ -74,6 +75,8 @@ export type CreateAccountFormProps = {
    * itself better than one that crashes.
    */
   currencies: readonly CreateAccountCurrency[];
+  /** The device's local `AccountingDate` (§7.0a) — `DateField`'s shortcut row for opening date. */
+  today: string;
   /**
    * A refusal from the last save attempt, matched onto `name` / `currency` —
    * this form's own known paths (`mapFieldErrors`, `architecture/12`).
@@ -112,6 +115,7 @@ const KIND_LABEL_KEY: Record<AccountKind, keyof Messages["accounts"]> = {
 
 export function CreateAccountForm({
   currencies,
+  today,
   groups,
   fieldErrors,
   onCancel,
@@ -260,10 +264,11 @@ export function CreateAccountForm({
             onChange={setOpeningBalance}
             {...(currency === null ? {} : { currency })}
           />
-          <TextField
+          <DateField
             label={t("accounts.openingDate")}
             value={openingDateText}
-            onChangeText={setOpeningDateText}
+            onChange={setOpeningDateText}
+            today={today}
             hint={t("accounts.openingDateHint")}
             {...(dateInvalid ? { error: t("accounts.openingDateInvalid") } : {})}
           />
