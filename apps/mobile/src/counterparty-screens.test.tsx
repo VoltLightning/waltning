@@ -995,6 +995,14 @@ describe("CounterpartyDetail (S13)", () => {
     // `AmountField` displays the raw "1,23" through the locale's own mark
     // (English: ".") — the same `display` a caption or a hero value reads.
     expect(sheet.getByRole("button", { name: "Discharges: 1.23" })).toBeDefined();
+
+    // L6 — a keystroke clears the stale refusal rather than leaving it
+    // stand against a figure that has since changed. The next digit typed
+    // (into either field) is what a person does next after reading the
+    // caption, and it used to leave the caption exactly where it was.
+    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 1.23" }));
+    fireEvent.click(sheet.getByRole("button", { name: "4" }));
+    expect(screen.queryByText("JPY holds 0 decimal places — this amount has more.")).toBeNull();
   });
 
   it("shows the all-settled empty state, keeping the card, when nothing is open", () => {

@@ -247,8 +247,8 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
   },
   "packages/client/src/ledger/create-phone-ledger.ts": {
-    max: 9,
-    why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal, settleDebtRefusal and changePivotRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
+    max: 12,
+    why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal, settleDebtRefusal and changePivotRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast. L1's finish() adds three more: DistributiveOmit's own `T extends unknown` is the standard TypeScript idiom that makes a conditional type distribute over a union — not a value going untyped, a type-level trigger with no other spelling — and fieldErrorsOf(outcome: unknown) takes whichever of ~75 different controller return shapes was just produced (a deliberately heterogeneous collection, the one other case CLAUDE.md names), narrowed with an `in` check before the one cast that reads the narrowed shape back out.",
   },
   // E2 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per executor file — the driver's

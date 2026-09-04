@@ -50,6 +50,13 @@ function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError)
   if (error.messageKey === "accounts.staleVersion") return t("accounts.staleVersion");
   if (error.messageKey === "accounts.sharedNotBusiness") return t("accounts.sharedNotBusiness");
   if (error.messageKey === "accounts.nothingToReconcile") return t("accounts.nothingToReconcile");
+  /** M1 — `openingBalance`/`observedBalance`'s own scale mirror (`create-phone-ledger.ts`). */
+  if (error.messageKey === "transactions.tooManyDecimals") {
+    return t("transactions.tooManyDecimals", {
+      currency: error.params?.["currency"] ?? "",
+      decimals: error.params?.["decimals"] ?? "",
+    });
+  }
   return error.message;
 }
 

@@ -77,7 +77,10 @@ describe("signs", () => {
 
 describe("representation", () => {
   it("never emits exponent notation, however small or large", () => {
-    for (const v of ["0.00000001", "1e-8", "1e21", "12345678901234567890.12345678"]) {
+    // Fixed-notation input only — `toFixed()` never emits exponent notation
+    // on the way out regardless of magnitude, so this is the *output*
+    // guarantee. Exponent-notation *input* is its own refusal, below.
+    for (const v of ["0.00000001", "12345678901234567890.12345678"]) {
       expect(money.toMoney(v)).not.toMatch(/e/i);
     }
   });
@@ -87,6 +90,19 @@ describe("representation", () => {
     // place and 1,234.56 in another. Neither is a Money.
     expect(money.toMoney("1234.5", 2)).toBe("1234.50");
     expect(money.toMoney("1234.5", 2)).not.toContain(",");
+  });
+
+  /**
+   * L2 — `zMoney`'s own regex (`^-?\d+(\.\d+)?$`) already refuses exponent
+   * notation; `toMoney` used to be laxer about the same "decimal string"
+   * concept when reached directly (`createTransaction`'s controller does,
+   * on `draft.amount`, before any schema sees it) — `toMoney("1e3")`
+   * silently returned `"1000.00000000"`.
+   */
+  it("refuses exponent notation rather than silently normalising it", () => {
+    for (const v of ["1e3", "1E3", "1e-8", "1e21", "-1e3"]) {
+      expect(() => money.toMoney(v)).toThrow();
+    }
   });
 });
 

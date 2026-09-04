@@ -9,6 +9,7 @@
 --
 --   WA016  amount holds more decimals than its currency  → validation
 --   WA017  category kind disagrees with the transaction   → validation
+--   WA018  currency's decimals cannot be lowered under existing rows → validation
 --
 -- ═══ H2 — a figure past its own currency's scale ══════════════════════════
 --
@@ -39,7 +40,21 @@
 -- `scale()` cannot tell it apart from "48.90512340". `trim_scale` removes the
 -- trailing zeros first, so `scale(trim_scale(v))` answers the question this
 -- guarantee is actually about: how many decimal places did the figure itself
--- carry.
+-- carry. L4 — the message below prints `trim_scale(v)` too, for the same
+-- reason: printing the padded `48.90000000` back at a person is not the
+-- figure they typed.
+--
+-- **M3 — identity travels with the raise, not with the SQLSTATE.** WA016 is
+-- now shared by every trigger below (`transactions`, `debt_reassignments`,
+-- and — H3/M1 further down — `transaction_lines`, `accounts`,
+-- `recurring_transactions`, `targets`, `receipts`), so
+-- `apps/api/src/common/pg-errors.ts` cannot tell them apart from the code
+-- alone; it used to hard-wire WA016 to this one trigger's name, which
+-- mislabelled every other one. Every `RAISE` here now sets `CONSTRAINT` to
+-- its own trigger's name and `COLUMN` to the actual offending column —
+-- `pg-errors.ts` reads both off the driver error rather than guessing from a
+-- static map, and the column rides the envelope so a client can route the
+-- refusal to the right field.
 CREATE OR REPLACE FUNCTION assert_amount_scale()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -52,9 +67,11 @@ BEGIN
     SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
     IF allowed IS NOT NULL AND scale(trim_scale(NEW.amount_original)) > allowed THEN
       RAISE EXCEPTION
-        'amount % holds more decimal places than % (% allows %) (H2)',
-        NEW.amount_original, NEW.currency, NEW.currency, allowed
-        USING ERRCODE = 'WA016';
+        'amount_original % holds more decimal places than % allows (%) (H2)',
+        trim_scale(NEW.amount_original), NEW.currency, allowed
+        USING ERRCODE = 'WA016',
+          CONSTRAINT = 'transactions_amount_scale_matches_currency',
+          COLUMN = 'amount_original';
     END IF;
   END IF;
 
@@ -62,9 +79,11 @@ BEGIN
     SELECT decimals INTO allowed FROM currencies WHERE code = NEW.to_currency;
     IF allowed IS NOT NULL AND scale(trim_scale(NEW.to_amount)) > allowed THEN
       RAISE EXCEPTION
-        'amount % holds more decimal places than % (% allows %) (H2)',
-        NEW.to_amount, NEW.to_currency, NEW.to_currency, allowed
-        USING ERRCODE = 'WA016';
+        'to_amount % holds more decimal places than % allows (%) (H2)',
+        trim_scale(NEW.to_amount), NEW.to_currency, allowed
+        USING ERRCODE = 'WA016',
+          CONSTRAINT = 'transactions_amount_scale_matches_currency',
+          COLUMN = 'to_amount';
     END IF;
   END IF;
 
@@ -72,9 +91,11 @@ BEGIN
     SELECT decimals INTO allowed FROM currencies WHERE code = NEW.debt_currency;
     IF allowed IS NOT NULL AND scale(trim_scale(NEW.debt_amount)) > allowed THEN
       RAISE EXCEPTION
-        'amount % holds more decimal places than % (% allows %) (H2)',
-        NEW.debt_amount, NEW.debt_currency, NEW.debt_currency, allowed
-        USING ERRCODE = 'WA016';
+        'debt_amount % holds more decimal places than % allows (%) (H2)',
+        trim_scale(NEW.debt_amount), NEW.debt_currency, allowed
+        USING ERRCODE = 'WA016',
+          CONSTRAINT = 'transactions_amount_scale_matches_currency',
+          COLUMN = 'debt_amount';
     END IF;
   END IF;
 
@@ -85,9 +106,11 @@ BEGIN
     SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
     IF allowed IS NOT NULL AND scale(trim_scale(NEW.fee)) > allowed THEN
       RAISE EXCEPTION
-        'amount % holds more decimal places than % (% allows %) (H2)',
-        NEW.fee, NEW.currency, NEW.currency, allowed
-        USING ERRCODE = 'WA016';
+        'fee % holds more decimal places than % allows (%) (H2)',
+        trim_scale(NEW.fee), NEW.currency, allowed
+        USING ERRCODE = 'WA016',
+          CONSTRAINT = 'transactions_amount_scale_matches_currency',
+          COLUMN = 'fee';
     END IF;
   END IF;
 
@@ -116,9 +139,11 @@ BEGIN
     SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
     IF allowed IS NOT NULL AND scale(trim_scale(NEW.amount)) > allowed THEN
       RAISE EXCEPTION
-        'amount % holds more decimal places than % (% allows %) (H2)',
-        NEW.amount, NEW.currency, NEW.currency, allowed
-        USING ERRCODE = 'WA016';
+        'amount % holds more decimal places than % allows (%) (H2)',
+        trim_scale(NEW.amount), NEW.currency, allowed
+        USING ERRCODE = 'WA016',
+          CONSTRAINT = 'debt_reassignments_amount_scale_matches_currency',
+          COLUMN = 'amount';
     END IF;
   END IF;
 
@@ -171,3 +196,261 @@ CREATE TRIGGER transactions_category_kind_matches_type
   BEFORE INSERT OR UPDATE OF category_id, type
   ON transactions
   FOR EACH ROW EXECUTE FUNCTION assert_category_kind_matches_type();
+--> statement-breakpoint
+
+-- ═══ H3 — a split line past its own transaction's scale ═══════════════════
+--
+-- `transaction_lines.amount` (§6.10) carries no currency of its own — a
+-- split belongs to the payment, not the photograph — so its scale has to be
+-- checked against its *parent* `transactions.currency`. Nothing did:
+-- `4.905 + 5.095 = 10.00` inserted fine and rendered as `4.91 + 5.10 = 10.01`
+-- against a stated `10.00`, the same defect `assert_amount_scale` above
+-- fixes for the parent row, one join away from it.
+CREATE OR REPLACE FUNCTION assert_transaction_line_amount_scale()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  allowed integer;
+  parent_currency text;
+BEGIN
+  SELECT currency INTO parent_currency FROM transactions WHERE id = NEW.transaction_id;
+  -- The FK to `transactions` already refuses an unknown id; a missing row
+  -- here means that check has not run yet in this same statement.
+  IF parent_currency IS NULL THEN RETURN NEW; END IF;
+
+  SELECT decimals INTO allowed FROM currencies WHERE code = parent_currency;
+  IF allowed IS NOT NULL AND scale(trim_scale(NEW.amount)) > allowed THEN
+    RAISE EXCEPTION
+      'amount % holds more decimal places than % allows (%) (H3)',
+      trim_scale(NEW.amount), parent_currency, allowed
+      USING ERRCODE = 'WA016',
+        CONSTRAINT = 'transaction_lines_amount_scale_matches_currency',
+        COLUMN = 'amount';
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER transaction_lines_amount_scale_matches_currency
+  BEFORE INSERT OR UPDATE OF amount, transaction_id
+  ON transaction_lines
+  FOR EACH ROW EXECUTE FUNCTION assert_transaction_line_amount_scale();
+--> statement-breakpoint
+
+-- ═══ M1 — four more money columns with a sibling currency, unguarded ══════
+--
+-- `accounts.opening_balance`/`expected_balance` (against `accounts.currency`
+-- — the same row), `recurring_transactions.amount_original` (against its
+-- own `currency`), `targets.amount` (against its own `currency`), and
+-- `receipts.total` (against its own `currency`, both nullable — a receipt
+-- can arrive before OCR has read either). Each is the identical guarantee
+-- `assert_amount_scale` already states for `transactions`, applied to a
+-- table that guarantee never reaches. `opening_balance` is the sharpest of
+-- the four — it shifts every balance computed from it, forever — and
+-- `recurring_transactions` is the most visible: an over-scale rule used to
+-- insert fine and then refuse every occurrence it ever generates.
+CREATE OR REPLACE FUNCTION assert_account_balance_scale()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  allowed integer;
+BEGIN
+  SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
+  IF allowed IS NULL THEN RETURN NEW; END IF;
+
+  IF scale(trim_scale(NEW.opening_balance)) > allowed THEN
+    RAISE EXCEPTION
+      'opening_balance % holds more decimal places than % allows (%) (M1)',
+      trim_scale(NEW.opening_balance), NEW.currency, allowed
+      USING ERRCODE = 'WA016',
+        CONSTRAINT = 'accounts_balance_scale_matches_currency',
+        COLUMN = 'opening_balance';
+  END IF;
+
+  IF NEW.expected_balance IS NOT NULL AND scale(trim_scale(NEW.expected_balance)) > allowed THEN
+    RAISE EXCEPTION
+      'expected_balance % holds more decimal places than % allows (%) (M1)',
+      trim_scale(NEW.expected_balance), NEW.currency, allowed
+      USING ERRCODE = 'WA016',
+        CONSTRAINT = 'accounts_balance_scale_matches_currency',
+        COLUMN = 'expected_balance';
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER accounts_balance_scale_matches_currency
+  BEFORE INSERT OR UPDATE OF opening_balance, expected_balance, currency
+  ON accounts
+  FOR EACH ROW EXECUTE FUNCTION assert_account_balance_scale();
+--> statement-breakpoint
+
+CREATE OR REPLACE FUNCTION assert_recurring_transaction_amount_scale()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  allowed integer;
+BEGIN
+  IF NEW.amount_original IS NULL OR NEW.currency IS NULL THEN RETURN NEW; END IF;
+  SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
+  IF allowed IS NOT NULL AND scale(trim_scale(NEW.amount_original)) > allowed THEN
+    RAISE EXCEPTION
+      'amount_original % holds more decimal places than % allows (%) (M1)',
+      trim_scale(NEW.amount_original), NEW.currency, allowed
+      USING ERRCODE = 'WA016',
+        CONSTRAINT = 'recurring_transactions_amount_scale_matches_currency',
+        COLUMN = 'amount_original';
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER recurring_transactions_amount_scale_matches_currency
+  BEFORE INSERT OR UPDATE OF amount_original, currency
+  ON recurring_transactions
+  FOR EACH ROW EXECUTE FUNCTION assert_recurring_transaction_amount_scale();
+--> statement-breakpoint
+
+CREATE OR REPLACE FUNCTION assert_target_amount_scale()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  allowed integer;
+BEGIN
+  IF NEW.amount IS NULL OR NEW.currency IS NULL THEN RETURN NEW; END IF;
+  SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
+  IF allowed IS NOT NULL AND scale(trim_scale(NEW.amount)) > allowed THEN
+    RAISE EXCEPTION
+      'amount % holds more decimal places than % allows (%) (M1)',
+      trim_scale(NEW.amount), NEW.currency, allowed
+      USING ERRCODE = 'WA016',
+        CONSTRAINT = 'targets_amount_scale_matches_currency',
+        COLUMN = 'amount';
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER targets_amount_scale_matches_currency
+  BEFORE INSERT OR UPDATE OF amount, currency
+  ON targets
+  FOR EACH ROW EXECUTE FUNCTION assert_target_amount_scale();
+--> statement-breakpoint
+
+-- `total`/`currency` are both nullable — a receipt row can exist before OCR
+-- has populated either — so this is checked only once both are present,
+-- the same shape `assert_amount_scale` already gives every optional pair.
+CREATE OR REPLACE FUNCTION assert_receipt_total_scale()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  allowed integer;
+BEGIN
+  IF NEW.total IS NULL OR NEW.currency IS NULL THEN RETURN NEW; END IF;
+  SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
+  IF allowed IS NOT NULL AND scale(trim_scale(NEW.total)) > allowed THEN
+    RAISE EXCEPTION
+      'total % holds more decimal places than % allows (%) (M1)',
+      trim_scale(NEW.total), NEW.currency, allowed
+      USING ERRCODE = 'WA016',
+        CONSTRAINT = 'receipts_total_scale_matches_currency',
+        COLUMN = 'total';
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER receipts_total_scale_matches_currency
+  BEFORE INSERT OR UPDATE OF total, currency
+  ON receipts
+  FOR EACH ROW EXECUTE FUNCTION assert_receipt_total_scale();
+--> statement-breakpoint
+
+-- ═══ C1 — lowering a currency's own `decimals` under existing rows ════════
+--
+-- `currencies.decimals` (`update_currency`, `currencyPatch.decimals` in
+-- `packages/core/src/registry/inputs.ts`) is an unconstrained `int 0–8` —
+-- nothing re-validated the rows it governs. `XAA decimals=8`, a row storing
+-- `amount_original=48.90512340`, then `UPDATE currencies SET decimals=2`
+-- succeeded, and the row was now un-editable: any later update of it fired
+-- WA016 on a value it had already held before the currency changed under it.
+--
+-- Shaped after `accounts_change_safe` (WA013, `0001_database_objects.sql`):
+-- a currency change is refused, not silently accepted, when it would
+-- invalidate a row that already exists. Every table the H2/H3/M1 triggers
+-- above cover is checked here in turn — a widening (or unchanged) `decimals`
+-- always passes without a single lookup, since nothing that fit the old,
+-- smaller scale can fail to fit a larger one.
+CREATE OR REPLACE FUNCTION assert_currency_decimals_safe()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  n bigint;
+BEGIN
+  IF NEW.decimals >= OLD.decimals THEN RETURN NEW; END IF;
+
+  SELECT count(*) INTO n FROM transactions
+  WHERE deleted_at IS NULL AND (
+    (currency = NEW.code AND scale(trim_scale(amount_original)) > NEW.decimals)
+    OR (currency = NEW.code AND fee IS NOT NULL AND scale(trim_scale(fee)) > NEW.decimals)
+    OR (to_currency = NEW.code AND scale(trim_scale(to_amount)) > NEW.decimals)
+    OR (debt_currency = NEW.code AND scale(trim_scale(debt_amount)) > NEW.decimals)
+  );
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      'cannot lower % to % decimal places — % transaction row(s) hold a figure with more (C1)',
+      NEW.code, NEW.decimals, n
+      USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
+  END IF;
+
+  SELECT count(*) INTO n FROM debt_reassignments
+  WHERE currency = NEW.code AND scale(trim_scale(amount)) > NEW.decimals;
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      'cannot lower % to % decimal places — % debt reassignment(s) hold a figure with more (C1)',
+      NEW.code, NEW.decimals, n
+      USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
+  END IF;
+
+  SELECT count(*) INTO n FROM transaction_lines tl
+  JOIN transactions t ON t.id = tl.transaction_id
+  WHERE t.currency = NEW.code AND scale(trim_scale(tl.amount)) > NEW.decimals;
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      'cannot lower % to % decimal places — % transaction line(s) hold a figure with more (C1)',
+      NEW.code, NEW.decimals, n
+      USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
+  END IF;
+
+  SELECT count(*) INTO n FROM accounts
+  WHERE currency = NEW.code AND (
+    scale(trim_scale(opening_balance)) > NEW.decimals
+    OR (expected_balance IS NOT NULL AND scale(trim_scale(expected_balance)) > NEW.decimals)
+  );
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      'cannot lower % to % decimal places — % account(s) hold a balance with more (C1)',
+      NEW.code, NEW.decimals, n
+      USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
+  END IF;
+
+  SELECT count(*) INTO n FROM recurring_transactions
+  WHERE currency = NEW.code AND scale(trim_scale(amount_original)) > NEW.decimals;
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      'cannot lower % to % decimal places — % recurring transaction(s) hold a figure with more (C1)',
+      NEW.code, NEW.decimals, n
+      USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER currencies_decimals_safe
+  BEFORE UPDATE OF decimals ON currencies
+  FOR EACH ROW EXECUTE FUNCTION assert_currency_decimals_safe();
+--> statement-breakpoint
+
+-- ═══ M2 — `fee` carries no sign constraint ═════════════════════════════════
+--
+-- `computations.md` §12.2 reports `fee` verbatim as the institution's own
+-- stated-fee line; a negative value is never a fee, it is a rebate wearing
+-- the wrong sign. A single-column CHECK, not a trigger — declared in
+-- `schema.ts` as `transactions_fee_positive` (regenerate `0000_schema.sql`
+-- to pick it up); added here by hand so it holds before that regeneration.
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_fee_positive"
+  CHECK ("fee" IS NULL OR "fee" >= 0);

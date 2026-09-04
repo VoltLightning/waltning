@@ -450,6 +450,43 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * M1 — `accounts.opening_balance` had no client mirror at all — the
+   * sharpest of the four columns `accounts_balance_scale_matches_currency`
+   * covers (`0012_transaction_scale_and_category_kind.sql`), since it
+   * shifts every balance computed from it, forever.
+   */
+  it("refuses an opening balance past the chosen currency's own scale", () => {
+    const { controller, createAccount } = harness();
+
+    const result = controller.createAccount({
+      ...minimalDraft("Bank A · PLN", PLN),
+      openingBalance: "48.905",
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "openingBalance",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+    expect(createAccount).not.toHaveBeenCalled();
+  });
+
+  it("admits an opening balance at exactly the chosen currency's own scale", () => {
+    const { controller, createAccount } = harness();
+
+    const result = controller.createAccount({
+      ...minimalDraft("Bank A · PLN", PLN),
+      openingBalance: "48.90",
+    });
+
+    expect("id" in result).toBe(true);
+    expect(createAccount).toHaveBeenCalledOnce();
+  });
+
+  /**
    * **The test that replaces a throw.**
    *
    * `refresh()` used to scan for an account that was not `USD` and throw
@@ -701,6 +738,38 @@ describe("phone ledger controller", () => {
     expect(controller.getSnapshot().recent).toEqual([]);
   });
 
+  /**
+   * M3 — a server-side WA016 refusal (`assert_amount_scale`,
+   * `0012_transaction_scale_and_category_kind.sql`) is shared by three
+   * columns on this table alone; the message names its own column first
+   * (`'to_amount % holds more decimal places …'`), and this is what routes
+   * that back onto the field a person is looking at rather than a form-level
+   * message. The client's own H2 checks refuse this before a write ever
+   * reaches a port — this pins the path for a row that got past them.
+   */
+  it.each([
+    ["amount_original", "amountOriginal"],
+    ["to_amount", "toAmount"],
+    ["fee", "fee"],
+  ] as const)("routes a server-side WA016 on %s to the %s field", (column, path) => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    createTransaction.mockImplementationOnce(() => {
+      throw new Error(`${column} 10.125 holds more decimal places than PLN allows (2) (H2)`);
+    });
+
+    const result = controller.createTransaction(expenseDraft(accountId));
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path,
+        message: expect.stringContaining(column),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+  });
+
   it.each(["0", "-1"])("rejects the non-positive amount %s before writing", (amount) => {
     const { controller, createTransaction } = harness();
     const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
@@ -734,6 +803,25 @@ describe("phone ledger controller", () => {
     expect("deferred" in result && result.deferred).toBe(true);
     // Not a refusal: nothing named `fieldErrors` on this outcome.
     expect(result).not.toHaveProperty("fieldErrors");
+  });
+
+  /**
+   * M4 — `money.toMoney` calls `Decimal`'s own constructor, which throws
+   * `DecimalError` on a malformed string rather than returning one. This
+   * controller used to call it directly on `draft.amount`, so a malformed
+   * figure threw out of `createTransaction` instead of refusing.
+   */
+  it("refuses a malformed amount through fieldErrors, never throws", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    expect(() => controller.createTransaction(expenseDraft(accountId, "abc"))).not.toThrow();
+
+    const result = controller.createTransaction(expenseDraft(accountId, "abc"));
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "amountOriginal", message: expect.any(String) },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
   });
 
   /**
@@ -1154,6 +1242,48 @@ describe("phone ledger controller", () => {
       expect("fieldErrors" in result).toBe(true);
       expect(updateAccount).not.toHaveBeenCalled();
     });
+
+    /**
+     * M1 — `accounts.opening_balance` had no client mirror at all: an
+     * account's own opening figure past its own currency's scale used to
+     * reach the write unrefused (`accounts_balance_scale_matches_currency`,
+     * `0012_transaction_scale_and_category_kind.sql`, is the guarantee this
+     * mirrors).
+     */
+    it("refuses an opening balance past the account's own currency scale", () => {
+      const { controller, updateAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.updateAccount({
+        id: accountId,
+        version: 1,
+        patch: { openingBalance: "48.905" },
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        {
+          path: "openingBalance",
+          message: expect.stringContaining("decimal places"),
+          messageKey: "transactions.tooManyDecimals",
+          params: { currency: "PLN", decimals: "2" },
+        },
+      ]);
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    it("admits an opening balance at exactly the account's own currency scale", () => {
+      const { controller, updateAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.updateAccount({
+        id: accountId,
+        version: 1,
+        patch: { openingBalance: "48.90" },
+      });
+
+      expect("id" in result).toBe(true);
+      expect(updateAccount).toHaveBeenCalledOnce();
+    });
   });
 
   describe("archiveAccount", () => {
@@ -1200,6 +1330,35 @@ describe("phone ledger controller", () => {
       });
       expect("id" in result).toBe(true);
       expect(controller.getSnapshot().accounts[0]?.expectedBalance).toBe(money.toMoney("42.20"));
+    });
+
+    /**
+     * M1 — `observedBalance` is what this write puts onto
+     * `accounts.expected_balance`; the same
+     * `accounts_balance_scale_matches_currency` trigger that column shares
+     * with `opening_balance` had no client mirror here either.
+     */
+    it("refuses an observed balance past the account's own currency scale", () => {
+      const { controller, reconcileAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.reconcileAccount({
+        accountId,
+        observedBalance: "42.205",
+        asOf: "2026-08-23",
+        note: "",
+        categoryId: null,
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        {
+          path: "observedBalance",
+          message: expect.stringContaining("decimal places"),
+          messageKey: "transactions.tooManyDecimals",
+          params: { currency: "PLN", decimals: "2" },
+        },
+      ]);
+      expect(reconcileAccount).not.toHaveBeenCalled();
     });
   });
 
@@ -1818,6 +1977,46 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       },
     ]);
   });
+
+  /**
+   * H3 — `transaction_lines.amount` carries no currency of its own; a split
+   * past the *parent* transaction's own scale (PLN, two decimal places
+   * here) used to reach the write unrefused — the client had no mirror of
+   * `transaction_lines_amount_scale_matches_currency`
+   * (`0012_transaction_scale_and_category_kind.sql`) at all.
+   */
+  it("refuses a split line past its parent transaction's own currency scale", () => {
+    const { controller, setTransactionLines } = detailHarness();
+
+    const result = controller.setTransactionLines(TXN, 1, [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        description: "Groceries",
+        amount: "4.905",
+      },
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        description: "Fuel",
+        amount: "43.995",
+      },
+    ]);
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "lines.0.amount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+      {
+        path: "lines.1.amount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+    expect(setTransactionLines).not.toHaveBeenCalled();
+  });
 });
 
 describe("phone ledger controller — counterparties and settlement", () => {
@@ -2330,6 +2529,95 @@ describe("phone ledger controller — counterparties and settlement", () => {
         params: { currency: "PLN", decimals: "2" },
       },
     ]);
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /**
+   * M4 — `money.toMoney` calls `Decimal`'s own constructor, which throws
+   * `DecimalError` on a malformed string rather than returning one. This
+   * controller used to call it directly on `draft.amount`, so a malformed
+   * figure threw out of `settleDebt` instead of refusing.
+   */
+  it("settleDebt: a malformed amount refuses through fieldErrors, never throws", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    expect(() =>
+      controller.settleDebt({
+        counterpartyId: NINA,
+        accountId: "33333333-3333-4333-8333-333333333333",
+        date: "2026-08-04",
+        amount: "abc",
+        currency: "PLN",
+        dischargesCurrency: "PLN",
+        dischargesAmount: "50",
+        note: "",
+        categoryId: null,
+      }),
+    ).not.toThrow();
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "abc",
+      currency: "PLN",
+      dischargesCurrency: "PLN",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+    expect("fieldErrors" in result && result.fieldErrors.some((e) => e.path === "amount")).toBe(
+      true,
+    );
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /** M4 — same guard, the "Discharges" leg (`draft.dischargesAmount`). */
+  it("settleDebt: a malformed discharges.amount refuses through fieldErrors, never throws", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "PLN",
+      dischargesCurrency: "PLN",
+      dischargesAmount: "abc",
+      note: "",
+      categoryId: null,
+    });
+    expect(
+      "fieldErrors" in result && result.fieldErrors.some((e) => e.path === "discharges.amount"),
+    ).toBe(true);
     expect(settleDebt).not.toHaveBeenCalled();
   });
 

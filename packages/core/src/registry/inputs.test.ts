@@ -263,6 +263,21 @@ describe("createTransactionInput", () => {
     expect(paths(result)).toContain("amountOriginal");
   });
 
+  /**
+   * M4 — the schema's own `superRefine` used to call `dec(t.amountOriginal)`
+   * unconditionally; `zMoney`'s regex failing does not stop `superRefine`
+   * from running, so a malformed `amountOriginal` threw a `DecimalError`
+   * out of `safeParse` instead of returning one. Same for `toAmount`.
+   */
+  it("refuses a malformed amountOriginal through safeParse, never throws", () => {
+    expect(() =>
+      createTransactionInput.safeParse({ ...expense, amountOriginal: "abc" }),
+    ).not.toThrow();
+    const result = createTransactionInput.safeParse({ ...expense, amountOriginal: "abc" });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("amountOriginal");
+  });
+
   it("refuses an ISO timestamp where an accounting date belongs", () => {
     // C28 again, on the field that matters most: a capture at 01:00 in Warsaw
     // dated by a UTC instant is dated *yesterday*, permanently.
@@ -367,6 +382,16 @@ describe("createTransactionInput", () => {
         expect(paths(result)).toContain(field);
       },
     );
+
+    /** M4 — same guard as `amountOriginal`'s own, above, for `toAmount`. */
+    it("refuses a malformed toAmount through safeParse, never throws", () => {
+      expect(() =>
+        createTransactionInput.safeParse({ ...transfer, toAmount: "abc" }),
+      ).not.toThrow();
+      const result = createTransactionInput.safeParse({ ...transfer, toAmount: "abc" });
+      expect(result.success).toBe(false);
+      expect(paths(result)).toContain("toAmount");
+    });
 
     it("refuses a transfer to the same account", () => {
       // `transactions_transfer_distinct`, and S31 refuses it inline — the
@@ -1222,6 +1247,31 @@ describe("settleDebtInput", () => {
       discharges: { currency: "EUR", amount: "-1" },
     });
 
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("discharges.amount");
+  });
+
+  /**
+   * M4 — the schema's own `superRefine` used to call `dec(v.amount)`
+   * unconditionally; `zMoney`'s regex failing does not stop `superRefine`
+   * from running, so a malformed `amount` threw a `DecimalError` out of
+   * `safeParse` instead of returning one. Same for `discharges.amount`.
+   */
+  it("refuses a malformed amount through safeParse, never throws", () => {
+    expect(() => settleDebtInput.safeParse({ ...base, amount: "abc" })).not.toThrow();
+    const result = settleDebtInput.safeParse({ ...base, amount: "abc" });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("amount");
+  });
+
+  it("refuses a malformed discharges.amount through safeParse, never throws", () => {
+    expect(() =>
+      settleDebtInput.safeParse({ ...base, discharges: { currency: "EUR", amount: "abc" } }),
+    ).not.toThrow();
+    const result = settleDebtInput.safeParse({
+      ...base,
+      discharges: { currency: "EUR", amount: "abc" },
+    });
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("discharges.amount");
   });

@@ -394,13 +394,24 @@ export default function CounterpartyDetail() {
   }, []);
   const handleDismissSettledToast = useCallback(() => setSettledToastMessage(null), []);
   const handleDismissUnmergeToast = useCallback(() => setUnmergeToast(false), []);
+  /**
+   * L6 — a keystroke clears a stale refusal rather than leaving it stand
+   * against a figure that has since changed. `handleDischargesCurrencyChange`
+   * (below) is the one place this screen sets `settleFieldErrors`, and its
+   * own refusal is exactly the shape this closes: switch the discharges
+   * currency to a smaller scale, refused, then type a now-valid figure —
+   * without this, the stale caption stayed on screen against a figure that
+   * would no longer trip it.
+   */
   const handleSettleKey = useCallback(
     (key: KeypadKey) => {
       if (settleActiveField === "amount") {
         setSettleAmountRaw((current) => applyKey(current, key, settleAccountDecimals));
+        setSettleFieldErrors(undefined);
         return;
       }
       setSettleDischargesRaw((current) => applyKey(current, key, settleDischargesDecimals));
+      setSettleFieldErrors(undefined);
     },
     [settleActiveField, settleAccountDecimals, settleDischargesDecimals],
   );

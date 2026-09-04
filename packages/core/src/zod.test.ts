@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
+import { zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
 
 describe("zMoney", () => {
   it("accepts the largest numeric(20,8) magnitude", () => {
@@ -13,6 +13,21 @@ describe("zMoney", () => {
       expect(zMoney.safeParse(value).success).toBe(false);
     },
   );
+});
+
+describe("zFee (M2)", () => {
+  it("accepts a positive fee and zero", () => {
+    expect(zFee.parse("5.00")).toBe("5.00000000");
+    expect(zFee.parse("0")).toBe("0.00000000");
+  });
+
+  it("refuses a negative fee — a fee is never a rebate wearing the wrong sign", () => {
+    const result = zFee.safeParse("-5.00");
+    expect(result.success).toBe(false);
+    expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+      "cannot be negative",
+    );
+  });
 });
 
 describe("zUnitsPerPivot", () => {

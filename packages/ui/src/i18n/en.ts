@@ -165,6 +165,13 @@ export const en = {
      * own currency holds.
      */
     tooManyDecimals: "{{currency}} holds {{decimals}} decimal places — this amount has more.",
+    /**
+     * H1 — a fee that fails `parseAmount` (`"1,234.56"`, `"1.2.3"`, `"12."`,
+     * `"abc"`) used to be dropped silently and the transfer saved with no
+     * fee at all. Named onto the field it refuses, the same as
+     * `tooManyDecimals` above.
+     */
+    invalidAmount: "Enter a valid amount.",
     expense: "Expense",
     income: "Income",
     category: "Category",

@@ -43,6 +43,17 @@ export const zMoney = z
   .refine((v) => dec(v).abs().lt("1000000000000"), "amount exceeds numeric(20,8)");
 
 /**
+ * `fee` (S31 §9.1) — the institution's own stated-fee line, reported
+ * verbatim by `computations.md` §12.2. `zMoney` alone stays sign-permissive
+ * because `amountOriginal` legitimately carries a negative sign for an
+ * `adjustment` row (`transactions_amount_positive`); a fee has no such case
+ * — a negative one is never a fee, it is a rebate wearing the wrong sign
+ * (M2). `transactions_fee_positive` (`schema.ts`) is the same guarantee in
+ * Postgres.
+ */
+export const zFee = zMoney.refine((v) => dec(v).gte(0), "a fee cannot be negative");
+
+/**
  * A rate you multiply by to reach the pivot (`computations.md` §4).
  *
  * **Refused at zero or below.** A rate is pivot per unit and must be

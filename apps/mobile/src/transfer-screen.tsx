@@ -38,7 +38,7 @@ import {
   type TransferComposerField,
 } from "@waltning/ui/transactions/transfer-composer";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
 /** `create_transaction`'s own field paths for a transfer row — everything else lands at form level. */
@@ -64,6 +64,10 @@ function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError)
       currency: error.params?.["currency"] ?? "",
       decimals: error.params?.["decimals"] ?? "",
     });
+  }
+  /** H1 — the fee field's own refusal when `parseAmount` cannot read it. */
+  if (error.messageKey === "transactions.invalidAmount") {
+    return t("transactions.invalidAmount");
   }
   return error.message;
 }
@@ -112,6 +116,12 @@ function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
  */
 function handleCreateAccountFromTransfer() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
+}
+
+/** L5 — the same "does this raw figure still fit?" question `handleComposerAccountChange` (quick-add-screen.tsx) asks on its own switch. */
+function decimalsExceed(raw: string, decimals: number): boolean {
+  const parsed = parseAmount(raw);
+  return parsed !== null && money.dec(parsed).decimalPlaces() > decimals;
 }
 
 export default function Transfer() {
@@ -181,6 +191,26 @@ export default function Transfer() {
     };
   }, [ledger, crossCurrency, fromAccount, toAccount, date]);
 
+  /**
+   * R4 H-r4 — `referenceRate` is correctly re-derived when only `date`
+   * changes (it is a `useMemo` keyed on it, above), but nothing else
+   * recomputed the destination *figure* from a date-only change:
+   * `handleKey` only recomputes it on a keypress, and
+   * `handleFromAccountChange`/`handleToAccountChange` only on an account
+   * switch. A person who types the amount, then picks a different date, saw
+   * the figure stay priced at the old date's rate — silently, since nothing
+   * on screen says the two have drifted apart. Gated the same way every
+   * other auto-fill here is: never once the destination has been hand-typed
+   * (`toAmountEdited`).
+   */
+  useEffect(() => {
+    if (toAmountEdited) return;
+    if (!crossCurrency || referenceRate === undefined) return;
+    const parsed = parseAmount(amountRaw);
+    if (parsed === null) return;
+    setToAmountRaw(convertAmountRaw(parsed, referenceRate.rate, toAccount?.decimals ?? 2));
+  }, [referenceRate, crossCurrency, amountRaw, toAccount, toAmountEdited]);
+
   const handleKey = useCallback(
     (key: KeypadKey) => {
       if (activeField === "amount") {
@@ -219,56 +249,94 @@ export default function Transfer() {
     ],
   );
 
-  // H1 — a destination amount typed (or prefilled) for one currency pair must
-  // not survive a change to either leg: same-currency collapses to the
-  // source figure (§3), a cross-currency pair with a reference re-prefills
-  // from it, and one with no reference held offline clears rather than
-  // showing a stale conversion for a currency that no longer matches.
-  const computeToAmountPrefill = useCallback(
-    (nextFromId: string | null, nextToId: string | null): string => {
-      const nextFrom = accounts.find((account) => account.id === nextFromId);
-      const nextTo = accounts.find((account) => account.id === nextToId);
-      if (nextFrom === undefined || nextTo === undefined) return "";
-      if (nextFrom.currency === nextTo.currency) return amountRaw;
+  /**
+   * H2 — the destination figure for the *new* pair, never the previous
+   * pair's. Called from both account-switch handlers below, each with the
+   * leg that just changed: same-currency copies `amountRaw` verbatim, a
+   * cross-currency pair converts through the reference rate for *that*
+   * pair (read directly — `referenceRate`'s own memo is still keyed to the
+   * account ids before this switch), and no rate (offline, nothing cached)
+   * clears the field rather than leaving a stale, no-longer-true figure
+   * behind for Save to write.
+   */
+  const deriveToAmountRaw = useCallback(
+    (from: { currency: string }, to: { currency: string; decimals: number }): string => {
+      if (from.currency === to.currency) return amountRaw;
       if (!isAccountingDate(date)) return "";
       const result = ledger.readCrossRate({
-        from: money.currencyCode(nextFrom.currency),
-        to: money.currencyCode(nextTo.currency),
+        from: money.currencyCode(from.currency),
+        to: money.currencyCode(to.currency),
         date: accountingDate(date),
       });
-      if (result === null) return "";
-      const parsed = parseAmount(amountRaw);
-      if (parsed === null) return "";
-      return convertAmountRaw(parsed, result.rate, nextTo.decimals);
+      const parsedAmountRaw = parseAmount(amountRaw);
+      if (result === null || parsedAmountRaw === null) return "";
+      return convertAmountRaw(parsedAmountRaw, result.rate, to.decimals);
     },
-    [accounts, amountRaw, date, ledger],
+    [amountRaw, date, ledger],
   );
 
   // H1 — a typed destination must not be discarded by a currency-preserving
   // account change: switching *From* (or *To*) to another account in the
   // same currency leaves the pair itself unchanged, so the figure (and
   // `toAmountEdited`) a person already typed stays exactly as it was. Only a
-  // change to the currency actually on one side re-triggers the prefill
-  // above.
+  // change to the currency actually on one side re-derives the destination,
+  // below.
   const handleFromAccountChange = useCallback(
     (id: string) => {
-      const nextFrom = accounts.find((account) => account.id === id);
+      const nextFromAccount = accounts.find((account) => account.id === id);
+      // L5 — the same refuse-when-over-scale rule quick-add's own
+      // `handleComposerAccountChange` states for its account chip: a switch
+      // to a smaller scale never silently carries an already-typed amount
+      // past what the new account can hold. The switch is refused outright
+      // — the account stays as it was — rather than truncating the figure
+      // on the person's behalf.
+      if (nextFromAccount !== undefined && decimalsExceed(amountRaw, nextFromAccount.decimals)) {
+        const message = t("transactions.tooManyDecimals", {
+          currency: nextFromAccount.currency,
+          decimals: String(nextFromAccount.decimals),
+        });
+        setFieldErrors(mapFieldErrors([{ path: "accountId", message }], KNOWN_PATHS));
+        return;
+      }
+      setFieldErrors(undefined);
       setFromAccountId(id);
-      if (nextFrom?.currency === fromAccount?.currency) return;
+      if (nextFromAccount?.currency === fromAccount?.currency) return;
       setToAmountEdited(false);
-      setToAmountRaw(computeToAmountPrefill(id, toAccountId));
+      if (nextFromAccount !== undefined && toAccount !== undefined) {
+        setToAmountRaw(deriveToAmountRaw(nextFromAccount, toAccount));
+      }
     },
-    [accounts, computeToAmountPrefill, fromAccount, toAccountId],
+    [accounts, amountRaw, fromAccount, toAccount, deriveToAmountRaw, t],
   );
   const handleToAccountChange = useCallback(
     (id: string) => {
-      const nextTo = accounts.find((account) => account.id === id);
+      const nextToAccount = accounts.find((account) => account.id === id);
+      // L5 — the destination leg's own version of the same rule, checked
+      // only against a figure the person actually typed (`toAmountEdited`):
+      // the auto-filled case is re-derived below instead of ever compared,
+      // because `deriveToAmountRaw` already rounds to the new account's
+      // own scale.
+      if (
+        toAmountEdited &&
+        nextToAccount !== undefined &&
+        decimalsExceed(toAmountRaw, nextToAccount.decimals)
+      ) {
+        const message = t("transactions.tooManyDecimals", {
+          currency: nextToAccount.currency,
+          decimals: String(nextToAccount.decimals),
+        });
+        setFieldErrors(mapFieldErrors([{ path: "toAccountId", message }], KNOWN_PATHS));
+        return;
+      }
+      setFieldErrors(undefined);
       setToAccountId(id);
-      if (nextTo?.currency === toAccount?.currency) return;
+      if (nextToAccount?.currency === toAccount?.currency) return;
       setToAmountEdited(false);
-      setToAmountRaw(computeToAmountPrefill(fromAccountId, id));
+      if (fromAccount !== undefined && nextToAccount !== undefined) {
+        setToAmountRaw(deriveToAmountRaw(fromAccount, nextToAccount));
+      }
     },
-    [accounts, computeToAmountPrefill, toAccount, fromAccountId],
+    [accounts, fromAccount, toAccount, toAmountRaw, toAmountEdited, deriveToAmountRaw, t],
   );
 
   /**
@@ -323,12 +391,13 @@ export default function Transfer() {
   // them by hand), and this is a save-gate check, not a render.
   const amountIsZero = parsedAmount !== null && money.dec(parsedAmount).isZero();
   const toAmountIsZero = parsedToAmount !== null && money.dec(parsedToAmount).isZero();
-  // C2 — a fee that has been typed but does not yet parse (a stray letter,
-  // or `parseAmount`'s own "trailing separator" rejection — typing "1," on
-  // its way to "1,50" parses to `null` until a digit follows the comma) must
-  // not be silently dropped from the write; Save stays disabled — correctly,
-  // mid-keystroke — until it is either finished or cleared.
-  const feeUnparsable = feeRaw !== "" && parseAmount(feeRaw) === null;
+  const parsedFee = parseAmount(feeRaw);
+  // H1 — a fee that fails to parse ("1,234.56", "1.2.3", "12.", "abc") used
+  // to be dropped silently and the transfer saved with no fee at all. An
+  // empty field is not an invalid one — `feeRaw` is optional — so this is
+  // only true once a person has actually typed something `parseAmount`
+  // cannot read.
+  const feeInvalid = parsedFee === null && feeRaw.trim() !== "";
   // §14.6 — refused before the write on an uncapturable *From* account; Save
   // stays disabled the same way it already does for every other refusal this
   // screen can see coming, rather than letting a tap reach the controller
@@ -341,7 +410,7 @@ export default function Transfer() {
     parsedToAmount === null ||
     amountIsZero ||
     toAmountIsZero ||
-    feeUnparsable ||
+    feeInvalid ||
     fromAccount?.capturable === false;
 
   const handleSave = useCallback(() => {
@@ -351,7 +420,14 @@ export default function Transfer() {
     // a zero either side is refused here too, not only by the button's own
     // disabled state, so a stray `handleSave` call can never reach the write.
     if (amountIsZero || toAmountIsZero) return;
-    const parsedFee = parseAmount(feeRaw);
+    // H1 — the same guard, reachable directly: a fee that fails to parse is
+    // refused here too, not only by the button's own disabled state.
+    if (feeInvalid) {
+      setFieldErrors(
+        mapFieldErrors([{ path: "fee", message: t("transactions.invalidAmount") }], KNOWN_PATHS),
+      );
+      return;
+    }
     // H3 — a typed `0`/`0,00` fee is the same as no fee at all: dropped here
     // rather than sent as a zero the contract's `> 0` refine would then
     // refuse.
@@ -387,10 +463,11 @@ export default function Transfer() {
     parsedToAmount,
     amountIsZero,
     toAmountIsZero,
+    parsedFee,
+    feeInvalid,
     fromAccountId,
     toAccountId,
     toAccount,
-    feeRaw,
     date,
     note,
     ledger,

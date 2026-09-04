@@ -44,7 +44,14 @@ export const ACCOUNTS = [
     currency: "PLN",
     ownership: "own",
     isBusiness: false,
-    opening: "10.12345678",
+    // M1 — `accounts.opening_balance` now has its own scale guarantee
+    // (`assert_account_balance_scale`, `0012_transaction_scale_and_category_kind.sql`),
+    // so a PLN account's own opening figure has to fit PLN's own two decimal
+    // places; the eight- and nine-decimal-digit rows this fixture exists to
+    // provoke (this file's own top comment) live on `…001`/`…002`/`…004`/
+    // `…006` below, in `ZZZ`, precisely so an *opening balance* never has to
+    // carry that precision.
+    opening: "10.12",
     kind: "other",
   },
   {

@@ -110,6 +110,7 @@ export const pl: Messages = {
       "Zapisano — zostanie wycenione, gdy tylko będzie znany kurs wymiany dla {{currency}}.",
     tooManyDecimals:
       "Waluta {{currency}} ma {{decimals}} miejsc po przecinku — ta kwota ma więcej.",
+    invalidAmount: "Podaj prawidłową kwotę.",
     expense: "Wydatek",
     income: "Przychód",
     category: "Kategoria",
