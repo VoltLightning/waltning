@@ -47,7 +47,7 @@ beforeEach(() => {
 afterEach(() => stores.close());
 
 describe("readUnsettledClearing", () => {
-  it("names only the clearing account with a non-zero balance", () => {
+  it("names only the clearing account with a non-zero balance, and its one open inflow", () => {
     expect(readUnsettledClearing(stores.ledger.replica.db)).toEqual([
       {
         accountId: UNSETTLED,
@@ -55,6 +55,9 @@ describe("readUnsettledClearing", () => {
         currency: PLN,
         decimals: 2,
         balance: "340.00000000",
+        oldestUnconsumedTransactionId: id<"transactions">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+        oldestDate: accountingDate("2026-08-05"),
+        oldestUnconsumedPayee: "",
       },
     ]);
   });
@@ -68,5 +71,69 @@ describe("readUnsettledClearing", () => {
     expect(
       readUnsettledClearing(stores.ledger.replica.db).some((row) => row.accountId === SETTLED),
     ).toBe(false);
+  });
+
+  /**
+   * §8's own reading: inflows open, outflows consume, FIFO. Two inflows to
+   * the clearing account, one allocation out that exhausts the older —
+   * J08's group bill shape (`computations.md` §8).
+   */
+  it("names the oldest still-open inflow once an older one is fully allocated", () => {
+    const db = stores.ledger.replica.db;
+    db.insert(accounts)
+      .values({
+        id: id<"accounts">("44444444-4444-4444-8444-444444444444"),
+        name: "Trip clearing",
+        currency: PLN,
+        kind: "clearing",
+      })
+      .run();
+    const trip = id<"accounts">("44444444-4444-4444-8444-444444444444");
+    db.insert(transactions)
+      .values([
+        {
+          id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+          date: accountingDate("2026-08-01"),
+          type: "income",
+          accountId: trip,
+          payee: "Hotel",
+          amountOriginal: money.toMoney("120"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+        },
+        {
+          id: id<"transactions">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+          date: accountingDate("2026-08-05"),
+          type: "income",
+          accountId: trip,
+          payee: "Dinner",
+          amountOriginal: money.toMoney("80"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+        },
+        {
+          id: id<"transactions">("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+          date: accountingDate("2026-08-06"),
+          type: "expense",
+          accountId: trip,
+          payee: "Allocated to Nina",
+          amountOriginal: money.toMoney("120"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+        },
+      ])
+      .run();
+
+    const row = readUnsettledClearing(db).find((candidate) => candidate.accountId === trip);
+    expect(row).toEqual({
+      accountId: trip,
+      name: "Trip clearing",
+      currency: PLN,
+      decimals: 2,
+      balance: "80.00000000",
+      oldestUnconsumedTransactionId: id<"transactions">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+      oldestDate: accountingDate("2026-08-05"),
+      oldestUnconsumedPayee: "Dinner",
+    });
   });
 });

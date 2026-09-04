@@ -1,13 +1,7 @@
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
-import type {
-  ClearingAccountRow,
-  CurrencyCode,
-  Money,
-  Period,
-  PeriodSpendRow,
-} from "@waltning/core/money";
+import type { CurrencyCode, Money, Period, PeriodSpendRow } from "@waltning/core/money";
 import type {
   AddCurrencyInput,
   ArchiveAccountInput,
@@ -43,7 +37,10 @@ import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts
 import { readBalanceAsOf } from "./accounts/read-balance-as-of.ts";
 import { type LocalGroup, readGroups } from "./accounts/read-groups.ts";
 import { type LocalNetWorth, readNetWorth } from "./accounts/read-net-worth.ts";
-import { readUnsettledClearing } from "./accounts/read-unsettled-clearing.ts";
+import {
+  type LocalUnsettledClearing,
+  readUnsettledClearing,
+} from "./accounts/read-unsettled-clearing.ts";
 import { reconcileAccountExecutor } from "./accounts/reconcile-account.executor.ts";
 import { updateAccountExecutor } from "./accounts/update-account.executor.ts";
 import {
@@ -87,6 +84,9 @@ import {
   clearManualRateExecutor,
 } from "./currencies/clear-manual-rate.executor.ts";
 // ── end E2 block ─────────────────────────────────────────────────────────
+  type LocalCounterpartyBalance,
+  readCounterpartyBalances,
+} from "./counterparties/read-counterparty-balances.ts";
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 import {
   type LocalCoverage,
@@ -181,12 +181,14 @@ export type LocalLedgerSession = {
    * folded payee, its most recent category. See `readPayeeHistory`.
    */
   listPayeeHistory: () => readonly PayeeHistoryRow[];
+  /** §7, one row per counterparty per currency, ageing on companies (O15) — S12. */
+  listCounterpartyBalances: (today: AccountingDate) => readonly LocalCounterpartyBalance[];
   /** §3, per currency — C2's hero (`DualTotal`), not the phone-preview's single subtotal. */
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
-  /** §8, minus FIFO attribution — C2's unsettled banner. */
-  listUnsettledClearing: () => readonly ClearingAccountRow[];
+  /** §8, FIFO attribution included — C2's unsettled banner names a transaction. */
+  listUnsettledClearing: () => readonly LocalUnsettledClearing[];
   /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
   balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
   /** C4 — S10's list. A query, not a snapshot field: a filtered page is asked for, not held. */
@@ -379,6 +381,7 @@ export function createLocalLedgerSession<TRun>(
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
     listCounterparties: (options) => readCounterparties(requireOpen().replica.db, options),
     listPayeeHistory: () => readPayeeHistory(requireOpen().replica.db),
+    listCounterpartyBalances: (today) => readCounterpartyBalances(requireOpen().replica.db, today),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
