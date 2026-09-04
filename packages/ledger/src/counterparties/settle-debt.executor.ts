@@ -81,7 +81,10 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .from(currencies)
     .where(eq(currencies.code, input.discharges.currency))
     .all();
-  const decimals = currencyRow?.decimals ?? 2;
+  if (!currencyRow) {
+    throw new Error(`settle_debt: no currency ${input.discharges.currency}`);
+  }
+  const decimals = currencyRow.decimals;
 
   const before = balancesForCounterparty(tx, input.counterpartyId).find(
     (row) => row.currency === input.discharges.currency,

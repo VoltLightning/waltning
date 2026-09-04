@@ -38,7 +38,6 @@ import { GroundPanel } from "@waltning/ui/shell/card";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
-import { Skeleton } from "@waltning/ui/states/skeleton";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
@@ -116,7 +115,20 @@ export default function Debt() {
   const [segment, setSegment] = useState<DirectionSegment>("all");
 
   const balances = useMemo(() => ledger.listCounterpartyBalances(today), [ledger, today]);
-  const directionTotals = useMemo(() => money.directionTotals(balances), [balances]);
+  // M2 — `money.directionTotals` throws on a genuine invariant violation
+  // (two rows naming one currency at two different `decimals`), and a throw
+  // inside a `useMemo` that runs above every guard below must not take the
+  // whole screen down. Caught here, once, and rendered as a recoverable
+  // error rather than a blank screen or a crash.
+  const directionTotalsResult = useMemo(():
+    | { ok: true; rows: readonly money.DirectionTotalRow[] }
+    | { ok: false; reason: string } => {
+    try {
+      return { ok: true, rows: money.directionTotals(balances) };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    }
+  }, [balances]);
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
 
   const rows = useMemo((): readonly DebtRow[] => {
@@ -197,6 +209,19 @@ export default function Debt() {
     router.push(`/counterparty/${id}`);
   }, []);
 
+  if (!directionTotalsResult.ok) {
+    return (
+      <GroundPanel>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.loadFailedTitle")}
+          why={directionTotalsResult.reason}
+          action={{ label: t("common.retry"), onPress: ledger.refresh }}
+        />
+      </GroundPanel>
+    );
+  }
+
   if (snapshot.error) {
     return (
       <GroundPanel>
@@ -204,41 +229,6 @@ export default function Debt() {
           variant="recoverable"
           what={t("counterparties.loadFailedTitle")}
           why={t("counterparties.loadFailedWhy")}
-          action={{ label: t("common.retry"), onPress: ledger.refresh }}
-        />
-      </GroundPanel>
-    );
-  }
-
-  // H1 — the real distinction is `currencies`, not `revision` (every real
-  // controller calls `refresh()` synchronously before it is ever handed out,
-  // so `revision > 0` always holds and that gate was unreachable). An empty
-  // `currencies` list is the replica genuinely not bootstrapped yet — the
-  // loading state (S12 §6: "Skeleton rows; totals resolve last rather than
-  // showing a wrong number"). A *non-empty* list with no `isPivot` row is not
-  // a loading state at all — it is `architecture/09`'s bootstrap guarantee
-  // broken, which must never render as "All settled" or a blank screen.
-  if (pivot === undefined) {
-    if (snapshot.currencies.length === 0) {
-      return (
-        <GroundPanel>
-          <View style={styles.root}>
-            <View style={styles.totals}>
-              <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-            </View>
-            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-          </View>
-        </GroundPanel>
-      );
-    }
-    return (
-      <GroundPanel>
-        <ErrorState
-          variant="recoverable"
-          what={t("counterparties.noPivotTitle")}
-          why={t("counterparties.noPivotWhy")}
           action={{ label: t("common.retry"), onPress: ledger.refresh }}
         />
       </GroundPanel>
@@ -264,7 +254,7 @@ export default function Debt() {
         {unsettledBanner}
         <SegmentControl segments={segments} value={segment} onChange={handleSegmentChange} />
         <View style={styles.totals}>
-          {directionTotals.map((total) => (
+          {directionTotalsResult.rows.map((total) => (
             <View key={total.currency} style={styles.totalRow}>
               <Text style={styles.totalLabel}>
                 {t("counterparties.theyOweTotal")} · {total.currency}
@@ -278,7 +268,7 @@ export default function Debt() {
               />
             </View>
           ))}
-          {directionTotals.map((total) => (
+          {directionTotalsResult.rows.map((total) => (
             <View key={`${total.currency}-you`} style={styles.totalRow}>
               <Text style={styles.totalLabel}>
                 {t("counterparties.youOweTotal")} · {total.currency}

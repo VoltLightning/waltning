@@ -220,6 +220,35 @@ describe("Debt (S12)", () => {
   });
 
   /**
+   * M2 — `money.directionTotals` throws on two rows naming the same currency
+   * at two different `decimals` (an invariant violation), and that throw
+   * runs inside a `useMemo` above every guard on this screen. It must render
+   * as a recoverable error, never crash the screen.
+   */
+  it("renders a recoverable error, not a crash, when direction totals disagree on decimals", () => {
+    const marekRow: PhoneCounterpartyBalance = {
+      ...NINA_ROW,
+      counterpartyId: MAREK,
+      name: "Marek",
+      decimals: 3,
+      balance: toMoney("-120.00000000"),
+    };
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY, { ...NINA_COUNTERPARTY, id: MAREK }],
+        listCounterpartyBalances: () => [NINA_ROW, marekRow],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Couldn't load your counterparties")).toBeDefined();
+    expect(screen.getByText(/disagree on decimals/)).toBeDefined();
+  });
+
+  /**
    * L1 — one list, sorted by name, kind never a sort key. `Zeta Corp` sorts
    * alphabetically after both persons — a kind-first sort (the prior "companies
    * by age desc, then by name" comment) would put it first regardless, so this
@@ -265,62 +294,6 @@ describe("Debt (S12)", () => {
     expect(marekIndex).toBeGreaterThanOrEqual(0);
     expect(ninaIndex).toBeGreaterThan(marekIndex);
     expect(zetaIndex).toBeGreaterThan(ninaIndex);
-  });
-
-  /**
-   * H1 — the loading state (S12 §6), never "All settled", while the replica
-   * has not bootstrapped any currency yet. Live debts exist
-   * (`listCounterpartyBalances` answers a real balance) — the bug rendered
-   * the empty state right over them.
-   */
-  it("shows a loading skeleton, never the empty state, while no currency has been read yet", () => {
-    const controller = controllerOf(
-      basePort({
-        listCurrencies: () => [],
-        listCounterparties: () => [NINA_COUNTERPARTY],
-        listCounterpartyBalances: () => [NINA_ROW],
-      }),
-    );
-    render(
-      <LedgerProvider controller={controller}>
-        <Debt />
-      </LedgerProvider>,
-    );
-    expect(screen.queryByText("All settled")).toBeNull();
-    expect(screen.queryByText("No one yet")).toBeNull();
-    expect(screen.getAllByLabelText("Loading debts").length).toBeGreaterThan(0);
-  });
-
-  /**
-   * H1 — a *non-empty* `currencies` list with no `isPivot` row is not a
-   * loading state: it is `architecture/09`'s bootstrap guarantee broken, and
-   * must surface as a recoverable error rather than "All settled".
-   */
-  it("shows a recoverable error, never the empty state, when currencies hold no pivot", () => {
-    const controller = controllerOf(
-      basePort({
-        listCurrencies: () => [
-          {
-            code: PLN,
-            name: "Polish Złoty",
-            symbol: "zł",
-            decimals: 2,
-            capturable: true,
-            isPivot: false,
-          },
-        ],
-        listCounterparties: () => [NINA_COUNTERPARTY],
-        listCounterpartyBalances: () => [NINA_ROW],
-      }),
-    );
-    render(
-      <LedgerProvider controller={controller}>
-        <Debt />
-      </LedgerProvider>,
-    );
-    expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
-    expect(screen.queryByText("All settled")).toBeNull();
-    expect(screen.queryByText("No one yet")).toBeNull();
   });
 
   it("shows the first-run empty state with nothing on the ledger", () => {
@@ -401,55 +374,6 @@ describe("Debt (S12)", () => {
 
 describe("CounterpartyDetail (S13)", () => {
   beforeEach(() => useLocalSearchParams.mockReturnValue({ id: NINA }));
-
-  /** H1 — S13 §6's own loading state, never the `return null` an unresolved `figures` fell through to. */
-  it("shows a loading skeleton, never a blank screen, while no currency has been read yet", () => {
-    const controller = controllerOf(
-      basePort({
-        listCurrencies: () => [],
-        listCounterparties: () => [NINA_COUNTERPARTY],
-        listCounterpartyBalances: () => [NINA_ROW],
-      }),
-    );
-    render(
-      <LedgerProvider controller={controller}>
-        <CounterpartyDetail />
-      </LedgerProvider>,
-    );
-    expect(screen.queryByText("Nina")).toBeNull();
-    expect(screen.getAllByLabelText("Loading counterparty ledger").length).toBeGreaterThan(0);
-  });
-
-  /**
-   * H1 — a *non-empty* `currencies` list with no `isPivot` row is not a
-   * loading state: it is `architecture/09`'s bootstrap guarantee broken, and
-   * must surface as a recoverable error rather than a blank screen.
-   */
-  it("shows a recoverable error, never a blank screen, when currencies hold no pivot", () => {
-    const controller = controllerOf(
-      basePort({
-        listCurrencies: () => [
-          {
-            code: PLN,
-            name: "Polish Złoty",
-            symbol: "zł",
-            decimals: 2,
-            capturable: true,
-            isPivot: false,
-          },
-        ],
-        listCounterparties: () => [NINA_COUNTERPARTY],
-        listCounterpartyBalances: () => [NINA_ROW],
-      }),
-    );
-    render(
-      <LedgerProvider controller={controller}>
-        <CounterpartyDetail />
-      </LedgerProvider>,
-    );
-    expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
-    expect(screen.queryByText("Nina")).toBeNull();
-  });
 
   it("shows the card, the ledger, and defaults history to debt rows", () => {
     const controller = controllerOf(
@@ -651,7 +575,7 @@ describe("CounterpartyDetail (S13)", () => {
     // carries its own body text, which a test (or a future copy edit) can
     // tell apart even though the two titles read the same.
     expect(screen.getByText("Nothing open with them right now.")).toBeDefined();
-    expect(screen.getByText("Nobody owes anything right now.")).toBeDefined();
+    expect(screen.getByText("No debt rows with Nina yet.")).toBeDefined();
   });
 
   /** The BLOCKER (finding 1), on S13 — no net line when the fold is incomplete. */

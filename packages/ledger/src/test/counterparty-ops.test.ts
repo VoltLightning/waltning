@@ -446,6 +446,26 @@ describe("settle_debt", () => {
     expect(result.row.overSettled).toBe(true);
   });
 
+  /**
+   * L — a currency this replica has no row for must never silently settle
+   * at an assumed 2 decimals; the refusal names the currency so a caller can
+   * tell "unseeded currency" from "nothing to settle" (they were the same
+   * unreachable branch before).
+   */
+  it("throws naming the currency, never assumes 2 decimals, when the currency has no row", () => {
+    expect(() =>
+      write(settleDebtExecutor, {
+        id: "c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0",
+        counterpartyId: NINA,
+        accountId: ACCOUNT,
+        date: "2026-08-04",
+        amount: "10",
+        currency: "EUR",
+        discharges: { currency: "PLN", amount: "10" },
+      }),
+    ).toThrow(/PLN/);
+  });
+
   it("refuses a zero balance", () => {
     expect(() =>
       write(settleDebtExecutor, {

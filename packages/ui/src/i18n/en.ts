@@ -399,7 +399,7 @@ export const en = {
     ledgerSettledBody: "Nothing open with them right now.",
     /** The history section's own empty state (S13 §3) — same words `emptySettledTitle`/`Body` (S12) carried before the two were split apart, kept unchanged. */
     historySettled: "All settled",
-    historySettledBody: "Nobody owes anything right now.",
+    historySettledBody: "No debt rows with {{name}} yet.",
     /** P1 — the derived total's own rate and date, never shown without both. */
     atRateDate: "@ {{rate}} · {{date}}",
     /** S13 — after a successful settle: the residual, named in words, never a bare sign (P5). */

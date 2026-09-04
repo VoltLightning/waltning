@@ -275,6 +275,29 @@ describe("searchTransactions — paging", () => {
 
     expect(statements.some((sql) => /\blimit\b/i.test(sql))).toBe(true);
   });
+
+  /**
+   * L — `total.count` runs as a real SQL `count(*)`, bounded and pushed
+   * down, rather than the length of a JS array holding every matching row
+   * (the money sums beside it still fold in JS — `searchTransactions`' own
+   * doc says why an SQL `SUM()` cannot be the fix for those).
+   */
+  it("counts the total with an aggregate query, for a text-free filter", () => {
+    for (let i = 0; i < 5; i++) {
+      insertExpense({
+        id: `40000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        date: accountingDate(`2026-01-${String((i % 28) + 1).padStart(2, "0")}`),
+      });
+    }
+
+    const prepareSpy = vi.spyOn(Database.prototype, "prepare");
+    const result = searchTransactions(stores.ledger.replica.db, {});
+    const statements = prepareSpy.mock.calls.map(([sql]) => String(sql));
+    prepareSpy.mockRestore();
+
+    expect(result.total.count).toBe(5);
+    expect(statements.some((sql) => /count\(/i.test(sql))).toBe(true);
+  });
 });
 
 describe("searchTransactions — totals", () => {

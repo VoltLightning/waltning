@@ -174,6 +174,75 @@ it("opens the account picker through a callback rather than a select of its own"
   expect(onOpenAccountPicker).toHaveBeenCalledOnce();
 });
 
+/**
+ * H1 — `settleDebtRefusal` never returns `null`: an unrecognised message
+ * still lands here, at `path: ""`, which `mapFieldErrors` routes to
+ * `formLevel`. A refusal a person cannot see is a refusal that never
+ * happened, so the sheet must render it — the same treatment
+ * `CounterpartyForm` and `QuickAddForm` give their own `formLevel`.
+ */
+it("shows an unrecognised settle refusal at form level", () => {
+  renderSheet({
+    fieldErrors: {
+      byField: {},
+      formLevel: ["settle_debt: the row changed between insert and the debt-fields update"],
+    },
+  });
+  expect(
+    screen.getByText("settle_debt: the row changed between insert and the debt-fields update"),
+  ).toBeDefined();
+});
+
+it("shows a counterpartyId refusal under the header", () => {
+  renderSheet({
+    fieldErrors: {
+      byField: { counterpartyId: ["No counterparty found"] },
+      formLevel: [],
+    },
+  });
+  expect(screen.getByText("No counterparty found")).toBeDefined();
+});
+
+/**
+ * M1 — `debtDirection` decides at the currency's own scale, not the raw 8dp
+ * value: a `+0.004 PLN` balance is `settled` at `decimals: 2`, so it is
+ * hidden from the Discharges picker entirely (it cannot be settled again —
+ * the executor itself refuses "nothing to settle").
+ */
+it("hides a balance that is settled at the currency's own scale from the Discharges picker", () => {
+  renderSheet({
+    balances: [
+      { currency: "EUR", balance: toMoney("-120"), decimals: 2 },
+      { currency: "PLN", balance: toMoney("0.004"), decimals: 2 },
+    ],
+    dischargesCurrency: "EUR",
+  });
+  // Only EUR is open — one balance reads as a plain fact, never a
+  // radio group, and PLN never appears at all.
+  expect(screen.queryByRole("radiogroup")).toBeNull();
+  expect(screen.getByText(/EUR · 120.00 · you owe them/)).toBeDefined();
+  // A balance row reads "{currency} · {amount} · {direction}" — the dust
+  // PLN row never renders as one, whether the picker offers a real choice
+  // or (as here) reads as a single plain fact.
+  expect(screen.queryByText(/PLN · /)).toBeNull();
+});
+
+it("computes the residual's direction at the currency's own scale, not raw 8dp precision", () => {
+  // The sole balance is dust at PLN's own scale (2dp) — discharging
+  // anything against it must read as settled, never as a real direction.
+  renderSheet({
+    balances: [{ currency: "PLN", balance: toMoney("0.004"), decimals: 2 }],
+    dischargesCurrency: "PLN",
+    dischargesRaw: "5",
+    amountRaw: "5",
+  });
+  expect(screen.getAllByText((_, element) => element?.textContent === "0.00 PLN")).not.toHaveLength(
+    0,
+  );
+  expect(screen.queryByText("they owe you")).toBeNull();
+  expect(screen.queryByText("you owe them")).toBeNull();
+});
+
 it("renders every figure through the locale's own decimal mark — Polish", () => {
   render(
     <I18nProvider locale="pl">

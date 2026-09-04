@@ -56,7 +56,6 @@ import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
-import { Skeleton } from "@waltning/ui/states/skeleton";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -435,39 +434,6 @@ export default function CounterpartyDetail() {
     );
   }
 
-  // H1 — the real distinction is `currencies`, not `revision` (every real
-  // controller calls `refresh()` synchronously before it is ever handed out,
-  // so `revision > 0` always holds and that gate was unreachable). An empty
-  // `currencies` list is the replica genuinely not bootstrapped yet — S13 §6's
-  // own loading state. A *non-empty* list with no `isPivot` row is not a
-  // loading state at all — it is `architecture/09`'s bootstrap guarantee
-  // broken, which must never render as a blank screen (`figures` is `null`
-  // exactly when `pivot` is, so this also resolves the old `!figures` half of
-  // the guard below).
-  if (pivot === undefined) {
-    if (snapshot.currencies.length === 0) {
-      return (
-        <GroundPanel>
-          <Card>
-            <Skeleton shape="hero" label={t("counterparties.loadingLedger")} />
-            <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
-            <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
-          </Card>
-        </GroundPanel>
-      );
-    }
-    return (
-      <GroundPanel>
-        <ErrorState
-          variant="recoverable"
-          what={t("counterparties.noPivotTitle")}
-          why={t("counterparties.noPivotWhy")}
-          action={{ label: t("common.retry"), onPress: ledger.refresh }}
-        />
-      </GroundPanel>
-    );
-  }
-
   if (!counterparty || !figures) return null;
 
   return (
@@ -530,7 +496,7 @@ export default function CounterpartyDetail() {
           // used to borrow — two screens sharing one key meant an edit to
           // either's copy silently changed the other's.
           title={t("counterparties.historySettled")}
-          body={t("counterparties.historySettledBody")}
+          body={t("counterparties.historySettledBody", { name: counterparty.name })}
           primaryAction={{
             label: t("counterparties.addTransaction"),
             onPress: handleAddTransaction,

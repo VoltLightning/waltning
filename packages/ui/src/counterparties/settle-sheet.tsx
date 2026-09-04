@@ -120,6 +120,12 @@ function decimalsOf(list: readonly { currency: string; decimals?: number }[], cu
   return list.find((row) => row.currency === currency)?.decimals ?? 2;
 }
 
+/** `money.DebtDirection`, as the signed multiplier this sheet's own arithmetic needs (M1). */
+function directionSign(direction: money.DebtDirection): -1 | 0 | 1 {
+  if (direction === "settled") return 0;
+  return direction === "theyOwe" ? 1 : -1;
+}
+
 /**
  * An account's own label — name plus currency, **once**.
  *
@@ -175,7 +181,14 @@ export function SettleSheet({
   );
 
   const picked = balances.find((row) => row.currency === dischargesCurrency);
-  const sign = picked === undefined ? 0 : money.cmp(picked.balance, money.ZERO);
+  const dischargesDecimals = decimalsOf(balances, dischargesCurrency ?? "");
+  // M1 — decided at the currency's own scale (§6.6), the same rule
+  // `debtDirection` states everywhere else: a balance that reads `0,00` at
+  // its own decimals must never be called "they owe you" just because the
+  // full 8dp value is a whisker off zero.
+  const sign = directionSign(
+    picked === undefined ? "settled" : money.debtDirection(picked.balance, dischargesDecimals),
+  );
   const account = accounts.find((row) => row.id === accountId);
 
   const dischargesAmount = money.toMoney(
@@ -200,7 +213,7 @@ export function SettleSheet({
     picked === undefined
       ? money.ZERO
       : money.sub(picked.balance, money.mul(dischargesAmount, sign));
-  const residualSign = money.cmp(residual, money.ZERO);
+  const residualSign = directionSign(money.debtDirection(residual, dischargesDecimals));
   const overSettled = sign !== 0 && residualSign !== 0 && residualSign !== sign;
   // P5 — direction in words, never by sign alone. `residual` above stays
   // signed for the arithmetic; everything rendered reads its magnitude and
@@ -212,13 +225,12 @@ export function SettleSheet({
         ? t("counterparties.theyOweYou")
         : t("counterparties.youOweThem");
 
-  const dischargesDecimals = decimalsOf(balances, dischargesCurrency ?? "");
-
   const balanceLabel = useMemo(
     () => (row: SettleSheetBalance) => {
-      const rowSign = money.cmp(row.balance, money.ZERO);
       const direction =
-        rowSign > 0 ? t("counterparties.theyOweYou") : t("counterparties.youOweThem");
+        money.debtDirection(row.balance, row.decimals ?? 2) === "theyOwe"
+          ? t("counterparties.theyOweYou")
+          : t("counterparties.youOweThem");
       return `${row.currency} · ${money.forDisplay(money.abs(row.balance), row.decimals ?? 2, mark)} · ${direction}`;
     },
     [t, mark],
@@ -231,12 +243,23 @@ export function SettleSheet({
     [stale, stampedAt, t],
   );
 
+  // M1 — a balance that is `settled` at its own currency's scale cannot be
+  // settled again (the executor itself refuses "nothing to settle" —
+  // `settle-debt.executor.ts`), so it is never offered as a Discharges
+  // choice, whether the picker renders as a radio group or a lone plain
+  // fact.
+  const openBalances = useMemo(
+    () =>
+      balances.filter((row) => money.debtDirection(row.balance, row.decimals ?? 2) !== "settled"),
+    [balances],
+  );
+
   // `RadioGroup`'s own contract needs two options — "a lone radio is a
   // checkbox with worse manners" — and the ordinary case here is exactly one
   // open balance. One row reads as a fact, not a choice, so it renders as
   // plain text rather than a radio group of one.
   const balanceOptions = useMemo<RadioGroupProps["options"] | undefined>(() => {
-    const mapped = balances.map((row) => ({
+    const mapped = openBalances.map((row) => ({
       value: row.currency,
       label: balanceLabel(row),
       ...(balanceHint === undefined ? {} : { hint: balanceHint }),
@@ -244,13 +267,19 @@ export function SettleSheet({
     const [first, second, ...rest] = mapped;
     if (first === undefined || second === undefined) return undefined;
     return [first, second, ...rest];
-  }, [balances, balanceLabel, balanceHint]);
+  }, [openBalances, balanceLabel, balanceHint]);
+  const singleOpenBalance = openBalances.length === 1 ? openBalances[0] : undefined;
 
   const intoLabel = sign < 0 ? t("transactions.from") : t("counterparties.into");
 
   const dischargesError = fieldErrors?.byField["discharges.currency"]?.[0];
   const accountError = fieldErrors?.byField["accountId"]?.[0];
   const amountError = fieldErrors?.byField["amount"]?.[0];
+  // H1 — `settleDebtRefusal` (`create-phone-ledger.ts`) never returns
+  // `null`: an unrecognised message still lands here, at `path: ""`, which
+  // `mapFieldErrors` routes to `formLevel` rather than dropping it. A
+  // refusal a person cannot see is a refusal that never happened.
+  const counterpartyError = fieldErrors?.byField["counterpartyId"]?.[0];
 
   // C1 — the same guard `TransferComposer`'s own `fromNeedsRate` states: the
   // controller refuses `settle_debt` on `accountId` before the write once the
@@ -278,6 +307,9 @@ export function SettleSheet({
       onDismiss={onDismiss}
     >
       <View style={styles.body}>
+        {counterpartyError === undefined ? null : (
+          <Text style={styles.fieldError}>{counterpartyError}</Text>
+        )}
         <AmountField
           variant="hero"
           label={t("transactions.amount")}
@@ -290,9 +322,9 @@ export function SettleSheet({
 
         <Text style={styles.sectionLabel}>{t("counterparties.discharges")}</Text>
         {balanceOptions === undefined ? (
-          picked === undefined ? null : (
+          singleOpenBalance === undefined ? null : (
             <Text style={styles.singleBalance}>
-              {balanceLabel(picked)}
+              {balanceLabel(singleOpenBalance)}
               {balanceHint === undefined ? "" : ` · ${balanceHint}`}
             </Text>
           )
@@ -408,6 +440,16 @@ export function SettleSheet({
 
         {keypad}
 
+        {fieldErrors && fieldErrors.formLevel.length > 0 ? (
+          <View style={styles.formLevel} accessibilityRole="alert">
+            {fieldErrors.formLevel.map((message) => (
+              <Text key={message} style={styles.formLevelMessage}>
+                {message}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
         <Button
           label={t("counterparties.settle")}
           onPress={onSettle}
@@ -423,6 +465,8 @@ export function SettleSheet({
 const useStyles = makeStyles((theme) => ({
   body: { gap: space.x3 },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
+  formLevel: { gap: space.xs },
+  formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   needsRate: { color: theme.textMuted, ...text.ui("caption") },
   sectionLabel: {
     color: theme.textMuted,

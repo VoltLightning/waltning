@@ -5,7 +5,7 @@ import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
-import { and, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
@@ -161,6 +161,15 @@ function scopeCondition(scope: TransactionSearchScope) {
  * still reads the whole structurally-filtered set into JS first regardless —
  * the trade-off `matchesText`'s own doc names above, unavoidable without
  * `pg_trgm`.
+ *
+ * **L — `total.count`, in the text-free path, is a genuine SQL `count(*)`,
+ * not `totalRows.length`.** Unlike a per-currency sum, "how many rows
+ * matched" needs no `money.signed` fold and no decimal precision — SQLite's
+ * `count(*)` is exact and bounded by the same `structuralWhere` the totals
+ * query already runs, so there is no reason to make it wait on reading and
+ * folding every row in JS first. The currency sums beside it still cannot
+ * make that trip: `money.signed` per row is not expressible in SQL, so they
+ * stay a `decimal.js` fold over `totalRows`, for the reason stated above.
  */
 export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
@@ -296,10 +305,19 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
       .all()
       .map(signRow);
 
+    // L — the count alone is bounded in SQL: no `accounts`/`toAccounts`
+    // join, no `money.signed` fold, just `structuralWhere` and an aggregate.
+    const [{ value: totalCount } = { value: 0 }] = db
+      .select({ value: count() })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .where(structuralWhere)
+      .all();
+
     return {
       rows: page.map(({ amountOriginal, ...row }) => row),
       nextCursor,
-      total: totalsOf(totalRows),
+      total: { ...totalsOf(totalRows), count: totalCount },
     };
   }
 

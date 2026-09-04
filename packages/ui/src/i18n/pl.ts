@@ -263,7 +263,7 @@ export const pl: Messages = {
     ledgerSettled: "Wszystko rozliczone",
     ledgerSettledBody: "Nic teraz nie jest z nimi otwarte.",
     historySettled: "Wszystko rozliczone",
-    historySettledBody: "Nikt nic teraz nie jest winien.",
+    historySettledBody: "Jeszcze żadnych rozliczeń z {{name}}.",
     atRateDate: "@ {{rate}} · {{date}}",
     settledToast: "Rozliczono. {{amount}} {{currency}} {{direction}}.",
     addTransaction: "Dodaj transakcję",
