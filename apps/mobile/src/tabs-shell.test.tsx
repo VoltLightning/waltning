@@ -51,6 +51,12 @@ function fakeController() {
       listNetWorth: () => [],
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
+      searchTransactions: () => ({
+        rows: [],
+        nextCursor: undefined,
+        total: { count: 0, currencies: [] },
+      }),
+      categorizeBatch: () => undefined,
       createAccount: () => undefined,
       createTransaction: () => undefined,
       listCategoryTree: () => [],

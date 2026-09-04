@@ -174,6 +174,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "`error.cause` is unknown by construction; the code beside it is now tRPC's own union",
   },
+  "packages/client/src/ledger/use-transaction-search.ts": {
+    max: 1,
+    why: "a catch binding — the search reports whatever the replica threw, narrowed by a type guard rather than cast",
+  },
   "packages/client/src/query/use-query.ts": {
     max: 2,
     why: "a dependency array is heterogeneous by definition, and a promise rejection is a catch binding",
@@ -205,6 +209,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
   "apps/mobile/src/phone-ledger.web.ts": {
     max: 1,
     why: "the same package-manager-only Drizzle cast, on the browser's half of the seam",
+  },
+  "apps/mobile/src/ledger-screen.tsx": {
+    max: 1,
+    why: "a route to C5's transaction detail screen (`/transaction/[id]`), which does not exist in this worktree's `app/` yet — expo-router's generated `Href` union has no literal for it, so the two types share no member and the cast has to go through `unknown` rather than straight across",
   },
   "packages/db/src/fx/backfill.ts": {
     max: 1,

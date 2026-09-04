@@ -6,6 +6,7 @@ import type {
   PeriodSpendRow,
 } from "@waltning/core/money";
 import type {
+  CategorizeBatchInput,
   CreateAccountInput,
   CreateCategoryInput,
   CreateTransactionInput,
@@ -38,12 +39,19 @@ import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./
 import { recoverOnLaunch } from "./recover.ts";
 import { ledgerRegistry } from "./registry.ts";
 import type { ledgerSchema } from "./schema-map.ts";
+import { categorizeBatchExecutor } from "./transactions/categorize-batch.executor.ts";
 import {
   createTransactionExecutor,
   type LocalTransactionRow,
 } from "./transactions/create-transaction.executor.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
+import {
+  searchTransactions,
+  type TransactionSearchCursor,
+  type TransactionSearchFilter,
+  type TransactionSearchPage,
+} from "./transactions/search-transactions.ts";
 import { type Capture, writeLocally } from "./write.ts";
 
 /**
@@ -93,9 +101,19 @@ export type LocalLedgerSession = {
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
   /** §8, minus FIFO attribution — C2's unsettled banner. */
   listUnsettledClearing: () => readonly ClearingAccountRow[];
+  /** C4 — S10's list. A query, not a snapshot field: a filtered page is asked for, not held. */
+  searchTransactions: (
+    filter: TransactionSearchFilter,
+    cursor?: TransactionSearchCursor,
+  ) => TransactionSearchPage;
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
   createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
+  /** C4 — S10's swipe-categorize. One category over N ids, refused as a whole or not at all. */
+  categorizeBatch: (
+    input: CategorizeBatchInput,
+    capture: Capture,
+  ) => readonly LocalTransactionRow[];
   reset: () => void;
   close: () => void;
 };
@@ -226,6 +244,8 @@ export function createLocalLedgerSession<TRun>(
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
+    searchTransactions: (filter, cursor) =>
+      searchTransactions(requireOpen().replica.db, filter, cursor),
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createAccountExecutor,
@@ -245,6 +265,14 @@ export function createLocalLedgerSession<TRun>(
     createCategory: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createCategoryExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    categorizeBatch: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: categorizeBatchExecutor,
         registry: ledgerRegistry,
         input,
         capture,

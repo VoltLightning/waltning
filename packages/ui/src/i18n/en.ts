@@ -118,6 +118,47 @@ export const en = {
     "role.debt": "Debt — expected back",
     "role.contribution": "Contribution to a shared account",
     "role.reference": "Just involved — no obligation",
+    /* ── S10 · the ledger list (C4) ─────────────────────────────────────── */
+    /** `SearchField`'s placeholder — S10 §3 mobile. */
+    searchPlaceholder: "Search payee, note, amount",
+    /** The chip that opens `FilterSheet`. */
+    addFilter: "+ Filter",
+    /** The filter bar's own clear-all, distinct from one chip's own ✕ (S10 §3). */
+    clearAllFilters: "Clear all",
+    /** `EmptyState(filtered)`'s primary action when every filter is the reason. */
+    clearFilters: "Clear filters",
+    filterSheetTitle: "Filter",
+    filterAccount: "Account",
+    filterCategory: "Category",
+    filterScope: "Scope",
+    filterFrom: "From",
+    filterTo: "To",
+    /** The running total's row count — S10 §3's "1 284 transactions". */
+    totalCountOne: "{{count}} transaction",
+    totalCountMany: "{{count}} transactions",
+    /**
+     * S10 §9 — decided: the total always includes capital rows, and a second
+     * line breaks the capital-excluded figure out *only* when one is present.
+     * `{{amount}}` arrives pre-formatted (`forDisplay`), like every other
+     * composed amount string in this catalogue.
+     */
+    totalExcludingCapitalOne: "{{amount}} excluding {{count}} one-off",
+    totalExcludingCapitalMany: "{{amount}} excluding {{count}} one-offs",
+    /** Drawn between the two accounts, and the two amounts, of a `TransferRow`. */
+    transferArrow: "→",
+    /** Short swipe's action (S10 §4, §7) — announced, not only shown. */
+    categorise: "Categorise",
+    /** `Skeleton`'s accessible label while a page loads. */
+    loadingTransactions: "Loading transactions",
+    emptyFirstRunTitle: "No transactions yet",
+    emptyFirstRunBody: "Capture your first expense or income to start your ledger.",
+    emptyFilteredTitle: "No matching transactions",
+    /** Names the excluding filter and its hidden count (S10 §6) — `count` renders via `states.filteredHidden`. */
+    emptyFilteredBody: "This filter is excluding every row.",
+    loadFailedTitle: "Couldn't load your transactions",
+    loadFailedWhy: "Something went wrong reading the ledger.",
+    /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
+    accountFilterFrom: "From {{account}}",
   },
   categories: {
     /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
