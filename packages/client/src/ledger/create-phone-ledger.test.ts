@@ -289,6 +289,7 @@ function harness(diagnostics?: (event: object) => void) {
     unmergeCounterparties: vi.fn(),
     recordDistinctCounterparties: vi.fn(),
     settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
+    listCounterpartyBalances: vi.fn(() => []),
     reset,
   };
   const capture = vi.fn(() => ({
@@ -419,6 +420,7 @@ describe("phone ledger controller", () => {
       unmergeCounterparties: vi.fn(),
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
+      listCounterpartyBalances: vi.fn(() => []),
       reset: vi.fn(),
     };
 
@@ -489,6 +491,7 @@ describe("phone ledger controller", () => {
       unmergeCounterparties: vi.fn(),
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
+      listCounterpartyBalances: vi.fn(() => []),
       reset: vi.fn(),
     };
 
@@ -651,6 +654,7 @@ describe("phone ledger controller", () => {
       unmergeCounterparties: vi.fn(),
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
+      listCounterpartyBalances: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1113,6 +1117,7 @@ describe("phone ledger controller — createCategory", () => {
       unmergeCounterparties: vi.fn(),
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
+      listCounterpartyBalances: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1298,6 +1303,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      listCounterpartyBalances: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1538,6 +1544,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       listPayeeHistory: vi.fn(() => []),
+      listCounterpartyBalances: vi.fn(() => []),
       reset: vi.fn(),
     };
 
@@ -1883,6 +1890,22 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       archiveAccount: vi.fn(),
       reconcileAccount: vi.fn(),
       createGroup: vi.fn(),
+      readRate: vi.fn(() => null),
+      readCoverage: vi.fn(() => []),
+      listFxRates: vi.fn(() => []),
+      addCurrency: vi.fn(),
+      archiveCurrency: vi.fn(),
+      setRateSource: vi.fn(),
+      setPinned: vi.fn(),
+      changePivot: vi.fn(),
+      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
+      clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      createCounterparty: vi.fn(),
+      updateCounterparty: vi.fn(),
+      mergeCounterparties: vi.fn(),
+      unmergeCounterparties: vi.fn(),
+      recordDistinctCounterparties: vi.fn(),
+      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

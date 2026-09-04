@@ -62,6 +62,11 @@ import {
   type ReadCounterpartiesOptions,
   readCounterparties,
 } from "./counterparties/read-counterparties.ts";
+// ── end E2 block ─────────────────────────────────────────────────────────
+import {
+  type LocalCounterpartyBalance,
+  readCounterpartyBalances,
+} from "./counterparties/read-counterparty-balances.ts";
 import {
   type LocalDistinctPairRow,
   recordDistinctCounterpartiesExecutor,
@@ -83,10 +88,7 @@ import {
   type ClearManualRateResult,
   clearManualRateExecutor,
 } from "./currencies/clear-manual-rate.executor.ts";
-// ── end E2 block ─────────────────────────────────────────────────────────
-  type LocalCounterpartyBalance,
-  readCounterpartyBalances,
-} from "./counterparties/read-counterparty-balances.ts";
+
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 import {
   type LocalCoverage,
