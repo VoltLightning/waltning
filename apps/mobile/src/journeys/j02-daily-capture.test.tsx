@@ -14,6 +14,10 @@
  * Every test mounts the **real** `Today` and `Quick add` screens, through the
  * **real** `TabsShell`, over a **real** `LocalLedgerSession` —
  * `journey-harness.tsx`'s own doc says why a fake port cannot stand in here.
+ *
+ * Proves: flows/J02-daily-capture.md §3, screens/S05-quick-add.md §3.
+ * Findings: none — this is D5's acceptance timing check, not a
+ * spec-violation probe, so it carries no `it.fails`.
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
