@@ -139,3 +139,5 @@ All four states designed — `design/gaps.dc.html` G3.
 | Trail comprehension | Every machine-filled field can be traced to what produced it, without leaving the screen |
 | Offline parity | The same flow, same timing, no degraded mode — only the queue indicator differs |
 | Correctness | A duplicate is caught **before** it enters the ledger, not found in a later reconciliation |
+
+Measured by `j02-daily-capture.test.tsx` — tap count and wall clock, offline, on every gate.

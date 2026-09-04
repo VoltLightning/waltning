@@ -15,6 +15,14 @@
  * **Files on disk, not `:memory:`.** The property under test is what survives
  * the process going away, and an in-memory database is closed when it does.
  * `reopen()` below is the whole point of the file.
+ *
+ * **Exported (`./test/stores`), for one caller outside this package.** D5's
+ * `apps/mobile/src/journeys/j02-daily-capture.test.tsx` mounts the real
+ * screens over a real `LocalLedgerSession` — `wave-4-shared.md`'s "an
+ * executor is the phone's whole contract" holds for a journey test too, so it
+ * cannot run a fake port. Reusing this rather than a second copy is what
+ * `CLAUDE.md`'s "no abstraction before the third use" already implies once a
+ * second, legitimate caller exists.
  */
 
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";

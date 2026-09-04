@@ -455,6 +455,7 @@ export default function QuickAdd() {
         visible={composerCategorySheet.open}
         kind={composerCategorySheet.kind}
         tree={snapshot.categoryTree}
+        {...(categoryProposal === undefined ? {} : { proposal: categoryProposal })}
         onPick={handlePickComposerCategory}
         onCreate={handleCreateCategory}
         onDismiss={handleDismissComposerCategorySheet}

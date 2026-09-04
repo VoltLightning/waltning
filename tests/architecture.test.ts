@@ -243,6 +243,11 @@ describe("apps hold only what names a platform", () => {
         if (isTest(file) || isAmbient(file)) continue;
         // `app/` is the route tree — composition is its job by definition.
         if (/^apps\/[^/]+\/app\//.test(rel(file))) continue;
+        // `src/journeys/` composes the same platform-bound screens a route
+        // does (D5's `journey-harness.tsx`) — a stub router standing in for
+        // `app/`'s, not a second `app/` — so it earns the same exemption
+        // without needing to name a platform on its own.
+        if (/^apps\/[^/]+\/src\/journeys\//.test(rel(file))) continue;
         if (!NAMES_PLATFORM.test(readFileSync(file, "utf8"))) offenders.push(rel(file));
       }
     }
@@ -423,6 +428,12 @@ describe("every src/ is organised by domain, not by layer", () => {
       "registry",
       "trpc",
     ],
+    /**
+     * `journeys` — D5's acceptance tests, which cross screens (`Today`,
+     * `Quick add`) and belong to none of them, the same reason this file
+     * itself does not fold into any single `describe`.
+     */
+    "apps/mobile/src": ["journeys"],
     "packages/core/src": ["capture", "registry"],
     // Foundation (`transport`, `query`) plus one folder per domain.
     "packages/client/src": [
