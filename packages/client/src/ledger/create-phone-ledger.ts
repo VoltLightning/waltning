@@ -689,6 +689,35 @@ function subtotalsOf(accounts: readonly PhoneAccount[]): readonly PhoneCurrencyS
 const COLLISION_THRESHOLD = 0.4;
 
 /**
+ * The ratio alone is not enough. `Taxi`/`Tax` — real, seeded, unrelated
+ * leaves — score `0.5` under `COLLISION_THRESHOLD` too: a short name has few
+ * trigrams (`Tax` has four), so sharing its first two or three inflates the
+ * *ratio* without the pair sharing much of anything structurally. `jaccard`
+ * cannot tell "these overlap a lot, proportionally, because they are both
+ * three letters" from "these overlap a lot because one is the other plus an
+ * `s`" — a **count**, not a ratio, is what separates them: `Taxi`/`Tax` share
+ * 3 trigrams; `Groceries`/`Grocery` (§9.2's own example) share 6.
+ *
+ * A minimum *folded length* was the other option this could have used —
+ * `Taxi`/`Tax` are both under 5 characters, so a length floor would exclude
+ * them too. Rejected: length is a proxy for "few trigrams", one step removed
+ * from the actual mechanism, and a short *pair that genuinely overlaps a lot*
+ * (there is no such pair in the seeded taxonomy today, but nothing rules one
+ * out) would be excluded by a length floor for no reason connected to why it
+ * scored high. Counting the overlap directly stays correct if that ever
+ * happens; a length floor would still be guessing.
+ */
+const MIN_SHARED_TRIGRAMS = 4;
+
+function sharedTrigramCount(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  let shared = 0;
+  for (const gram of a) {
+    if (b.has(gram)) shared++;
+  }
+  return shared;
+}
+
+/**
  * S19's collision finder. **Not scoped to one parent** — §9.2's own example
  * is `Groceries`/`Grocery`, "created months apart... under different
  * groups", which the sibling-uniqueness index cannot catch because it is
@@ -714,6 +743,7 @@ function collisionsOf(
       if (!b || !bGrams || b.kind !== a.kind) continue;
       const score = jaccard(aGrams, bGrams);
       if (score < COLLISION_THRESHOLD) continue;
+      if (sharedTrigramCount(aGrams, bGrams) < MIN_SHARED_TRIGRAMS) continue;
       collisions.push({
         a: { id: a.id, name: a.name, usageCount: usage.get(a.id) ?? 0 },
         b: { id: b.id, name: b.name, usageCount: usage.get(b.id) ?? 0 },
@@ -1354,6 +1384,20 @@ export function createPhoneLedger(
         const current = findCategory(snapshot.fullCategoryTree, draft.id);
         if (!current) {
           return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
+        }
+
+        // TAXONOMY.md R2 — two levels only. A group may sit at the root and
+        // nowhere else; the actions sheet never offers Move for one, but the
+        // executor's own guarantee stays mirrored here too.
+        if (!current.isLeaf && draft.parentId !== null) {
+          return {
+            fieldErrors: [
+              {
+                path: "parentId",
+                message: `"${current.name}" is a group — a group may only sit at the root`,
+              },
+            ],
+          };
         }
 
         if (draft.parentId !== null) {

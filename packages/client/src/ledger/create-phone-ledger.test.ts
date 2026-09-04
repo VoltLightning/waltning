@@ -1000,6 +1000,35 @@ describe("category writes", () => {
       expect(reparentCategory).not.toHaveBeenCalled();
     });
 
+    /**
+     * `TAXONOMY.md` R2 — mirrors `reparent-category.executor.ts`'s own
+     * guard. The actions sheet never offers Move for a group, so this is
+     * defense in depth against any other caller.
+     */
+    it("refuses moving a group anywhere but the root", () => {
+      const { controller, reparentCategory } = harness(undefined, {
+        categoryTree: [
+          ...tree(),
+          categoryNode({
+            id: "88888888-8888-4888-8888-888888888888",
+            name: "Household",
+            kind: "expense",
+            isLeaf: false,
+          }),
+        ],
+      });
+
+      const result = controller.moveCategory({
+        id: FOOD_GROUP,
+        parentId: "88888888-8888-4888-8888-888888888888",
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "parentId", message: '"Food" is a group — a group may only sit at the root' },
+      ]);
+      expect(reparentCategory).not.toHaveBeenCalled();
+    });
+
     it("refuses crossing kinds", () => {
       const { controller } = harness(undefined, { categoryTree: tree() });
       const result = controller.moveCategory({ id: SALARY, parentId: FOOD_GROUP });
@@ -1008,7 +1037,14 @@ describe("category writes", () => {
       ]);
     });
 
-    it("refuses a cycle — a group moved under its own descendant", () => {
+    /**
+     * The same scenario the old cycle test used — `FOOD_GROUP` moved onto
+     * `GROCERIES` after `GROCERIES` becomes a group — now refuses at the R2
+     * guard above (tested separately), before `wouldCycle` ever runs: only a
+     * leaf reaches that check, matching `reparent-category.executor.ts`'s
+     * own reasoning.
+     */
+    it("refuses the R2 way before it would ever reach the cycle check", () => {
       const { controller } = harness(undefined, {
         categoryTree: tree().map((node) =>
           node.id === GROCERIES ? { ...node, isLeaf: false } : node,
@@ -1016,10 +1052,7 @@ describe("category writes", () => {
       });
       const result = controller.moveCategory({ id: FOOD_GROUP, parentId: GROCERIES });
       expect("fieldErrors" in result && result.fieldErrors).toEqual([
-        {
-          path: "parentId",
-          message: '"Groceries" is inside "Food" — that would make the tree a cycle',
-        },
+        { path: "parentId", message: '"Food" is a group — a group may only sit at the root' },
       ]);
     });
   });
@@ -1199,5 +1232,127 @@ describe("category collisions", () => {
     });
 
     expect(controller.getSnapshot().categoryCollisions).toHaveLength(0);
+  });
+
+  /**
+   * A real false positive on the seeded taxonomy: `Taxi` and `Tax` are
+   * unrelated (transport vs. financial — different groups, same kind), but
+   * `jaccard(trigrams("taxi"), trigrams("tax"))` is `0.5` — over threshold —
+   * purely because both names are short. A short string has few trigrams, so
+   * sharing just its first two or three inflates the *ratio* without the two
+   * names sharing much of anything structurally. `Groceries`/`Grocery` share
+   * 6 actual trigrams; `Taxi`/`Tax` share 3.
+   */
+  it("does not flag Taxi and Tax — a short-name false positive", () => {
+    const { controller } = harness(undefined, {
+      categoryTree: [
+        categoryNode({ id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Taxi", kind: "expense" }),
+        categoryNode({ id: "aaaaaaaa-0000-4000-8000-000000000002", name: "Tax", kind: "expense" }),
+      ],
+    });
+
+    expect(controller.getSnapshot().categoryCollisions).toHaveLength(0);
+  });
+
+  /**
+   * Every leaf `TAXONOMY.md` actually seeds (`packages/db/src/seed/data.ts`),
+   * name and kind only. **Copied literally, not imported** —
+   * `tests/architecture.test.ts` refuses any client package a path into
+   * `packages/db`, by any route, so this list is duplicated rather than
+   * shared; a seed change that renames or adds a leaf needs this list kept in
+   * step, which is the cost of the boundary rather than a costless one. The
+   * whole point of this test: the real 59-leaf taxonomy produces **zero**
+   * collisions at this threshold, not just the two names picked for the tests
+   * above.
+   */
+  it("finds zero collisions across the real seeded taxonomy", () => {
+    const seededLeaves: { name: string; kind: "income" | "expense" }[] = [
+      // Income
+      { name: "Services", kind: "income" },
+      { name: "Other revenue", kind: "income" },
+      { name: "Salary", kind: "income" },
+      { name: "Bonus & equity", kind: "income" },
+      { name: "Investment returns", kind: "income" },
+      { name: "Interest", kind: "income" },
+      { name: "Gift received", kind: "income" },
+      { name: "Refund", kind: "income" },
+      { name: "Borrowed", kind: "income" },
+      { name: "Repayment received", kind: "income" },
+      { name: "Other inflow", kind: "income" },
+      // Expense — Home
+      { name: "Property purchase", kind: "expense" },
+      { name: "Rent", kind: "expense" },
+      { name: "Utilities", kind: "expense" },
+      { name: "Furniture & appliances", kind: "expense" },
+      { name: "Household supplies", kind: "expense" },
+      { name: "Renovation & building", kind: "expense" },
+      { name: "Plumbing", kind: "expense" },
+      { name: "Electrical & network", kind: "expense" },
+      { name: "Facade & exterior", kind: "expense" },
+      { name: "Garden", kind: "expense" },
+      // Food
+      { name: "Groceries", kind: "expense" },
+      { name: "Eating out", kind: "expense" },
+      { name: "Delivery", kind: "expense" },
+      { name: "Alcohol", kind: "expense" },
+      // Transport
+      { name: "Car", kind: "expense" },
+      { name: "Taxi", kind: "expense" },
+      { name: "Public transport", kind: "expense" },
+      { name: "Fuel & parking", kind: "expense" },
+      // Travel
+      { name: "Flights & tickets", kind: "expense" },
+      { name: "Accommodation", kind: "expense" },
+      { name: "Travel food & activities", kind: "expense" },
+      // Health
+      { name: "Medical & dental", kind: "expense" },
+      { name: "Pharmacy", kind: "expense" },
+      { name: "Sport & fitness", kind: "expense" },
+      { name: "Beauty & grooming", kind: "expense" },
+      // Personal
+      { name: "Clothing & shoes", kind: "expense" },
+      { name: "Technology", kind: "expense" },
+      { name: "Hobbies", kind: "expense" },
+      { name: "Education", kind: "expense" },
+      // Social
+      { name: "Friends & going out", kind: "expense" },
+      { name: "Gifts given", kind: "expense" },
+      { name: "Celebrations", kind: "expense" },
+      { name: "Entertainment", kind: "expense" },
+      // Subscriptions
+      { name: "Software & tools", kind: "expense" },
+      { name: "Media & streaming", kind: "expense" },
+      { name: "Mobile & internet", kind: "expense" },
+      // Financial
+      { name: "Tax", kind: "expense" },
+      { name: "Bank fees & commission", kind: "expense" },
+      { name: "Legal & professional", kind: "expense" },
+      { name: "Insurance", kind: "expense" },
+      // Business
+      { name: "Accountant", kind: "expense" },
+      { name: "Business services", kind: "expense" },
+      { name: "ZUS & business tax", kind: "expense" },
+      { name: "Business other", kind: "expense" },
+      // Debt & giving
+      { name: "Lent out", kind: "expense" },
+      { name: "Repayment made", kind: "expense" },
+      { name: "Charity", kind: "expense" },
+      // Top-level
+      { name: "Uncategorized", kind: "expense" },
+    ];
+    expect(seededLeaves).toHaveLength(59);
+
+    const { controller } = harness(undefined, {
+      categoryTree: seededLeaves.map((leaf, index) =>
+        categoryNode({
+          id: `cccccccc-0000-4000-${String(8000 + index).padStart(4, "0")}-000000000000`,
+          name: leaf.name,
+          kind: leaf.kind,
+        }),
+      ),
+    });
+
+    const collisions = controller.getSnapshot().categoryCollisions;
+    expect(collisions.map((c) => `${c.a.name} <-> ${c.b.name}`)).toEqual([]);
   });
 });

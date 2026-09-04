@@ -1,9 +1,10 @@
 /**
  * `reparent_category`, on the device — J12: *"move a leaf to another
- * group."* Compare-and-swap on `version`, then three refusals: no cycle, no
- * leaf parent (`TAXONOMY.md` R1), no kind crossing (J12 §4 — *"target group
- * has a different kind"*, refused so an income leaf never sums into the
- * expense side of a report, or the reverse).
+ * group."* Compare-and-swap on `version`, then four refusals: no group
+ * anywhere but the root (`TAXONOMY.md` R2 — two levels, never deeper), no
+ * leaf parent (R1), no kind crossing (J12 §4 — *"target group has a
+ * different kind"*, refused so an income leaf never sums into the expense
+ * side of a report, or the reverse), no cycle.
  */
 
 import type { Id } from "@waltning/core/id";
@@ -41,6 +42,16 @@ function reparentCategory(input: ReparentCategoryInput, tx: ReplicaTx): LocalCat
   }
 
   if (input.parentId !== null) {
+    // R2 first, and unconditionally — a group taking on *any* non-null
+    // parent is a third level, which `TAXONOMY.md` names explicitly as never
+    // allowed. Everything below this line runs only for a leaf, which is the
+    // only thing R1/R2 together permit to have a parent at all.
+    if (!current.isLeaf) {
+      throw new Error(
+        `reparent_category: ${input.id} is a group — a group may only sit at the root, never nested under another (TAXONOMY.md R2, two levels)`,
+      );
+    }
+
     const [parent] = tx.select().from(categories).where(eq(categories.id, input.parentId)).all();
     if (!parent) {
       throw new Error(`reparent_category: no parent ${input.parentId}`);
@@ -84,6 +95,13 @@ function reparentCategory(input: ReparentCategoryInput, tx: ReplicaTx): LocalCat
  * cycle — true exactly when `targetParentId` is `categoryId` itself or one of
  * its descendants, found by walking `targetParentId`'s own ancestor chain up
  * toward the root and watching for `categoryId`.
+ *
+ * **Unreachable in practice once R2 is enforced above, and kept anyway.**
+ * This only ever runs for a leaf (the R2 guard refuses every group before
+ * reaching it), and a leaf has no descendants — so `categoryId` can never
+ * appear in `targetParentId`'s ancestor chain. Left in rather than deleted:
+ * it costs one query, and a guarantee that depends on nothing upstream ever
+ * changing is a fragile guarantee.
  *
  * `seen` bounds the walk even against data that is already cyclic somehow —
  * an infinite loop here would hang the write rather than refuse it.
