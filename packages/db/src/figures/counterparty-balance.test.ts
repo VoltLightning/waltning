@@ -61,4 +61,86 @@ describe("counterparty balance — §7, in SQL", () => {
       },
     ]);
   });
+
+  it("coalesces debt_amount — a settlement discharges its own currency and amount, never the leg's own", async () => {
+    await scratch.sql.unsafe(`
+      INSERT INTO currencies (code, name, decimals, is_pivot) VALUES
+        ('EUR','Euro',2,false);
+      INSERT INTO accounts (id, name, currency, ownership, opening_balance) VALUES
+        ('11111111-1111-1111-1111-111111111112','Bank B · PLN','PLN','own',0),
+        ('11111111-1111-1111-1111-111111111113','Cash B · EUR','EUR','own',0);
+      INSERT INTO counterparties (id, name) VALUES
+        ('44444444-4444-4444-4444-444444444445','Counterparty C');
+      INSERT INTO transactions
+        (id, date, type, account_id, amount_original, currency, fx_rate,
+         counterparty_id, counterparty_role)
+        VALUES
+          -- lent 200 PLN
+          ('66666666-6666-6666-6666-666666666667','2026-09-01','expense',
+           '11111111-1111-1111-1111-111111111112',200,'PLN',1,
+           '44444444-4444-4444-4444-444444444445','debt');
+      -- repaid 50 EUR, discharging 214.05 PLN of the debt — debt_currency/debt_amount
+      -- name what the settlement actually clears, never what changed hands.
+      INSERT INTO transactions
+        (id, date, type, account_id, amount_original, currency, fx_rate,
+         counterparty_id, counterparty_role, debt_currency, debt_amount)
+        VALUES
+          ('77777777-7777-7777-7777-777777777778','2026-09-02','income',
+           '11111111-1111-1111-1111-111111111113',50,'EUR',1,
+           '44444444-4444-4444-4444-444444444445','debt','PLN',214.05);
+    `);
+
+    const rows = await counterpartyBalances(scratch.db);
+    const forC = rows.filter((r) => r.counterpartyId === "44444444-4444-4444-4444-444444444445");
+
+    // 200 lent, 214.05 discharged — a PLN balance of −14.05, never the
+    // 200 − 50 = 150 the un-coalesced leg amount (in the wrong currency) gives.
+    expect(forC).toEqual([
+      {
+        counterpartyId: "44444444-4444-4444-4444-444444444445",
+        currency: "PLN",
+        balance: "-14.05000000",
+      },
+    ]);
+  });
+
+  it("an archived counterparty AT ZERO is excluded; one with a non-zero balance is not", async () => {
+    await scratch.sql.unsafe(`
+      INSERT INTO accounts (id, name, currency, ownership, opening_balance) VALUES
+        ('11111111-1111-1111-1111-111111111114','Bank C · PLN','PLN','own',0);
+      INSERT INTO counterparties (id, name, archived) VALUES
+        ('44444444-4444-4444-4444-444444444446','Settled & archived', true),
+        ('44444444-4444-4444-4444-444444444447','Open & archived', true);
+      INSERT INTO transactions
+        (id, date, type, account_id, amount_original, currency, fx_rate,
+         counterparty_id, counterparty_role)
+        VALUES
+          -- Settled & archived: lent 100, repaid 100 — nets to zero.
+          ('66666666-6666-6666-6666-666666666668','2026-09-01','expense',
+           '11111111-1111-1111-1111-111111111114',100,'PLN',1,
+           '44444444-4444-4444-4444-444444444446','debt'),
+          ('66666666-6666-6666-6666-666666666669','2026-09-02','income',
+           '11111111-1111-1111-1111-111111111114',100,'PLN',1,
+           '44444444-4444-4444-4444-444444444446','debt'),
+          -- Open & archived: lent 75, never repaid — a non-zero balance
+          -- history must still show even though the counterparty is archived.
+          ('66666666-6666-6666-6666-666666666670','2026-09-03','expense',
+           '11111111-1111-1111-1111-111111111114',75,'PLN',1,
+           '44444444-4444-4444-4444-444444444447','debt');
+    `);
+
+    const rows = await counterpartyBalances(scratch.db);
+    expect(rows.some((r) => r.counterpartyId === "44444444-4444-4444-4444-444444444446")).toBe(
+      false,
+    );
+    expect(rows.filter((r) => r.counterpartyId === "44444444-4444-4444-4444-444444444447")).toEqual(
+      [
+        {
+          counterpartyId: "44444444-4444-4444-4444-444444444447",
+          currency: "PLN",
+          balance: "75.00000000",
+        },
+      ],
+    );
+  });
 });

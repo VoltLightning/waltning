@@ -35,7 +35,7 @@ import {
   type LocalTransactionRow,
 } from "../transactions/create-transaction.executor.ts";
 import type { LocalTx } from "../write.ts";
-import { openBalances } from "./open-balances.ts";
+import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
 const { counterparties } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
@@ -71,7 +71,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     throw new Error(`settle_debt: no counterparty ${input.counterpartyId}`);
   }
 
-  const before = openBalances(tx, input.counterpartyId).find(
+  const before = balancesForCounterparty(tx, input.counterpartyId).find(
     (row) => row.currency === input.discharges.currency,
   );
   const balanceBefore = before?.balance ?? money.ZERO;
@@ -117,7 +117,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     throw new Error("settle_debt: the row changed between insert and the debt-fields update");
   }
 
-  const after = openBalances(tx, input.counterpartyId).find(
+  const after = balancesForCounterparty(tx, input.counterpartyId).find(
     (r) => r.currency === input.discharges.currency,
   );
   const residual = after?.balance ?? money.ZERO;

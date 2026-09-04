@@ -206,6 +206,25 @@ export type PhoneSettleDebtResult = {
   overSettled: boolean;
 };
 
+/**
+ * §7, one row per counterparty per currency — S12's list. Structural, like
+ * `PhoneCounterparty` above: `kind` and `bucket` are restated rather than
+ * imported so this package stays free of `@waltning/schema` and
+ * `@waltning/ledger` alike.
+ */
+export type PhoneCounterpartyBalance = {
+  counterpartyId: Id<"counterparties">;
+  name: string;
+  kind: "person" | "company";
+  settlementCurrency: CurrencyCode | null;
+  currency: CurrencyCode;
+  decimals: number;
+  balance: Money;
+  /** Companies only (O15) — `null` for a person, and for a company with nothing open. */
+  ageDays: number | null;
+  bucket: money.AgeBucket | null;
+};
+
 /** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
 export type PhoneTransactionScope = "all" | "mine" | "shared" | "business";
 
@@ -358,6 +377,8 @@ export type PhoneLedgerPort = {
   listCounterparties: (options?: { includeArchived?: boolean }) => readonly PhoneCounterparty[];
   /** D2's reader, on demand — D4b's proposal recomputes it only when the typed payee changes. */
   listPayeeHistory: () => readonly PhonePayeeHistoryRow[];
+  /** §7 — S12's list. `today` is the caller's own accounting date, the same one `capture()` computes. */
+  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
@@ -466,8 +487,19 @@ export type PhoneNetWorth = {
 /** §5's base figure, per currency — C2's *spent* and *net* `StatTile`s. See `money.periodSpend`. */
 export type PhonePeriodSpend = money.PeriodSpendRow;
 
-/** §8, minus FIFO attribution — C2's unsettled banner. See `money.unsettledClearing`. */
-export type PhoneClearingAccount = money.ClearingAccountRow;
+/**
+ * §8's unsettled clearing accounts, FIFO attribution included — C2's
+ * unsettled banner names a transaction when one is present (S04 §3). See
+ * `money.unsettledClearing` and `readUnsettledClearing`'s own `fifoOldestOpen` call.
+ */
+export type PhoneClearingAccount = money.ClearingAccountRow & {
+  oldestUnconsumedTransactionId: Id<"transactions"> | null;
+  oldestDate: AccountingDate | null;
+  oldestUnconsumedPayee: string | null;
+};
+
+/** S12's two direction totals, per currency. See `money.directionTotals`. */
+export type PhoneDirectionTotal = money.DirectionTotalRow;
 
 /** D2's history, read on demand for D4b's proposal — see `proposeCategory`. */
 export type PhonePayeeHistoryRow = PayeeHistoryRow;
@@ -791,6 +823,15 @@ export type PhoneLedgerController = {
    * `refresh()` recomputes for every subscriber on every write.
    */
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /**
+   * §7, on demand — S12's list. Same reasoning as `readPeriodSpend` above:
+   * `today` is a value the caller already has (the same accounting date
+   * `capture()` computes), not state `refresh()` should own or a reason to
+   * call the device's clock on every write elsewhere in the app.
+   * `money.directionTotals(balances)` folds S12's two direction totals from
+   * this call's own result — a pure function, not a second round trip.
+   */
+  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
   /**
    * S16 §5, on demand — `ReconcileSheet`'s "Computed" figure, refolded every
    * time its own date field moves rather than fixed to the balance the sheet
@@ -1226,6 +1267,7 @@ export function createPhoneLedger(
     },
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
+    listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listPayeeHistory: () => port.listPayeeHistory(),
     searchTransactions: (filter, cursor) =>

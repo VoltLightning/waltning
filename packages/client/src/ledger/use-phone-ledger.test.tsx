@@ -38,6 +38,7 @@ describe("usePhoneLedger", () => {
         listNetWorth: () => [],
         readPeriodSpend: () => [],
         listUnsettledClearing: () => [],
+        listCounterpartyBalances: () => [],
         balanceAsOf: vi.fn(),
         searchTransactions: () => ({
           rows: [],

@@ -14,12 +14,11 @@
  * currently holds a balance, which is state on the row rather than on the
  * patch.
  *
- * **The balance fold comes from `open-balances.ts`, not `readCounterpartyBalances`.**
- * `money.counterpartyBalance` (§7's fold, `packages/core/src/money.ts`)
- * exists on this base, but `readCounterpartyBalances` — the ledger-side
- * reader that queries the replica and calls it — is E1's, a parallel PR not
- * on this base. `open-balances.ts` is the query it will replace, shared with
- * `settle_debt`'s own read rather than a second copy of the same fold.
+ * **The balance fold comes from `read-counterparty-balances.ts`'s
+ * `balancesForCounterparty`, shared with `settle_debt`'s own read** rather
+ * than a second copy of the same fold — both need `{ currency, balance }[]`
+ * for one counterparty, never the full multi-counterparty, ageing-inclusive
+ * shape `readCounterpartyBalances` builds for the phone's own screen.
  *
  * **A renamed `patch.name` gets the same folded-name pre-check
  * `create_counterparty` runs**, for the same reason: without it, the raw
@@ -37,7 +36,7 @@ import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
-import { openBalances } from "./open-balances.ts";
+import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
 const { counterparties } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
@@ -86,7 +85,7 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
 
   const willArchive = input.patch.archived === true && !current.archived;
   if (willArchive) {
-    const balances = openBalances(tx, input.id);
+    const balances = balancesForCounterparty(tx, input.id);
     const open = balances.find((row) => !money.isZero(row.balance));
     if (open) {
       throw new Error(

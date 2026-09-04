@@ -10,6 +10,7 @@
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { accountingDate } from "./date.ts";
 import * as money from "./money.ts";
 
 /** A scale-8 decimal string, up to numeric(20,8): 12 integer digits, 8 fractional. */
@@ -159,6 +160,139 @@ describe("money, for every input", () => {
         const one = money.unitsPerPivot("1");
         expect(money.convert(x, one, one)).toBe(x);
       }),
+    );
+  });
+});
+
+/**
+ * §7 ageing and §8 attribution share one algorithm (`fifoOldestOpen`); §8's
+ * allocation is a second, unrelated one (`allocateLargestRemainder`). Same
+ * shape of property either way: an assertion that does not reimplement the
+ * function under test, so a bug in the implementation cannot also be a bug
+ * in the check.
+ */
+describe("fifoOldestOpen — for every input", () => {
+  const idArb = fc.stringMatching(/^[a-z]{1,4}$/);
+
+  it("a zero balance returns null — deltas built to sum to exactly zero", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(idArb, { minLength: 1, maxLength: 6 }),
+        fc.array(fc.bigInt({ min: -999_999n, max: 999_999n }), { minLength: 1, maxLength: 6 }),
+        (ids, magnitudes) => {
+          const rows = ids.map((id, i) => ({
+            id,
+            date: accountingDate(`2026-08-${String((i % 28) + 1).padStart(2, "0")}`),
+            delta: money.toMoney((magnitudes[i % magnitudes.length] ?? 0n).toString()),
+          }));
+          const total = rows.reduce((acc, r) => acc.plus(money.dec(r.delta)), money.dec(0));
+          // A last row that exactly cancels the rest — the fixture, not the
+          // property, forces the zero balance.
+          const balancing = {
+            id: "zzzzzz",
+            date: accountingDate("2026-08-28"),
+            delta: money.toMoney(total.negated()),
+          };
+          expect(money.fifoOldestOpen([...rows, balancing])).toBeNull();
+        },
+      ),
+    );
+  });
+
+  it("never returns an id absent from its own input, and never for a zero balance", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(idArb, { minLength: 1, maxLength: 6 }),
+        fc.array(
+          fc.bigInt({ min: -999_999n, max: 999_999n }).filter((n) => n !== 0n),
+          {
+            minLength: 1,
+            maxLength: 6,
+          },
+        ),
+        (ids, magnitudes) => {
+          const rows = ids.map((id, i) => ({
+            id,
+            date: accountingDate(`2026-08-${String((i % 28) + 1).padStart(2, "0")}`),
+            delta: money.toMoney((magnitudes[i % magnitudes.length] ?? 1n).toString()),
+          }));
+          const result = money.fifoOldestOpen(rows);
+          if (money.dec(rows.reduce((a, r) => a.plus(money.dec(r.delta)), money.dec(0))).isZero()) {
+            expect(result).toBeNull();
+          } else {
+            expect(result).not.toBeNull();
+            expect(rows.some((r) => r.id === result?.id && r.date === result.date)).toBe(true);
+          }
+        },
+      ),
+    );
+  });
+
+  it("is stable by (date, id) — the answer does not depend on input array order", () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(idArb, { minLength: 2, maxLength: 6 }),
+        fc.array(
+          fc.bigInt({ min: -999_999n, max: 999_999n }).filter((n) => n !== 0n),
+          {
+            minLength: 2,
+            maxLength: 6,
+          },
+        ),
+        fc.integer({ min: 0, max: 2 ** 31 - 1 }),
+        (ids, magnitudes, seed) => {
+          const rows = ids.map((id, i) => ({
+            id,
+            date: accountingDate(`2026-08-${String((i % 5) + 1).padStart(2, "0")}`),
+            delta: money.toMoney((magnitudes[i % magnitudes.length] ?? 1n).toString()),
+          }));
+          // A deterministic shuffle from the seed — array order must not
+          // matter; only (date, id) may.
+          const shuffled = [...rows]
+            .map((row, i) => ({ row, key: (i * 2654435761 + seed) >>> 0 }))
+            .sort((a, b) => a.key - b.key)
+            .map(({ row }) => row);
+          expect(money.fifoOldestOpen(shuffled)).toEqual(money.fifoOldestOpen(rows));
+        },
+      ),
+    );
+  });
+});
+
+describe("allocateLargestRemainder — for every input", () => {
+  it("always sums back to the total, at any scale and any weights", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 8 }),
+        fc.array(fc.integer({ min: 1, max: 1000 }), { minLength: 1, maxLength: 8 }),
+        fc.bigInt({ min: 0n, max: 999_999_999n }),
+        (decimals, weights, wholeUnits) => {
+          // A total already at the currency's own scale — realistic input,
+          // and the precondition the implementation itself documents.
+          const total = money.toMoney(money.dec(wholeUnits.toString()).dividedBy(10 ** decimals));
+          const shares = money.allocateLargestRemainder(total, weights, decimals);
+          expect(shares).toHaveLength(weights.length);
+          expect(money.sum([...shares])).toBe(total);
+        },
+      ),
+    );
+  });
+
+  it("every share is a non-negative multiple of the currency's own minor unit", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 4 }),
+        fc.array(fc.integer({ min: 1, max: 100 }), { minLength: 1, maxLength: 5 }),
+        fc.bigInt({ min: 0n, max: 99_999n }),
+        (decimals, weights, wholeUnits) => {
+          const total = money.toMoney(money.dec(wholeUnits.toString()).dividedBy(10 ** decimals));
+          for (const share of money.allocateLargestRemainder(total, weights, decimals)) {
+            expect(money.dec(share).isNegative()).toBe(false);
+            const units = money.dec(share).times(10 ** decimals);
+            expect(units.toDecimalPlaces(0).eq(units)).toBe(true);
+          }
+        },
+      ),
     );
   });
 });

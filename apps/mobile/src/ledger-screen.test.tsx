@@ -107,6 +107,7 @@ function fakeController(search: FakeSearch) {
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
+    listCounterpartyBalances: () => [],
     balanceAsOf: () => toMoney("0"),
     searchTransactions: search,
     createAccount: () => undefined,

@@ -307,6 +307,13 @@ export const en = {
      * one action."
      */
     unsettledMore: "{{amount}} {{currency}} unallocated · {{account}} · and {{count}} more",
+    /**
+     * §8's third field — `find_unsettled`'s own reason for existing — is
+     * what lets this name the transaction rather than the account, once
+     * `fifoOldestOpen` has one on hand (`read-unsettled-clearing.ts`).
+     */
+    unsettledNamed: "{{amount}} {{currency}} unallocated · {{payee}}",
+    unsettledNamedMore: "{{amount}} {{currency}} unallocated · {{payee}} · and {{count}} more",
     unsettledOpen: "Open",
     /** S04 §6 — the balance query failed; the hero keeps its last known figure. */
     balanceQueryFailed: "Couldn't refresh",

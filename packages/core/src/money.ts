@@ -11,6 +11,7 @@
 // decimal.js's namespace declaration rather than the constructable class.
 import { Decimal as GlobalDecimal } from "decimal.js";
 import type { AccountingDate } from "./date.ts";
+import { daysBetween } from "./date.ts";
 
 /**
  * A **private** Decimal constructor, not the global one.
@@ -563,14 +564,259 @@ export type ClearingAccountRow = {
  * §8 — every clearing account whose `clearingBalance` is non-zero. **A
  * filter, not a fold**: the caller has already folded each clearing
  * account's own rows into `balance` the way `readAccountsForNetWorth` does
- * for §3, so this only asks which of those balances are non-zero. FIFO
- * attribution — which unconsumed transaction is the oldest, for the banner
- * to name — is `find_unsettled`'s own job and class **S** ("largest-remainder
- * allocation must not be reimplemented," §0): arc-phone's banner names the
- * account and the amount, not the transaction.
+ * for §3, so this only asks which of those balances are non-zero.
+ *
+ * **FIFO attribution — which transaction is the oldest unconsumed one — is
+ * `fifoOldestOpen`'s job below, not this filter's.** It used to read "stays
+ * server-only": that was true only because nothing on the phone folded the
+ * account's own legs through FIFO yet. §0's class-**S** line is narrower —
+ * "largest-remainder allocation must not be reimplemented" — and names the
+ * *split*, never the *pointer* to the oldest row. The replica holds the
+ * whole history the same way it does for §7's ageing (§0's own
+ * reclassification note there), so `readUnsettledClearing` calls
+ * `fifoOldestOpen` over each account's legs to fill in that pointer.
  */
 export const unsettledClearing = (
   balances: readonly ClearingAccountRow[],
 ): readonly ClearingAccountRow[] => balances.filter((row) => !isZero(row.balance));
+
+/* ── The FIFO fold — computations.md §7 ageing and §8 attribution, one algorithm ── */
+
+export type FifoDelta<TId extends string> = { id: TId; date: AccountingDate; delta: Money };
+export type FifoOldest<TId extends string> = { id: TId; date: AccountingDate };
+
+/**
+ * The oldest row still carrying a positive, unconsumed remainder — FIFO,
+ * ordered `(date, id)`.
+ *
+ * **One algorithm, two readers.** §7's ageing needs "the oldest still-open
+ * `debt` row for a company"; §8's `find_unsettled` needs "the oldest still-
+ * unconsumed inflow to a clearing account" — the same shape, "the oldest row
+ * a queue of later opposite-signed rows has not yet fully eaten," so this is
+ * one function rather than two copies that could drift.
+ *
+ * **Which deltas *open* and which *consume* is decided by the RUNNING
+ * direction, never the final balance's sign.** A single global sign is
+ * wrong the moment the balance crosses zero more than once: `+50, −80,
+ * +100, +20, −75` ends at `+15`, and classifying every row against that
+ * final `+` sign picks the `+100` row as oldest-open — but walking it, the
+ * `−80` fully drains the `+50` and, since it overshoots, *opens a new row of
+ * its own (opposite) sign* for the excess (`−30`); the `+100` then drains
+ * that `−30` and opens a fresh `+70`; the `+20` opens alongside it (queue:
+ * `+70, +20`); the `−75` drains the `+70` fully and 5 of the `+20`, leaving
+ * the `+20` row — not the `+100` — as the oldest survivor, remainder `15`.
+ *
+ * A queue holds at most one sign at a time: a row sharing the queue's
+ * current sign (or an empty queue) opens; a row of the opposite sign
+ * consumes from the oldest entries first, and any amount left over once the
+ * queue is fully drained opens a brand-new entry of *its own* sign — the
+ * balance flipped, so the queue's direction flips with it. §8's "inflows
+ * opened, outflows consume, FIFO" is the ordinary case of this rule where
+ * the queue only ever holds one sign for its whole life.
+ *
+ * Returns `null` when the balance is zero — nothing is unconsumed because
+ * nothing is owed. Otherwise the returned row's remainder is strictly
+ * positive: a row exactly exhausted by consumption is never "still open,"
+ * and the queue's remainders always sum to the balance (conservation — every
+ * unit removed from one entry is handed to consumption or to a new entry,
+ * never dropped).
+ */
+export function fifoOldestOpen<TId extends string>(
+  deltas: readonly FifoDelta<TId>[],
+): FifoOldest<TId> | null {
+  const sorted = [...deltas].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.id === b.id) return 0;
+    return a.id < b.id ? -1 : 1;
+  });
+
+  type Entry = { id: TId; date: AccountingDate; remaining: Decimal; sign: 1 | -1 };
+  const queue: Entry[] = [];
+
+  for (const row of sorted) {
+    const amount = dec(row.delta);
+    if (amount.isZero()) continue;
+    const sign: 1 | -1 = amount.isPositive() ? 1 : -1;
+    const queueSign = queue[0]?.sign ?? sign; // an empty queue always "opens"
+
+    if (sign === queueSign) {
+      queue.push({ id: row.id, date: row.date, remaining: amount.abs(), sign });
+      continue;
+    }
+
+    let toConsume = amount.abs();
+    // `.gt(0)`, never `.isPositive()`: decimal.js's zero carries a stored
+    // sign (`new Decimal(0).isPositive()` is `true`), so a subtraction that
+    // lands on exact zero never trips the loop's exit condition — it keeps
+    // "consuming" a zero remainder against the next open row forever. Found
+    // by running the exact case below (lend 200, lend 300, a repay of 200
+    // that exactly exhausts the first): the process pegged a core at 100%
+    // CPU and never returned.
+    while (toConsume.gt(0)) {
+      const oldest = queue[0];
+      if (!oldest) break;
+      if (oldest.remaining.lte(toConsume)) {
+        toConsume = toConsume.minus(oldest.remaining);
+        queue.shift();
+      } else {
+        oldest.remaining = oldest.remaining.minus(toConsume);
+        toConsume = dec(0);
+      }
+    }
+    // The queue is now empty and there is still an amount left to place —
+    // the balance flipped direction. It opens a new entry of *this* row's
+    // own sign rather than being discarded.
+    if (toConsume.gt(0)) {
+      queue.push({ id: row.id, date: row.date, remaining: toConsume, sign });
+    }
+  }
+
+  const oldest = queue[0];
+  return oldest ? { id: oldest.id, date: oldest.date } : null;
+}
+
+/**
+ * §7's ageing buckets. `days` is `ageInDays`'s output — this only buckets.
+ * The label rule ("*old*, never *overdue*") belongs to the screen, not here:
+ * without a `payment_terms_days` field this function has no way to know a
+ * debt is late, only how long it has stood open.
+ */
+export type AgeBucket = "0-30" | "31-60" | "61-90" | "90+";
+
+export const ageBucket = (days: number): AgeBucket => {
+  if (days <= 30) return "0-30";
+  if (days <= 60) return "31-60";
+  if (days <= 90) return "61-90";
+  return "90+";
+};
+
+/**
+ * §7's ageing figure: whole days from the oldest still-open `debt` row to
+ * `today`. Bare-string day arithmetic through `date.ts`'s `daysBetween` —
+ * never a `Date` diff in this module.
+ */
+export const ageInDays = (oldestDate: AccountingDate, today: AccountingDate): number =>
+  daysBetween(oldestDate, today);
+
+/**
+ * S12's two direction totals — *they owe you*, *you owe* — per currency,
+ * **never summed across people**: a receivable from one counterparty and a
+ * payable to another do not net against each other just because they share
+ * a currency, so this sums the *positive* balances into `theyOwe` and the
+ * *magnitude* of the negative ones into `youOwe`, both non-negative.
+ *
+ * Takes the same `CounterpartyBalanceRow[]` shape `counterpartyBalance`
+ * above produces — one row per counterparty per currency — so the caller
+ * folds every counterparty's balances into one list and hands it here
+ * directly.
+ *
+ * **A currency whose totals both land on zero is omitted, not returned as a
+ * `0.00000000` / `0.00000000` row.** That happens when every counterparty
+ * holding that currency is exactly settled — nothing to show S12, and a
+ * zero/zero row would render as an empty line with a currency label and
+ * nothing under it.
+ */
+export type DirectionTotalRow = { currency: CurrencyCode; theyOwe: Money; youOwe: Money };
+
+export const directionTotals = (
+  rows: readonly CounterpartyBalanceRow[],
+): readonly DirectionTotalRow[] => {
+  const byCurrency = new Map<CurrencyCode, { theyOwe: Decimal; youOwe: Decimal }>();
+  for (const { currency, balance } of rows) {
+    const bucket = byCurrency.get(currency) ?? { theyOwe: dec(0), youOwe: dec(0) };
+    const b = dec(balance);
+    if (b.isPositive()) bucket.theyOwe = bucket.theyOwe.plus(b);
+    else if (b.isNegative()) bucket.youOwe = bucket.youOwe.plus(b.abs());
+    byCurrency.set(currency, bucket);
+  }
+  return [...byCurrency.entries()]
+    .filter(([, { theyOwe, youOwe }]) => !(theyOwe.isZero() && youOwe.isZero()))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, { theyOwe, youOwe }]) => ({
+      currency,
+      theyOwe: toMoney(theyOwe),
+      youOwe: toMoney(youOwe),
+    }));
+};
+
+/**
+ * §8's largest-remainder allocation, as a pure function — J08's group-bill
+ * split. **Never `total × (1/n)`**: that leaves dust in the same direction
+ * every time (three ways on 185,00 never sums back to 185,00), and the
+ * clearing invariant (§6.4: "a clearing account should trend to zero") would
+ * never clear again.
+ *
+ * Floor each share at the currency's scale, then hand out the remainder one
+ * minor unit at a time, by descending fractional part, ties by ascending
+ * index. **Total-preserving by construction** — `sum(shares) === total`,
+ * always, because every minor unit floored away is handed to exactly one
+ * share before this returns.
+ *
+ * **A negative `total` is refused, not mirrored.** J08's group bill is
+ * always a positive amount to split; a negative total has no shipped
+ * caller, and silently allocating it (flooring `total × w/Σw` toward
+ * negative infinity, per share) previously clamped the leftover-unit count
+ * with `Math.max(0, …)` — the clamp discarded the true (negative) leftover
+ * instead of handing it out, so three ways on `−100.00` summed to `−99.99`,
+ * not `−100.00`. A caller that legitimately needs a negative split (a
+ * refund apportioned the same way a bill was) allocates `abs(total)` and
+ * negates every returned share itself, which preserves this function's one
+ * job — the split — without teaching it a second sign convention.
+ */
+export const allocateLargestRemainder = (
+  total: Money,
+  weights: readonly number[],
+  decimals: number,
+): readonly Money[] => {
+  if (weights.length === 0) return [];
+  const weightSum = weights.reduce((sum, w) => sum + w, 0);
+  if (!(weightSum > 0)) {
+    throw new Error("allocateLargestRemainder: weights must sum to a positive number");
+  }
+  if (dec(total).isNegative()) {
+    throw new Error(`allocateLargestRemainder: total must not be negative, got ${total}`);
+  }
+
+  const scale = new Decimal(10).pow(decimals);
+  const totalUnits = dec(total).times(scale);
+
+  // One record per weight, its own remainder carried alongside it rather
+  // than in a second array indexed back into this one — nothing here reads
+  // an array cell TypeScript cannot prove is there.
+  const shares = weights.map((weight, index) => {
+    const exact = totalUnits.times(weight).dividedBy(weightSum);
+    const floor = exact.toDecimalPlaces(0, Decimal.ROUND_DOWN);
+    return { index, floor, remainder: exact.minus(floor) };
+  });
+
+  const distributed = shares.reduce((acc, share) => acc.plus(share.floor), dec(0));
+  // Whole minor units left to hand out. `total` is presumed to already sit at
+  // the currency's own scale (`decimals`) — the realistic input, and the one
+  // every worked example in §8 and J08 §5 uses — which makes this an exact
+  // non-negative integer; `ROUND_HALF_UP` only guards the last place against
+  // representation noise, never invents units. **Never clamped** — a
+  // negative leftover means a share was floored past the total (a bug
+  // upstream, e.g. a negative weight this function does not otherwise
+  // reject), and a `Math.max(0, …)` here would silently swallow exactly that
+  // bug by dropping a unit instead of raising.
+  const leftoverDecimal = totalUnits.minus(distributed).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  if (leftoverDecimal.isNegative()) {
+    throw new Error(
+      `allocateLargestRemainder: leftover units went negative (${leftoverDecimal.toString()}) — ` +
+        "a share was floored past the total",
+    );
+  }
+  const leftover = leftoverDecimal.toNumber();
+
+  const byDescendingRemainder = [...shares].sort((a, b) => {
+    const byRemainder = b.remainder.cmp(a.remainder);
+    return byRemainder !== 0 ? byRemainder : a.index - b.index;
+  });
+  const getsExtraUnit = new Set(byDescendingRemainder.slice(0, leftover).map((s) => s.index));
+
+  return shares.map(({ index, floor }) =>
+    toMoney((getsExtraUnit.has(index) ? floor.plus(1) : floor).dividedBy(scale)),
+  );
+};
 
 export { Decimal };

@@ -53,6 +53,7 @@ function fakeController() {
       listNetWorth: () => [],
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
+      listCounterpartyBalances: () => [],
       balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],
