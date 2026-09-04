@@ -122,13 +122,17 @@ level 2). The range form is what makes a dead source recoverable by hand: RUB
 has had no published quote since 2022-03-11, and covering that day by day would
 be some 1,600 entries.
 
-Before writing, it states exactly what it will do:
+Before writing, it states exactly what it will do — **which way the figure
+reads, always**: `fx_rates.rate` is units of the quote per one pivot (§4), so
+the title and every confirmation say `{quote} per {base}`, never a `→` arrow
+(that reads as a conversion direction, and is exactly backwards for this
+figure — RUB per USD is roughly 96, not 0,0104).
 
 ```
-  Set RUB → 0,0104 for 2022-03-12 … 2026-08-07
+  Set RUB per USD, 2022-03-12 … 2026-08-07
 
   1 610 days        1 464 currently absent
-                      146 currently carried_forward
+                      146 currently carried forward
                         0 currently manual
                                         [ Cancel ]  [ Set rate ]
 ```

@@ -14,6 +14,20 @@
  * a caller scrolling past a silent hole, and a component that can render a
  * sparse list unchanged would let that happen again.
  *
+ * **`base`/`quote` are required, not decoration.** `fx_rates.rate` is units
+ * of the quote per one pivot (`SPEC.md` §4) — a table that renders `3.7556`
+ * with no unit reads as *the* rate, and the reader supplies whichever
+ * direction they were already thinking in, which is the exact hazard §4
+ * names. The column header states it plainly: `{quote} per {base}`.
+ *
+ * **The rate renders through `formatRate`**, the same locale-aware helper
+ * `<Amount>` uses (`money.forDisplay` under the reader's own decimal mark) —
+ * not `money.toMoney`, which only ever answers the storage form. And through
+ * `text.ui` + `tabularNums`, not `text.mono`: `04` §2.2 already settled which
+ * face aligns a column of digits on Android, and `mono` here was `ui-monospace`
+ * — the platform's own face, unregistered and untested, which is a fallback
+ * serif on more than one device this ships to.
+ *
  * **A `FlatList`, per `wave-4-shared.md`'s own rule — no virtualisation
  * library.** 2,080 days is comfortably within what `FlatList`'s own windowing
  * handles; the spec's "Virtualized" is the behaviour, not a dependency.
@@ -32,29 +46,46 @@
  */
 
 import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
-import * as money from "@waltning/core/money";
 import { useCallback, useMemo } from "react";
-import { FlatList, Pressable, Text } from "react-native";
-import { useT } from "../i18n/provider";
+import { FlatList, Pressable, Text, View } from "react-native";
+import { useLocale, useT } from "../i18n/provider";
 import { useInteraction } from "../primitives/interaction.ts";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, space, tabularNums, touchTarget } from "../tokens.ts";
+import { formatRate } from "./format-rate.ts";
+
+/** `04` §4.6's own source set — the fourth provider names and the two markers. */
+const SOURCE_LABEL_KEYS = {
+  nbp: "fx.sourceNbp",
+  ecb: "fx.sourceEcb",
+  nbrb: "fx.sourceNbrb",
+  nbg: "fx.sourceNbg",
+  manual: "fx.sourceManual",
+} as const;
+
+const CARRIED_FORWARD = "carried_forward";
 
 export type RateTableSourceRow = {
   date: string;
   rate: string;
   source: string;
+  /** Only meaningful when `source === "carried_forward"` — `readRate`'s own figure. */
+  carriedDays?: number;
 };
 
 type RenderRow = {
   date: string;
   rate: string | null;
   source: string | null;
+  carriedDays: number | undefined;
 };
 
 export type RateTableProps = {
+  /** The pivot — never chosen here, only stated (`SPEC.md` §7.0). */
+  base: string;
+  quote: string;
   /** Inclusive range — every calendar day between renders one row. */
   from: string;
   to: string;
@@ -68,7 +99,7 @@ function keyExtractor(row: RenderRow): string {
   return row.date;
 }
 
-export function RateTable({ from, to, rows, onSelectRow }: RateTableProps) {
+export function RateTable({ base, quote, from, to, rows, onSelectRow }: RateTableProps) {
   const t = useT();
   const styles = useStyles();
 
@@ -84,7 +115,9 @@ export function RateTable({ from, to, rows, onSelectRow }: RateTableProps) {
       const date = addDays(fromDate, n);
       const held = byDate.get(date);
       out.push(
-        held ? { date, rate: held.rate, source: held.source } : { date, rate: null, source: null },
+        held
+          ? { date, rate: held.rate, source: held.source, carriedDays: held.carriedDays }
+          : { date, rate: null, source: null, carriedDays: undefined },
       );
     }
     return out;
@@ -100,12 +133,19 @@ export function RateTable({ from, to, rows, onSelectRow }: RateTableProps) {
   }
 
   return (
-    <FlatList
-      data={filled}
-      keyExtractor={keyExtractor}
-      renderItem={renderItem}
-      style={styles.list}
-    />
+    <>
+      <View style={styles.header}>
+        <Text style={styles.headerDate}>{t("fx.rateTableDateHeader")}</Text>
+        <Text style={styles.headerRate}>{t("fx.rateTableRateHeader", { quote, base })}</Text>
+        <Text style={styles.headerSource}>{t("fx.rateTableSourceHeader")}</Text>
+      </View>
+      <FlatList
+        data={filled}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        style={styles.list}
+      />
+    </>
   );
 }
 
@@ -117,12 +157,25 @@ function RateTableRowView({
   onSelect?: ((date: string) => void) | undefined;
 }) {
   const t = useT();
+  const locale = useLocale();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
 
   const handlePress = useCallback(() => onSelect?.(row.date), [onSelect, row.date]);
 
   const isManual = row.source === "manual";
+  const isCarried = row.source === CARRIED_FORWARD;
+
+  // Never the raw enum with an underscore (`04` §4.6) — every source renders
+  // through a translated label, and `carried_forward` states its own age
+  // rather than repeating a word that means nothing to whoever reads it.
+  const sourceKey =
+    row.source !== null && row.source in SOURCE_LABEL_KEYS
+      ? SOURCE_LABEL_KEYS[row.source as keyof typeof SOURCE_LABEL_KEYS]
+      : undefined;
+  const sourceLabel = isCarried
+    ? t("fx.rateTableCarried", { count: row.carriedDays ?? 0 })
+    : t(sourceKey ?? "fx.sourceManual");
 
   return (
     <Pressable
@@ -139,8 +192,8 @@ function RateTableRowView({
         <Text style={styles.gap}>{t("fx.rateTableGap")}</Text>
       ) : (
         <>
-          <Text style={styles.rate}>{money.toMoney(row.rate, 4)}</Text>
-          <Tag variant={isManual ? "warn" : "neutral"}>{row.source ?? ""}</Tag>
+          <Text style={styles.rate}>{formatRate(row.rate, locale)}</Text>
+          <Tag variant={isManual ? "warn" : "neutral"}>{sourceLabel}</Tag>
         </>
       )}
     </Pressable>
@@ -149,6 +202,23 @@ function RateTableRowView({
 
 const useStyles = makeStyles((theme) => ({
   list: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.x3,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.x2,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  headerDate: {
+    color: theme.textMuted,
+    ...text.ui("kicker"),
+    textTransform: "uppercase",
+    width: 96,
+  },
+  headerRate: { color: theme.textMuted, ...text.ui("kicker"), textTransform: "uppercase", flex: 1 },
+  headerSource: { color: theme.textMuted, ...text.ui("kicker"), textTransform: "uppercase" },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -167,7 +237,7 @@ const useStyles = makeStyles((theme) => ({
   date: { color: theme.text, ...text.ui("bodySm"), width: 96 },
   rate: {
     color: theme.text,
-    ...text.mono("bodySm"),
+    ...text.ui("bodySm"),
     fontVariant: [...tabularNums],
     flex: 1,
   },

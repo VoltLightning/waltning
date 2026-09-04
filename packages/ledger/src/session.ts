@@ -31,6 +31,7 @@ import type {
   UnmergeCounterpartiesInput,
   UpdateAccountInput,
   UpdateCounterpartyInput,
+  UpdateCurrencyInput,
   UpdateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
@@ -122,6 +123,7 @@ import {
 } from "./currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
+import { updateCurrencyExecutor } from "./currencies/update-currency.executor.ts";
 import {
   describeLedgerError,
   emitLedgerDiagnostic,
@@ -273,6 +275,7 @@ export type LocalLedgerSession = {
   changePivot: (input: ChangePivotInput, capture: Capture) => LocalCurrencyRow;
   setManualRate: (input: SetManualRateInput, capture: Capture) => SetManualRateResult;
   clearManualRate: (input: ClearManualRateInput, capture: Capture) => ClearManualRateResult;
+  updateCurrency: (input: UpdateCurrencyInput, capture: Capture) => LocalCurrencyRow;
   /* ── end E3 block ─────────────────────────────────────────────────────── */
   // ── E2 · counterparties and settlement ────────────────────────────────────
   createCounterparty: (input: CreateCounterpartyInput, capture: Capture) => LocalCounterpartyRow;
@@ -607,6 +610,14 @@ export function createLocalLedgerSession<TRun>(
     clearManualRate: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: clearManualRateExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    updateCurrency: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: updateCurrencyExecutor,
         registry: ledgerRegistry,
         input,
         capture,

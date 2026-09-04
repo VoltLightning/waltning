@@ -915,6 +915,37 @@ export const clearManualRateInput = z
   .refine(rateRangeOrdered, RATE_RANGE_ISSUE);
 export type ClearManualRateInput = z.output<typeof clearManualRateInput>;
 
+/**
+ * `update_currency` — S17 §9.2: cosmetic fields only. `symbol`,
+ * `symbolPosition`, `decimals` are how a figure in this currency renders
+ * (`<Amount>`'s own affix and decimal places) and nothing else references
+ * them — never `code`, never `rateSource`/`pinned`/`isPivot`, each of which
+ * already has its own named operation (`set_rate_source`, `set_pinned`,
+ * `change_pivot`) precisely because each carries a guarantee this patch does
+ * not: a rate source changes what a sync fetches, a pivot changes what every
+ * `fx_rates` row is quoted against. Compare-and-swap on `version`, matching
+ * every other structural currency write.
+ */
+const currencyPatch = z
+  .object({
+    symbol: z.string().trim().max(8).optional(),
+    symbolPosition: z.enum(["P", "S"]).optional(),
+    decimals: z.number().int().min(0).max(8).optional(),
+  })
+  .strict();
+
+export const updateCurrencyInput = z
+  .object({
+    code: zCurrencyCode,
+    version: z.number().int().positive(),
+    patch: currencyPatch,
+  })
+  .refine((v) => Object.keys(v.patch).length > 0, {
+    message: "a patch must set at least one field",
+    path: ["patch"],
+  });
+export type UpdateCurrencyInput = z.output<typeof updateCurrencyInput>;
+
 /* ════════════════════════════════════════════════════════════════════════
  * end E3 block
  * E2 · counterparties and settlement — its own block for the same reason

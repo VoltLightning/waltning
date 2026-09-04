@@ -38,7 +38,8 @@ export type ClientAction =
   | "set_pinned"
   | "change_pivot"
   | "set_manual_rate"
-  | "clear_manual_rate";
+  | "clear_manual_rate"
+  | "update_currency";
 
 export type ClientStateUpdate =
   | "phone_ledger_refresh"

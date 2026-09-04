@@ -459,20 +459,36 @@ export const en = {
     coveragePct: "{{pct}}%",
     coverageBelow: "{{pct}}% · last quote {{date}}",
     coverageTitle: "Coverage",
+    /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
+    noRatesYet: "no rates yet · set one by hand",
     /** `RateField` — `03` §3.7. */
     rateFieldSynced: "Synced: {{rate}}",
+    /** `parseRate`'s own refusal — 0, negative, or anything not a positive decimal. */
+    ratePositive: "A rate must be a positive number.",
     /** `RateTable` — `04` §4.6. */
     rateTableGap: "No rate held",
     rateTableGapLabel: "{{date}} — no rate held",
     rateTableEmptyRange: "The range must not end before it starts.",
-    /** `RateEditor` — `04` §4.7. */
-    rateEditorTitle: "Set {{quote}} → {{base}} for {{from}} … {{to}}",
-    rateEditorRateLabel: "Rate",
+    /** The column header — states which way `rate` reads, same rule as `RateEditor`'s title. */
+    rateTableDateHeader: "Date",
+    rateTableRateHeader: "{{quote}} per {{base}}",
+    rateTableSourceHeader: "Source",
+    /** A `carried_forward` row's own tag — its age, never the raw enum. */
+    rateTableCarried: "Carried · {{count}} d",
+    /**
+     * `RateEditor` — `04` §4.7. `{{quote}} per {{base}}` states which way the
+     * figure reads (`SPEC.md` §4: `fx_rates.rate` is units of the quote per
+     * one pivot) — never a `→` arrow, which reads as a conversion direction
+     * and is exactly backwards for this figure.
+     */
+    rateEditorTitle: "Set {{quote}} per {{base}}, {{from}} … {{to}}",
+    rateEditorRateLabel: "Rate · {{quote}} per {{base}}",
     rateEditorTotalDays: "{{count}} days",
     rateEditorAbsent: "{{count}} currently absent",
     rateEditorCarried: "{{count}} currently carried forward",
     rateEditorManual: "{{count}} currently manual",
-    rateEditorConfirmOverwrite: "This replaces {{count}} manual rate(s), set by hand.",
+    rateEditorConfirmOverwrite:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rate(s) set by hand.",
     rateEditorSubmit: "Set rate",
     rateEditorConfirmSubmit: "Overwrite and set",
     /** S17. */
@@ -487,14 +503,22 @@ export const en = {
     sourceEcb: "ECB",
     sourceNbrb: "NBRB",
     sourceNbg: "NBG",
+    sourceManual: "Manual",
     archiveCurrency: "Archive",
     currencyArchiveRefused: "Couldn't archive this currency.",
     currencyWriteFailed: "That didn't save.",
+    /** S17 §9.2 — a row's own symbol and decimals, and the sheet that edits them. */
+    currencyDetail: "{{symbol}} · {{decimals}}dp",
+    editCurrency: "Edit {{code}}",
+    symbolPosition: "Symbol position",
+    symbolBefore: "Before the figure",
+    symbolAfter: "After the figure",
+    decimals: "Decimal places",
     pivotLabel: "Pivot: {{code}}",
     changePivot: "Change pivot",
     pivotConfirmTitle: "Change the pivot currency?",
     pivotConfirmBody:
-      "The pivot is the technical hub every rate is stored against. Changing it is rare, audited, and never something moving abroad requires.",
+      "The pivot is the technical hub every rate is stored against. Refused once any transaction exists — a phone alone has no way to re-rate the history that would leave behind. Changing it is rare, audited, and never something moving abroad requires.",
     pivotConfirmSubmit: "Yes, change it",
     pivotChangeRefused: "The pivot can't change while a transaction exists.",
     /** S18. */

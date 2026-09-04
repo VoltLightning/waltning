@@ -34,6 +34,7 @@ import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
+import { useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 
@@ -67,8 +68,18 @@ export default function SettingsRatesScreen() {
     .filter((row) => !row.isPivot)
     .map((row) => ({ value: row.code, label: `${row.code} · ${row.name}` }));
 
+  // S17's own link at 0% coverage (`CoverageTag.onPress`) preselects the pair
+  // — `?quote=<code>` — over the plain first-option default, but only when
+  // that code is actually one of this pivot's quote currencies.
+  const { quote: quoteParam } = useLocalSearchParams<{ quote?: string }>();
+  const preselected = quoteOptions.find((option) => option.value === quoteParam);
+
   const [quote, setQuote] = useState<CurrencyCode | null>(
-    quoteOptions[0] ? currencyCode(quoteOptions[0].value) : null,
+    preselected
+      ? currencyCode(preselected.value)
+      : quoteOptions[0]
+        ? currencyCode(quoteOptions[0].value)
+        : null,
   );
   const [preset, setPreset] = useState<RangePreset>("30d");
   const [custom, setCustom] = useState({
@@ -205,10 +216,17 @@ export default function SettingsRatesScreen() {
           />
         </View>
 
-        {quote === null || range === null ? (
+        {quote === null || range === null || pivot === undefined ? (
           <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
         ) : (
-          <RateTable from={range.from} to={range.to} rows={rows} onSelectRow={handleSelectRow} />
+          <RateTable
+            base={pivot.code}
+            quote={quote}
+            from={range.from}
+            to={range.to}
+            rows={rows}
+            onSelectRow={handleSelectRow}
+          />
         )}
 
         <View style={styles.actionsRow}>

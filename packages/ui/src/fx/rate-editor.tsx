@@ -28,6 +28,7 @@
  */
 
 import { accountingDate, daysBetween } from "@waltning/core/date";
+import * as money from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useT } from "../i18n/provider";
@@ -92,13 +93,22 @@ export function RateEditor({
     onSubmit(counts.manual > 0);
   }, [counts.manual, confirming, onSubmit]);
 
-  const canSubmit = rate !== "" && !disabled;
+  // `money.cmp` rather than trusting `rate !== ""` alone: `RateField`'s own
+  // `parseRate` already refuses a typed `0`, but `rate` is this component's
+  // prop, not its state — a caller could still hand it `"0"` directly, and
+  // the contract behind `onSubmit` deserves the same refusal here that a
+  // typed zero gets in the field (`fx.ratePositive`'s own reasoning).
+  const canSubmit = rate !== "" && !disabled && money.cmp(money.toMoney(rate), money.ZERO) > 0;
 
   return (
     <View style={styles.root}>
       <Text style={styles.title}>{t("fx.rateEditorTitle", { quote, base, from, to })}</Text>
 
-      <RateField label={t("fx.rateEditorRateLabel")} value={rate} onChange={onRateChange} />
+      <RateField
+        label={t("fx.rateEditorRateLabel", { quote, base })}
+        value={rate}
+        onChange={onRateChange}
+      />
 
       <View style={styles.summary}>
         <Text style={styles.summaryLine}>
@@ -115,7 +125,7 @@ export function RateEditor({
 
       {confirming ? (
         <Text style={styles.warning}>
-          {t("fx.rateEditorConfirmOverwrite", { count: counts.manual })}
+          {t("fx.rateEditorConfirmOverwrite", { count: counts.manual, rate, quote, base })}
         </Text>
       ) : null}
 

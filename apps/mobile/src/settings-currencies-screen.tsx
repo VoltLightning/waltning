@@ -1,23 +1,24 @@
 /**
  * S17 · Settings · Currencies — `screens/S17`.
  *
- * Row per currency: code, name, symbol, rate source, pinned toggle,
- * coverage, archive. Pivot shown read-only at the bottom, its one write
- * (`change_pivot`) behind `ConfirmDialog` — E3's executor refuses it once
- * any transaction exists.
- *
- * **The pivot's own refusal is stated after a failed attempt, not before.**
- * §17's own text says the dialog states the refusal "before offering" —
- * that needs a read this PR has no reader for (whether any transaction
- * exists at all), so this confirms unconditionally and surfaces
- * `change_pivot`'s own refusal on a `Toast` if the executor throws. Named
- * here as the one place this screen is narrower than the spec's own words.
+ * Row per currency: code, name, symbol, decimals, rate source, pinned
+ * toggle, coverage, archive — symbol and decimals editable behind the row's
+ * own detail sheet (S17 §9.2, `update_currency`). Pivot shown read-only at
+ * the bottom, its one write (`change_pivot`) behind `ConfirmDialog` — E3's
+ * executor refuses it once any transaction exists, and the dialog now says
+ * so before offering (S17 §7).
  *
  * **No backfill progress.** S17 §2's own text: "No backfill progress on the
  * phone (nothing to fetch)" — `add_currency` here writes the row alone;
  * `sync_fx_rates` is server-side (`wave-4-shared.md`'s own excluded list).
+ *
+ * **A 0% row is not "0%".** `CoverageTag` states `fx.noRatesYet` instead,
+ * and this screen is the one place that wires its `onPress` — tapping opens
+ * S18 with the pair preselected (`?quote=<code>`), because "set one by hand"
+ * is a place, not just a sentence.
  */
 
+import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -34,12 +35,16 @@ import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
+import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 
 type CurrencyRowData = {
   code: string;
   name: string;
+  symbol: string;
+  symbolPosition: string;
+  decimals: number;
   pinned: boolean;
   rateSource: string | null;
   version: number;
@@ -53,6 +58,8 @@ type CurrencyRowProps = {
   onTogglePinned: (code: string, version: number, next: boolean) => void;
   onChangeSource: (code: string, version: number, source: string) => void;
   onArchive: (code: string, version: number) => void;
+  onEdit: (row: CurrencyRowData) => void;
+  onViewRates: (code: string) => void;
 };
 
 function CurrencyRow({
@@ -61,6 +68,8 @@ function CurrencyRow({
   onTogglePinned,
   onChangeSource,
   onArchive,
+  onEdit,
+  onViewRates,
 }: CurrencyRowProps) {
   const t = useT();
   const styles = useStyles();
@@ -87,13 +96,24 @@ function CurrencyRow({
     () => onArchive(row.code, row.version),
     [onArchive, row.code, row.version],
   );
+  const handleEdit = useCallback(() => onEdit(row), [onEdit, row]);
+  const handleViewRates = useCallback(() => onViewRates(row.code), [onViewRates, row.code]);
 
   return (
     <View style={styles.row}>
       <View style={styles.rowHeader}>
         <Text style={styles.code}>{row.code}</Text>
         <Text style={styles.name}>{row.name}</Text>
-        {coverage ? <CoverageTag pct={coverage.pct} lastDate={coverage.lastDate} /> : null}
+        <Text style={styles.detail}>
+          {t("fx.currencyDetail", { symbol: row.symbol, decimals: row.decimals })}
+        </Text>
+        {coverage ? (
+          <CoverageTag
+            pct={coverage.pct}
+            lastDate={coverage.lastDate}
+            {...(coverage.pct <= 0 ? { onPress: handleViewRates } : {})}
+          />
+        ) : null}
       </View>
       <Toggle label={t("fx.pinned")} value={row.pinned} onChange={handleToggle} />
       <Select
@@ -103,12 +123,20 @@ function CurrencyRow({
         value={row.rateSource}
         onChange={handleSource}
       />
-      <Button
-        label={t("fx.archiveCurrency")}
-        onPress={handleArchive}
-        variant="secondary"
-        size="sm"
-      />
+      <View style={styles.rowActions}>
+        <Button
+          label={t("fx.editCurrency", { code: row.code })}
+          onPress={handleEdit}
+          variant="ghost"
+          size="sm"
+        />
+        <Button
+          label={t("fx.archiveCurrency")}
+          onPress={handleArchive}
+          variant="secondary"
+          size="sm"
+        />
+      </View>
     </View>
   );
 }
@@ -116,6 +144,14 @@ function CurrencyRow({
 type Draft = { code: string; name: string; symbol: string };
 
 const EMPTY_DRAFT: Draft = { code: "", name: "", symbol: "" };
+
+type EditDraft = {
+  code: string;
+  version: number;
+  symbol: string;
+  symbolPosition: "P" | "S";
+  decimals: number;
+};
 
 export default function SettingsCurrenciesScreen() {
   const t = useT();
@@ -141,6 +177,15 @@ export default function SettingsCurrenciesScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [pivotConfirmOpen, setPivotConfirmOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+
+  const symbolPositionOptions: SelectOption[] = useMemo(
+    () => [
+      { value: "P", label: t("fx.symbolBefore") },
+      { value: "S", label: t("fx.symbolAfter") },
+    ],
+    [t],
+  );
 
   const handleDismissToast = useCallback(() => setToast(null), []);
 
@@ -177,6 +222,10 @@ export default function SettingsCurrenciesScreen() {
     [ledger, t],
   );
 
+  const handleViewRates = useCallback((code: string) => {
+    router.push({ pathname: "/settings/rates", params: { quote: code } });
+  }, []);
+
   const handleOpenAdd = useCallback(() => setAddOpen(true), []);
   const handleCloseAdd = useCallback(() => {
     setAddOpen(false);
@@ -202,6 +251,58 @@ export default function SettingsCurrenciesScreen() {
     }
     handleCloseAdd();
   }, [ledger, draft, handleCloseAdd, t]);
+
+  const handleOpenEdit = useCallback((row: CurrencyRowData) => {
+    setEditDraft({
+      code: row.code,
+      version: row.version,
+      symbol: row.symbol,
+      symbolPosition: row.symbolPosition === "S" ? "S" : "P",
+      decimals: row.decimals,
+    });
+  }, []);
+  const handleCloseEdit = useCallback(() => setEditDraft(null), []);
+  const handleChangeEditSymbol = useCallback(
+    (value: string) => setEditDraft((prev) => (prev ? { ...prev, symbol: value } : prev)),
+    [],
+  );
+  const handleChangeEditPosition = useCallback(
+    (value: string) =>
+      setEditDraft((prev) =>
+        prev ? { ...prev, symbolPosition: value === "S" ? "S" : "P" } : prev,
+      ),
+    [],
+  );
+  const handleChangeEditDecimals = useCallback(
+    (value: string) => setEditDraft((prev) => (prev ? { ...prev, decimals: Number(value) } : prev)),
+    [],
+  );
+  const handleSaveEdit = useCallback(() => {
+    if (!editDraft) return;
+    const original = rows.find((row) => row.code === editDraft.code);
+    if (!original) return;
+    const patch: CurrencyPatch = {
+      ...(editDraft.symbol !== original.symbol ? { symbol: editDraft.symbol } : {}),
+      ...(editDraft.symbolPosition !== original.symbolPosition
+        ? { symbolPosition: editDraft.symbolPosition }
+        : {}),
+      ...(editDraft.decimals !== original.decimals ? { decimals: editDraft.decimals } : {}),
+    };
+    if (Object.keys(patch).length === 0) {
+      handleCloseEdit();
+      return;
+    }
+    const result = ledger.updateCurrency({
+      code: editDraft.code,
+      version: editDraft.version,
+      patch,
+    });
+    if ("fieldErrors" in result) {
+      setToast(result.fieldErrors[0]?.message ?? t("fx.currencyWriteFailed"));
+      return;
+    }
+    handleCloseEdit();
+  }, [ledger, editDraft, rows, handleCloseEdit, t]);
 
   const handleOpenPivotConfirm = useCallback(() => setPivotConfirmOpen(true), []);
   const handleCancelPivotConfirm = useCallback(() => setPivotConfirmOpen(false), []);
@@ -229,6 +330,8 @@ export default function SettingsCurrenciesScreen() {
             onTogglePinned={handleTogglePinned}
             onChangeSource={handleChangeSource}
             onArchive={handleArchive}
+            onEdit={handleOpenEdit}
+            onViewRates={handleViewRates}
           />
         ))}
 
@@ -261,6 +364,40 @@ export default function SettingsCurrenciesScreen() {
         <Button label={t("common.save")} onPress={handleSaveDraft} />
       </BottomSheet>
 
+      <BottomSheet
+        visible={editDraft !== null}
+        title={editDraft ? t("fx.editCurrency", { code: editDraft.code }) : ""}
+        onDismiss={handleCloseEdit}
+      >
+        {editDraft ? (
+          <>
+            <TextField
+              label={t("fx.currencySymbol")}
+              value={editDraft.symbol}
+              onChangeText={handleChangeEditSymbol}
+            />
+            {/* `placeholder` is required by `Select`, and unreachable here — this
+                field always seeds a value from the row being edited (`handleOpenEdit`),
+                never opens on "nothing chosen". */}
+            <Select
+              label={t("fx.symbolPosition")}
+              placeholder=""
+              options={symbolPositionOptions}
+              value={editDraft.symbolPosition}
+              onChange={handleChangeEditPosition}
+            />
+            <Select
+              label={t("fx.decimals")}
+              placeholder=""
+              options={DECIMALS_OPTIONS}
+              value={String(editDraft.decimals)}
+              onChange={handleChangeEditDecimals}
+            />
+            <Button label={t("common.save")} onPress={handleSaveEdit} />
+          </>
+        ) : null}
+      </BottomSheet>
+
       <ConfirmDialog
         visible={pivotConfirmOpen}
         title={t("fx.pivotConfirmTitle")}
@@ -275,6 +412,11 @@ export default function SettingsCurrenciesScreen() {
   );
 }
 
+const DECIMALS_OPTIONS: SelectOption[] = Array.from({ length: 9 }, (_, decimals) => ({
+  value: String(decimals),
+  label: String(decimals),
+}));
+
 const useStyles = makeStyles((theme) => ({
   row: {
     gap: space.sm,
@@ -285,6 +427,8 @@ const useStyles = makeStyles((theme) => ({
   rowHeader: { flexDirection: "row", alignItems: "center", gap: space.sm },
   code: { color: theme.text, ...text.ui("body", 600) },
   name: { color: theme.textMuted, ...text.ui("bodySm"), flex: 1 },
+  detail: { color: theme.textMuted, ...text.ui("caption") },
+  rowActions: { flexDirection: "row", gap: space.sm },
   pivotRow: {
     flexDirection: "row",
     alignItems: "center",

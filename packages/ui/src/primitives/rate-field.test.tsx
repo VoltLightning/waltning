@@ -44,4 +44,67 @@ describe("RateField", () => {
       ),
     ).toBeDefined();
   });
+it("emits null for a value with two separators", () => {
+  const onChange = vi.fn();
+  render(<RateField label="Manual rate" value="" onChange={onChange} />);
+  fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "1,234.5" } });
+  expect(onChange).toHaveBeenCalledWith(null);
+});
+
+it("rejects 0 — a rate is never zero", () => {
+  const onChange = vi.fn();
+  render(<RateField label="Manual rate" value="" onChange={onChange} />);
+  fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "0" } });
+  expect(onChange).toHaveBeenCalledWith(null);
+});
+
+it("rejects an all-zero decimal", () => {
+  const onChange = vi.fn();
+  render(<RateField label="Manual rate" value="" onChange={onChange} />);
+  fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "0,00" } });
+  expect(onChange).toHaveBeenCalledWith(null);
+});
+
+it("shows an inline error, unprompted, when what is typed is not a positive rate", () => {
+  const onChange = vi.fn();
+  render(<RateField label="Manual rate" value="" onChange={onChange} />);
+  fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "0" } });
+  expect(screen.getByText("A rate must be a positive number.")).toBeDefined();
+});
+
+it("clears the inline error once a valid positive rate is typed", () => {
+  const onChange = vi.fn();
+  render(<RateField label="Manual rate" value="" onChange={onChange} />);
+  fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "0" } });
+  expect(screen.getByText("A rate must be a positive number.")).toBeDefined();
+  fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "3.75" } });
+  expect(screen.queryByText("A rate must be a positive number.")).toBeNull();
+});
+
+it("shows the synced source's own rate beside the field", () => {
+  render(<RateField label="Manual rate" value="3.8000" syncedValue="3.7556" />);
+  expect(screen.getByText("Synced: 3.7556")).toBeDefined();
+});
+
+it("shows the error in place of a synced value", () => {
+  render(
+    <RateField label="Manual rate" value="1,234.5" error="A rate takes one decimal separator." />,
+  );
+  expect(screen.getByText("A rate takes one decimal separator.")).toBeDefined();
+});
+
+it("read-only renders text, not an editable input", () => {
+  render(<RateField label="Manual rate" value="3.7556" readOnly />);
+  expect(screen.getByText("3.7556")).toBeDefined();
+  expect(screen.queryByLabelText("Manual rate")).toBeNull();
+});
+
+it("read-only with no value shows a dash", () => {
+  render(<RateField label="Manual rate" value="" readOnly />);
+  expect(screen.getByText("—")).toBeDefined();
+});
+
+it("no synced value renders no synced line", () => {
+  render(<RateField label="Manual rate" value="3.7556" onChange={noop} />);
+  expect(screen.queryByText(/Synced:/)).toBeNull();
 });

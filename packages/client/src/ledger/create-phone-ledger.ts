@@ -61,10 +61,12 @@ import {
   type UnmergeCounterpartiesInput,
   type UpdateAccountInput,
   type UpdateCounterpartyInput,
+  type UpdateCurrencyInput,
   type UpdateTransactionInput,
   unmergeCounterpartiesInput,
   updateAccountInput,
   updateCounterpartyInput,
+  updateCurrencyInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
@@ -456,6 +458,8 @@ export type PhoneFxRateRow = {
   date: AccountingDate;
   rate: UnitsPerPivot;
   source: string;
+  /** Only present on a `carried_forward` row — `RateTable`'s own age marker. */
+  carriedDays?: number;
 };
 
 export type PhoneLedgerPort = {
@@ -535,6 +539,8 @@ export type PhoneLedgerPort = {
     capture: PhoneCapture,
   ) => { written: number; replacedManual: number };
   clearManualRate: (input: ClearManualRateInput, capture: PhoneCapture) => { deleted: number };
+  /** S17 §9.2 — cosmetic patch only: symbol, symbol position, decimals. */
+  updateCurrency: (input: UpdateCurrencyInput, capture: PhoneCapture) => void;
   /* ── end E3 block ─────────────────────────────────────────────────────── */
   // ── E2 · counterparties and settlement ────────────────────────────────────
   createCounterparty: (input: CreateCounterpartyInput, capture: PhoneCapture) => void;
@@ -893,6 +899,15 @@ export type SetManualRateDraft = {
 };
 
 export type ClearManualRateDraft = { base: string; quote: string; from: string; to: string };
+
+/** S17 §9.2's own row — only the cosmetic fields, never `code` or `version`'s siblings. */
+export type CurrencyPatch = Partial<{
+  symbol: string;
+  symbolPosition: "P" | "S";
+  decimals: number;
+}>;
+
+export type UpdateCurrencyDraft = { code: string; version: number; patch: CurrencyPatch };
 /* ── E2 · counterparties and settlement ──────────────────────────────────── */
 
 export type CreateCounterpartyDraft = {
@@ -1087,6 +1102,9 @@ export type PhoneLedgerController = {
   clearManualRate: (
     draft: ClearManualRateDraft,
   ) => { deleted: number } | { fieldErrors: readonly FieldError[] };
+  updateCurrency: (
+    draft: UpdateCurrencyDraft,
+  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
   /* ── end E3 block ─────────────────────────────────────────────────────── */
   // ── E2 · counterparties and settlement ────────────────────────────────────
   createCounterparty: (
@@ -2852,6 +2870,53 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "clear_manual_rate",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    updateCurrency: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "update_currency",
+        phase: "start",
+      });
+      try {
+        const parsed = updateCurrencyInput.safeParse({
+          code: draft.code,
+          version: draft.version,
+          patch: draft.patch,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_currency",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.updateCurrency(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_currency",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_currency",
+          phase: "success",
+        });
+        return { code: parsed.data.code };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_currency",
           phase: "failure",
           error: clientFailure(error),
         });

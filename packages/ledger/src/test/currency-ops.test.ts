@@ -12,6 +12,7 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
+import { updateCurrencyInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
@@ -25,6 +26,7 @@ import { listFxRates, readCoverage, readRate } from "../currencies/read-rate.ts"
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "../currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "../currencies/set-rate-source.executor.ts";
+import { updateCurrencyExecutor } from "../currencies/update-currency.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -192,6 +194,45 @@ describe("archive_currency", () => {
     expect(() => write(archiveCurrencyExecutor, { code: "EUR", version: 1 })).toThrow(
       /live transaction/,
     );
+  });
+});
+
+/* ── update_currency ──────────────────────────────────────────────────────── */
+
+describe("update_currency", () => {
+  it("patches symbol, symbolPosition and decimals, and bumps the version", () => {
+    const result = write(updateCurrencyExecutor, {
+      code: "USD",
+      version: 1,
+      patch: { symbol: "US$", symbolPosition: "P", decimals: 2 },
+    });
+    expect(result.row.symbol).toBe("US$");
+    expect(result.row.symbolPosition).toBe("P");
+    expect(result.row.decimals).toBe(2);
+    expect(result.row.version).toBe(2);
+  });
+
+  it("refuses a stale version", () => {
+    write(updateCurrencyExecutor, { code: "USD", version: 1, patch: { decimals: 0 } });
+    expect(() =>
+      write(updateCurrencyExecutor, { code: "USD", version: 1, patch: { decimals: 3 } }),
+    ).toThrow(/stale version/);
+  });
+
+  it("refuses an empty patch at the schema, before it ever reaches the executor", () => {
+    const parsed = updateCurrencyInput.safeParse({ code: "USD", version: 1, patch: {} });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("never touches the code, rateSource, pinned or isPivot — each has its own operation", () => {
+    const result = write(updateCurrencyExecutor, {
+      code: "USD",
+      version: 1,
+      patch: { symbol: "US$" },
+    });
+    expect(result.row.code).toBe("USD");
+    expect(result.row.pinned).toBe(false);
+    expect(result.row.isPivot).toBe(false);
   });
 });
 
@@ -651,6 +692,38 @@ describe("listFxRates", () => {
     });
 
     expect(rows.map((r) => r.date)).toEqual(["2026-01-01", "2026-01-03"]);
+  });
+
+  it("carries the origin's own age on a carried_forward row — never left for the caller to compute", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-04"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    const rows = listFxRates(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      from: accountingDate("2026-01-01"),
+      to: accountingDate("2026-01-04"),
+    });
+
+    expect(rows.find((r) => r.source === "nbp")?.carriedDays).toBeUndefined();
+    expect(rows.find((r) => r.source === "carried_forward")?.carriedDays).toBe(3);
   });
 });
 

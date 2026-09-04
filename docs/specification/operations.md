@@ -137,6 +137,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `sync_fx_rates` · `force_sync` · `backfill_fx_rates` | ✅ | Idempotent and safe to repeat |
 | `set_manual_rate` · `clear_manual_rate` | ❌ | An assertion about a figure nobody published |
 | `add_currency` · `archive_currency` · `set_rate_source` · `set_pinned` | ❌ | |
+| `update_currency` | ❌ | Cosmetic patch only — symbol, symbol position, decimals (S17 §9.2). Never `code`, `rateSource`, `pinned` or `isPivot`, each of which is its own operation above |
 | `change_pivot` | ❌ | `ConfirmDialog`. Should essentially never happen (§7.0) |
 
 ### Import, rules, recurring, receipts

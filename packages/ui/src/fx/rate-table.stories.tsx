@@ -12,13 +12,15 @@ const meta = {
   title: "FX/RateTable",
   component: RateTable,
   args: {
+    base: "USD",
+    quote: "PLN",
     from: "2026-08-01",
     to: "2026-08-05",
     rows: [
       { date: "2026-08-01", rate: "3.7556", source: "nbp" },
       { date: "2026-08-02", rate: "3.7601", source: "nbp" },
       { date: "2026-08-04", rate: "3.9000", source: "manual" },
-      { date: "2026-08-05", rate: "3.7601", source: "carried_forward" },
+      { date: "2026-08-05", rate: "3.7601", source: "carried_forward", carriedDays: 3 },
     ],
     onSelectRow: noop,
   },

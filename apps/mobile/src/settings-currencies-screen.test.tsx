@@ -59,6 +59,8 @@ function fakeController(overrides: {
   archiveCurrency?: PhoneLedgerPort["archiveCurrency"];
   addCurrency?: PhoneLedgerPort["addCurrency"];
   changePivot?: PhoneLedgerPort["changePivot"];
+  updateCurrency?: PhoneLedgerPort["updateCurrency"];
+  readCoverage?: PhoneLedgerPort["readCoverage"];
 }) {
   const port: PhoneLedgerPort = {
     listAccounts: () => [],
@@ -98,16 +100,18 @@ function fakeController(overrides: {
     setTransactionLines: () => undefined,
     readRate: () => null,
     listCurrencySettings: overrides.listCurrencySettings ?? (() => [PLN_ROW, USD_ROW]),
-    readCoverage: () => [
-      {
-        code: PLN,
-        source: "nbp",
-        firstDate: accountingDate("2020-11-25"),
-        lastDate: accountingDate("2026-09-02"),
-        days: 2100,
-        coveragePct: 100,
-      },
-    ],
+    readCoverage:
+      overrides.readCoverage ??
+      (() => [
+        {
+          code: PLN,
+          source: "nbp",
+          firstDate: accountingDate("2020-11-25"),
+          lastDate: accountingDate("2026-09-02"),
+          days: 2100,
+          coveragePct: 100,
+        },
+      ]),
     listFxRates: () => [],
     addCurrency: overrides.addCurrency ?? vi.fn(() => ({ code: "EUR" })),
     archiveCurrency: overrides.archiveCurrency ?? vi.fn(() => ({ code: "PLN" })),
@@ -116,6 +120,7 @@ function fakeController(overrides: {
     changePivot: overrides.changePivot ?? vi.fn(() => ({ code: "USD" })),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
+    updateCurrency: overrides.updateCurrency ?? vi.fn(() => ({ code: "PLN" })),
     listCounterpartyBalances: vi.fn(() => []),
     listFullCategoryTree: vi.fn(() => []),
     listCategoryUsage: vi.fn(() => new Map()),
@@ -200,4 +205,48 @@ it("changing the pivot is gated behind a confirmation", () => {
   expect(changePivot).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(changePivot).toHaveBeenCalledWith({ code: "USD" }, expect.anything());
+});
+
+it("the pivot confirmation states the refusal before offering, not after", () => {
+  withLedger();
+  fireEvent.click(screen.getByText("Change pivot"));
+  expect(screen.getByText(/Refused once any transaction exists/)).toBeDefined();
+});
+
+it("a row states its own symbol and decimals", () => {
+  withLedger();
+  expect(screen.getByText("zł · 2dp")).toBeDefined();
+});
+
+it("editing a row's symbol and decimals writes through update_currency", () => {
+  const updateCurrency = vi.fn(() => ({ code: "PLN" }));
+  withLedger({ updateCurrency });
+  fireEvent.click(screen.getByLabelText("Edit PLN"));
+  fireEvent.change(screen.getByLabelText("Symbol"), { target: { value: "PLN" } });
+  fireEvent.click(screen.getByText("Save"));
+  expect(updateCurrency).toHaveBeenCalledWith(
+    { code: "PLN", version: 3, patch: { symbol: "PLN" } },
+    expect.anything(),
+  );
+});
+
+it("a currency with no rates yet says so, and opens S18 with the pair preselected", () => {
+  withLedger({
+    readCoverage: () => [
+      {
+        code: PLN,
+        source: "nbp",
+        firstDate: accountingDate("2026-09-03"),
+        lastDate: accountingDate("2026-09-03"),
+        days: 0,
+        coveragePct: 0,
+      },
+    ],
+  });
+  expect(screen.getByText("no rates yet · set one by hand")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "no rates yet · set one by hand" }));
+  expect(router.push).toHaveBeenCalledWith({
+    pathname: "/settings/rates",
+    params: { quote: "PLN" },
+  });
 });

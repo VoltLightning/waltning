@@ -102,8 +102,20 @@ const useStyles = makeStyles((theme) => ({
     paddingVertical: space.xs,
   },
   row: { flexDirection: "row", gap: space.sm },
-  code: { color: theme.shellTextMuted, ...text.ui("bodySm", 600) },
-  codeActive: { color: theme.shellText },
+  // A 2px `borderBottomWidth`, never `borderRadius` — a bar is sharp by
+  // construction, and rounding it would read as a pill, the one shape this
+  // design system's own taste refuses (`waltning-design-taste`).
+  code: {
+    color: theme.shellTextMuted,
+    ...text.ui("bodySm", 600),
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  // **Never weight alone (P5).** `theme.shellText` beside `theme.shellTextMuted`
+  // is a colour difference a low-vision or colour-deficient reader may not
+  // resolve — the accent bar is the second, shape-based signal every other
+  // amber/asserted marker in this system already carries.
+  codeActive: { color: theme.shellText, borderBottomColor: theme.accent },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,

@@ -16,6 +16,26 @@ const BASE_PROPS = {
   onCancel: noop,
 };
 
+it("states which way the rate reads — quote per base, never a conversion arrow", () => {
+  render(<RateEditor {...BASE_PROPS} existingRows={[]} onSubmit={noop} />);
+  expect(screen.getByText("Set RUB per USD, 2026-08-01 … 2026-08-05")).toBeDefined();
+  expect(screen.getByLabelText("Rate · RUB per USD")).toBeDefined();
+});
+
+it("the second confirmation restates the typed value with its unit", () => {
+  render(
+    <RateEditor
+      {...BASE_PROPS}
+      existingRows={[{ date: "2026-08-02", source: "manual" }]}
+      onSubmit={noop}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
+  expect(
+    screen.getByText("This sets 0.0104 RUB per USD, replacing 1 manual rate(s) set by hand."),
+  ).toBeDefined();
+});
+
 it("counts the range and states nothing needs a second confirmation with no manual rows", () => {
   const onSubmit = vi.fn();
   render(<RateEditor {...BASE_PROPS} existingRows={[]} onSubmit={onSubmit} />);
@@ -40,7 +60,7 @@ it("a manual row in range asks for a second, explicit confirmation before writin
 
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
   expect(onSubmit).not.toHaveBeenCalled();
-  expect(screen.getByText(/This replaces 1 manual rate/)).toBeDefined();
+  expect(screen.getByText(/This sets 0\.0104 RUB per USD, replacing 1 manual rate/)).toBeDefined();
 
   fireEvent.click(screen.getByRole("button", { name: "Overwrite and set" }));
   expect(onSubmit).toHaveBeenCalledWith(true);
@@ -63,6 +83,11 @@ it("carried-forward rows count separately from manual and absent", () => {
 
 it("refuses to submit with no rate typed", () => {
   render(<RateEditor {...BASE_PROPS} rate="" existingRows={[]} onSubmit={noop} />);
+  expect(screen.getByRole("button", { name: "Set rate" })).toHaveProperty("disabled", true);
+});
+
+it("refuses to submit a rate of 0, even set outside RateField's own guard", () => {
+  render(<RateEditor {...BASE_PROPS} rate="0" existingRows={[]} onSubmit={noop} />);
   expect(screen.getByRole("button", { name: "Set rate" })).toHaveProperty("disabled", true);
 });
 

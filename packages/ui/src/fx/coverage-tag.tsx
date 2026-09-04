@@ -13,26 +13,72 @@
  * component draws the number and, below 100%, the date of the last quote it
  * actually holds — nothing that reads as a recommendation to archive or
  * reconnect. GEL at 0.5% is a fact worth seeing, not a nag.
+ *
+ * **0% is not "0%".** A currency with nothing held yet is not a currency
+ * 0% of the way through a range — it is a currency S18 has never been asked
+ * about, and `noRatesYet` says that in words instead of a number a reader
+ * has to interpret. `onPress`, when the caller wires it (S17's own row, to
+ * `/settings/rates?quote=<code>`), makes that state the exact place to fix
+ * it — this component knows nothing about routes; that stays with the
+ * caller, the same boundary `RateTable`'s own `onSelectRow` draws.
  */
 
+import { useCallback } from "react";
+import { Pressable } from "react-native";
 import { useT } from "../i18n/provider";
+import { useInteraction } from "../primitives/interaction.ts";
 import { Tag } from "../primitives/tag";
+import { makeStyles } from "../theme/styles.ts";
+import { focus, touchTarget } from "../tokens.ts";
 
 export type CoverageTagProps = {
   /** 0–100, `readCoverage`'s own figure. */
   pct: number;
   /** The most recent date a rate is actually held for — required below 100%. */
   lastDate?: string | undefined;
+  /** Wired by the caller at 0% — opens S18 with the pair preselected. */
+  onPress?: () => void;
 };
 
-export function CoverageTag({ pct, lastDate }: CoverageTagProps) {
+export function CoverageTag({ pct, lastDate, onPress }: CoverageTagProps) {
   const t = useT();
+  const styles = useStyles();
+  const { focused, handlers } = useInteraction();
   const complete = pct >= 100;
+  const nothingHeld = pct <= 0;
 
-  const label =
-    complete || lastDate === undefined
+  const label = nothingHeld
+    ? t("fx.noRatesYet")
+    : complete || lastDate === undefined
       ? t("fx.coveragePct", { pct: String(pct) })
       : t("fx.coverageBelow", { pct: String(pct), date: lastDate });
 
-  return <Tag variant={complete ? "neutral" : "warn"}>{label}</Tag>;
+  const tag = <Tag variant={complete ? "neutral" : "warn"}>{label}</Tag>;
+
+  const handlePress = useCallback(() => onPress?.(), [onPress]);
+
+  if (!onPress) return tag;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={handlePress}
+      {...handlers}
+      style={[styles.pressable, focused ? styles.focused : null]}
+    >
+      {tag}
+    </Pressable>
+  );
 }
+
+const useStyles = makeStyles((theme) => ({
+  // A `Tag` is normally sized to its text alone — the 44px floor belongs to
+  // whatever makes it *pressable*, so it lives here, not on `Tag` itself.
+  pressable: { minHeight: touchTarget.min, justifyContent: "center", alignSelf: "flex-start" },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
+}));

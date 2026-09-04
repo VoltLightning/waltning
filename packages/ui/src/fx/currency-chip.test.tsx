@@ -45,3 +45,14 @@ it("marks every pinned currency, with the active one distinct", () => {
   expect(screen.getByText("PLN")).toBeDefined();
   expect(screen.getByText("USD")).toBeDefined();
 });
+
+it("marks the active currency with its own 2px accent bar, not weight alone", () => {
+  render(<CurrencyChip pinned={[{ code: "PLN" }, { code: "USD" }]} active="USD" onChange={noop} />);
+  const active = screen.getByText("USD");
+  const inactive = screen.getByText("PLN");
+  // Both reserve the same 2px so the active row never shifts layout — only
+  // the colour distinguishes which one is drawn (P5: never weight alone).
+  expect(getComputedStyle(active).borderBottomWidth).toBe("2px");
+  expect(getComputedStyle(inactive).borderBottomColor).toBe("rgba(0, 0, 0, 0)");
+  expect(getComputedStyle(active).borderBottomColor).not.toBe("rgba(0, 0, 0, 0)");
+});

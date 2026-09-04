@@ -42,6 +42,35 @@ export type LocalRate = {
 };
 
 /**
+ * The nearest row `≤ asOf` whose own source is real — walking past any
+ * `carried_forward` rows in between. Shared by `readRate` and `listFxRates`:
+ * both need the same "how many days is this being carried" answer, and a
+ * second, slightly different walk-back here is exactly how the two would
+ * drift on the ten-day cap (see `readRate`'s own note on why the cap must
+ * not chain).
+ */
+function findOrigin<TRun, TSchema extends typeof ledgerSchema>(
+  db: ReplicaDb<TRun, TSchema>,
+  { base, quote, asOf }: { base: CurrencyCode; quote: CurrencyCode; asOf: AccountingDate },
+): { date: AccountingDate; source: string } | undefined {
+  const [real] = db
+    .select({ date: fxRates.date, source: fxRates.source })
+    .from(fxRates)
+    .where(
+      and(
+        eq(fxRates.base, base),
+        eq(fxRates.quote, quote),
+        lte(fxRates.date, asOf),
+        ne(fxRates.source, CARRIED_FORWARD),
+      ),
+    )
+    .orderBy(desc(fxRates.date))
+    .limit(1)
+    .all();
+  return real;
+}
+
+/**
  * The rate for `(base, quote)` as of `date` — the latest row `≤ date`,
  * refused past the ten-day carry cap.
  *
@@ -76,22 +105,9 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
 
   if (!row) return undefined;
 
-  let origin = row;
+  let origin: { date: AccountingDate; source: string } = row;
   if (row.source === CARRIED_FORWARD) {
-    const [real] = db
-      .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
-      .from(fxRates)
-      .where(
-        and(
-          eq(fxRates.base, base),
-          eq(fxRates.quote, quote),
-          lte(fxRates.date, row.date),
-          ne(fxRates.source, CARRIED_FORWARD),
-        ),
-      )
-      .orderBy(desc(fxRates.date))
-      .limit(1)
-      .all();
+    const real = findOrigin(db, { base, quote, asOf: row.date });
     if (real) origin = real;
   }
 
@@ -176,6 +192,12 @@ export type LocalRateRow = {
   date: AccountingDate;
   rate: UnitsPerPivot;
   source: string;
+  /**
+   * Only present when `source === "carried_forward"` — `readRate`'s own
+   * figure, per row. `RateTable` (`04` §4.6) needs it to state a carried
+   * row's own age (*carried · 3 d*) rather than the bare enum.
+   */
+  carriedDays?: number;
 };
 
 /**
@@ -183,6 +205,11 @@ export type LocalRateRow = {
  * first. Not `readRate`'s single "as of" answer: the screen this feeds shows
  * the whole held history so a person can spot the gap `readCoverage`
  * summarises as a percentage.
+ *
+ * **`carriedDays` is filled in per `carried_forward` row**, walking back to
+ * its origin the same way `readRate` does (`findOrigin`) — one extra query
+ * per carried row in the range, which a settings screen's own range (30 d ·
+ * 90 d · a year) pays for once, on demand, not per frame.
  */
 export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
@@ -193,7 +220,7 @@ export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
     to,
   }: { base: CurrencyCode; quote: CurrencyCode; from: AccountingDate; to: AccountingDate },
 ): readonly LocalRateRow[] {
-  return db
+  const rows = db
     .select({
       base: fxRates.base,
       quote: fxRates.quote,
@@ -212,6 +239,14 @@ export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
     )
     .orderBy(asc(fxRates.date))
     .all();
+
+  return rows.map((row) => {
+    if (row.source !== CARRIED_FORWARD) return row;
+    const origin = findOrigin(db, { base, quote, asOf: row.date });
+    // `exactOptionalPropertyTypes` — an *absent* key, not a present one set
+    // to `undefined`, matching `LocalRateRow.carriedDays`'s own `?:`.
+    return origin ? { ...row, carriedDays: daysBetween(origin.date, row.date) } : row;
+  });
 }
 
 export type LocalCrossRate = {

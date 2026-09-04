@@ -161,6 +161,7 @@ function fakeController(
     changePivot: vi.fn(),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
+    updateCurrency: vi.fn(),
     listFullCategoryTree: () => [],
     listCategoryUsage: () => new Map(),
     readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),

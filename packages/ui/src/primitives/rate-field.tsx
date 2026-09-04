@@ -19,6 +19,7 @@
  */
 
 import * as money from "@waltning/core/money";
+import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { decimalMark } from "../i18n/locales.ts";
 import { useLocale, useT } from "../i18n/provider";
@@ -52,6 +53,28 @@ export type RateFieldProps = {
   error?: string;
 };
 
+/**
+ * What was typed → a decimal string, or `null`. Accepts either separator, the
+ * same rule `AmountField`'s own `parseAmount` states — a Polish keyboard
+ * gives `,`, a numeric keypad often gives `.` — and rejects two of either,
+ * because `4,023.1` is not a rate anyone meant to type.
+ */
+export function parseRate(input: string): string | null {
+  const trimmed = input.replace(/\s| /g, "");
+  if (trimmed === "") return null;
+
+  const separators = (trimmed.match(/[.,]/g) ?? []).length;
+  if (separators > 1) return null;
+
+  const normalized = trimmed.replace(",", ".");
+  if (!/^\d*\.?\d*$/.test(normalized)) return null;
+  if (!/\d/.test(normalized)) return null;
+
+  if (money.cmp(money.toMoney(normalized), money.ZERO) <= 0) return null;
+
+  return normalized;
+}
+
 export function RateField({
   label,
   value,
@@ -72,6 +95,29 @@ export function RateField({
   // is the same normalization step this component always ran, just no
   // longer the last one.
   const displayed = money.forDisplay(money.toMoney(value, decimals), decimals, mark);
+  const [focused, setFocused] = useState(false);
+  // What was actually typed doesn't survive the round trip through a parent's
+  // controlled `value` once it is rejected — `onChange(null)` typically resets
+  // `value` back to `""`, which would erase the evidence a message needs to
+  // point at. Held here, independent of `value`, so the message stays up
+  // exactly as long as the reason for it does — cleared the moment a valid
+  // positive rate is typed, not when `value` next changes for some other reason.
+  const [invalid, setInvalid] = useState(false);
+
+  const handleChangeText = useCallback(
+    (next: string) => {
+      const parsed = parseRate(next);
+      setInvalid(next !== "" && parsed === null);
+      onChange?.(parsed);
+    },
+    [onChange],
+  );
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
+
+  // The caller's own `error` (a contract refusal, say) always wins — this is
+  // only the field's own, immediate objection to what is currently typed.
+  const message = error ?? (invalid ? t("fx.ratePositive") : undefined);
 
   return (
     <View style={styles.block}>
@@ -101,6 +147,25 @@ export function RateField({
           })}
         </Text>
       )}
+        <View
+          style={[styles.field, focused ? styles.focused : null, message ? styles.invalid : null]}
+        >
+          <TextInput
+            accessibilityLabel={label}
+            keyboardType="decimal-pad"
+            value={value}
+            onChangeText={handleChangeText}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            editable={!disabled}
+            style={styles.input}
+          />
+        </View>
+      )}
+      {syncedValue === undefined ? null : (
+        <Text style={styles.synced}>{t("fx.rateFieldSynced", { rate: syncedValue })}</Text>
+      )}
+      {message ? <Text style={styles.error}>{message}</Text> : null}
     </View>
   );
 }

@@ -16,7 +16,12 @@ const meta = {
     quote: "RUB",
     from: "2022-03-12",
     to: "2026-08-07",
-    rate: "0.0104",
+    // `fx_rates.rate` is units of the quote per one pivot (`SPEC.md` §4) —
+    // `base = USD` (the pivot), `quote = RUB`, so this is RUB per USD, not
+    // the other way round. ~96 is a placeholder in the neighbourhood of
+    // RUB's own last published rate before 2022-03-11 (`04` §4.7's own
+    // worked example) — never a real quote (public repo, private ledger).
+    rate: "96.1500",
     onRateChange: noop,
     existingRows: [],
     onSubmit: noop,

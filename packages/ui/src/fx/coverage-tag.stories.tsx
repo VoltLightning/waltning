@@ -6,6 +6,8 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { CoverageTag } from "./coverage-tag";
 
+function noop() {}
+
 const meta = {
   title: "FX/CoverageTag",
   component: CoverageTag,
@@ -22,3 +24,6 @@ export const Partial: Story = { args: { pct: 23, lastDate: "2022-03-11" } };
 
 /** GEL — 11 days of 2,080. Stated plainly, never nudged (S17 §9). */
 export const NearlyEmpty: Story = { args: { pct: 1, lastDate: "2020-12-06" } };
+
+/** A currency just added — never a bare "0%". Tappable, wired by S17's own row. */
+export const NoRatesYet: Story = { args: { pct: 0, onPress: noop } };
