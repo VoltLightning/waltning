@@ -1,8 +1,9 @@
 /**
  * The floating add button — `design-system/02` §2.9.
  *
- * The one object *above* the page: a 56px circle, the only circle on the
- * screen, with the system's only shadow. It sits over the list, over the
+ * One of the two objects *above* the page (`Toast` is the other): a 56px
+ * circle, the only circle on the screen, carrying `shadow-float`. It sits
+ * over the list, over the
  * header, over everything, so nothing ever pushes it away; and it is the
  * user's to place. Drag it and it settles against the nearer side, at the
  * height it was let go, with a bounce that never reaches the edge. Push it
