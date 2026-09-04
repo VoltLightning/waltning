@@ -24,7 +24,10 @@ export const counterpartyMergesColumns = () => ({
     .notNull()
     .references(() => counterparties.id),
   /** JSON array of the transaction ids repointed by this merge. */
-  movedTransactionIds: k.json<readonly Id<"transactions">[]>("moved_transaction_ids").notNull().default([]),
+  movedTransactionIds: k
+    .json<readonly Id<"transactions">[]>("moved_transaction_ids")
+    .notNull()
+    .default([]),
   mergedAt: k.stamp("merged_at"),
   /** Null until `unmerge_counterparties` reverses this record. */
   unmergedAt: k.timestamp("unmerged_at"),

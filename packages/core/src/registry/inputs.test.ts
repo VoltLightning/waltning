@@ -20,6 +20,7 @@ import type { Id } from "../id.ts";
 import type { CurrencyCode, Money, PivotPerUnit, TxnType, UnitsPerPivot } from "../money.ts";
 // A3's own import from "./inputs.ts" — kept separate from A2's above so a
 // rebase against A2's append is a line-level merge, not a symbol-level one.
+// E2's own import — same reason as A3's above.
 import {
   type AccountKind,
   type ArchiveAccountInput,
@@ -30,17 +31,21 @@ import {
   archiveGroupInput,
   type CreateAccountInput,
   type CreateCategoryInput,
+  type CreateCounterpartyInput,
   type CreateTransactionInput,
   categorizeBatchInput,
   changePivotInput,
   clearManualRateInput,
   createAccountInput,
   createCategoryInput,
+  createCounterpartyInput,
   createGroupInput,
   createTransactionInput,
   deleteTransactionInput,
   mergeCategoriesInput,
+  mergeCounterpartiesInput,
   reconcileAccountInput,
+  recordDistinctCounterpartiesInput,
   renameCategoryInput,
   reorderAccountsInput,
   reorderGroupsInput,
@@ -49,22 +54,15 @@ import {
   setPinnedInput,
   setRateSourceInput,
   setTransactionLinesInput,
+  settleDebtInput,
   supersedeTransactionInput,
   type UpdateAccountInput,
+  type UpdateCounterpartyInput,
+  unmergeCounterpartiesInput,
   updateAccountInput,
+  updateCounterpartyInput,
   updateGroupInput,
   updateTransactionInput,
-} from "./inputs.ts";
-// E2's own import — same reason as A3's above.
-import {
-  type CreateCounterpartyInput,
-  createCounterpartyInput,
-  mergeCounterpartiesInput,
-  recordDistinctCounterpartiesInput,
-  settleDebtInput,
-  unmergeCounterpartiesInput,
-  type UpdateCounterpartyInput,
-  updateCounterpartyInput,
 } from "./inputs.ts";
 
 /* ── compile-time assertions ─────────────────────────────────────────────────
