@@ -4,11 +4,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
+import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import {
   type FloatPosition,
   parseFloatPosition,
   serializeFloatPosition,
 } from "@waltning/ui/shell/float-geometry";
+import * as Haptics from "expo-haptics";
 import { getLocales } from "expo-localization";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
@@ -38,6 +40,22 @@ export const PREVIEW_RESET_ENABLED = previewResetEnabled(
   __DEV__,
   process.env["EXPO_PUBLIC_ENABLE_PREVIEW_RESET"],
 );
+
+const LAST_CAPTURE_KEY = "waltning.lastCapture";
+
+/** D4b's last-used account, within S05 §9.2's four-hour window. */
+export const lastCapture = createLastCapturePreference(
+  {
+    get: () => AsyncStorage.getItem(LAST_CAPTURE_KEY),
+    set: (value) => AsyncStorage.setItem(LAST_CAPTURE_KEY, value),
+  },
+  mobileDiagnostics,
+);
+
+/** S05 §7: haptic on Save. `platform.ts`'s web half no-ops this same name. */
+export function saveHaptic(): void {
+  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+}
 
 /**
  * The device's ordered language preferences.

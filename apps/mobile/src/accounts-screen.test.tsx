@@ -74,6 +74,7 @@ function fakeController(rows: readonly Row[]) {
     listCategories: () => [],
     listCategoryTree: () => [],
     listCounterparties: () => [],
+    listPayeeHistory: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
