@@ -22,10 +22,22 @@ import { transactions } from "../schema.ts";
 export type MarginRow = {
   id: string;
   marginPivot: Money;
-  /** The plain ratio §4a defines — margin ÷ amount_pivot — not ×100. */
-  marginPct: Money;
-  /** `to_amount ÷ amount_original` — derived here too, never stored (§7.5). */
-  realizedRate: Money;
+  /**
+   * The plain ratio §4a defines — margin ÷ amount_pivot — not ×100.
+   *
+   * M2 — nullable. `amount_pivot` is guarded by `NULLIF` below, and a
+   * migration `NOT VALID` (M1, `0014_…sql`) means a pre-existing zero-amount
+   * row can still reach this query — its margin is genuinely unpriceable,
+   * not a number to fake.
+   */
+  marginPct: Money | null;
+  /**
+   * `to_amount ÷ amount_original` — derived here too, never stored (§7.5).
+   *
+   * M2 — nullable for the same reason `marginPct` is: `amount_original` is
+   * guarded by `NULLIF` below.
+   */
+  realizedRate: Money | null;
 };
 
 const live = sql`${transactions.deletedAt} is null`;
@@ -34,22 +46,27 @@ const amountPivot = sql`(${transactions.amountOriginal} * ${transactions.fxRate}
 const toAmountPivot = sql`(${transactions.toAmount} * ${transactions.toFxRate})`;
 
 /**
- * H4 — `transactions_amount_positive` already refuses `amount_original <= 0`
- * for anything but an adjustment (and a transfer is never one), so
- * `amountPivot` should never reach zero here. `NULLIF` is the defence
- * anyway: a division by zero is a Postgres error for the *whole* query, and
- * one bad row must not take every other row's margin down with it — it
- * reads `null` on the row it cannot price, not a thrown query.
+ * H4 / M2 — `transactions_amount_positive` refuses `amount_original <= 0`
+ * for anything but an adjustment (and a transfer is never one) for every
+ * *new* row, but M1's migration adds that CHECK `NOT VALID`: a database that
+ * already held a zero-amount transfer before the tightening keeps it,
+ * ungraded, until the owner runs `VALIDATE CONSTRAINT`. `NULLIF` is the
+ * defence for exactly that row — a division by zero is a Postgres error for
+ * the *whole* query, and one bad row must not take every other row's margin
+ * down with it — it reads `null` on the row it cannot price, not a thrown
+ * query.
  */
 const safeAmountPivot = sql`NULLIF(${amountPivot}, 0)`;
+/** M2 — the same defence, for `realizedRate`'s own denominator. */
+const safeAmountOriginal = sql`NULLIF(${transactions.amountOriginal}, 0)`;
 
 export async function transactionMargins(db: DbHandle): Promise<MarginRow[]> {
   const rows = await db
     .select({
       id: transactions.id,
       marginPivot: sql<Money>`(${amountPivot} - ${toAmountPivot})::numeric(20,8)::text`,
-      marginPct: sql<Money>`((${amountPivot} - ${toAmountPivot}) / ${safeAmountPivot})::numeric(20,8)::text`,
-      realizedRate: sql<Money>`(${transactions.toAmount} / ${transactions.amountOriginal})::numeric(20,8)::text`,
+      marginPct: sql<Money | null>`((${amountPivot} - ${toAmountPivot}) / ${safeAmountPivot})::numeric(20,8)::text`,
+      realizedRate: sql<Money | null>`(${transactions.toAmount} / ${safeAmountOriginal})::numeric(20,8)::text`,
     })
     .from(transactions)
     .where(

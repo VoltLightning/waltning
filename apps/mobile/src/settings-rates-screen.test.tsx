@@ -10,6 +10,7 @@ import {
   createPhoneLedger,
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
@@ -187,6 +188,10 @@ it("preselects the quote from ?quote=, S17's own link at 0% coverage", () => {
 });
 
 it("a range write with no existing manual rows submits on the first press", () => {
+  // L — `today` on the draft is the device's own date, read through
+  // `deviceRuntime()` (`settings-rates-screen.tsx`), never a constant this
+  // test would have to keep in sync with the real clock by hand.
+  const today = deviceRuntime().capture().date;
   const setManualRate = vi.fn(() => ({ written: 30, replacedManual: 0 }));
   withLedger({ setManualRate, listFxRates: () => [] });
 
@@ -195,7 +200,13 @@ it("a range write with no existing manual rows submits on the first press", () =
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
 
   expect(setManualRate).toHaveBeenCalledWith(
-    expect.objectContaining({ base: "USD", quote: "PLN", rate: "3.7556", overwriteManual: false }),
+    expect.objectContaining({
+      base: "USD",
+      quote: "PLN",
+      rate: "3.7556",
+      overwriteManual: false,
+      today,
+    }),
     expect.anything(),
   );
 });
@@ -221,7 +232,7 @@ it("a range holding manual rows asks for a second confirmation before overwritin
 
   fireEvent.click(screen.getByRole("button", { name: "Overwrite and set" }));
   expect(setManualRate).toHaveBeenCalledWith(
-    expect.objectContaining({ overwriteManual: true }),
+    expect.objectContaining({ overwriteManual: true, today: deviceRuntime().capture().date }),
     expect.anything(),
   );
 });

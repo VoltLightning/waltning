@@ -366,27 +366,43 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(result.row.fxRateEstimated).toBe(false);
   });
 
-  // H1 — a rate exists for the pair, just not within ten days of the
-  // capture's own date; `readRate`'s cap refuses it exactly as it would a
-  // missing rate, rather than reaching for whatever is newest.
-  it("H1 — refuses a back-dated capture when the nearest rate is past the ten-day cap", () => {
+  // C1/C2 — the ten-day cap is `readRate`'s own read-side rule (S18,
+  // references); it must not gate a capture. A rate 31 days from the
+  // capture's own date is still the honest answer this replica can give, so
+  // the row saves rather than being lost to the outbox with no trace on
+  // screen. `SPEC.md` §7.6, `architecture/01`/`06`: a missing rate must never
+  // cost you the transaction.
+  it("C1/C2 — a capture 31 days from the only held rate still saves, estimated", () => {
     s.ledger.replica.db
       .insert(fxRates)
       .values({
         base: USD,
-        quote: PLN,
+        quote: CHF,
         date: accountingDate("2026-01-01"),
-        rate: money.unitsPerPivot("3.5000"),
+        rate: money.unitsPerPivot("0.9000"),
         source: "nbp",
       })
       .run();
 
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-02-01", // 31 days from the only row (2026-01-01)
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("0.9000")));
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+
+  // C1/C2 — the executor refuses only when the pair holds no rate row at
+  // all, the exact condition `readCurrencies.capturable` gates on — never on
+  // distance from the capture's own date.
+  it("C1/C2 — refuses only when the pair has no rate at all, not on distance", () => {
     expect(() =>
       write(createTransactionExecutor, {
-        ...expenseInput(TXN_A, ACCOUNT_PLN, "PLN"),
-        date: "2026-02-01", // nearest held row (2026-01-04) is 28 days back
+        ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+        date: "2026-02-01",
       }),
-    ).toThrow(/no last-known rate for USD\/PLN/);
+    ).toThrow(/no last-known rate for USD\/CHF/);
   });
 
   it("prefers a rate the caller asserted over anything cached", () => {

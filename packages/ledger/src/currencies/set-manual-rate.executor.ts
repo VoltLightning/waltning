@@ -32,12 +32,24 @@
  * ever published. Deleted here rather than repaired, because nothing on the
  * phone can re-derive what a synced `carried_forward` row should say next —
  * arc 2's sync (or a later `readCoverage` gap) repopulates it.
+ *
+ * **H1 — the orphan scan runs against the state this write leaves behind,
+ * not the one it found.** A date that was itself `carried_forward` before
+ * this write can become a real origin *as a result of it* — every downstream
+ * carried row whose nearest real predecessor is now one of the dates just
+ * written must be deleted too, even when its *pre-write* origin sat outside
+ * the corrected range entirely. Scanning before the write misses exactly
+ * that row: its old origin looks untouched, so nothing marks it stale, and
+ * it goes on answering reads with a rate this write just superseded. So the
+ * write happens first, then one bounded scan (candidates dated `>= from` —
+ * an origin is never later than its own row, so nothing earlier can be
+ * affected) walks every real row for the pair once and every candidate once,
+ * rather than one `findOrigin` query per candidate (Pi-scale L).
  */
 
 import { type AccountingDate, addDays } from "@waltning/core/date";
-import type { CurrencyCode } from "@waltning/core/money";
 import { type SetManualRateInput, setManualRateInput } from "@waltning/core/registry/inputs";
-import { and, desc, eq, gte, lte, ne } from "drizzle-orm";
+import { and, asc, eq, gte, lte, ne } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
@@ -69,33 +81,6 @@ function dateRange(from: AccountingDate, to: AccountingDate): AccountingDate[] {
   const dates: AccountingDate[] = [];
   for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d);
   return dates;
-}
-
-/**
- * The nearest row `≤ asOf` whose own source is real — the same walk-back
- * `read-rate.ts#findOrigin` does, kept as a separate copy because this one
- * runs against the pre-write state to decide which `carried_forward` rows
- * this write is about to orphan (H3).
- */
-function findOrigin(
-  tx: ReplicaTx,
-  { base, quote, asOf }: { base: CurrencyCode; quote: CurrencyCode; asOf: AccountingDate },
-): LocalFxRateRow | undefined {
-  const [real] = tx
-    .select()
-    .from(fxRates)
-    .where(
-      and(
-        eq(fxRates.base, base),
-        eq(fxRates.quote, quote),
-        lte(fxRates.date, asOf),
-        ne(fxRates.source, CARRIED_FORWARD),
-      ),
-    )
-    .orderBy(desc(fxRates.date))
-    .limit(1)
-    .all();
-  return real;
 }
 
 function setManualRate(input: SetManualRateInput, tx: ReplicaTx): SetManualRateResult {
@@ -131,34 +116,6 @@ function setManualRate(input: SetManualRateInput, tx: ReplicaTx): SetManualRateR
         `set_manual_rate: ${conflict} already has a manual rate — pass overwriteManual to replace it`,
       );
     }
-  }
-
-  // H3 — every `carried_forward` row (any date, this pair) whose origin,
-  // *before* this write, resolves to one of the dates being corrected. Its
-  // own `rate` is a copy taken from that origin, and this write is about to
-  // change what the origin says.
-  const allCarried = tx
-    .select()
-    .from(fxRates)
-    .where(
-      and(
-        eq(fxRates.base, input.base),
-        eq(fxRates.quote, input.quote),
-        eq(fxRates.source, CARRIED_FORWARD),
-      ),
-    )
-    .all();
-  const correctedDates = new Set<string>(dates);
-  const orphaned = allCarried.filter((row) => {
-    const origin = findOrigin(tx, { base: input.base, quote: input.quote, asOf: row.date });
-    return origin !== undefined && correctedDates.has(origin.date);
-  });
-  for (const row of orphaned) {
-    tx.delete(fxRates)
-      .where(
-        and(eq(fxRates.base, row.base), eq(fxRates.quote, row.quote), eq(fxRates.date, row.date)),
-      )
-      .run();
   }
 
   let replacedManual = 0;
@@ -200,6 +157,67 @@ function setManualRate(input: SetManualRateInput, tx: ReplicaTx): SetManualRateR
         set: { rate: input.rate, source: "manual", ...displaced },
       })
       .run();
+  }
+
+  // H1 — the orphan scan runs *after* the write above, against the origins
+  // it leaves behind. Bounded to candidates dated `>= from`: an origin is
+  // never later than its own row, so a carried row dated before this write's
+  // range can never gain an origin inside it. One query for every such
+  // candidate, one query for every real (non-`carried_forward`) row this
+  // pair holds, then a single ascending merge in memory — never one
+  // `findOrigin` per candidate (Pi-scale L).
+  const candidates = tx
+    .select()
+    .from(fxRates)
+    .where(
+      and(
+        eq(fxRates.base, input.base),
+        eq(fxRates.quote, input.quote),
+        eq(fxRates.source, CARRIED_FORWARD),
+        gte(fxRates.date, input.from),
+      ),
+    )
+    .orderBy(asc(fxRates.date))
+    .all();
+
+  if (candidates.length > 0) {
+    const realRows = tx
+      .select({ date: fxRates.date })
+      .from(fxRates)
+      .where(
+        and(
+          eq(fxRates.base, input.base),
+          eq(fxRates.quote, input.quote),
+          ne(fxRates.source, CARRIED_FORWARD),
+        ),
+      )
+      .orderBy(asc(fxRates.date))
+      .all();
+
+    let realIdx = 0;
+    let originDate: AccountingDate | undefined;
+    const orphaned: LocalFxRateRow[] = [];
+    for (const row of candidates) {
+      // Both lists are sorted ascending, so this pointer only ever advances —
+      // the nearest real row `<= row.date` is whichever real row was last
+      // consumed before crossing it.
+      while (realIdx < realRows.length) {
+        const real = realRows[realIdx];
+        if (real === undefined || real.date > row.date) break;
+        originDate = real.date;
+        realIdx += 1;
+      }
+      if (originDate !== undefined && originDate >= input.from && originDate <= input.to) {
+        orphaned.push(row);
+      }
+    }
+    for (const row of orphaned) {
+      tx.delete(fxRates)
+        .where(
+          and(eq(fxRates.base, row.base), eq(fxRates.quote, row.quote), eq(fxRates.date, row.date)),
+        )
+        .run();
+    }
   }
 
   return { written: dates.length, replacedManual };

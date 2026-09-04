@@ -442,6 +442,11 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   // divides by `amount_pivot = amount_original × fx_rate`, and a zero
   // income/expense/transfer amount is not a payment event to begin with
   // (§6.10). An adjustment may still reconcile to an unchanged balance.
+  //
+  // M1 — the migration that tightened this from `>= 0` (`0014_…sql`) adds it
+  // `NOT VALID`: existing zero-amount rows are grandfathered, new ones are
+  // refused immediately. `drizzle-kit generate` cannot express `NOT VALID`,
+  // so a future regeneration of that migration must have it hand-added back.
   check("transactions_amount_positive", sql`${t.amountOriginal} > 0 or ${t.type} = 'adjustment'`),
   check(
     "transactions_transfer_shape",

@@ -9,6 +9,12 @@
  * `manual` row with no displaced trio (the date held nothing before it) is
  * still deleted outright — there is nothing to restore it to.
  *
+ * **L — restores the origin only. `set_manual_rate`'s own carried-forward
+ * deletions (H3) are not recreated here.** A `carried_forward` row a manual
+ * write orphaned is gone for good until arc 2's sync or a later
+ * `readCoverage` gap repopulates it — this operation only undoes what *this*
+ * write did to the one date it targeted, never what it did downstream.
+ *
  * A synced or carried-forward row for the same pair and dates that this
  * write did **not** target is untouched either way.
  */
@@ -23,7 +29,13 @@ const { currencies, fxRates } = schema;
 
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 
-export type ClearManualRateResult = { deleted: number };
+/**
+ * L — kept separate rather than summed: *deleted* and *restored* are
+ * different outcomes for the same row (a hole left behind versus a real
+ * reading put back), and a caller collapsing them into one count could not
+ * tell which had happened.
+ */
+export type ClearManualRateResult = { deleted: number; restored: number };
 
 export const clearManualRateExecutor = defineLocalExecutor<
   typeof clearManualRateInput,
@@ -76,5 +88,5 @@ function clearManualRate(input: ClearManualRateInput, tx: ReplicaTx): ClearManua
 
   const deleted = tx.delete(fxRates).where(inRange).returning().all();
 
-  return { deleted: deleted.length + restored.length };
+  return { deleted: deleted.length, restored: restored.length };
 }

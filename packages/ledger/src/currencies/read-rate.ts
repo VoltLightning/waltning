@@ -1,11 +1,16 @@
 /**
- * `readRate` and `readCoverage` — §4/§7.7, against the replica.
+ * `readRate`, `readNearestRate` and `readCoverage` — §4/§7.7, against the
+ * replica.
  *
  * H1 — `readRate` answers the carry-forward question §7.7 asks (how many
  * days is this rate being carried forward from, and is that still inside the
- * ten-day cap?) for an arbitrary `date`, and `create-transaction.executor.ts`
- * calls it directly for a capture's own provisional rate rather than keeping
- * a second, date-blind "newest row" query that answers a different question.
+ * ten-day cap?) for an arbitrary `date` — a *read-side* question, for S18 and
+ * reference figures.
+ *
+ * C1/C2 — `create-transaction.executor.ts` prices a capture through
+ * `readNearestRate` instead, which shares `readRate`'s carry-forward walk but
+ * not its cap: a capture is never refused for being far from the nearest
+ * held rate, only for the pair having no rate at all (`SPEC.md` §7.6).
  *
  * **`fx_rates` is stored one way only**, `(base = pivot, quote = X)`, in
  * units-per-pivot (§4) — every caller states `base` and `quote` explicitly
@@ -136,6 +141,73 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
   // written; if the origin was corrected afterwards (`set_manual_rate`), the
   // snapshot is stale and the origin's current value is the true answer.
   return { rate: origin.rate, source: origin.source, asOf: origin.date, carriedDays };
+}
+
+export type NearestRate = {
+  rate: UnitsPerPivot;
+  source: string;
+  /** The rate row's own date — never `date` itself unless they coincide. */
+  asOf: AccountingDate;
+};
+
+/**
+ * C1/C2 — the rate for `(base, quote)` **nearest** `date`, uncapped. The
+ * write path's own lookup, never `readRate`'s: `readRate`'s ten-day cap is a
+ * *read-side* rule (S18, reference figures) and must not gate a capture — a
+ * capture more than ten days from the nearest held rate still has to save,
+ * with `fx_rate_estimated` set, per `SPEC.md` §7.6 and `architecture/01`/`06`
+ * ("a missing rate must never cost you the transaction"). `readCurrencies`'s
+ * own `capturable` flag already asks the coarser question this answers —
+ * *does the pair have a row at all* — with no date and no cap, so the two
+ * must agree: this refuses only when the pair has no row anywhere, the same
+ * condition `capturable` gates on.
+ *
+ * **Prefers the nearest row at or before `date`** — the ordinary case, a
+ * capture entered for a date that already has a published rate. Falls back
+ * to the nearest **after** only when nothing at or before exists: a
+ * currency just added to the ledger, priced from the first quote synced for
+ * it rather than refused outright.
+ *
+ * Walks past a `carried_forward` row to its origin the same way `readRate`
+ * does (`findOrigin`) and returns the *origin's* rate, never the carried
+ * copy's stale snapshot (H3's argument, unchanged here).
+ */
+export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
+  db: Queryable<TRun, TSchema>,
+  { base, quote, date }: { base: CurrencyCode; quote: CurrencyCode; date: AccountingDate },
+): NearestRate | undefined {
+  const [before] = db
+    .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
+    .from(fxRates)
+    .where(and(eq(fxRates.base, base), eq(fxRates.quote, quote), lte(fxRates.date, date)))
+    .orderBy(desc(fxRates.date))
+    .limit(1)
+    .all();
+
+  let nearest = before;
+  if (!nearest) {
+    const [after] = db
+      .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
+      .from(fxRates)
+      .where(and(eq(fxRates.base, base), eq(fxRates.quote, quote), gte(fxRates.date, date)))
+      .orderBy(asc(fxRates.date))
+      .limit(1)
+      .all();
+    nearest = after;
+  }
+  if (!nearest) return undefined;
+
+  let origin: { date: AccountingDate; source: string; rate: UnitsPerPivot } = nearest;
+  if (nearest.source === CARRIED_FORWARD) {
+    const real = findOrigin(db, { base, quote, asOf: nearest.date });
+    // No locatable origin (C2) — same refusal `readRate` makes for the same
+    // reason: `change_pivot` can drop the bridge row a carried date descends
+    // from while leaving the carried row itself.
+    if (!real) return undefined;
+    origin = real;
+  }
+
+  return { rate: origin.rate, source: origin.source, asOf: origin.date };
 }
 
 export type LocalCoverage = {

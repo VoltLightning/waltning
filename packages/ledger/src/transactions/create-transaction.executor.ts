@@ -12,6 +12,13 @@
  * **The hard part of this file is one NOT NULL column**, `fx_rate`, against a
  * spec sentence that says the client never stamps a rate. See
  * `provisionalFxRate` below, which is where that is resolved and argued.
+ *
+ * **C1/C2 — a missing rate must never cost you the transaction.**
+ * `provisionalFxRate` prices every capture at the nearest rate this replica
+ * holds for the row's own date, however far away that rate is
+ * (`readNearestRate`, uncapped); it defers only when the pair has no rate at
+ * all — never on distance, which is `readRate`'s cap and belongs to its
+ * read-side callers, not to this write.
  */
 
 import type { CurrencyCode, PivotPerUnit } from "@waltning/core/money";
@@ -21,7 +28,7 @@ import {
   createTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
-import { readRate } from "../currencies/read-rate.ts";
+import { readNearestRate } from "../currencies/read-rate.ts";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -273,13 +280,14 @@ function isSharedAccount(tx: ReplicaTx, accountId: CreateTransactionInput["accou
  *    lookup, and it is the one rate the server has no better source for.
  * 2. **Same currency as the pivot: exactly `1`, and not an estimate.** There is
  *    no conversion to be wrong about.
- * 3. **Cross-currency: the rate the replica holds for this row's own date**
- *    (H1) — `readRate`, the same reader §7.7's carry-forward and ten-day cap
- *    already govern, rather than "the newest row regardless of date". A
- *    back-dated capture is priced against a rate near *its* date, never
- *    today's, and `estimated` is true whenever the resolved rate's own date
- *    is not this row's date.
- * 4. **No rate within the cap: defer.** Argued below.
+ * 3. **Cross-currency: the rate nearest the replica holds for this row's own
+ *    date** (H1, C1/C2) — `readNearestRate`, uncapped, rather than "the
+ *    newest row regardless of date". A back-dated capture is priced against
+ *    a rate near *its* date, never today's, and `estimated` is true whenever
+ *    the resolved rate's own date is not this row's date — however far away
+ *    that rate is. `readRate`'s ten-day cap does not apply here; it is a
+ *    read-side rule (S18, reference figures), not a write-side one.
+ * 4. **No rate at all for the pair: defer.** Argued below.
  */
 type ProvisionalFxRate = { rate: PivotPerUnit; estimated: boolean };
 
@@ -304,7 +312,7 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): Provis
   // back from either engine compares equal as a string.
   if (input.currency === pivot) return { rate: money.pivotPerUnit("1"), estimated: false };
 
-  const local = readRate(tx, { base: pivot, quote: input.currency, date: input.date });
+  const local = readNearestRate(tx, { base: pivot, quote: input.currency, date: input.date });
 
   if (local === undefined) {
     /**
@@ -323,18 +331,24 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): Provis
      * capture still drains to a server that can resolve the rate properly.
      *
      * **`LocalDeferral`, not `LocalRefusal` (R3 H1).** The missing rate is
-     * local state, not a business rule the input violates — a currency added
-     * to the ledger while the phone was offline has no rate row yet (H1:
-     * including a back-dated capture whose own date has no rate within
-     * `readRate`'s ten-day cap, even if a *newer* row for the pair exists),
-     * and that gap closes on its own the moment a rate arrives, whether from
-     * a fresh sync or the server that eventually drains this entry.
-     * `write.ts` leaves the entry `pending` rather than `blocked(refused)`
-     * for exactly that reason: a refusal never gets retried. **R4 C2** — it
-     * also marks `disposition: "deferred"`, so `recover.ts`'s `outstanding`
-     * query keeps finding this entry at every launch even once a later write
-     * has pushed the watermark past it, until this branch stops throwing. It
-     * is not the same as "the rate is stale", which is case 3 and is fine.
+     * local state, not a business rule the input violates, and that gap
+     * closes on its own the moment a rate arrives, whether from a fresh sync
+     * or the server that eventually drains this entry. `write.ts` leaves the
+     * entry `pending` rather than `blocked(refused)` for exactly that reason:
+     * a refusal never gets retried. **R4 C2** — it also marks
+     * `disposition: "deferred"`, so `recover.ts`'s `outstanding` query keeps
+     * finding this entry at every launch even once a later write has pushed
+     * the watermark past it, until this branch stops throwing.
+     *
+     * **C1/C2 — the only reachable case now is "no row for this pair at
+     * all".** `readNearestRate` is uncapped, so a back-dated capture 31 days
+     * from the only held row still resolves (case 3, `estimated: true`)
+     * rather than landing here; this branch is a currency added to the
+     * ledger while the phone was offline, with no rate row yet for the pair
+     * — exactly what `readCurrencies.capturable` already checks for,
+     * date-blind, so a screen can decline the capture before ever reaching
+     * this throw. It is not the same as "the rate is stale", which is case 3
+     * and is fine.
      */
     throw new LocalDeferral(
       `create_transaction: no last-known rate for ${pivot}/${input.currency}, and a ` +

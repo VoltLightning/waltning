@@ -888,6 +888,58 @@ describe("set_manual_rate", () => {
 
     expect(rateRows().find((r) => r.date === accountingDate("2026-01-05"))).toBeDefined();
   });
+
+  // H1 — a downstream carried row whose *pre-write* origin sits outside the
+  // corrected range must still be deleted when this write turns a date
+  // *inside* the range into a nearer real origin for it. Scanning against
+  // the pre-write state (the bug) finds the old, still-distant origin and
+  // leaves this row in place, answering reads with a rate this write just
+  // superseded.
+  it("H1 — deletes a downstream carried row whose origin only lands in range after this write", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        // Carrying forward from 2026-01-01 — nothing else real exists yet.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-10"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-15"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    // Corrects 2026-01-10 — a date that was itself carried_forward. Its
+    // *pre-write* origin is 2026-01-01, outside this range; only after the
+    // write does 2026-01-10 become the nearer real origin for 2026-01-15.
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-10",
+      to: "2026-01-10",
+      rate: "0.30",
+      today: "2026-06-01",
+    });
+
+    const rows = rateRows();
+    expect(rows.find((r) => r.date === accountingDate("2026-01-10"))?.source).toBe("manual");
+    expect(rows.find((r) => r.date === accountingDate("2026-01-15"))).toBeUndefined();
+  });
 });
 
 describe("clear_manual_rate", () => {
@@ -919,7 +971,7 @@ describe("clear_manual_rate", () => {
       to: "2026-01-03",
     });
 
-    expect(result.row).toEqual({ deleted: 1 });
+    expect(result.row).toEqual({ deleted: 1, restored: 0 });
     expect(rateRows()).toHaveLength(1);
     expect(rateRows()[0]?.source).toBe("nbp");
   });
@@ -958,7 +1010,7 @@ describe("clear_manual_rate", () => {
       to: "2026-01-01",
     });
 
-    expect(result.row).toEqual({ deleted: 1 });
+    expect(result.row).toEqual({ deleted: 0, restored: 1 });
     const rows = rateRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]?.source).toBe("nbp");
@@ -985,7 +1037,7 @@ describe("clear_manual_rate", () => {
       to: "2026-01-01",
     });
 
-    expect(result.row).toEqual({ deleted: 1 });
+    expect(result.row).toEqual({ deleted: 1, restored: 0 });
     expect(rateRows()).toHaveLength(0);
   });
 
@@ -1030,7 +1082,7 @@ describe("clear_manual_rate", () => {
     });
 
     const rows = rateRows();
-    expect(result.row).toEqual({ deleted: 1 });
+    expect(result.row).toEqual({ deleted: 0, restored: 1 });
     expect(rows[0]?.source).toBe("nbp");
     expect(rows[0]?.rate).toBe(money.unitsPerPivot("3.81"));
   });
@@ -1693,17 +1745,17 @@ describe("readCrossRate", () => {
     // 4.0 / 0.92 = 4.3478260869565217…, rounded half-up at `PivotPerUnit`'s
     // twelve decimal places — not the ledger's usual eight, and not
     // re-rounded a second time by this assertion.
-    expect(cross?.rate).toBe(money.pivotPerUnit("4.347826086957"));
+    expect(cross?.rate).toBe(money.crossRate("4.347826086957"));
   });
 
   it("triangulates PLN→EUR the other way", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: PLN, to: EUR, date: DATE });
-    expect(cross?.rate).toBe(money.pivotPerUnit("0.23"));
+    expect(cross?.rate).toBe(money.crossRate("0.23"));
   });
 
   it("is exactly 1 when the same currency is on both sides", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: EUR, to: EUR, date: DATE });
-    expect(cross?.rate).toBe(money.pivotPerUnit("1"));
+    expect(cross?.rate).toBe(money.crossRate("1"));
   });
 
   it("collapses to the plain readRate when the pivot is the destination", () => {
@@ -1712,7 +1764,7 @@ describe("readCrossRate", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: PLN, to: USD, date: DATE });
     // `readRate` holds PLN in units-per-pivot; the cross rate asked for is
     // pivot-per-unit — its reciprocal.
-    expect(cross?.rate).toBe(money.reciprocal(direct.rate));
+    expect(cross?.rate).toBe(money.crossRate(money.reciprocal(direct.rate)));
   });
 
   it("collapses to the plain readRate when the pivot is the source", () => {
@@ -1721,7 +1773,7 @@ describe("readCrossRate", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: USD, to: PLN, date: DATE });
     // Valuing 1 pivot unit in PLN is exactly what `readRate` already holds —
     // rebranded pivot-per-unit, not recomputed.
-    expect(cross?.rate).toBe(direct.rate);
+    expect(cross?.rate).toBe(money.crossRate(direct.rate));
   });
 
   /**
