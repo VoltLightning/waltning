@@ -26,6 +26,10 @@ import type { accounts as pgAccounts } from "./accounts.pg.ts";
 import type { accounts as sqliteAccounts } from "./accounts.sqlite.ts";
 import type { categories as pgCategories } from "./categories.pg.ts";
 import type { categories as sqliteCategories } from "./categories.sqlite.ts";
+import type { counterpartyDistinctPairs as pgCounterpartyDistinctPairs } from "./counterparty-distinct-pairs.pg.ts";
+import type { counterpartyDistinctPairs as sqliteCounterpartyDistinctPairs } from "./counterparty-distinct-pairs.sqlite.ts";
+import type { counterpartyMerges as pgCounterpartyMerges } from "./counterparty-merges.pg.ts";
+import type { counterpartyMerges as sqliteCounterpartyMerges } from "./counterparty-merges.sqlite.ts";
 import type { counterparties as pgCounterparties } from "./counterparties.pg.ts";
 import type { counterparties as sqliteCounterparties } from "./counterparties.sqlite.ts";
 import type { currencies as pgCurrencies } from "./currencies.pg.ts";
@@ -53,6 +57,8 @@ type Pg = {
   accounts: typeof pgAccounts;
   categories: typeof pgCategories;
   counterparties: typeof pgCounterparties;
+  counterpartyDistinctPairs: typeof pgCounterpartyDistinctPairs;
+  counterpartyMerges: typeof pgCounterpartyMerges;
   currencies: typeof pgCurrencies;
   dashboardLayouts: typeof pgDashboardLayouts;
   dashboardWidgets: typeof pgDashboardWidgets;
@@ -69,6 +75,8 @@ type Sqlite = {
   accounts: typeof sqliteAccounts;
   categories: typeof sqliteCategories;
   counterparties: typeof sqliteCounterparties;
+  counterpartyDistinctPairs: typeof sqliteCounterpartyDistinctPairs;
+  counterpartyMerges: typeof sqliteCounterpartyMerges;
   currencies: typeof sqliteCurrencies;
   dashboardLayouts: typeof sqliteDashboardLayouts;
   dashboardWidgets: typeof sqliteDashboardWidgets;

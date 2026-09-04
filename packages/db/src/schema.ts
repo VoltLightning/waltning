@@ -117,6 +117,8 @@ import { accountGroupsColumns } from "@waltning/schema/pg/account-groups";
 import { accountsColumns } from "@waltning/schema/pg/accounts";
 import { categoriesColumns } from "@waltning/schema/pg/categories";
 import { counterpartiesColumns } from "@waltning/schema/pg/counterparties";
+import { counterpartyDistinctPairsColumns } from "@waltning/schema/pg/counterparty-distinct-pairs";
+import { counterpartyMergesColumns } from "@waltning/schema/pg/counterparty-merges";
 import { currenciesColumns } from "@waltning/schema/pg/currencies";
 import { dashboardLayoutsColumns } from "@waltning/schema/pg/dashboard-layouts";
 import { dashboardWidgetsColumns } from "@waltning/schema/pg/dashboard-widgets";
@@ -240,6 +242,37 @@ export const categoryMappings = pgTable(
 export const counterparties = pgTable("counterparties", counterpartiesColumns(), (t) => [
   uniqueIndex("counterparties_name_uq").on(normalized(t.name)),
 ]);
+
+/**
+ * `merge_counterparties` / `unmerge_counterparties` — S15 §9.2. The record of
+ * which transactions moved, so unmerge reverses exactly them rather than
+ * re-deriving the set.
+ */
+export const counterpartyMerges = pgTable(
+  "counterparty_merges",
+  counterpartyMergesColumns(),
+  (t) => [
+    index("counterparty_merges_winner_idx").on(t.winnerId),
+    index("counterparty_merges_loser_idx").on(t.loserId),
+  ],
+);
+
+/**
+ * `record_distinct_counterparties` — S15 §9.1's *these are different*
+ * decision, so `MatchWarning` never asks about the same pair twice.
+ *
+ * Ordered `a_id < b_id`: a pair has no direction, and the CHECK is what makes
+ * the composite primary key actually dedupe regardless of which counterparty
+ * a caller named first.
+ */
+export const counterpartyDistinctPairs = pgTable(
+  "counterparty_distinct_pairs",
+  counterpartyDistinctPairsColumns(),
+  (t) => [
+    primaryKey({ columns: [t.aId, t.bId] }),
+    check("counterparty_distinct_pairs_ordered", sql`${t.aId} < ${t.bId}`),
+  ],
+);
 
 /* ------------------------------------------------------------------ *
  * Transactions

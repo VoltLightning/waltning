@@ -12,6 +12,8 @@ export type SharedTable =
   | "accounts"
   | "categories"
   | "counterparties"
+  | "counterpartyDistinctPairs"
+  | "counterpartyMerges"
   | "currencies"
   | "dashboardLayouts"
   | "dashboardWidgets"

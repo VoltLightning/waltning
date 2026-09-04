@@ -44,6 +44,8 @@ const replicaSchema = {
   accounts: schema.accounts,
   categories: schema.categories,
   counterparties: schema.counterparties,
+  counterpartyDistinctPairs: schema.counterpartyDistinctPairs,
+  counterpartyMerges: schema.counterpartyMerges,
   currencies: schema.currencies,
   dashboardLayouts: schema.dashboardLayouts,
   dashboardWidgets: schema.dashboardWidgets,
@@ -221,7 +223,7 @@ describe("a fresh database", () => {
     expect(result.refetchRequired, "nothing was dropped — there was nothing there").toBe(false);
 
     const names = inspect(join(dir, "fresh-replica.db"), tableNames);
-    expect(names, "the thirteen shared tables plus the replica's meta store").toHaveLength(14);
+    expect(names, "the fifteen shared tables plus the replica's meta store").toHaveLength(16);
     expect(names).toContain("transactions");
     expect(names).toContain("local_meta");
     expect(names, "the outbox is the other file's table").not.toContain("outbox");
@@ -788,7 +790,7 @@ describe("a constraint declared in the schema is present on the device", () => {
           .sort(),
       );
 
-    expect(declared(replicaSchema), "vacuity guard").toHaveLength(14);
+    expect(declared(replicaSchema), "vacuity guard").toHaveLength(16);
     expect(declaredColumns(replicaSchema).length, "vacuity guard").toBeGreaterThan(100);
 
     expect(

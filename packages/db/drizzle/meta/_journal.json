@@ -50,6 +50,13 @@
       "when": 1788463444881,
       "tag": "0006_account_groups_archived",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788502789610,
+      "tag": "0007_counterparty_merges_and_distinct_pairs",
+      "breakpoints": true
     }
   ]
 }

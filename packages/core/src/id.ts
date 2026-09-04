@@ -37,6 +37,7 @@ export type IdTable =
   | "agentSessions"
   | "categories"
   | "counterparties"
+  | "counterpartyMerges"
   | "dashboardLayouts"
   | "dashboardWidgets"
   | "importBatches"

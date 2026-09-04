@@ -2,7 +2,13 @@ import { currencies } from "./currencies.pg.ts";
 import { counterpartyKind } from "./enums.pg.ts";
 import { pgKit as k } from "./kit.ts";
 
-/** The unique index on the normalised name stays in `packages/db`. */
+/**
+ * The unique index on the normalised name stays in `packages/db`
+ * (`counterparties_name_uq`, `lower(btrim(name))`) — this is the bare table,
+ * for the parity assertion. **The SQLite twin is not bare**: see
+ * `counterparties.sqlite.ts` for why the phone carries its own copy of this
+ * index rather than trusting a server that may not exist yet.
+ */
 export const counterpartiesColumns = () => ({
   id: k.id<"counterparties">("id"),
   name: k.text("name").notNull(),

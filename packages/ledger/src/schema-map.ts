@@ -2,6 +2,8 @@ import { accountGroups } from "@waltning/schema/sqlite/account-groups";
 import { accounts } from "@waltning/schema/sqlite/accounts";
 import { categories } from "@waltning/schema/sqlite/categories";
 import { counterparties } from "@waltning/schema/sqlite/counterparties";
+import { counterpartyDistinctPairs } from "@waltning/schema/sqlite/counterparty-distinct-pairs";
+import { counterpartyMerges } from "@waltning/schema/sqlite/counterparty-merges";
 import { currencies } from "@waltning/schema/sqlite/currencies";
 import { dashboardLayouts } from "@waltning/schema/sqlite/dashboard-layouts";
 import { dashboardWidgets } from "@waltning/schema/sqlite/dashboard-widgets";
@@ -20,6 +22,8 @@ export const ledgerSchema = {
   accounts,
   categories,
   counterparties,
+  counterpartyDistinctPairs,
+  counterpartyMerges,
   currencies,
   dashboardLayouts,
   dashboardWidgets,
