@@ -1906,6 +1906,7 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       unmergeCounterparties: vi.fn(),
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
+      listPayeeHistory: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

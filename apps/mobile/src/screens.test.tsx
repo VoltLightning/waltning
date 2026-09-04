@@ -451,6 +451,7 @@ describe("Today", () => {
       unmergeCounterparties: vi.fn(),
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
+      listPayeeHistory: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

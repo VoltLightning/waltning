@@ -129,6 +129,7 @@ function fakeController(
     unmergeCounterparties: vi.fn(),
     recordDistinctCounterparties: vi.fn(),
     settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
+    listCounterpartyBalances: vi.fn(() => []),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {
