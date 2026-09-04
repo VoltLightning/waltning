@@ -106,10 +106,12 @@ import {
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 import {
   type LocalCoverage,
+  type LocalCrossRate,
   type LocalRate,
   type LocalRateRow,
   listFxRates,
   readCoverage,
+  readCrossRate,
   readRate,
 } from "./currencies/read-rate.ts";
 import {
@@ -247,6 +249,12 @@ export type LocalLedgerSession = {
     quote: CurrencyCode;
     date: AccountingDate;
   }) => LocalRate | null;
+  /** E5 — S14 and S31's own reference line, triangulated through the pivot (§7.0). */
+  readCrossRate: (pair: {
+    from: CurrencyCode;
+    to: CurrencyCode;
+    date: AccountingDate;
+  }) => LocalCrossRate | null;
   readCoverage: (today: AccountingDate) => readonly LocalCoverage[];
   listFxRates: (range: {
     base: CurrencyCode;
@@ -539,6 +547,7 @@ export function createLocalLedgerSession<TRun>(
       }).row,
     /* ── E3 · FX ────────────────────────────────────────────────────────── */
     readRate: (pair) => readRate(requireOpen().replica.db, pair) ?? null,
+    readCrossRate: (pair) => readCrossRate(requireOpen().replica.db, pair) ?? null,
     readCoverage: (today) => readCoverage(requireOpen().replica.db, today),
     listFxRates: (range) => listFxRates(requireOpen().replica.db, range),
     addCurrency: (input, capture) =>

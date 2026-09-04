@@ -405,6 +405,20 @@ export type PhoneRate = {
   carriedDays: number;
 };
 
+/**
+ * E5 — a reference rate between two arbitrary currencies, as of a date —
+ * `readCrossRate`'s answer. The pivot (§7.0) never reaches this type: `rate`
+ * is already triangulated, pivot-per-unit for this specific pair, the same
+ * direction `TransferAmount`'s own `referenceRate` prop and `margin`'s
+ * `fxRate`/`toFxRate` take.
+ */
+export type PhoneCrossRate = {
+  rate: money.PivotPerUnit;
+  source: string;
+  asOf: AccountingDate;
+  carriedDays: number;
+};
+
 /** S17 §8's coverage figure, per currency — `readCoverage`'s answer. */
 export type PhoneCoverage = {
   code: CurrencyCode;
@@ -471,6 +485,12 @@ export type PhoneLedgerPort = {
     quote: CurrencyCode;
     date: AccountingDate;
   }) => PhoneRate | null;
+  /** E5 — S14 and S31's own reference line, triangulated through the invisible pivot (§7.0). */
+  readCrossRate: (pair: {
+    from: CurrencyCode;
+    to: CurrencyCode;
+    date: AccountingDate;
+  }) => PhoneCrossRate | null;
   /** S17 §8, on demand — not carried in the snapshot; a settings screen asks for it. */
   readCoverage: (today: AccountingDate) => readonly PhoneCoverage[];
   /** S18's table, on demand, one pair at a time. */
@@ -623,18 +643,26 @@ export type PhoneLedgerSnapshot = {
 };
 
 /**
- * Every field the quick-add screen can save, plain-string ids and all.
+ * Every field the quick-add screen — or S31's `TransferComposer` — can save,
+ * plain-string ids and all.
  *
  * **The user-owned subset of `CreateTransactionInput`.** Everything else on
- * that schema is either a transfer field (Quick add never offers a transfer —
- * `+` long-press does) or resolved by the server (`fxRate`, `source`, …). Ids
- * stay `string` rather than `Id<Table>` on purpose: this is the shape a form
+ * that schema is resolved by the server (`fxRate`, `source`, …). Ids stay
+ * `string` rather than `Id<Table>` on purpose: this is the shape a form
  * hands back, and `createTransactionInput.parse` inside the controller is
  * where the brand and the format are actually checked — a screen that
  * pre-branded them would be asserting a claim it cannot verify.
+ *
+ * **E5 widens `type` to `"transfer"` and adds the destination leg.** S31 is
+ * the one caller that ever sets `toAccountId`/`toAmount`/`toCurrency`/`fee` —
+ * every other caller leaves them `undefined`, which is what keeps `type:
+ * "transfer"` without them a Zod refusal rather than a silent half-row
+ * (`transactions_transfer_shape`, mirrored by `transactionShapeIssues`).
+ * `toFxRate` is never among them: §7.5 resolves it server-side at commit,
+ * and the client never asserts the reference rate as truth (S31 §5).
  */
 export type QuickAddDraft = {
-  type: "expense" | "income";
+  type: "expense" | "income" | "transfer";
   amount: string;
   accountId: string;
   categoryId: string | null;
@@ -653,6 +681,12 @@ export type QuickAddDraft = {
   isBusiness: boolean;
   counterpartyId: string | null;
   counterpartyRole: "debt" | "contribution" | "reference" | null;
+  /** S31's destination leg (§7.5) — present only when `type === "transfer"`. */
+  toAccountId?: string;
+  toAmount?: string;
+  toCurrency?: string;
+  /** The bank's stated fee, distinct from the rate margin (S31 §9.1). */
+  fee?: string;
 };
 
 /**
@@ -992,6 +1026,11 @@ export type PhoneLedgerController = {
     quote: CurrencyCode;
     date: AccountingDate;
   }) => PhoneRate | null;
+  readCrossRate: (pair: {
+    from: CurrencyCode;
+    to: CurrencyCode;
+    date: AccountingDate;
+  }) => PhoneCrossRate | null;
   readCoverage: (today: AccountingDate) => readonly PhoneCoverage[];
   listFxRates: (range: {
     base: CurrencyCode;
@@ -2180,6 +2219,13 @@ export function createPhoneLedger(
           isBusiness: draft.isBusiness,
           counterpartyId: draft.counterpartyId ?? undefined,
           counterpartyRole: draft.counterpartyRole ?? undefined,
+          // S31's destination leg (§7.5) — absent on every other caller, and
+          // `createTransactionInput`'s own shape refusal is what catches a
+          // `type: "transfer"` missing one of these, not this method.
+          ...(draft.toAccountId === undefined ? {} : { toAccountId: draft.toAccountId }),
+          ...(draft.toAmount === undefined ? {} : { toAmount: money.toMoney(draft.toAmount) }),
+          ...(draft.toCurrency === undefined ? {} : { toCurrency: draft.toCurrency }),
+          ...(draft.fee === undefined ? {} : { fee: money.toMoney(draft.fee) }),
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
@@ -2449,6 +2495,7 @@ export function createPhoneLedger(
     },
     /* ── E3 · FX ──────────────────────────────────────────────────────────── */
     readRate: (pair) => port.readRate(pair),
+    readCrossRate: (pair) => port.readCrossRate(pair),
     readCoverage: (today) => port.readCoverage(today),
     listFxRates: (range) => port.listFxRates(range),
     addCurrency: (draft) => {

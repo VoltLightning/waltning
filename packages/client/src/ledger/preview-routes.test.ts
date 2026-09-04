@@ -42,11 +42,19 @@ describe("phone preview route state", () => {
   });
 
   it("accepts an empty quick-add draft and only scalar route values", () => {
-    expect(parseQuickAddRoute({})).toEqual({ amount: "", accountId: undefined });
+    expect(parseQuickAddRoute({})).toEqual({ amount: "", accountId: undefined, type: undefined });
     expect(parseQuickAddRoute({ amount: ["1", "2"], accountId: ["a", "b"] })).toEqual({
       amount: "",
       accountId: undefined,
+      type: undefined,
     });
+  });
+
+  it("reads `type` only as `expense` or `income` — the long-press picker's own two named values", () => {
+    expect(parseQuickAddRoute({ type: "income" }).type).toBe("income");
+    expect(parseQuickAddRoute({ type: "expense" }).type).toBe("expense");
+    expect(parseQuickAddRoute({ type: "transfer" }).type).toBeUndefined();
+    expect(parseQuickAddRoute({ type: ["income", "expense"] }).type).toBeUndefined();
   });
 
   it("reads the transaction id, or undefined for a missing or duplicated segment", () => {

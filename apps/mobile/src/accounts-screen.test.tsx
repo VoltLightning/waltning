@@ -104,6 +104,7 @@ function fakeController(rows: readonly Row[]) {
     deleteTransaction: () => undefined,
     setTransactionLines: () => undefined,
     readRate: () => null,
+    readCrossRate: () => null,
     readCoverage: () => [],
     listFxRates: () => [],
     addCurrency: vi.fn(),

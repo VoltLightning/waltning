@@ -124,6 +124,7 @@ function fakeController(
     settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
     balanceAsOf: () => toMoney("0"),
     readRate: () => null,
+    readCrossRate: () => null,
     readCoverage: () => [],
     listFxRates: () => [],
     addCurrency: vi.fn(),

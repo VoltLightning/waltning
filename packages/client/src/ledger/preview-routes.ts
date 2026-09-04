@@ -40,11 +40,26 @@ export function parseNewAccountRoute(params: {
   return { valid: false, message: "Could not restore the expense draft." };
 }
 
-export function parseQuickAddRoute(params: { amount?: RouteValue; accountId?: RouteValue }): {
+/** §9.1's third entry point — `FloatingAdd`'s long-press picker names `income` explicitly; anything else defaults on the screen. */
+function quickAddType(value: RouteValue): "expense" | "income" | undefined {
+  const v = one(value);
+  return v === "expense" || v === "income" ? v : undefined;
+}
+
+export function parseQuickAddRoute(params: {
+  amount?: RouteValue;
+  accountId?: RouteValue;
+  type?: RouteValue;
+}): {
   amount: string;
   accountId: string | undefined;
+  type: "expense" | "income" | undefined;
 } {
-  return { amount: one(params.amount) ?? "", accountId: one(params.accountId) };
+  return {
+    amount: one(params.amount) ?? "",
+    accountId: one(params.accountId),
+    type: quickAddType(params.type),
+  };
 }
 
 /**
