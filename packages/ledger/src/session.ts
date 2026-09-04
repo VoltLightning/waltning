@@ -22,10 +22,10 @@ import type {
   DeleteTransactionInput,
   MergeCounterpartiesInput,
   ReconcileAccountInput,
+  RecordDistinctCounterpartiesInput,
   SetManualRateInput,
   SetPinnedInput,
   SetRateSourceInput,
-  RecordDistinctCounterpartiesInput,
   SetTransactionLinesInput,
   SettleDebtInput,
   UnmergeCounterpartiesInput,
@@ -64,14 +64,6 @@ import {
   type ReadCounterpartiesOptions,
   readCounterparties,
 } from "./counterparties/read-counterparties.ts";
-// ── E3 · FX operations — the phone half ────────────────────────────────────
-import { addCurrencyExecutor, type LocalCurrencyRow } from "./currencies/add-currency.executor.ts";
-import { archiveCurrencyExecutor } from "./currencies/archive-currency.executor.ts";
-import { changePivotExecutor } from "./currencies/change-pivot.executor.ts";
-import {
-  type ClearManualRateResult,
-  clearManualRateExecutor,
-} from "./currencies/clear-manual-rate.executor.ts";
 import {
   type LocalDistinctPairRow,
   recordDistinctCounterpartiesExecutor,
@@ -85,6 +77,14 @@ import {
   unmergeCounterpartiesExecutor,
 } from "./counterparties/unmerge-counterparties.executor.ts";
 import { updateCounterpartyExecutor } from "./counterparties/update-counterparty.executor.ts";
+// ── E3 · FX operations — the phone half ────────────────────────────────────
+import { addCurrencyExecutor, type LocalCurrencyRow } from "./currencies/add-currency.executor.ts";
+import { archiveCurrencyExecutor } from "./currencies/archive-currency.executor.ts";
+import { changePivotExecutor } from "./currencies/change-pivot.executor.ts";
+import {
+  type ClearManualRateResult,
+  clearManualRateExecutor,
+} from "./currencies/clear-manual-rate.executor.ts";
 // ── end E2 block ─────────────────────────────────────────────────────────
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 import {

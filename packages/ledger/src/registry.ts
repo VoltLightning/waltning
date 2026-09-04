@@ -13,14 +13,6 @@ import { createCategoryExecutor } from "./categories/create-category.executor.ts
 import { mergeCategoriesExecutor } from "./categories/merge-categories.executor.ts";
 import { renameCategoryExecutor } from "./categories/rename-category.executor.ts";
 import { reparentCategoryExecutor } from "./categories/reparent-category.executor.ts";
-// ── E3 · FX operations — the phone half ────────────────────────────────────
-import { addCurrencyExecutor } from "./currencies/add-currency.executor.ts";
-import { archiveCurrencyExecutor } from "./currencies/archive-currency.executor.ts";
-import { changePivotExecutor } from "./currencies/change-pivot.executor.ts";
-import { clearManualRateExecutor } from "./currencies/clear-manual-rate.executor.ts";
-import { setManualRateExecutor } from "./currencies/set-manual-rate.executor.ts";
-import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
-import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
 // ── end E3 block ─────────────────────────────────────────────────────────
 // ── E2 · counterparties and settlement — its own block, same reason ────────
 import { createCounterpartyExecutor } from "./counterparties/create-counterparty.executor.ts";
@@ -29,6 +21,14 @@ import { recordDistinctCounterpartiesExecutor } from "./counterparties/record-di
 import { settleDebtExecutor } from "./counterparties/settle-debt.executor.ts";
 import { unmergeCounterpartiesExecutor } from "./counterparties/unmerge-counterparties.executor.ts";
 import { updateCounterpartyExecutor } from "./counterparties/update-counterparty.executor.ts";
+// ── E3 · FX operations — the phone half ────────────────────────────────────
+import { addCurrencyExecutor } from "./currencies/add-currency.executor.ts";
+import { archiveCurrencyExecutor } from "./currencies/archive-currency.executor.ts";
+import { changePivotExecutor } from "./currencies/change-pivot.executor.ts";
+import { clearManualRateExecutor } from "./currencies/clear-manual-rate.executor.ts";
+import { setManualRateExecutor } from "./currencies/set-manual-rate.executor.ts";
+import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
+import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
 // ── end E2 block ─────────────────────────────────────────────────────────
 import { localRegistry } from "./executor.ts";
 // ── A2 · transaction operations — the phone half ──────────────────────────

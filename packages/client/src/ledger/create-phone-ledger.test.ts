@@ -1484,6 +1484,16 @@ describe("phone ledger controller — counterparties and settlement", () => {
       unmergeCounterparties,
       recordDistinctCounterparties,
       settleDebt,
+      readRate: vi.fn(() => null),
+      readCoverage: vi.fn(() => []),
+      listFxRates: vi.fn(() => []),
+      addCurrency: vi.fn(),
+      archiveCurrency: vi.fn(),
+      setRateSource: vi.fn(),
+      setPinned: vi.fn(),
+      changePivot: vi.fn(),
+      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
+      clearManualRate: vi.fn(() => ({ deleted: 0 })),
       reset: vi.fn(),
     };
 

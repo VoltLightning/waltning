@@ -888,6 +888,9 @@ describe("clearManualRateInput", () => {
     });
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("to");
+  });
+});
+
 /* ════════════════════════════════════════════════════════════════════════
  * E2 · counterparties and settlement
  * ════════════════════════════════════════════════════════════════════════ */
