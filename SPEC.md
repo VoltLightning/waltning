@@ -1192,9 +1192,10 @@ transactions_transfer_shape      (type = 'transfer') = (to_account_id IS NOT NUL
 transactions_transfer_distinct   to_account_id IS NULL OR to_account_id <> account_id
 transactions_category_shape      type IN ('income','expense') OR category_id IS NULL
 transactions_to_amount_shape     (type = 'transfer') = (to_amount IS NOT NULL)
-transactions_to_amount_positive  to_amount IS NULL OR to_amount >= 0
+transactions_to_amount_positive  to_amount IS NULL OR to_amount > 0
 transactions_to_currency_shape   (type = 'transfer') = (to_currency IS NOT NULL)
 transactions_to_fx_rate_shape    (type = 'transfer') = (to_fx_rate IS NOT NULL)
+transactions_fee_positive        fee IS NULL OR fee > 0
 categories_no_self_parent        id <> parent_id
 categories_earnings_income_only  kind = 'income' OR is_earnings = false
 accounts_shared_not_business     ownership = 'own' OR is_business = false
@@ -1956,8 +1957,8 @@ a pivot of USD:
 ```
 amount_pivot     = 150.00 × 1.0        = 150.00 USD
 to_amount_pivot  = 565.20 × (1/3.8100) = 148.35 USD
-margin_pivot     =                       1.65 USD   (≈ 6.29 PLN)
-margin_pct       = 1.65 ÷ 150.00       = 1.10 %
+margin_pivot     =                       1.6535 USD (≈ 6.30 PLN)
+margin_pct       = 1.6535 ÷ 150.00     = 1.10 %
 ```
 
 Positive means the transfer cost you money, which is the ordinary case. A

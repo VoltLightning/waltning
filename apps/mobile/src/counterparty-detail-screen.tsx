@@ -38,6 +38,7 @@ import type {
   PhoneCapturableAccount,
   PhoneSearchTransaction,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { crossRateProvenance } from "@waltning/client/ledger/cross-rate-provenance";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useCounterpartyHistory } from "@waltning/client/ledger/use-counterparty-history";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -332,7 +333,17 @@ export default function CounterpartyDetail() {
       date: today,
     });
     if (result === null) return undefined;
-    return { rate: result.rate, source: result.source, date: result.asOf };
+    // H2 — see `transfer-screen.tsx`'s own note: `crossRateProvenance` keeps
+    // `source`/`date`/`carriedDays` all describing the same leg, with
+    // `manual` its own, independent flag.
+    const provenance = crossRateProvenance(result.legs);
+    return {
+      rate: result.rate,
+      source: provenance.source,
+      date: provenance.asOf,
+      carriedDays: provenance.carriedDays,
+      manual: provenance.manual,
+    };
   }, [ledger, settleDischargesCurrency, settleAccount, snapshot.revision, today]);
 
   const handleToggleHistory = useCallback(() => setShowAllRows((current) => !current), []);

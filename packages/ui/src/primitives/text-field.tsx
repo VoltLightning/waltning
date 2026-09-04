@@ -56,6 +56,13 @@ export type TextFieldProps = {
    * one exists.
    */
   hideLabel?: boolean;
+  /**
+   * `"decimal-pad"` for a field that only ever holds a typed amount (a
+   * transfer's fee, §7.5) — the same keyboard `AmountField`'s own
+   * `TextInput` hardcodes, offered here rather than duplicating the input.
+   * Defaults to the platform's ordinary text keyboard.
+   */
+  keyboardType?: "default" | "decimal-pad";
 };
 
 export function TextField({
@@ -71,6 +78,7 @@ export function TextField({
   autoFocus = false,
   onBlur,
   hideLabel = false,
+  keyboardType = "default",
 }: TextFieldProps) {
   const styles = useStyles();
   const theme = useTheme();
@@ -95,6 +103,7 @@ export function TextField({
         value={value}
         onChangeText={onChangeText}
         editable={!disabled}
+        keyboardType={keyboardType}
         // `editable={false}` maps to read-only on the web, which is a
         // different promise: a read-only field's text must still meet
         // contrast, a disabled one's need not (and, faded to 45%, cannot).

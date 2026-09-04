@@ -169,6 +169,8 @@ export const pl: Messages = {
     transfer: "Przelew",
     realized: "Zrealizowany",
     referenceRate: "referencyjny {{rate}} · {{source}} · {{date}}",
+    referenceRateCarried:
+      "referencyjny {{rate}} · {{source}} · przeniesiony {{count}} d z {{date}}",
     manualRate: "Ręczny",
     from: "Z",
     to: "Do",
@@ -176,6 +178,7 @@ export const pl: Messages = {
     destinationAmount: "Kwota docelowa",
     margin: "Marża",
     fee: "Opłata",
+    feeInvalid: "Wpisz liczbę lub zostaw puste.",
     sameAccountRefused: "Przelew wymaga dwóch różnych kont.",
 
     newCounterparty: "+ Nowa osoba lub firma",

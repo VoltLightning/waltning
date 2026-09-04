@@ -14,7 +14,7 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { updateCurrencyInput } from "@waltning/core/registry/inputs";
 import Database from "better-sqlite3";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { addCurrencyExecutor } from "../currencies/add-currency.executor.ts";
@@ -1395,6 +1395,39 @@ describe("readCrossRate", () => {
     // Valuing 1 pivot unit in PLN is exactly what `readRate` already holds —
     // rebranded pivot-per-unit, not recomputed.
     expect(cross?.rate).toBe(direct.rate);
+  });
+
+  /**
+   * H2 — `readCrossRate` reports both legs whole and unmixed now: the USD
+   * (pivot) leg is always the fabricated `source: "pivot"` self-leg and the
+   * PLN leg is always the real `nbp` row, regardless of which side of the
+   * pair each currency lands on. Picking which of the two to *display* (M1's
+   * old concern — never the fabricated leg when a real one exists) moved to
+   * `crossRateProvenance` (`packages/client`), tested there.
+   */
+  it("H2: reports each leg's own provenance — source, asOf and carriedDays together, never mixed across legs", () => {
+    const fromPivot = readCrossRate(s.ledger.replica.db, { from: USD, to: PLN, date: DATE });
+    expect(fromPivot?.legs.from).toMatchObject({ source: "pivot", asOf: DATE, carriedDays: 0 });
+    expect(fromPivot?.legs.to).toMatchObject({ source: "nbp", asOf: DATE, carriedDays: 0 });
+
+    const toPivot = readCrossRate(s.ledger.replica.db, { from: PLN, to: USD, date: DATE });
+    expect(toPivot?.legs.from).toMatchObject({ source: "nbp", asOf: DATE, carriedDays: 0 });
+    expect(toPivot?.legs.to).toMatchObject({ source: "pivot", asOf: DATE, carriedDays: 0 });
+  });
+
+  it("H2: keeps a manual leg's own provenance separate from the other leg's", () => {
+    // EUR's leg gets a manual correction; PLN's stays the automatic `nbp`
+    // quote seeded in `beforeEach`. Each leg reports its own source, never
+    // borrowed onto the other.
+    s.ledger.replica.db
+      .update(fxRates)
+      .set({ source: "manual" })
+      .where(and(eq(fxRates.base, USD), eq(fxRates.quote, EUR), eq(fxRates.date, DATE)))
+      .run();
+
+    const cross = readCrossRate(s.ledger.replica.db, { from: EUR, to: PLN, date: DATE });
+    expect(cross?.legs.from.source).toBe("manual");
+    expect(cross?.legs.to.source).toBe("nbp");
   });
 
   it("is undefined when either leg has no rate at all", () => {

@@ -41,6 +41,17 @@ describe("parseAmount — comma decimal", () => {
     expect(parsed).toBe("0.10");
   });
 
+  /**
+   * M3 — "5," used to normalize to "5.", a shape `zMoney` refuses (its regex
+   * requires a digit after the mark once one is typed). Still mid-entry, the
+   * same "not yet a number" state `"."` alone already returns `null` for.
+   */
+  it("refuses a trailing separator rather than a shape zMoney would reject", () => {
+    expect(parseAmount("5,")).toBeNull();
+    expect(parseAmount("5.")).toBeNull();
+    expect(parseAmount("-5,")).toBeNull();
+  });
+
   it("renders with a currency affix", () => {
     render(<AmountField label="Amount" currency="PLN" onChange={noop} />);
     expect(screen.getByText("PLN")).toBeDefined();

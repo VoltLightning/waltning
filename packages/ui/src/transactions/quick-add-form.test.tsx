@@ -121,6 +121,13 @@ it("opens the account picker carrying the amount typed so far", () => {
   expect(onOpenAccountPicker).toHaveBeenCalledWith({ amount: "10" });
 });
 
+// L — a trailing-separator seed ("1," mid-way to "1,50") is fine: `AmountField`
+// keeps it on screen verbatim, unparsed, the same as anything else typed.
+it("seeds a trailing-separator initial amount onto the field verbatim", () => {
+  renderForm({ initialAmount: "1," });
+  expect(screen.getByLabelText("Amount")).toHaveProperty("value", "1,");
+});
+
 it("shows the picked account on the chip, from the controlled accountId", () => {
   renderForm({ accountId: "account-a" });
   expect(screen.getByRole("button", { name: "Account: Bank A · PLN" })).toBeDefined();

@@ -468,12 +468,17 @@ export type PhoneRate = {
  * is already triangulated, pivot-per-unit for this specific pair, the same
  * direction `TransferAmount`'s own `referenceRate` prop and `margin`'s
  * `fxRate`/`toFxRate` take.
+ *
+ * H2 — `legs`, not a flattened `source`/`asOf`/`carriedDays`: those three
+ * used to be assembled from whichever leg was "worse" and whichever was
+ * "manual" — not always the same row — inside `readCrossRate` itself. Each
+ * leg's own provenance travels here whole; `crossRateProvenance`
+ * (`ledger/cross-rate-provenance.ts`) is where a screen turns the two into
+ * one honest display fact.
  */
 export type PhoneCrossRate = {
   rate: money.PivotPerUnit;
-  source: string;
-  asOf: AccountingDate;
-  carriedDays: number;
+  legs: { from: PhoneRate; to: PhoneRate };
 };
 
 /** S17 §8's coverage figure, per currency — `readCoverage`'s answer. */

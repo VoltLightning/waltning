@@ -70,6 +70,10 @@ export type SettleSheetReferenceRate = {
   rate: money.PivotPerUnit;
   source: string;
   date: string;
+  /** H2 — `crossRateProvenance`'s own carry, for the same leg `source`/`date` name. */
+  carriedDays: number;
+  /** H2 — true when either leg is a person's own correction, independent of which leg's `date` is shown. */
+  manual: boolean;
 };
 
 export type SettleSheetField = "amount" | "discharges";
@@ -396,6 +400,8 @@ export function SettleSheet({
                   rate: referenceRate.rate,
                   source: referenceRate.source,
                   date: referenceRate.date,
+                  carriedDays: referenceRate.carriedDays,
+                  manual: referenceRate.manual,
                 },
               }
             : {})}
