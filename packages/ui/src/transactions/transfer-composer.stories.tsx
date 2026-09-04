@@ -9,6 +9,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { pivotPerUnit } from "@waltning/core/money";
+import { GroundPanel } from "../shell/card";
 import { TransferComposer } from "./transfer-composer";
 
 function noop() {}
@@ -41,6 +42,17 @@ const meta = {
     onNoteChange: noop,
     onCancel: noop,
   },
+  // `transfer-screen.tsx` never renders `TransferComposer` flush to the
+  // device edge — it wraps it in its own `space.x5` horizontal clearance,
+  // the same clearance `GroundPanel` gives every other screen body
+  // (`today-frame.tsx`). Flush here would be a baseline nobody actually sees.
+  decorators: [
+    (Story) => (
+      <GroundPanel>
+        <Story />
+      </GroundPanel>
+    ),
+  ],
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof TransferComposer>;
 

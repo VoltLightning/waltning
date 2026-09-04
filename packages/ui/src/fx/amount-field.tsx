@@ -117,18 +117,22 @@ function HeroAmountField({
   const display = value === "" ? "0" : value.replace(",", mark);
   const accessibilityLabel = t("common.fieldValue", { field: label, value: display });
 
-  const figure = (
-    <View
-      accessibilityRole={onPress === undefined ? "text" : undefined}
-      accessibilityLabel={accessibilityLabel}
-      style={[styles.heroField, active ? styles.heroFieldActive : null]}
-    >
-      <Text style={styles.heroValue}>{display}</Text>
-      {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
-    </View>
-  );
-
-  if (onPress === undefined) return figure;
+  // Un-pressable: this `View` is the whole control, so it carries the label.
+  // Pressable: the `Pressable` below is the control instead, and a second
+  // `accessibilityLabel` here would have a screen reader announce "Amount:
+  // 48.90" twice for the one tap target.
+  if (onPress === undefined) {
+    return (
+      <View
+        accessibilityRole="text"
+        accessibilityLabel={accessibilityLabel}
+        style={[styles.heroField, active ? styles.heroFieldActive : null]}
+      >
+        <Text style={styles.heroValue}>{display}</Text>
+        {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
+      </View>
+    );
+  }
 
   return (
     <Pressable
@@ -137,7 +141,10 @@ function HeroAmountField({
       accessibilityState={{ selected: active }}
       onPress={onPress}
     >
-      {figure}
+      <View style={[styles.heroField, active ? styles.heroFieldActive : null]}>
+        <Text style={styles.heroValue}>{display}</Text>
+        {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
+      </View>
     </Pressable>
   );
 }

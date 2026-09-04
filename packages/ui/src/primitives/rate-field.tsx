@@ -20,7 +20,8 @@
 
 import * as money from "@waltning/core/money";
 import { Text, TextInput, View } from "react-native";
-import { useT } from "../i18n/provider";
+import { decimalMark } from "../i18n/locales.ts";
+import { useLocale, useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../tokens.ts";
@@ -64,7 +65,13 @@ export function RateField({
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
-  const displayed = money.toMoney(value, decimals);
+  const mark = decimalMark(useLocale());
+  // `money.forDisplay` — the same formatting `<Amount>` renders every figure
+  // through (`fx/amount.tsx`) — takes a `Money`, and `value` here is also
+  // legally a branded `Rate` (`PivotPerUnit` | `UnitsPerPivot`); `toMoney`
+  // is the same normalization step this component always ran, just no
+  // longer the last one.
+  const displayed = money.forDisplay(money.toMoney(value, decimals), decimals, mark);
 
   return (
     <View style={styles.block}>
@@ -88,7 +95,7 @@ export function RateField({
       {reference === undefined ? null : (
         <Text style={styles.reference}>
           {t("transactions.referenceRate", {
-            rate: money.toMoney(reference.rate, decimals),
+            rate: money.forDisplay(money.toMoney(reference.rate, decimals), decimals, mark),
             source: reference.source,
             date: reference.date,
           })}

@@ -32,7 +32,8 @@ import { useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { AmountField } from "../fx/amount-field";
-import { useT } from "../i18n/provider";
+import { decimalMark } from "../i18n/locales.ts";
+import { useLocale, useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { RadioGroup, type RadioGroupProps } from "../primitives/radio";
@@ -111,6 +112,18 @@ function decimalsOf(list: readonly { currency: string; decimals?: number }[], cu
   return list.find((row) => row.currency === currency)?.decimals ?? 2;
 }
 
+/**
+ * An account's own label — name plus currency, **once**.
+ *
+ * The placeholder convention already bakes the currency into the name
+ * (`Cash · PLN`), so appending it unconditionally read `Cash · PLN · PLN`
+ * (S14 §3's own mockup shows the field with the name alone). This only
+ * appends when the name does not already end with it.
+ */
+function accountLabel(name: string, currency: string): string {
+  return name.endsWith(`· ${currency}`) ? name : `${name} · ${currency}`;
+}
+
 /** `HH:mm`, the device's own locale — `formatClockTime`'s own twin (`quick-add-composer.tsx`). */
 function formatClockTime(at: number): string {
   return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(
@@ -143,6 +156,7 @@ export function SettleSheet({
 }: SettleSheetProps) {
   const t = useT();
   const styles = useStyles();
+  const mark = decimalMark(useLocale());
   const handleActivateAmount = useCallback(
     () => onActiveFieldChange("amount"),
     [onActiveFieldChange],
@@ -180,6 +194,15 @@ export function SettleSheet({
       : money.sub(picked.balance, money.mul(dischargesAmount, sign));
   const residualSign = money.cmp(residual, money.ZERO);
   const overSettled = sign !== 0 && residualSign !== 0 && residualSign !== sign;
+  // P5 — direction in words, never by sign alone. `residual` above stays
+  // signed for the arithmetic; everything rendered reads its magnitude and
+  // states the direction separately.
+  const residualDirection =
+    residualSign === 0
+      ? undefined
+      : residualSign > 0
+        ? t("counterparties.theyOweYou")
+        : t("counterparties.youOweThem");
 
   const dischargesDecimals = decimalsOf(balances, dischargesCurrency ?? "");
 
@@ -188,9 +211,9 @@ export function SettleSheet({
       const rowSign = money.cmp(row.balance, money.ZERO);
       const direction =
         rowSign > 0 ? t("counterparties.theyOweYou") : t("counterparties.youOweThem");
-      return `${row.currency} · ${money.forDisplay(money.abs(row.balance), row.decimals ?? 2)} · ${direction}`;
+      return `${row.currency} · ${money.forDisplay(money.abs(row.balance), row.decimals ?? 2, mark)} · ${direction}`;
     },
-    [t],
+    [t, mark],
   );
   const balanceHint = useMemo(
     () =>
@@ -217,7 +240,7 @@ export function SettleSheet({
 
   const accountOptions: readonly SelectOption[] = accounts.map((row) => ({
     value: row.id,
-    label: `${row.name} · ${row.currency}`,
+    label: accountLabel(row.name, row.currency),
   }));
 
   const intoLabel = sign < 0 ? t("transactions.from") : t("counterparties.into");
@@ -318,11 +341,16 @@ export function SettleSheet({
                 ? t("counterparties.resultRemainingEstimated")
                 : t("counterparties.resultRemaining")}
             </Text>
-            <Amount
-              value={residual}
-              currency={dischargesCurrency ?? ""}
-              decimals={dischargesDecimals}
-            />
+            <View style={styles.resultValueGroup}>
+              <Amount
+                value={money.abs(residual)}
+                currency={dischargesCurrency ?? ""}
+                decimals={dischargesDecimals}
+              />
+              {residualDirection === undefined ? null : (
+                <Text style={styles.direction}>{residualDirection}</Text>
+              )}
+            </View>
           </View>
           {!stale || stampedAt === undefined ? null : (
             <Text style={styles.staleLine}>
@@ -332,8 +360,9 @@ export function SettleSheet({
           {!overSettled ? null : (
             <Text style={styles.staleLine}>
               {t("counterparties.overSettled", {
-                amount: `${money.forDisplay(money.abs(residual), dischargesDecimals)} ${dischargesCurrency ?? ""}`,
+                amount: `${money.forDisplay(money.abs(residual), dischargesDecimals, mark)} ${dischargesCurrency ?? ""}`,
               })}
+              {residualDirection === undefined ? null : ` · ${residualDirection}`}
             </Text>
           )}
         </View>
@@ -378,5 +407,8 @@ const useStyles = makeStyles((theme) => ({
   },
   resultRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   resultLabel: { color: theme.textMuted, ...text.ui("body") },
+  /** The magnitude and its direction — P5's "in words", stacked so the sign is never the only signal. */
+  resultValueGroup: { alignItems: "flex-end", gap: space.xxs },
+  direction: { color: theme.textMuted, ...text.ui("caption") },
   staleLine: { color: theme.assertedText, ...text.ui("caption") },
 }));

@@ -10,6 +10,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { pivotPerUnit, toMoney } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
+import { I18nProvider } from "../i18n/provider";
 import { SettleSheet, type SettleSheetProps } from "./settle-sheet";
 
 const BASE_PROPS: SettleSheetProps = {
@@ -51,7 +52,10 @@ it("derives the rate from the two typed amounts and shows the reference beside i
 it("states the residual before commit — the S14 worked example", () => {
   renderSheet();
   expect(screen.getByText((_, element) => element?.textContent === "50.00 EUR")).toBeDefined();
-  expect(screen.getByText((_, element) => element?.textContent === "-70.00 EUR")).toBeDefined();
+  // P5 — direction in words, never by sign alone: the magnitude, not a
+  // negative figure, plus which way it runs.
+  expect(screen.getByText((_, element) => element?.textContent === "70.00 EUR")).toBeDefined();
+  expect(screen.getByText("you owe them")).toBeDefined();
 });
 
 it("names the counterparty in the sheet's own title", () => {
@@ -77,14 +81,15 @@ it("offers a real choice once a second balance is open", () => {
   expect(screen.getByRole("radio", { name: /GBP · 60.00 · they owe you/ })).toBeDefined();
 });
 
-it("flips to over-settlement rather than clamping at zero", () => {
-  // Owe 120 EUR, discharge 150 — the balance flips the other way.
+it("flips to over-settlement rather than clamping at zero, and says which way in words", () => {
+  // Owe 120 EUR, discharge 150 — the balance flips the other way: they now
+  // owe 30 EUR.
   renderSheet({
     dischargesRaw: "150",
     amountRaw: "642,15",
     balances: [{ currency: "EUR", balance: toMoney("-120"), decimals: 2 }],
   });
-  expect(screen.getByText(/Becomes 30.00 EUR the other way\./)).toBeDefined();
+  expect(screen.getByText(/Becomes 30.00 EUR the other way\..*they owe you/)).toBeDefined();
 });
 
 it("marks the result an estimate and stamps it once the snapshot is older than the session", () => {
@@ -115,4 +120,29 @@ it("routes a tap on either hero amount through onActiveFieldChange", () => {
   renderSheet({ onActiveFieldChange });
   fireEvent.click(screen.getByRole("button", { name: "Discharges: 50" }));
   expect(onActiveFieldChange).toHaveBeenCalledWith("discharges");
+});
+
+it("does not double the currency when the account name already carries it", () => {
+  // `Cash · PLN`'s own name already ends `· PLN` (the placeholder
+  // convention) — the field must show it once, not `Cash · PLN · PLN`.
+  renderSheet();
+  expect(screen.getByText("Cash · PLN")).toBeDefined();
+  expect(screen.queryByText("Cash · PLN · PLN")).toBeNull();
+});
+
+it("still appends the currency when the account name does not carry it", () => {
+  renderSheet({
+    accounts: [{ id: "acc-other", name: "Household", currency: "USD" }],
+    accountId: "acc-other",
+  });
+  expect(screen.getByText("Household · USD")).toBeDefined();
+});
+
+it("renders every figure through the locale's own decimal mark — Polish", () => {
+  render(
+    <I18nProvider locale="pl">
+      <SettleSheet {...BASE_PROPS} />
+    </I18nProvider>,
+  );
+  expect(screen.getByText(/EUR · 120,00 · /)).toBeDefined();
 });
