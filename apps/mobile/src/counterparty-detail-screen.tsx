@@ -34,7 +34,10 @@ import {
   resolveCounterpartyFigures,
   settleResidualDirection,
 } from "@waltning/client/counterparties/counterparty-figures";
-import type { PhoneSearchTransaction } from "@waltning/client/ledger/create-phone-ledger";
+import type {
+  PhoneCapturableAccount,
+  PhoneSearchTransaction,
+} from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useCounterpartyHistory } from "@waltning/client/ledger/use-counterparty-history";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -42,6 +45,7 @@ import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { type FieldError, mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
+import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { BalanceLedger } from "@waltning/ui/counterparties/balance-ledger";
 import { CounterpartyCard } from "@waltning/ui/counterparties/counterparty-card";
 import { SettleSheet, type SettleSheetField } from "@waltning/ui/counterparties/settle-sheet";
@@ -143,6 +147,32 @@ function MergeRow({ mergeId, loserName, movedCount, onUnmerge }: MergeRowProps) 
   );
 }
 
+/** The replica's account onto `AccountPicker`'s own choice shape — grouped, kind-ordered, S16 §3, `transfer-screen.tsx`'s own `toPickerChoice` matched rather than shared. */
+function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
+  return {
+    id: account.id,
+    name: account.name,
+    currency: account.currency,
+    decimals: account.decimals,
+    kind: account.kind,
+    capturable: account.capturable,
+    ownership: account.ownership,
+    groupId: account.groupId,
+    archived: account.archived,
+  };
+}
+
+/**
+ * The escape to account creation — unlike `quick-add-screen.tsx`'s, this
+ * settle draft has no restorable route shape (`parseNewAccountRoute` only
+ * carries `quick-add`'s own amount/account pair), so creating an account
+ * mid-settle lands on the accounts list rather than resuming this draft —
+ * the same gap `transfer-screen.tsx`'s own escape names.
+ */
+function handleCreateAccountFromCounterparty() {
+  router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
+}
+
 /**
  * `settle_debt`'s two refusals (`settleDebtRefusal`, `create-phone-ledger.ts`),
  * resolved through `useT()` the same way `quick-add-screen.tsx`'s own
@@ -179,6 +209,10 @@ export default function CounterpartyDetail() {
   const [settleAccountId, setSettleAccountId] = useState<string | null>(null);
   const [settleNote, setSettleNote] = useState("");
   const [settleFieldErrors, setSettleFieldErrors] = useState<ReturnType<typeof mapFieldErrors>>();
+  // `AccountPicker` (`accounts/`) is a sibling domain — `counterparties/` may
+  // not import it, so this screen opens it, the same split `transfer-screen.tsx`
+  // already draws for its own keypad-driven sheet.
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
   // H1 — at least one `refresh()` has completed, success or failure. Gates
   // the loading branch below, which must render before anything derived from
@@ -218,16 +252,30 @@ export default function CounterpartyDetail() {
   // S13's overflow — every merge still live into this record (S15 §9.2).
   const merges = rawId ? ledger.listCounterpartyMerges(id<"counterparties">(rawId)) : [];
 
-  // The sheet's own capturable accounts (S14 §3's "Into"/"From" picker) —
-  // the same filter `quick-add-screen.tsx` applies before offering a choice.
+  // The sheet's own account labels (name + currency, for the Chip and the
+  // AmountField's own currency) — every account, uncapturable ones included:
+  // `AccountPicker` (below) is what actually offers the choice now (S14 §3),
+  // and it never hides one (S05).
   const settleAccounts = useMemo(
     () =>
-      snapshot.accounts
-        .filter((account) => account.capturable)
-        .map((account) => ({ id: account.id, name: account.name, currency: account.currency })),
+      snapshot.accounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        currency: account.currency,
+      })),
     [snapshot.accounts],
   );
   const settleAccount = settleAccounts.find((account) => account.id === settleAccountId);
+  // `AccountPicker` (`accounts/`) is a sibling domain — the same rule
+  // `transfer-screen.tsx` already draws for its own two-leg picker.
+  const settlePickerAccounts = useMemo(
+    () => snapshot.accounts.map(toPickerChoice),
+    [snapshot.accounts],
+  );
+  const settlePickerGroups = useMemo(
+    () => snapshot.groups.map((accountGroup) => ({ id: accountGroup.id, name: accountGroup.name })),
+    [snapshot.groups],
+  );
   // Decimals live on the snapshot's own account, not `SettleSheetAccount`
   // (a plain `{id, name, currency}` shape the sheet itself declares).
   const settleAccountDecimals =
@@ -270,6 +318,12 @@ export default function CounterpartyDetail() {
     setSettleVisible(true);
   }, [group, figures]);
   const handleDismissSettle = useCallback(() => setSettleVisible(false), []);
+  const handleOpenAccountPicker = useCallback(() => setAccountPickerOpen(true), []);
+  const handleDismissAccountPicker = useCallback(() => setAccountPickerOpen(false), []);
+  const handlePickAccount = useCallback((accountId: string) => {
+    setSettleAccountId(accountId);
+    setAccountPickerOpen(false);
+  }, []);
   const handleDismissSettledToast = useCallback(() => setSettledToastMessage(null), []);
   const handleDismissUnmergeToast = useCallback(() => setUnmergeToast(false), []);
   const handleSettleKey = useCallback(
@@ -465,7 +519,7 @@ export default function CounterpartyDetail() {
         activeField={settleActiveField}
         onActiveFieldChange={setSettleActiveField}
         accountId={settleAccountId}
-        onAccountChange={setSettleAccountId}
+        onOpenAccountPicker={handleOpenAccountPicker}
         {...(settleReferenceRate ? { referenceRate: settleReferenceRate } : {})}
         note={settleNote}
         onNoteChange={setSettleNote}
@@ -474,6 +528,16 @@ export default function CounterpartyDetail() {
         onDismiss={handleDismissSettle}
         onSettle={handleSettleSave}
         {...(settleFieldErrors === undefined ? {} : { fieldErrors: settleFieldErrors })}
+      />
+
+      <AccountPicker
+        visible={accountPickerOpen}
+        accounts={settlePickerAccounts}
+        groups={settlePickerGroups}
+        accountId={settleAccountId}
+        onPick={handlePickAccount}
+        onCreateAccount={handleCreateAccountFromCounterparty}
+        onDismiss={handleDismissAccountPicker}
       />
 
       {settledToastMessage === null ? null : (

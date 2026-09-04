@@ -461,8 +461,11 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
     const sheet = within(screen.getByLabelText("Settling with Nina"));
+    // `AccountPicker` (`accounts/`) is a sibling domain — the screen composes
+    // it, so its tile lives outside the sheet's own labelled region, the same
+    // way `transfer-screen.test.tsx`'s own `pickFrom` drives it.
     fireEvent.click(sheet.getByRole("button", { name: "Into" }));
-    fireEvent.click(sheet.getByRole("radio", { name: "Cash · PLN" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
 
     fireEvent.click(sheet.getByRole("button", { name: "Amount: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
