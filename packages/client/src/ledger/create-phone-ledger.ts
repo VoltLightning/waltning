@@ -1,4 +1,5 @@
 import { fold } from "@waltning/core/capture/names";
+import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
 import { type Id, type IdTable, id } from "@waltning/core/id";
 import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
@@ -355,6 +356,8 @@ export type PhoneLedgerPort = {
   listCategoryTree: () => readonly PhoneCategoryNode[];
   /** `includeArchived` — default `false`, same toggle as `listAccounts`. */
   listCounterparties: (options?: { includeArchived?: boolean }) => readonly PhoneCounterparty[];
+  /** D2's reader, on demand — D4b's proposal recomputes it only when the typed payee changes. */
+  listPayeeHistory: () => readonly PhonePayeeHistoryRow[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
@@ -466,6 +469,9 @@ export type PhonePeriodSpend = money.PeriodSpendRow;
 /** §8, minus FIFO attribution — C2's unsettled banner. See `money.unsettledClearing`. */
 export type PhoneClearingAccount = money.ClearingAccountRow;
 
+/** D2's history, read on demand for D4b's proposal — see `proposeCategory`. */
+export type PhonePayeeHistoryRow = PayeeHistoryRow;
+
 export type PhoneLedgerSnapshot = {
   accounts: readonly PhoneCapturableAccount[];
   /**
@@ -528,6 +534,15 @@ export type QuickAddDraft = {
   categoryId: string | null;
   /** `AccountingDate`'s shape (`YYYY-MM-DD`), defaulted by the form to today. */
   date: string;
+  /**
+   * D4b's chip. **Optional**, not merely defaulted — `QuickAddForm`'s own
+   * draft (`quick-add-form.tsx`, structurally distinct from this type) has no
+   * payee field at all, and both it and D4b's composer call this same
+   * controller method. `createTransactionInput`'s own `payee` already
+   * defaults to `""`, so an absent field here is the same "not yet typed"
+   * either path can mean.
+   */
+  payee?: string;
   note: string;
   isBusiness: boolean;
   counterpartyId: string | null;
@@ -782,6 +797,11 @@ export type PhoneLedgerController = {
    * opened with.
    */
   balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
+  /**
+   * D4b's proposal, on demand — the composer calls this only when the typed
+   * payee's fold changes, not on every keystroke or every `refresh()`.
+   */
+  listPayeeHistory: () => readonly PhonePayeeHistoryRow[];
   /**
    * S10, on demand — like `readPeriodSpend` above, a query rather than a
    * snapshot field: a filtered, paged list is asked for, not held for every
@@ -1183,6 +1203,7 @@ export function createPhoneLedger(
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
+    listPayeeHistory: () => port.listPayeeHistory(),
     searchTransactions: (filter, cursor) =>
       port.searchTransactions(
         {
@@ -1861,6 +1882,7 @@ export function createPhoneLedger(
           amountOriginal: normalized,
           currency: account.currency,
           categoryId: draft.categoryId ?? undefined,
+          payee: draft.payee ?? "",
           note: draft.note,
           isBusiness: draft.isBusiness,
           counterpartyId: draft.counterpartyId ?? undefined,

@@ -1,3 +1,4 @@
+import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type {
@@ -119,6 +120,7 @@ import {
   type LocalTransactionRow,
 } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
+import { readPayeeHistory } from "./transactions/read-payee-history.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
 import { type LocalTransactionDetail, readTransaction } from "./transactions/read-transaction.ts";
@@ -174,6 +176,11 @@ export type LocalLedgerSession = {
   listCategoryTree: () => readonly LocalCategory[];
   /** `includeArchived` — default `false`, same toggle as `listAccounts`. */
   listCounterparties: (options?: ReadCounterpartiesOptions) => readonly LocalCounterparty[];
+  /**
+   * D2's own reader, exposed here for D4b's proposal — one row per distinct
+   * folded payee, its most recent category. See `readPayeeHistory`.
+   */
+  listPayeeHistory: () => readonly PayeeHistoryRow[];
   /** §3, per currency — C2's hero (`DualTotal`), not the phone-preview's single subtotal. */
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
@@ -371,6 +378,7 @@ export function createLocalLedgerSession<TRun>(
     listCategoryTree: () =>
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
     listCounterparties: (options) => readCounterparties(requireOpen().replica.db, options),
+    listPayeeHistory: () => readPayeeHistory(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),

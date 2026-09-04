@@ -446,6 +446,31 @@ describe("the phone ledger session", () => {
     session.close();
   });
 
+  it("listPayeeHistory exposes D2's reader — D4b's proposal calls it", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    session.createTransaction(expenseInput(), capture);
+    const categoryId = id<"categories">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    const sqlite = new Database(paths.replica);
+    sqlite
+      .prepare(
+        "insert into categories (id, parent_id, name, kind, is_leaf, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(categoryId, null, "Groceries", "expense", 1, 0, 0);
+    sqlite.close();
+
+    session.categorizeBatch({ transactionIds: [transactionId], categoryId }, capture);
+    session.updateTransaction(
+      { id: transactionId, version: 2, patch: { payee: "Corner shop" } },
+      capture,
+    );
+
+    expect(session.listPayeeHistory()).toEqual([
+      { payee: "Corner shop", categoryId, date: accountingDate("2026-08-23") },
+    ]);
+    session.close();
+  });
+
   it("reset deletes an unmaterialised outbox entry too", () => {
     const session = createLocalLedgerSession(options());
     const sqlite = new Database(paths.outbox);
