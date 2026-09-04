@@ -2043,6 +2043,7 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

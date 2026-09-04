@@ -114,6 +114,15 @@ function fakeController(overrides: {
     changePivot: vi.fn(),
     setManualRate: overrides.setManualRate ?? vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: overrides.clearManualRate ?? vi.fn(() => ({ deleted: 0 })),
+    listCounterpartyBalances: vi.fn(() => []),
+    listFullCategoryTree: vi.fn(() => []),
+    listCategoryUsage: vi.fn(() => new Map()),
+    readCategoryReferenceCounts: vi.fn(() => ({ transactions: 0, lines: 0, rules: 0 })),
+    renameCategory: vi.fn(),
+    reparentCategory: vi.fn(),
+    convertLeafGroup: vi.fn(),
+    mergeCategories: vi.fn(),
+    archiveCategory: vi.fn(),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

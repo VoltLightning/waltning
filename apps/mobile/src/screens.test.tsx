@@ -514,6 +514,7 @@ describe("Today", () => {
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
