@@ -238,6 +238,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "a catch binding — the e2e probe reports whatever a failed fetch threw, and narrowing it would mean guessing at the shape of a failure it exists to discover",
   },
+  "tools/e2e/specs/00-smoke.spec.ts": {
+    max: 2,
+    why: "the same catch binding as smoke.ts's own reasonOf, restated as a Playwright test — one in reasonOf itself, one holding whatever create_counterparty's mutate() threw before it is narrowed by an instanceof guard, not a cast",
+  },
   "packages/client/src/transport/field-errors.ts": {
     max: 1,
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
