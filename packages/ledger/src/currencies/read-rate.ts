@@ -8,9 +8,16 @@
  * reference figures.
  *
  * C1/C2 — `create-transaction.executor.ts` prices a capture through
- * `readNearestRate` instead, which shares `readRate`'s carry-forward walk but
- * not its cap: a capture is never refused for being far from the nearest
- * held rate, only for the pair having no rate at all (`SPEC.md` §7.6).
+ * `readNearestRate` instead, which asks that same carry-forward question
+ * *first* — `SPEC.md` §7.6's weekend/holiday row, *"carry forward the last
+ * published rate"*, and §7.7's *"the reporting jurisdiction values at the
+ * preceding business day"* — and falls back to the nearest real-source row on
+ * either side of `date` only when carry-forward has nothing: no row
+ * at-or-before `date`, the carry past the ten-day cap, or an orphaned
+ * carried row with no locatable origin. That fallback is §7.6's own
+ * *"when no rate exists at all"* sentence, not the general rule — a capture
+ * is never refused for being far from the nearest held rate, only for the
+ * pair having no rate at all.
  *
  * **`fx_rates` is stored one way only**, `(base = pivot, quote = X)`, in
  * units-per-pivot (§4) — every caller states `base` and `quote` explicitly
@@ -158,6 +165,20 @@ export type NearestRate = {
    * future diagnostic (S18/S30) can surface it without a second query.
    */
   daysAway: number;
+  /**
+   * H2 — true when this rate is the one **in effect** on `date`: an exact
+   * real-source row, or a `carried_forward` row tracing to a real origin
+   * within the ten-day cap (step 1 below, `readRate`'s own answer, §7.6's
+   * weekend/holiday row). False when step 2 supplied it instead — the
+   * nearest real-source row on either side, reached only because
+   * carry-forward had nothing (§7.6's *"when no rate exists at all"*).
+   *
+   * `create-transaction.executor.ts` reads this directly into
+   * `fx_rate_estimated`: a weekend or next-day capture priced by step 1 is
+   * not an estimate, even though `asOf !== date`; only a row step 2 had to
+   * reach for is.
+   */
+  inEffect: boolean;
 };
 
 /**
@@ -168,34 +189,61 @@ export type NearestRate = {
  * with `fx_rate_estimated` set, per `SPEC.md` §7.6 and `architecture/01`/`06`
  * ("a missing rate must never cost you the transaction").
  *
- * **Now the same refusal as `readCurrencies.capturable`, exactly** — both
- * answer "does this pair have at least one real-source row", `capturable`
- * date-blind and this one nearest `date`. H1/H2 made that true: this
- * compares two *real-source* candidates rather than picking the nearest row
- * of any source and only then walking a loser back to its origin, so a
- * `carried_forward` row — orphaned or not — is never the thing being
- * compared or returned. A pair `capturable` marks `true` always has a
- * real-source row here too, on some date.
+ * **The round-4 correction: carry-forward wins before any distance is ever
+ * compared.** §7.6's table gives *weekend or holiday* its own row — *"carry
+ * forward the last published rate"* — and §7.7 has the reporting
+ * jurisdiction valuing at *the preceding business day*. Neither is a
+ * distance comparison, and the *"nearest in calendar days on either side"*
+ * sentence sits only under §7.6's **next** heading, *"when no rate exists at
+ * all"* — the dead-source fallback, not the ordinary rule. So this now
+ * answers in two steps, never one comparison:
  *
- * **H1 — nearest by calendar distance on both sides, ties to before.**
- * Queries the nearest **real-source** row at-or-before `date` (`findOrigin`,
- * the same query `readRate` uses to walk a carried row back to its origin)
- * and the nearest **real-source** row at-or-after `date`
- * (`source <> 'carried_forward'`, ascending), then compares the two with
- * `daysBetween` and keeps whichever is closer — the before row on a tie,
- * preferring the rate already in effect on `date` over one that only takes
- * effect later. Either side may hold nothing (a currency just added to the
- * ledger has nothing before its first synced quote; one whose source went
- * quiet has nothing after); this refuses only when neither side holds a
- * real-source row at all — never because the *nearer* candidate happened to
- * be a carried copy, which is what used to make this return a farther row
- * than the one it had just measured as closer (H1), or refuse outright
- * although a real row existed on the other side (H2).
+ * 1. **`readRate`'s own answer.** A row at-or-before `date` whose origin is
+ *    real and within the ten-day cap — an exact real-source row, a
+ *    `carried_forward` row that traces to a real origin, or a real row
+ *    itself, all at-or-before `date`. When `readRate` has an answer, *that
+ *    answer is the nearest rate*: a carried Sunday's rate is Friday's,
+ *    whatever real quote happens to sit fewer calendar days away on the
+ *    other side. `NearestRate.inEffect` is `true` here.
+ * 2. **Only when step 1 has nothing** — no row at-or-before `date` at all,
+ *    the carry past the ten-day cap, or an orphaned carried row with no
+ *    locatable origin — the nearest **real-source** row on either side of
+ *    `date` by `daysBetween`, ties to before. This is §7.6's *"when no rate
+ *    exists at all"* fallback, and `NearestRate.inEffect` is `false`.
+ *
+ * **Still the same refusal as `readCurrencies.capturable`, exactly** — both
+ * answer "does this pair have at least one real-source row", `capturable`
+ * date-blind and this one nearest `date`. Step 2 compares two *real-source*
+ * candidates rather than picking the nearest row of any source and walking a
+ * loser back to its origin, so a `carried_forward` row — orphaned or not —
+ * is never the thing step 2 compares or returns. A pair `capturable` marks
+ * `true` always has a real-source row here too, on some date.
  */
 export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
   db: Queryable<TRun, TSchema>,
   { base, quote, date }: { base: CurrencyCode; quote: CurrencyCode; date: AccountingDate },
 ): NearestRate | undefined {
+  // Step 1 — carry-forward first (§7.6's weekend/holiday row, §7.7's
+  // "preceding business day"). `readRate` already walks a carried row back
+  // to a real origin and caps the result at ten days; when it answers, that
+  // answer is the rate in effect on `date`, not merely the closest one.
+  const carried = readRate(db, { base, quote, date });
+  if (carried) {
+    return {
+      rate: carried.rate,
+      source: carried.source,
+      asOf: carried.asOf,
+      daysAway: carried.carriedDays,
+      inEffect: true,
+    };
+  }
+
+  // Step 2 — §7.6's "when no rate exists at all": step 1 found nothing to
+  // carry forward, so compare the nearest real-source row on either side of
+  // `date`, ties to before. `before` re-runs the same real-source walk
+  // `readRate` used internally (it necessarily failed there too — no row
+  // at-or-before `date`, the cap, or an unlocatable origin), and `after` is
+  // the nearest real-source row strictly at-or-after `date`.
   const before = findOrigin(db, { base, quote, asOf: date });
 
   const [after] = db
@@ -214,10 +262,9 @@ export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
     .all();
 
   // H1 — compare distances rather than always preferring `before`: a row 26
-  // days after `date` is nearer than one from 2020, and the newest-before
-  // pick used to win regardless of how far it was. Tie (equal distance on
+  // days after `date` is nearer than one from 2020. Tie (equal distance on
   // both sides) goes to `before`. Both candidates are already real-source
-  // rows (H1/H2), so the winner needs no further walk to an origin.
+  // rows, so the winner needs no further walk to an origin.
   const origin =
     before && after
       ? daysBetween(before.date, date) <= daysBetween(date, after.date)
@@ -234,6 +281,7 @@ export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
     // origin can land on either side of `date`, so this is the distance,
     // never the signed offset.
     daysAway: Math.abs(daysBetween(origin.date, date)),
+    inEffect: false,
   };
 }
 
@@ -267,15 +315,6 @@ export type LocalCoverage = {
    * quote. Floored while incomplete, so 2,075/2,080 reads `99%`, never `100%`.
    */
   coveragePct: number;
-  /**
-   * L7 — rows held *past* today (S18 §7's "set a range" allows a future end
-   * date), excluded from `days`/`calendarDays`/`coveragePct` alike (M4) so
-   * they cannot inflate a figure `calendarDays` only counts through today.
-   * `CoverageTag` reads this instead when `days === 0`: a currency with only
-   * future rows has held rates set, just none due yet — a different state
-   * from *no rates yet*, and worth saying so rather than reading identically.
-   */
-  futureRows: number;
 };
 
 /**
@@ -319,7 +358,6 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       realDays: 0,
       calendarDays: 0,
       coveragePct: 0,
-      futureRows: 0,
     };
     // No pivot set at all — vacuous, same empty answer as a currency with
     // no rows (`fx_rates` is always stored `base = pivot`, §4).
@@ -330,10 +368,10 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
     // `carried_forward` (H4, S17 §8: *last quote date*, not last held row).
     // `realDays` counts the same real rows (M3) — the decision variable for
     // *complete*, never `days`, which a dead source carried to today fills
-    // without a fresh quote. Every count but `futureN` is scoped `date <=
-    // today` in the `case` itself (M4) rather than the `where` — L7 needs
-    // `futureN`'s complementary count from the very same aggregate, still
-    // one query per currency.
+    // without a fresh quote. Every count is scoped `date <= today` in the
+    // `case` itself (M4) rather than the `where`, so a row past today (which
+    // `set_manual_rate` refuses to write, L2) cannot inflate a figure that
+    // only counts through today.
     const [agg] = db
       .select({
         n: sql<number>`count(case when ${fxRates.date} <= ${today} then 1 else null end)`,
@@ -344,15 +382,13 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
         lastRealDate: sql<
           string | null
         >`max(case when ${fxRates.date} <= ${today} and ${fxRates.source} <> ${CARRIED_FORWARD} then ${fxRates.date} else null end)`,
-        futureN: sql<number>`count(case when ${fxRates.date} > ${today} then 1 else null end)`,
       })
       .from(fxRates)
       .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot)))
       .all();
 
     const days = agg?.n ?? 0;
-    const futureRows = agg?.futureN ?? 0;
-    if (days === 0 || !agg?.firstDate) return { ...empty, futureRows };
+    if (days === 0 || !agg?.firstDate) return empty;
 
     const firstDate = agg.firstDate as AccountingDate;
     const realDays = agg.realN ?? 0;
@@ -379,7 +415,6 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       realDays,
       calendarDays,
       coveragePct,
-      futureRows,
     };
   });
 }

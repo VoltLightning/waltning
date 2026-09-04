@@ -448,6 +448,19 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   // refused immediately. `drizzle-kit generate` cannot express `NOT VALID`,
   // so a future regeneration of that migration must have it hand-added back.
   check("transactions_amount_positive", sql`${t.amountOriginal} > 0 or ${t.type} = 'adjustment'`),
+  // L3 — the CHECK above justifies itself by naming `fx_rate` in
+  // `amount_pivot = amount_original × fx_rate`, but until now nothing
+  // enforced `fx_rate` itself: `fx_rates.rate` has `fx_rates_rate_positive`
+  // (above), and the reciprocal crossing at the write boundary
+  // (`create-transaction.executor.ts`, `money.reciprocal`) refuses a result
+  // that rounds to zero at twelve places (`money.ts`), but neither stops a
+  // zero from landing here through a caller-asserted rate (§7.6 level 1),
+  // which is never derived and so never passes through `reciprocal` at all.
+  // `IS NULL OR` even though the column is `NOT NULL` — the same shape
+  // `fx_rates_rate_positive` and every other nullable-safe CHECK in this
+  // file use, so the constraint reads the same regardless of whether the
+  // column ever becomes optional.
+  check("transactions_fx_rate_positive", sql`${t.fxRate} is null or ${t.fxRate} > 0`),
   check(
     "transactions_transfer_shape",
     sql`(${t.type} = 'transfer') = (${t.toAccountId} is not null)`,

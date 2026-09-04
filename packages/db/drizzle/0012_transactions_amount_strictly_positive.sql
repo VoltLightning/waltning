@@ -27,3 +27,21 @@ BEGIN
     ALTER TABLE "transactions" VALIDATE CONSTRAINT "transactions_amount_positive";
   END IF;
 END $$;
+--> statement-breakpoint
+-- L3 — the CHECK above justifies itself by naming `fx_rate` in
+-- `amount_pivot = amount_original × fx_rate`, but nothing enforced `fx_rate`
+-- itself. Same shape as the amount CHECK above: `NOT VALID` first so an
+-- existing zero (`fx_rates.rate` has always refused one; `transactions` never
+-- did) is grandfathered rather than aborting the migration, then a guarded
+-- `VALIDATE` that flips it to `VALID` immediately on a fresh install.
+ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_fx_rate_positive";--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_fx_rate_positive" CHECK ("transactions"."fx_rate" is null or "transactions"."fx_rate" > 0) NOT VALID;--> statement-breakpoint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM "transactions"
+    WHERE NOT ("fx_rate" is null or "fx_rate" > 0)
+  ) THEN
+    ALTER TABLE "transactions" VALIDATE CONSTRAINT "transactions_fx_rate_positive";
+  END IF;
+END $$;

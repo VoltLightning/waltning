@@ -765,6 +765,143 @@ describe("change_pivot", () => {
     expect(day5?.source).toBe("derived");
     expect(day5?.rate).toBe(money.unitsPerPivot("4")); // 1 PLN = 0.25 USD ⇒ 1 USD = 4 PLN
   });
+
+  // M1/M2 — the origin guard used to gate only the reciprocal: an orphaned
+  // carried bridge dropped `(newPivot, oldPivot)` correctly, but a *different*
+  // real quote sharing that same date still divided by the untraceable
+  // bridge and landed stamped `derived` — a source every reader treats as
+  // real. One rule for the whole date now: an untraceable bridge prices
+  // nothing on its date, not the reciprocal and not any other quote either.
+  it("M1/M2 — an untraceable carried bridge drops the whole date, never rebasing another quote off it", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Day 1 — the bridge to EUR, carried forward with no real (PLN, EUR)
+        // quote anywhere before it: an orphan.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.90"),
+          source: "carried_forward",
+        },
+        // Day 1 — an unrelated real quote sharing the orphan's date. This is
+        // exactly the row the old code wrongly rebased.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        // Day 2 — a real bridge, and a real quote that rebases off it
+        // normally: proof the fix does not over-skip.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.92"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.20"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "EUR" });
+
+    const rows = rateRows();
+    // Day 1 — the orphaned bridge date: nothing at all lands for it, derived
+    // or reciprocal alike (the extended "no orphan" scan: scan the whole
+    // date, not just the reciprocal that used to be checked).
+    expect(rows.filter((r) => r.date === accountingDate("2026-01-01"))).toHaveLength(0);
+    expect(
+      rows.find(
+        (r) => r.base === "EUR" && r.quote === "USD" && r.date === accountingDate("2026-01-01"),
+      ),
+    ).toBeUndefined();
+    expect(
+      rows.find(
+        (r) => r.base === "EUR" && r.quote === "PLN" && r.date === accountingDate("2026-01-01"),
+      ),
+    ).toBeUndefined();
+
+    // Day 2 — the real bridge still prices both the reciprocal and the
+    // unrelated quote sharing its date.
+    const eurToPln = rows.find(
+      (r) => r.base === "EUR" && r.quote === "PLN" && r.date === accountingDate("2026-01-02"),
+    );
+    const eurToUsd = rows.find(
+      (r) => r.base === "EUR" && r.quote === "USD" && r.date === accountingDate("2026-01-02"),
+    );
+    expect(eurToPln?.source).toBe("derived"); // the reciprocal: 1 / 0.92
+    expect(eurToUsd?.source).toBe("derived"); // 0.20 / 0.92
+  });
+
+  // M2 — the mirror case: the bridge is `carried_forward` but *traceable* to
+  // a real origin. It is not an orphan, so it prices both the reciprocal
+  // (itself stamped `carried_forward`, never dropped) and any other quote on
+  // its date — and `readRate` on that reciprocal still walks to a real
+  // origin, exactly as `readRate`'s own contract promises.
+  it("M2 — a traceable carried bridge prices both the rows and a carried reciprocal that still resolves", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Day 1 — the real origin for EUR.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.90"),
+          source: "nbp",
+        },
+        // Day 2 — EUR carried forward from day 1: the bridge for day 2, and
+        // traceable.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.90"),
+          source: "carried_forward",
+        },
+        // Day 2 — an unrelated real quote, priced off the traceable bridge.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "EUR" });
+
+    const rows = rateRows();
+    const eurToUsdDay2 = rows.find(
+      (r) => r.base === "EUR" && r.quote === "USD" && r.date === accountingDate("2026-01-02"),
+    );
+    expect(eurToUsdDay2?.source).toBe("derived"); // 0.25 / 0.90, priced off the traceable bridge
+    const eurToPlnDay2 = rows.find(
+      (r) => r.base === "EUR" && r.quote === "PLN" && r.date === accountingDate("2026-01-02"),
+    );
+    // The reciprocal keeps the bridge's own source: it is a copy standing in
+    // for the real origin, not a fresh figure — never an orphan.
+    expect(eurToPlnDay2?.source).toBe("carried_forward");
+
+    const resolved = readRate(s.ledger.replica.db, {
+      base: currencyCode("EUR"),
+      quote: currencyCode("PLN"),
+      date: accountingDate("2026-01-02"),
+    });
+    expect(resolved?.asOf).toBe(accountingDate("2026-01-01"));
+    expect(resolved?.carriedDays).toBe(1);
+  });
 });
 
 /* ── set_manual_rate / clear_manual_rate ─────────────────────────────────── */
@@ -1491,11 +1628,15 @@ describe("readNearestRate", () => {
     expect(rate?.daysAway).toBe(0);
   });
 
-  // H1(a) — the closer candidate is `carried_forward`; the old code compared
-  // it against the after row, lost the comparison, then walked the *loser*
-  // back to its own origin and returned that instead — 9 days away rather
-  // than the 1-day row it had just measured as closer.
-  it("H1 — the closer candidate is carried_forward; must not fall back to a farther real row", () => {
+  // H1 — round-4 correction: carry-forward wins before any distance is ever
+  // compared. §7.6's table gives *weekend or holiday* its own row — *"carry
+  // forward the last published rate"* — and the "nearest in calendar days on
+  // either side" sentence sits only under the table's *next* heading, "when
+  // no rate exists at all". Step 1 (`readRate`'s own answer) succeeds here —
+  // the carried row at the query date traces to the real row 9 days before,
+  // still within the ten-day cap — so it wins even though a real row sits
+  // only 1 day away on the other side.
+  it("H1 — carry-forward (9 days, within the cap) wins over a nearer real row on the other side", () => {
     s.ledger.replica.db
       .insert(fxRates)
       .values([
@@ -1509,14 +1650,14 @@ describe("readNearestRate", () => {
         {
           base: PLN,
           quote: USD,
-          date: accountingDate("2026-01-10"),
+          date: accountingDate("2026-01-10"), // the query date, carried from 01-01 (9 days)
           rate: money.unitsPerPivot("4.00"),
           source: "carried_forward",
         },
         {
           base: PLN,
           quote: USD,
-          date: accountingDate("2026-01-11"),
+          date: accountingDate("2026-01-11"), // only 1 day after, but never compared
           rate: money.unitsPerPivot("4.90"),
           source: "nbp",
         },
@@ -1528,17 +1669,18 @@ describe("readNearestRate", () => {
       quote: USD,
       date: accountingDate("2026-01-10"),
     });
-    expect(rate?.rate).toBe(money.unitsPerPivot("4.90"));
-    expect(rate?.asOf).toBe(accountingDate("2026-01-11"));
-    expect(rate?.daysAway).toBe(1);
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-01"));
+    expect(rate?.daysAway).toBe(9);
+    expect(rate?.inEffect).toBe(true);
   });
 
-  // H1(b) — the common weekend case: a source publishes Friday and Monday,
-  // carrying forward over the weekend. SPEC.md §7.6's round-3 sentence says
-  // nearest in calendar days on either side — Monday (1 day) beats Friday
-  // (2 days), even though the carried Saturday/Sunday rows sit closer in the
-  // table's own row order.
-  it("H1 — Monday's real quote beats Friday's, across a carried weekend", () => {
+  // H1 — the common weekend case: a source publishes Friday and Monday,
+  // carrying forward over the weekend. §7.6's table names this its own
+  // row — carry-forward — so Friday's rate (carried through the weekend) is
+  // the answer for Sunday, never Monday's, however much nearer Monday sits
+  // in calendar days.
+  it("H1 — Friday's carried rate wins on a carried Sunday, never Monday's nearer real quote", () => {
     s.ledger.replica.db
       .insert(fxRates)
       .values([
@@ -1566,7 +1708,7 @@ describe("readNearestRate", () => {
         {
           base: PLN,
           quote: USD,
-          date: accountingDate("2026-01-05"), // Monday
+          date: accountingDate("2026-01-05"), // Monday — nearer, but never compared
           rate: money.unitsPerPivot("4.30"),
           source: "nbp",
         },
@@ -1578,9 +1720,11 @@ describe("readNearestRate", () => {
       quote: USD,
       date: accountingDate("2026-01-04"),
     });
-    expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
-    expect(rate?.asOf).toBe(accountingDate("2026-01-05"));
-    expect(rate?.daysAway).toBe(1);
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-02"));
+    // Measured to the origin (Friday), not to the query date's own carried row.
+    expect(rate?.daysAway).toBe(2);
+    expect(rate?.inEffect).toBe(true);
   });
 
   // H2 — the nearer candidate is a carried_forward row with no locatable
@@ -1620,6 +1764,7 @@ describe("readNearestRate", () => {
     expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
     expect(rate?.asOf).toBe(accountingDate("2026-01-05"));
     expect(rate?.daysAway).toBe(2);
+    expect(rate?.inEffect).toBe(false);
   });
 
   // H2, mirrored — the orphaned carried row is nearer on the *after* side,
@@ -1660,6 +1805,7 @@ describe("readNearestRate", () => {
     expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
     expect(rate?.asOf).toBe(accountingDate("2026-02-01"));
     expect(rate?.daysAway).toBe(31);
+    expect(rate?.inEffect).toBe(false);
   });
 });
 
@@ -1817,9 +1963,11 @@ describe("readCoverage", () => {
     );
   });
 
-  // M4 — a manual rate set into the future must not inflate `days` (or the
-  // percentage) past what `calendarDays` — counted only through today —
-  // actually covers.
+  // M4 — a row past `today` must not inflate `days` (or the percentage) past
+  // what `calendarDays` — counted only through today — actually covers.
+  // `set_manual_rate` refuses `to > today` (L2), so this reads the replica
+  // directly rather than through the operation — the scoping in the read
+  // itself is the guard now, not an input this executor would ever accept.
   it("M4 — a future-dated row is excluded from days and calendarDays alike", () => {
     const first = accountingDate("2026-01-01");
     const today = accountingDate("2026-01-05");
@@ -1833,7 +1981,9 @@ describe("readCoverage", () => {
           rate: money.unitsPerPivot("4.00"),
           source: "nbp" as const,
         })),
-        // Set past `today` — S18's "set a range" allows a future end date.
+        // Past `today` — never written by `set_manual_rate` itself (L2), but
+        // the replica could still hold one (a synced row with a provider's
+        // clock skew, a pre-existing row from before the refusal shipped).
         {
           base: PLN,
           quote: USD,
@@ -1851,40 +2001,7 @@ describe("readCoverage", () => {
         realDays: 5,
         calendarDays: 5,
         coveragePct: 100,
-        futureRows: 1,
       }),
-    );
-  });
-
-  // L7 — a currency whose only rows are future-dated has `days === 0`, the
-  // same shape as no rows at all — but it is not "no rates yet": someone set
-  // a rate, it just is not due yet. `futureRows` is how `CoverageTag` tells
-  // the two states apart.
-  it("L7 — a currency with only future-dated rows reports futureRows, not empty", () => {
-    const today = accountingDate("2026-01-05");
-    s.ledger.replica.db
-      .insert(fxRates)
-      .values([
-        {
-          base: PLN,
-          quote: USD,
-          date: accountingDate("2026-01-10"),
-          rate: money.unitsPerPivot("4.00"),
-          source: "manual",
-        },
-        {
-          base: PLN,
-          quote: USD,
-          date: accountingDate("2026-01-11"),
-          rate: money.unitsPerPivot("4.00"),
-          source: "manual",
-        },
-      ])
-      .run();
-
-    const coverage = readCoverage(s.ledger.replica.db, today);
-    expect(coverage.find((c) => c.code === "USD")).toEqual(
-      expect.objectContaining({ days: 0, calendarDays: 0, coveragePct: 0, futureRows: 2 }),
     );
   });
 

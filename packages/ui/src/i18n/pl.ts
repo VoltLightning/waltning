@@ -397,13 +397,6 @@ export const pl: Messages = {
     coverageBelow: "{{pct}}% · ostatni kurs {{date}}",
     coverageTitle: "Pokrycie",
     noRatesYet: "brak kursów · ustaw ręcznie",
-    // 1 → ustawiony, 2–4 → ustawione, 5+ (and 0) → ustawionych. `futureRows`
-    // is always a whole count, so `_other` (fractional) never actually
-    // renders — it carries the `_many` form rather than invent an untested one.
-    noRatesYetFuture_one: "brak kursów · {{count}} ustawiony na później",
-    noRatesYetFuture_few: "brak kursów · {{count}} ustawione na później",
-    noRatesYetFuture_many: "brak kursów · {{count}} ustawionych na później",
-    noRatesYetFuture_other: "brak kursów · {{count}} ustawionych na później",
     noQuoteYet: "brak kursu",
     rateFieldSynced: "Zsynchronizowany: {{rate}}",
     ratePositive: "Kurs musi być liczbą dodatnią.",

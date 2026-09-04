@@ -125,9 +125,10 @@ export function insertTransaction(
     amountOriginal: input.amountOriginal,
     currency: input.currency,
     fxRate: provisional.rate,
-    // H1 — set whenever the resolved rate's own date is not the row's own
-    // date: a carried or walked-back rate is an estimate for this date, even
-    // though it is the honest answer the replica can give right now.
+    // H2 — set only when `provisionalFxRate` had to reach past carry-forward
+    // (`readNearestRate`'s step 2): a carried rate within the ten-day cap is
+    // the rate in effect on this date (§7.6's weekend/holiday row), not an
+    // estimate, even though its own date differs from the row's.
     fxRateEstimated: provisional.estimated,
     payee: input.payee,
     note: input.note,
@@ -151,10 +152,10 @@ export function insertTransaction(
     ...(input.toFxRate !== undefined ? { toFxRate: input.toFxRate } : {}),
     ...(input.fee !== undefined ? { fee: input.fee } : {}),
     ...(input.externalId !== undefined ? { externalId: input.externalId } : {}),
-    // H1 — `fx_rate_estimated` is set above, from `provisionalFxRate`'s own
-    // answer, whenever the resolved rate is not exact for this date. §14.6
-    // still applies past that: a synced backend re-derives it at drain from
-    // the published series, replacing this guess with its own.
+    // H2 — `fx_rate_estimated` is set above, from `provisionalFxRate`'s own
+    // answer, whenever step 2 (not carry-forward) had to price the row.
+    // §14.6 still applies past that: a synced backend re-derives it at
+    // drain from the published series, replacing this guess with its own.
   };
 
   const [row] = tx
@@ -282,12 +283,16 @@ function isSharedAccount(tx: ReplicaTx, accountId: CreateTransactionInput["accou
  * 2. **Same currency as the pivot: exactly `1`, and not an estimate.** There is
  *    no conversion to be wrong about.
  * 3. **Cross-currency: the rate nearest the replica holds for this row's own
- *    date** (H1, C1/C2) — `readNearestRate`, uncapped, rather than "the
+ *    date** (H1/H2, C1/C2) — `readNearestRate`, uncapped, rather than "the
  *    newest row regardless of date". A back-dated capture is priced against
- *    a rate near *its* date, never today's, and `estimated` is true whenever
- *    the resolved rate's own date is not this row's date — however far away
- *    that rate is. `readRate`'s ten-day cap does not apply here; it is a
- *    read-side rule (S18, reference figures), not a write-side one.
+ *    a rate near *its* date, never today's, and `estimated` is true only
+ *    when `readNearestRate` had to reach past carry-forward for it (step 2
+ *    — carry exhausted, or nothing held at all): a weekend or holiday
+ *    carried forward within the cap is the rate §7.6's table says is in
+ *    effect on this date, not an estimate, however far its own date is from
+ *    this row's. `readRate`'s ten-day cap gates only step 1's carry-forward
+ *    walk here, exactly as it does for its read-side callers (S18,
+ *    reference figures); step 2 remains uncapped.
  * 4. **No rate at all for the pair: defer.** Argued below.
  */
 /**
@@ -387,8 +392,14 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): Provis
    * decimal places, so flipping back cannot recover what truncation removed.
    */
   return {
+    // H2 — `estimated` follows `readNearestRate`'s own step, never
+    // `asOf !== input.date`: a weekend or holiday carried forward within the
+    // ten-day cap (step 1, `inEffect: true`) is the rate in effect on this
+    // date per §7.6's table, not an estimate, even though its `asOf` is a
+    // different day. Only a rate step 2 had to reach for — carry-forward
+    // exhausted or nothing held at all — is an estimate.
     rate: money.reciprocal(local.rate),
-    estimated: local.asOf !== input.date,
+    estimated: !local.inEffect,
     daysAway: local.daysAway,
   };
 }

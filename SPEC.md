@@ -3750,6 +3750,16 @@ costs 1 MB — and is unnecessary, because the replica carries each row's
 remain for their one legitimate use: pricing a *new* capture. Changing display
 currency is an online settings action that bumps the replica epoch.
 
+**"Last-known" is, per pair: the last real-source row, and every
+`carried_forward` row after it — never a carried row mirrored alone.** A
+carried row with no real-source row behind it in the replica is exactly the
+orphan `readNearestRate` (§7.6/§7.7) refuses to serve, so a sync that mirrored
+only the newest row for a pair could hand a weekend-carried phone a copy with
+nothing to trace to — `capturable` would read `true` from a real row the
+replica once held, while `readNearestRate` had nothing left to find. Mirroring
+the trailing carried run alongside its origin keeps `capturable` and
+`readNearestRate` answering the same question from the same rows.
+
 #### Replication, not caching
 
 The replica syncs by `(updated_at, id)` cursor and **includes soft-deleted rows**,
@@ -3799,11 +3809,17 @@ that freeze into `GENERATED` columns and are not re-derivable afterwards:
   and nothing to stamp them later, so it was permanently unfilable under a scheme
   whose failure direction is under-declared revenue (C5).
 
-Server-side resolution collapses all four. `fx_rate_estimated` is then set by the
-**server**, if and only if no published rate existed for that date at drain
-time — the only moment the question can be answered correctly. Clearing it when a
-published rate is substituted is a correction of provenance, not a model
-rewriting your data, so §11.2's gate does not apply and it is automatic.
+Server-side resolution collapses all four. `fx_rate_estimated` is set by
+whichever side values the row: the **server**, at drain, if and only if no
+published rate exists for that date; or the **phone**, at capture, when it
+must price the row from a quote not in effect on the row's own date — §7.6's
+*"when no rate exists at all"*, the carry-forward cap exhausted or nothing
+held for the pair on either side of that date. A weekend or holiday carried
+forward within the cap is not an estimate on either side: §7.6's table lists
+it as the ordinary answer for that date, not a fallback. Clearing the flag
+when a published rate is substituted is a correction of provenance, not a
+model rewriting your data, so §11.2's gate does not apply and it is
+automatic.
 
 Offline, a cross-currency transfer leaves the destination amount **empty**, with
 the stale reference shown only as a hint. An unedited destination amount is then
@@ -3820,14 +3836,20 @@ the correction arrives on the ordinary path rather than as an offer attached to
 some other operation.
 
 The phone therefore writes a **provisional** rate — exactly `1` for a
-same-currency capture, which is not an estimate; the last-known rate for the
-pair otherwise, flipped once from `fx_rates.rate`'s units-per-pivot to the
-pivot-per-unit this column holds. Who *decides* is unaffected: the phone never
-sends that number as an assertion, the server resolves the real rate at commit
-from the row's own date, and **`fx_rate_estimated` is set by the server at drain
-and by nothing else**. A provisional figure no reader can identify as
-provisional would be the same defect wearing a different name, so the line that
-matters is that the phone's number never leaves the phone.
+same-currency capture, which is not an estimate; otherwise the rate nearest
+the row's own date that the replica holds (§7.6/§7.7: carry-forward first,
+the nearest real-source row on either side only when carry-forward has
+nothing), flipped once from `fx_rates.rate`'s units-per-pivot to the
+pivot-per-unit this column holds. Who *decides* is unaffected: the phone
+never sends that number as an assertion, and the server still resolves the
+real rate at commit from the row's own date, replacing whatever the phone
+wrote. **`fx_rate_estimated` is set by whichever side values the row** — the
+phone, at capture, only when it had to reach past carry-forward for a quote
+not in effect on the row's date; the server, at drain, when it re-resolves
+from the row's own date and finds no published rate. A provisional figure no
+reader can identify as provisional would be the same defect wearing a
+different name, so the line that matters is that the phone's number never
+leaves the phone.
 
 #### Validate at entry, not at sync
 

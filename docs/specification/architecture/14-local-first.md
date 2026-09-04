@@ -229,12 +229,24 @@ someone has edited.
 
 **The capture caller does not stamp a reference rate.** SQLite still requires a
 non-null `fx_rate`, so the local executor resolves the materialisation: exactly
-`1` in the pivot currency, or the replica's last-known rate for another
-currency. The outbox entry makes that value visibly provisional once a backend
+`1` in the pivot currency, or the rate nearest the row's own date the replica
+holds for another currency — carry-forward first (§7.6's weekend/holiday row),
+the nearest real-source row on either side only when carry-forward has
+nothing. The outbox entry makes that value visibly provisional once a backend
 exists; admission replaces the whole row with the date-correct canonical rate.
 With no backend the local value is final because there is no second authority.
 An explicitly asserted rate — what the bank actually applied — remains part of
 the input because no later resolver has better evidence.
+
+**`fx_rate_estimated` is set by whichever side is doing the valuing at that
+moment**, never asserted by the caller. The phone sets it locally, at capture,
+only when it had to price the row from a quote not in effect on the row's own
+date — carry-forward exhausted, or nothing held for the pair at all. A
+weekend or holiday rate carried forward within the ten-day cap is not an
+estimate; it is the rate §7.6's table names as the ordinary answer for that
+date. The server sets the same flag again at drain, from its own resolution
+against the row's date, replacing whatever the phone wrote — one flag, two
+writers, never both at once for the same row.
 
 **Holding a currency and capturing in it are two different capabilities, and the
 second one is gated.** An account can be opened in any currency the replica

@@ -26,16 +26,23 @@
  * quote's own date's* bridge even when its own date has none — dropped only
  * when the origin itself has no bridge to trace to (C2).
  *
- * **M1 — the bridge row itself is not exempt from that guard.** The
+ * **M1/M2 — the bridge row itself is not exempt from that guard, and the
+ * guard is one rule for the whole date, not the reciprocal alone.** The
  * reciprocal `(newPivot, oldPivot)` row this writes once per date descends
  * from the *bridge* row (`base = P, quote = Q`) the same way every other
  * rebased row descends from its own — so when the bridge is itself
- * `carried_forward`, the reciprocal is dropped unless that bridge traces to
- * a real origin too, exactly like any other carried row above. Skipping this
- * guard used to mint the one orphaned `carried_forward` row `readNearestRate`
- * (H2) and `readCurrencies.capturable` both refuse to serve for the new
- * pair — the earliest bridge date in range, carried, with nothing real
- * before it.
+ * `carried_forward` with no traceable real origin, **the whole date is
+ * skipped**: no reciprocal, and no rebased row for any other quote on that
+ * date either, since every one of them divides by the same untraceable
+ * bridge rate. An orphaned bridge used to gate only the reciprocal, so a
+ * real quote sharing its date still rebased and landed stamped `derived` —
+ * a source every reader (`capturable`, `readRate`'s `carriedDays: 0`) counts
+ * as real, off a bridge that traces to nothing. A bridge that *is*
+ * `carried_forward` but traces to a real origin is not an orphan: it prices
+ * both the reciprocal and every other row on its date, exactly like a real
+ * bridge would, and the reciprocal it produces is itself a traceable
+ * `carried_forward` row, never the one `readNearestRate` (H2) and
+ * `readCurrencies.capturable` refuse to serve.
  */
 
 import { dec, type UnitsPerPivot, unitsPerPivot } from "@waltning/core/money";
@@ -133,6 +140,20 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
     if (dateRows.some((row) => row.quote === newPivot.code)) bridgeDates.add(date);
   }
 
+  // M1/M2 — a date's own bridge is usable only when it prices something:
+  // absent (handled by the caller as "no bridge"), real, or `carried_forward`
+  // with a traceable real origin. An orphaned carried bridge (no real origin
+  // anywhere before it) is not a rate (§7.6) and must not be divided into —
+  // not for the reciprocal, and not for any other real row sharing its date,
+  // which used to trust the raw carried snapshot as if it were real.
+  const newPivotCode = newPivot.code;
+  function usableBridgeRate(bridge: LocalFxRateRow | undefined) {
+    if (!bridge) return undefined;
+    if (bridge.source !== CARRIED_FORWARD) return dec(bridge.rate);
+    const origin = originDateOf(newPivotCode, bridge.date);
+    return origin !== undefined && bridgeDates.has(origin) ? dec(bridge.rate) : undefined;
+  }
+
   tx.delete(fxRates).where(eq(fxRates.base, oldPivot.code)).run();
 
   for (const dateRows of byDate.values()) {
@@ -142,7 +163,13 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
     // the date wholesale dropped that row along with every real, unbridged
     // one — even though M8's own per-row rebase would have kept it.
     const bridge = dateRows.find((row) => row.quote === newPivot.code);
-    const k = bridge ? dec(bridge.rate) : undefined;
+    // M1/M2 — `undefined` here means "nothing to rebase real rows against on
+    // this date", whether that is because there is no bridge at all or
+    // because the one present is an orphaned carried copy; either way a real
+    // row sharing this date falls through to the same "no usable bridge"
+    // branch below, and the reciprocal (past the per-row loop) is skipped
+    // the same way.
+    const k = usableBridgeRate(bridge);
 
     for (const row of dateRows) {
       if (row.quote === newPivot.code) continue; // consumed into the reciprocal row below
@@ -190,21 +217,11 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
         .run();
     }
 
-    if (!bridge || !k) continue; // no bridge on this date — nothing to reciprocate for it.
-
-    // M1 — the same origin guard the per-row rebase applies above (C2/M8):
-    // when the bridge row itself is a carried-forward copy, the reciprocal
-    // `(newPivot, oldPivot)` row must trace to a real origin too, or this
-    // mints exactly the orphaned carried row `readNearestRate` (H2) and
-    // `capturable` both refuse to hand back — a row for the new pair with
-    // no real source anywhere behind it. `bridgeDates.has(origin)` is
-    // guaranteed once `origin` is found (the origin row itself is what put
-    // its own date in `bridgeDates`), checked anyway for the same reason
-    // the per-row guard checks it: never trust one lookup to imply another.
-    if (bridge.source === CARRIED_FORWARD) {
-      const origin = originDateOf(newPivot.code, bridge.date);
-      if (origin === undefined || !bridgeDates.has(origin)) continue;
-    }
+    // M1/M2 — `k` is already the one gate: `undefined` for no bridge at all
+    // *and* for an orphaned carried bridge, so this is the same "no usable
+    // bridge on this date" refusal the per-row loop just applied above, not
+    // a second, narrower check applied to the reciprocal alone.
+    if (!bridge || k === undefined) continue;
     const reciprocal: UnitsPerPivot = unitsPerPivot(dec(1).dividedBy(k));
     // M4 — same reasoning as the per-row rebase above, and the bridge
     // quote's own `fetchedAt` carried forward rather than dropped.

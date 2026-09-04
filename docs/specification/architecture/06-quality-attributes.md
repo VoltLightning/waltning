@@ -91,7 +91,7 @@ What *is* required is that unavailability never costs data:
 | Failure | Behaviour |
 |---|---|
 | Pi down | Mobile keeps capturing to the outbox; replay on reconnect |
-| FX provider down | Writes still succeed — last known rate carried forward, `fx_rate_estimated = true`, bounded carry window |
+| FX provider down | Writes still succeed — last known rate carried forward, bounded carry window; `fx_rate_estimated` follows, set only past the window or with nothing held at all |
 | Model provider down | Manual entry and every deterministic path unaffected |
 | Postgres down | API returns errors; **no partial writes** — every multi-row operation is one transaction |
 

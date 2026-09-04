@@ -142,6 +142,16 @@ describe("the two rates are reciprocals, and the types know it (H21)", () => {
     expect(Math.abs(Number(back) - Number(stored))).toBeLessThan(1e-9);
   });
 
+  // L3 — a rate astronomically large but still technically positive (past
+  // the `> 0` CHECK on the table it came from) can still flip into a stored
+  // zero once truncated to twelve places. Refused here, at the one
+  // sanctioned crossing, rather than landing silently past every CHECK on
+  // the far side.
+  it("L3 — refuses a reciprocal that rounds to zero at twelve places", () => {
+    const astronomical = money.unitsPerPivot("10000000000000"); // 1e13
+    expect(() => money.reciprocal(astronomical)).toThrow(/rounds to zero/);
+  });
+
   /**
    * The failure H21 actually was: the wrong direction applied, silently, to a
    * figure that still looks like money. At 3.81 the two answers differ by

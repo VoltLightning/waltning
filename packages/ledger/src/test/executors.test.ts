@@ -328,9 +328,11 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     // unit. Storing 4.0231 here would value an 18 PLN coffee at 72 USD.
     expect(result.row.fxRate).toBe(PIVOT_PER_PLN);
     expect(result.row.fxRate).not.toBe("4.023100000000");
-    // H1 — the seeded row is 4 days before the capture's own date, so the
-    // rate is carried forward rather than exact.
-    expect(result.row.fxRateEstimated).toBe(true);
+    // H2 — the seeded row is 4 days before the capture's own date and within
+    // `readRate`'s ten-day cap, so `readNearestRate` answers at step 1: the
+    // rate in effect for this date, not an estimate, even though its own
+    // date differs from the row's.
+    expect(result.row.fxRateEstimated).toBe(false);
   });
 
   // H1 — `readRate` prices a capture from the rate *at its own date*, never
@@ -534,6 +536,109 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     // The server answers this at drain; `false` is the column's default and not
     // a claim this executor made.
     expect(result.row.fxRateEstimated).toBe(false);
+  });
+});
+
+// H2 — `fxRateEstimated` follows `readNearestRate`'s own step, never
+// `asOf !== date`. §7.6's table gives carry-forward (weekend, holiday, an
+// ordinary stale-but-within-cap quote) its own row, separate from "when no
+// rate exists at all" — only the second is an estimate.
+describe("H2 — fxRateEstimated is set only when readNearestRate had to reach past carry-forward", () => {
+  it("a next-day capture, priced from yesterday's real quote, is not an estimate", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("0.9000"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-02",
+    });
+
+    expect(result.row.fxRateEstimated).toBe(false);
+  });
+
+  it("a capture on a carried weekend day is not an estimate", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-02"), // Friday
+          rate: money.unitsPerPivot("0.9000"),
+          source: "nbp",
+        },
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-03"), // Saturday, carried
+          rate: money.unitsPerPivot("0.9000"),
+          source: "carried_forward",
+        },
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-04"), // Sunday, carried
+          rate: money.unitsPerPivot("0.9000"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-04",
+    });
+
+    expect(result.row.fxRateEstimated).toBe(false);
+  });
+
+  it("nothing before the capture's date, only a quote 3 days after, is an estimate", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-01-04"),
+        rate: money.unitsPerPivot("0.9000"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-01",
+    });
+
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+
+  it("carry exhausted past the ten-day cap, nothing after, is an estimate off the before row", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-01-01"), // 20 days before the capture
+        rate: money.unitsPerPivot("0.9000"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-21",
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("0.9000")));
+    expect(result.row.fxRateEstimated).toBe(true);
   });
 });
 

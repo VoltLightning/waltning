@@ -42,12 +42,6 @@ export type CoverageTagProps = {
   pct: number;
   /** The most recent date a *real* quote is held for — `undefined` when none exists yet. */
   lastDate?: string | undefined;
-  /**
-   * L7 — rows held past today, excluded from `days` and every figure above
-   * (M4). A currency with `days === 0` but `futureRows > 0` has rates set,
-   * just none due yet — worth saying, not the same claim as *no rates yet*.
-   */
-  futureRows: number;
   /** Wired by the caller at 0% — opens S18 with the pair preselected. */
   onPress?: () => void;
 };
@@ -58,7 +52,6 @@ export function CoverageTag({
   calendarDays,
   pct,
   lastDate,
-  futureRows,
   onPress,
 }: CoverageTagProps) {
   const t = useT();
@@ -76,21 +69,14 @@ export function CoverageTag({
   // H2 — rows exist, but none is a real quote: no date to state, and no
   // percentage that would read as a fill nobody can vouch for.
   const noRealQuote = !nothingHeld && realDays === 0;
-  // L7 — nothing due yet is not nothing set: a currency whose only rows are
-  // future-dated has `days === 0` (M4 excludes them), the same shape as no
-  // rows at all, so this reads the count off separately rather than off
-  // `nothingHeld` alone.
-  const onlyFutureRows = nothingHeld && futureRows > 0;
 
-  const label = onlyFutureRows
-    ? t("fx.noRatesYetFuture", { count: futureRows })
-    : nothingHeld
-      ? t("fx.noRatesYet")
-      : noRealQuote
-        ? t("fx.noQuoteYet")
-        : complete || lastDate === undefined
-          ? t("fx.coveragePct", { pct: String(pct) })
-          : t("fx.coverageBelow", { pct: String(pct), date: lastDate });
+  const label = nothingHeld
+    ? t("fx.noRatesYet")
+    : noRealQuote
+      ? t("fx.noQuoteYet")
+      : complete || lastDate === undefined
+        ? t("fx.coveragePct", { pct: String(pct) })
+        : t("fx.coverageBelow", { pct: String(pct), date: lastDate });
 
   const tag = <Tag variant={complete ? "neutral" : "warn"}>{label}</Tag>;
 

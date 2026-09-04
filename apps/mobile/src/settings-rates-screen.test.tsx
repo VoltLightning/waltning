@@ -123,7 +123,6 @@ function fakeController(overrides: {
         realDays: 2100,
         calendarDays: 2100,
         coveragePct: 100,
-        futureRows: 0,
       },
     ],
     listFxRates: overrides.listFxRates ?? (() => []),

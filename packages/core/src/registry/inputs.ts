@@ -324,9 +324,12 @@ export const createTransactionInput = z
      * Optional, and present only when you are asserting a rate that actually
      * applied — §7.6 level 1, *"enter the rate your bank actually applied"*,
      * which travels as an explicit agreement rather than as the phone's cache.
-     * Absent is the ordinary case and the server resolves it at commit, which
-     * is also the only moment `fx_rate_estimated` can be answered correctly —
-     * so that flag is the server's to write and is not an input at all.
+     * Absent is the ordinary case and the server resolves it at commit.
+     * `fx_rate_estimated` is not an input either way: it is set by whichever
+     * side does the valuing — the phone, locally, from `readNearestRate`'s
+     * own step (carry-forward vs. reaching past it); the server again at
+     * drain, from its own resolution against the row's date — never
+     * asserted by the caller.
      */
     fxRate: zPivotPerUnit.optional(),
 
@@ -360,8 +363,12 @@ export const createTransactionInput = z
     externalId: z.string().trim().min(1).max(200).optional(),
 
     // Not here, on purpose:
-    //   `fx_rate_estimated`     — the server sets it at drain, iff no published
-    //                             rate existed for that date (§14.6).
+    //   `fx_rate_estimated`     — set by whichever side values the row, never
+    //                             asserted by the caller: the phone locally
+    //                             (`readNearestRate`'s step 2, carry-forward
+    //                             exhausted or nothing held), the server
+    //                             again at drain iff no published rate exists
+    //                             for that date (§7.6, §14.6).
     //   `recurring_id`, `occurrence_date`
     //                           — `materialize_occurrence` posts one, and
     //                             `link_occurrence` stamps a row you already

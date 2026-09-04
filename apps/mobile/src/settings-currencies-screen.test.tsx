@@ -112,7 +112,6 @@ function fakeController(overrides: {
           realDays: 2100,
           calendarDays: 2100,
           coveragePct: 100,
-          futureRows: 0,
         },
       ]),
     listFxRates: () => [],
@@ -321,7 +320,6 @@ it("a currency with no rates yet says so, and opens S18 with the pair preselecte
         realDays: 0,
         calendarDays: 0,
         coveragePct: 0,
-        futureRows: 0,
       },
     ],
   });

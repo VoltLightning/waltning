@@ -273,11 +273,25 @@ export const crossRate = (v: string | number | Decimal): CrossRate =>
  * flipping back cannot recover what truncation removed — 4.0231 returns as
  * 4.023099999996. Invisible on a screen and cumulative in a pipeline;
  * `money.test.ts` pins it.
+ *
+ * **L3 — refuses a result that rounds to zero at twelve places.** `rate`
+ * itself carries a `> 0` CHECK on every table that stores one
+ * (`fx_rates_rate_positive`, `transactions_fx_rate_positive`), so this is the
+ * one place a rate that is technically positive but astronomically large
+ * (a hyperinflated currency's units-per-pivot, say) can still cross into a
+ * stored zero — silently, since `0.000000000000` is a value those CHECKs
+ * accept from the *other* side of the flip. Refusing here, at the only
+ * sanctioned crossing, is cheaper than a CHECK on every column a reciprocal
+ * could ever land in.
  */
 export function reciprocal(rate: PivotPerUnit): UnitsPerPivot;
 export function reciprocal(rate: UnitsPerPivot): PivotPerUnit;
 export function reciprocal(rate: Rate): Rate {
-  return new Decimal(1).dividedBy(rate).toFixed(12) as Rate;
+  const result = new Decimal(1).dividedBy(rate).toFixed(12);
+  if (dec(result).isZero()) {
+    throw new Error(`money.reciprocal: 1 / ${rate} rounds to zero at twelve places`);
+  }
+  return result as Rate;
 }
 
 /**
