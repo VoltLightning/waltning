@@ -258,14 +258,20 @@ permanently blocked in one batch — correctly, by the rules as written.**
 The event-sourcing pattern is the right one, because the payload *is* a recorded
 intention:
 
-1. **Two independent version counters.** `PRAGMA user_version` for the replica —
-   mismatch means drop and refetch. The replica is now the whole ledger, not a
-   window (`14-local-first.md`), so this is a full resync — single-digit
-   megabytes, cheap but not instant, and it needs connectivity — rather than
-   the free operation it was when there was little to refetch. It is still
-   safe to drop for exactly the reason the outbox below is not: the replica is
-   a copy, and the outbox is the only place an unsent intention exists. A
-   separate, forward-only, never-destructive chain for the outbox.
+1. **Two independent version counters, and neither one drops the file it
+   counts.** `PRAGMA user_version` for the replica migrates it **in place** —
+   one version per generated migration file (`packages/ledger/tools/embed-ddl.ts`),
+   applied in filename order, each version's statements run in one
+   transaction after a pre-migration copy, and a step that cannot be
+   expressed in SQL alone carries a hand-written backfill. The replica is now
+   the whole ledger, not a window (`14-local-first.md`), so it is never a
+   database this module drops to recover a version mismatch — the outbox
+   below never was, for the same reason, and now neither is the replica. A
+   **refetch from a backend** — rebuilding the replica from what a server
+   holds — is a *separate* operation belonging to sync (arc 2), triggered by
+   sync's own decisions (an epoch mismatch, an explicit reset a person asked
+   for), never by a schema version. A separate, forward-only,
+   never-destructive chain for the outbox, same rule.
 2. **The outbox table's shape never changes with the domain.** The payload is
    opaque to it, so domain changes change *payloads*, not tables.
 3. **Upcasters, not migrations.** Pure functions `upcast(op, v, payload)` chained

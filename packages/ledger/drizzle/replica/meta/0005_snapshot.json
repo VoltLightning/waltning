@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "27ce22e9-a50f-4e0f-b095-6663f9522492",
-  "prevId": "53f64081-5322-40e6-bfb6-f30ee7bbcacc",
+  "id": "321a636d-c4d5-4105-b5cc-1fb4c67e0550",
+  "prevId": "171f8bbd-aa04-4e08-ad58-0a4a810832f6",
   "tables": {
     "account_groups": {
       "name": "account_groups",
@@ -359,14 +359,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "name_folded": {
-          "name": "name_folded",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
         "kind": {
           "name": "kind",
           "type": "text",
@@ -447,10 +439,9 @@
         "counterparties_name_uq": {
           "name": "counterparties_name_uq",
           "columns": [
-            "name_folded"
+            "lower(trim(\"name\"))"
           ],
-          "isUnique": true,
-          "where": "not \"counterparties\".\"archived\""
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -583,16 +574,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "counterparty_merges_loser_open_uq": {
-          "name": "counterparty_merges_loser_open_uq",
-          "columns": [
-            "loser_id"
-          ],
-          "isUnique": true,
-          "where": "\"counterparty_merges\".\"unmerged_at\" is null"
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "counterparty_merges_winner_id_counterparties_id_fk": {
           "name": "counterparty_merges_winner_id_counterparties_id_fk",
@@ -623,12 +605,7 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "counterparty_merges_winner_ne_loser": {
-          "name": "counterparty_merges_winner_ne_loser",
-          "value": "\"counterparty_merges\".\"winner_id\" <> \"counterparty_merges\".\"loser_id\""
-        }
-      }
+      "checkConstraints": {}
     },
     "currencies": {
       "name": "currencies",
@@ -1612,13 +1589,6 @@
             "category_id"
           ],
           "isUnique": false
-        },
-        "transactions_counterparty_idx": {
-          "name": "transactions_counterparty_idx",
-          "columns": [
-            "counterparty_id"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -1729,12 +1699,7 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "transactions_debt_amount_requires_currency": {
-          "name": "transactions_debt_amount_requires_currency",
-          "value": "\"transactions\".\"debt_amount\" IS NULL OR \"transactions\".\"debt_currency\" IS NOT NULL"
-        }
-      }
+      "checkConstraints": {}
     },
     "local_meta": {
       "name": "local_meta",
@@ -1775,6 +1740,14 @@
     "columns": {}
   },
   "internal": {
-    "indexes": {}
+    "indexes": {
+      "counterparties_name_uq": {
+        "columns": {
+          "lower(trim(\"name\"))": {
+            "isExpression": true
+          }
+        }
+      }
+    }
   }
 }

@@ -56,13 +56,13 @@ export function scratchLedger() {
 
   // No re-assert here (L1). A SQLite table rebuild — the shape drizzle-kit
   // emits for a migration that adds a `CHECK`, this package's own
-  // `0007_schema.sql` included — used to wrap itself in `PRAGMA
-  // foreign_keys=OFF; … PRAGMA foreign_keys=ON;`, which would have left this
-  // harness enforcing foreign keys again after the loop above, silently,
-  // regardless of the line before it. `tools/embed-ddl.ts` now strips that
-  // bookend pragma out of a rebuild export's own statements (M2's own header
-  // says why: it is a no-op once `migrate.ts` has a transaction open, which
-  // is every real launch), so nothing between the `= OFF` above and here can
+  // `0007_schema.sql` included — wraps itself in `PRAGMA foreign_keys=OFF;
+  // … PRAGMA foreign_keys=ON;` in the generated file, which would have left
+  // this harness enforcing foreign keys again after the loop above, silently,
+  // regardless of the line before it. `tools/embed-ddl.ts` strips that
+  // bookend pragma out of every step's own statements (its own header says
+  // why: it is a no-op once `migrate.ts` has a transaction open, which is
+  // every real launch), so nothing between the `= OFF` above and here can
   // have turned it back on — reasserting would be setting a pragma to what
   // it already is.
 

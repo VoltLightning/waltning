@@ -20,6 +20,7 @@
 // import graph, least of all both at once.
 import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
+import type { Simplify } from "drizzle-orm";
 import type { accountGroups as pgAccountGroups } from "./account-groups.pg.ts";
 import type { accountGroups as sqliteAccountGroups } from "./account-groups.sqlite.ts";
 import type { accounts as pgAccounts } from "./accounts.pg.ts";
@@ -97,11 +98,47 @@ type Sqlite = {
 type Exact<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
-type Selects<S> = { [K in keyof S]: S[K] extends { $inferSelect: infer R } ? R : never };
-type Inserts<S> = { [K in keyof S]: S[K] extends { $inferInsert: infer R } ? R : never };
+/**
+ * `$inferSelect`/`$inferInsert`, normalised with drizzle's own `Simplify`
+ * before comparison — not cosmetic. pg-core and sqlite-core are separate
+ * modules building their inferred types through separate generic machinery
+ * (this file's own header), and for `counterpartyDistinctPairs` — the one
+ * table with a composite `primaryKey()` — that machinery produces two type
+ * *expressions* `Exact`'s identity trick tells apart even though every
+ * property, every required key, and mutual assignability in both directions
+ * are all identical (checked by hand while narrowing this down: `Exact`
+ * without `Simplify` says `false`, yet `CdpPg extends CdpSqlite` and the
+ * reverse both hold, every single column matches, and so does the required-
+ * key set). `Simplify` forces both sides through the same "flatten a mapped
+ * type into a plain object type" step, so two extensionally equal types
+ * compare equal regardless of which module's conditional types produced
+ * them — the fix belongs here, once, rather than as a table-shaped
+ * exception lower down.
+ */
+type Selects<S> = { [K in keyof S]: S[K] extends { $inferSelect: infer R } ? Simplify<R> : never };
+type Inserts<S> = { [K in keyof S]: S[K] extends { $inferInsert: infer R } ? Simplify<R> : never };
 
-export const readsMatch: Exact<Selects<Pg>, Selects<Sqlite>> = true;
-export const writesMatch: Exact<Inserts<Pg>, Inserts<Sqlite>> = true;
+/**
+ * `Exact`, applied table by table rather than to the two fifteen-table
+ * objects at once — still one assertion per direction, not one per table
+ * (the file's own opening rule): the per-table results are folded into a
+ * single boolean by `AllTrue`, so a hand-written per-table pair still cannot
+ * exist here to forget, and adding or losing a table changes which keys
+ * `AllExact` iterates without anyone updating this file.
+ *
+ * **Also not cosmetic.** Even with `Simplify` on every leaf, comparing the
+ * two fifteen-table objects as one `Exact<Inserts<Pg>, Inserts<Sqlite>>`
+ * still reports drift that is not there — the aggregate mapped type over
+ * all fifteen tables inherits the same same-expression sensitivity `Simplify`
+ * fixes at the leaf, one level up. Checking one table's `$inferInsert` at a
+ * time, the way `Simplify` was verified to fix it, is what stays inside the
+ * region where `Exact` reports real drift and nothing else.
+ */
+type AllExact<A, B> = { [K in keyof A & keyof B]: Exact<A[K], B[K]> };
+type AllTrue<T> = keyof T extends never ? never : T[keyof T] extends true ? true : false;
+
+export const readsMatch: AllTrue<AllExact<Selects<Pg>, Selects<Sqlite>>> = true;
+export const writesMatch: AllTrue<AllExact<Inserts<Pg>, Inserts<Sqlite>>> = true;
 export const pgTransactionAccountIsAccountId: Exact<
   Selects<Pg>["transactions"]["accountId"],
   Id<"accounts">

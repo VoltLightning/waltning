@@ -1,29 +1,24 @@
 /**
- * Two migrators, because the two files have opposite rules.
+ * Two migrators, because the two files have opposite rules about **what
+ * happens on a version mismatch** — the outbox never drops, the replica
+ * migrates in place, and neither one ever refetches from a backend.
  *
- * `architecture/08` §"Surviving an app update" gives each store its own version
- * counter and its own answer to a mismatch:
+ * `architecture/08` §"Surviving an app update":
  *
- * - **The replica** — *"`PRAGMA user_version` for the replica — mismatch means
- *   drop and refetch"*. Safe *"for exactly the reason the outbox below is not:
- *   the replica is a copy"*.
- * - **The outbox** — *"a separate, forward-only, never-destructive chain"*, and
- *   §5 of that list is one word: *"Never drop."* A missing migration is an
- *   error, never a reset, because the alternative deletes intent that exists
- *   nowhere else.
- *
- * **And one carve-out, which is the sharpest edge in this file.** §14.1: when
- * there is no server, *"with no server the outbox never drains"* —
- * and the replica is not a copy of anything. Dropping it is not a refetch, it
- * is the deletion of the ledger. §14.6 states the rule the whole module obeys:
- * *"A migration must not be able to destroy the ledger. With no backend the
- * phone's database is the only copy, and unlike the server there is nothing to
- * reset from — no seed, no second copy, no `db:reset`."*
- *
- * So the drop is conditional on there being somewhere to refetch **from**, and
- * that condition is a parameter rather than a guess: whether a backend has ever
- * been reached is knowledge this module does not have and must not invent. When
- * it would drop and must not, it fails loudly and touches nothing.
+ * - **The replica** — migrates in place, one version per generated migration
+ *   file, applied in the order those files were generated. There is no
+ *   version this module ever drops the replica to recover: dropping it is
+ *   not a resync, it is the deletion of the ledger, and §14.6 states the
+ *   rule this whole module obeys — *"A migration must not be able to
+ *   destroy the ledger. With no backend the phone's database is the only
+ *   copy, and unlike the server there is nothing to reset from — no seed,
+ *   no second copy, no `db:reset`."* A refetch from a backend is a
+ *   *separate* operation, sync's own (arc 2) — never one a schema version
+ *   triggers.
+ * - **The outbox** — *"a separate, forward-only, never-destructive chain"*,
+ *   and §5 of that list is one word: *"Never drop."* A missing migration is
+ *   an error, never a reset, because the alternative deletes intent that
+ *   exists nowhere else.
  *
  * **Both migrators copy the file first.** §14.6: *"every schema migration
  * copies the file first, runs inside a transaction, and keeps the pre-migration
@@ -38,78 +33,68 @@
  * with everything else, which is what makes "half-migrated" unrepresentable:
  * either the tables and the number both moved, or neither did.
  *
- * **A constraint added to a table that already ships means a versioned,
- * in-place rebuild from now on (M2) — never folding it into `REPLICA_DDL`'s
- * single version.** SQLite has no `ALTER TABLE … ADD CONSTRAINT`, so a new
- * `CHECK` on an existing table is a copy-rename-drop (`REPLICA_REBUILDS`,
- * `ddl.ts`'s own header) — and folding that into version 1's `up`, as the
- * single-version chain used to, is exactly wrong for a phone already at
- * version 1: this module's only lever for *any* version mismatch there was
- * *drop the whole replica and refetch*, and an offline-only phone
- * (`canRefetch: false`) has no refetch half of that, so the new constraint
- * would simply never reach it — silently, because nothing ever bumped
- * `REPLICA_MIGRATIONS` to make the mismatch exist in the first place. A
- * migration marked `inPlace` is the escape hatch: `migrateReplica` runs it
- * against the table as it stands, rows intact, rather than treating it as a
- * reason to drop. It is what a table rebuild actually is — an ALTER SQLite
- * cannot express any other way — never a licence to skip the drop-and-refetch
- * rule for an actual schema redesign.
+ * **One version per generated migration file, applied in place.** SQLite has
+ * no `ALTER TABLE … ADD CONSTRAINT`, so a new `CHECK` on an existing table is
+ * a copy-rename-drop `ddl.ts`'s own header describes — and drizzle-kit
+ * already emits it as an ordinary step in `REPLICA_STEPS`, indexes included.
+ * There is nothing here that treats a rebuild step differently from any
+ * other: every step's statements run, in order, against the table as it
+ * stands, rows intact — never against an assumed-empty database, because
+ * this module never drops one to get back to empty.
  *
  * **Its `foreign_keys` toggle is the caller's job, not the SQL's.** SQLite
  * documents `PRAGMA foreign_keys` as a no-op once a transaction is already
- * open — the same trap `dropEverything` below works around with
- * `defer_foreign_keys` — and unlike that function, an in-place rebuild
- * cannot use `defer_foreign_keys` at all: it does not drop every table, so a
- * sibling still holding real rows (`transaction_lines`, `transaction_tags`)
- * would have its `ON DELETE CASCADE` fire for real when the rebuilt table is
- * dropped, deferred check or not — proven by hand against `better-sqlite3`:
- * a child row survives a parent drop+recreate only when `foreign_keys` was
- * turned off *before* the transaction opened. `runInOneTransaction` does
- * exactly that, toggled around the whole run whenever any step it is given
- * is `inPlace`.
+ * open, so a step that rebuilds a table another populated table still
+ * references (`transaction_lines`, `transaction_tags` pointing at
+ * `transactions`) needs the connection's foreign keys off *before* the
+ * migration transaction opens — proven by hand against `better-sqlite3`: a
+ * child row survives a parent drop+recreate only when `foreign_keys` was
+ * turned off before the transaction opened, deferred or not.
+ * `runInOneTransaction` does exactly that for the replica, unconditionally —
+ * any pending step might be a rebuild, and toggling costs nothing on a step
+ * that is not one.
+ *
+ * **A step that cannot be expressed in SQL alone carries a hand-written
+ * backfill.** `REPLICA_BACKFILLS` / `OUTBOX_BACKFILLS`, keyed by the same
+ * tag `ddl.ts`'s `REPLICA_STEPS` / `OUTBOX_STEPS` carry, run inside the same
+ * migration transaction as their step — the counterparties `name_folded`
+ * backfill below is the one that exists today. **Not simply "after" the
+ * step's own statements** — a backfill is handed the statements and runs
+ * every one of them itself, because at least one of them (a `CREATE UNIQUE
+ * INDEX` over the very column being backfilled) validates existing rows
+ * eagerly and must not run until the backfill has already touched them.
+ * `REPLICA_BACKFILLS`'s own header has the detail.
  */
 
+import { fold } from "@waltning/core/capture/names";
 import { type SQL, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
-import { OUTBOX_DDL, REPLICA_DDL, REPLICA_REBUILDS } from "./ddl.ts";
+import { OUTBOX_STEPS, REPLICA_STEPS } from "./ddl.ts";
 import type { LedgerSchema, OutboxStore, ReplicaDb, ReplicaStore } from "./open.ts";
 
 /* ── the shapes ──────────────────────────────────────────────────────────── */
 
 /**
- * Anything that can run one statement: a database handle, or a transaction.
+ * Anything that can run a statement and read rows back: a database handle, or
+ * a transaction.
  *
- * **One capability, not a database.** A migration needs to issue statements and
- * nothing else, and saying only that is what lets a caller's own drizzle
- * transaction be passed straight in — including to `advanceAppliedSeq` below,
- * whose entire contract is that it runs inside a transaction it did not open.
- * Naming a database type here would force every caller to thread `TRun` and
- * `TSchema` through to answer questions no migration asks.
+ * **Two capabilities, not a database.** A migration step needs to issue
+ * statements and, for a backfill, read the rows it is filling in — and
+ * saying only that is what lets a caller's own drizzle transaction be passed
+ * straight in, including to `advanceAppliedSeq` below, whose entire contract
+ * is that it runs inside a transaction it did not open. Naming a database
+ * type here would force every caller to thread `TRun` and `TSchema` through
+ * to answer questions no migration or backfill asks.
  */
-export type SqlRunner = { readonly run: (query: SQL) => void };
+export type SqlRunner = {
+  readonly run: (query: SQL) => void;
+  readonly all: <T>(query: SQL) => T[];
+};
 
 /** One step in a chain. `version` is what `PRAGMA user_version` becomes once `up` has run. */
 export type Migration = {
   readonly version: number;
   readonly up: (tx: SqlRunner) => void;
-  /**
-   * True when `up` rebuilds an existing table in place (copy-rename-drop,
-   * SQLite's only way to add a constraint) rather than assuming a blank
-   * database (M2). Only `migrateReplica` reads this — the outbox is
-   * forward-only DDL and never dropped in the first place, so the question
-   * does not arise there. Defaults to `false`/absent: an unmarked version
-   * bump stays destructive, on purpose — this module fails closed rather
-   * than guessing a step preserves data it never said it does.
-   */
-  readonly inPlace?: boolean;
-  /**
-   * The `REPLICA_REBUILDS` key this step's `up` runs, when it runs one (M2).
-   * Purely descriptive — `migrateReplica` never reads it — and exists so
-   * `test/migrate.test.ts` can assert every `REPLICA_REBUILDS` entry has a
-   * chain step naming it: a rebuild file `embed-ddl.ts` emitted that no
-   * version ever runs would sit in `ddl.ts` and never reach a phone.
-   */
-  readonly rebuildTag?: string;
 };
 
 /**
@@ -159,32 +144,20 @@ export type MigrationResult = {
 
 export type ReplicaMigrationResult = MigrationResult & {
   /**
-   * The replica was dropped and holds nothing. Every row has to come back from
-   * the server before a figure computed off it means anything.
+   * Always `false`. Kept on the result rather than dropped outright because a
+   * refetch is still a real state a replica can be in — just never one this
+   * module puts it in. A schema migration never drops the replica (see this
+   * file's header), so nothing this function does ever requires refetching
+   * rows back from a server; that operation belongs to sync (arc 2) and is
+   * triggered there, never by a version mismatch here.
    */
-  readonly refetchRequired: boolean;
+  readonly refetchRequired: false;
 };
 
 export type MigrateOptions = {
   readonly fs: LedgerFs;
   /** Defaults to this module's own chain; a test supplies its own. */
   readonly migrations?: readonly Migration[];
-};
-
-export type MigrateReplicaOptions = MigrateOptions & {
-  /**
-   * Has a backend ever been reached?
-   *
-   * **Injected, because it is not knowable here and guessing it is
-   * catastrophic.** `false` means the replica is the only copy of the ledger
-   * and the drop-and-refetch rule has no *refetch* half. `true` means the server
-   * holds the canonical base and the outbox holds every unadmitted local intent,
-   * so drop, refetch and replay cost a resync and nothing else.
-   *
-   * It asks *ever*, not *now*. A phone that is merely offline this second still
-   * has somewhere to refetch from.
-   */
-  readonly canRefetch: boolean;
 };
 
 /** The suffix appended to a database path for its pre-migration copy. */
@@ -224,51 +197,95 @@ export const COPY_SUFFIX = ".pre-migration";
  */
 
 /**
- * The replica's chain.
+ * Every hand-written backfill a replica step needs, keyed by the step's own
+ * tag (`ddl.ts`'s `REPLICA_STEPS[i].tag`) — the SQL a schema step cannot
+ * itself express. Given a step's own statements, in order, and expected to
+ * run every one of them — not appended after, see below for why.
+ * `test/migrate.test.ts` asserts every key here names a real step tag: a
+ * rename or a removed step must not leave a hook nothing ever runs.
  *
- * **Two versions, not one.** Version 1 is every table exactly as a fresh
- * install needs it. Version 2 exists only because `transactions` gained a
- * `CHECK` after phones were already at version 1 (M2, this file's own
- * header) — `inPlace: true` is what tells `migrateReplica` this step rebuilds
- * `transactions` where it stands rather than assuming an empty database, so
- * it reaches an already-installed phone — offline-only ones included —
- * without the drop-and-refetch rule engaging at all.
+ * **A backfill runs the step's statements itself, interleaved with its own
+ * SQL, rather than after all of them.** The obvious design — run the
+ * step's statements verbatim, then the backfill — is wrong for
+ * `"0006_schema"` specifically, and provably so: that step's own
+ * `CREATE UNIQUE INDEX … (name_folded) WHERE not archived` validates every
+ * existing row *at the moment it runs*, and on a table with more than one
+ * active counterparty, every one of them still holds `name_folded = ''`
+ * (the `ADD COLUMN`'s default) until something fills it in — so the index
+ * creation itself fails before a trailing backfill ever gets to run,
+ * regardless of what that backfill would have set the column to. The fix
+ * has to run the fold *before* that one statement, not after all of them,
+ * so this hook owns its step's execution end to end.
+ *
+ * **`0006_schema` fills `counterparties.name_folded`.** The column carries a
+ * `DEFAULT ''` (`packages/schema/src/counterparties.sqlite.ts`) precisely so
+ * the `ADD COLUMN NOT NULL` step runs on a table that already has rows —
+ * `''` is what every existing row gets from the `ALTER TABLE` alone. This
+ * hook finds the one statement that needs every row's `name_folded` correct
+ * before it can run — matched by what it says (`CREATE UNIQUE INDEX` naming
+ * `name_folded`), not by its position in the array, so a drizzle-kit
+ * regenerate that reorders the step's other statements cannot silently put
+ * this back in the wrong place — backfills every row with `fold(name)`
+ * immediately before it, then continues.
  */
+export const REPLICA_BACKFILLS: Readonly<
+  Record<string, (tx: SqlRunner, statements: readonly string[]) => void>
+> = {
+  "0006_schema": (tx, statements) => {
+    const needsFoldedNamesFirst = (statement: string) =>
+      /create\s+unique\s+index/i.test(statement) && /name_folded/i.test(statement);
+
+    for (const statement of statements) {
+      if (needsFoldedNamesFirst(statement)) {
+        const rows = tx.all<{ id: string; name: string }>(
+          sql.raw(`select "id", "name" from "counterparties"`),
+        );
+        for (const row of rows) {
+          tx.run(
+            sql`update "counterparties" set "name_folded" = ${fold(row.name)} where "id" = ${row.id}`,
+          );
+        }
+      }
+      tx.run(sql.raw(statement));
+    }
+  },
+};
+
+/** No outbox step needs a backfill today — its table shape barely changes (§08 item 2), and none of the changes it has had were unexpressable in SQL alone. */
+export const OUTBOX_BACKFILLS: Readonly<
+  Record<string, (tx: SqlRunner, statements: readonly string[]) => void>
+> = {};
 
 /**
- * One `REPLICA_REBUILDS` entry, by tag rather than by the identifier
- * `embed-ddl.ts` would otherwise have to generate and this module import by
- * name (M2). The chain names a tag it does not find only if `ddl.ts` and
- * `migrate.ts` have drifted from each other by hand-edit — `embed-ddl.ts`
- * derives every tag from the same `drizzle/replica` directory it derives the
- * versions here from.
+ * Turn one directory's generated steps into a migration chain: version
+ * `i + 1` for step `i`. A step with no registered backfill runs its
+ * statements verbatim, in order; a step with one hands its statements to
+ * the backfill instead, which is then responsible for running every one of
+ * them (see `REPLICA_BACKFILLS`'s own header for why "run them, then
+ * backfill" is not always correct).
  */
-function rebuildStatements(tag: string): readonly string[] {
-  const statements = REPLICA_REBUILDS[tag];
-  if (!statements) {
-    throw new Error(
-      `REPLICA_REBUILDS has no entry for "${tag}" — regenerate with pnpm ledger:generate`,
-    );
-  }
-  return statements;
+function migrationsFromSteps(
+  steps: readonly { readonly tag: string; readonly statements: readonly string[] }[],
+  backfills: Readonly<Record<string, (tx: SqlRunner, statements: readonly string[]) => void>>,
+): readonly Migration[] {
+  return steps.map((step, i) => ({
+    version: i + 1,
+    up: (tx: SqlRunner) => {
+      const backfill = backfills[step.tag];
+      if (backfill) {
+        backfill(tx, step.statements);
+      } else {
+        for (const statement of step.statements) tx.run(sql.raw(statement));
+      }
+    },
+  }));
 }
 
-export const REPLICA_MIGRATIONS: readonly Migration[] = [
-  {
-    version: 1,
-    up: (tx) => {
-      for (const statement of REPLICA_DDL) tx.run(sql.raw(statement));
-    },
-  },
-  {
-    version: 2,
-    up: (tx) => {
-      for (const statement of rebuildStatements("0007_schema")) tx.run(sql.raw(statement));
-    },
-    inPlace: true,
-    rebuildTag: "0007_schema",
-  },
-];
+/** The replica's chain — one version per file in `drizzle/replica`, in the order `embed-ddl.ts` generated them. */
+export const REPLICA_MIGRATIONS: readonly Migration[] = migrationsFromSteps(
+  REPLICA_STEPS,
+  REPLICA_BACKFILLS,
+);
 
 /**
  * The outbox's chain — two tables and an index, and §08 item 2 is the reason it
@@ -276,14 +293,10 @@ export const REPLICA_MIGRATIONS: readonly Migration[] = [
  * never changes with the domain. The payload is opaque to it, so domain changes
  * change payloads, not tables."*
  */
-export const OUTBOX_MIGRATIONS: readonly Migration[] = [
-  {
-    version: 1,
-    up: (tx) => {
-      for (const statement of OUTBOX_DDL) tx.run(sql.raw(statement));
-    },
-  },
-];
+export const OUTBOX_MIGRATIONS: readonly Migration[] = migrationsFromSteps(
+  OUTBOX_STEPS,
+  OUTBOX_BACKFILLS,
+);
 
 /* ── the watermark ───────────────────────────────────────────────────────── */
 
@@ -321,6 +334,11 @@ export function readAppliedSeq<TRun, TSchema extends LedgerSchema>(
  * convention: a replay that arrives out of order is a no-op instead of a
  * rewind, and a rewind would re-apply entries whose effects are already on the
  * ledger.
+ *
+ * **A schema migration never touches this row.** Every `REPLICA_MIGRATIONS`
+ * step is DDL (plus, sometimes, a data backfill of an existing column) —
+ * nothing about the local tables' *contents relative to the outbox* changes
+ * when their shape does, so what has been applied to them is unchanged too.
  */
 export function advanceAppliedSeq(tx: SqlRunner, seq: number): void {
   if (!Number.isInteger(seq) || seq < 0) {
@@ -344,60 +362,8 @@ function readUserVersion<TRun, TSchema extends LedgerSchema>(
   return value;
 }
 
-/**
- * A change detector, in plain JS — FNV-1a, not `node:crypto`. This module
- * runs on the phone (this file's own header, `open.ts`'s argument for the
- * driver), and `node:crypto` is exactly the kind of platform package that
- * cannot be named here; nothing below needs collision resistance, only "did
- * this move".
- */
-function fnv1a(text: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function hashOf(statements: readonly string[]): string {
-  return fnv1a(statements.join("\n"));
-}
-
-/**
- * `REPLICA_DDL`'s content hash, frozen at the shape version 1 shipped with.
- *
- * **H2, the design gap this only catches rather than closes.** `REPLICA_DDL`
- * is unversioned: `REPLICA_MIGRATIONS`' version 1 is the only step that ever
- * runs it, so a schema change that lands in `REPLICA_DDL` *after* version 1
- * has already reached a phone reaches a fresh install and never that phone —
- * silently, because nothing bumps `REPLICA_MIGRATIONS` to say a change
- * happened at all. Closing the gap needs one of: a version per generated
- * file, or failing loudly whenever this hash moves with no chain entry to
- * explain it. This constant and `checkChain`'s guard below are the second
- * option, done now rather than designed — the PR report carries a follow-up
- * card for choosing between the two for real.
- *
- * Update this constant only alongside a change that also added a new
- * `REPLICA_MIGRATIONS` version for whatever moved `REPLICA_DDL` (a plain
- * `CREATE INDEX` needs no *rebuild*, but it still needs a *version* — the
- * follow-up card again), or a change provably about `embed-ddl.ts`'s own
- * output shape rather than what a phone runs. Never merely to make a red
- * `checkChain` pass.
- */
-const REPLICA_DDL_HASH = "848c1935";
-
-/**
- * The chain must ascend, or "the versions after `found`" is not a
- * well-defined set. `ddlGuard`, when given, is the second, unrelated check
- * H2 adds: `REPLICA_DDL`'s content must still hash to what version 1 was
- * pinned against, or a schema change reached fresh installs only (see
- * `REPLICA_DDL_HASH`'s own comment).
- */
-function checkChain(
-  migrations: readonly Migration[],
-  ddlGuard?: { readonly ddl: readonly string[]; readonly expectedHash: string },
-): number {
+/** The chain must ascend, or "the steps after `found`" is not a well-defined set. */
+function checkChain(migrations: readonly Migration[]): number {
   let previous = 0;
   for (const step of migrations) {
     if (!Number.isInteger(step.version) || step.version <= previous) {
@@ -408,17 +374,6 @@ function checkChain(
     previous = step.version;
   }
   if (previous === 0) throw new Error("a migration chain must have at least one version");
-  if (ddlGuard) {
-    const actual = hashOf(ddlGuard.ddl);
-    if (actual !== ddlGuard.expectedHash) {
-      throw new Error(
-        `REPLICA_DDL's content hash moved (was ${ddlGuard.expectedHash}, is now ${actual}) with no ` +
-          `REPLICA_MIGRATIONS entry to carry the change to an already-installed phone (H2 — see the ` +
-          `PR's follow-up card). Add a versioned step for the change, or update REPLICA_DDL_HASH if ` +
-          `only embed-ddl.ts's own output shape changed.`,
-      );
-    }
-  }
   return previous;
 }
 
@@ -454,13 +409,12 @@ function takeCopy<TRun, TSchema extends LedgerSchema>(
  *
  * **`foreignKeysOff`, toggled outside the transaction, around it.** SQLite
  * treats `PRAGMA foreign_keys` as a no-op once a transaction is open, so a
- * migration that needs it off for an in-place table rebuild (M2 — see this
- * file's header) cannot ask for it from inside `steps`; asking here, before
- * `db.transaction` opens one, is the only place the pragma actually takes.
- * `finally` restores it whether the transaction committed or rolled back —
- * the setting is a connection property, not something the rollback undoes on
- * its own, and every other statement on this connection still needs foreign
- * keys enforced.
+ * step that rebuilds a table (this file's own header) cannot ask for it from
+ * inside `steps`; asking here, before `db.transaction` opens one, is the
+ * only place the pragma actually takes. `finally` restores it whether the
+ * transaction committed or rolled back — the setting is a connection
+ * property, not something the rollback undoes on its own, and every other
+ * statement on this connection still needs foreign keys enforced.
  */
 function runInOneTransaction<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
@@ -479,55 +433,6 @@ function runInOneTransaction<TRun, TSchema extends LedgerSchema>(
   } finally {
     if (foreignKeysOff) db.run(sql.raw("pragma foreign_keys = ON"));
   }
-}
-
-/**
- * A step that drops every table and view in the database.
- *
- * The names are read **before** the transaction opens — one connection, one
- * writer, nothing else is touching this file — and only the object list is
- * carried in. `local_meta` goes with them, which is correct: see
- * `migrateReplica`.
- */
-function dropEverything<TRun, TSchema extends LedgerSchema>(
-  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
-): (tx: SqlRunner) => void {
-  const objects = db.all<{ name: string; type: string }>(
-    sql.raw(
-      "select name, type from sqlite_master where type in ('table', 'view') and name not like 'sqlite_%'",
-    ),
-  );
-  return (tx) => {
-    /**
-     * **Defer the foreign keys, for the length of this transaction only.**
-     *
-     * `open.ts` has `pragma foreign_keys` on for the replica, and the tables it
-     * is enforcing against now actually declare references — so `drop table
-     * "accounts"` does an implicit `delete from accounts` and is refused on the
-     * spot by every `transactions` row pointing at it. There is no drop order
-     * that fixes it either: `transactions` and `categories` reference each other
-     * through `parent_id`-shaped chains, and a topological sort maintained here
-     * would be a second copy of the schema's edges.
-     *
-     * `pragma foreign_keys = off` is the obvious reach and is a **silent no-op
-     * inside a transaction** — SQLite documents it as such, so it would leave
-     * the drop failing exactly as before with nothing to point at.
-     * `defer_foreign_keys` is the sanctioned one: constraints are checked at
-     * COMMIT instead of per-statement, and it clears itself when the
-     * transaction ends. By COMMIT the tables have been recreated empty, so
-     * there is nothing left to violate — and a chain that dropped without
-     * recreating would fail at COMMIT rather than pass, which is the direction
-     * this file wants to fail in.
-     */
-    tx.run(sql.raw("pragma defer_foreign_keys = on"));
-    for (const object of objects) {
-      // Names come from this module's own DDL, but a quote in one would end the
-      // identifier and start a statement. Cheaper to refuse than to reason about.
-      if (object.name.includes('"')) throw new Error(`unquotable object name: ${object.name}`);
-      const kind = object.type === "view" ? "view" : "table";
-      tx.run(sql.raw(`drop ${kind} if exists "${object.name}"`));
-    }
-  };
 }
 
 /**
@@ -566,6 +471,23 @@ function refuseStaleCopy(path: string, fs: LedgerFs): void {
   }
 }
 
+/**
+ * `found` must be a version this chain actually passed through, or "the steps
+ * after it" is not well-defined. Zero is the exception: a database SQLite
+ * just created.
+ */
+function refuseUnknownVersion(
+  found: number,
+  migrations: readonly Migration[],
+  store: string,
+): void {
+  if (found !== 0 && !migrations.some((m) => m.version === found)) {
+    throw new Error(
+      `${store} is at version ${found}, which is not in this build's chain [${migrations.map((m) => m.version).join(", ")}] — a missing migration is an error, never a reset`,
+    );
+  }
+}
+
 /* ── the two migrators ───────────────────────────────────────────────────── */
 
 /**
@@ -596,14 +518,7 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
     );
   }
 
-  // `found` must be a version this chain actually passed through, or "the steps
-  // after it" is a guess. Zero is the exception: a database SQLite just created.
-  if (found !== 0 && !migrations.some((m) => m.version === found)) {
-    throw new Error(
-      `outbox is at version ${found}, which is not in this build's chain [${migrations.map((m) => m.version).join(", ")}] — a missing migration is an error, never a reset (architecture/08 §5)`,
-    );
-  }
-
+  refuseUnknownVersion(found, migrations, "outbox");
   refuseStaleCopy(store.path, fs);
 
   const steps = migrations.filter((m) => m.version > found);
@@ -618,46 +533,30 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
 }
 
 /**
- * Migrate the replica — or drop and recreate it, when there is somewhere to
- * refetch from.
+ * Migrate the replica in place. Never dropped, never refetched — see this
+ * file's header for why.
  *
- * Four outcomes, and the last two are why this function is not the one above:
+ * Four outcomes:
  *
  * - **At current.** Nothing happens.
- * - **At zero.** A database SQLite just created. The chain runs; there is
- *   nothing to lose and nothing to refetch.
- * - **At anything else, every pending step `inPlace`.** A table rebuild (M2,
- *   this file's own header) that keeps the rows it started with — run
- *   without dropping anything, `canRefetch` never asked. This is the
- *   escape hatch, not the default: a step earns it by rebuilding one table
- *   where it stands, never by being convenient.
- * - **At anything else, otherwise.** §08's rule for the replica is *drop and
- *   refetch*, not *migrate*, and that is deliberate: it is what saves the
- *   replica from needing a second migration chain to maintain for a change
- *   that is not an in-place rebuild. Applied here **only if `canRefetch`** —
- *   otherwise the "refetch" half does not exist, this file is the ledger, and
- *   dropping it destroys the record (§14.6). Then it raises, and has written
- *   nothing.
- *
- * **What happens to the watermark**, in each case. A forward *schema*
- * migration — in place or not — keeps `local_meta` untouched: the local
- * tables still hold what they held, so what has been applied to them is
- * unchanged. A **drop** takes it with everything else and the chain
- * recreates it at zero — which is right, and the safe direction besides: a
- * refetched replica holds what the *server* has admitted, so every entry
- * still in the outbox is by definition not reflected in it and must be
- * replayed. Erring the other way would strand intent that exists nowhere
- * else. With no backend this never arises for a non-in-place step: the
- * replica is never dropped, so the watermark only ever resets once a backend
- * exists.
+ * - **At zero.** A database SQLite just created. Every step runs; there is
+ *   nothing to preserve and nothing missing to reason about.
+ * - **Behind current, at a version this chain recognises.** The steps after
+ *   `found` run, in one transaction, against the tables as they stand — rows
+ *   intact. `refetchRequired` is `false`: nothing here ever drops the
+ *   replica, so nothing here ever needs the rows back from a server.
+ * - **Ahead of current.** A database written by a newer app. This build
+ *   raises and writes nothing — the same rule `migrateOutbox` applies, for
+ *   the same reason: a build that does not recognise a version must not
+ *   guess what running its own chain over it would do.
  */
 export function migrateReplica<TRun, TSchema extends LedgerSchema>(
   store: ReplicaStore<TRun, TSchema>,
-  options: MigrateReplicaOptions,
+  options: MigrateOptions,
 ): ReplicaMigrationResult {
-  const { fs, canRefetch } = options;
+  const { fs } = options;
   const migrations = options.migrations ?? REPLICA_MIGRATIONS;
-  const current = checkChain(migrations, { ddl: REPLICA_DDL, expectedHash: REPLICA_DDL_HASH });
+  const current = checkChain(migrations);
   const found = readUserVersion(store.db);
 
   if (found === current) {
@@ -670,47 +569,29 @@ export function migrateReplica<TRun, TSchema extends LedgerSchema>(
     };
   }
 
-  // The steps that have not run yet. When every one of them rebuilds in
-  // place (M2), that is reason enough on its own not to drop — a phone with
-  // no backend gets the rebuild through the same door a phone with one does,
-  // rather than being permanently stuck at `found` because it has no
-  // refetch half to satisfy the ordinary rule below. `found < current` is
-  // checked alongside `pending.every` on purpose and not folded away: `every`
-  // over an empty array is vacuously `true`, and `pending` is empty whenever
-  // `found` is *ahead* of this build's own chain (a newer or corrupted
-  // database) — that case still means dropping, never "nothing pending, so
-  // silently stamp `user_version` down to `current`".
-  const pending = migrations.filter((m) => m.version > found);
-  const inPlaceEligible = found < current && pending.every((m) => m.inPlace === true);
-  const dropping = found !== 0 && !inPlaceEligible;
-
-  if (dropping && !canRefetch) {
-    // Before the copy, before the checkpoint, before anything: the whole
-    // contract of this branch is that the file is left exactly as it was.
+  if (found > current) {
     throw new Error(
-      `replica is at version ${found} and this build is at ${current}, so the rule is drop and refetch — but no backend has ever been reached, so there is nothing to refetch from and this file is the only copy of the ledger (architecture/14 §14.6). Install a build at version ${found}, or export the ledger before running one that would drop it`,
+      `replica is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. Install the newer build before opening this file with an older one`,
     );
   }
 
+  refuseUnknownVersion(found, migrations, "replica");
   refuseStaleCopy(store.path, fs);
 
+  const steps = found === 0 ? migrations : migrations.filter((m) => m.version > found);
   const copy = takeCopy(store.path, store.db, fs);
-  // At zero every migration runs (there is nothing to skip past); dropping
-  // rebuilds from nothing the same way; otherwise only the steps after
-  // `found` run, in place, against the rows already there.
-  const running = found === 0 || dropping ? migrations : pending;
-  const steps = dropping
-    ? [dropEverything(store.db), ...running.map((m) => m.up)]
-    : running.map((m) => m.up);
-  runInOneTransaction(store.db, steps, current, {
-    foreignKeysOff: running.some((m) => m.inPlace),
-  });
+  runInOneTransaction(
+    store.db,
+    steps.map((m) => m.up),
+    current,
+    { foreignKeysOff: true },
+  );
 
   return {
     from: found,
     to: current,
-    applied: running.map((m) => m.version),
+    applied: steps.map((m) => m.version),
     copy,
-    refetchRequired: dropping,
+    refetchRequired: false,
   };
 }

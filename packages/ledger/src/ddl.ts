@@ -17,24 +17,32 @@
  * refusals is a constraint that emitter did not emit. `outbox.ts` declares
  * `index("outbox_pending_by_seq")` and the phone did not have it.
  *
- * `REPLICA_REBUILDS`, when it holds an entry, keys a migration file that
- * rebuilds an existing table rather than only adding to the schema —
- * `tools/embed-ddl.ts`'s own header says why it ships apart from
- * `REPLICA_DDL`, and `migrate.ts`'s `REPLICA_MIGRATIONS` is what turns a tag
- * into its own version. Each entry's own trailing statements recreate every
- * index the rebuilt table declares (H1) — `DROP TABLE` takes them with it,
- * and nothing declared them against the copy that replaces it.
+ * **One step per generated file, in filename order, statements verbatim.**
+ * `migrate.ts` turns `REPLICA_STEPS[i]` / `OUTBOX_STEPS[i]` into
+ * `REPLICA_MIGRATIONS` / `OUTBOX_MIGRATIONS`' version `i + 1`, and runs
+ * the step's statements — itself, or handed off whole to a hand-written
+ * backfill keyed by the step's own `tag` when one exists
+ * (`REPLICA_BACKFILLS` / `OUTBOX_BACKFILLS`, both in `migrate.ts`) — the
+ * SQL a schema step cannot itself express, such as filling a new column
+ * from existing rows before a statement later in the same step validates
+ * it. This module does not know which tags have one.
  */
 
-/** The fifteen shared tables, plus `local_meta` and its one row. */
-export const REPLICA_DDL: readonly string[] = [
-  `CREATE TABLE \`account_groups\` (
+/** One step per file in `drizzle/replica`, filename order — the fifteen shared tables, `local_meta` and its one row, and every schema change since. */
+export const REPLICA_STEPS: readonly {
+  readonly tag: string;
+  readonly statements: readonly string[];
+}[] = [
+  {
+    tag: "0000_schema",
+    statements: [
+      `CREATE TABLE \`account_groups\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
 	\`institution\` text,
 	\`sort\` integer DEFAULT 0 NOT NULL
 )`,
-  `CREATE TABLE \`accounts\` (
+      `CREATE TABLE \`accounts\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
 	\`kind\` text DEFAULT 'other' NOT NULL,
@@ -55,7 +63,7 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`currency\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (\`group_id\`) REFERENCES \`account_groups\`(\`id\`) ON UPDATE no action ON DELETE no action
 )`,
-  `CREATE TABLE \`categories\` (
+      `CREATE TABLE \`categories\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`parent_id\` text,
 	\`name\` text NOT NULL,
@@ -72,7 +80,7 @@ export const REPLICA_DDL: readonly string[] = [
 	\`version\` integer DEFAULT 1 NOT NULL,
 	FOREIGN KEY (\`parent_id\`) REFERENCES \`categories\`(\`id\`) ON UPDATE no action ON DELETE restrict
 )`,
-  `CREATE TABLE \`counterparties\` (
+      `CREATE TABLE \`counterparties\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
 	\`kind\` text DEFAULT 'person' NOT NULL,
@@ -87,7 +95,7 @@ export const REPLICA_DDL: readonly string[] = [
 	\`version\` integer DEFAULT 1 NOT NULL,
 	FOREIGN KEY (\`settlement_currency\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action
 )`,
-  `CREATE TABLE \`currencies\` (
+      `CREATE TABLE \`currencies\` (
 	\`code\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
 	\`symbol\` text DEFAULT '' NOT NULL,
@@ -101,14 +109,14 @@ export const REPLICA_DDL: readonly string[] = [
 	\`updated_at\` integer NOT NULL,
 	\`version\` integer DEFAULT 1 NOT NULL
 )`,
-  `CREATE TABLE \`dashboard_layouts\` (
+      `CREATE TABLE \`dashboard_layouts\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
 	\`is_active\` integer DEFAULT false NOT NULL,
 	\`is_preset\` integer DEFAULT false NOT NULL,
 	\`sort\` integer DEFAULT 0 NOT NULL
 )`,
-  `CREATE TABLE \`dashboard_widgets\` (
+      `CREATE TABLE \`dashboard_widgets\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`layout_id\` text NOT NULL,
 	\`kind\` text NOT NULL,
@@ -118,7 +126,7 @@ export const REPLICA_DDL: readonly string[] = [
 	\`sort\` integer DEFAULT 0 NOT NULL,
 	FOREIGN KEY (\`layout_id\`) REFERENCES \`dashboard_layouts\`(\`id\`) ON UPDATE no action ON DELETE cascade
 )`,
-  `CREATE TABLE \`fx_rates\` (
+      `CREATE TABLE \`fx_rates\` (
 	\`base\` text NOT NULL,
 	\`quote\` text NOT NULL,
 	\`date\` text NOT NULL,
@@ -128,12 +136,12 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`base\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (\`quote\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action
 )`,
-  `CREATE TABLE \`local_meta\` (
+      `CREATE TABLE \`local_meta\` (
 	\`id\` integer PRIMARY KEY NOT NULL,
 	\`applied_seq\` integer DEFAULT 0 NOT NULL,
 	CONSTRAINT "local_meta_single_row" CHECK("local_meta"."id" = 1)
 )`,
-  `CREATE TABLE \`recurring_transactions\` (
+      `CREATE TABLE \`recurring_transactions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`type\` text NOT NULL,
 	\`account_id\` text NOT NULL,
@@ -158,11 +166,11 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`counterparty_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (\`currency\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action
 )`,
-  `CREATE TABLE \`tags\` (
+      `CREATE TABLE \`tags\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL
 )`,
-  `CREATE TABLE \`transaction_lines\` (
+      `CREATE TABLE \`transaction_lines\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`transaction_id\` text NOT NULL,
 	\`receipt_id\` text,
@@ -174,13 +182,13 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`transaction_id\`) REFERENCES \`transactions\`(\`id\`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (\`category_id\`) REFERENCES \`categories\`(\`id\`) ON UPDATE no action ON DELETE no action
 )`,
-  `CREATE TABLE \`transaction_tags\` (
+      `CREATE TABLE \`transaction_tags\` (
 	\`transaction_id\` text NOT NULL,
 	\`tag_id\` text NOT NULL,
 	FOREIGN KEY (\`transaction_id\`) REFERENCES \`transactions\`(\`id\`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (\`tag_id\`) REFERENCES \`tags\`(\`id\`) ON UPDATE no action ON DELETE cascade
 )`,
-  `CREATE TABLE \`transactions\` (
+      `CREATE TABLE \`transactions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`date\` text NOT NULL,
 	\`type\` text NOT NULL,
@@ -228,10 +236,26 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`to_currency\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (\`recurring_id\`) REFERENCES \`recurring_transactions\`(\`id\`) ON UPDATE no action ON DELETE no action
 )`,
-  `INSERT INTO \`local_meta\` (\`id\`, \`applied_seq\`) VALUES (1, 0)`,
-  `ALTER TABLE \`account_groups\` ADD \`archived\` integer DEFAULT false NOT NULL`,
-  `CREATE UNIQUE INDEX \`fx_rates_pk\` ON \`fx_rates\` (\`base\`,\`quote\`,\`date\`)`,
-  `CREATE TABLE \`counterparty_distinct_pairs\` (
+    ],
+  },
+  {
+    tag: "0001_database_objects",
+    statements: [`INSERT INTO \`local_meta\` (\`id\`, \`applied_seq\`) VALUES (1, 0)`],
+  },
+  {
+    tag: "0002_schema",
+    statements: [`ALTER TABLE \`account_groups\` ADD \`archived\` integer DEFAULT false NOT NULL`],
+  },
+  {
+    tag: "0003_schema",
+    statements: [
+      `CREATE UNIQUE INDEX \`fx_rates_pk\` ON \`fx_rates\` (\`base\`,\`quote\`,\`date\`)`,
+    ],
+  },
+  {
+    tag: "0004_schema",
+    statements: [
+      `CREATE TABLE \`counterparty_distinct_pairs\` (
 	\`a_id\` text NOT NULL,
 	\`b_id\` text NOT NULL,
 	PRIMARY KEY(\`a_id\`, \`b_id\`),
@@ -239,7 +263,7 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`b_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "counterparty_distinct_pairs_ordered" CHECK("counterparty_distinct_pairs"."a_id" < "counterparty_distinct_pairs"."b_id")
 )`,
-  `CREATE TABLE \`counterparty_merges\` (
+      `CREATE TABLE \`counterparty_merges\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`winner_id\` text NOT NULL,
 	\`loser_id\` text NOT NULL,
@@ -249,13 +273,44 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`winner_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (\`loser_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action
 )`,
-  `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (lower(trim("name")))`,
-];
-
-/** Every table-rebuild file (M2), keyed by tag — `migrate.ts`'s `REPLICA_MIGRATIONS` runs one by looking its tag up here. */
-export const REPLICA_REBUILDS: Readonly<Record<string, readonly string[]>> = {
-  "0007_schema": [
-    `CREATE TABLE \`__new_transactions\` (
+      `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (lower(trim("name")))`,
+    ],
+  },
+  {
+    tag: "0005_schema",
+    statements: [
+      `CREATE INDEX \`transaction_lines_category_idx\` ON \`transaction_lines\` (\`category_id\`)`,
+      `CREATE INDEX \`transactions_category_idx\` ON \`transactions\` (\`category_id\`)`,
+    ],
+  },
+  {
+    tag: "0006_schema",
+    statements: [
+      `DROP INDEX \`counterparties_name_uq\``,
+      `ALTER TABLE \`counterparties\` ADD \`name_folded\` text DEFAULT '' NOT NULL`,
+      `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
+      `CREATE TABLE \`__new_counterparty_merges\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`winner_id\` text NOT NULL,
+	\`loser_id\` text NOT NULL,
+	\`moved_transaction_ids\` text DEFAULT '[]' NOT NULL,
+	\`merged_at\` integer NOT NULL,
+	\`unmerged_at\` integer,
+	FOREIGN KEY (\`winner_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`loser_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "counterparty_merges_winner_ne_loser" CHECK("__new_counterparty_merges"."winner_id" <> "__new_counterparty_merges"."loser_id")
+)`,
+      `INSERT INTO \`__new_counterparty_merges\`("id", "winner_id", "loser_id", "moved_transaction_ids", "merged_at", "unmerged_at") SELECT "id", "winner_id", "loser_id", "moved_transaction_ids", "merged_at", "unmerged_at" FROM \`counterparty_merges\``,
+      `DROP TABLE \`counterparty_merges\``,
+      `ALTER TABLE \`__new_counterparty_merges\` RENAME TO \`counterparty_merges\``,
+      `CREATE UNIQUE INDEX \`counterparty_merges_loser_open_uq\` ON \`counterparty_merges\` (\`loser_id\`) WHERE "counterparty_merges"."unmerged_at" is null`,
+      `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
+    ],
+  },
+  {
+    tag: "0007_schema",
+    statements: [
+      `CREATE TABLE \`__new_transactions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`date\` text NOT NULL,
 	\`type\` text NOT NULL,
@@ -304,15 +359,24 @@ export const REPLICA_REBUILDS: Readonly<Record<string, readonly string[]>> = {
 	FOREIGN KEY (\`recurring_id\`) REFERENCES \`recurring_transactions\`(\`id\`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "transactions_debt_amount_requires_currency" CHECK("__new_transactions"."debt_amount" IS NULL OR "__new_transactions"."debt_currency" IS NOT NULL)
 )`,
-    `INSERT INTO \`__new_transactions\`("id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at") SELECT "id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at" FROM \`transactions\``,
-    `DROP TABLE \`transactions\``,
-    `ALTER TABLE \`__new_transactions\` RENAME TO \`transactions\``,
-  ],
-};
+      `INSERT INTO \`__new_transactions\`("id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at") SELECT "id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at" FROM \`transactions\``,
+      `DROP TABLE \`transactions\``,
+      `ALTER TABLE \`__new_transactions\` RENAME TO \`transactions\``,
+      `CREATE INDEX \`transactions_category_idx\` ON \`transactions\` (\`category_id\`)`,
+      `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
+    ],
+  },
+];
 
-/** The queue, its index, and the counter `claimSeq` allocates from. */
-export const OUTBOX_DDL: readonly string[] = [
-  `CREATE TABLE \`outbox\` (
+/** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */
+export const OUTBOX_STEPS: readonly {
+  readonly tag: string;
+  readonly statements: readonly string[];
+}[] = [
+  {
+    tag: "0000_schema",
+    statements: [
+      `CREATE TABLE \`outbox\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`seq\` integer NOT NULL,
 	\`operation\` text NOT NULL,
@@ -329,9 +393,15 @@ export const OUTBOX_DDL: readonly string[] = [
 	\`captured_tz\` text NOT NULL,
 	\`captured_offset_minutes\` integer NOT NULL
 )`,
-  `CREATE INDEX \`outbox_pending_by_seq\` ON \`outbox\` (\`state\`,\`seq\`)`,
-  `CREATE TABLE \`outbox_seq\` (
+      `CREATE INDEX \`outbox_pending_by_seq\` ON \`outbox\` (\`state\`,\`seq\`)`,
+      `CREATE TABLE \`outbox_seq\` (
 	\`id\` integer PRIMARY KEY NOT NULL,
 	\`issued\` integer NOT NULL
 )`,
+    ],
+  },
+  {
+    tag: "0001_schema",
+    statements: [`ALTER TABLE \`outbox\` ADD \`blocked_disposition\` text`],
+  },
 ];

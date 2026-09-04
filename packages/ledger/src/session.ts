@@ -388,10 +388,7 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): StartResult<TRun
     stage = "migrate_outbox";
     const outboxMigration = migrateOutbox(ledger.outbox, { fs: options.fs });
     stage = "migrate_replica";
-    const replicaMigration = migrateReplica(ledger.replica, {
-      fs: options.fs,
-      canRefetch: false,
-    });
+    const replicaMigration = migrateReplica(ledger.replica, { fs: options.fs });
 
     stage = "bootstrap_currency";
     // `onConflictDoNothing`, so a launch after someone has edited a currency

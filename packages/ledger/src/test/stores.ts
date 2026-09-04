@@ -75,7 +75,7 @@ export function scratchStores(): ScratchStores {
     // Outbox first, mirroring the order a launch has to use: the replica's
     // watermark is meaningless until the queue it counts against exists.
     migrateOutbox(opened.outbox, { fs: nodeFs });
-    migrateReplica(opened.replica, { fs: nodeFs, canRefetch: false });
+    migrateReplica(opened.replica, { fs: nodeFs });
     return opened;
   }
 

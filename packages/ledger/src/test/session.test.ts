@@ -213,7 +213,7 @@ describe("the phone ledger session", () => {
     createLocalLedgerSession(options()).close();
     const ledger = openLedger(open, paths);
     migrateOutbox(ledger.outbox, { fs });
-    migrateReplica(ledger.replica, { fs, canRefetch: false });
+    migrateReplica(ledger.replica, { fs });
     ledger.outbox.db
       .insert(outbox)
       .values({
@@ -260,7 +260,7 @@ describe("the phone ledger session", () => {
     session.close();
   });
 
-  it("refuses a replica version mismatch rather than dropping the only ledger", () => {
+  it("refuses a replica version ahead of this build rather than guessing", () => {
     const first = createLocalLedgerSession(options());
     first.createAccount(accountInput(), capture);
     first.close();
@@ -275,14 +275,14 @@ describe("the phone ledger session", () => {
         ...options(),
         diagnostics: (event: object) => diagnostics.push(event),
       }),
-    ).toThrow(/only copy of the ledger/);
+    ).toThrow(/newer app/);
     expect(diagnostics.at(-1)).toMatchObject({
       scope: "ledger_startup",
       phase: "failure",
       stage: "migrate_replica",
       error: {
         name: "Error",
-        message: expect.stringMatching(/only copy of the ledger/),
+        message: expect.stringMatching(/newer app/),
         stack: expect.any(String),
       },
     });

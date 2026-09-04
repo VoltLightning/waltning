@@ -343,11 +343,18 @@ the same way a `CHECK` violation is, even though nothing here is a trigger.
 
 **A migration must not be able to destroy the ledger.** With no backend the
 phone's database is the only copy, and unlike the server there is nothing to
-reset from — no seed, no second copy, no `db:reset`. So every schema migration
+reset from — no seed, no second copy, no `db:reset`. So the replica migrates
+**in place** — one version per generated migration file
+(`packages/ledger/tools/embed-ddl.ts`, `08`'s own account of the two version
+counters), never by dropping and recreating it — and every schema migration
 copies the file first, runs inside a transaction, and keeps the pre-migration
 copy until the app has opened cleanly once. A transaction alone covers an error;
 it does not cover a crash, a kill, or a corrupt write, which is the case that
-matters when there is no second copy.
+matters when there is no second copy. A **refetch** — discarding the replica
+and rebuilding it from a server — is sync's own operation (arc 2), never one a
+schema version triggers; this arc has no backend to refetch from, so the
+question does not arise here at all, and even once one exists a schema
+mismatch is answered by migrating forward, not by falling back to a resync.
 
 ---
 
