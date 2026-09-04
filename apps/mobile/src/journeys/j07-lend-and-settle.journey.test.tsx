@@ -26,16 +26,14 @@
  * account's").** `SettleSheet` always derives `currency` from the picked
  * account (`counterparty-detail-screen.tsx`'s own `handleSettleSave`), so the
  * mismatch this finding names can never actually reach the sheet through a
- * tap — there is no control that lets the two diverge. What the sheet *does*
- * let happen, because nothing here checks it either, is settling a PLN debt
- * through the ledger's pivot-currency (USD) account with a self-typed
- * cross-rate and no refusal at all — USD is always capturable (§7.0), so the
- * one proactive guard this sheet has (`accountNeedsRate`) never fires, and
- * nothing else asks whether the account and the discharge currency actually
- * relate. That silent acceptance is what the refusal-path scenario below
- * exercises, through the real screen; the literal mismatch R2 H3 names is
- * proven directly against the controller, the one place it is reachable at
- * all (per the controller ruling: no UI control produces it).
+ * tap — there is no control that lets the two diverge, and the pivot
+ * currency (USD, always capturable per §7.0) can never trigger the sheet's
+ * own `accountNeedsRate` caption either, so there is no needs-rate scenario
+ * for a screen test to exercise. The screen test below is the happy path
+ * only; R2 H3 itself is proven directly against the controller instead — the
+ * one place it is reachable at all — by calling `settleDebt` with a
+ * `currency` that does not match the picked account, a mismatch no UI
+ * control can express.
  */
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";

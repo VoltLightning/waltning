@@ -75,8 +75,8 @@ function lineRows(j: ReturnType<typeof openJourney>) {
     .all();
 }
 
-/** Archives the account, then books a live 0.12345678 XAA transaction with one line on it. */
-function archiveAndBookLiveTransaction(j: ReturnType<typeof openJourney>) {
+/** Archives the account, then books a live `amount` XAA transaction with one line on it. */
+function archiveAndBookLiveTransaction(j: ReturnType<typeof openJourney>, amount = "0.12345678") {
   j.session.archiveAccount({ id: ID.accountPln, version: 1 }, j.capture);
 
   const created = j.session.createTransaction(
@@ -85,7 +85,7 @@ function archiveAndBookLiveTransaction(j: ReturnType<typeof openJourney>) {
       date: accountingDate("2026-01-01"),
       type: "expense",
       accountId: ID.accountPln,
-      amountOriginal: money.toMoney("0.12345678"),
+      amountOriginal: money.toMoney(amount),
       currency: XAA,
       payee: "",
       note: "",
@@ -101,10 +101,22 @@ function archiveAndBookLiveTransaction(j: ReturnType<typeof openJourney>) {
     {
       transactionId: ID.txn1,
       version: created.version,
-      lines: [{ id: line, description: "Line", amount: money.toMoney("0.12345678") }],
+      lines: [{ id: line, description: "Line", amount: money.toMoney(amount) }],
     },
     j.capture,
   );
+}
+
+/**
+ * Same shape as `setup()`, but the account's opening balance is seeded at
+ * the 2dp scale a later shrink will target, instead of at XAA's full 8dp —
+ * so nothing this scenario books is over-scale for that shrink to refuse.
+ */
+function setupAtTargetScale() {
+  const j = openJourney();
+  seedCurrency(j, XAA, { isPivot: true, decimals: 8 });
+  seedAccount(j, ID.accountPln, "Bank D · XAA", XAA, { openingBalance: "1.12" });
+  return j;
 }
 
 describe("update_currency — SPEC.md §7.2, a decimals shrink checked against live rows", () => {
@@ -126,10 +138,10 @@ describe("update_currency — SPEC.md §7.2, a decimals shrink checked against l
     }
   });
 
-  it("succeeds once the live transaction is deleted, even though the archived account and its orphaned line still hold 8dp values", () => {
-    const j = setup();
+  it("succeeds once the live transaction is deleted and the archived account's opening balance and orphaned line were never over-scale", () => {
+    const j = setupAtTargetScale();
     try {
-      const txn = archiveAndBookLiveTransaction(j);
+      const txn = archiveAndBookLiveTransaction(j, "0.12");
       j.session.deleteTransaction({ id: ID.txn1, version: txn.version }, j.capture);
 
       const updated = j.session.updateCurrency(
