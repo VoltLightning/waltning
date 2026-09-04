@@ -259,6 +259,39 @@ export const en = {
     noMatchBody: 'Nothing here matches "{{query}}".',
     /** The create row's group chooser, shown when no group chip narrowed the sheet first. */
     chooseGroup: "Choose a group",
+    /** S19's archived toggle. */
+    showArchived: "Show archived",
+    /** `Tag` variants over a leaf — usage count, archived, unused. */
+    archived: "Archived",
+    unused: "Unused",
+    usageOne: "{{count}} transaction",
+    usageMany: "{{count}} transactions",
+    /** The trailing `IconButton`'s accessible name — never a bare "more". */
+    actionsFor: "{{name}} actions",
+    /** The actions sheet's five verbs (S19 §3). */
+    rename: "Rename",
+    move: "Move",
+    convertToGroup: "Convert to group",
+    convertToLeaf: "Convert to leaf",
+    merge: "Merge",
+    archive: "Archive",
+    /** The move sheet's target picker. */
+    moveTargetLabel: "Group",
+    moveTargetPlaceholder: "Choose a group",
+    /** The merge sheet's winner picker and preview. */
+    mergeWinnerLabel: "Merge into",
+    mergeWinnerPlaceholder: "Choose a category",
+    mergeRowTransactions: "Transactions",
+    mergeRowLines: "Lines",
+    mergeRowRules: "Rules",
+    /** §7 — stated before commit, not after. */
+    mergeConfirmTitle: "This can't be undone in one step",
+    mergeConfirmBody:
+      "Every transaction, line and rule on “{{loser}}” moves to “{{winner}}”, and “{{loser}}” is archived. Correct a bad merge by running it again with the names swapped.",
+    mergeConfirmAction: "Merge",
+    /** §9.2 — the near-duplicate finder above the tree. */
+    collisionsTitle: "Possibly the same category",
+    collisionsReview: "Review",
   },
   shell: {
     today: "Today",
@@ -339,6 +372,8 @@ export const en = {
     debt: "Debt",
     /** S09's nav title — no page heading repeats it (`TransactionHero` already states the amount). */
     transaction: "Transaction",
+    settings: "Settings",
+    categories: "Categories",
   },
   states: {
     /**

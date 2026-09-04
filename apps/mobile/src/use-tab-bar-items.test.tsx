@@ -9,11 +9,17 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-const switchTab = { today: vi.fn(), ledger: vi.fn(), calendar: vi.fn(), debt: vi.fn() };
-let focused: "today" | "ledger" | "calendar" | "debt" = "today";
+const switchTab = {
+  today: vi.fn(),
+  ledger: vi.fn(),
+  calendar: vi.fn(),
+  debt: vi.fn(),
+  settings: vi.fn(),
+};
+let focused: "today" | "ledger" | "calendar" | "debt" | "settings" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "calendar" | "debt" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "calendar" | "debt" | "settings" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -31,16 +37,17 @@ describe("useTabBarItems", () => {
       "ledger",
       "calendar",
       "debt",
+      "settings",
     ]);
-    expect(result.current.items.map((i) => i.active)).toEqual([false, true, false, false]);
+    expect(result.current.items.map((i) => i.active)).toEqual([false, true, false, false, false]);
   });
 
   it("dispatches onSelect to the named tab's own switchTab", () => {
     focused = "today";
     const { result } = renderHook(() => useTabBarItems());
 
-    act(() => result.current.onSelect("debt"));
-    expect(switchTab.debt).toHaveBeenCalledWith("debt", {});
+    act(() => result.current.onSelect("settings"));
+    expect(switchTab.settings).toHaveBeenCalledWith("settings", {});
     expect(switchTab.today).not.toHaveBeenCalled();
   });
 
@@ -51,6 +58,6 @@ describe("useTabBarItems", () => {
       return <>{items.map((item) => item.label).join(" · ")}</>;
     }
     render(<Probe />);
-    expect(screen.getByText("Today · Ledger · Calendar · Debt")).toBeDefined();
+    expect(screen.getByText("Today · Ledger · Calendar · Debt · Settings")).toBeDefined();
   });
 });
