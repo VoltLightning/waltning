@@ -578,6 +578,18 @@ describe("CategoriesScreen", () => {
     expect(screen.getByText("Groceries & household")).toBeDefined();
   });
 
+  it("names the direction it just converted — group vs leaf are different Toasts", () => {
+    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+
+    fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Convert to group" }));
+    expect(screen.getByText("Convert to group")).toBeDefined(); // the Toast, not the button
+
+    fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Convert to leaf" }));
+    expect(screen.getByText("Convert to leaf")).toBeDefined();
+  });
+
   it("shows the sibling-collision refusal inline, without closing the sheet", () => {
     withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
 

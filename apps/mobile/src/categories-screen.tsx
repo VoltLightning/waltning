@@ -183,17 +183,17 @@ export default function CategoriesScreen() {
 
   const handleConvert = useCallback(() => {
     if (sheet?.type !== "actions") return;
-    const draft: ConvertCategoryDraft = {
-      id: sheet.category.id,
-      to: sheet.category.isLeaf ? "group" : "leaf",
-    };
+    const to = sheet.category.isLeaf ? "group" : "leaf";
+    const draft: ConvertCategoryDraft = { id: sheet.category.id, to };
     const result = ledger.convertCategory(draft);
     if ("fieldErrors" in result) {
       setSheet({ ...sheet, error: messageOf(result.fieldErrors) });
       return;
     }
     setSheet(null);
-    setToast({ message: t("categories.convertToGroup") });
+    setToast({
+      message: t(to === "group" ? "categories.convertToGroup" : "categories.convertToLeaf"),
+    });
   }, [sheet, ledger, t, messageOf]);
 
   const handleArchive = useCallback(() => {
