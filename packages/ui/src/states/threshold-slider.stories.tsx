@@ -24,3 +24,6 @@ export const Floor: Story = { args: { value: 0.5 } };
 
 /** The ceiling — the closest the control ever gets to certainty. */
 export const Ceiling: Story = { args: { value: 0.99 } };
+
+/** Mid-track, with the value badge riding above the thumb. */
+export const Dragging: Story = { args: { value: 0.75 } };

@@ -19,6 +19,19 @@ describe("Toast", () => {
     vi.advanceTimersByTime(4_000);
     expect(onDismiss).toHaveBeenCalledOnce();
   });
+
+  it("renders the leading status mark beside the message", () => {
+    render(<Toast message="Saved" onDismiss={vi.fn()} />);
+    expect(screen.getByTestId("toast-mark")).toBeDefined();
+    expect(screen.getByText("Saved")).toBeDefined();
+  });
+
+  it("still fires dismiss when the action is pressed", () => {
+    const onDismiss = vi.fn();
+    render(<Toast message="Saved" onDismiss={onDismiss} />);
+    screen.getByRole("button", { name: "Dismiss" }).click();
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
 });
 
 describe("UndoToast", () => {
@@ -51,5 +64,10 @@ describe("UndoToast", () => {
   it("does not show a count for a single occurrence", () => {
     render(<UndoToast message="Row accepted" onUndo={vi.fn()} onDismiss={vi.fn()} count={1} />);
     expect(screen.queryByText(/×/)).toBeNull();
+  });
+
+  it("renders the same leading status mark as Toast", () => {
+    render(<UndoToast message="Row deleted" onUndo={vi.fn()} onDismiss={vi.fn()} />);
+    expect(screen.getByTestId("toast-mark")).toBeDefined();
   });
 });

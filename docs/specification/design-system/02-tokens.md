@@ -288,9 +288,11 @@ buttons and inputs all share the `sm` corner, differing by size and padding
 rather than by shape — so adjacency between a chip and a button reads as two
 sizes of one material. `md` is a card, `lg` a sheet, `xs` a glyph-scale box (a
 checkbox). `pill` survives only where roundness *is* the control: a radio is a
-circle everywhere in computing, a switch is a sliding capsule, and the add
-button is the one object floating above the page. No control invents a radius
-between these.
+circle everywhere in computing, a switch is a sliding capsule, the add button
+is the one object floating above the page, and `ThinkingIndicator`'s three
+loading dots are a fourth — each one a beat of a wait rather than a boundary,
+so the pill shape reads as a pulse rather than as a control. No control
+invents a radius between these.
 
 **Control metrics, the ones that drifted before they were written down:**
 
@@ -309,7 +311,7 @@ adopted it.
 
 ### 2.5 Elevation
 
-**One shadow, on the one thing that floats.**
+**One shadow, reserved for what floats above the page.**
 
 Nothing that sits in the layout casts a shadow. A card is a surface with a
 one-pixel `border`; a sheet is a surface with a scrim behind it; elevation is
@@ -322,12 +324,13 @@ in their mechanism.
 |---|---|---|
 | `elevation-card` / `-raised` / `-frame` | `1px solid border`, no shadow | Every surface in the layout. The three names survive so a component can still say what kind of surface it is |
 | `border-hairline` | `1px solid rgba(23,29,26,.10)` | Dividers |
-| `shadow-float` | `0 1px 2px 10%` · `0 4px 10px 8%` · `0 12px 24px -8px 16%`, all `#0f2b1f` | **The floating add button, and nothing else** |
-| `shadow-float-lifted` | `0 2px 4px 12%` · `0 10px 22px 10%` · `0 24px 40px -10px 22%` | The same button while it is being dragged |
+| `shadow-float` | `0 1px 2px 10%` · `0 4px 10px 8%` · `0 12px 24px -8px 16%`, all `#0f2b1f` | **The floating add button and `Toast`/`UndoToast` — nothing else in the layout gets one** |
+| `shadow-float-lifted` | `0 2px 4px 12%` · `0 10px 22px 10%` · `0 24px 40px -10px 22%` | The add button while it is being dragged |
 
-The floating button is the one object *above* the page, and the shadow is what
-says so: three layers — a tight contact edge, a mid cast, a soft far cast —
-rather than one large blur, which is the glow removed everywhere else. The
+The floating button and the toast are the two objects that sit *above* the
+page rather than in it, and the shadow is what says so: three layers — a
+tight contact edge, a mid cast, a soft far cast — rather than one large blur,
+which is the glow removed everywhere else. The
 opacities are low on purpose: Geist stacks its layers at 4–12%, and a first cut
 at three times that read as a glow, which is the one thing a shadow here must
 not do. In dark

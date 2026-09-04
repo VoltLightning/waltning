@@ -25,5 +25,7 @@ export const useAnimatedStyle = m.useAnimatedStyle;
 export const withTiming = m.withTiming;
 export const withSpring = m.withSpring;
 export const withRepeat = m.withRepeat;
+export const withDelay = m.withDelay;
+export const withSequence = m.withSequence;
 export const runOnJS = m.runOnJS;
 export const Easing = m.Easing;
