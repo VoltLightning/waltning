@@ -57,6 +57,13 @@
       "when": 1788502789610,
       "tag": "0007_counterparty_merges_and_distinct_pairs",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788533082978,
+      "tag": "0008_transaction_lines_category_index",
+      "breakpoints": true
     }
   ]
 }

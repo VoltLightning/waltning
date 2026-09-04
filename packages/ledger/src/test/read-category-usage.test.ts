@@ -145,6 +145,35 @@ describe("readCategoryUsage", () => {
     expect(usage.get(TAKEOUT)).toBeUndefined();
   });
 
+  // H2 — `hasLines` used to come from the same map as the category tally,
+  // which only ever holds a transaction whose lines carry a *non-null*
+  // category. A transaction whose lines are all null-category therefore
+  // looked line-less and fell back to counting its own (stale) header
+  // category — exactly what §6's `WHERE NOT EXISTS (SELECT 1 FROM
+  // transaction_lines …)` says a transaction *with* lines must never do.
+  it("a transaction with only null-category lines does not count for its header category", () => {
+    const txnId = id<"transactions">("aaaaaaaa-0000-4000-8000-000000000006");
+    s.ledger.replica.db
+      .insert(transactions)
+      .values(transaction({ id: txnId, categoryId: GROCERIES }))
+      .run();
+    s.ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: id<"transactionLines">("bbbbbbbb-0000-4000-8000-000000000006"),
+        transactionId: txnId,
+        description: "Split, not yet categorized",
+        amount: money.toMoney("18.40"),
+        categoryId: null,
+      })
+      .run();
+
+    const usage = readCategoryUsage(s.ledger.replica.db);
+
+    expect(usage.get(GROCERIES)).toBeUndefined();
+    expect(usage.size).toBe(0);
+  });
+
   it("excludes a soft-deleted transaction", () => {
     s.ledger.replica.db
       .insert(transactions)

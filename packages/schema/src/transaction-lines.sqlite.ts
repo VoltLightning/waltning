@@ -1,4 +1,4 @@
-import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { type AnySQLiteColumn, index } from "drizzle-orm/sqlite-core";
 import { categories } from "./categories.sqlite.ts";
 import { sqliteKit as k } from "./kit.ts";
 import { transactions } from "./transactions.sqlite.ts";
@@ -34,4 +34,7 @@ export const transactionLinesColumns = (refs: TransactionLineRefs) => ({
 export const transactionLines = k.table(
   "transaction_lines",
   transactionLinesColumns({ transactionId: () => transactions.id }),
+  // `category_id` (M2) — S19's merge preview scans this on every render the
+  // merge sheet is open for; see `transactions.sqlite.ts`'s own note.
+  (t) => [index("transaction_lines_category_idx").on(t.categoryId)],
 );

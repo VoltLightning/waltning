@@ -410,6 +410,10 @@ export const transactionLines = pgTable(
   (t) => [
     index("transaction_lines_transaction_idx").on(t.transactionId),
     index("transaction_lines_receipt_idx").on(t.receiptId),
+    // M2 — S19's merge preview (`readCategoryReferenceCounts`) scans this by
+    // category on every render the merge sheet is open for; `transactions`
+    // already had `transactions_category_idx`, this table did not.
+    index("transaction_lines_category_idx").on(t.categoryId),
   ],
 );
 
