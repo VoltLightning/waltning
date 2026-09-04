@@ -189,6 +189,12 @@ function fakeController(
     changePivot: () => undefined,
     setManualRate: () => ({ written: 0, replacedManual: 0 }),
     clearManualRate: () => ({ deleted: 0 }),
+    createCounterparty: () => undefined,
+    updateCounterparty: () => undefined,
+    mergeCounterparties: () => undefined,
+    unmergeCounterparties: () => undefined,
+    recordDistinctCounterparties: () => undefined,
+    settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
     reset: () => {
       accounts = [];
     },
@@ -461,6 +467,12 @@ describe("Today", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      createCounterparty: vi.fn(),
+      updateCounterparty: vi.fn(),
+      mergeCounterparties: vi.fn(),
+      unmergeCounterparties: vi.fn(),
+      recordDistinctCounterparties: vi.fn(),
+      settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

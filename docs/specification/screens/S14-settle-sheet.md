@@ -67,11 +67,18 @@ visible at the moment of entry rather than discovered in a report.
 
 | Reads | Writes |
 |---|---|
-| `counterparty_balances` for this person | **`create_transaction`** with `counterparty_role = 'debt'` |
+| `counterparty_balances` for this person | **`settle_debt`** — the amount that changed hands and the debt it discharges, never the residual (`architecture/08` H9) |
 | Reference rate for the settlement date | — |
 
-Settlement is an ordinary transaction, not a special entity. That is what keeps
+Settlement is an ordinary transaction, not a special entity — `settle_debt`
+writes exactly one, with `counterparty_role = 'debt'`. That is what keeps
 balances derived and unable to drift from history.
+
+**Not `create_transaction`.** `operations.md`'s `settle_debt` row already says
+so: that call was the defect H9 fixed — `create_transaction` has no notion of
+a residual and no channel to return a corrected one, so a client stuck with it
+would either compute the residual itself against a balance that could be
+stale, or silently drop the check this screen exists to make.
 
 ## 6. States
 

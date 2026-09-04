@@ -3,6 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import { createPhoneLedger } from "./create-phone-ledger.ts";
@@ -85,6 +86,12 @@ describe("usePhoneLedger", () => {
         changePivot: () => undefined,
         setManualRate: () => ({ written: 0, replacedManual: 0 }),
         clearManualRate: () => ({ deleted: 0 }),
+        createCounterparty: () => undefined,
+        updateCounterparty: () => undefined,
+        mergeCounterparties: () => undefined,
+        unmergeCounterparties: () => undefined,
+        recordDistinctCounterparties: () => undefined,
+        settleDebt: () => ({ residual: money.toMoney("0"), overSettled: false }),
         reset: () => undefined,
       },
       {

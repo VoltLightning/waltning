@@ -3,6 +3,7 @@ import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning
 import { type Id, type IdTable, id } from "@waltning/core/id";
 import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
+// ── E2 · counterparties and settlement — its own block, same reason A3/A2 give ──
 import {
   type AccountKind,
   type AddCurrencyInput,
@@ -14,8 +15,10 @@ import {
   type CategorizeBatchInput,
   type ChangePivotInput,
   type ClearManualRateInput,
+  type CounterpartyKind,
   type CreateAccountInput,
   type CreateCategoryInput,
+  type CreateCounterpartyInput,
   type CreateGroupInput,
   type CreateTransactionInput,
   categorizeBatchInput,
@@ -23,27 +26,39 @@ import {
   clearManualRateInput,
   createAccountInput,
   createCategoryInput,
+  createCounterpartyInput,
   createGroupInput,
   createTransactionInput,
   type DeleteTransactionInput,
   deleteTransactionInput,
+  type MergeCounterpartiesInput,
+  mergeCounterpartiesInput,
   type ReconcileAccountInput,
+  type RecordDistinctCounterpartiesInput,
   reconcileAccountInput,
+  recordDistinctCounterpartiesInput,
   type SetManualRateInput,
   type SetPinnedInput,
   type SetRateSourceInput,
   type SetTransactionLinesInput,
+  type SettleDebtInput,
   setManualRateInput,
   setPinnedInput,
   setRateSourceInput,
   setTransactionLinesInput,
+  settleDebtInput,
+  type UnmergeCounterpartiesInput,
   type UpdateAccountInput,
+  type UpdateCounterpartyInput,
   type UpdateTransactionInput,
+  unmergeCounterpartiesInput,
   updateAccountInput,
+  updateCounterpartyInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
 import { type FieldError, fieldErrorsFromZod } from "../transport/field-errors.ts";
+// ── end E2 block ─────────────────────────────────────────────────────────
 
 export type PhoneCapture = {
   date: AccountingDate;
@@ -173,14 +188,21 @@ export type PhoneCategoryNode = {
 };
 
 /**
- * A counterparty the quick-add form can attach a role to (§6.6).
- *
- * `#e3` has not shipped a write path yet, so this list is ordinarily empty —
- * the form offers the field only when it is not (S05 §5).
+ * A counterparty the quick-add form can attach a role to (§6.6), and S12,
+ * S13 and S15's whole subject now that `#e2` gives the table a write path.
  */
 export type PhoneCounterparty = {
   id: Id<"counterparties">;
   name: string;
+  kind: CounterpartyKind;
+  settlementCurrency: CurrencyCode | null;
+  archived: boolean;
+};
+
+/** What settling with someone actually did — H9, never supplied, only returned. */
+export type PhoneSettleDebtResult = {
+  residual: Money;
+  overSettled: boolean;
 };
 
 /** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
@@ -331,7 +353,8 @@ export type PhoneLedgerPort = {
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
   listCategoryTree: () => readonly PhoneCategoryNode[];
-  listCounterparties: () => readonly PhoneCounterparty[];
+  /** `includeArchived` — default `false`, same toggle as `listAccounts`. */
+  listCounterparties: (options?: { includeArchived?: boolean }) => readonly PhoneCounterparty[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
@@ -380,6 +403,23 @@ export type PhoneLedgerPort = {
   ) => { written: number; replacedManual: number };
   clearManualRate: (input: ClearManualRateInput, capture: PhoneCapture) => { deleted: number };
   /* ── end E3 block ─────────────────────────────────────────────────────── */
+  // ── E2 · counterparties and settlement ────────────────────────────────────
+  createCounterparty: (input: CreateCounterpartyInput, capture: PhoneCapture) => void;
+  updateCounterparty: (input: UpdateCounterpartyInput, capture: PhoneCapture) => void;
+  mergeCounterparties: (input: MergeCounterpartiesInput, capture: PhoneCapture) => void;
+  unmergeCounterparties: (input: UnmergeCounterpartiesInput, capture: PhoneCapture) => void;
+  recordDistinctCounterparties: (
+    input: RecordDistinctCounterpartiesInput,
+    capture: PhoneCapture,
+  ) => void;
+  /**
+   * The one port write with a real return value — `residual`/`overSettled`
+   * are H9's whole point, computed server-side (or, with none yet, by the
+   * executor) from live data, and never derivable from the input alone the
+   * way every other write's `{ id }` success is.
+   */
+  settleDebt: (input: SettleDebtInput, capture: PhoneCapture) => PhoneSettleDebtResult;
+  // ── end E2 block ─────────────────────────────────────────────────────────
   reset: () => void;
 };
 
@@ -439,6 +479,11 @@ export type PhoneLedgerSnapshot = {
   categories: readonly PhoneCategory[];
   categoryTree: readonly PhoneCategoryNode[];
   counterparties: readonly PhoneCounterparty[];
+  /**
+   * Empty until `loadArchivedCounterparties()` runs — the same lazy toggle
+   * `archivedAccounts` / `loadArchived()` gives S16's register.
+   */
+  archivedCounterparties: readonly PhoneCounterparty[];
   /**
    * Ordered by the account list, so the currency of your first account leads.
    *
@@ -655,6 +700,59 @@ export type SetManualRateDraft = {
 };
 
 export type ClearManualRateDraft = { base: string; quote: string; from: string; to: string };
+/* ── E2 · counterparties and settlement ──────────────────────────────────── */
+
+export type CreateCounterpartyDraft = {
+  name: string;
+  kind: CounterpartyKind;
+  settlementCurrency: string | null;
+  contact: string | null;
+  note: string;
+};
+
+/** Only the fields `CounterpartyEditor` actually changed — the executor refuses an empty patch. */
+export type CounterpartyPatch = Partial<{
+  name: string;
+  kind: CounterpartyKind;
+  settlementCurrency: string | null;
+  contact: string | null;
+  note: string;
+  /** No separate `archive_counterparty` exists — S15 §6, archiving is a field on this patch. */
+  archived: boolean;
+}>;
+
+export type UpdateCounterpartyDraft = {
+  id: string;
+  version: number;
+  patch: CounterpartyPatch;
+};
+
+export type MergeCounterpartiesDraft = {
+  winnerId: string;
+  loserId: string;
+};
+
+export type UnmergeCounterpartiesDraft = {
+  mergeId: string;
+};
+
+export type RecordDistinctCounterpartiesDraft = {
+  aId: string;
+  bId: string;
+};
+
+/** S14 §3 — what the sheet actually asks for. No `residual`, no `rate`: both are derived (H9, §7.5). */
+export type SettleDebtDraft = {
+  counterpartyId: string;
+  accountId: string;
+  date: string;
+  amount: string;
+  currency: string;
+  dischargesCurrency: string;
+  dischargesAmount: string;
+  note: string;
+  categoryId: string | null;
+};
 
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
@@ -759,6 +857,32 @@ export type PhoneLedgerController = {
     draft: ClearManualRateDraft,
   ) => { deleted: number } | { fieldErrors: readonly FieldError[] };
   /* ── end E3 block ─────────────────────────────────────────────────────── */
+  // ── E2 · counterparties and settlement ────────────────────────────────────
+  createCounterparty: (
+    draft: CreateCounterpartyDraft,
+  ) => { id: Id<"counterparties"> } | { fieldErrors: readonly FieldError[] };
+  updateCounterparty: (
+    draft: UpdateCounterpartyDraft,
+  ) => { id: Id<"counterparties"> } | { fieldErrors: readonly FieldError[] };
+  mergeCounterparties: (
+    draft: MergeCounterpartiesDraft,
+  ) => { id: Id<"counterpartyMerges"> } | { fieldErrors: readonly FieldError[] };
+  unmergeCounterparties: (
+    draft: UnmergeCounterpartiesDraft,
+  ) => { id: Id<"counterpartyMerges"> } | { fieldErrors: readonly FieldError[] };
+  recordDistinctCounterparties: (
+    draft: RecordDistinctCounterpartiesDraft,
+  ) =>
+    | { aId: Id<"counterparties">; bId: Id<"counterparties"> }
+    | { fieldErrors: readonly FieldError[] };
+  /** The same lazy toggle as `loadArchived()`, for counterparties. */
+  loadArchivedCounterparties: () => void;
+  settleDebt: (
+    draft: SettleDebtDraft,
+  ) =>
+    | { id: Id<"transactions">; residual: Money; overSettled: boolean }
+    | { fieldErrors: readonly FieldError[] };
+  // ── end E2 block ─────────────────────────────────────────────────────────
   reset: () => void;
 };
 
@@ -849,6 +973,112 @@ function reconcileAccountRefusal(error: unknown): FieldError | null {
   return null;
 }
 
+/**
+ * The six counterparty and settlement writes' refusal mappers, one contract
+ * — the same shape `accountWriteRefusal` above already fixes on: a message
+ * this mapper recognises names the field it belongs to and a `messageKey`
+ * the screen resolves through `useT()`; a message it does not recognise
+ * returns `null`. **Every caller below tries its mapper first and falls back
+ * to `refusalFromThrow` on `null`** — never rethrows — so a refusal the
+ * mapper has not met yet still reaches the screen as a form-level
+ * `fieldErrors` entry instead of an unhandled throw out of the controller.
+ */
+
+/** `create_counterparty`'s one refusal — S15 §6: an exact collision lands on `name`. */
+function createCounterpartyRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("collides with existing counterparty")) {
+    return { path: "name", message: error.message, messageKey: "counterparties.nameCollision" };
+  }
+  return null;
+}
+
+/**
+ * `update_counterparty`'s refusals — S15 §6: stale version, a renamed
+ * folded-name collision (the same check `create_counterparty` runs), and
+ * the archive gate.
+ */
+function counterpartyWriteRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("stale version")) {
+    return { path: "version", message: error.message, messageKey: "counterparties.staleVersion" };
+  }
+  if (error.message.includes("collides with existing counterparty")) {
+    return { path: "name", message: error.message, messageKey: "counterparties.nameCollision" };
+  }
+  if (error.message.includes("archiving is for settled relationships")) {
+    return {
+      path: "archived",
+      message: error.message,
+      messageKey: "counterparties.openBalance",
+    };
+  }
+  return null;
+}
+
+/**
+ * `merge_counterparties`'s refusals — S15 §9.1/§9.2: either side missing
+ * lands on `counterpartyId`, either side already archived lands on
+ * `archived`. A pair recorded distinct (§9.1) names no single field and is
+ * left to `refusalFromThrow`'s form-level message.
+ */
+function mergeCounterpartiesRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("no counterparty")) {
+    return {
+      path: "counterpartyId",
+      message: error.message,
+      messageKey: "counterparties.mergeNoCounterparty",
+    };
+  }
+  if (error.message.includes("archived")) {
+    return {
+      path: "archived",
+      message: error.message,
+      messageKey: "counterparties.mergeArchived",
+    };
+  }
+  return null;
+}
+
+/** `unmerge_counterparties`'s refusals — S15 §9.2: both name the merge itself. */
+function unmergeCounterpartiesRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("no merge") || error.message.includes("already unmerged")) {
+    return {
+      path: "mergeId",
+      message: error.message,
+      messageKey: "counterparties.mergeNotFound",
+    };
+  }
+  return null;
+}
+
+/**
+ * `settle_debt`'s refusals (H9) — a missing counterparty lands on
+ * `counterpartyId`; a zero balance in the chosen currency lands on
+ * `discharges.currency`, the field that picked a currency with nothing open
+ * rather than the amount typed against it.
+ */
+function settleDebtRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("no counterparty")) {
+    return {
+      path: "counterpartyId",
+      message: error.message,
+      messageKey: "settleDebt.noCounterparty",
+    };
+  }
+  if (error.message.includes("nothing to settle")) {
+    return {
+      path: "discharges.currency",
+      message: error.message,
+      messageKey: "settleDebt.nothingToSettle",
+    };
+  }
+  return null;
+}
+
 export function createPhoneLedger(
   port: PhoneLedgerPort,
   runtime: PhoneLedgerRuntime,
@@ -862,6 +1092,7 @@ export function createPhoneLedger(
     categories: [],
     categoryTree: [],
     counterparties: [],
+    archivedCounterparties: [],
     subtotals: [],
     netWorth: [],
     unsettledClearing: [],
@@ -872,6 +1103,8 @@ export function createPhoneLedger(
   // `refresh()` so a write made with the section open does not collapse it;
   // `reset()` below is the one place it goes back to `false`.
   let archivedRequested = false;
+  /** The same toggle as `archivedRequested`, for `loadArchivedCounterparties()`. */
+  let archivedCounterpartiesRequested = false;
 
   const refresh = () => {
     emitClientDiagnostic(diagnostics, {
@@ -889,6 +1122,13 @@ export function createPhoneLedger(
       const capturable = new Set(
         currencies.filter((currency) => currency.capturable).map((currency) => currency.code),
       );
+      const counterpartyRows = archivedCounterpartiesRequested
+        ? port.listCounterparties({ includeArchived: true })
+        : port.listCounterparties();
+      const counterparties = counterpartyRows.filter((counterparty) => !counterparty.archived);
+      const archivedCounterparties = archivedCounterpartiesRequested
+        ? counterpartyRows.filter((counterparty) => counterparty.archived)
+        : [];
       snapshot = {
         accounts: accounts.map((account) => ({
           ...account,
@@ -900,7 +1140,8 @@ export function createPhoneLedger(
         recent: port.listRecent(5),
         categories: port.listCategories(),
         categoryTree: port.listCategoryTree(),
-        counterparties: port.listCounterparties(),
+        counterparties,
+        archivedCounterparties,
         subtotals: subtotalsOf(accounts),
         netWorth: port.listNetWorth(),
         unsettledClearing: port.listUnsettledClearing(),
@@ -1238,6 +1479,315 @@ export function createPhoneLedger(
       archivedRequested = true;
       refresh();
     },
+    // ── E2 · counterparties and settlement ──────────────────────────────────
+    createCounterparty: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "create_counterparty",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = createCounterpartyInput.safeParse({
+          id: runtime.id<"counterparties">(),
+          name: draft.name,
+          kind: draft.kind,
+          settlementCurrency: draft.settlementCurrency,
+          contact: draft.contact,
+          note: draft.note,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_counterparty",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.createCounterparty(parsed.data, capture);
+        } catch (refusal) {
+          const fieldError = createCounterpartyRefusal(refusal);
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_counterparty",
+            phase: "success",
+          });
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_counterparty",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_counterparty",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    updateCounterparty: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "update_counterparty",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = updateCounterpartyInput.safeParse({
+          id: draft.id,
+          version: draft.version,
+          patch: draft.patch,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_counterparty",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.updateCounterparty(parsed.data, capture);
+        } catch (refusal) {
+          const fieldError = counterpartyWriteRefusal(refusal);
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_counterparty",
+            phase: "success",
+          });
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_counterparty",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_counterparty",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    mergeCounterparties: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "merge_counterparties",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = mergeCounterpartiesInput.safeParse({
+          mergeId: runtime.id<"counterpartyMerges">(),
+          winnerId: draft.winnerId,
+          loserId: draft.loserId,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "merge_counterparties",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.mergeCounterparties(parsed.data, capture);
+        } catch (writeError) {
+          const fieldError = mergeCounterpartiesRefusal(writeError);
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "merge_counterparties",
+            phase: "success",
+          });
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "merge_counterparties",
+          phase: "success",
+        });
+        return { id: parsed.data.mergeId };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "merge_counterparties",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    unmergeCounterparties: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "unmerge_counterparties",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = unmergeCounterpartiesInput.safeParse({ mergeId: draft.mergeId });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "unmerge_counterparties",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.unmergeCounterparties(parsed.data, capture);
+        } catch (writeError) {
+          const fieldError = unmergeCounterpartiesRefusal(writeError);
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "unmerge_counterparties",
+            phase: "success",
+          });
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "unmerge_counterparties",
+          phase: "success",
+        });
+        return { id: parsed.data.mergeId };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "unmerge_counterparties",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    recordDistinctCounterparties: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "record_distinct_counterparties",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = recordDistinctCounterpartiesInput.safeParse({
+          aId: draft.aId,
+          bId: draft.bId,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "record_distinct_counterparties",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.recordDistinctCounterparties(parsed.data, capture);
+        } catch (writeError) {
+          // No mapper of its own: the executor is idempotent (S15 §9.1) and
+          // backed only by a primary key, so nothing it throws in ordinary
+          // operation names a field a form could point at — every refusal
+          // here is already the fallback `refusalFromThrow` gives the other
+          // five writes for a message their own mapper does not recognise.
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "record_distinct_counterparties",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "record_distinct_counterparties",
+          phase: "success",
+        });
+        return { aId: parsed.data.aId, bId: parsed.data.bId };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "record_distinct_counterparties",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    loadArchivedCounterparties: () => {
+      archivedCounterpartiesRequested = true;
+      refresh();
+    },
+    settleDebt: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "settle_debt",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = settleDebtInput.safeParse({
+          id: runtime.id<"transactions">(),
+          counterpartyId: draft.counterpartyId,
+          accountId: draft.accountId,
+          date: draft.date,
+          amount: draft.amount,
+          currency: draft.currency,
+          discharges: { currency: draft.dischargesCurrency, amount: draft.dischargesAmount },
+          note: draft.note,
+          categoryId: draft.categoryId ?? undefined,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        let settled: PhoneSettleDebtResult;
+        try {
+          settled = port.settleDebt(parsed.data, capture);
+        } catch (refusal) {
+          const fieldError = settleDebtRefusal(refusal);
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "success",
+          });
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "settle_debt",
+          phase: "success",
+        });
+        return { id: parsed.data.id, residual: settled.residual, overSettled: settled.overSettled };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "settle_debt",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    // ── end E2 block ─────────────────────────────────────────────────────────
     createTransaction: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
@@ -1915,9 +2465,10 @@ export function createPhoneLedger(
       });
       try {
         port.reset();
-        // A wiped ledger has nothing archived to show — the toggle starts
+        // A wiped ledger has nothing archived to show — both toggles start
         // collapsed again, the same as a fresh launch.
         archivedRequested = false;
+        archivedCounterpartiesRequested = false;
         refresh();
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",

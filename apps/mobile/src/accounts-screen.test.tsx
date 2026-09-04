@@ -85,6 +85,12 @@ function fakeController(rows: readonly Row[]) {
     archiveAccount: vi.fn(),
     reconcileAccount: vi.fn(),
     createGroup: vi.fn(),
+    createCounterparty: vi.fn(),
+    updateCounterparty: vi.fn(),
+    mergeCounterparties: vi.fn(),
+    unmergeCounterparties: vi.fn(),
+    recordDistinctCounterparties: vi.fn(),
+    settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
     searchTransactions: () => ({
       rows: [],
       nextCursor: undefined,

@@ -18,7 +18,7 @@
  * `index("outbox_pending_by_seq")` and the phone did not have it.
  */
 
-/** The thirteen shared tables, plus `local_meta` and its one row. */
+/** The fifteen shared tables, plus `local_meta` and its one row. */
 export const REPLICA_DDL: readonly string[] = [
   `CREATE TABLE \`account_groups\` (
 	\`id\` text PRIMARY KEY NOT NULL,
@@ -223,6 +223,25 @@ export const REPLICA_DDL: readonly string[] = [
   `INSERT INTO \`local_meta\` (\`id\`, \`applied_seq\`) VALUES (1, 0)`,
   `ALTER TABLE \`account_groups\` ADD \`archived\` integer DEFAULT false NOT NULL`,
   `CREATE UNIQUE INDEX \`fx_rates_pk\` ON \`fx_rates\` (\`base\`,\`quote\`,\`date\`)`,
+  `CREATE TABLE \`counterparty_distinct_pairs\` (
+	\`a_id\` text NOT NULL,
+	\`b_id\` text NOT NULL,
+	PRIMARY KEY(\`a_id\`, \`b_id\`),
+	FOREIGN KEY (\`a_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`b_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "counterparty_distinct_pairs_ordered" CHECK("counterparty_distinct_pairs"."a_id" < "counterparty_distinct_pairs"."b_id")
+)`,
+  `CREATE TABLE \`counterparty_merges\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`winner_id\` text NOT NULL,
+	\`loser_id\` text NOT NULL,
+	\`moved_transaction_ids\` text DEFAULT '[]' NOT NULL,
+	\`merged_at\` integer NOT NULL,
+	\`unmerged_at\` integer,
+	FOREIGN KEY (\`winner_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`loser_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action
+)`,
+  `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (lower(trim("name")))`,
 ];
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */

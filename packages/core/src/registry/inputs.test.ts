@@ -20,6 +20,7 @@ import type { Id } from "../id.ts";
 import type { CurrencyCode, Money, PivotPerUnit, TxnType, UnitsPerPivot } from "../money.ts";
 // A3's own import from "./inputs.ts" — kept separate from A2's above so a
 // rebase against A2's append is a line-level merge, not a symbol-level one.
+// E2's own import — same reason as A3's above.
 import {
   type AccountKind,
   type ArchiveAccountInput,
@@ -30,17 +31,21 @@ import {
   archiveGroupInput,
   type CreateAccountInput,
   type CreateCategoryInput,
+  type CreateCounterpartyInput,
   type CreateTransactionInput,
   categorizeBatchInput,
   changePivotInput,
   clearManualRateInput,
   createAccountInput,
   createCategoryInput,
+  createCounterpartyInput,
   createGroupInput,
   createTransactionInput,
   deleteTransactionInput,
   mergeCategoriesInput,
+  mergeCounterpartiesInput,
   reconcileAccountInput,
+  recordDistinctCounterpartiesInput,
   renameCategoryInput,
   reorderAccountsInput,
   reorderGroupsInput,
@@ -49,9 +54,13 @@ import {
   setPinnedInput,
   setRateSourceInput,
   setTransactionLinesInput,
+  settleDebtInput,
   supersedeTransactionInput,
   type UpdateAccountInput,
+  type UpdateCounterpartyInput,
+  unmergeCounterpartiesInput,
   updateAccountInput,
+  updateCounterpartyInput,
   updateGroupInput,
   updateTransactionInput,
 } from "./inputs.ts";
@@ -879,5 +888,197 @@ describe("clearManualRateInput", () => {
     });
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("to");
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════════
+ * E2 · counterparties and settlement
+ * ════════════════════════════════════════════════════════════════════════ */
+
+// `COUNTERPARTY_ID` is `createTransactionInput`'s own fixture (above) — reused
+// rather than redeclared, the same "one const per id" rule every other block
+// in this file already follows.
+const OTHER_COUNTERPARTY_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const MERGE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const SETTLE_ACCOUNT_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const SETTLE_TXN_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+export type CounterpartyKindMatchesInput = Expect<
+  Exact<CreateCounterpartyInput["kind"], "person" | "company">
+>;
+export type UpdateCounterpartyVersionIsRequired = Expect<
+  Extends<UpdateCounterpartyInput["version"], number>
+>;
+
+describe("createCounterpartyInput", () => {
+  it("defaults kind to person and settlementCurrency/contact to null", () => {
+    const parsed = createCounterpartyInput.parse({ id: COUNTERPARTY_ID, name: "Nina" });
+
+    expect(parsed.kind).toBe("person");
+    expect(parsed.settlementCurrency).toBeNull();
+    expect(parsed.contact).toBeNull();
+    expect(parsed.note).toBe("");
+  });
+
+  it("refuses an empty name", () => {
+    const result = createCounterpartyInput.safeParse({ id: COUNTERPARTY_ID, name: "" });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a company with a settlement currency", () => {
+    const parsed = createCounterpartyInput.parse({
+      id: COUNTERPARTY_ID,
+      name: "Marek Sp. z o.o.",
+      kind: "company",
+      settlementCurrency: "EUR",
+    });
+
+    expect(parsed.kind).toBe("company");
+    expect(parsed.settlementCurrency).toBe("EUR");
+  });
+});
+
+describe("updateCounterpartyInput", () => {
+  it("refuses an empty patch", () => {
+    const result = updateCounterpartyInput.safeParse({
+      id: COUNTERPARTY_ID,
+      version: 1,
+      patch: {},
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("patch");
+  });
+
+  it("refuses a field the patch does not know — .strict()", () => {
+    const result = updateCounterpartyInput.safeParse({
+      id: COUNTERPARTY_ID,
+      version: 1,
+      patch: { sort: 3 },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("archives through the patch — no separate operation exists", () => {
+    const parsed = updateCounterpartyInput.parse({
+      id: COUNTERPARTY_ID,
+      version: 1,
+      patch: { archived: true },
+    });
+
+    expect(parsed.patch.archived).toBe(true);
+  });
+
+  it("accepts clearing the settlement currency back to null", () => {
+    const parsed = updateCounterpartyInput.parse({
+      id: COUNTERPARTY_ID,
+      version: 2,
+      patch: { settlementCurrency: null },
+    });
+
+    expect(parsed.patch.settlementCurrency).toBeNull();
+  });
+});
+
+describe("mergeCounterpartiesInput", () => {
+  it("refuses merging a counterparty into itself", () => {
+    const result = mergeCounterpartiesInput.safeParse({
+      mergeId: MERGE_ID,
+      winnerId: COUNTERPARTY_ID,
+      loserId: COUNTERPARTY_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("loserId");
+  });
+
+  it("accepts two different counterparties", () => {
+    const parsed = mergeCounterpartiesInput.parse({
+      mergeId: MERGE_ID,
+      winnerId: COUNTERPARTY_ID,
+      loserId: OTHER_COUNTERPARTY_ID,
+    });
+
+    expect(parsed.winnerId).toBe(COUNTERPARTY_ID);
+  });
+});
+
+describe("unmergeCounterpartiesInput", () => {
+  it("carries only the merge id", () => {
+    expect(unmergeCounterpartiesInput.parse({ mergeId: MERGE_ID })).toEqual({
+      mergeId: MERGE_ID,
+    });
+  });
+});
+
+describe("recordDistinctCounterpartiesInput", () => {
+  it("refuses a pair naming the same counterparty twice", () => {
+    const result = recordDistinctCounterpartiesInput.safeParse({
+      aId: COUNTERPARTY_ID,
+      bId: COUNTERPARTY_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("bId");
+  });
+
+  it("accepts an unordered pair — the executor normalises a < b", () => {
+    const parsed = recordDistinctCounterpartiesInput.parse({
+      aId: OTHER_COUNTERPARTY_ID,
+      bId: COUNTERPARTY_ID,
+    });
+
+    expect(parsed).toEqual({ aId: OTHER_COUNTERPARTY_ID, bId: COUNTERPARTY_ID });
+  });
+});
+
+describe("settleDebtInput", () => {
+  const base = {
+    id: SETTLE_TXN_ID,
+    counterpartyId: COUNTERPARTY_ID,
+    accountId: SETTLE_ACCOUNT_ID,
+    date: "2026-08-04",
+    amount: "50",
+    currency: "EUR",
+    discharges: { currency: "EUR", amount: "50" },
+  };
+
+  it("parses S14's worked example — no residual field exists", () => {
+    const parsed = settleDebtInput.parse(base);
+
+    expect(parsed.amount).toBe("50.00000000");
+    expect(parsed.discharges.amount).toBe("50.00000000");
+    expect(parsed).not.toHaveProperty("residual");
+    expect(parsed).not.toHaveProperty("rate");
+  });
+
+  it("refuses a zero or negative amount", () => {
+    expect(settleDebtInput.safeParse({ ...base, amount: "0" }).success).toBe(false);
+    expect(settleDebtInput.safeParse({ ...base, amount: "-50" }).success).toBe(false);
+  });
+
+  it("refuses a zero or negative discharged amount", () => {
+    const result = settleDebtInput.safeParse({
+      ...base,
+      discharges: { currency: "EUR", amount: "-1" },
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("discharges.amount");
+  });
+
+  it("allows amount and discharges to differ in currency and figure", () => {
+    // 120 PLN owed, settled with 50 EUR — the rate falls out, never entered.
+    const parsed = settleDebtInput.parse({
+      ...base,
+      currency: "EUR",
+      amount: "50",
+      discharges: { currency: "PLN", amount: "120" },
+    });
+
+    expect(parsed.currency).toBe("EUR");
+    expect(parsed.discharges.currency).toBe("PLN");
   });
 });

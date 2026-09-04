@@ -9,6 +9,7 @@ import {
   createPhoneLedger,
   type PhoneAccount,
   type PhoneCategoryNode,
+  type PhoneCounterparty,
   type PhoneGroup,
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
@@ -272,6 +273,12 @@ function harness(diagnostics?: (event: object) => void) {
     changePivot: vi.fn(),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
+    createCounterparty: vi.fn(),
+    updateCounterparty: vi.fn(),
+    mergeCounterparties: vi.fn(),
+    unmergeCounterparties: vi.fn(),
+    recordDistinctCounterparties: vi.fn(),
+    settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
     reset,
   };
   const capture = vi.fn(() => ({
@@ -317,6 +324,7 @@ describe("phone ledger controller", () => {
       categories: [],
       categoryTree: [],
       counterparties: [],
+      archivedCounterparties: [],
       subtotals: [],
       netWorth: [],
       unsettledClearing: [],
@@ -394,6 +402,12 @@ describe("phone ledger controller", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      createCounterparty: vi.fn(),
+      updateCounterparty: vi.fn(),
+      mergeCounterparties: vi.fn(),
+      unmergeCounterparties: vi.fn(),
+      recordDistinctCounterparties: vi.fn(),
+      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
       reset: vi.fn(),
     };
 
@@ -457,6 +471,12 @@ describe("phone ledger controller", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      createCounterparty: vi.fn(),
+      updateCounterparty: vi.fn(),
+      mergeCounterparties: vi.fn(),
+      unmergeCounterparties: vi.fn(),
+      recordDistinctCounterparties: vi.fn(),
+      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
       reset: vi.fn(),
     };
 
@@ -584,6 +604,12 @@ describe("phone ledger controller", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      createCounterparty: vi.fn(),
+      updateCounterparty: vi.fn(),
+      mergeCounterparties: vi.fn(),
+      unmergeCounterparties: vi.fn(),
+      recordDistinctCounterparties: vi.fn(),
+      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1039,6 +1065,12 @@ describe("phone ledger controller — createCategory", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      createCounterparty: vi.fn(),
+      updateCounterparty: vi.fn(),
+      mergeCounterparties: vi.fn(),
+      unmergeCounterparties: vi.fn(),
+      recordDistinctCounterparties: vi.fn(),
+      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1206,6 +1238,12 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       archiveAccount: () => undefined,
       reconcileAccount: () => undefined,
       createGroup: () => undefined,
+      createCounterparty: () => undefined,
+      updateCounterparty: () => undefined,
+      mergeCounterparties: () => undefined,
+      unmergeCounterparties: () => undefined,
+      recordDistinctCounterparties: () => undefined,
+      settleDebt: () => ({ residual: money.toMoney("0"), overSettled: false }),
       balanceAsOf: () => money.toMoney("0"),
       readRate: vi.fn(() => null),
       readCoverage: vi.fn(() => []),
@@ -1323,6 +1361,420 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       {
         path: "",
         message: "set_transaction_lines: lines sum to 10.00000000, the transaction is 48.90",
+      },
+    ]);
+  });
+});
+
+describe("phone ledger controller — counterparties and settlement", () => {
+  const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
+  const MAREK = id<"counterparties">("22222222-2222-4222-8222-222222222222");
+
+  function counterpartyHarness() {
+    let counterparties: PhoneCounterparty[] = [
+      { id: NINA, name: "Nina", kind: "person", settlementCurrency: null, archived: false },
+      { id: MAREK, name: "Marek", kind: "person", settlementCurrency: null, archived: false },
+    ];
+    let version = 1;
+
+    const createCounterparty = vi.fn<PhoneLedgerPort["createCounterparty"]>((input) => {
+      const collision = counterparties.find(
+        (c) => c.name.trim().toLowerCase() === input.name.trim().toLowerCase(),
+      );
+      if (collision) {
+        throw new Error(
+          `create_counterparty: "${input.name}" collides with existing counterparty "${collision.name}" (${collision.id}) — counterparties_name_uq`,
+        );
+      }
+      counterparties = [
+        ...counterparties,
+        {
+          id: input.id,
+          name: input.name,
+          kind: input.kind,
+          settlementCurrency: input.settlementCurrency,
+          archived: false,
+        },
+      ];
+    });
+    const updateCounterparty = vi.fn<PhoneLedgerPort["updateCounterparty"]>((input) => {
+      if (input.version !== version) {
+        throw new Error(
+          `update_counterparty: stale version — read ${input.version}, row is at ${version}`,
+        );
+      }
+      if (input.patch.name !== undefined) {
+        const collision = counterparties.find(
+          (c) =>
+            c.id !== input.id &&
+            c.name.trim().toLowerCase() === (input.patch.name ?? "").trim().toLowerCase(),
+        );
+        if (collision) {
+          throw new Error(
+            `update_counterparty: "${input.patch.name}" collides with existing counterparty "${collision.name}" (${collision.id}) — counterparties_name_uq`,
+          );
+        }
+      }
+      version += 1;
+      counterparties = counterparties.map((c) =>
+        c.id === input.id
+          ? {
+              ...c,
+              name: input.patch.name ?? c.name,
+              kind: input.patch.kind ?? c.kind,
+              settlementCurrency:
+                input.patch.settlementCurrency === undefined
+                  ? c.settlementCurrency
+                  : input.patch.settlementCurrency,
+              archived: input.patch.archived ?? c.archived,
+            }
+          : c,
+      );
+    });
+    const mergeCounterparties = vi.fn<PhoneLedgerPort["mergeCounterparties"]>(() => undefined);
+    const unmergeCounterparties = vi.fn<PhoneLedgerPort["unmergeCounterparties"]>(() => undefined);
+    const recordDistinctCounterparties = vi.fn<PhoneLedgerPort["recordDistinctCounterparties"]>(
+      () => undefined,
+    );
+    const settleDebt = vi.fn<PhoneLedgerPort["settleDebt"]>((input) => {
+      if (money.dec(input.discharges.amount).gt("100")) {
+        throw new Error(`settle_debt: nothing to settle in ${input.discharges.currency}`);
+      }
+      return { residual: money.toMoney("-70"), overSettled: false };
+    });
+    // `includeArchived` threaded through, mirroring `readCounterparties`'
+    // own default — the fixture is the port, so it filters the way the
+    // replica reader does rather than leaving that to the controller alone.
+    const listCounterparties = vi.fn<PhoneLedgerPort["listCounterparties"]>((options) =>
+      options?.includeArchived ? counterparties : counterparties.filter((c) => !c.archived),
+    );
+
+    const port: PhoneLedgerPort = {
+      listAccounts: () => [],
+      listCurrencies: () => [],
+      listGroups: () => [],
+      listRecent: () => [],
+      listCategories: () => [],
+      listCategoryTree: () => [],
+      listCounterparties,
+      listNetWorth: () => [],
+      readPeriodSpend: () => [],
+      listUnsettledClearing: () => [],
+      balanceAsOf: vi.fn(),
+      searchTransactions: () => ({
+        rows: [],
+        nextCursor: undefined,
+        total: { count: 0, currencies: [] },
+      }),
+      categorizeBatch: () => undefined,
+      createAccount: vi.fn(),
+      createTransaction: vi.fn(),
+      createCategory: vi.fn(),
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
+      updateAccount: vi.fn(),
+      archiveAccount: vi.fn(),
+      reconcileAccount: vi.fn(),
+      createGroup: vi.fn(),
+      createCounterparty,
+      updateCounterparty,
+      mergeCounterparties,
+      unmergeCounterparties,
+      recordDistinctCounterparties,
+      settleDebt,
+      readRate: vi.fn(() => null),
+      readCoverage: vi.fn(() => []),
+      listFxRates: vi.fn(() => []),
+      addCurrency: vi.fn(),
+      archiveCurrency: vi.fn(),
+      setRateSource: vi.fn(),
+      setPinned: vi.fn(),
+      changePivot: vi.fn(),
+      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
+      clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      reset: vi.fn(),
+    };
+
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: accountingDate("2026-08-23"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-08-23T10:00:00Z"),
+      }),
+      id: <Table extends IdTable>() => id<Table>("00000000-0000-4000-8000-000000000099"),
+    });
+
+    return {
+      controller,
+      createCounterparty,
+      updateCounterparty,
+      mergeCounterparties,
+      unmergeCounterparties,
+      recordDistinctCounterparties,
+      settleDebt,
+      listCounterparties,
+    };
+  }
+
+  it("creates a counterparty and it appears in the list", () => {
+    const { controller } = counterpartyHarness();
+
+    const result = controller.createCounterparty({
+      name: "Ola",
+      kind: "person",
+      settlementCurrency: null,
+      contact: null,
+      note: "",
+    });
+
+    expect("id" in result).toBe(true);
+    expect(controller.getSnapshot().counterparties.map((c) => c.name)).toContain("Ola");
+  });
+
+  it("refuses a folded-name collision, on the name field", () => {
+    const { controller } = counterpartyHarness();
+
+    const result = controller.createCounterparty({
+      name: "  NINA  ",
+      kind: "person",
+      settlementCurrency: null,
+      contact: null,
+      note: "",
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "name",
+        message: expect.stringContaining("collides with existing counterparty"),
+        messageKey: "counterparties.nameCollision",
+      },
+    ]);
+  });
+
+  it("refuses a stale version on update, with the shared messageKey", () => {
+    const { controller } = counterpartyHarness();
+
+    const result = controller.updateCounterparty({ id: NINA, version: 999, patch: { note: "x" } });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "version",
+        message: expect.stringContaining("stale version"),
+        messageKey: "counterparties.staleVersion",
+      },
+    ]);
+  });
+
+  it("refuses renaming into a folded-name collision, on the name field", () => {
+    const { controller } = counterpartyHarness();
+
+    const result = controller.updateCounterparty({
+      id: MAREK,
+      version: 1,
+      patch: { name: "nina" },
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "name",
+        message: expect.stringContaining('collides with existing counterparty "Nina"'),
+        messageKey: "counterparties.nameCollision",
+      },
+    ]);
+  });
+
+  it("merges, unmerges, and records a distinct pair — the port is called with the parsed shape", () => {
+    const { controller, mergeCounterparties, unmergeCounterparties, recordDistinctCounterparties } =
+      counterpartyHarness();
+
+    const merged = controller.mergeCounterparties({ winnerId: NINA, loserId: MAREK });
+    expect("id" in merged).toBe(true);
+    expect(mergeCounterparties).toHaveBeenCalledWith(
+      expect.objectContaining({ winnerId: NINA, loserId: MAREK }),
+      expect.anything(),
+    );
+
+    if (!("id" in merged)) throw new Error("expected a merge id");
+    const unmerged = controller.unmergeCounterparties({ mergeId: merged.id });
+    expect("id" in unmerged).toBe(true);
+    expect(unmergeCounterparties).toHaveBeenCalledWith(
+      expect.objectContaining({ mergeId: merged.id }),
+      expect.anything(),
+    );
+
+    const distinct = controller.recordDistinctCounterparties({ aId: NINA, bId: MAREK });
+    expect("aId" in distinct).toBe(true);
+    expect(recordDistinctCounterparties).toHaveBeenCalledWith(
+      expect.objectContaining({ aId: NINA, bId: MAREK }),
+      expect.anything(),
+    );
+  });
+
+  describe("loadArchivedCounterparties", () => {
+    it("is empty until asked, then carries archived counterparties apart from the active list", () => {
+      const { controller, listCounterparties } = counterpartyHarness();
+      controller.updateCounterparty({ id: MAREK, version: 1, patch: { archived: true } });
+
+      expect(controller.getSnapshot().archivedCounterparties).toEqual([]);
+      expect(controller.getSnapshot().counterparties.map((c) => c.id)).toEqual([NINA]);
+      expect(listCounterparties).toHaveBeenLastCalledWith();
+
+      controller.loadArchivedCounterparties();
+
+      expect(listCounterparties).toHaveBeenLastCalledWith({ includeArchived: true });
+      expect(controller.getSnapshot().archivedCounterparties.map((c) => c.id)).toEqual([MAREK]);
+      expect(controller.getSnapshot().counterparties.map((c) => c.id)).toEqual([NINA]);
+    });
+  });
+
+  it("settle_debt: the residual and overSettled come from the port, never derived locally", () => {
+    const { controller } = counterpartyHarness();
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "EUR",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({ residual: money.toMoney("-70"), overSettled: false }),
+    );
+  });
+
+  it("settle_debt: a zero balance refuses on the discharges field", () => {
+    const { controller } = counterpartyHarness();
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "150",
+      currency: "EUR",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "150",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "discharges.currency",
+        message: expect.stringContaining("nothing to settle"),
+        messageKey: "settleDebt.nothingToSettle",
+      },
+    ]);
+  });
+
+  /*
+   * H — an executor throw this controller does not recognise must still
+   * surface as a form-level `fieldErrors` entry, never rethrown past the
+   * controller (finding 2: one shape for all six counterparty/settlement
+   * writes, `accountWriteRefusal`'s own contract).
+   */
+  it("createCounterparty: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, createCounterparty } = counterpartyHarness();
+    createCounterparty.mockImplementationOnce(() => {
+      throw new Error("create_counterparty: the replica insert returned no row");
+    });
+
+    const result = controller.createCounterparty({
+      name: "Ola",
+      kind: "person",
+      settlementCurrency: null,
+      contact: null,
+      note: "",
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "create_counterparty: the replica insert returned no row" },
+    ]);
+  });
+
+  it("updateCounterparty: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, updateCounterparty } = counterpartyHarness();
+    updateCounterparty.mockImplementationOnce(() => {
+      throw new Error("update_counterparty: the row changed between read and write");
+    });
+
+    const result = controller.updateCounterparty({ id: NINA, version: 1, patch: { note: "x" } });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "update_counterparty: the row changed between read and write" },
+    ]);
+  });
+
+  it("mergeCounterparties: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, mergeCounterparties } = counterpartyHarness();
+    mergeCounterparties.mockImplementationOnce(() => {
+      throw new Error("merge_counterparties: the merge insert returned no row");
+    });
+
+    const result = controller.mergeCounterparties({ winnerId: NINA, loserId: MAREK });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "merge_counterparties: the merge insert returned no row" },
+    ]);
+  });
+
+  it("unmergeCounterparties: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, unmergeCounterparties } = counterpartyHarness();
+    unmergeCounterparties.mockImplementationOnce(() => {
+      throw new Error("unmerge_counterparties: the merge row changed between read and write");
+    });
+
+    const result = controller.unmergeCounterparties({
+      mergeId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "unmerge_counterparties: the merge row changed between read and write" },
+    ]);
+  });
+
+  it("recordDistinctCounterparties: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, recordDistinctCounterparties } = counterpartyHarness();
+    recordDistinctCounterparties.mockImplementationOnce(() => {
+      throw new Error("record_distinct_counterparties: boom");
+    });
+
+    const result = controller.recordDistinctCounterparties({ aId: NINA, bId: MAREK });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "record_distinct_counterparties: boom" },
+    ]);
+  });
+
+  it("settleDebt: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, settleDebt } = counterpartyHarness();
+    settleDebt.mockImplementationOnce(() => {
+      throw new Error("settle_debt: the row changed between insert and the debt-fields update");
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "EUR",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "",
+        message: "settle_debt: the row changed between insert and the debt-fields update",
       },
     ]);
   });

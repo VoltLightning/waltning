@@ -130,6 +130,12 @@ function fakeController(search: FakeSearch) {
     changePivot: () => undefined,
     setManualRate: () => ({ written: 0, replacedManual: 0 }),
     clearManualRate: () => ({ deleted: 0 }),
+    createCounterparty: () => undefined,
+    updateCounterparty: () => undefined,
+    mergeCounterparties: () => undefined,
+    unmergeCounterparties: () => undefined,
+    recordDistinctCounterparties: () => undefined,
+    settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
     reset: () => undefined,
   };
   return createPhoneLedger(port, {

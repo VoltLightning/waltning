@@ -235,8 +235,39 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
   },
   "packages/client/src/ledger/create-phone-ledger.ts": {
-    max: 2,
-    why: "accountWriteRefusal and reconcileAccountRefusal each take whatever update_account/archive_account/reconcile_account's executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
+    max: 7,
+    why: "accountWriteRefusal, reconcileAccountRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal and settleDebtRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
+  },
+  // E2 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
+  // `create-account.executor.ts` above, once per executor file — the driver's
+  // run-result, in a position nothing consumes.
+  "packages/ledger/src/counterparties/create-counterparty.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/counterparties/update-counterparty.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/counterparties/merge-counterparties.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/counterparties/unmerge-counterparties.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/counterparties/record-distinct-counterparties.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/counterparties/settle-debt.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/counterparties/open-balances.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
   },
   // E3 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per FX executor file — the
