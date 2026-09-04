@@ -109,6 +109,7 @@ function fakeController(overrides: {
           firstDate: accountingDate("2020-11-25"),
           lastDate: accountingDate("2026-09-02"),
           days: 2100,
+          realDays: 2100,
           calendarDays: 2100,
           coveragePct: 100,
         },
@@ -213,6 +214,52 @@ it("changing the pivot writes the chosen target, never the current pivot (C1)", 
   expect(changePivot).toHaveBeenCalledWith({ code: "PLN" }, expect.anything());
 });
 
+// M7 — a stale `pivotTargetCode` survives a successful change: it names the
+// currency that *just became* the pivot, which the target `Select` no
+// longer offers, and a second press would resend it, refused as "already
+// the pivot".
+it("M7 — the pivot target select recovers after a successful change", () => {
+  const EUR = currencyCode("EUR");
+  const EUR_ROW = {
+    code: EUR,
+    name: "Euro",
+    symbol: "€",
+    symbolPosition: "P",
+    decimals: 2,
+    rateSource: "ecb",
+    pinned: false,
+    isPivot: false,
+    version: 1,
+  };
+  let pivot = "USD";
+  const listCurrencySettings = () => [
+    { ...PLN_ROW, isPivot: pivot === "PLN" },
+    { ...USD_ROW, isPivot: pivot === "USD" },
+    { ...EUR_ROW, isPivot: pivot === "EUR" },
+  ];
+  const changePivot = vi.fn((input: { code: string }) => {
+    pivot = input.code;
+    return { code: input.code };
+  });
+  withLedger({ listCurrencySettings, changePivot });
+
+  // Explicitly choose EUR — the bug is in the state this sets, not the
+  // Select's own default.
+  fireEvent.click(screen.getByRole("button", { name: /New pivot/ }));
+  fireEvent.click(screen.getByRole("radio", { name: "EUR" }));
+  fireEvent.click(screen.getByText("Change pivot"));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
+  expect(changePivot).toHaveBeenCalledWith({ code: "EUR" }, expect.anything());
+
+  // EUR is now the pivot; PLN and USD are the only valid targets. The
+  // select must show one of them, and a second press must not resend EUR.
+  changePivot.mockClear();
+  expect(screen.queryByRole("button", { name: /New pivot: EUR/ })).toBeNull();
+  fireEvent.click(screen.getByText("Change pivot"));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
+  expect(changePivot).not.toHaveBeenCalledWith({ code: "EUR" }, expect.anything());
+});
+
 it("maps the executor's two refusals to their own texts, never one fallback (C1)", () => {
   const alreadyPivot = vi.fn(() => {
     throw new Error("change_pivot: PLN is already the pivot");
@@ -268,6 +315,7 @@ it("a currency with no rates yet says so, and opens S18 with the pair preselecte
         firstDate: accountingDate("2026-09-03"),
         lastDate: accountingDate("2026-09-03"),
         days: 0,
+        realDays: 0,
         calendarDays: 0,
         coveragePct: 0,
       },

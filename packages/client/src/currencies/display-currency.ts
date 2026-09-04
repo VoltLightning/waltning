@@ -11,7 +11,10 @@
  * *no* display currency while deciding. `initializeFromPinned` applies that
  * default exactly once, the first time a screen learns which currencies are
  * pinned; until then, and whenever nothing has been chosen, the snapshot
- * falls back to the pivot outright.
+ * falls back to the *live* pivot (`readPivot`), and only to the build-time
+ * `seed` when no live pivot is available yet (H1 — a fresh install whose
+ * ledger pivot differs from the seed must render its own pivot, not the
+ * seed frozen at build time).
  *
  * **`getSnapshot` returns a cached object, not a fresh one every call.**
  * `useSyncExternalStore` compares what it returns by reference — a snapshot
@@ -59,22 +62,31 @@ const codec = {
 
 export function createDisplayCurrencyPreference(
   store: DevicePreferenceStore,
-  pivot: CurrencyCode,
+  /** A live read of the ledger's current pivot — `currencies.find(isPivot)` over a session snapshot. `null` before the ledger is ready. */
+  readPivot: () => CurrencyCode | null,
+  /** The build-time fallback, used only when `readPivot` has nothing yet. */
+  seed: CurrencyCode,
   diagnostics?: ClientDiagnostics,
 ): DisplayCurrencyController {
   const inner = createDevicePreference<CurrencyCode>(store, codec, diagnostics);
 
   // See the file doc: cached so `useSyncExternalStore` sees the same
-  // reference across renders where nothing actually changed.
+  // reference across renders where nothing actually changed. Rebuilt when
+  // either the stored snapshot changes, or — while nothing is stored — the
+  // live pivot's answer changes (H1: `change_pivot` must be visible on the
+  // next read with no store write at all).
   let cachedInner: ReturnType<typeof inner.getSnapshot> | undefined;
   let cached: DisplayCurrencySnapshot | undefined;
 
   return {
     getSnapshot: () => {
       const snapshot = inner.getSnapshot();
-      if (cached !== undefined && cachedInner === snapshot) return cached;
+      const currency = snapshot.value ?? readPivot() ?? seed;
+      if (cached !== undefined && cachedInner === snapshot && cached.currency === currency) {
+        return cached;
+      }
       cachedInner = snapshot;
-      cached = { currency: snapshot.value ?? pivot, hydrated: snapshot.hydrated };
+      cached = { currency, hydrated: snapshot.hydrated };
       return cached;
     },
     subscribe: inner.subscribe,

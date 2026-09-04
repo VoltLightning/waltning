@@ -267,9 +267,10 @@ export default function SettingsRatesScreen() {
             <Text style={styles.coverageCode}>{row.code}</Text>
             <CoverageTag
               days={row.days}
+              realDays={row.realDays}
               calendarDays={row.calendarDays}
               pct={row.coveragePct}
-              lastDate={row.days > 0 ? row.lastDate : undefined}
+              lastDate={row.lastDate ?? undefined}
             />
           </View>
         ))}

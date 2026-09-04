@@ -51,7 +51,13 @@ type CurrencyRowData = {
   version: number;
 };
 
-type CurrencyRowCoverage = { days: number; calendarDays: number; pct: number; lastDate?: string };
+type CurrencyRowCoverage = {
+  days: number;
+  realDays: number;
+  calendarDays: number;
+  pct: number;
+  lastDate?: string;
+};
 
 type CurrencyRowProps = {
   row: CurrencyRowData;
@@ -111,6 +117,7 @@ function CurrencyRow({
         {coverage ? (
           <CoverageTag
             days={coverage.days}
+            realDays={coverage.realDays}
             calendarDays={coverage.calendarDays}
             pct={coverage.pct}
             lastDate={coverage.lastDate}
@@ -183,9 +190,10 @@ export default function SettingsCurrenciesScreen() {
           row.code,
           {
             days: row.days,
+            realDays: row.realDays,
             calendarDays: row.calendarDays,
             pct: row.coveragePct,
-            ...(row.days > 0 ? { lastDate: row.lastDate } : {}),
+            ...(row.lastDate !== null ? { lastDate: row.lastDate } : {}),
           },
         ]),
       ),
@@ -345,7 +353,13 @@ export default function SettingsCurrenciesScreen() {
     if ("fieldErrors" in result) {
       const [fieldError] = result.fieldErrors;
       setToast(fieldError ? resolvePivotErrorMessage(t, fieldError) : t("fx.pivotChangeRefused"));
+      return;
     }
+    // M7 — the chosen target just became the pivot: clearing it here is what
+    // lets `selectedPivotTarget` fall back to `otherRows[0]` on the next
+    // render, rather than resending a code the executor now refuses as
+    // "already the pivot".
+    setPivotTargetCode(null);
   }, [ledger, selectedPivotTarget, t]);
 
   const addAction = (

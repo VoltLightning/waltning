@@ -464,6 +464,8 @@ export const en = {
     coverageTitle: "Coverage",
     /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
     noRatesYet: "no rates yet · set one by hand",
+    /** H2 — rows held, but none a real quote (every one `carried_forward`): no date exists to state. */
+    noQuoteYet: "no quote yet",
     /** `RateField` — `03` §3.7. */
     rateFieldSynced: "Synced: {{rate}}",
     /** `parseRate`'s own refusal — 0, negative, or anything not a positive decimal. */
@@ -479,7 +481,7 @@ export const en = {
     /** A `carried_forward` row's own tag — its age, never the raw enum. */
     rateTableCarried: "Carried · {{count}} d",
     /** C2 — the origin is unlocatable (`change_pivot` can drop it). Never `0 d`, which would read as exact. */
-    rateTableCarriedUnknown: "Carried · age unknown",
+    rateTableCarriedUnknown: "Carried · age not known",
     /**
      * `RateEditor` — `04` §4.7. `{{quote}} per {{base}}` states which way the
      * figure reads (`SPEC.md` §4: `fx_rates.rate` is units of the quote per

@@ -30,6 +30,7 @@ describe("initializeDisplayCurrencyFromLedger", () => {
   it("defaults to the first pinned currency when nothing is stored", async () => {
     const pref = createDisplayCurrencyPreference(
       { get: async () => null, set: async () => undefined },
+      () => null,
       USD,
     );
     await initializeDisplayCurrencyFromLedger(pref, () => [
@@ -46,7 +47,7 @@ describe("initializeDisplayCurrencyFromLedger", () => {
   // chosen" without writing anything.
   it("M6 — nothing pinned writes nothing; getSnapshot's own fallback answers instead", async () => {
     const set = vi.fn(async () => undefined);
-    const pref = createDisplayCurrencyPreference({ get: async () => null, set }, USD);
+    const pref = createDisplayCurrencyPreference({ get: async () => null, set }, () => null, USD);
     await initializeDisplayCurrencyFromLedger(pref, () => [
       { code: PLN, pinned: false, isPivot: false },
       { code: EUR, pinned: false, isPivot: true },
@@ -57,7 +58,7 @@ describe("initializeDisplayCurrencyFromLedger", () => {
 
   it("never overwrites a stored choice — the hydration race a naive call would lose", async () => {
     const store = delayedStore("PLN");
-    const pref = createDisplayCurrencyPreference(store, USD);
+    const pref = createDisplayCurrencyPreference(store, () => null, USD);
 
     const init = initializeDisplayCurrencyFromLedger(pref, () => [
       { code: EUR, pinned: true, isPivot: false },

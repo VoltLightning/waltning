@@ -114,7 +114,7 @@ it("a carried-forward row with an unlocatable origin states its age as unknown",
       rows={[{ date: "2026-08-01", rate: "3.7601", source: "carried_forward", carriedDays: null }]}
     />,
   );
-  expect(screen.getByText("Carried · age unknown")).toBeDefined();
+  expect(screen.getByText("Carried · age not known")).toBeDefined();
   expect(screen.queryByText("Carried · 0 d")).toBeNull();
 });
 

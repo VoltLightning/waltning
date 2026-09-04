@@ -92,6 +92,19 @@ describe("RateField", () => {
     expect(screen.getByLabelText("Manual rate")).toHaveProperty("value", "4,2810");
   });
 
+  // L10 — the editable seed must not round an 8dp stored rate down to the
+  // 4dp display default: opening a synced rate to edit it, untouched, must
+  // not silently downgrade its precision before Save is ever pressed.
+  it("L10 — seeds an 8dp stored rate at its own scale, not the 4dp display default", () => {
+    render(<RateField label="Manual rate" value="4.02345678" editable onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Manual rate")).toHaveProperty("value", "4.02345678");
+  });
+
+  it("L10 — a value with fewer than 4 decimals still pads to the 4dp display default", () => {
+    render(<RateField label="Manual rate" value="4.2" editable onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Manual rate")).toHaveProperty("value", "4.2000");
+  });
+
   it("emits the parsed rate as it is typed", () => {
     const onChange = vi.fn();
     render(<RateField label="Manual rate" value="" editable onChange={onChange} />);

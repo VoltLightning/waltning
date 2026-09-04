@@ -446,9 +446,12 @@ export type PhoneCoverage = {
   code: CurrencyCode;
   source: string | null;
   firstDate: AccountingDate;
-  lastDate: AccountingDate;
+  /** The last *real* quote's date — `null` when every held row is `carried_forward` (H2). */
+  lastDate: AccountingDate | null;
   days: number;
-  /** Calendar days from `firstDate` to today, inclusive (H3) — `CoverageTag`'s own decision variable, with `days`. */
+  /** Real (non-`carried_forward`) rows held (M3) — `CoverageTag`'s decision variable for *complete*, with `calendarDays`, never `days`. */
+  realDays: number;
+  /** Calendar days from `firstDate` to today, inclusive (H3). */
   calendarDays: number;
   coveragePct: number;
 };

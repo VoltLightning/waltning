@@ -242,7 +242,6 @@ export const REPLICA_DDL: readonly string[] = [
 	FOREIGN KEY (\`loser_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action
 )`,
   `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (lower(trim("name")))`,
-  `CREATE INDEX \`fx_rates_quote_date_idx\` ON \`fx_rates\` (\`quote\`,\`date\`)`,
 ];
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */

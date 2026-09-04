@@ -1,1 +1,0 @@
-CREATE INDEX "fx_rates_quote_date_idx" ON "fx_rates" USING btree ("quote","date");

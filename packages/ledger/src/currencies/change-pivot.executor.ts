@@ -126,14 +126,25 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
 
     for (const row of dateRows) {
       if (row.quote === newPivot.code) continue; // consumed into the reciprocal row below
+      // M8 — a carried-forward row rebases by its *origin's* own bridge, not
+      // the bridge on the date it happens to be carried onto. §7.6: a
+      // carried row is a copy of the nearest earlier real quote, and two
+      // different bridge rates on two different dates would rebase the same
+      // stored rate into two different answers — the copy stops being one.
+      let bridgeRate = k;
       if (row.source === CARRIED_FORWARD) {
         const origin = originDateOf(row.quote, row.date);
         // An orphaned carried-forward child (C2) — its origin's own date had
         // no bridge and was dropped above, so this row's rate would now
         // trace to nothing. §7.6: the table never holds an invented figure.
         if (origin === undefined || !bridgeDates.has(origin)) continue;
+        const originBridge = byDate.get(origin)?.find((r) => r.quote === newPivot.code);
+        // `bridgeDates.has(origin)` already guarantees this row exists —
+        // never trust the same lookup twice without a fallback.
+        if (!originBridge) continue;
+        bridgeRate = dec(originBridge.rate);
       }
-      const rebased: UnitsPerPivot = unitsPerPivot(dec(row.rate).dividedBy(k));
+      const rebased: UnitsPerPivot = unitsPerPivot(dec(row.rate).dividedBy(bridgeRate));
       tx.insert(fxRates)
         .values({
           base: newPivot.code,

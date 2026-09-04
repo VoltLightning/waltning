@@ -32,30 +32,47 @@ import { makeStyles } from "../theme/styles.ts";
 import { focus, touchTarget } from "../tokens.ts";
 
 export type CoverageTagProps = {
-  /** Rows held. The decision variable (H3), with `calendarDays` — never `pct`, which is display-only. */
+  /** Rows held, real and carried alike. Display context only — never the decision variable (H3, M3). */
   days: number;
+  /** Real (non-`carried_forward`) rows held — the decision variable (M3), with `calendarDays`, never `days` or `pct`. */
+  realDays: number;
   /** Calendar days from the first held rate to today, inclusive. */
   calendarDays: number;
   /** 0–100, `readCoverage`'s own figure — display-only, floored while incomplete. */
   pct: number;
-  /** The most recent date a rate is actually held for — required below 100%. */
+  /** The most recent date a *real* quote is held for — `undefined` when none exists yet. */
   lastDate?: string | undefined;
   /** Wired by the caller at 0% — opens S18 with the pair preselected. */
   onPress?: () => void;
 };
 
-export function CoverageTag({ days, calendarDays, pct, lastDate, onPress }: CoverageTagProps) {
+export function CoverageTag({
+  days,
+  realDays,
+  calendarDays,
+  pct,
+  lastDate,
+  onPress,
+}: CoverageTagProps) {
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
-  const complete = days === calendarDays;
+  // M3 — `complete` decides on real quotes over calendar days, never on
+  // `days`, which a dead source carried every day to today fills without a
+  // single fresh quote.
+  const complete = realDays === calendarDays;
   const nothingHeld = days === 0;
+  // H2 — rows exist, but none is a real quote: no date to state, and no
+  // percentage that would read as a fill nobody can vouch for.
+  const noRealQuote = !nothingHeld && realDays === 0;
 
   const label = nothingHeld
     ? t("fx.noRatesYet")
-    : complete || lastDate === undefined
-      ? t("fx.coveragePct", { pct: String(pct) })
-      : t("fx.coverageBelow", { pct: String(pct), date: lastDate });
+    : noRealQuote
+      ? t("fx.noQuoteYet")
+      : complete || lastDate === undefined
+        ? t("fx.coveragePct", { pct: String(pct) })
+        : t("fx.coverageBelow", { pct: String(pct), date: lastDate });
 
   const tag = <Tag variant={complete ? "neutral" : "warn"}>{label}</Tag>;
 

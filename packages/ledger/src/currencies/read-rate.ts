@@ -125,14 +125,27 @@ export type LocalCoverage = {
   code: CurrencyCode;
   source: string | null;
   firstDate: AccountingDate;
-  lastDate: AccountingDate;
-  /** Rows held. Never the decision variable itself — see `days`/`calendarDays` below (H3). */
+  /**
+   * The most recent date a *real* (non-`carried_forward`) quote is held —
+   * `null` when every held row is `carried_forward` (H2). Never a stand-in
+   * date: `firstDate` would understate the gap, and `today` would hide it
+   * entirely.
+   */
+  lastDate: AccountingDate | null;
+  /** Rows held, real and carried alike. Never the decision variable itself — see `realDays`/`calendarDays` below (H3, M3). */
   days: number;
+  /**
+   * Real (non-`carried_forward`) rows held — `CoverageTag`'s decision
+   * variable for *complete* (M3): a dead source carried every day to today
+   * fills `days` to `calendarDays` without a single fresh quote, and must
+   * still read amber.
+   */
+  realDays: number;
   /** Calendar days from `firstDate` to `today`, inclusive. `0` only when `days` is also `0`. */
   calendarDays: number;
   /**
    * Display-only (H3) — `CoverageTag` decides *no rates yet* on `days === 0`
-   * and *complete* on `days === calendarDays`, never on this rounding.
+   * and *complete* on `realDays === calendarDays`, never on this rounding.
    * Floored while incomplete, so 2,075/2,080 reads `99%`, never `100%`.
    */
   coveragePct: number;
@@ -174,8 +187,9 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       code,
       source: rateSource,
       firstDate: today,
-      lastDate: today,
+      lastDate: null,
       days: 0,
+      realDays: 0,
       calendarDays: 0,
       coveragePct: 0,
     };
@@ -186,28 +200,44 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
     // One aggregate, never `.all()`'d rows (M7) — `min`/`max` sort correctly
     // on the bare `YYYY-MM-DD` text SQLite stores. `lastRealDate` excludes
     // `carried_forward` (H4, S17 §8: *last quote date*, not last held row).
+    // `realDays` counts the same real rows (M3) — the decision variable for
+    // *complete*, never `days`, which a dead source carried to today fills
+    // without a fresh quote. `date <= today` (M4) keeps a future-dated
+    // manual row from inflating `days` past what `calendarDays` — counted
+    // only through today — actually covers.
     const [agg] = db
       .select({
         n: sql<number>`count(*)`,
+        realN: sql<number>`count(case when ${fxRates.source} <> ${CARRIED_FORWARD} then 1 else null end)`,
         firstDate: sql<string | null>`min(${fxRates.date})`,
         lastRealDate: sql<
           string | null
         >`max(case when ${fxRates.source} <> ${CARRIED_FORWARD} then ${fxRates.date} else null end)`,
       })
       .from(fxRates)
-      .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot)))
+      .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot), lte(fxRates.date, today)))
       .all();
 
     const days = agg?.n ?? 0;
     if (days === 0 || !agg?.firstDate) return empty;
 
     const firstDate = agg.firstDate as AccountingDate;
-    const lastDate = (agg.lastRealDate ?? agg.firstDate) as AccountingDate;
+    const realDays = agg.realN ?? 0;
+    const lastDate = agg.lastRealDate as AccountingDate | null;
     const calendarDays = daysBetween(firstDate, today) + 1;
     const coveragePct =
       calendarDays <= 0 ? 0 : days >= calendarDays ? 100 : Math.floor((days / calendarDays) * 100);
 
-    return { code, source: rateSource, firstDate, lastDate, days, calendarDays, coveragePct };
+    return {
+      code,
+      source: rateSource,
+      firstDate,
+      lastDate,
+      days,
+      realDays,
+      calendarDays,
+      coveragePct,
+    };
   });
 }
 

@@ -72,6 +72,12 @@ export type RateFieldProps = {
   unit?: string;
 };
 
+/** How many digits follow the decimal mark in a stored decimal string — `0` for a whole number. */
+function decimalPlaces(raw: string): number {
+  const i = raw.indexOf(".");
+  return i === -1 ? 0 : raw.length - i - 1;
+}
+
 /**
  * What was typed → a decimal string, or `null`. Accepts either separator, the
  * same rule `AmountField`'s own `parseAmount` states — a Polish keyboard
@@ -113,13 +119,21 @@ export function RateField({
   const { focused, handlers } = useInteraction();
   const locale = useLocale();
   // Seeded once, from whatever `value` held at mount — see the docstring for
-  // why this never re-syncs from `value` afterward. Through `formatRate`
-  // (L10), so a Polish reader opening an existing rate to edit sees `4,0231`,
-  // not the storage form's `4.0231` echoed back unformatted.
+  // why this never re-syncs from `value` afterward. Through `formatRate`, so
+  // a Polish reader opening an existing rate to edit sees `4,0231`, not the
+  // storage form's `4.0231` echoed back unformatted.
+  //
+  // **At the value's own scale, never rounded down to `decimals` (L10).**
+  // `decimals` is this field's *display* default (4dp, §4.6) — `fx_rates` is
+  // stored to 8dp, and opening a synced rate to edit it, untouched, must not
+  // silently downgrade its precision before a person has pressed a key. A
+  // value with fewer than `decimals` digits still pads to `decimals`,
+  // matching the read-only path exactly.
   const [text, setText] = useState(() => {
     if (!editable || value === "") return "";
     try {
-      return formatRate(String(value), locale, decimals);
+      const raw = String(value);
+      return formatRate(raw, locale, Math.max(decimals, decimalPlaces(raw)));
     } catch {
       // A caller can still seed a raw, unparsed string outside `parseRate`'s
       // own contract (a stale draft, say) — falls back to it unformatted

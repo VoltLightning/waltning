@@ -158,10 +158,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "a CommonJS mock with no declared type, cast once to the module it stands in for",
   },
-  "packages/ui/src/i18n/en.ts": {
-    max: 1,
-    why: "fx.rateTableCarriedUnknown (C2) — the English word in a carried-forward row's own age label, never a TypeScript unknown",
-  },
   "packages/ui/src/states/use-timer.ts": {
     max: 1,
     why: "the timer's re-arm signal is compared only by identity across renders — a constraint position for a deliberately heterogeneous value, the same shape as a dependency array",
@@ -202,10 +198,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "`invoke(raw)` takes unvalidated input on purpose (validating it is the method's job), and `AnyOperation` is a heterogeneous registry",
   },
-  "tools/migrate-mm/src/import.ts": {
-    max: 2,
-    why: "reads a foreign export whose shape is the thing being discovered",
-  },
   "apps/api/src/registry/define.ts": {
     max: 1,
     why: "passes unvalidated input through to the gate, which is where the runtime check lives",
@@ -225,10 +217,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
   "apps/mobile/src/ledger-screen.tsx": {
     max: 1,
     why: "a route to C5's transaction detail screen (`/transaction/[id]`), which does not exist in this worktree's `app/` yet — expo-router's generated `Href` union has no literal for it, so the two types share no member and the cast has to go through `unknown` rather than straight across",
-  },
-  "packages/db/src/fx/backfill.ts": {
-    max: 1,
-    why: "an unrecognised rate source, which is a string from the database and not a type",
   },
   "packages/schema/src/dashboard-widgets.pg.ts": {
     max: 1,
@@ -319,14 +307,26 @@ const BUDGET: Record<string, { max: number; why: string }> = {
 };
 
 /**
- * Comments are stripped first.
+ * Comments and string literals are stripped first.
  *
  * Half the occurrences in this repository are prose *explaining why an
  * `unknown` was removed* — counting those would make the budget rise every time
  * someone documented a fix, which is the exact opposite of what it is for.
+ *
+ * **String literals too (L10/L11)** — `en.ts` once earned a budget entry for
+ * "age unknown", the English word in a carried-forward row's own age label,
+ * never a TypeScript `unknown`. That entry was a loosened guard: it let a
+ * real `unknown` type slip into `en.ts` uncounted, hidden behind the one the
+ * copy already spent. Stripping string content the same way comments are
+ * stripped means copy can never pay a budget's way again.
  */
 function usages(source: string): number {
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/`(?:[^`\\]|\\.)*`/g, "``");
   return code.match(/\bunknown\b/g)?.length ?? 0;
 }
 
