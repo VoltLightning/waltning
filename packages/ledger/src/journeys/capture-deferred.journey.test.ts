@@ -1,8 +1,11 @@
 /**
  * Proves: flows/J02-daily-capture.md §2 ("must work offline"), architecture/14 §14.6
- * ("intent commits first"), architecture/08 §5 ("never drop").
+ * ("intent commits first"),
+ * architecture/08-offline-and-concurrency.md H15 (a blocked outbox is a
+ * state, never a silent drop).
  * Findings: R2 H6, R2 H1-r3 (deferral marked refused), R2 C2-r4 (deferred entry below the watermark),
- * R2 H1-r4 (refusal behind a deferral marked terminal).
+ * R2 H1-r4 (a capture replayed successfully after an earlier halt is not left blocked, and the
+ * update queued behind it lands).
  */
 import { accountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
@@ -95,25 +98,24 @@ describe("J02 — a capture in a currency with no rate row", () => {
     }
   });
 
-  it.fails("R2 H1-r4 — an update queued behind the deferred capture is not refused for good", () => {
+  it.fails("R2 H1-r4 — a capture replayed successfully after an earlier halt is not left blocked, and the update queued behind it lands", () => {
     const j = setup();
     try {
       capture(j, ID.txn1);
-      let updateThrew = false;
       try {
         j.session.updateTransaction(
           { id: ID.txn1, version: 1, patch: { note: "later" } },
           j.capture,
         );
       } catch {
-        updateThrew = true;
+        // same reason as `capture` — the outbox entry is the assertion
       }
       j.relaunch();
       seedRate(j, PIVOT, CHF, "2026-03-10", "0.2300", "nbp");
       j.relaunch();
       const rows = transactionRows(j);
       expect(rows).toHaveLength(1);
-      expect(updateThrew ? rows[0]?.note : "later").toBe("later");
+      expect(rows[0]?.note).toBe("later");
       expect(outboxEntries(j).map((e) => e.state)).toEqual(["pending", "pending"]);
     } finally {
       j.close();
