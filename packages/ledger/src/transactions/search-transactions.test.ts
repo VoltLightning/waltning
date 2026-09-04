@@ -83,13 +83,19 @@ describe("searchTransactions — text", () => {
     expect(searchTransactions(stores.ledger.replica.db, { text: "nope" }).rows).toHaveLength(0);
   });
 
-  it("matches the amount's digits regardless of separators", () => {
+  it("matches an amount exactly, in either decimal mark, and never by digits (§13)", () => {
     insertExpense({ payee: "Rewe", amountOriginal: money.toMoney("48.90") });
+    insertExpense({ payee: "Landlord", amountOriginal: money.toMoney("1489.00") });
 
-    expect(searchTransactions(stores.ledger.replica.db, { text: "4890" }).rows).toHaveLength(1);
-    expect(searchTransactions(stores.ledger.replica.db, { text: "48,90" }).rows).toHaveLength(1);
-    expect(searchTransactions(stores.ledger.replica.db, { text: "489" }).rows).toHaveLength(1);
-    expect(searchTransactions(stores.ledger.replica.db, { text: "999" }).rows).toHaveLength(0);
+    const payees = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+    expect(payees("48,90")).toEqual(["Rewe"]);
+    expect(payees("48.90")).toEqual(["Rewe"]);
+    // A substring of the digits is not the amount — and it must not reach the
+    // running total either, which folds over the same filtered rows.
+    expect(payees("489")).toEqual([]);
+    expect(payees("4890")).toEqual([]);
+    expect(payees("999")).toEqual([]);
   });
 
   it("never lets a purely alphabetic query match on amount alone", () => {

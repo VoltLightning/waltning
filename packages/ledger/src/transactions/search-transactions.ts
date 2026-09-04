@@ -1,3 +1,4 @@
+import { findAmount } from "@waltning/core/capture/amount";
 import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
@@ -78,29 +79,21 @@ export type TransactionSearchPage = {
 export const SEARCH_PAGE_SIZE = 50;
 
 /**
- * Digits only — the way an amount is matched (§13: "an amount token matches
- * `amount_original` exactly, in any currency"). `48,90` and `48.90` both fold
- * to `4890`, and so does typing `4890` — separators carry no meaning here,
- * only the digits do.
- */
-function digitsOf(s: string): string {
-  return s.replace(/[^0-9]/g, "");
-}
-
-/**
  * Whether `row` matches the folded `needle` — payee, note, or the source
- * leg's amount digits. The amount check only fires when the needle itself has
- * a digit: an empty digit string is a substring of every amount, which would
- * make a purely alphabetic search match every row on the sly.
+ * leg's amount **exactly** (§13: "an amount token matches `amount_original`
+ * exactly, in any currency"). The token is read the way capture reads one
+ * (`findAmount` — `48,90` and `48.90` are the same value), and compared as
+ * money, never as digits: a substring match let `489` find `1 489,00` and
+ * put it in the running total. `489` is not `48,90`; only `48,90` is.
  */
 function matchesText(
-  row: { payee: string; note: string; amountDigits: string },
+  row: { payee: string; note: string; amountOriginal: Money },
   needle: string,
-  needleDigits: string,
+  needleAmount: Money | null,
 ): boolean {
   if (fold(row.payee).includes(needle)) return true;
   if (fold(row.note).includes(needle)) return true;
-  if (needleDigits !== "" && row.amountDigits.includes(needleDigits)) return true;
+  if (needleAmount !== null && money.eq(row.amountOriginal, needleAmount)) return true;
   return false;
 }
 
@@ -206,13 +199,13 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
           ? money.signed({ type, amountOriginal, toAmount: toAmountRaw }, "to")
           : null,
       type,
-      amountDigits: digitsOf(amountOriginal),
+      amountOriginal,
     }));
 
   const needle = filter.text !== undefined ? fold(filter.text.trim()) : "";
-  const needleDigits = digitsOf(needle);
+  const needleAmount = filter.text === undefined ? null : (findAmount(filter.text)?.amount ?? null);
   const filtered =
-    needle === "" ? rows : rows.filter((row) => matchesText(row, needle, needleDigits));
+    needle === "" ? rows : rows.filter((row) => matchesText(row, needle, needleAmount));
 
   const total = totalsOf(filtered);
 
@@ -230,7 +223,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
       : undefined;
 
   return {
-    rows: page.map(({ amountDigits, ...row }) => row),
+    rows: page.map(({ amountOriginal, ...row }) => row),
     nextCursor,
     total,
   };
