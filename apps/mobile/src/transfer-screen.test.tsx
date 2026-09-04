@@ -520,4 +520,29 @@ describe("Transfer — the phone path", () => {
 
     expect(screen.queryByRole("button", { name: /^Destination amount/ })).toBeNull();
   });
+
+  /**
+   * L — `createTransaction`'s own H2 mirror for `fee` (M,
+   * `create-phone-ledger.ts`) sets `messageKey: "transactions.
+   * tooManyDecimals"`; this screen used to render `result.fieldErrors`
+   * straight through (the raw, unperiod-terminated builder string), the same
+   * gap `quick-add-screen.tsx`'s own `resolveFieldErrorMessage` already
+   * closed for Quick add. The trailing period is `en.ts`'s own copy — its
+   * presence is what tells the two apart.
+   */
+  it("resolves a fee refusal's messageKey through the same translation Quick add uses (L)", () => {
+    const createTransaction = vi.fn();
+    withLedger({ createTransaction });
+
+    pickFrom("Household · USD");
+    pickTo("Cash · PLN");
+    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
+    tapKeys("1", "5", "0");
+    fireEvent.change(screen.getByLabelText("Fee"), { target: { value: "0,125" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(screen.getByText("USD holds 2 decimal places — this amount has more.")).toBeDefined();
+  });
 });

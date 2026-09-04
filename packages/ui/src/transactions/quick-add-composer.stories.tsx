@@ -112,9 +112,12 @@ export const WithProposal: Story = {
 };
 
 /**
- * Below §14's `PROPOSAL_DISPLAY_THRESHOLD` (0.85) — still shown, still
- * machine-filled, but with `categories.lowConfidence` under the chip too, the
- * one thing that visibly separates this from `WithProposal` above.
+ * Below §14's `PROPOSAL_DISPLAY_THRESHOLD` (0.85) — H1-a: never machine-filled,
+ * because that would claim more confidence than the proposal itself carries.
+ * The chip's own placeholder names the suggestion instead
+ * (`transactions.categorySuggested`), in the placeholder's own ink, with
+ * `categories.lowConfidence` underneath — no accent border, no Undo, nothing
+ * an applied pick would show.
  */
 export const LowConfidence: Story = {
   args: {
@@ -125,7 +128,7 @@ export const LowConfidence: Story = {
       categoryId: "cat-eating-out",
       confidence: 0.62,
       basis: "neighbours",
-      neighbours: [{ payee: "Corner shop", similarity: 0.4 }],
+      neighbours: [{ payee: "Corner shop", similarity: 0.4, categoryId: "cat-eating-out" }],
     },
   },
 };

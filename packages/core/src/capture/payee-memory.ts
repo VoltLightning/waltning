@@ -29,7 +29,16 @@ export type CategoryProposal = {
   categoryId: string;
   confidence: number;
   basis: "exact" | "neighbours";
-  neighbours: readonly { payee: string; similarity: number }[];
+  /**
+   * **Carries its own `categoryId`, not only the winning one's.** A caption
+   * naming "where the pick came from" (`quick-add-composer.tsx`'s own
+   * `categoryFromHistory`) must name a neighbour that actually sits in the
+   * *winning* category — the closest neighbour overall (`neighbours[0]`) can
+   * sit in a different, losing category and still rank first by similarity
+   * alone, which named a match for a category it never voted for. Without
+   * `categoryId` here, the caller has no way to tell the two apart.
+   */
+  neighbours: readonly { payee: string; similarity: number; categoryId: string }[];
 } | null;
 
 /**
@@ -94,7 +103,11 @@ export function proposeCategory(
     categoryId: winner.categoryId,
     confidence: winner.count / nearest.length,
     basis: "neighbours",
-    neighbours: nearest.map(({ row, similarity }) => ({ payee: row.payee, similarity })),
+    neighbours: nearest.map(({ row, similarity }) => ({
+      payee: row.payee,
+      similarity,
+      categoryId: row.categoryId,
+    })),
   };
 }
 

@@ -877,6 +877,39 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * M — `fee` (S31 §9.1) carries no currency column of its own; it is
+   * always the row's own `currency`, so it is checked against the *source*
+   * account's own scale, matching the extended `assert_amount_scale`
+   * trigger (`0012_transaction_scale_and_category_kind.sql`).
+   */
+  it("refuses fee past the account's own scale (M)", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({ ...expenseDraft(accountId), fee: "0.125" });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "fee",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: PLN, decimals: "2" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("admits fee at exactly the account's own scale", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({ ...expenseDraft(accountId), fee: "0.12" });
+
+    expect("id" in result).toBe(true);
+    expect(createTransaction).toHaveBeenCalledOnce();
+  });
+
+  /**
    * **The write is refused before the outbox is touched.**
    *
    * `provisionalFxRate` refuses the same capture, but it does so mid-transaction
@@ -1791,7 +1824,10 @@ describe("phone ledger controller — counterparties and settlement", () => {
   const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
   const MAREK = id<"counterparties">("22222222-2222-4222-8222-222222222222");
 
-  function counterpartyHarness(overrides: Partial<PhoneLedgerPort> = {}) {
+  function counterpartyHarness(
+    overrides: Partial<PhoneLedgerPort> = {},
+    diagnostics?: (event: object) => void,
+  ) {
     let counterparties: PhoneCounterparty[] = [
       {
         id: NINA,
@@ -1999,6 +2035,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
         offsetMinutes: 120,
         at: new Date("2026-08-23T10:00:00Z"),
       }),
+      ...(diagnostics ? { diagnostics } : {}),
       id: <Table extends IdTable>() => id<Table>("00000000-0000-4000-8000-000000000099"),
     });
 
@@ -2248,6 +2285,97 @@ describe("phone ledger controller — counterparties and settlement", () => {
       },
     ]);
     expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /**
+   * M — `settle_debt`'s own `amount` (the "Into"/"From" leg, in the
+   * account's own currency) had no client mirror at all — only
+   * `discharges.amount` did (the test above). Same guarantee, mirrored the
+   * same way `createTransaction`'s own `amountOriginal` guard is.
+   */
+  it("settleDebt: refuses amount past the account currency's own scale", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50.125",
+      currency: "PLN",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "amount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /**
+   * L — every early return here used to report `phase: "success"`, the same
+   * defect `createTransaction`'s own diagnostics test pins above: a refusal
+   * is not a success.
+   */
+  it("settleDebt: reports a refusal's own phase as failure, not success", () => {
+    const diagnostics: object[] = [];
+    const { controller } = counterpartyHarness(
+      {
+        listAccounts: () => [
+          account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+        ],
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+            isPivot: true,
+          },
+        ],
+      },
+      (event) => diagnostics.push(event),
+    );
+
+    controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50.125",
+      currency: "PLN",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    const settleDebtEvents = diagnostics.filter(
+      (event) => "action" in event && event.action === "settle_debt",
+    );
+    expect(settleDebtEvents).toContainEqual(expect.objectContaining({ phase: "failure" }));
+    expect(settleDebtEvents).not.toContainEqual(expect.objectContaining({ phase: "success" }));
   });
 
   it("settleDebt: admits discharges.amount at exactly its own currency's scale", () => {

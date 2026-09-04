@@ -22,11 +22,15 @@
 -- that refusal) would sit past the precision its own currency claims to
 -- hold.
 --
--- **Three pairs, one function.** `to_amount`/`to_currency` (the transfer
--- destination leg, §7.5) and `debt_amount`/`debt_currency` (S14's settlement
--- coalesce) are each optional — set together or not at all
+-- **Three pairs, one function — plus `fee`, which pairs with the row's own
+-- `currency` rather than a column of its own.** `to_amount`/`to_currency`
+-- (the transfer destination leg, §7.5) and `debt_amount`/`debt_currency`
+-- (S14's settlement coalesce) are each optional — set together or not at all
 -- (`transactions_to_amount_shape` et al. already enforce that shape) — so
--- each pair is checked only when both halves are present.
+-- each pair is checked only when both halves are present. `fee` (S31 §9.1,
+-- the bank's stated fee) never carries a currency of its own — it is always
+-- in the row's own `currency` — so it is checked whenever it is present,
+-- against `NEW.currency` rather than a sibling column.
 --
 -- **`trim_scale`, not `scale`.** Every one of these columns' type already
 -- fixes its *declared* scale at 8, so `scale(amount)` reads 8 on every row
@@ -74,14 +78,57 @@ BEGIN
     END IF;
   END IF;
 
+  -- M — `fee` (S31 §9.1) is a fourth figure `numeric(20,8)` regardless of
+  -- currency, and it carries no currency column of its own — it is always
+  -- the row's own `currency`, so that is what its scale is checked against.
+  IF NEW.fee IS NOT NULL AND NEW.currency IS NOT NULL THEN
+    SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
+    IF allowed IS NOT NULL AND scale(trim_scale(NEW.fee)) > allowed THEN
+      RAISE EXCEPTION
+        'amount % holds more decimal places than % (% allows %) (H2)',
+        NEW.fee, NEW.currency, NEW.currency, allowed
+        USING ERRCODE = 'WA016';
+    END IF;
+  END IF;
+
   RETURN NEW;
 END $$;
 --> statement-breakpoint
 CREATE TRIGGER transactions_amount_scale_matches_currency
   BEFORE INSERT OR UPDATE OF
-    amount_original, currency, to_amount, to_currency, debt_amount, debt_currency
+    amount_original, currency, to_amount, to_currency, debt_amount, debt_currency, fee
   ON transactions
   FOR EACH ROW EXECUTE FUNCTION assert_amount_scale();
+--> statement-breakpoint
+
+-- ═══ M — `debt_reassignments.amount`, the same guarantee ══════════════════
+--
+-- `debt_reassignments` (§6.6a) carries its own `currency`/`amount` pair,
+-- outside `transactions` entirely, so `assert_amount_scale` above never sees
+-- it. Same defect, same fix: a PLN reassignment could store `48.905` past
+-- PLN's own two decimal places with nothing to refuse it.
+CREATE OR REPLACE FUNCTION assert_debt_reassignment_amount_scale()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  allowed integer;
+BEGIN
+  IF NEW.amount IS NOT NULL AND NEW.currency IS NOT NULL THEN
+    SELECT decimals INTO allowed FROM currencies WHERE code = NEW.currency;
+    IF allowed IS NOT NULL AND scale(trim_scale(NEW.amount)) > allowed THEN
+      RAISE EXCEPTION
+        'amount % holds more decimal places than % (% allows %) (H2)',
+        NEW.amount, NEW.currency, NEW.currency, allowed
+        USING ERRCODE = 'WA016';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER debt_reassignments_amount_scale_matches_currency
+  BEFORE INSERT OR UPDATE OF amount, currency
+  ON debt_reassignments
+  FOR EACH ROW EXECUTE FUNCTION assert_debt_reassignment_amount_scale();
 --> statement-breakpoint
 
 -- ═══ H1-b — a category whose kind disagrees with the transaction's type ═══

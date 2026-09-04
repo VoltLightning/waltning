@@ -69,6 +69,7 @@ import {
   updateCurrencyInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
+import { zMoney } from "@waltning/core/zod";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
 import { type FieldError, fieldErrorsFromZod } from "../transport/field-errors.ts";
 // ── end E2 block ─────────────────────────────────────────────────────────
@@ -2299,7 +2300,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.needsRate")),
           });
           return {
             fieldErrors: [
@@ -2338,6 +2340,36 @@ export function createPhoneLedger(
                 message: `This account only holds ${account.currency} — settle in that currency.`,
                 messageKey: "settleDebt.currencyMismatch",
                 params: { accountCurrency: account.currency },
+              },
+            ],
+          };
+        }
+
+        /**
+         * M — `settle_debt`'s own `amount` (the "Into"/"From" leg, in the
+         * *account's* currency) had no client mirror at all — only
+         * `discharges.amount` (below) did. Same guarantee, same shape as
+         * `createTransaction`'s own `amountOriginal` guard above: refused
+         * here, on the account's own scale, before the write rather than
+         * discovered as a silently truncated figure.
+         */
+        if (
+          account !== undefined &&
+          money.dec(money.toMoney(draft.amount)).decimalPlaces() > account.decimals
+        ) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "amount",
+                message: `${account.currency} holds ${account.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: { currency: account.currency, decimals: String(account.decimals) },
               },
             ],
           };
@@ -2434,7 +2466,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(parsed.error),
           });
           return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
         }
@@ -2445,7 +2478,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(refusal),
           });
           return { fieldErrors: [settleDebtRefusal(refusal)] };
         }
@@ -2476,10 +2510,14 @@ export function createPhoneLedger(
       try {
         const account = snapshot.accounts.find((candidate) => candidate.id === draft.accountId);
         if (!account) {
+          // L — a refusal is not a success (the same fix `tooManyDecimals`
+          // below already carries): every early return here bounces the
+          // write, and `phase: "success"` misreported every one of them.
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("accountId required")),
           });
           return {
             fieldErrors: [{ path: "accountId", message: "Choose an account before saving" }],
@@ -2501,7 +2539,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.needsRate")),
           });
           return {
             fieldErrors: [
@@ -2520,7 +2559,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("amount must be greater than zero")),
           });
           return {
             fieldErrors: [{ path: "amountOriginal", message: "Amount must be greater than zero" }],
@@ -2565,14 +2605,24 @@ export function createPhoneLedger(
          * (`0012_transaction_scale_and_category_kind.sql`). Only checked
          * when the destination account is known locally, matching the
          * source account's own guard above.
+         *
+         * L — `money.toMoney` throws on anything that is not a decimal
+         * (`Decimal` does), and `draft.toAmount` is a raw string this
+         * controller does not otherwise validate before this point. The
+         * screen always hands it through `parseAmount` first, but this is a
+         * controller boundary, not a component — `zMoney.safeParse` is that
+         * same shape check, run here rather than assumed.
          */
+        const parsedToAmount =
+          draft.toAmount === undefined ? undefined : zMoney.safeParse(draft.toAmount);
         if (draft.toAmount !== undefined && draft.toAccountId !== undefined) {
           const toAccount = snapshot.accounts.find(
             (candidate) => candidate.id === draft.toAccountId,
           );
           if (
             toAccount !== undefined &&
-            money.dec(money.toMoney(draft.toAmount)).decimalPlaces() > toAccount.decimals
+            parsedToAmount?.success === true &&
+            money.dec(parsedToAmount.data).decimalPlaces() > toAccount.decimals
           ) {
             emitClientDiagnostic(diagnostics, {
               scope: "client_action",
@@ -2587,6 +2637,35 @@ export function createPhoneLedger(
                   message: `${toAccount.currency} holds ${toAccount.decimals} decimal places — this amount has more`,
                   messageKey: "transactions.tooManyDecimals",
                   params: { currency: toAccount.currency, decimals: String(toAccount.decimals) },
+                },
+              ],
+            };
+          }
+        }
+
+        /**
+         * M — `fee` (S31 §9.1) carries no currency of its own; it is always
+         * the row's own `currency`, so it is checked against `account`'s
+         * own scale (the same account `amountOriginal` above is checked
+         * against), matching the extended `assert_amount_scale` trigger
+         * (`0012_transaction_scale_and_category_kind.sql`).
+         */
+        if (draft.fee !== undefined) {
+          const parsedFee = zMoney.safeParse(draft.fee);
+          if (parsedFee.success && money.dec(parsedFee.data).decimalPlaces() > account.decimals) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.tooManyDecimals")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "fee",
+                  message: `${account.currency} holds ${account.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: { currency: account.currency, decimals: String(account.decimals) },
                 },
               ],
             };
@@ -2649,15 +2728,24 @@ export function createPhoneLedger(
           // `createTransactionInput`'s own shape refusal is what catches a
           // `type: "transfer"` missing one of these, not this method.
           ...(draft.toAccountId === undefined ? {} : { toAccountId: draft.toAccountId }),
-          ...(draft.toAmount === undefined ? {} : { toAmount: money.toMoney(draft.toAmount) }),
+          // L — `zMoney` (`toAmount`'s own field type) is `z.string()` and
+          // does its own parse-and-transform; passing the raw string lets a
+          // malformed `toAmount` land as an ordinary `fieldErrors` refusal
+          // from `safeParse` below, the same as every other field here, in
+          // place of `money.toMoney` throwing before this call is even made.
+          ...(draft.toAmount === undefined ? {} : { toAmount: draft.toAmount }),
           ...(draft.toCurrency === undefined ? {} : { toCurrency: draft.toCurrency }),
-          ...(draft.fee === undefined ? {} : { fee: money.toMoney(draft.fee) }),
+          // `zMoney` (`fee`'s own field type) is `z.string()` and does its
+          // own parse-and-transform, the same reason `toAmount` above is
+          // passed raw rather than pre-converted.
+          ...(draft.fee === undefined ? {} : { fee: draft.fee }),
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(parsed.error),
           });
           return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
         }
@@ -2698,7 +2786,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(refusal),
           });
           return { fieldErrors: [fieldError] };
         }

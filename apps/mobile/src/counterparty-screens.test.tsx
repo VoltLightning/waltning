@@ -928,6 +928,75 @@ describe("CounterpartyDetail (S13)", () => {
     expect(screen.getByText("Settled. 790 PLN they owe you.")).toBeDefined();
   });
 
+  /**
+   * H — the same guard `quick-add-screen.test.tsx`'s own account-switch test
+   * pins for `createTransaction` (H2): a discharges-currency switch to a
+   * smaller scale never silently carries an already-typed figure past what
+   * it can hold. The switch is refused outright — the discharges currency
+   * stays PLN, the typed "1,23" survives — and the reason is stated rather
+   * than the amount quietly losing its cents.
+   */
+  it("refuses a discharges currency switch to a smaller scale, keeping the amount and naming why (H)", () => {
+    const jpyRow: PhoneCounterpartyBalance = {
+      ...NINA_ROW,
+      currency: currencyCode("JPY"),
+      balance: toMoney("-500.00000000"),
+    };
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+            isPivot: true,
+          },
+          {
+            code: currencyCode("JPY"),
+            name: "Yen",
+            symbol: "¥",
+            decimals: 0,
+            capturable: true,
+            isPivot: false,
+          },
+        ],
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW, jpyRow],
+        listAccounts: () => [CASH_PLN],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    // Two open balances — a real choice, defaulting to PLN (the
+    // counterparty's own settlement currency, S14 §9.1).
+    expect(sheet.getByRole("radio", { name: /PLN/ })).toBeDefined();
+
+    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "1" }));
+    // `Keypad`'s decimal key emits the canonical `,`, but its own *label*
+    // follows the locale — English shows `.` (`keypad.tsx`).
+    fireEvent.click(sheet.getByRole("button", { name: "." }));
+    fireEvent.click(sheet.getByRole("button", { name: "2" }));
+    fireEvent.click(sheet.getByRole("button", { name: "3" }));
+
+    fireEvent.click(sheet.getByRole("radio", { name: /JPY/ }));
+
+    // The switch is refused — the discharges amount field still names PLN
+    // (never JPY), the typed "1,23" survives, and the reason is stated.
+    expect(sheet.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
+    // `AmountField` displays the raw "1,23" through the locale's own mark
+    // (English: ".") — the same `display` a caption or a hero value reads.
+    expect(sheet.getByRole("button", { name: "Discharges: 1.23" })).toBeDefined();
+  });
+
   it("shows the all-settled empty state, keeping the card, when nothing is open", () => {
     const controller = controllerOf(basePort({ listCounterparties: () => [NINA_COUNTERPARTY] }));
     render(

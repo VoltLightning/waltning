@@ -1,8 +1,10 @@
 /**
  * H2 — a transaction cannot hold more decimal places than its own currency,
- * in any of the three amount/currency pairs it can carry: `amount_original`
- * (every row), `to_amount` (a transfer's destination leg, §7.5) and
- * `debt_amount` (S14's settlement coalesce).
+ * in any of the four amount/currency pairs it can carry: `amount_original`
+ * (every row), `to_amount` (a transfer's destination leg, §7.5), `debt_amount`
+ * (S14's settlement coalesce), and `fee` (S31 §9.1, checked against the row's
+ * own `currency` rather than a sibling column). `debt_reassignments.amount`
+ * (§6.6a) carries the same guarantee outside `transactions` entirely.
  *
  * `create-phone-ledger.ts`'s controller already refuses this before a write
  * ever leaves the phone (`transactions.tooManyDecimals`), but a client-side
@@ -23,6 +25,10 @@ const JPY_ACCOUNT = "33333333-3333-3333-3333-333333333333";
 /** The transfer destination leg's own account — a second currency, USD. */
 const USD_ACCOUNT = "44444444-4444-4444-4444-444444444444";
 
+/** `debt_reassignments`' own pair — placeholder names only. */
+const NINA = "55555555-5555-5555-5555-555555555555";
+const MAREK = "66666666-6666-6666-6666-666666666666";
+
 beforeAll(async () => {
   s = await scratchDatabase("amountscale");
   // Placeholder data only — an invented bank in an invented currency.
@@ -36,7 +42,9 @@ beforeAll(async () => {
     INSERT INTO accounts (id, name, kind, currency, ownership)
       VALUES ('${JPY_ACCOUNT}', 'Bank A · JPY', 'bank', 'JPY', 'own');
     INSERT INTO accounts (id, name, kind, currency, ownership)
-      VALUES ('${USD_ACCOUNT}', 'Bank B · USD', 'bank', 'USD', 'own');`);
+      VALUES ('${USD_ACCOUNT}', 'Bank B · USD', 'bank', 'USD', 'own');
+    INSERT INTO counterparties (id, name) VALUES ('${NINA}', 'Nina');
+    INSERT INTO counterparties (id, name) VALUES ('${MAREK}', 'Marek');`);
 }, 60_000);
 
 afterAll(async () => {
@@ -166,6 +174,54 @@ describe("a transaction's amount fits its currency's own scale", () => {
         VALUES
           ('${id}', '${ACCOUNT}', '2026-01-01', 'expense', 10, 'PLN', 1,
            'PLN', 10.12)`),
+    );
+    expect(code).toBeNull();
+  });
+
+  /**
+   * M — `fee` (S31 §9.1) carries no currency column of its own; it is
+   * always the row's own `currency`, so the trigger checks it against that
+   * rather than a sibling.
+   */
+  it("refuses three decimal places on fee, checked against the row's own currency (WA016)", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate, fee)
+        VALUES ('${id}', '${ACCOUNT}', '2026-01-01', 'expense', 10, 'PLN', 1, 0.125)`),
+    );
+    expect(code, "0.125 against PLN's two decimal places must be refused").toBe("WA016");
+  });
+
+  it("admits fee at exactly the row's own currency's scale", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate, fee)
+        VALUES ('${id}', '${ACCOUNT}', '2026-01-01', 'expense', 10, 'PLN', 1, 0.12)`),
+    );
+    expect(code).toBeNull();
+  });
+});
+
+/** M — `debt_reassignments.amount` (§6.6a) carries the same guarantee, outside `transactions` entirely. */
+describe("a debt reassignment's amount fits its own currency's scale", () => {
+  it("refuses three decimal places on amount (WA016)", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO debt_reassignments (id, date, from_counterparty_id, to_counterparty_id, currency, amount)
+        VALUES ('${id}', '2026-01-01', '${NINA}', '${MAREK}', 'PLN', 48.905)`),
+    );
+    expect(code, "48.905 against PLN's two decimal places must be refused").toBe("WA016");
+  });
+
+  it("admits an amount at exactly its own currency's scale", async () => {
+    const id = nextId();
+    const code = await refusal(() =>
+      s.sql.unsafe(`
+        INSERT INTO debt_reassignments (id, date, from_counterparty_id, to_counterparty_id, currency, amount)
+        VALUES ('${id}', '2026-01-01', '${NINA}', '${MAREK}', 'PLN', 48.90)`),
     );
     expect(code).toBeNull();
   });

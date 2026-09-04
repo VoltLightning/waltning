@@ -20,7 +20,7 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseTransferRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import { mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { type FieldError, mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
@@ -43,6 +43,30 @@ import { View } from "react-native";
 
 /** `create_transaction`'s own field paths for a transfer row — everything else lands at form level. */
 const KNOWN_PATHS = ["amountOriginal", "accountId", "toAccountId", "toAmount", "fee", "date"];
+
+/**
+ * L — a refusal's own text, resolving the `messageKey`s `createTransaction`
+ * can set for a transfer row through `useT()` — it cannot call the hook
+ * itself (`packages/client` is not a component). The same two keys
+ * `quick-add-screen.tsx`'s own `resolveFieldErrorMessage` resolves for
+ * `amountOriginal`; here they can also land on `toAmount` or `fee`
+ * (`0012_transaction_scale_and_category_kind.sql`'s extended
+ * `assert_amount_scale`), and `accountId` (the *from* leg's own rate guard).
+ * Everything else was already `error.message` — the raw English a schema or
+ * an executor wrote — never routed through a translation at all.
+ */
+function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
+  if (error.messageKey === "transactions.needsRate") {
+    return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
+  }
+  if (error.messageKey === "transactions.tooManyDecimals") {
+    return t("transactions.tooManyDecimals", {
+      currency: error.params?.["currency"] ?? "",
+      decimals: error.params?.["decimals"] ?? "",
+    });
+  }
+  return error.message;
+}
 
 function handleCancel() {
   router.back();
@@ -349,7 +373,11 @@ export default function Transfer() {
       ...(parsedFee === null || feeIsZero ? {} : { fee: parsedFee }),
     });
     if (!("id" in result)) {
-      setFieldErrors(mapFieldErrors(result.fieldErrors, KNOWN_PATHS));
+      const resolved = result.fieldErrors.map((error) => ({
+        path: error.path,
+        message: resolveFieldErrorMessage(t, error),
+      }));
+      setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
       return;
     }
     setFieldErrors(undefined);
@@ -366,6 +394,7 @@ export default function Transfer() {
     date,
     note,
     ledger,
+    t,
   ]);
 
   const handleMode = useCallback(() => {}, []);

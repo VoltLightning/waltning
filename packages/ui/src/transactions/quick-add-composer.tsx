@@ -244,10 +244,22 @@ export function QuickAddComposer({
    * match's own neighbour list is empty (`payee-memory.ts`), but an exact
    * match is by definition the same fold as `payee`, so the fallback reads
    * identically either way.
+   *
+   * M — the *closest neighbour of the winning category*, not `neighbours[0]`
+   * unconditionally: the closest neighbour overall can sit in a different,
+   * losing category (`payee-memory.ts`'s own reviewer case) and still rank
+   * first by similarity alone — naming it would claim the pick came from a
+   * row that never voted for it. `neighbours` is already sorted by
+   * similarity (`proposeCategory`), so the first entry whose own `categoryId`
+   * matches the proposal's is the closest one that actually is.
    */
   const categoryFromHistory = !categoryAutoFilled
     ? undefined
-    : t("categories.fromHistory", { payee: categoryProposal?.neighbours[0]?.payee ?? payee });
+    : t("categories.fromHistory", {
+        payee:
+          categoryProposal?.neighbours.find((n) => n.categoryId === categoryProposal.categoryId)
+            ?.payee ?? payee,
+      });
 
   const notePreview =
     note.trim() === ""

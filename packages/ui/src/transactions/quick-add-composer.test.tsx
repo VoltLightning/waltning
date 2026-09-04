@@ -172,8 +172,8 @@ it("names the trail from the proposal's own neighbour, not the typed payee (M)",
           confidence: 0.9,
           basis: "neighbours",
           neighbours: [
-            { payee: "Corner Café", similarity: 0.8 },
-            { payee: "Corner Cafe Ltd", similarity: 0.5 },
+            { payee: "Corner Café", similarity: 0.8, categoryId: "cat-eating-out" },
+            { payee: "Corner Cafe Ltd", similarity: 0.5, categoryId: "cat-eating-out" },
           ],
         },
         categoryAutoFilled: true,
@@ -182,6 +182,38 @@ it("names the trail from the proposal's own neighbour, not the typed payee (M)",
   );
   expect(screen.getByText("From your history: Corner Café")).toBeDefined();
   expect(screen.queryByText("From your history: corner cafe")).toBeNull();
+});
+
+/**
+ * M — the reviewer's own case: the closest neighbour overall can sit in a
+ * different, *losing* category (`payee-memory.ts`'s own test) and still
+ * rank first by similarity alone. The trail must skip past it to the
+ * closest neighbour *of the winning category* — never name a row that
+ * never voted for this pick.
+ */
+it("names the trail from the closest neighbour of the winning category, not rank-0 overall (M)", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        payee: "Coffee House",
+        categoryId: "cat-dining",
+        categoryProposal: {
+          categoryId: "cat-dining",
+          confidence: 0.67,
+          basis: "neighbours",
+          neighbours: [
+            // Closest overall, but the *losing* category — must not be named.
+            { payee: "Coffee Hous", similarity: 0.9, categoryId: "cat-groceries" },
+            { payee: "Coffee Shop", similarity: 0.6, categoryId: "cat-dining" },
+            { payee: "Coffee Stop", similarity: 0.5, categoryId: "cat-dining" },
+          ],
+        },
+        categoryAutoFilled: true,
+      })}
+    />,
+  );
+  expect(screen.getByText("From your history: Coffee Shop")).toBeDefined();
+  expect(screen.queryByText("From your history: Coffee Hous")).toBeNull();
 });
 
 it("lets someone type a payee through its own sheet", () => {
@@ -374,7 +406,7 @@ it("shows a below-threshold proposal as a suggestion, never as the chip's value 
           categoryId: "cat-eating-out",
           confidence: 0.57,
           basis: "neighbours",
-          neighbours: [{ payee: "corner cafe", similarity: 0.5 }],
+          neighbours: [{ payee: "corner cafe", similarity: 0.5, categoryId: "cat-eating-out" }],
         },
       })}
     />,
