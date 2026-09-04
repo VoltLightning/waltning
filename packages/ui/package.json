@@ -6,6 +6,7 @@
   "exports": {
     "./tokens": "./src/tokens.ts",
     "./accounts/*": "./src/accounts/*.tsx",
+    "./categories/*": "./src/categories/*.tsx",
     "./fx/*": "./src/fx/*.tsx",
     "./i18n/en": "./src/i18n/en.ts",
     "./i18n/locales": "./src/i18n/locales.ts",

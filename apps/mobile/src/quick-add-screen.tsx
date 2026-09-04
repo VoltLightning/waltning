@@ -1,4 +1,5 @@
 import type {
+  CreateCategoryDraft,
   PhoneCapturableAccount,
   QuickAddDraft,
 } from "@waltning/client/ledger/create-phone-ledger";
@@ -8,6 +9,7 @@ import { useLedgerController } from "@waltning/client/ledger/use-ledger-controll
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
@@ -104,6 +106,38 @@ export default function QuickAdd() {
     [ledger, t],
   );
 
+  /**
+   * D4a: S06's sheet is composed here, not inside `QuickAddForm` — a domain
+   * (`transactions/`) importing a sibling domain (`categories/`) is the thing
+   * `architecture/11` names directly, so the form only ever opens a callback
+   * this screen owns, the same way it already escapes to account creation.
+   */
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categorySheet, setCategorySheet] = useState<{
+    open: boolean;
+    kind: "income" | "expense";
+  }>({ open: false, kind: "expense" });
+  const handleOpenCategoryPicker = useCallback(
+    (kind: "income" | "expense") => setCategorySheet({ open: true, kind }),
+    [],
+  );
+  const handleDismissCategorySheet = useCallback(
+    () => setCategorySheet((current) => ({ ...current, open: false })),
+    [],
+  );
+  const handlePickCategory = useCallback((next: string) => {
+    setCategoryId(next);
+    setCategorySheet((current) => ({ ...current, open: false }));
+  }, []);
+  const handleCreateCategory = useCallback(
+    (categoryDraft: CreateCategoryDraft) => {
+      const result = ledger.createCategory(categoryDraft);
+      if ("id" in result) return { id: result.id };
+      return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
+    },
+    [ledger, t],
+  );
+
   return (
     <GroundPanel>
       {/* No title: the navigation header carries it, and the same
@@ -116,12 +150,22 @@ export default function QuickAdd() {
           today={today}
           initialAmount={draft.amount}
           {...(draft.accountId ? { initialAccountId: draft.accountId } : {})}
+          categoryId={categoryId}
+          onOpenCategoryPicker={handleOpenCategoryPicker}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
           onCancel={handleCancel}
           onCreateAccount={handleCreateAccount}
           onSave={handleSave}
         />
       </Card>
+      <CategorySheet
+        visible={categorySheet.open}
+        kind={categorySheet.kind}
+        tree={snapshot.categoryTree}
+        onPick={handlePickCategory}
+        onCreate={handleCreateCategory}
+        onDismiss={handleDismissCategorySheet}
+      />
     </GroundPanel>
   );
 }

@@ -65,6 +65,7 @@ function fakeController(initialAccounts: readonly FakeAccount[] = []) {
       listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
+      listCategoryTree: () => [],
       listCounterparties: () => [],
       createAccount: (input) => {
         accounts = [
@@ -81,6 +82,7 @@ function fakeController(initialAccounts: readonly FakeAccount[] = []) {
         ];
       },
       createTransaction: () => undefined,
+      createCategory: () => undefined,
       reset: () => {
         accounts = [];
       },

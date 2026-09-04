@@ -89,6 +89,17 @@ export const pl: Messages = {
     "role.contribution": "Wkład na konto wspólne",
     "role.reference": "Tylko udział — bez zobowiązania",
   },
+  categories: {
+    search: "Szukaj wśród {{count}} kategorii",
+    new: "Nowa",
+    create: "Utwórz „{{query}}”",
+    use: "Użyj „{{name}}”",
+    suggested: "Sugerowana",
+    lowConfidence: "Niska pewność — sprawdź przed użyciem.",
+    noMatchTitle: "Brak pasującej kategorii",
+    noMatchBody: "Nic nie pasuje do „{{query}}”.",
+    chooseGroup: "Wybierz grupę",
+  },
   shell: {
     today: "Dziś",
     add: "Dodaj",

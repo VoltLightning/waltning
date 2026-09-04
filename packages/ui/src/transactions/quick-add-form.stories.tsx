@@ -40,6 +40,8 @@ const meta = {
     categories: CATEGORIES,
     counterparties: [],
     today: "2026-08-24",
+    categoryId: null,
+    onOpenCategoryPicker: noop,
     onCancel: noop,
     onCreateAccount: noop,
     onSave: noop,

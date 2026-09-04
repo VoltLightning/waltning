@@ -1,3 +1,4 @@
+import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id, IdTable } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
@@ -5,8 +6,10 @@ import * as money from "@waltning/core/money";
 import {
   type AccountKind,
   type CreateAccountInput,
+  type CreateCategoryInput,
   type CreateTransactionInput,
   createAccountInput,
+  createCategoryInput,
   createTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
@@ -100,6 +103,26 @@ export type PhoneCategory = {
 };
 
 /**
+ * One node of the whole category tree — groups and leaves both — for S06's
+ * sheet, which browses and filters by group rather than only offering the
+ * flat leaf list `PhoneCategory` above carries.
+ *
+ * Structural, matching `PhoneCategory`: the port is what keeps this package
+ * free of the storage engine behind it. **`parentId: null` names a root** —
+ * ordinarily a group (`isLeaf: false`), except `Uncategorized`, the one leaf
+ * `TAXONOMY.md` seeds at the root (R1/R2: a category is a group or a leaf,
+ * two levels, never deeper).
+ */
+export type PhoneCategoryNode = {
+  id: Id<"categories">;
+  parentId: Id<"categories"> | null;
+  name: string;
+  kind: "income" | "expense";
+  isLeaf: boolean;
+  sort: number;
+};
+
+/**
  * A counterparty the quick-add form can attach a role to (§6.6).
  *
  * `#e3` has not shipped a write path yet, so this list is ordinarily empty —
@@ -116,9 +139,11 @@ export type PhoneLedgerPort = {
   listGroups: () => readonly PhoneGroup[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
+  listCategoryTree: () => readonly PhoneCategoryNode[];
   listCounterparties: () => readonly PhoneCounterparty[];
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
+  createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
   reset: () => void;
 };
 
@@ -149,6 +174,7 @@ export type PhoneLedgerSnapshot = {
   groups: readonly PhoneGroup[];
   recent: readonly PhoneRecentTransaction[];
   categories: readonly PhoneCategory[];
+  categoryTree: readonly PhoneCategoryNode[];
   counterparties: readonly PhoneCounterparty[];
   /**
    * Ordered by the account list, so the currency of your first account leads.
@@ -209,6 +235,21 @@ export type CreateAccountDraft = {
   groupId: string | null;
 };
 
+/**
+ * What S06's create-in-place row can save — a leaf, always (`create_category`
+ * never sets `isLeaf: false`, see the executor). `parentId` names the group
+ * it was created under, or `null` for the one root exception (`Uncategorized`
+ * already exists; a person creating a new root-level leaf is the taxonomy
+ * drifting, which is why the sheet scopes `+ New` to a chosen group — this
+ * type stays permissive so the controller's own refusal, not the type, is
+ * where that is decided).
+ */
+export type CreateCategoryDraft = {
+  name: string;
+  kind: "income" | "expense";
+  parentId: string | null;
+};
+
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
@@ -219,6 +260,9 @@ export type PhoneLedgerController = {
   createTransaction: (
     draft: QuickAddDraft,
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
+  createCategory: (
+    draft: CreateCategoryDraft,
+  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
   reset: () => void;
 };
 
@@ -255,6 +299,7 @@ export function createPhoneLedger(
     groups: [],
     recent: [],
     categories: [],
+    categoryTree: [],
     counterparties: [],
     subtotals: [],
   };
@@ -282,6 +327,7 @@ export function createPhoneLedger(
         groups: port.listGroups(),
         recent: port.listRecent(5),
         categories: port.listCategories(),
+        categoryTree: port.listCategoryTree(),
         counterparties: port.listCounterparties(),
         subtotals: subtotalsOf(accounts),
       };
@@ -451,6 +497,78 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "create_transaction",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    createCategory: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "create_category",
+        phase: "start",
+      });
+      try {
+        /**
+         * **Refused here, before the write.** `S06-category-sheet.md` §6: a
+         * failed create "lands inline on the field, naming the existing
+         * sibling." The executor has no field-scoped refusal channel — it
+         * throws a plain `Error`, the same shape `create_transaction`'s own
+         * capturable-account check works around — so the collision is caught
+         * proactively against the snapshot's own tree, the same pattern the
+         * amount and account checks above already use.
+         *
+         * Folded (`D1`'s `fold`), scoped to the exact parent and kind: a
+         * sibling is a name collision *within one group* (`TAXONOMY.md` R3
+         * reads "no name appears twice in the tree", but S06 §6 and the
+         * executor's own parent checks both operate one level at a time).
+         */
+        const target = fold(draft.name);
+        const collision = snapshot.categoryTree.find(
+          (node) =>
+            node.parentId === (draft.parentId ?? null) &&
+            node.kind === draft.kind &&
+            fold(node.name) === target,
+        );
+        if (collision) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_category",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+          };
+        }
+
+        const capture = runtime.capture();
+        const parsed = createCategoryInput.safeParse({
+          id: runtime.id<"categories">(),
+          name: draft.name,
+          kind: draft.kind,
+          parentId: draft.parentId,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_category",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.createCategory(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_category",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_category",
           phase: "failure",
           error: clientFailure(error),
         });

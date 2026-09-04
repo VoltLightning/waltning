@@ -103,6 +103,23 @@ const FOUNDATION = new Set([
    * on the screens that read it.
    */
   "i18n",
+  /**
+   * **`shell` and `states` are chrome, not domains — the same property that
+   * makes `fx` and `i18n` foundational.** `Shell`, `Card`, `TabBar`,
+   * `BottomSheet` (`shell/`) and `EmptyState`, `ErrorState`, `Toast`,
+   * `MatchWarning` (`states/`) mean the same thing in every domain that has a
+   * screen or a sheet; nothing about them names an account, a transaction or a
+   * category. D4a's `CategorySheet` is the first module to compose one of
+   * these — the wave-3 shared plan says explicitly to build "over
+   * `BottomSheet`" and to compose `EmptyState` rather than reinvent it — and
+   * hit this test unpromoted, which is the gap this closes.
+   *
+   * The direction still runs one way: neither folder imports a domain (verified
+   * below, same as `fx`), so a domain depending on either is a floor, not a
+   * tangle.
+   */
+  "shell",
+  "states",
 ]);
 
 /** Which module a path belongs to, or undefined if it is outside them all. */

@@ -69,11 +69,25 @@ async function open(page: Page, id: string, theme: string) {
   await settle(page);
 }
 
+/**
+ * `#storybook-root` is a story's own render target — but `<Modal>`
+ * (`shell/bottom-sheet.tsx`, first exercised by a story here in D4a's
+ * `CategorySheet`) portals its content to a sibling of it on the web, the
+ * same way it portals outside an RTL render container in a jsdom test. A
+ * story screenshotting the root alone photographs nothing for a modal-based
+ * component — `react-native-web`'s `Modal` renders `role="dialog"` on that
+ * portaled node, so this looks for one first and falls back to the root.
+ */
+async function screenshotTarget(page: Page) {
+  const dialog = page.locator('[role="dialog"]');
+  return (await dialog.count()) > 0 ? dialog.first() : page.locator("#storybook-root");
+}
+
 for (const story of STORIES) {
   for (const theme of THEMES) {
     test(`${story.title}/${story.name} · ${theme}`, async ({ page }) => {
       await open(page, story.id, theme);
-      await expect(page.locator("#storybook-root")).toHaveScreenshot(`${story.id}-${theme}.png`);
+      await expect(await screenshotTarget(page)).toHaveScreenshot(`${story.id}-${theme}.png`);
     });
   }
 }
