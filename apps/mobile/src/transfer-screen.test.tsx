@@ -76,7 +76,14 @@ function fakeController(
         decimals: 2,
         capturable: overrides.capturableUsd ?? true,
       },
-      { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
+      {
+        code: PLN,
+        name: "Polish Złoty",
+        symbol: "zł",
+        decimals: 2,
+        capturable: true,
+        isPivot: false,
+      },
       { code: USD, name: "US Dollar", symbol: "$", decimals: 2, capturable: true, isPivot: true },
       {
         code: PLN,

@@ -40,6 +40,7 @@ import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { AmountField } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
+import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
