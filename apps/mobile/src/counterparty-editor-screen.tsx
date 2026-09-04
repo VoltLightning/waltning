@@ -40,7 +40,7 @@ import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { groupByCounterparty, makeRateOf, resolveCounterpartyFigures } from "./counterparty-figures.ts";
+import { groupByCounterparty, makeRateOf, resolveCounterpartyFigures } from "@waltning/client/counterparties/counterparty-figures";
 
 /** `update_counterparty` and `create_counterparty`'s own field paths — everything else lands at form level. */
 const KNOWN_PATHS = ["name", "version", "archived"];

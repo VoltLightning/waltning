@@ -3,22 +3,46 @@
  * per-currency rows (§7) to the one settlement-currency net a row or a card
  * shows, plus the display-currency equivalent whenever a rate answers (P1).
  *
- * A screen concern, not a domain component's: it reads `readRate` and a
- * `today`, neither of which `packages/ui`'s `CounterpartyRow` or
- * `BalanceLedger` know about — those components render whatever figure this
- * module resolved.
+ * **`packages/client`, not the app** — `tests/architecture.test.ts` requires
+ * every app source file to be platform-bound, a test, or a route; this reads
+ * `readRate` and a `today` (both the screen already has) and is shareable
+ * logic with no platform dependency, so it lives beside `counterparty-net.ts`
+ * rather than in `apps/mobile/src`. Two screens (`debt-screen.tsx`,
+ * `counterparty-detail-screen.tsx`, `counterparty-editor-screen.tsx`) import
+ * it; `packages/ui`'s `CounterpartyRow`/`BalanceLedger` only ever render
+ * whatever figure this module already resolved.
  */
 
-import type { PhoneCounterpartyBalance } from "@waltning/client/ledger/create-phone-ledger";
-import { counterpartyNet } from "@waltning/client/counterparties/counterparty-net";
 import type { AccountingDate } from "@waltning/core/date";
 import type { AgeBucket, CurrencyCode, Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
+import { counterpartyNet } from "./counterparty-net.ts";
 
 export type CounterpartyBalanceLine = {
   currency: CurrencyCode;
   balance: Money;
   decimals: number;
+};
+
+/**
+ * §7's row, structurally — the fields `groupByCounterparty` reads off
+ * `PhoneCounterpartyBalance` (`ledger/create-phone-ledger.ts`). Structural
+ * rather than imported: `counterparties` and `ledger` are sibling domains
+ * inside `packages/client/src`, and a value import across that seam is what
+ * `tests/module-boundaries.test.ts` refuses (`architecture/11` — compose at
+ * the screen, never domain-to-domain). Every field this module needs, in the
+ * same shape.
+ */
+export type CounterpartyBalanceRow = {
+  counterpartyId: string;
+  name: string;
+  kind: "person" | "company";
+  settlementCurrency: CurrencyCode | null;
+  currency: CurrencyCode;
+  decimals: number;
+  balance: Money;
+  ageDays: number | null;
+  bucket: AgeBucket | null;
 };
 
 export type CounterpartyGroup = {
@@ -34,7 +58,7 @@ export type CounterpartyGroup = {
 
 /** One row per counterparty per currency (§7) folded into one row per counterparty. */
 export function groupByCounterparty(
-  rows: readonly PhoneCounterpartyBalance[],
+  rows: readonly CounterpartyBalanceRow[],
 ): readonly CounterpartyGroup[] {
   const byId = new Map<string, CounterpartyGroup & { balances: CounterpartyBalanceLine[] }>();
   for (const row of rows) {

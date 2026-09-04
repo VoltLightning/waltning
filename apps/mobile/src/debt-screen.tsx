@@ -38,7 +38,7 @@ import {
   groupByCounterparty,
   makeRateOf,
   resolveCounterpartyFigures,
-} from "./counterparty-figures.ts";
+} from "@waltning/client/counterparties/counterparty-figures";
 
 type DirectionSegment = "all" | "theyOwe" | "youOwe";
 
@@ -109,8 +109,7 @@ export default function Debt() {
   const visibleRows = useMemo(() => {
     const filtered = rows.filter((row) => {
       if (segment === "all") return true;
-      const theyOwe = money.cmp(row.figures.value, money.toMoney("0")) > 0;
-      return segment === "theyOwe" ? theyOwe : !theyOwe;
+      return money.debtDirection(row.figures.value) === segment;
     });
     // S12 §3: companies by age desc, then by name.
     return [...filtered].sort((a, b) => {

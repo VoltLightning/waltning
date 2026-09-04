@@ -17,9 +17,13 @@ export type DebtDirectionTagProps = {
   balance: money.Money;
 };
 
+const KEY: Record<money.DebtDirection, "counterparties.owesYou" | "counterparties.youOwe" | "counterparties.settled"> = {
+  theyOwe: "counterparties.owesYou",
+  youOwe: "counterparties.youOwe",
+  settled: "counterparties.settled",
+};
+
 export function DebtDirectionTag({ balance }: DebtDirectionTagProps) {
   const t = useT();
-  if (money.isZero(balance)) return <Tag>{t("counterparties.settled")}</Tag>;
-  const theyOwe = money.cmp(balance, money.toMoney("0")) > 0;
-  return <Tag>{t(theyOwe ? "counterparties.owesYou" : "counterparties.youOwe")}</Tag>;
+  return <Tag>{t(KEY[money.debtDirection(balance)])}</Tag>;
 }

@@ -29,11 +29,16 @@ export function CounterpartyCard({ name, kind, settlementCurrency, ageing }: Cou
   const t = useT();
   const styles = useStyles();
   const monogram = monogramFor(name);
+  // Computed rather than in `useStyles`: the tint is per-name, a prop, not a
+  // theme-scale constant — `tag.tsx`'s own `fill`/`ink` are the same shape, a
+  // plain object built beside the JSX rather than inline inside it.
+  const monogramFill = { backgroundColor: monogram.fill };
+  const monogramInk = { color: monogram.ink };
 
   return (
     <View style={styles.root}>
-      <View style={[styles.monogram, { backgroundColor: monogram.fill }]}>
-        <Text style={[styles.monogramText, { color: monogram.ink }]}>{monogram.letter}</Text>
+      <View style={[styles.monogram, monogramFill]}>
+        <Text style={[styles.monogramText, monogramInk]}>{monogram.letter}</Text>
       </View>
       <View style={styles.identity}>
         <Text style={styles.name}>{name}</Text>

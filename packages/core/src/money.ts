@@ -699,6 +699,21 @@ export const ageInDays = (oldestDate: AccountingDate, today: AccountingDate): nu
   daysBetween(oldestDate, today);
 
 /**
+ * §6.6's direction, in words — `DebtDirectionTag` and S12's own sort/filter
+ * both need this exact rule (positive means *they owe you*) and neither
+ * should restate it: `debt-screen.tsx`'s segment filter calls this rather
+ * than `money.cmp` directly, the same "no component outside the design
+ * system formats money" rule `tests/architecture.test.ts` holds packages/ui
+ * to (P5, §6.6).
+ */
+export type DebtDirection = "theyOwe" | "youOwe" | "settled";
+
+export const debtDirection = (balance: Money): DebtDirection => {
+  if (isZero(balance)) return "settled";
+  return cmp(balance, toMoney("0")) > 0 ? "theyOwe" : "youOwe";
+};
+
+/**
  * S12's two direction totals — *they owe you*, *you owe* — per currency,
  * **never summed across people**: a receivable from one counterparty and a
  * payable to another do not net against each other just because they share

@@ -33,7 +33,7 @@ import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { groupByCounterparty, makeRateOf, resolveCounterpartyFigures } from "./counterparty-figures.ts";
+import { groupByCounterparty, makeRateOf, resolveCounterpartyFigures } from "@waltning/client/counterparties/counterparty-figures";
 
 type HistoryRowProps = {
   row: PhoneSearchTransaction;

@@ -60,6 +60,9 @@ export function CounterpartyRow({
   const handlePress = useCallback(() => onPress(), [onPress]);
   const monogram = monogramFor(name);
   const showAgeing = kind === "company" && ageDays != null && ageBucket != null;
+  // Computed rather than in `useStyles`, matching `tag.tsx`'s own `fill`/`ink`.
+  const monogramFill = { backgroundColor: monogram.fill };
+  const monogramInk = { color: monogram.ink };
 
   return (
     <Animated.View style={press.style}>
@@ -72,8 +75,8 @@ export function CounterpartyRow({
         {...handlers}
         style={[styles.row, hovered ? styles.hovered : null, focused ? styles.focused : null]}
       >
-        <View style={[styles.monogram, { backgroundColor: monogram.fill }]}>
-          <Text style={[styles.monogramText, { color: monogram.ink }]}>{monogram.letter}</Text>
+        <View style={[styles.monogram, monogramFill]}>
+          <Text style={[styles.monogramText, monogramInk]}>{monogram.letter}</Text>
         </View>
         <View style={styles.identity}>
           <View style={styles.nameLine}>

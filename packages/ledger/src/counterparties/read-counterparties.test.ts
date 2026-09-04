@@ -67,14 +67,20 @@ describe("readCounterparties", () => {
         name: "Counterparty A",
         kind: "company",
         settlementCurrency: null,
+        contact: null,
+        note: "",
         archived: false,
+        version: 1,
       },
       {
         id: BOB,
         name: "Counterparty B",
         kind: "person",
         settlementCurrency: "EUR",
+        contact: null,
+        note: "",
         archived: false,
+        version: 1,
       },
     ]);
   });
