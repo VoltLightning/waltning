@@ -360,7 +360,10 @@ balance is negative, the roles invert symmetrically: outflows open it,
 inflows consume, same FIFO, same third field. A clearing account's own
 opening balance is seeded as one more entry of this kind, dated its opening
 date, carrying no transaction of its own — `oldest_unconsumed_transaction_id`
-is `null` exactly when that entry is the oldest still-open one.
+is `null` exactly when that entry is the oldest still-open one. That opening
+entry sorts by its own date like any other — a leg dated before `openingDate`
+(an import backdated past the account's own recorded start) sorts ahead of
+it, not after, the same `(date, id)` order every other pair of entries uses.
 
 **Allocation is total-preserving by construction.** Largest-remainder: floor each
 share at the currency's scale, then distribute the remainder one minor unit at a

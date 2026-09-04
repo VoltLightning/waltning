@@ -256,7 +256,7 @@ export default function Today() {
   const unsettledRemainderDiffers =
     unsettled != null &&
     unsettled.oldestUnconsumedRemainder != null &&
-    unsettled.oldestUnconsumedRemainder !== unsettled.balance;
+    !money.eq(unsettled.oldestUnconsumedRemainder, unsettled.balance);
   const unsettledNamedKey = unsettledRemainderDiffers
     ? unsettledMore > 0
       ? "shell.unsettledNamedDiffersMore"

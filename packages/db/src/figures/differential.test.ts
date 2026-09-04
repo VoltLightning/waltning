@@ -324,12 +324,14 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       balance: tsBalance,
       oldestUnconsumedTransactionId: tsOldest?.id,
       oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
     });
     expect(sqlRow).toEqual({
       accountId: tripClearing.id,
       balance: "280.00000000",
       oldestUnconsumedTransactionId: null,
       oldestDate: "2026-07-15",
+      remainder: "80.00000000",
     });
   });
 
@@ -356,12 +358,48 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       balance: tsBalance,
       oldestUnconsumedTransactionId: tsOldest?.id,
       oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
     });
     expect(sqlRow).toEqual({
       accountId: flipClearing.id,
       balance: "15.00000000",
       oldestUnconsumedTransactionId: "20000000-0000-4000-8000-00000000001b",
       oldestDate: "2026-08-04",
+      remainder: "15.00000000",
+    });
+  });
+
+  /**
+   * H1 — a clearing account whose balance is itself negative (a single
+   * outflow, e.g. paid for the group at a hotel): the remainder must carry
+   * that sign too. `abs()`ing it (the bug) reported `150.00000000` beside a
+   * `-150.00000000` balance the banner then contradicted.
+   */
+  it("§8 find_unsettled — remainder keeps a negative balance's own sign", async () => {
+    const negativeClearing = ACCOUNTS[8];
+    const sqlRows = await findUnsettled(scratch.db);
+    const sqlRow = sqlRows.find((r) => r.accountId === negativeClearing.id);
+
+    const tsBalance = money.accountBalance(
+      money.toMoney(negativeClearing.opening),
+      negativeClearing.id,
+      legRows,
+    );
+    const tsOldest = money.fifoOldestOpen(clearingLegRowsFor(negativeClearing.id));
+
+    expect(sqlRow).toEqual({
+      accountId: negativeClearing.id,
+      balance: tsBalance,
+      oldestUnconsumedTransactionId: tsOldest?.id,
+      oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
+    });
+    expect(sqlRow).toEqual({
+      accountId: negativeClearing.id,
+      balance: "-150.00000000",
+      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000023",
+      oldestDate: "2026-08-01",
+      remainder: "-150.00000000",
     });
   });
 

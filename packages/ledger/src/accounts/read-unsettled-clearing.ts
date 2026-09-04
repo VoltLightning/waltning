@@ -1,8 +1,10 @@
 /**
  * §8's `find_unsettled`, FIFO half included. Class **F** for the balance
  * (`computations.md` §0) — this reuses the per-account balances
- * `readAccounts` already folds for §2/§3, filtered to `kind = 'clearing'`,
- * and asks `money.unsettledClearing` which of them are non-zero.
+ * `readAccounts` already folds for §2/§3, restricted to `kind: 'clearing'`
+ * in the query itself (M3 — `readAccounts` used to fold every account's
+ * legs and filter to clearing only afterward), and asks
+ * `money.unsettledClearing` which of them are non-zero.
  *
  * **Archived is not filtered out here (M1) — read with `includeArchived:
  * true`, the same rule `read-counterparty-balances.ts` applies.** A clearing
@@ -63,9 +65,7 @@ export type LocalUnsettledClearing = money.ClearingAccountRow & {
 export function readUnsettledClearing<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
 ): readonly LocalUnsettledClearing[] {
-  const clearingAccounts = readAccounts(db, { includeArchived: true }).filter(
-    (account) => account.kind === "clearing",
-  );
+  const clearingAccounts = readAccounts(db, { includeArchived: true, kind: "clearing" });
   const clearing = clearingAccounts.map(({ id, name, currency, decimals, balance }) => ({
     accountId: id,
     name,

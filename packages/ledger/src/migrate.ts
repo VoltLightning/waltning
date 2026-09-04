@@ -37,11 +37,41 @@
  * app."*). `PRAGMA user_version` lives in the database header and rolls back
  * with everything else, which is what makes "half-migrated" unrepresentable:
  * either the tables and the number both moved, or neither did.
+ *
+ * **A constraint added to a table that already ships means a versioned,
+ * in-place rebuild from now on (M2) — never folding it into `REPLICA_DDL`'s
+ * single version.** SQLite has no `ALTER TABLE … ADD CONSTRAINT`, so a new
+ * `CHECK` on an existing table is a copy-rename-drop (`REPLICA_DDL_REBUILD_*`,
+ * `ddl.ts`'s own header) — and folding that into version 1's `up`, as the
+ * single-version chain used to, is exactly wrong for a phone already at
+ * version 1: this module's only lever for *any* version mismatch there was
+ * *drop the whole replica and refetch*, and an offline-only phone
+ * (`canRefetch: false`) has no refetch half of that, so the new constraint
+ * would simply never reach it — silently, because nothing ever bumped
+ * `REPLICA_MIGRATIONS` to make the mismatch exist in the first place. A
+ * migration marked `inPlace` is the escape hatch: `migrateReplica` runs it
+ * against the table as it stands, rows intact, rather than treating it as a
+ * reason to drop. It is what a table rebuild actually is — an ALTER SQLite
+ * cannot express any other way — never a licence to skip the drop-and-refetch
+ * rule for an actual schema redesign.
+ *
+ * **Its `foreign_keys` toggle is the caller's job, not the SQL's.** SQLite
+ * documents `PRAGMA foreign_keys` as a no-op once a transaction is already
+ * open — the same trap `dropEverything` below works around with
+ * `defer_foreign_keys` — and unlike that function, an in-place rebuild
+ * cannot use `defer_foreign_keys` at all: it does not drop every table, so a
+ * sibling still holding real rows (`transaction_lines`, `transaction_tags`)
+ * would have its `ON DELETE CASCADE` fire for real when the rebuilt table is
+ * dropped, deferred check or not — proven by hand against `better-sqlite3`:
+ * a child row survives a parent drop+recreate only when `foreign_keys` was
+ * turned off *before* the transaction opened. `runInOneTransaction` does
+ * exactly that, toggled around the whole run whenever any step it is given
+ * is `inPlace`.
  */
 
 import { type SQL, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
-import { OUTBOX_DDL, REPLICA_DDL } from "./ddl.ts";
+import { OUTBOX_DDL, REPLICA_DDL, REPLICA_DDL_REBUILD_0007_SCHEMA } from "./ddl.ts";
 import type { LedgerSchema, OutboxStore, ReplicaDb, ReplicaStore } from "./open.ts";
 
 /* ── the shapes ──────────────────────────────────────────────────────────── */
@@ -62,6 +92,16 @@ export type SqlRunner = { readonly run: (query: SQL) => void };
 export type Migration = {
   readonly version: number;
   readonly up: (tx: SqlRunner) => void;
+  /**
+   * True when `up` rebuilds an existing table in place (copy-rename-drop,
+   * SQLite's only way to add a constraint) rather than assuming a blank
+   * database (M2). Only `migrateReplica` reads this — the outbox is
+   * forward-only DDL and never dropped in the first place, so the question
+   * does not arise there. Defaults to `false`/absent: an unmarked version
+   * bump stays destructive, on purpose — this module fails closed rather
+   * than guessing a step preserves data it never said it does.
+   */
+  readonly inPlace?: boolean;
 };
 
 /**
@@ -178,8 +218,13 @@ export const COPY_SUFFIX = ".pre-migration";
 /**
  * The replica's chain.
  *
- * One version, and honestly one: there is no history to record, and inventing
- * intermediate versions would be inventing a past this database never had.
+ * **Two versions, not one.** Version 1 is every table exactly as a fresh
+ * install needs it. Version 2 exists only because `transactions` gained a
+ * `CHECK` after phones were already at version 1 (M2, this file's own
+ * header) — `inPlace: true` is what tells `migrateReplica` this step rebuilds
+ * `transactions` where it stands rather than assuming an empty database, so
+ * it reaches an already-installed phone — offline-only ones included —
+ * without the drop-and-refetch rule engaging at all.
  */
 export const REPLICA_MIGRATIONS: readonly Migration[] = [
   {
@@ -187,6 +232,13 @@ export const REPLICA_MIGRATIONS: readonly Migration[] = [
     up: (tx) => {
       for (const statement of REPLICA_DDL) tx.run(sql.raw(statement));
     },
+  },
+  {
+    version: 2,
+    up: (tx) => {
+      for (const statement of REPLICA_DDL_REBUILD_0007_SCHEMA) tx.run(sql.raw(statement));
+    },
+    inPlace: true,
   },
 ];
 
@@ -308,18 +360,34 @@ function takeCopy<TRun, TSchema extends LedgerSchema>(
  * `toVersion` is set from the same transaction the steps run in, so a kill at
  * any point leaves the pair consistent — the case §08 item 6 names, because
  * migrations run at launch and launch is when iOS kills things.
+ *
+ * **`foreignKeysOff`, toggled outside the transaction, around it.** SQLite
+ * treats `PRAGMA foreign_keys` as a no-op once a transaction is open, so a
+ * migration that needs it off for an in-place table rebuild (M2 — see this
+ * file's header) cannot ask for it from inside `steps`; asking here, before
+ * `db.transaction` opens one, is the only place the pragma actually takes.
+ * `finally` restores it whether the transaction committed or rolled back —
+ * the setting is a connection property, not something the rollback undoes on
+ * its own, and every other statement on this connection still needs foreign
+ * keys enforced.
  */
 function runInOneTransaction<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
   steps: readonly ((tx: SqlRunner) => void)[],
   toVersion: number,
+  { foreignKeysOff = false }: { foreignKeysOff?: boolean } = {},
 ): void {
-  db.transaction((tx) => {
-    for (const step of steps) step(tx);
-    // Interpolated because `pragma` takes no bound parameters; the value came
-    // from a chain this module validated as integers.
-    tx.run(sql.raw(`pragma user_version = ${toVersion}`));
-  });
+  if (foreignKeysOff) db.run(sql.raw("pragma foreign_keys = OFF"));
+  try {
+    db.transaction((tx) => {
+      for (const step of steps) step(tx);
+      // Interpolated because `pragma` takes no bound parameters; the value came
+      // from a chain this module validated as integers.
+      tx.run(sql.raw(`pragma user_version = ${toVersion}`));
+    });
+  } finally {
+    if (foreignKeysOff) db.run(sql.raw("pragma foreign_keys = ON"));
+  }
 }
 
 /**
@@ -462,27 +530,35 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
  * Migrate the replica — or drop and recreate it, when there is somewhere to
  * refetch from.
  *
- * Three outcomes, and the third is why this function is not the one above:
+ * Four outcomes, and the last two are why this function is not the one above:
  *
  * - **At current.** Nothing happens.
  * - **At zero.** A database SQLite just created. The chain runs; there is
  *   nothing to lose and nothing to refetch.
- * - **At anything else.** §08's rule for the replica is *drop and refetch*, not
- *   *migrate*, and that is deliberate: it is what saves the replica from
- *   needing a second migration chain to maintain. Applied here **only if
- *   `canRefetch`** — otherwise the "refetch" half does not exist, this file is
- *   the ledger, and dropping it destroys the record (§14.6). Then it raises,
- *   and has written nothing.
+ * - **At anything else, every pending step `inPlace`.** A table rebuild (M2,
+ *   this file's own header) that keeps the rows it started with — run
+ *   without dropping anything, `canRefetch` never asked. This is the
+ *   escape hatch, not the default: a step earns it by rebuilding one table
+ *   where it stands, never by being convenient.
+ * - **At anything else, otherwise.** §08's rule for the replica is *drop and
+ *   refetch*, not *migrate*, and that is deliberate: it is what saves the
+ *   replica from needing a second migration chain to maintain for a change
+ *   that is not an in-place rebuild. Applied here **only if `canRefetch`** —
+ *   otherwise the "refetch" half does not exist, this file is the ledger, and
+ *   dropping it destroys the record (§14.6). Then it raises, and has written
+ *   nothing.
  *
- * **What happens to the watermark**, in each case. A forward *schema* migration
- * keeps `local_meta` untouched: the local tables still hold what they held, so
- * what has been applied to them is unchanged. A **drop** takes it with
- * everything else and the chain recreates it at zero — which is right, and the
- * safe direction besides: a refetched replica holds what the *server* has
- * admitted, so every entry still in the outbox is by definition not reflected
- * in it and must be replayed. Erring the other way would strand intent that
- * exists nowhere else. With no backend this never arises: the replica is never
- * dropped, so the watermark only ever resets once a backend exists.
+ * **What happens to the watermark**, in each case. A forward *schema*
+ * migration — in place or not — keeps `local_meta` untouched: the local
+ * tables still hold what they held, so what has been applied to them is
+ * unchanged. A **drop** takes it with everything else and the chain
+ * recreates it at zero — which is right, and the safe direction besides: a
+ * refetched replica holds what the *server* has admitted, so every entry
+ * still in the outbox is by definition not reflected in it and must be
+ * replayed. Erring the other way would strand intent that exists nowhere
+ * else. With no backend this never arises for a non-in-place step: the
+ * replica is never dropped, so the watermark only ever resets once a backend
+ * exists.
  */
 export function migrateReplica<TRun, TSchema extends LedgerSchema>(
   store: ReplicaStore<TRun, TSchema>,
@@ -503,7 +579,19 @@ export function migrateReplica<TRun, TSchema extends LedgerSchema>(
     };
   }
 
-  const dropping = found !== 0;
+  // The steps that have not run yet. When every one of them rebuilds in
+  // place (M2), that is reason enough on its own not to drop — a phone with
+  // no backend gets the rebuild through the same door a phone with one does,
+  // rather than being permanently stuck at `found` because it has no
+  // refetch half to satisfy the ordinary rule below. `found < current` is
+  // checked alongside `pending.every` on purpose and not folded away: `every`
+  // over an empty array is vacuously `true`, and `pending` is empty whenever
+  // `found` is *ahead* of this build's own chain (a newer or corrupted
+  // database) — that case still means dropping, never "nothing pending, so
+  // silently stamp `user_version` down to `current`".
+  const pending = migrations.filter((m) => m.version > found);
+  const inPlaceEligible = found < current && pending.every((m) => m.inPlace === true);
+  const dropping = found !== 0 && !inPlaceEligible;
 
   if (dropping && !canRefetch) {
     // Before the copy, before the checkpoint, before anything: the whole
@@ -516,15 +604,21 @@ export function migrateReplica<TRun, TSchema extends LedgerSchema>(
   refuseStaleCopy(store.path, fs);
 
   const copy = takeCopy(store.path, store.db, fs);
+  // At zero every migration runs (there is nothing to skip past); dropping
+  // rebuilds from nothing the same way; otherwise only the steps after
+  // `found` run, in place, against the rows already there.
+  const running = found === 0 || dropping ? migrations : pending;
   const steps = dropping
-    ? [dropEverything(store.db), ...migrations.map((m) => m.up)]
-    : migrations.map((m) => m.up);
-  runInOneTransaction(store.db, steps, current);
+    ? [dropEverything(store.db), ...running.map((m) => m.up)]
+    : running.map((m) => m.up);
+  runInOneTransaction(store.db, steps, current, {
+    foreignKeysOff: running.some((m) => m.inPlace),
+  });
 
   return {
     from: found,
     to: current,
-    applied: migrations.map((m) => m.version),
+    applied: running.map((m) => m.version),
     copy,
     refetchRequired: dropping,
   };

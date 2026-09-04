@@ -156,6 +156,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   /** The `…004` transfer's destination — shared, matching what it tested before moving off PLN. */
@@ -166,7 +167,25 @@ export const ACCOUNTS = [
     ownership: "shared",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
+  },
+  /**
+   * H1 — a clearing account whose one leg is an outflow (a payment made on
+   * the group's behalf, e.g. "Hotel"): the balance goes negative, and both
+   * engines' remainder must keep that sign — `abs()`ing it (the bug) had
+   * `money.fifoOldestOpen` report a positive remainder that disagreed with
+   * this exact negative balance.
+   */
+  {
+    id: "00000000-0000-4000-8000-000000000014",
+    name: "Negative clearing · PLN",
+    currency: "PLN",
+    ownership: "own",
+    isBusiness: false,
+    opening: "0",
+    openingDate: null as string | null,
+    kind: "clearing",
   },
 ] as const;
 
@@ -501,6 +520,16 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     counterpartyRole: "debt",
     debtCurrency: "PLN",
     debtAmount: "214.05",
+  },
+  // H1 — a single outflow on Negative clearing: balance −150, and the
+  // remainder of this one leg must read −150 too, not 150.
+  {
+    id: "20000000-0000-4000-8000-000000000023",
+    date: "2026-08-01",
+    type: "expense",
+    accountId: ACCOUNTS[8].id,
+    amountOriginal: "150",
+    currency: "PLN",
   },
 ];
 

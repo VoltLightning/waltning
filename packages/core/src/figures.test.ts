@@ -284,6 +284,24 @@ describe("fifoOldestOpen — §7 ageing and §8 attribution", () => {
   });
 
   /**
+   * H1 — the remainder is signed like the queue's own running direction, not
+   * always positive. A single −150 outflow (a clearing account whose one leg
+   * is a payment out, e.g. Hotel) opens a negative-sign entry — `abs()`ing it
+   * used to render "150,00 PLN unallocated" beside a "−150,00 account
+   * balance" that disagreed with it.
+   */
+  it("a lone negative leg keeps its sign in the remainder (H1)", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: "hotel", date: d("2026-08-01"), delta: m("-150") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "hotel",
+      date: d("2026-08-01"),
+      remainder: "-150.00000000",
+    });
+  });
+
+  /**
    * H2 — a clearing/counterparty opening balance is seeded as a delta with
    * `id: null` so it folds into FIFO like any other row but can never be
    * "named" the way a real transaction can. Opening 100, one 40 expense:
@@ -299,6 +317,23 @@ describe("fifoOldestOpen — §7 ageing and §8 attribution", () => {
       id: null,
       date: d("2026-08-01"),
       remainder: "60.00000000",
+    });
+  });
+
+  /**
+   * L2 — the opening entry sorts by its own date like any other; it is not
+   * pinned to "always oldest." A leg dated before `openingDate` (an import
+   * backdated past the account's own recorded start) sorts ahead of it.
+   */
+  it("sorts a leg dated before openingDate ahead of the opening entry itself", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: null, date: d("2026-08-10"), delta: m("100") },
+      { id: "backdated", date: d("2026-08-01"), delta: m("50") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "backdated",
+      date: d("2026-08-01"),
+      remainder: "50.00000000",
     });
   });
 

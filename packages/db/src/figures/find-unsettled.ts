@@ -63,6 +63,8 @@ export type FindUnsettledRow = {
   /** `null` when the oldest unconsumed entry is the account's own opening balance, not a transaction (H2) — the SQL twin of `read-unsettled-clearing.ts`'s same field. */
   oldestUnconsumedTransactionId: string | null;
   oldestDate: AccountingDate;
+  /** The oldest still-open row's own unconsumed amount, signed like `balance` (M1) — the SQL twin of `money.fifoOldestOpen`'s `remainder` and `read-unsettled-clearing.ts`'s `oldestUnconsumedRemainder`. */
+  remainder: Money;
 };
 
 /** The raw driver row — snake_case, string dates — before this module's own mapping. */
@@ -71,6 +73,7 @@ type RawRow = {
   balance: string;
   oldest_unconsumed_transaction_id: string | null;
   oldest_date: string;
+  remainder: string;
 };
 
 const accountsTable = sql.raw(`"${getTableName(accounts)}"`);
@@ -137,7 +140,13 @@ export async function findUnsettled(db: DbHandle): Promise<readonly FindUnsettle
       o.account_id AS account_id,
       b.balance::numeric(20,8)::text AS balance,
       o.transaction_id AS oldest_unconsumed_transaction_id,
-      o.date AS oldest_date
+      o.date AS oldest_date,
+      -- M1 — this row's own share of what is still open: how far its
+      -- running total reaches past what has already been consumed,
+      -- signed like balance (every open leg shares final_sign, so this
+      -- is exactly fifoOldestOpen's remainder, not its absolute value).
+      ((o.running_open - coalesce(c.total_consumed, 0)) * sign(b.balance))::numeric(20,8)::text
+        AS remainder
     FROM opens o
     JOIN balances b USING (account_id)
     LEFT JOIN consumed c USING (account_id)
@@ -156,5 +165,6 @@ export async function findUnsettled(db: DbHandle): Promise<readonly FindUnsettle
     balance: row.balance as Money,
     oldestUnconsumedTransactionId: row.oldest_unconsumed_transaction_id,
     oldestDate: row.oldest_date as AccountingDate,
+    remainder: row.remainder as Money,
   }));
 }

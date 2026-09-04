@@ -228,6 +228,37 @@ describe("readUnsettledClearing", () => {
   });
 
   /**
+   * H1 — a clearing account whose one leg is an outflow (a payment made on
+   * the group's behalf) carries a negative balance, and the remainder must
+   * keep that sign too: `abs()`ing it used to render "150,00 PLN unallocated"
+   * beside a "−150,00 account balance" that visibly disagreed with it.
+   */
+  it("keeps the remainder's sign negative when the clearing balance itself is negative", () => {
+    const db = stores.ledger.replica.db;
+    const negative = id<"accounts">("99999999-9999-4999-8999-999999999999");
+    db.insert(accounts)
+      .values({ id: negative, name: "Trip clearing", currency: PLN, kind: "clearing" })
+      .run();
+    db.insert(transactions)
+      .values({
+        id: id<"transactions">("99999999-1111-4222-8333-444444444444"),
+        date: accountingDate("2026-08-01"),
+        type: "expense",
+        accountId: negative,
+        payee: "Hotel",
+        amountOriginal: money.toMoney("150"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+
+    const row = readUnsettledClearing(db).find((candidate) => candidate.accountId === negative);
+    expect(row?.balance).toBe("-150.00000000");
+    expect(row?.oldestUnconsumedRemainder).toBe("-150.00000000");
+    expect(row?.oldestUnconsumedPayee).toBe("Hotel");
+  });
+
+  /**
    * M1 — an archived clearing account still carrying a non-zero balance is
    * still a prompt (§6.4), the same rule `read-counterparty-balances.ts`
    * already applies to an archived counterparty.

@@ -621,7 +621,7 @@ export type FifoDelta<TId extends string> = {
 export type FifoOldest<TId extends string> = {
   id: TId | null;
   date: AccountingDate;
-  /** The oldest row's own unconsumed magnitude — always positive, and not always the whole account/counterparty balance (H3): later open rows can carry the rest. */
+  /** The oldest row's own unconsumed amount, signed like the queue's own running direction (H1) — not always the whole account/counterparty balance (H3): later open rows can carry the rest. */
   remainder: Money;
 };
 
@@ -714,7 +714,9 @@ export function fifoOldestOpen<TId extends string>(
   }
 
   const oldest = queue[0];
-  return oldest ? { id: oldest.id, date: oldest.date, remainder: toMoney(oldest.remaining) } : null;
+  return oldest
+    ? { id: oldest.id, date: oldest.date, remainder: toMoney(oldest.remaining.times(oldest.sign)) }
+    : null;
 }
 
 /**

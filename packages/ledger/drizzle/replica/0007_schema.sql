@@ -1,2 +1,2 @@
-DROP INDEX `counterparties_name_uq`;--> statement-breakpoint
-CREATE UNIQUE INDEX `counterparties_name_uq` ON `counterparties` (`name_folded`) WHERE not "counterparties"."archived";
+CREATE INDEX `transaction_lines_category_idx` ON `transaction_lines` (`category_id`);--> statement-breakpoint
+CREATE INDEX `transactions_category_idx` ON `transactions` (`category_id`);

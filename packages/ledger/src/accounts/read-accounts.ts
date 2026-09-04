@@ -45,6 +45,8 @@ export type LocalAccountForNetWorth = LocalAccountSummary;
 export type ReadAccountsOptions = {
   /** Default `false` — S16's archived accounts sit behind their own toggle (`loadArchived()`). */
   includeArchived?: boolean;
+  /** Restricts to one `kind` at the SQL level (M3) — unset reads every kind, S16's own default. */
+  kind?: AccountKind;
 };
 
 /**
@@ -55,7 +57,7 @@ export type ReadAccountsOptions = {
  */
 function selectAccountRows<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
-  { includeArchived = false }: ReadAccountsOptions,
+  { includeArchived = false, kind }: ReadAccountsOptions,
 ) {
   return db
     .select({
@@ -77,7 +79,12 @@ function selectAccountRows<TRun, TSchema extends typeof ledgerSchema>(
     })
     .from(accounts)
     .innerJoin(currencies, eq(accounts.currency, currencies.code))
-    .where(includeArchived ? undefined : eq(accounts.archived, false))
+    .where(
+      and(
+        includeArchived ? undefined : eq(accounts.archived, false),
+        kind === undefined ? undefined : eq(accounts.kind, kind),
+      ),
+    )
     .orderBy(asc(accounts.sort), asc(accounts.name), asc(accounts.id))
     .all();
 }

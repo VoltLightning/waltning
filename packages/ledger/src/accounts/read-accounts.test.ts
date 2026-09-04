@@ -155,4 +155,22 @@ describe("readAccounts", () => {
     const archived = withArchived.find((account) => account.id === ARCHIVED);
     expect(archived).toMatchObject({ id: ARCHIVED, archived: true });
   });
+
+  /**
+   * M3 — `kind` restricts at the query itself, not with a `.filter()` after
+   * every account's legs have already been folded. `readUnsettledClearing`
+   * is the caller this exists for: it wants clearing accounts alone, not
+   * every account's balance computed only to discard most of it.
+   */
+  it("restricts to one kind, at the query, when asked", () => {
+    const clearing = id<"accounts">("66666666-6666-4666-8666-666666666666");
+    stores.ledger.replica.db
+      .insert(accounts)
+      .values({ id: clearing, name: "Trip clearing", currency: USD, kind: "clearing", sort: 3 })
+      .run();
+
+    const result = readAccounts(stores.ledger.replica.db, { kind: "clearing" });
+
+    expect(result.map((account) => account.id)).toEqual([clearing]);
+  });
 });

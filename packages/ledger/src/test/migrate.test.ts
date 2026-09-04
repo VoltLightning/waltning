@@ -37,7 +37,7 @@ import {
 import { openLedger } from "../open.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 
-const { accounts, currencies, outbox, transactions } = schema;
+const { accounts, currencies, outbox, transactions, transactionLines } = schema;
 const outboxSchema = { outbox: schema.outbox, outboxSeq: schema.outboxSeq };
 const replicaSchema = {
   accountGroups: schema.accountGroups,
@@ -195,6 +195,14 @@ function seedEntry(ledger: Ledger, entryId: string) {
     .run();
 }
 
+/**
+ * Real version 1 alone, never `REPLICA_MIGRATIONS` itself: `REPLICA_MIGRATIONS`
+ * carries a real version 2 now (M2), and `chainOfTwo` below synthesises its
+ * own — appending onto the real chain would collide on the version number,
+ * and `checkChain` would refuse it before any test here got the chance to run.
+ */
+const REPLICA_V1: readonly Migration[] = REPLICA_MIGRATIONS.filter((m) => m.version === 1);
+
 /** A second version, which either creates a table or dies trying. */
 function chainOfTwo(base: readonly Migration[], second: "creates" | "throws"): Migration[] {
   return [
@@ -218,8 +226,10 @@ describe("a fresh database", () => {
     ledger.close();
 
     expect(result.from).toBe(0);
-    expect(result.to).toBe(1);
-    expect(result.applied).toEqual([1]);
+    // Two versions now (M2) — a fresh database runs both, version 1's create
+    // and version 2's rebuild, in the same launch.
+    expect(result.to).toBe(2);
+    expect(result.applied).toEqual([1, 2]);
     expect(result.refetchRequired, "nothing was dropped — there was nothing there").toBe(false);
 
     const names = inspect(join(dir, "fresh-replica.db"), tableNames);
@@ -228,7 +238,7 @@ describe("a fresh database", () => {
     expect(names).toContain("local_meta");
     expect(names, "the outbox is the other file's table").not.toContain("outbox");
 
-    expect(inspect(join(dir, "fresh-replica.db"), userVersion)).toBe(1);
+    expect(inspect(join(dir, "fresh-replica.db"), userVersion)).toBe(2);
   });
 
   it("migrates the outbox, and only the outbox, into the second file", () => {
@@ -251,8 +261,8 @@ describe("a fresh database", () => {
     const second = migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
     ledger.close();
 
-    expect(second.from).toBe(1);
-    expect(second.to).toBe(1);
+    expect(second.from).toBe(2);
+    expect(second.to).toBe(2);
     expect(second.applied, "no step ran again").toEqual([]);
     expect(second.copy, "and nothing was copied, because nothing was written").toBeNull();
   });
@@ -313,14 +323,18 @@ describe("a migration that throws leaves nothing behind", () => {
    */
   it("does not leave the replica dropped when a later step fails", () => {
     const ledger = openAt("rollback-drop");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      canRefetch: false,
+      migrations: REPLICA_V1,
+    }).copy?.release();
     seedTransaction(ledger, "txn-1");
 
     expect(() =>
       migrateReplica(ledger.replica, {
         fs: realFs,
         canRefetch: true,
-        migrations: chainOfTwo(REPLICA_MIGRATIONS, "throws"),
+        migrations: chainOfTwo(REPLICA_V1, "throws"),
       }),
     ).toThrow("killed mid-migration");
     ledger.close();
@@ -392,7 +406,11 @@ describe("the replica is not dropped when there is nowhere to refetch from", () 
    */
   it("raises instead, and leaves every row where it was", () => {
     const ledger = openAt("brick1");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      canRefetch: false,
+      migrations: REPLICA_V1,
+    }).copy?.release();
     seedTransaction(ledger, "txn-1");
     seedTransaction(ledger, "txn-2");
 
@@ -400,7 +418,7 @@ describe("the replica is not dropped when there is nowhere to refetch from", () 
       migrateReplica(ledger.replica, {
         fs: realFs,
         canRefetch: false,
-        migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+        migrations: chainOfTwo(REPLICA_V1, "creates"),
       }),
     ).toThrow(/nothing to refetch from/);
     ledger.close();
@@ -417,13 +435,17 @@ describe("the replica is not dropped when there is nowhere to refetch from", () 
   /** The same mismatch, once a backend exists, is the ordinary drop-and-refetch. */
   it("drops once a backend has been reached, and says a refetch is required", () => {
     const ledger = openAt("brick2");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      canRefetch: false,
+      migrations: REPLICA_V1,
+    }).copy?.release();
     seedTransaction(ledger, "txn-1");
 
     const result = migrateReplica(ledger.replica, {
       fs: realFs,
       canRefetch: true,
-      migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+      migrations: chainOfTwo(REPLICA_V1, "creates"),
     });
     ledger.close();
 
@@ -433,6 +455,84 @@ describe("the replica is not dropped when there is nowhere to refetch from", () 
     const path = join(dir, "brick2-replica.db");
     expect(inspect(path, transactionCount), "emptied — the server holds these rows").toBe(0);
     expect(inspect(path, tableNames)).toContain("v2_marker");
+  });
+});
+
+/* ── a versioned rebuild reaches an installed replica (M2) ───────────────── */
+
+describe("an in-place rebuild migrates a phone already at version 1", () => {
+  /**
+   * The whole point of M2: version 2 rebuilds `transactions` to add
+   * `transactions_debt_amount_requires_currency` without the drop-and-refetch
+   * rule ever engaging — proven with `canRefetch: false`, the exact
+   * offline-only phone the single-version chain used to strand at version 1
+   * forever.
+   */
+  it("migrates a v1 database to v2 with every row intact, and ships the CHECK", () => {
+    const ledger = openAt("inplace");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      canRefetch: false,
+      migrations: REPLICA_V1,
+    }).copy?.release();
+    seedTransaction(ledger, "txn-1");
+    // A child row too (`ON DELETE CASCADE` on `transaction_lines.transaction_id`)
+    // — the row a naive copy-rename-drop of `transactions`, run with foreign
+    // keys still enforced, would cascade away even though nothing asked it to.
+    ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: id<"transactionLines">("line-1"),
+        transactionId: id<"transactions">("txn-1") as Id<"transactions">,
+        description: "Room",
+        amount: money.toMoney("18.00"),
+      })
+      .run();
+
+    // The real chain, not a synthetic one — and no `canRefetch` needed.
+    const result = migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+
+    expect(result.from).toBe(1);
+    expect(result.to).toBe(2);
+    expect(result.applied, "only the step after `found` ran").toEqual([2]);
+    expect(result.refetchRequired, "nothing was dropped").toBe(false);
+
+    let cause: unknown;
+    try {
+      ledger.replica.db
+        .insert(transactions)
+        .values({
+          id: id<"transactions">("txn-check") as Id<"transactions">,
+          date: accountingDate("2026-03-13"),
+          type: "expense",
+          accountId: id<"accounts">("acc-1"),
+          amountOriginal: money.toMoney("5.00"),
+          currency: currencyCode("PLN"),
+          fxRate: money.pivotPerUnit("1.000000000000"),
+          debtAmount: money.toMoney("5.00"),
+        })
+        .run();
+    } catch (error) {
+      // `.cause` when drizzle wrapped the driver error, the error itself when
+      // (as here, a plain `.run()`) it did not — `refusal` below makes the
+      // same allowance.
+      cause = error instanceof Error ? (error.cause ?? error) : error;
+    }
+    expect(String(cause), "the rebuilt table enforces the CHECK").toMatch(
+      /CHECK constraint failed/i,
+    );
+    ledger.close();
+
+    const path = join(dir, "inplace-replica.db");
+    expect(inspect(path, userVersion)).toBe(2);
+    expect(
+      inspect(path, transactionCount),
+      "the transaction survived its own table's rebuild",
+    ).toBe(1);
+    expect(
+      inspect(path, (db) => db.prepare("select count(*) as n from transaction_lines").get()),
+      "and so did the child row `ON DELETE CASCADE` could otherwise have taken with it",
+    ).toEqual({ n: 1 });
   });
 });
 
@@ -472,7 +572,11 @@ describe("the pre-migration copy", () => {
    */
   it("is taken before anything is written, and holds the state as it was", () => {
     const ledger = openAt("copy");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      canRefetch: false,
+      migrations: REPLICA_V1,
+    }).copy?.release();
     seedTransaction(ledger, "txn-1");
 
     const path = join(dir, "copy-replica.db");
@@ -491,7 +595,7 @@ describe("the pre-migration copy", () => {
     const result = migrateReplica(ledger.replica, {
       fs: watchingFs,
       canRefetch: true,
-      migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+      migrations: chainOfTwo(REPLICA_V1, "creates"),
     });
     ledger.close();
 
@@ -533,13 +637,13 @@ describe("the pre-migration copy", () => {
    */
   it("refuses to migrate over a copy nobody released", () => {
     const ledger = openAt("stale");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false, migrations: REPLICA_V1 });
 
     expect(() =>
       migrateReplica(ledger.replica, {
         fs: realFs,
         canRefetch: true,
-        migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+        migrations: chainOfTwo(REPLICA_V1, "creates"),
       }),
     ).toThrow(/has not opened cleanly/);
     ledger.close();
@@ -624,13 +728,17 @@ describe("`applied_seq`, the replica's watermark", () => {
    */
   it("resets to zero when the replica is dropped and refetched", () => {
     const ledger = openAt("reset");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      canRefetch: false,
+      migrations: REPLICA_V1,
+    }).copy?.release();
     ledger.replica.db.transaction((tx) => advanceAppliedSeq(tx, 31));
 
     migrateReplica(ledger.replica, {
       fs: realFs,
       canRefetch: true,
-      migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+      migrations: chainOfTwo(REPLICA_V1, "creates"),
     });
 
     expect(readAppliedSeq(ledger.replica.db)).toBe(0);

@@ -593,6 +593,33 @@ describe("Today", () => {
   });
 
   /**
+   * H1 — a negative clearing balance keeps its sign in the remainder, so a
+   * remainder equal to the balance (both `-150`) reads as the same figure
+   * through `money.eq`: the banner names the single unsettled leg without
+   * the "differs" parenthetical, and the figure it shows is signed.
+   */
+  it("shows a negative remainder signed, and does not claim it differs from an equal balance", () => {
+    const controller = fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT], [], [], new Map(), [
+      {
+        accountId: CLEARING_ACCOUNT.id,
+        name: CLEARING_ACCOUNT.name,
+        currency: CLEARING_ACCOUNT.currency,
+        decimals: CLEARING_ACCOUNT.decimals,
+        balance: toMoney("-150"),
+        oldestUnconsumedTransactionId: id<"transactions">("77777777-7777-4777-8777-777777777777"),
+        oldestDate: accountingDate("2026-08-01"),
+        oldestUnconsumedRemainder: toMoney("-150"),
+        oldestUnconsumedPayee: "Hotel",
+      },
+    ]);
+    withLedger(<Today />, controller);
+
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).toContain("-150.00 PLN unallocated · Hotel");
+    expect(rendered).not.toContain("account balance");
+  });
+
+  /**
    * S04 §3 draws exactly one banner row and `Banner`'s own doc says
    * "page-level, one tone, one action" — a second unsettled account does not
    * stack a second alert. It folds into the same banner's text instead, and
