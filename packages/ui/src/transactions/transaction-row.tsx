@@ -19,15 +19,27 @@
  * paint one leg green and the other red — money that moved between your own
  * accounts, read as a gain and a loss. The row maps the ledger's type onto
  * `<Amount>`'s `kind`; the component never sees a colour.
+ *
+ * **`onPress` is optional, and its absence changes what the row *is*.**
+ * S09's whole reason to exist is a tap on one of these rows, so a row that
+ * can open it takes the `button` role and the same hover/focus treatment
+ * every other pressable primitive carries (§2.6: focus is never colour
+ * alone); a row with nothing to open — none exists yet — stays a plain
+ * `View`, because a `button` role that does nothing is a worse trap than no
+ * role at all.
  */
 
 import type * as money from "@waltning/core/money";
-import { Text, View } from "react-native";
+import { useCallback } from "react";
+import { Pressable, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Amount, type AmountKind } from "../fx/amount";
+import { useInteraction } from "../primitives/interaction.ts";
+import { usePressScale } from "../primitives/press-scale.ts";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { space, tabularNums } from "../tokens.ts";
+import { focus, space, tabularNums, touchTarget } from "../tokens.ts";
 
 /** The ledger's own vocabulary — `schema/enums`. */
 export type TransactionType = "expense" | "income" | "transfer" | "adjustment";
@@ -49,9 +61,16 @@ export type TransactionRowProps = {
    */
   type?: TransactionType;
   isBusiness?: boolean;
+  /** S09: tap the row, see everything the ledger knows about it. Omit to keep the row inert. */
+  onPress?: () => void;
 };
 
-const KIND: Record<TransactionType, AmountKind> = {
+/**
+ * Exported for `TransactionHero` (S09) — the same mapping, so a row and the
+ * detail screen's own hero figure never disagree about what colour a
+ * transfer or an adjustment gets.
+ */
+export const TRANSACTION_AMOUNT_KIND: Record<TransactionType, AmountKind> = {
   expense: "spend",
   income: "income",
   transfer: "transfer",
@@ -69,13 +88,17 @@ export function TransactionRow({
   decimals = 2,
   type: transactionType,
   isBusiness = false,
+  onPress,
 }: TransactionRowProps) {
   const meta = [account, category].filter(Boolean).join(" · ");
 
   const styles = useStyles();
+  const { hovered, focused, handlers } = useInteraction();
+  const press = usePressScale();
+  const handlePress = useCallback(() => onPress?.(), [onPress]);
 
-  return (
-    <View style={styles.row}>
+  const content = (
+    <>
       {/*
         The bare accounting date. These are `YYYY-MM-DD` strings, not moments —
         rendering one through a `Date` is how a capture lands on the wrong day
@@ -96,9 +119,29 @@ export function TransactionRow({
         currency={currency}
         decimals={decimals}
         size="small"
-        kind={transactionType ? KIND[transactionType] : "auto"}
+        kind={transactionType ? TRANSACTION_AMOUNT_KIND[transactionType] : "auto"}
       />
-    </View>
+    </>
+  );
+
+  if (!onPress) {
+    return <View style={styles.row}>{content}</View>;
+  }
+
+  return (
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={payee || date}
+        onPress={handlePress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        {...handlers}
+        style={[styles.row, hovered ? styles.hovered : null, focused ? styles.focused : null]}
+      >
+        {content}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -115,6 +158,16 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
+    // The floor (§10) — a pressable row's whole target, not only its
+    // pressable variant, so the two never drift a pixel apart.
+    minHeight: touchTarget.min,
+  },
+  /** Only ever applied when `onPress` is set — a plain `View` row gets neither. */
+  hovered: { backgroundColor: theme.hoverFill },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
   },
   date: {
     color: theme.textMuted,

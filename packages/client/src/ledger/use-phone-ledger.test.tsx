@@ -42,6 +42,7 @@ describe("usePhoneLedger", () => {
           total: { count: 0, currencies: [] },
         }),
         categorizeBatch: () => undefined,
+        getTransaction: () => null,
         createAccount: (input) => {
           accounts = [
             {
@@ -57,6 +58,9 @@ describe("usePhoneLedger", () => {
         },
         createTransaction: () => undefined,
         createCategory: () => undefined,
+        updateTransaction: () => undefined,
+        deleteTransaction: () => undefined,
+        setTransactionLines: () => undefined,
         reset: () => undefined,
       },
       {

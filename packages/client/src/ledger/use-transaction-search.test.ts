@@ -74,6 +74,10 @@ function fakeController() {
       // calls `refresh()` after this returns, which is what notifies every
       // `controller.subscribe` listener, `useTransactionSearch`'s included.
       categorizeBatch: () => undefined,
+      getTransaction: () => null,
+      updateTransaction: () => undefined,
+      deleteTransaction: () => undefined,
+      setTransactionLines: () => undefined,
       reset: () => undefined,
     },
     {
@@ -171,6 +175,10 @@ describe("useTransactionSearch", () => {
         createTransaction: () => undefined,
         createCategory: () => undefined,
         categorizeBatch: () => undefined,
+        getTransaction: () => null,
+        updateTransaction: () => undefined,
+        deleteTransaction: () => undefined,
+        setTransactionLines: () => undefined,
         reset: () => undefined,
       },
       {

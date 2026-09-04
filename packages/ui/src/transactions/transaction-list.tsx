@@ -16,8 +16,17 @@
  * whatever a screen passed — cannot tell a row from a heading, so the day a
  * screen puts anything else in the list the separators land in the wrong
  * places and nothing says so.
+ *
+ * **`onPress` is one prop on the list, not one per item.** S09: every row
+ * opens the same detail screen for its own id, so the list takes a single
+ * `(id) => void` and threads it — a screen building `TransactionListItem[]`
+ * would otherwise have to close over each id itself, and `architecture/11`
+ * bans exactly that arrow-in-JSX. `CurriedRow` below is the named
+ * component the id is curried through instead, the same shape
+ * `quick-add-form.tsx`'s `AccountChoice` already uses for one row of a list.
  */
 
+import { useCallback } from "react";
 import { View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline } from "../tokens.ts";
@@ -28,23 +37,34 @@ export type TransactionListItem = TransactionRowProps & { id: string };
 
 export type TransactionListProps = {
   transactions: readonly TransactionListItem[];
+  /** Present only where a tap opens something — S09's detail screen. */
+  onPress?: (id: string) => void;
 };
 
-export function TransactionList({ transactions }: TransactionListProps) {
+export function TransactionList({ transactions, onPress }: TransactionListProps) {
   const styles = useStyles();
 
   return (
     <View>
-      {transactions.map(({ id, ...row }, index) => (
-        // `id` is destructured off rather than spread through: it is the
-        // list's key, and a row that receives it would be a row that could
-        // start using it.
-        <View key={id} style={index === 0 ? null : styles.separated}>
-          <TransactionRow {...row} />
+      {transactions.map((row, index) => (
+        <View key={row.id} style={index === 0 ? null : styles.separated}>
+          <CurriedRow row={row} {...(onPress ? { onPress } : {})} />
         </View>
       ))}
     </View>
   );
+}
+
+type CurriedRowProps = {
+  row: TransactionListItem;
+  onPress?: (id: string) => void;
+};
+
+/** Curries the list-level `onPress` down to this one row's id. */
+function CurriedRow({ row, onPress }: CurriedRowProps) {
+  const { id, ...rowProps } = row;
+  const handlePress = useCallback(() => onPress?.(id), [id, onPress]);
+  return <TransactionRow {...rowProps} {...(onPress ? { onPress: handlePress } : {})} />;
 }
 
 const useStyles = makeStyles((theme) => ({

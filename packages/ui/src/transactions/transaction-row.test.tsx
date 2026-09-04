@@ -4,9 +4,9 @@
  * `TransactionRow` — its own domain's test, beside its own component.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { TransactionRow } from "./transaction-row";
 
 describe("TransactionRow", () => {
@@ -62,5 +62,32 @@ describe("TransactionRow", () => {
       />,
     );
     expect(screen.getByText("—")).toBeDefined();
+  });
+
+  it("stays a plain row with no button role when onPress is absent", () => {
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        payee="Grocer"
+        amount={money.toMoney("-1.00000000")}
+        currency="PLN"
+      />,
+    );
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("takes the button role and calls onPress — S09's whole entry point", () => {
+    const onPress = vi.fn();
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        payee="Grocer"
+        amount={money.toMoney("-1.00000000")}
+        currency="PLN"
+        onPress={onPress}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Grocer" }));
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
 });

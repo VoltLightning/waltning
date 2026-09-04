@@ -201,11 +201,13 @@ function AppStack() {
     >
       {/* The tab shell draws its own chrome — Today's header is the shell
           itself (a 54pt total does not fit in a navigation bar, §5.1), and
-          the other tabs are stubs with none yet. `quick-add` and
-          `account/new` stay stack routes pushed *over* the tabs. */}
+          the other tabs are stubs with none yet. `quick-add`,
+          `account/new` and `transaction/[id]` (C5) stay stack routes
+          pushed *over* the tabs. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
+      <Stack.Screen name="transaction/[id]" options={{ title: t("routes.transaction") }} />
     </Stack>
   );
 }

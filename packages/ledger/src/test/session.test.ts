@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { currencies as referenceCurrencies } from "@waltning/core/currencies";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode, pivotPerUnit } from "@waltning/core/money";
+import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import {
   createAccountInput,
   createCategoryInput,
@@ -163,6 +163,50 @@ describe("the phone ledger session", () => {
     expect(second.listAccounts()[0]?.balance).toBe("-10.00000000");
     expect(second.listRecent(5)[0]?.id).toBe(transactionId);
     second.close();
+  });
+
+  /**
+   * C5: `update_transaction`, `delete_transaction` and `set_transaction_lines`
+   * were A2 executors with no session method reaching them — the shared plan's
+   * own rule is that exposing one is part of the screen's PR that needs it.
+   * This is that exposure, and `getTransaction` alongside it: S09's whole
+   * subject, joined once, `null` once the row is gone.
+   */
+  it("exposes getTransaction, updateTransaction, deleteTransaction and setTransactionLines", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    session.createTransaction(expenseInput(), capture);
+
+    const before = session.getTransaction(transactionId);
+    expect(before).toMatchObject({ id: transactionId, payee: "", version: 1 });
+
+    session.updateTransaction(
+      { id: transactionId, version: before?.version ?? 0, patch: { payee: "Corner shop" } },
+      capture,
+    );
+    const afterUpdate = session.getTransaction(transactionId);
+    expect(afterUpdate).toMatchObject({ payee: "Corner shop", version: 2 });
+
+    session.setTransactionLines(
+      {
+        transactionId,
+        version: afterUpdate?.version ?? 0,
+        lines: [
+          {
+            id: id<"transactionLines">("33333333-3333-4333-8333-333333333333"),
+            description: "Bread",
+            amount: toMoney("10"),
+          },
+        ],
+      },
+      capture,
+    );
+    const afterLines = session.getTransaction(transactionId);
+    expect(afterLines?.lines).toMatchObject([{ description: "Bread", amount: "10.00000000" }]);
+
+    session.deleteTransaction({ id: transactionId, version: afterLines?.version ?? 0 }, capture);
+    expect(session.getTransaction(transactionId)).toBeNull();
+    session.close();
   });
 
   it("replays an intent whose replica half is missing before the first read", () => {

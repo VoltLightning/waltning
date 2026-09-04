@@ -11,6 +11,7 @@ import {
   type PhoneCategoryNode,
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
+  type PhoneTransactionDetail,
   type QuickAddDraft,
 } from "./create-phone-ledger.ts";
 
@@ -151,6 +152,10 @@ function harness(diagnostics?: (event: object) => void) {
     createAccount,
     createTransaction,
     createCategory: vi.fn(),
+    getTransaction: vi.fn(() => null),
+    updateTransaction: vi.fn(),
+    deleteTransaction: vi.fn(),
+    setTransactionLines: vi.fn(),
     reset,
   };
   const capture = vi.fn(() => ({
@@ -240,6 +245,10 @@ describe("phone ledger controller", () => {
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       createCategory: vi.fn(),
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
       reset: vi.fn(),
     };
 
@@ -284,6 +293,10 @@ describe("phone ledger controller", () => {
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       createCategory: vi.fn(),
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
       reset: vi.fn(),
     };
 
@@ -392,6 +405,10 @@ describe("phone ledger controller", () => {
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       createCategory: vi.fn(),
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -509,6 +526,10 @@ describe("phone ledger controller — createCategory", () => {
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       createCategory,
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -567,5 +588,218 @@ describe("phone ledger controller — createCategory", () => {
     });
     expect("id" in result).toBe(true);
     expect(createCategory).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("phone ledger controller — transaction detail writes (C5)", () => {
+  const TXN = id<"transactions">("99999999-9999-4999-8999-999999999999");
+  const PLN = currencyCode("PLN");
+
+  /**
+   * A minimal in-memory row + version, mutated by the fake `updateTransaction`
+   * / `deleteTransaction` / `setTransactionLines` the way the real executors
+   * mutate SQLite — version-checked, refusing with the same message text the
+   * executors throw, so `refusalFromThrow`'s pattern match has something real
+   * to match against.
+   */
+  function detailHarness() {
+    let row: PhoneTransactionDetail | null = {
+      id: TXN,
+      date: accountingDate("2026-08-06"),
+      type: "expense",
+      payee: "Café A",
+      note: "",
+      isBusiness: false,
+      accountId: id<"accounts">("22222222-2222-4222-8222-222222222222"),
+      accountName: "Cash · PLN",
+      categoryId: null,
+      categoryName: null,
+      amount: money.toMoney("-48.90"),
+      currency: PLN,
+      decimals: 2,
+      version: 1,
+      lines: [],
+    };
+
+    const getTransaction = vi.fn<PhoneLedgerPort["getTransaction"]>(() => row);
+    const updateTransaction = vi.fn<PhoneLedgerPort["updateTransaction"]>((input) => {
+      if (!row || row.version !== input.version) {
+        throw new Error(
+          `update_transaction: stale version — read ${input.version}, row is at ${row?.version}`,
+        );
+      }
+      row = {
+        ...row,
+        ...("payee" in input.patch ? { payee: input.patch.payee ?? row.payee } : {}),
+        ...("categoryId" in input.patch ? { categoryId: input.patch.categoryId ?? null } : {}),
+        version: row.version + 1,
+      };
+    });
+    const deleteTransaction = vi.fn<PhoneLedgerPort["deleteTransaction"]>((input) => {
+      if (!row || row.version !== input.version) {
+        throw new Error(
+          `delete_transaction: stale version — read ${input.version}, row is at ${row?.version}`,
+        );
+      }
+      row = null;
+    });
+    const setTransactionLines = vi.fn<PhoneLedgerPort["setTransactionLines"]>((input) => {
+      if (!row || row.version !== input.version) {
+        throw new Error(
+          `set_transaction_lines: stale version — read ${input.version}, row is at ${row?.version}`,
+        );
+      }
+      const sum = input.lines.reduce(
+        (acc, line) => money.add(acc, line.amount),
+        money.toMoney("0"),
+      );
+      if (input.lines.length > 0 && !money.eq(sum, money.abs(row.amount))) {
+        throw new Error(`set_transaction_lines: lines sum to ${sum}, the transaction is 48.90`);
+      }
+      row = {
+        ...row,
+        lines: input.lines.map((line) => ({
+          id: line.id,
+          description: line.description,
+          amount: line.amount,
+          categoryId: line.categoryId ?? null,
+          categoryName: null,
+        })),
+        version: row.version + 1,
+      };
+    });
+
+    const port: PhoneLedgerPort = {
+      listAccounts: () => [],
+      listCurrencies: () => CURRENCIES,
+      listGroups: () => [],
+      listRecent: () => [],
+      listCategories: () => [],
+      listCategoryTree: () => [],
+      listCounterparties: () => [],
+      listNetWorth: () => [],
+      readPeriodSpend: () => [],
+      listUnsettledClearing: () => [],
+      getTransaction,
+      createAccount: vi.fn(),
+      createTransaction: vi.fn(),
+      createCategory: vi.fn(),
+      updateTransaction,
+      deleteTransaction,
+      setTransactionLines,
+      searchTransactions: () => ({
+        rows: [],
+        nextCursor: undefined,
+        total: { count: 0, currencies: [] },
+      }),
+      categorizeBatch: () => undefined,
+      reset: vi.fn(),
+    };
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: accountingDate("2026-08-06"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-08-06T10:00:00Z"),
+      }),
+      id: <Table extends IdTable>() => id<Table>("00000000-0000-4000-8000-000000000099"),
+    });
+    return {
+      controller,
+      getTransaction,
+      updateTransaction,
+      deleteTransaction,
+      setTransactionLines,
+    };
+  }
+
+  it("getTransaction reads through the port, unmodified", () => {
+    const { controller, getTransaction } = detailHarness();
+    const result = controller.getTransaction(TXN);
+    expect(result?.payee).toBe("Café A");
+    expect(getTransaction).toHaveBeenCalledWith(TXN);
+  });
+
+  it("updateTransaction patches with the version it was given, and refreshes on success", () => {
+    const { controller, updateTransaction } = detailHarness();
+    const result = controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
+    expect(idOf(result)).toBe(TXN);
+    expect(updateTransaction.mock.calls[0]?.[0]).toMatchObject({
+      id: TXN,
+      version: 1,
+      patch: { payee: "Café A · Downtown" },
+    });
+    expect(controller.getTransaction(TXN)?.payee).toBe("Café A · Downtown");
+  });
+
+  /**
+   * The plan's own case: a stale version lands at form level with
+   * `transactions.changedElsewhere`. The row moves under the writer first
+   * (a real save, bumping it to version 2), then the screen's own stale read
+   * (version 1) is what gets refused — `version: 0` would never reach the
+   * port at all, since the input schema itself refuses a non-positive one.
+   */
+  it("a stale version on update reaches fieldErrors with transactions.changedElsewhere", () => {
+    const { controller } = detailHarness();
+    controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
+
+    const result = controller.updateTransaction(TXN, 1, { payee: "Someone else's edit" });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "",
+        message: "update_transaction: stale version — read 1, row is at 2",
+        messageKey: "transactions.changedElsewhere",
+      },
+    ]);
+  });
+
+  it("deleteTransaction succeeds with the version it was given", () => {
+    const { controller } = detailHarness();
+    const result = controller.deleteTransaction(TXN, 1);
+    expect(idOf(result)).toBe(TXN);
+    expect(controller.getTransaction(TXN)).toBeNull();
+  });
+
+  it("a stale version on delete reaches fieldErrors, not a throw", () => {
+    const { controller } = detailHarness();
+    controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
+
+    const result = controller.deleteTransaction(TXN, 1);
+
+    expect("fieldErrors" in result && result.fieldErrors[0]?.messageKey).toBe(
+      "transactions.changedElsewhere",
+    );
+  });
+
+  it("setTransactionLines saves a set that sums to the transaction's own amount", () => {
+    const { controller } = detailHarness();
+    const result = controller.setTransactionLines(TXN, 1, [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        description: "Groceries",
+        amount: "48.90",
+      },
+    ]);
+    expect(idOf(result)).toBe(TXN);
+    expect(controller.getTransaction(TXN)?.lines).toMatchObject([{ description: "Groceries" }]);
+  });
+
+  /** The plan's other named case: a lines sum mismatch reaches fieldErrors too. */
+  it("a lines sum mismatch reaches fieldErrors, plain text, no messageKey", () => {
+    const { controller } = detailHarness();
+    const result = controller.setTransactionLines(TXN, 1, [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        description: "Groceries",
+        amount: "10.00",
+      },
+    ]);
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "",
+        message: "set_transaction_lines: lines sum to 10.00000000, the transaction is 48.90",
+      },
+    ]);
   });
 });

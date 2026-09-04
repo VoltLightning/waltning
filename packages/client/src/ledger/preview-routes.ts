@@ -40,3 +40,13 @@ export function parseQuickAddRoute(params: { amount?: RouteValue; accountId?: Ro
 } {
   return { amount: one(params.amount) ?? "", accountId: one(params.accountId) };
 }
+
+/**
+ * `/transaction/[id]` (C5, S09) — a dynamic segment expo-router hands the
+ * screen as `string | string[]`, same as every other param here. `undefined`
+ * means the route mounted with nothing to show, which the screen treats the
+ * same as a row it could not find.
+ */
+export function parseTransactionRoute(params: { id?: RouteValue }): string | undefined {
+  return one(params.id);
+}

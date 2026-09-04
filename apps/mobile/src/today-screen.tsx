@@ -16,6 +16,7 @@ import { TodayFrame } from "@waltning/ui/shell/today-frame";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
@@ -39,6 +40,11 @@ function handlePreference(next: "system" | "light" | "dark") {
 
 function handleShowAll() {
   router.push("/ledger");
+}
+
+/** C5: every Recent row opens S09 — the caller it returns to is this screen. */
+function handleOpenTransaction(id: string) {
+  router.push({ pathname: "/transaction/[id]", params: { id } });
 }
 
 /**
@@ -100,6 +106,12 @@ export default function Today() {
     systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
   );
   const { message } = useLocalSearchParams<{ message?: string }>();
+  // A route param, not local state: the message arrives once, on the push
+  // that carried it (`account-creation-screen.tsx`'s own convention, and
+  // C5's own `deleteTransaction` toast) — dismissing it is the *only* time
+  // this needs state, and `undefined` there just means "still showing".
+  const [toastDismissed, setToastDismissed] = useState(false);
+  const handleDismissToast = useCallback(() => setToastDismissed(true), []);
   const hasAccounts = snapshot.accounts.length > 0;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
   // The error a failed refresh set stays on the snapshot until the next
@@ -234,7 +246,10 @@ export default function Today() {
           <Button label={t("shell.showAll")} onPress={handleShowAll} variant="ghost" size="sm" />
         }
       >
-        <TransactionList transactions={snapshot.recent.map(toRow)} />
+        <TransactionList
+          transactions={snapshot.recent.map(toRow)}
+          onPress={handleOpenTransaction}
+        />
       </Card>
     </>
   ) : (
@@ -247,7 +262,9 @@ export default function Today() {
   );
   const body = (
     <>
-      {typeof message === "string" ? <Card title={message}>{null}</Card> : null}
+      {typeof message === "string" && !toastDismissed ? (
+        <Toast message={message} onDismiss={handleDismissToast} />
+      ) : null}
       {ledgerBody}
     </>
   );

@@ -13,6 +13,12 @@ import {
   createAccountInput,
   createCategoryInput,
   createTransactionInput,
+  type DeleteTransactionInput,
+  deleteTransactionInput,
+  type SetTransactionLinesInput,
+  setTransactionLinesInput,
+  type UpdateTransactionInput,
+  updateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
 import { type FieldError, fieldErrorsFromZod } from "../transport/field-errors.ts";
@@ -90,6 +96,14 @@ export type PhoneRecentTransaction = {
   decimals: number;
   isBusiness: boolean;
 };
+
+/**
+ * The ledger's own vocabulary — `@waltning/schema`'s `TxnType`, restated
+ * rather than imported: `packages/client` depends on `@waltning/core` alone
+ * (`architecture/11`), matching `TransactionRow`'s own `TransactionType` in
+ * `packages/ui`.
+ */
+export type TransactionType = "expense" | "income" | "transfer" | "adjustment";
 
 /**
  * A leaf category the quick-add form can offer.
@@ -200,6 +214,49 @@ export type PhoneSearchPage = {
   total: { count: number; currencies: readonly PhoneCurrencyTotal[] };
 };
 
+/** One line of S09's optional breakdown (§10.3) — a receipt-free split too. */
+export type PhoneTransactionLine = {
+  id: Id<"transactionLines">;
+  description: string;
+  amount: Money;
+  categoryId: Id<"categories"> | null;
+  categoryName: string | null;
+};
+
+/**
+ * S09's whole subject — the row, its account and category names, and its
+ * `lines`. Structural, matching `PhoneRecentTransaction` above: the port is
+ * what keeps this package free of the storage engine behind it, so this
+ * mirrors `@waltning/ledger`'s `LocalTransactionDetail` field-for-field
+ * rather than importing it.
+ *
+ * **`FxAmount`'s full basis, the receipt and the audit history are not
+ * here.** `wave-3-shared.md` names all three unbuilt this wave — no rate
+ * table (`#e3`), no receipts, no audit log on the phone — and `is_capital`
+ * and the counterparty row are deferred too: `FieldsCard` does not offer
+ * either yet (`#e3` has no counterparty write path, and `is_capital` has no
+ * screen driving it this wave), so carrying them here would be a field with
+ * nothing that reads it.
+ */
+export type PhoneTransactionDetail = {
+  id: Id<"transactions">;
+  date: AccountingDate;
+  type: TransactionType;
+  payee: string;
+  note: string;
+  isBusiness: boolean;
+  accountId: Id<"accounts">;
+  accountName: string;
+  categoryId: Id<"categories"> | null;
+  categoryName: string | null;
+  /** Already signed, the `"from"` leg — same rule as `PhoneRecentTransaction`. */
+  amount: Money;
+  currency: CurrencyCode;
+  decimals: number;
+  version: number;
+  lines: readonly PhoneTransactionLine[];
+};
+
 export type PhoneLedgerPort = {
   listAccounts: () => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
@@ -218,6 +275,10 @@ export type PhoneLedgerPort = {
   createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
   /** C4 — S10's swipe-categorize. One category over N ids, refused as a whole or not at all. */
   categorizeBatch: (input: CategorizeBatchInput, capture: PhoneCapture) => void;
+  getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
+  updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
+  deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
+  setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
   reset: () => void;
 };
 
@@ -387,10 +448,40 @@ export type TransactionSearchCursorDraft = { date: string; id: string };
  */
 export type CategorizeBatchDraft = { transactionIds: readonly string[]; categoryId: string };
 
+/**
+ * What `FieldsCard` can save — every key optional, so `updateTransaction`
+ * sends only what changed (the executor refuses an empty patch). Matches
+ * `update_transaction`'s own patch shape, narrowed to the fields the screen
+ * exposes this wave: counterparty and `is_capital` are deferred — see
+ * `PhoneTransactionDetail`.
+ */
+export type TransactionFieldPatch = {
+  date?: string;
+  accountId?: string;
+  categoryId?: string | null;
+  payee?: string;
+  note?: string;
+  isBusiness?: boolean;
+};
+
+/**
+ * One line `LinesCard` can save. Ids stay plain `string`, like every other
+ * draft here — `setTransactionLinesInput.parse` inside the controller is
+ * where the brand and the shape are actually checked.
+ */
+export type TransactionLineDraft = {
+  id: string;
+  description: string;
+  amount: string;
+  categoryId?: string | null;
+};
+
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
   refresh: () => void;
+  /** S09's whole subject, read fresh — not carried in the snapshot. */
+  getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
   createAccount: (
     draft: CreateAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
@@ -419,8 +510,44 @@ export type PhoneLedgerController = {
   categorizeBatch: (
     draft: CategorizeBatchDraft,
   ) => { count: number } | { fieldErrors: readonly FieldError[] };
+  updateTransaction: (
+    id: Id<"transactions">,
+    version: number,
+    patch: TransactionFieldPatch,
+  ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
+  deleteTransaction: (
+    id: Id<"transactions">,
+    version: number,
+  ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
+  setTransactionLines: (
+    id: Id<"transactions">,
+    version: number,
+    lines: readonly TransactionLineDraft[],
+  ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
   reset: () => void;
 };
+
+/**
+ * A thrown executor refusal, as a form-level `fieldErrors` entry.
+ *
+ * `update_transaction`, `delete_transaction` and `set_transaction_lines`
+ * have no `fieldErrors` channel of their own — a stale version or a lines
+ * sum mismatch (§10.3) is a plain `Error` thrown from inside the write, the
+ * same shape `createTransaction` above works around for an uncapturable
+ * account. `path: ""` matches no form field on purpose: this screen's own
+ * `KNOWN_PATHS` never lists one for "the row moved" or "the lines do not
+ * sum", so the message belongs at form level, not pinned to a field that
+ * did not cause it. A stale version gets `transactions.changedElsewhere`
+ * (the shared plan names it); every other refusal surfaces its own text —
+ * inventing a key for a message nobody has read yet would be translating
+ * ahead of a decision to keep the wording.
+ */
+function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("stale version")
+    ? [{ path: "", message, messageKey: "transactions.changedElsewhere" }]
+    : [{ path: "", message }];
+}
 
 /**
  * Balances folded per currency, in the order the accounts arrive.
@@ -590,6 +717,7 @@ export function createPhoneLedger(
         throw error;
       }
     },
+    getTransaction: (id) => port.getTransaction(id),
     createAccount: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
@@ -800,6 +928,163 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "create_category",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    updateTransaction: (id, version, patch) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "update_transaction",
+        phase: "start",
+      });
+      try {
+        const parsed = updateTransactionInput.safeParse({
+          id,
+          version,
+          patch: {
+            ...(patch.date !== undefined ? { date: patch.date } : {}),
+            ...(patch.accountId !== undefined ? { accountId: patch.accountId } : {}),
+            ...("categoryId" in patch ? { categoryId: patch.categoryId } : {}),
+            ...(patch.payee !== undefined ? { payee: patch.payee } : {}),
+            ...(patch.note !== undefined ? { note: patch.note } : {}),
+            ...(patch.isBusiness !== undefined ? { isBusiness: patch.isBusiness } : {}),
+          },
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_transaction",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.updateTransaction(parsed.data, runtime.capture());
+        } catch (writeError) {
+          // A version the row moved out from under, or a shape refusal — the
+          // one refusal channel `update_transaction`'s executor has is a
+          // throw. Caught here, not left to propagate: S09 §6 keeps the
+          // draft on the screen and states the refusal on the field, which
+          // needs a `fieldErrors` return, not an exception.
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_transaction",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_transaction",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_transaction",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    deleteTransaction: (id, version) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "delete_transaction",
+        phase: "start",
+      });
+      try {
+        const parsed = deleteTransactionInput.safeParse({ id, version });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "delete_transaction",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.deleteTransaction(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "delete_transaction",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "delete_transaction",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "delete_transaction",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    setTransactionLines: (id, version, lines) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "set_transaction_lines",
+        phase: "start",
+      });
+      try {
+        const parsed = setTransactionLinesInput.safeParse({
+          transactionId: id,
+          version,
+          lines: lines.map((line) => ({
+            id: line.id,
+            description: line.description,
+            amount: line.amount,
+            ...(line.categoryId ? { categoryId: line.categoryId } : {}),
+          })),
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_transaction_lines",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.setTransactionLines(parsed.data, runtime.capture());
+        } catch (writeError) {
+          // `set_transaction_lines` throws on a sum mismatch (§10.3) the same
+          // way `update_transaction` throws on a stale version — caught here
+          // so the refusal lands on the breakdown card rather than a crash.
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "set_transaction_lines",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_transaction_lines",
+          phase: "success",
+        });
+        return { id: parsed.data.transactionId };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_transaction_lines",
           phase: "failure",
           error: clientFailure(error),
         });

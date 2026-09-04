@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseNewAccountRoute, parseQuickAddRoute } from "./preview-routes.ts";
+import {
+  parseNewAccountRoute,
+  parseQuickAddRoute,
+  parseTransactionRoute,
+} from "./preview-routes.ts";
 
 describe("phone preview route state", () => {
   it("preserves the expense draft through account creation", () => {
@@ -33,5 +37,11 @@ describe("phone preview route state", () => {
       amount: "",
       accountId: undefined,
     });
+  });
+
+  it("reads the transaction id, or undefined for a missing or duplicated segment", () => {
+    expect(parseTransactionRoute({ id: "txn-a" })).toBe("txn-a");
+    expect(parseTransactionRoute({})).toBeUndefined();
+    expect(parseTransactionRoute({ id: ["txn-a", "txn-b"] })).toBeUndefined();
   });
 });
