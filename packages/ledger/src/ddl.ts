@@ -222,6 +222,7 @@ export const REPLICA_DDL: readonly string[] = [
 )`,
   `INSERT INTO \`local_meta\` (\`id\`, \`applied_seq\`) VALUES (1, 0)`,
   `ALTER TABLE \`account_groups\` ADD \`archived\` integer DEFAULT false NOT NULL`,
+  `CREATE UNIQUE INDEX \`fx_rates_pk\` ON \`fx_rates\` (\`base\`,\`quote\`,\`date\`)`,
 ];
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */
