@@ -9,11 +9,23 @@
  * always lands somewhere, even when that somewhere is a flipped sign
  * (over-settlement, S14 §9.2 — never refused, only stated).
  *
- * **Direction is read off the live balance's sign, never supplied.**
- * Positive — *they owe you* — settles as an `income` into `accountId`;
- * negative — *you owe them* — settles as an `expense` from it. §6.6's four
- * cases collapse to this one rule because the debt sign and the cash
- * direction are always opposite.
+ * **Direction is carried (`input.type`), never derived here (R2 H4).**
+ * §6.6's four cases collapse to one rule — they owe you (positive) → money
+ * flows in as `income`; you owe them (negative) → money flows out as
+ * `expense`, the sign and the cash direction always opposite — but deriving
+ * it *at apply time* reads a balance that may have moved since the sheet
+ * opened: the phone's own outbox can apply a dependent write out of order, so
+ * the direction the person was shown and the direction this write actually
+ * takes could silently disagree. The controller reads the sign once, when it
+ * builds the payload, and this executor verifies that read against the live
+ * balance rather than trusting it or re-deriving it — a disagreement means
+ * *the balance moved — reload*, not a silent flip.
+ *
+ * **Refuses a currency that contradicts the account (R2 H3).** §6.5:
+ * *a transaction's currency is its account's currency* — Postgres enforces it
+ * with a trigger the phone has no equivalent of, so nothing caught
+ * `settle_debt` writing an EUR row into a PLN account until drain. Checked
+ * here, before `insertTransaction` ever runs.
  *
  * `insertTransaction` (`transactions/create-transaction.executor.ts`) is the
  * one write path for the table — this mints a row through it rather than a
@@ -37,7 +49,7 @@ import {
 import type { LocalTx } from "../write.ts";
 import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
-const { counterparties, currencies } = schema;
+const { accounts, counterparties, currencies } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export type SettleDebtResult = {
@@ -71,6 +83,24 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     throw new Error(`settle_debt: no counterparty ${input.counterpartyId}`);
   }
 
+  // R2 H3 — §6.5: a transaction's currency is its account's currency.
+  // Postgres has a trigger for this; the phone has none, so `settle_debt`
+  // checks it directly rather than writing a row drain would refuse later.
+  const [account] = tx
+    .select({ currency: accounts.currency })
+    .from(accounts)
+    .where(eq(accounts.id, input.accountId))
+    .all();
+  if (!account) {
+    throw new Error(`settle_debt: no account ${input.accountId}`);
+  }
+  if (account.currency !== input.currency) {
+    throw new Error(
+      `settle_debt: currency ${input.currency} does not match account currency ` +
+        `${account.currency} (account ${input.accountId})`,
+    );
+  }
+
   // L1 — the currency's own decimals, read here rather than trusted from a
   // caller: `balancesForCounterparty` folds at full 8dp precision, and both
   // signs below must agree with `settleResidualDirection`'s own rounded read
@@ -96,15 +126,25 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     throw new Error(`settle_debt: nothing to settle in ${input.discharges.currency}`);
   }
 
-  // §6.6's four cases, collapsed: they owe you (positive) → money flows in;
-  // you owe them (negative) → money flows out. The two are always opposite.
-  const type = sign > 0 ? ("income" as const) : ("expense" as const);
+  // R2 H4 — §6.6's four cases, collapsed: they owe you (positive) → money
+  // flows in as `income`; you owe them (negative) → money flows out as
+  // `expense`. `input.type` is the controller's own read of this sign, taken
+  // when the sheet built the payload; verified against the live sign rather
+  // than trusted, and never silently re-derived — a disagreement means the
+  // balance moved since the sheet was shown.
+  const liveType = sign > 0 ? ("income" as const) : ("expense" as const);
+  if (input.type !== liveType) {
+    throw new Error(
+      `settle_debt: expected ${input.type} but the live balance in ` +
+        `${input.discharges.currency} now settles as ${liveType} — the balance moved, reload`,
+    );
+  }
 
   const row = insertTransaction(
     createTransactionInput.parse({
       id: input.id,
       date: input.date,
-      type,
+      type: liveType,
       accountId: input.accountId,
       amountOriginal: input.amount,
       currency: input.currency,

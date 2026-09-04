@@ -87,6 +87,16 @@ export const transactionsColumns = () => ({
   deletedAt: k.timestamp("deleted_at"),
 });
 
+/**
+ * **R2 M4** — one index, the exception to "the nine indexes stay in
+ * `packages/db`". `readCounterpartyBalances` and `balancesForCounterparty`
+ * (`packages/ledger/src/counterparties/read-counterparty-balances.ts`) both
+ * scan `transactions` by `counterparty_id` on every settlement, every archive
+ * gate, and every §7 read — the same predicate Postgres already indexes
+ * (`transactions_counterparty_idx`) — and the replica had nothing at all
+ * backing it.
+ */
 export const transactions = k.table("transactions", transactionsColumns(), (t) => [
   index("transactions_category_idx").on(t.categoryId),
+  index("transactions_counterparty_idx").on(t.counterpartyId),
 ]);

@@ -13,6 +13,7 @@
  * whitespace, and the shared translator has no way to know that.
  */
 
+import { fold } from "@waltning/core/capture/names";
 import type { CurrencyCode } from "@waltning/core/money";
 import type { DbHandle } from "@waltning/db/client";
 import { counterparties } from "@waltning/db/schema";
@@ -42,6 +43,13 @@ export async function insertCounterparty(
       .insert(counterparties)
       .values({
         name: input.name,
+        // R2 C1 — the stored fold `counterparties_name_uq` now indexes; see
+        // `counterparties.pg.ts`. Trimmed explicitly: `fold()` itself never
+        // trims (`capture/names.ts` — trimming would change a string's
+        // length, which `findName`'s span matching relies on staying fixed),
+        // so this is the one place responsible for it, the same way
+        // `lower(btrim(name))` used to trim regardless of the caller.
+        nameFolded: fold(input.name.trim()),
         kind: input.kind,
         settlementCurrency: input.settlementCurrency ?? null,
         contact: input.contact ?? null,

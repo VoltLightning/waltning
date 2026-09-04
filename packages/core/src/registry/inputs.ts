@@ -1052,7 +1052,11 @@ export const updateCounterpartyInput = z
     version: z.number().int().positive(),
     patch: counterpartyPatch,
   })
-  .refine((v) => Object.keys(v.patch).length > 0, {
+  // R2 L1 — `Object.keys` counts a key that is *present* with value
+  // `undefined` (e.g. `{ name: undefined }`, which a caller can construct by
+  // spreading an unset draft field), so a patch that sets nothing still
+  // passed. Every value must be something other than `undefined`.
+  .refine((v) => Object.values(v.patch).some((value) => value !== undefined), {
     message: "a patch must set at least one field",
     path: ["patch"],
   });
@@ -1062,12 +1066,23 @@ export type UpdateCounterpartyInput = z.output<typeof updateCounterpartyInput>;
  * `merge_counterparties` — S15 §9.2. `mergeId` is client-minted (H13), the
  * same reason `create_account`'s `id` is: the id this write mints (the merge
  * record) travels with the queued entry, not a value the server hands back.
+ *
+ * **`movedTransactionIds` travels on the payload (R2 H5)**, computed by the
+ * controller from the replica it can see at the moment of the merge, rather
+ * than recomputed by the executor at apply time — the same reason
+ * `settleDebtInput` never supplies a residual: the set of live transactions
+ * naming `loserId` can change between the screen reading it and the write
+ * landing (another device's own write, or the phone's own outbox draining
+ * out of order), and an executor that re-derives "everything currently
+ * pointing at the loser" would then move a different set than the person
+ * saw, or move something a concurrent write already reassigned.
  */
 export const mergeCounterpartiesInput = z
   .object({
     mergeId: zId<"counterpartyMerges">(),
     winnerId: zId<"counterparties">(),
     loserId: zId<"counterparties">(),
+    movedTransactionIds: z.array(zId<"transactions">()),
   })
   .refine((v) => v.winnerId !== v.loserId, {
     message: "a counterparty cannot merge into itself",
@@ -1110,6 +1125,16 @@ export type RecordDistinctCounterpartiesInput = z.output<typeof recordDistinctCo
  * never supplied *to* it. Supplying one would let a stale client figure
  * overwrite a balance that moved since the sheet opened (`architecture/08`
  * H9).
+ *
+ * **`type` is carried, not derived at apply time (R2 H4).** The executor
+ * previously read the live balance's sign itself and picked `income` or
+ * `expense` from it — correct the instant the sheet opened, but the phone's
+ * own outbox can apply a dependent write out of order, and nothing then tied
+ * the settlement to the balance the person actually saw. `type` is the
+ * controller's own read of that same sign, at the moment it built this
+ * payload; the executor verifies it against the live balance's sign when it
+ * applies and refuses on disagreement rather than silently flipping the
+ * direction the person was shown.
  */
 export const settleDebtInput = z
   .object({
@@ -1121,6 +1146,8 @@ export const settleDebtInput = z
     /** What actually changed hands. Positive — direction is derived, not entered. */
     amount: zMoney,
     currency: zCurrencyCode,
+    /** They owe you (`income`) or you owe them (`expense`) — see above. */
+    type: z.enum(["income", "expense"]),
     /** Which balance this discharges, and how much of it — §6.6's settlement table. */
     discharges: z.object({
       currency: zCurrencyCode,

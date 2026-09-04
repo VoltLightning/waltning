@@ -23,9 +23,12 @@
  * **A renamed `patch.name` gets the same folded-name pre-check
  * `create_counterparty` runs**, for the same reason: without it, the raw
  * SQLite `UNIQUE constraint failed: index 'counterparties_name_uq'` would
- * reach the caller instead of a refusal naming the collision.
+ * reach the caller instead of a refusal naming the collision. Compares
+ * `name_folded` (R2 C1) and excludes archived rows (R2 M3) — see
+ * `create-counterparty.executor.ts` for both.
  */
 
+import { fold } from "@waltning/core/capture/names";
 import * as money from "@waltning/core/money";
 import {
   type UpdateCounterpartyInput,
@@ -64,13 +67,17 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
     );
   }
 
+  let nameFolded: string | undefined;
   if (input.patch.name !== undefined) {
+    // `fold()` never trims by itself — see `create-counterparty.executor.ts`.
+    nameFolded = fold(input.patch.name.trim());
     const [collision] = tx
       .select({ id: counterparties.id, name: counterparties.name })
       .from(counterparties)
       .where(
         and(
-          sql`lower(trim(${counterparties.name})) = lower(trim(${input.patch.name}))`,
+          eq(counterparties.nameFolded, nameFolded),
+          eq(counterparties.archived, false),
           ne(counterparties.id, input.id),
         ),
       )
@@ -97,7 +104,12 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
 
   const [updated] = tx
     .update(counterparties)
-    .set({ ...input.patch, version: sql`${counterparties.version} + 1`, updatedAt: new Date() })
+    .set({
+      ...input.patch,
+      ...(nameFolded !== undefined ? { nameFolded } : {}),
+      version: sql`${counterparties.version} + 1`,
+      updatedAt: new Date(),
+    })
     .where(and(eq(counterparties.id, input.id), eq(counterparties.version, input.version)))
     .returning()
     .all();

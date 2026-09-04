@@ -241,10 +241,10 @@ describe("every other guard is identifiable", () => {
 
 describe("Postgres's own refusals", () => {
   it("maps a unique violation and names the index", async () => {
-    await s.sql`INSERT INTO counterparties (name, kind) VALUES ('Placeholder One', 'person')`;
+    await s.sql`INSERT INTO counterparties (name, name_folded, kind) VALUES ('Placeholder One', 'placeholder one', 'person')`;
 
     const error = await refusal(
-      `INSERT INTO counterparties (name, kind) VALUES ('  placeholder one  ', 'person')`,
+      `INSERT INTO counterparties (name, name_folded, kind) VALUES ('  placeholder one  ', 'placeholder one', 'person')`,
     );
     expect(error.code).toBe("validation");
     // The normalized-name index, which is the one that actually holds.

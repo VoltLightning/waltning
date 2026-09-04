@@ -244,6 +244,27 @@ export const REPLICA_DDL: readonly string[] = [
   `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (lower(trim("name")))`,
   `CREATE INDEX \`transaction_lines_category_idx\` ON \`transaction_lines\` (\`category_id\`)`,
   `CREATE INDEX \`transactions_category_idx\` ON \`transactions\` (\`category_id\`)`,
+  `DROP INDEX \`counterparties_name_uq\``,
+  `ALTER TABLE \`counterparties\` ADD \`name_folded\` text NOT NULL`,
+  `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
+  `PRAGMA foreign_keys=OFF`,
+  `CREATE TABLE \`__new_counterparty_merges\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`winner_id\` text NOT NULL,
+	\`loser_id\` text NOT NULL,
+	\`moved_transaction_ids\` text DEFAULT '[]' NOT NULL,
+	\`merged_at\` integer NOT NULL,
+	\`unmerged_at\` integer,
+	FOREIGN KEY (\`winner_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`loser_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "counterparty_merges_winner_ne_loser" CHECK("__new_counterparty_merges"."winner_id" <> "__new_counterparty_merges"."loser_id")
+)`,
+  `INSERT INTO \`__new_counterparty_merges\`("id", "winner_id", "loser_id", "moved_transaction_ids", "merged_at", "unmerged_at") SELECT "id", "winner_id", "loser_id", "moved_transaction_ids", "merged_at", "unmerged_at" FROM \`counterparty_merges\``,
+  `DROP TABLE \`counterparty_merges\``,
+  `ALTER TABLE \`__new_counterparty_merges\` RENAME TO \`counterparty_merges\``,
+  `PRAGMA foreign_keys=ON`,
+  `CREATE UNIQUE INDEX \`counterparty_merges_loser_open_uq\` ON \`counterparty_merges\` (\`loser_id\`) WHERE "counterparty_merges"."unmerged_at" is null`,
+  `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
 ];
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */

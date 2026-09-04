@@ -4,9 +4,9 @@ import { COUNTERPARTY_KIND } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 
 /**
- * The unique index on the *normalised* name is Postgres's, in `packages/db`
- * (`counterparties_name_uq`, `lower(btrim(name))`) — except here it isn't only
- * Postgres's.
+ * The unique index on `name_folded` is Postgres's too, in `packages/db`
+ * (`counterparties_name_uq`, partial where `not archived`) — except here it
+ * isn't only Postgres's.
  *
  * **This table is the one exception to "constraints stay in `packages/db`."**
  * Every other shared table's SQLite half is bare — `k.table(name, columns())`,
@@ -16,17 +16,24 @@ import { sqliteKit as k } from "./kit.ts";
  * where a collision is merely wasted effort (two `Tag` rows spelled
  * differently). It is not fine here: S15's whole guard is that two spellings
  * of one person cannot both exist, and `create_counterparty`'s executor can
- * only refuse a `fold(name)` collision against *rows this replica already
- * has* — it cannot see a duplicate the server would refuse tomorrow, and until
- * a real index backs it, two offline creates of "Nina" and "nina " both land.
- * `SQLite has no generated column in this Drizzle dialect (a stored
- * `name_folded` is Postgres's other approach), so the index is an expression
- * index over `lower(trim(name))` instead — the same normalisation, computed at
- * query time rather than materialised.
+ * only refuse a collision against *rows this replica already has* — it cannot
+ * see a duplicate the server would refuse tomorrow, and until a real index
+ * backs it, two offline creates of the same person both land.
+ *
+ * **`name_folded` is a stored column, not an expression index (R2 C1).** An
+ * expression index over `lower(trim(name))` was tried first, and SQLite's
+ * `lower()` is ASCII-only — `ŁUKASZ` and `łukasz` fold to two different
+ * strings on the phone and only collide once Postgres's locale-aware
+ * `lower()` sees them at drain. `fold()` (`@waltning/core/capture/names`,
+ * case-fold plus the nine Polish diacritics) runs in JavaScript at write
+ * time instead, on both engines, so the two spellings are the same folded
+ * string before either index ever sees them.
  */
 export const counterpartiesColumns = () => ({
   id: k.id<"counterparties">("id"),
   name: k.text("name").notNull(),
+  /** `fold(name)` — see above. Written by `create_counterparty`/`update_counterparty`, never derived by a query. */
+  nameFolded: k.text("name_folded").notNull(),
   kind: k.text("kind", { enum: COUNTERPARTY_KIND }).notNull().default("person"),
   settlementCurrency: k.currency("settlement_currency").references(() => currencies.code),
   contact: k.text("contact"),
@@ -40,5 +47,7 @@ export const counterpartiesColumns = () => ({
 });
 
 export const counterparties = k.table("counterparties", counterpartiesColumns(), (t) => [
-  k.uniqueIndex("counterparties_name_uq").on(sql`lower(trim(${t.name}))`),
+  // M3 — an archived counterparty's old name must not block a fresh one from
+  // taking it; history stays under the old row regardless (§9.2).
+  k.uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
 ]);

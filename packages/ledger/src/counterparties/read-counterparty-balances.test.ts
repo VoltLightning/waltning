@@ -31,8 +31,8 @@ beforeEach(() => {
   db.insert(accounts).values({ id: BANK, name: "Bank A · PLN", currency: PLN, kind: "bank" }).run();
   db.insert(counterparties)
     .values([
-      { id: NINA, name: "Nina", kind: "person" },
-      { id: ACME, name: "Acme", kind: "company" },
+      { id: NINA, name: "Nina", nameFolded: "nina", kind: "person" },
+      { id: ACME, name: "Acme", nameFolded: "acme", kind: "company" },
     ])
     .run();
 });

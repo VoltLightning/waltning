@@ -19,9 +19,9 @@ describe("counterparty balance — §7, in SQL", () => {
         ('11111111-1111-1111-1111-111111111111','Bank A · PLN','PLN','own',0),
         ('22222222-2222-2222-2222-222222222222','Household · PLN','PLN','shared',0),
         ('33333333-3333-3333-3333-333333333333','Cash · USD','USD','own',0);
-      INSERT INTO counterparties (id, name) VALUES
-        ('44444444-4444-4444-4444-444444444444','Counterparty A'),
-        ('55555555-5555-5555-5555-555555555555','Counterparty B');
+      INSERT INTO counterparties (id, name, name_folded) VALUES
+        ('44444444-4444-4444-4444-444444444444','Counterparty A','counterparty a'),
+        ('55555555-5555-5555-5555-555555555555','Counterparty B','counterparty b');
       INSERT INTO transactions
         (id, date, type, account_id, to_account_id, amount_original, to_amount,
          currency, to_currency, fx_rate, to_fx_rate, counterparty_id, counterparty_role)
@@ -69,8 +69,8 @@ describe("counterparty balance — §7, in SQL", () => {
       INSERT INTO accounts (id, name, currency, ownership, opening_balance) VALUES
         ('11111111-1111-1111-1111-111111111112','Bank B · PLN','PLN','own',0),
         ('11111111-1111-1111-1111-111111111113','Cash B · EUR','EUR','own',0);
-      INSERT INTO counterparties (id, name) VALUES
-        ('44444444-4444-4444-4444-444444444445','Counterparty C');
+      INSERT INTO counterparties (id, name, name_folded) VALUES
+        ('44444444-4444-4444-4444-444444444445','Counterparty C','counterparty c');
       INSERT INTO transactions
         (id, date, type, account_id, amount_original, currency, fx_rate,
          counterparty_id, counterparty_role)
@@ -108,9 +108,9 @@ describe("counterparty balance — §7, in SQL", () => {
     await scratch.sql.unsafe(`
       INSERT INTO accounts (id, name, currency, ownership, opening_balance) VALUES
         ('11111111-1111-1111-1111-111111111114','Bank C · PLN','PLN','own',0);
-      INSERT INTO counterparties (id, name, archived) VALUES
-        ('44444444-4444-4444-4444-444444444446','Settled & archived', true),
-        ('44444444-4444-4444-4444-444444444447','Open & archived', true);
+      INSERT INTO counterparties (id, name, name_folded, archived) VALUES
+        ('44444444-4444-4444-4444-444444444446','Settled & archived','settled & archived', true),
+        ('44444444-4444-4444-4444-444444444447','Open & archived','open & archived', true);
       INSERT INTO transactions
         (id, date, type, account_id, amount_original, currency, fx_rate,
          counterparty_id, counterparty_role)

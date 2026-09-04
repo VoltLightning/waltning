@@ -35,6 +35,7 @@ describe("readCounterparties", () => {
         {
           id: BOB,
           name: "Counterparty B",
+          nameFolded: "counterparty b",
           sort: 1,
           kind: "person" as const,
           settlementCurrency: currencyCode("EUR"),
@@ -43,6 +44,7 @@ describe("readCounterparties", () => {
         {
           id: ALICE,
           name: "Counterparty A",
+          nameFolded: "counterparty a",
           sort: 0,
           kind: "company" as const,
           settlementCurrency: null,
@@ -51,6 +53,7 @@ describe("readCounterparties", () => {
         {
           id: ARCHIVED,
           name: "Counterparty C",
+          nameFolded: "counterparty c",
           sort: 2,
           kind: "person" as const,
           settlementCurrency: null,
@@ -88,7 +91,9 @@ describe("readCounterparties", () => {
   it("includes archived rows when asked", () => {
     stores.ledger.replica.db
       .insert(counterparties)
-      .values([{ id: ARCHIVED, name: "Counterparty C", archived: true }])
+      .values([
+        { id: ARCHIVED, name: "Counterparty C", nameFolded: "counterparty c", archived: true },
+      ])
       .run();
 
     const result = readCounterparties(stores.ledger.replica.db, { includeArchived: true });

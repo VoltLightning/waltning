@@ -35,7 +35,7 @@
  * database, and the whole guarantee here is about what survives a crash.
  */
 
-import type { ExtractTablesWithRelations } from "drizzle-orm";
+import { type ExtractTablesWithRelations, eq } from "drizzle-orm";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
 import type { z } from "zod";
 import {
@@ -250,6 +250,20 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
       return applied;
     });
   } catch (error) {
+    // R2 H6 — a refusal here (a collision `create_counterparty` throws, a
+    // stale `update_counterparty` version, any executor's own `apply`
+    // failing) used to leave the outbox entry `pending`: real, unsent, and
+    // drainable — the drain would resend the same refused write forever, and
+    // the watermark would never catch up to explain why. Marked `blocked`
+    // the same way `recover.ts`'s own replay failure is (`haltAt`), and in
+    // this same catch — the entry never gets a chance to look sendable.
+    const reason = error instanceof Error ? error.message : String(error);
+    ledger.outbox.db
+      .update(outbox)
+      .set({ state: "blocked", blockedKind: "terminal", blockedReason: reason })
+      .where(eq(outbox.id, enqueued.entryId))
+      .run();
+
     emitLedgerDiagnostic(diagnostics, {
       scope: "local_write",
       phase: "failure",

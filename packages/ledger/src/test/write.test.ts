@@ -83,7 +83,7 @@ const createCounterparty = defineLocalExecutor<typeof CREATE_COUNTERPARTY, { id:
   apply: (input, tx) => {
     const [row] = tx
       .insert(counterparties)
-      .values({ id: id<"counterparties">(input.id), name: input.name })
+      .values({ id: id<"counterparties">(input.id), name: input.name, nameFolded: input.name })
       .returning({ id: counterparties.id })
       .all();
     if (!row) throw new Error("no row returned");
@@ -218,7 +218,11 @@ describe("a write records its intent and materialises", () => {
     // naming it must not hold the transaction behind anything.
     s.ledger.replica.db
       .insert(counterparties)
-      .values({ id: id<"counterparties">("cp-old"), name: "Placeholder" })
+      .values({
+        id: id<"counterparties">("cp-old"),
+        name: "Placeholder",
+        nameFolded: "placeholder",
+      })
       .run();
 
     const only = writeLocally(s.ledger, {
@@ -262,6 +266,14 @@ describe("a failure between the two commits keeps the intent", () => {
     expect(rows()).toHaveLength(0);
     // The watermark did not move, which is what tells the next launch to replay.
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+
+    // R2 H6 — a refusal marks the entry `blocked(terminal)` in this same
+    // catch, so it can never be picked up by a drain that would only resend
+    // the same refusal forever. `pending` is the bug this replaces.
+    const [entry] = entries();
+    expect(entry?.state).toBe("blocked");
+    expect(entry?.blockedKind).toBe("terminal");
+    expect(entry?.blockedReason).toBe("the replica half failed");
   });
 
   it("reports which commit boundary failed with the complete cause chain", () => {

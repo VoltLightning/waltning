@@ -49,9 +49,9 @@ beforeEach(() => {
   db.insert(schema.accounts).values({ id: ACCOUNT, name: "Cash · EUR", currency: EUR }).run();
   db.insert(counterparties)
     .values([
-      { id: NINA, name: "Nina" },
-      { id: MAREK, name: "Marek" },
-      { id: OLA, name: "Ola" },
+      { id: NINA, name: "Nina", nameFolded: "nina" },
+      { id: MAREK, name: "Marek", nameFolded: "marek" },
+      { id: OLA, name: "Ola", nameFolded: "ola" },
     ])
     .run();
 });
@@ -132,9 +132,50 @@ describe("create_counterparty", () => {
     expect(() =>
       s.ledger.replica.db
         .insert(counterparties)
-        .values({ id: id<"counterparties">("88888888-8888-4888-8888-888888888888"), name: "nina" })
+        .values({
+          id: id<"counterparties">("88888888-8888-4888-8888-888888888888"),
+          name: "nina",
+          nameFolded: "nina",
+        })
         .run(),
     ).toThrow(/UNIQUE constraint failed/);
+  });
+
+  /**
+   * R2 C1 — SQLite's `lower()` is ASCII-only: `ŁUKASZ` and `łukasz` folded to
+   * two different strings and both landed. `fold()` strips the diacritic in
+   * JavaScript before either row is written, so the two spellings collide on
+   * `name_folded` the same way an ASCII name always did.
+   */
+  it("refuses ŁUKASZ after łukasz — SQLite's lower() alone would miss this", () => {
+    write(createCounterpartyExecutor, {
+      id: "99999999-9999-4999-8999-999999999999",
+      name: "łukasz",
+    });
+
+    expect(() =>
+      write(createCounterpartyExecutor, {
+        id: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa",
+        name: "ŁUKASZ",
+      }),
+    ).toThrow(/collides with existing counterparty "łukasz"/);
+  });
+
+  /** R2 M3 — an archived counterparty's old name is free for a fresh one. */
+  it("does not collide with an archived counterparty's old name", () => {
+    const before = counterparty(OLA);
+    write(updateCounterpartyExecutor, {
+      id: OLA,
+      version: before?.version,
+      patch: { archived: true },
+    });
+
+    expect(() =>
+      write(createCounterpartyExecutor, {
+        id: "bbbbbbbb-1111-4bbb-8bbb-bbbbbbbbbbbb",
+        name: "Ola",
+      }),
+    ).not.toThrow();
   });
 });
 
@@ -218,6 +259,7 @@ describe("merge_counterparties", () => {
       mergeId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       winnerId: MAREK,
       loserId: OLA,
+      movedTransactionIds: ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
     });
 
     expect(result.row.movedTransactions).toBe(1);
@@ -244,6 +286,7 @@ describe("merge_counterparties", () => {
         mergeId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
         winnerId: MAREK,
         loserId: OLA,
+        movedTransactionIds: [],
       }),
     ).toThrow(/archived/);
   });
@@ -256,8 +299,135 @@ describe("merge_counterparties", () => {
         mergeId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
         winnerId: NINA,
         loserId: MAREK,
+        movedTransactionIds: [],
       }),
     ).toThrow(/recorded as distinct/);
+  });
+
+  /**
+   * R2 H5 — the controller's own list is the one moved, and a transaction
+   * reassigned away from the loser since that list was built is refused
+   * rather than silently dropped from the move.
+   */
+  it("refuses a named id that no longer names the loser", () => {
+    debtRow({
+      id: "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb",
+      type: "income",
+      amount: "10",
+      counterpartyId: OLA,
+    });
+    // Reassigned to NINA after the controller would have read it.
+    s.ledger.replica.db
+      .update(transactions)
+      .set({ counterpartyId: NINA })
+      .where(eq(transactions.id, id<"transactions">("bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb")))
+      .run();
+
+    expect(() =>
+      write(mergeCounterpartiesExecutor, {
+        mergeId: "ffffffff-2222-4fff-8fff-ffffffffffff",
+        winnerId: MAREK,
+        loserId: OLA,
+        movedTransactionIds: ["bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb"],
+      }),
+    ).toThrow(/no longer name/);
+  });
+
+  /** R2 H2 — A→B then B→C reverses into the wrong owner if allowed. */
+  it("refuses a chained merge while the first is still open", () => {
+    write(mergeCounterpartiesExecutor, {
+      mergeId: "10101010-2222-4101-8101-101010101010",
+      winnerId: MAREK,
+      loserId: OLA,
+      movedTransactionIds: [],
+    });
+
+    expect(() =>
+      write(mergeCounterpartiesExecutor, {
+        mergeId: "20202020-2222-4202-8202-202020202020",
+        winnerId: NINA,
+        loserId: MAREK,
+        movedTransactionIds: [],
+      }),
+    ).toThrow(/already appears on an open merge/);
+  });
+
+  it("allows the chain once the first merge is unmerged", () => {
+    const merge = write(mergeCounterpartiesExecutor, {
+      mergeId: "30303030-2222-4303-8303-303030303030",
+      winnerId: MAREK,
+      loserId: OLA,
+      movedTransactionIds: [],
+    });
+    write(unmergeCounterpartiesExecutor, { mergeId: merge.row.merge.id });
+
+    expect(() =>
+      write(mergeCounterpartiesExecutor, {
+        mergeId: "40404040-2222-4404-8404-404040404040",
+        winnerId: NINA,
+        loserId: MAREK,
+        movedTransactionIds: [],
+      }),
+    ).not.toThrow();
+  });
+
+  /** R2 M1 — a recurring rule naming the loser is repointed to the winner. */
+  it("repoints a recurring rule's counterparty", () => {
+    s.ledger.replica.db
+      .insert(schema.recurringTransactions)
+      .values({
+        id: id<"recurringTransactions">("50505050-2222-4505-8505-505050505050"),
+        type: "expense",
+        accountId: ACCOUNT,
+        counterpartyId: OLA,
+        amountOriginal: money.toMoney("10"),
+        currency: EUR,
+        rrule: "FREQ=MONTHLY",
+      })
+      .run();
+
+    write(mergeCounterpartiesExecutor, {
+      mergeId: "60606060-2222-4606-8606-606060606060",
+      winnerId: MAREK,
+      loserId: OLA,
+      movedTransactionIds: [],
+    });
+
+    const rule = s.ledger.replica.db
+      .select({ counterpartyId: schema.recurringTransactions.counterpartyId })
+      .from(schema.recurringTransactions)
+      .where(
+        eq(
+          schema.recurringTransactions.id,
+          id<"recurringTransactions">("50505050-2222-4505-8505-505050505050"),
+        ),
+      )
+      .all()[0];
+    expect(rule?.counterpartyId).toBe(MAREK);
+  });
+
+  /**
+   * R2 M1 — distinct-pairs are transitive: whoever the loser was recorded
+   * distinct from, the winner now stands in for.
+   */
+  it("carries a distinct pair from the loser onto the winner", () => {
+    write(recordDistinctCounterpartiesExecutor, { aId: OLA, bId: NINA });
+
+    write(mergeCounterpartiesExecutor, {
+      mergeId: "70707070-2222-4707-8707-707070707070",
+      winnerId: MAREK,
+      loserId: OLA,
+      movedTransactionIds: [],
+    });
+
+    const [a, b] = MAREK < NINA ? [MAREK, NINA] : [NINA, MAREK];
+    const row = s.ledger.replica.db
+      .select()
+      .from(counterpartyDistinctPairs)
+      .where(eq(counterpartyDistinctPairs.aId, a))
+      .all()
+      .find((r) => r.bId === b);
+    expect(row).toBeDefined();
   });
 });
 
@@ -273,6 +443,7 @@ describe("unmerge_counterparties", () => {
       mergeId: "10101010-1010-4101-8101-101010101010",
       winnerId: MAREK,
       loserId: OLA,
+      movedTransactionIds: ["ffffffff-ffff-4fff-8fff-ffffffffffff"],
     });
 
     const result = write(unmergeCounterpartiesExecutor, {
@@ -301,6 +472,7 @@ describe("unmerge_counterparties", () => {
       mergeId: "30303030-3030-4303-8303-303030303030",
       winnerId: MAREK,
       loserId: OLA,
+      movedTransactionIds: ["20202020-2020-4202-8202-202020202020"],
     });
     s.ledger.replica.db
       .update(transactions)
@@ -319,12 +491,51 @@ describe("unmerge_counterparties", () => {
       mergeId: "40404040-4040-4404-8404-404040404040",
       winnerId: MAREK,
       loserId: OLA,
+      movedTransactionIds: [],
     });
     write(unmergeCounterpartiesExecutor, { mergeId: merge.row.merge.id });
 
     expect(() => write(unmergeCounterpartiesExecutor, { mergeId: merge.row.merge.id })).toThrow(
       /already unmerged/,
     );
+  });
+
+  /**
+   * R2 H1 — a row deliberately reassigned away from the winner after the
+   * merge must not be silently overwritten by unmerge; only a row still on
+   * the winner is repointed back, and the rest count as skipped.
+   */
+  it("skips a row reassigned away from the winner since the merge", () => {
+    debtRow({
+      id: "80808080-2222-4808-8808-808080808080",
+      type: "income",
+      amount: "10",
+      counterpartyId: OLA,
+    });
+    const merge = write(mergeCounterpartiesExecutor, {
+      mergeId: "90909090-2222-4909-8909-909090909090",
+      winnerId: MAREK,
+      loserId: OLA,
+      movedTransactionIds: ["80808080-2222-4808-8808-808080808080"],
+    });
+    // A deliberate reassignment, unrelated to the merge, made after it.
+    s.ledger.replica.db
+      .update(transactions)
+      .set({ counterpartyId: NINA })
+      .where(eq(transactions.id, id<"transactions">("80808080-2222-4808-8808-808080808080")))
+      .run();
+
+    const result = write(unmergeCounterpartiesExecutor, { mergeId: merge.row.merge.id });
+
+    expect(result.row.restoredTransactions).toBe(0);
+    expect(result.row.skipped).toBe(1);
+    const row = s.ledger.replica.db
+      .select({ counterpartyId: transactions.counterpartyId })
+      .from(transactions)
+      .where(eq(transactions.id, id<"transactions">("80808080-2222-4808-8808-808080808080")))
+      .all()[0];
+    // Untouched — still NINA's, never overwritten back to OLA.
+    expect(row?.counterpartyId).toBe(NINA);
   });
 });
 
@@ -391,6 +602,7 @@ describe("settle_debt", () => {
       date: "2026-08-04",
       amount: "50",
       currency: "EUR",
+      type: "expense",
       discharges: { currency: "EUR", amount: "50" },
     });
 
@@ -416,6 +628,7 @@ describe("settle_debt", () => {
       date: "2026-08-04",
       amount: "50",
       currency: "EUR",
+      type: "expense",
       discharges: { currency: "EUR", amount: "50" },
     });
 
@@ -438,6 +651,7 @@ describe("settle_debt", () => {
       date: "2026-08-04",
       amount: "80",
       currency: "EUR",
+      type: "expense",
       discharges: { currency: "EUR", amount: "80" },
     });
 
@@ -461,6 +675,7 @@ describe("settle_debt", () => {
         date: "2026-08-04",
         amount: "10",
         currency: "EUR",
+        type: "expense",
         discharges: { currency: "PLN", amount: "10" },
       }),
     ).toThrow(/PLN/);
@@ -475,6 +690,7 @@ describe("settle_debt", () => {
         date: "2026-08-04",
         amount: "10",
         currency: "EUR",
+        type: "income",
         discharges: { currency: "EUR", amount: "10" },
       }),
     ).toThrow(/nothing to settle/);
@@ -503,6 +719,7 @@ describe("settle_debt", () => {
         date: "2026-08-04",
         amount: "0.001",
         currency: "EUR",
+        type: "expense",
         discharges: { currency: "EUR", amount: "0.001" },
       }),
     ).toThrow(/nothing to settle/);
@@ -529,6 +746,7 @@ describe("settle_debt", () => {
       date: "2026-08-04",
       amount: "0.014",
       currency: "EUR",
+      type: "income",
       discharges: { currency: "EUR", amount: "0.014" },
     });
 
@@ -552,8 +770,62 @@ describe("settle_debt", () => {
         date: "2026-08-04",
         amount: "10",
         currency: "EUR",
+        type: "income",
         discharges: { currency: "EUR", amount: "10" },
       }),
     ).toThrow(/nothing to settle/);
+  });
+
+  /** R2 H3 — a currency that contradicts the account is refused, naming both. */
+  it("refuses a currency that contradicts the account's own currency", () => {
+    debtRow({
+      id: "e1e1e1e1-1111-4e1e-8e1e-e1e1e1e1e1e1",
+      type: "income",
+      amount: "50",
+      counterpartyId: NINA,
+    });
+
+    expect(() =>
+      write(settleDebtExecutor, {
+        id: "e2e2e2e2-2222-4e2e-8e2e-e2e2e2e2e2e2",
+        counterpartyId: NINA,
+        accountId: ACCOUNT,
+        date: "2026-08-04",
+        amount: "50",
+        currency: "PLN",
+        type: "expense",
+        discharges: { currency: "EUR", amount: "50" },
+      }),
+    ).toThrow(/currency PLN does not match account currency EUR/);
+  });
+
+  /**
+   * R2 H4 — the direction is verified against the live balance, never
+   * silently flipped: a stale `type` (the balance moved since it was read)
+   * refuses rather than posting the wrong direction.
+   */
+  it("refuses a type that disagrees with the live balance's sign", () => {
+    debtRow({
+      id: "e3e3e3e3-3333-4e3e-8e3e-e3e3e3e3e3e3",
+      type: "income",
+      amount: "50",
+      counterpartyId: NINA,
+    });
+
+    expect(() =>
+      write(settleDebtExecutor, {
+        id: "e4e4e4e4-4444-4e4e-8e4e-e4e4e4e4e4e4",
+        counterpartyId: NINA,
+        accountId: ACCOUNT,
+        date: "2026-08-04",
+        amount: "50",
+        currency: "EUR",
+        // The balance is negative (you owe them) — expense is correct, so
+        // "income" disagrees and must be refused rather than silently
+        // corrected.
+        type: "income",
+        discharges: { currency: "EUR", amount: "50" },
+      }),
+    ).toThrow(/the balance moved, reload/);
   });
 });

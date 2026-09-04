@@ -2106,10 +2106,29 @@ export function createPhoneLedger(
       });
       try {
         const capture = runtime.capture();
+
+        // R2 H5 — computed here, from the replica this controller can see
+        // right now, and carried on the payload rather than left for the
+        // executor to recompute at apply time (by which point another write
+        // may have moved a different set than this one saw). Paged fully:
+        // S13's whole history for this counterparty, every role.
+        const movedTransactionIds: Id<"transactions">[] = [];
+        let cursor: PhoneSearchCursor | undefined;
+        for (;;) {
+          const page = port.searchTransactions(
+            { counterpartyId: id<"counterparties">(draft.loserId) },
+            cursor,
+          );
+          movedTransactionIds.push(...page.rows.map((row) => row.id));
+          cursor = page.nextCursor;
+          if (!cursor) break;
+        }
+
         const parsed = mergeCounterpartiesInput.safeParse({
           mergeId: runtime.id<"counterpartyMerges">(),
           winnerId: draft.winnerId,
           loserId: draft.loserId,
+          movedTransactionIds,
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
@@ -2286,13 +2305,34 @@ export function createPhoneLedger(
         }
 
         const capture = runtime.capture();
+
+        // R2 H4 — `type` is read here, from the balance the controller can
+        // see right now, and carried on the payload rather than left for the
+        // executor to derive at apply time (which may run after other writes
+        // have moved the balance the sheet showed).
+        const balance = port
+          .listCounterpartyBalances(capture.date)
+          .find(
+            (row) =>
+              row.counterpartyId === draft.counterpartyId &&
+              row.currency === draft.dischargesCurrency,
+          );
+        const type: "income" | "expense" =
+          balance && money.cmp(balance.balance, money.ZERO) < 0 ? "expense" : "income";
+
+        // R2 H3 — the same overwrite `createTransaction` makes below: the
+        // account's own currency, never the draft's, so a stale or
+        // mismatched draft field can never reach the write.
+        const currency = account?.currency ?? draft.currency;
+
         const parsed = settleDebtInput.safeParse({
           id: runtime.id<"transactions">(),
           counterpartyId: draft.counterpartyId,
           accountId: draft.accountId,
           date: draft.date,
           amount: draft.amount,
-          currency: draft.currency,
+          currency,
+          type,
           discharges: { currency: draft.dischargesCurrency, amount: draft.dischargesAmount },
           note: draft.note,
           categoryId: draft.categoryId ?? undefined,

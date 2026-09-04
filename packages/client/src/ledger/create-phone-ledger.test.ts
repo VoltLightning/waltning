@@ -2060,6 +2060,84 @@ describe("phone ledger controller — counterparties and settlement", () => {
     ]);
   });
 
+  /**
+   * R2 H3 — the same overwrite `createTransaction` makes: the account's own
+   * currency reaches the write, never a stale or mismatched draft field.
+   */
+  it("settleDebt: overwrites the draft's currency with the account's own", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: false,
+        },
+      ],
+    });
+
+    controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "EUR", // stale/mismatched — the account is PLN
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect(settleDebt).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "PLN" }),
+      expect.anything(),
+    );
+  });
+
+  /**
+   * R2 H4 — `type` is read from the balance this controller can see right
+   * now and carried on the payload, not left for the executor to derive.
+   */
+  it("settleDebt: carries type, read from the live balance's sign", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listCounterpartyBalances: () => [
+        {
+          counterpartyId: NINA,
+          name: "Nina",
+          kind: "person",
+          settlementCurrency: null,
+          currency: "EUR" as CurrencyCode,
+          decimals: 2,
+          balance: money.toMoney("-70"),
+          ageDays: null,
+          bucket: null,
+        },
+      ],
+    });
+
+    controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "EUR",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect(settleDebt).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "expense" }),
+      expect.anything(),
+    );
+  });
+
   /*
    * H — an executor throw this controller does not recognise must still
    * surface as a form-level `fieldErrors` entry, never rethrown past the

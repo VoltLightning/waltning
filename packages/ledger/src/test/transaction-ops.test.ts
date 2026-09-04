@@ -281,7 +281,11 @@ describe("a crash between the two stores", () => {
       "create_transaction",
       "update_transaction",
     ]);
-    expect(entries[2]?.state).toBe("pending");
+    // R2 H6 — blocked(terminal), not pending: a refusal must never leave a
+    // drainable entry that only resends the same refusal forever.
+    expect(entries[2]?.state).toBe("blocked");
+    expect(entries[2]?.blockedKind).toBe("terminal");
+    expect(entries[2]?.blockedReason).toBe("the replica half failed");
     expect(readTxn()?.payee).toBe(before?.payee);
 
     // The entry survives a relaunch, replayable — nothing was lost, only

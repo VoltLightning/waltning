@@ -243,13 +243,27 @@ export const categoryMappings = pgTable(
  * ------------------------------------------------------------------ */
 
 export const counterparties = pgTable("counterparties", counterpartiesColumns(), (t) => [
-  uniqueIndex("counterparties_name_uq").on(normalized(t.name)),
+  // R2 C1/M3 — indexed on `name_folded` (stored, written by the operation —
+  // see `counterparties.pg.ts`) rather than `normalized(t.name)`: the two
+  // engines now share one normalisation, `fold()`, instead of Postgres
+  // enforcing a stricter rule than the SQLite replica that captures offline
+  // can check. Partial, excluding archived rows, so an old name is free for
+  // reuse once its owner is archived (§9.2 — history stays under the old row).
+  uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
 ]);
 
 /**
  * `merge_counterparties` / `unmerge_counterparties` — S15 §9.2. The record of
  * which transactions moved, so unmerge reverses exactly them rather than
  * re-deriving the set.
+ *
+ * **M2**: `winner <> loser` — the executor's own `mergeCounterpartiesInput`
+ * refine already refuses this, but a CHECK holds regardless of the caller.
+ * **R2 H2**: the partial unique index on an open merge's `loser_id` refuses a
+ * counterparty being absorbed by two merges at once — one half of "a chained
+ * merge reverses into the wrong owner"; the other half (a winner or loser
+ * reappearing on *either* side of an open merge) is the executor's own
+ * pre-check, which this index cannot express alone.
  */
 export const counterpartyMerges = pgTable(
   "counterparty_merges",
@@ -257,6 +271,10 @@ export const counterpartyMerges = pgTable(
   (t) => [
     index("counterparty_merges_winner_idx").on(t.winnerId),
     index("counterparty_merges_loser_idx").on(t.loserId),
+    check("counterparty_merges_winner_ne_loser", sql`${t.winnerId} <> ${t.loserId}`),
+    uniqueIndex("counterparty_merges_loser_open_uq")
+      .on(t.loserId)
+      .where(sql`${t.unmergedAt} is null`),
   ],
 );
 

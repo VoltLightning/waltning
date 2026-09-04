@@ -25,8 +25,8 @@ beforeEach(() => {
   stores.ledger.replica.db
     .insert(counterparties)
     .values([
-      { id: NINA, name: "Nina" },
-      { id: MAREK, name: "Marek" },
+      { id: NINA, name: "Nina", nameFolded: "nina" },
+      { id: MAREK, name: "Marek", nameFolded: "marek" },
     ])
     .run();
 });
@@ -46,7 +46,12 @@ describe("readCounterpartyMerges", () => {
   });
 
   it("names a live merge — the loser's name and how many rows it moved", () => {
-    write(mergeCounterpartiesExecutor, { mergeId: MERGE_ID, winnerId: NINA, loserId: MAREK });
+    write(mergeCounterpartiesExecutor, {
+      mergeId: MERGE_ID,
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds: [],
+    });
 
     const merges = readCounterpartyMerges(stores.ledger.replica.db, NINA);
 
@@ -57,7 +62,12 @@ describe("readCounterpartyMerges", () => {
   });
 
   it("drops a merge once it is undone — S13's overflow has nothing left to offer", () => {
-    write(mergeCounterpartiesExecutor, { mergeId: MERGE_ID, winnerId: NINA, loserId: MAREK });
+    write(mergeCounterpartiesExecutor, {
+      mergeId: MERGE_ID,
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds: [],
+    });
     write(unmergeCounterpartiesExecutor, { mergeId: MERGE_ID });
 
     expect(readCounterpartyMerges(stores.ledger.replica.db, NINA)).toEqual([]);

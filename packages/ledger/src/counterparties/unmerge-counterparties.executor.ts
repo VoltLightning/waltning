@@ -10,11 +10,19 @@
  *
  * A row soft-deleted since the merge is skipped, not restored, and counted
  * as skipped rather than restored — there is nothing live to repoint.
+ *
+ * **A row repointed away from the winner since the merge is also skipped
+ * (R2 H1).** Only a named id still on `winnerId` is repointed —
+ * `eq(counterpartyId, winnerId)` — so a later, deliberate reassignment (a
+ * person moving that one transaction to a third counterparty by hand) is
+ * never overwritten by an unmerge that has nothing to do with it. Counted
+ * among `skipped` alongside the soft-deleted case, for the same reason: there
+ * is nothing on the winner left to take back.
  */
 
 import type { Id } from "@waltning/core/id";
 import { unmergeCounterpartiesInput } from "@waltning/core/registry/inputs";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
@@ -61,24 +69,27 @@ function unmergeCounterparties(
 
   const movedIds = merge.movedTransactionIds;
 
+  // R2 H1 — restores only a named row still on the winner. Anything else
+  // named — soft-deleted, or reassigned to a third counterparty since the
+  // merge — is not repointed, and both cases are counted as `skipped` below
+  // rather than silently overwritten.
   const restored =
     movedIds.length === 0
       ? []
       : tx
           .update(transactions)
           .set({ counterpartyId: merge.loserId })
-          .where(and(inArray(transactions.id, movedIds), isNull(transactions.deletedAt)))
+          .where(
+            and(
+              inArray(transactions.id, movedIds),
+              isNull(transactions.deletedAt),
+              eq(transactions.counterpartyId, merge.winnerId),
+            ),
+          )
           .returning({ id: transactions.id })
           .all();
 
-  const skipped =
-    movedIds.length === 0
-      ? 0
-      : tx
-          .select({ id: transactions.id })
-          .from(transactions)
-          .where(and(inArray(transactions.id, movedIds), isNotNull(transactions.deletedAt)))
-          .all().length;
+  const skipped = movedIds.length - restored.length;
 
   const [unarchivedLoser] = tx
     .update(counterparties)
