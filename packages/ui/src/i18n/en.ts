@@ -25,7 +25,6 @@ export const en = {
     cancel: "Cancel",
     back: "Back",
     save: "Save",
-    edit: "Edit",
     close: "Close",
     name: "Name",
     loading: "Loading…",
@@ -70,6 +69,8 @@ export const en = {
     discard: "Discard",
     discardTitle: "Discard this transaction?",
     discardBody: "It carries an auto-filled account — discarding it is cheap to redo.",
+
+    edit: "Edit",
   },
   accounts: {
     currency: "Currency",
@@ -220,8 +221,6 @@ export const en = {
     addNote: "+ Note",
     /** D4b's chip row, empty — offered only when the ledger holds a counterparty (S05 §5). */
     addPerson: "+ Person",
-    /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
-    newCounterparty: "+ New person or company",
     /** D4b's scope chip label — Mine · Shared · Business, `shell.scope*`'s own words. */
     scope: "Scope",
     /** The scope sheet's own `SegmentControl` — why *Business* is unreachable for a shared account (§6.7). */
@@ -268,73 +267,16 @@ export const en = {
     fee: "Fee",
     /** S31 §6 — same account both sides. `transactions_transfer_distinct`'s own message already reaches the screen through the field error; this is the sheet's own inline caption when nothing has been typed wrong yet. */
     sameAccountRefused: "A transfer needs two different accounts.",
-  },
-  categories: {
-    /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
-    search: "Search {{count}} categories",
-    /** The pinned footer's create affordance. */
-    new: "New",
-    /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */
-    create: 'Create "{{query}}"',
-    /**
-     * The pinned footer's primary, before a leaf is highlighted — the
-     * keyboard path; a tap on the leaf itself is the ordinary one (§7).
-     * `useLeaf` below is the same button once one is.
-     */
-    use: "Use",
-    useLeaf: 'Use "{{name}}"',
-    /** Heading over D2's proposal row. */
-    suggested: "Suggested",
-    /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */
-    lowConfidence: "Low confidence — check before using.",
-    noMatchTitle: "No matching category",
-    noMatchBody: 'Nothing here matches "{{query}}".',
-    /** The create row's group chooser, shown when no group chip narrowed the sheet first. */
-    chooseGroup: "Choose a group",
-    /** S19's archived toggle. */
-    showArchived: "Show archived",
-    /** `Tag` variants over a leaf — usage count, archived, unused. */
-    archived: "Archived",
-    unused: "Unused",
-    usageOne: "{{count}} transaction",
-    usageMany: "{{count}} transactions",
-    /** The trailing `IconButton`'s accessible name — never a bare "more". */
-    actionsFor: "{{name}} actions",
-    /** The actions sheet's five verbs (S19 §3). */
-    rename: "Rename",
-    move: "Move",
-    convertToGroup: "Convert to group",
-    convertToLeaf: "Convert to leaf",
-    merge: "Merge",
-    archive: "Archive",
-    /** The move sheet's target picker. */
-    moveTargetLabel: "Group",
-    moveTargetPlaceholder: "Choose a group",
-    /** The merge sheet's winner picker and preview. */
-    mergeWinnerLabel: "Merge into",
-    mergeWinnerPlaceholder: "Choose a category",
-    mergeRowTransactions: "Transactions",
-    mergeRowLines: "Lines",
-    mergeRowRules: "Rules",
-    /** §7 — stated before commit, not after. */
-    mergeConfirmTitle: "This can't be undone in one step",
-    mergeConfirmBody:
-      "Every transaction, line and rule on “{{loser}}” moves to “{{winner}}”, and “{{loser}}” is archived. Correct a bad merge by running it again with the names swapped.",
-    mergeConfirmAction: "Merge",
-    /** §9.2 — the near-duplicate finder above the tree. */
-    collisionsTitle: "Possibly the same category",
-    collisionsReview: "Review",
+
+    /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
+    newCounterparty: "+ New person or company",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
-
-  /** S12, S13, S15 (E4) — `SPEC.md` §6.6, §6.7. */
   counterparties: {
     /** `SettleSheet`'s title (S14 §3). */
     settlingWith: "Settling with {{name}}",
     /** The balance picker (S14 §9.1). */
     discharges: "Discharges",
-    /** M — every held balance is dust at its own currency's scale (M1's own filter, empty): nothing for Settle to discharge. */
-    nothingToSettle: "Nothing to settle.",
     theyOweYou: "they owe you",
     youOweThem: "you owe them",
     /** A balance row's offline stamp (S14 §6) — the phone's own last write, never today's date. */
@@ -354,6 +296,8 @@ export const en = {
     /** Q11 — prompted, not required. */
     notePrompt: "A note here is what settles a dispute later.",
 
+    /** M — every held balance is dust at its own currency's scale (M1's own filter, empty): nothing for Settle to discharge. */
+    nothingToSettle: "Nothing to settle.",
     /** `DebtDirectionTag` — text, never colour alone (P5). */
     owesYou: "owes you",
     youOwe: "you owe",
@@ -435,6 +379,62 @@ export const en = {
     mergeNoCounterparty: "One of these counterparties could not be found.",
     mergeArchived: "One of these counterparties is already archived.",
     mergeNotFound: "That merge could not be found, or was already undone.",
+  },
+  categories: {
+    /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
+    search: "Search {{count}} categories",
+    /** The pinned footer's create affordance. */
+    new: "New",
+    /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */
+    create: 'Create "{{query}}"',
+    /**
+     * The pinned footer's primary, before a leaf is highlighted — the
+     * keyboard path; a tap on the leaf itself is the ordinary one (§7).
+     * `useLeaf` below is the same button once one is.
+     */
+    use: "Use",
+    useLeaf: 'Use "{{name}}"',
+    /** Heading over D2's proposal row. */
+    suggested: "Suggested",
+    /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */
+    lowConfidence: "Low confidence — check before using.",
+    noMatchTitle: "No matching category",
+    noMatchBody: 'Nothing here matches "{{query}}".',
+    /** The create row's group chooser, shown when no group chip narrowed the sheet first. */
+    chooseGroup: "Choose a group",
+    /** S19's archived toggle. */
+    showArchived: "Show archived",
+    /** `Tag` variants over a leaf — usage count, archived, unused. */
+    archived: "Archived",
+    unused: "Unused",
+    usageOne: "{{count}} transaction",
+    usageMany: "{{count}} transactions",
+    /** The trailing `IconButton`'s accessible name — never a bare "more". */
+    actionsFor: "{{name}} actions",
+    /** The actions sheet's five verbs (S19 §3). */
+    rename: "Rename",
+    move: "Move",
+    convertToGroup: "Convert to group",
+    convertToLeaf: "Convert to leaf",
+    merge: "Merge",
+    archive: "Archive",
+    /** The move sheet's target picker. */
+    moveTargetLabel: "Group",
+    moveTargetPlaceholder: "Choose a group",
+    /** The merge sheet's winner picker and preview. */
+    mergeWinnerLabel: "Merge into",
+    mergeWinnerPlaceholder: "Choose a category",
+    mergeRowTransactions: "Transactions",
+    mergeRowLines: "Lines",
+    mergeRowRules: "Rules",
+    /** §7 — stated before commit, not after. */
+    mergeConfirmTitle: "This can't be undone in one step",
+    mergeConfirmBody:
+      "Every transaction, line and rule on “{{loser}}” moves to “{{winner}}”, and “{{loser}}” is archived. Correct a bad merge by running it again with the names swapped.",
+    mergeConfirmAction: "Merge",
+    /** §9.2 — the near-duplicate finder above the tree. */
+    collisionsTitle: "Possibly the same category",
+    collisionsReview: "Review",
   },
   shell: {
     today: "Today",
@@ -528,15 +528,13 @@ export const en = {
     /** S31's own nav title. */
     transfer: "Transfer",
 
-<<<<<<< HEAD
     currencies: "Currencies",
     rates: "Exchange rates",
-=======
+
     /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
     counterparty: "Counterparty",
     newCounterparty: "New counterparty",
     editCounterparty: "Edit counterparty",
->>>>>>> ae12a67 (Rebase E4 onto main: route parser merged with E5's type, i18n unions, fixtures completed)
   },
   /**
    * `settle_debt`'s refusals (H9), resolved through `useT()` the same way
@@ -547,9 +545,13 @@ export const en = {
   settleDebt: {
     noCounterparty: "This counterparty no longer exists.",
     nothingToSettle: "There is nothing open in this currency to settle.",
-<<<<<<< HEAD
     currencies: "Currencies",
     rates: "Exchange rates",
+
+    /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
+    counterparty: "Counterparty",
+    newCounterparty: "New counterparty",
+    editCounterparty: "Edit counterparty",
   },
   /** `packages/ui/src/fx/` and the two screens it feeds — S17, S18. */
   fx: {
@@ -663,12 +665,6 @@ export const en = {
     clearManual: "Clear manual",
     rateWriteFailed: "That didn't save.",
     rerateNotOffered: "Re-rate from the desk once a server exists.",
-=======
-    /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
-    counterparty: "Counterparty",
-    newCounterparty: "New counterparty",
-    editCounterparty: "Edit counterparty",
->>>>>>> 5c0eabc (WIP E4: filters, isPivot, near-matches/counterpartyNet, first components)
   },
   states: {
     /**

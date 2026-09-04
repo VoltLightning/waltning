@@ -17,6 +17,8 @@ const EMPTY_PAGE = {
 function fakeController(searchTransactions: PhoneLedgerPort["searchTransactions"]) {
   return createPhoneLedger(
     {
+      listCurrencySettings: vi.fn(() => []),
+      updateCurrency: vi.fn(),
       listAccounts: () => [],
       listCurrencies: () => [],
       listGroups: () => [],

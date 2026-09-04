@@ -144,6 +144,8 @@ function fakeController(overrides: {
     mergeCategories: vi.fn(),
     archiveCategory: vi.fn(),
     readCrossRate: vi.fn(() => null),
+    listCounterpartyMerges: vi.fn(() => []),
+    listDistinctCounterpartyPairs: vi.fn(() => []),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

@@ -178,6 +178,8 @@ function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerPort {
     mergeCategories: () => undefined,
     archiveCategory: () => undefined,
     readCrossRate: () => null,
+    listCurrencySettings: vi.fn(() => []),
+    updateCurrency: vi.fn(),
     reset: () => undefined,
     ...overrides,
   };

@@ -135,7 +135,6 @@ function fakeController(
     changePivot: vi.fn(),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
-    updateCurrency: vi.fn(),
     createCounterparty: vi.fn(),
     updateCounterparty: vi.fn(),
     mergeCounterparties: vi.fn(),
@@ -151,12 +150,10 @@ function fakeController(
     convertLeafGroup: vi.fn(),
     mergeCategories: vi.fn(),
     archiveCategory: vi.fn(),
-<<<<<<< HEAD
-    listCurrencySettings: vi.fn(() => []),
-=======
     listCounterpartyMerges: vi.fn(() => []),
     listDistinctCounterpartyPairs: vi.fn(() => []),
->>>>>>> ae12a67 (Rebase E4 onto main: route parser merged with E5's type, i18n unions, fixtures completed)
+    listCurrencySettings: vi.fn(() => []),
+    updateCurrency: vi.fn(),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {
