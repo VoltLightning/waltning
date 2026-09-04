@@ -1,5 +1,5 @@
 /**
- * `name_folded` parity — R2 H1/L1.
+ * `name_folded` parity — R2 H1/L1, R3 M1/L1.
  *
  * `FOLD_SQL` (`schema.ts`) and `fold()` (`@waltning/core/capture/names`) are
  * two implementations of one rule, one per engine, because SQLite has no
@@ -17,6 +17,15 @@
  * against the JS fold of the same input — not against a literal, so a
  * future edit to either side that quietly diverges from the other fails
  * here rather than only in production.
+ *
+ * **R3 M1.** `FOLD_SQL` no longer trims at all — `btrim("name")` only
+ * stripped ASCII space, while `fold()`'s `.trim()` strips every Unicode
+ * `White_Space` character, so a raw insert of a tab- or NBSP-padded name
+ * used to fold differently on each engine. The fix moved trimming out of the
+ * fold and into a CHECK (`counterparties_name_trimmed`) that refuses an
+ * untrimmed `name` outright, so `CASES` below holds only already-trimmed
+ * names — an untrimmed one is exercised separately, as a refusal, in the
+ * describe block below.
  */
 
 import { fold } from "@waltning/core/capture/names";
@@ -62,8 +71,6 @@ const CASES: readonly string[] = [
   "KáROL Wiśniewski",
   // Plain ASCII — the baseline every case above must still agree with.
   "Marek Kowalski",
-  // Leading/trailing whitespace, folded after trimming.
-  "  Ola Nowak  ",
 ];
 
 describe("Postgres's generated name_folded agrees with the phone's fold()", () => {
@@ -89,13 +96,22 @@ describe("Postgres's generated name_folded agrees with the phone's fold()", () =
       INSERT INTO counterparties (name, kind) VALUES (${JOZEF_NFD}, 'person')
       RETURNING id, name_folded`;
 
-    // R2 H1 is exactly this: the fold now agrees across composition forms,
-    // so `counterparties_name_uq` — live, on this same connection, the same
-    // index a real capture goes through — refuses the second spelling as a
-    // collision with the first, the same way it refuses two spellings of a
-    // name that only differ by case. Archiving the first frees its folded
-    // name (the index is partial, `WHERE NOT archived`) so the second
-    // insert's own `name_folded` can be read back and compared directly.
+    // R3 L1 — the collision this test is named for used to be asserted only
+    // in prose ("R2 H1 is exactly this: … refuses the second spelling"), one
+    // paragraph above where the code then archived the first row and moved
+    // on without ever exercising the refusal it describes. This is that
+    // assertion: `counterparties_name_uq` — live, on this same connection,
+    // the same index a real capture goes through — refuses the NFC spelling
+    // as a collision with the NFD one already in place, the same way it
+    // refuses two spellings of a name that only differ by case.
+    await expect(
+      s.sql`INSERT INTO counterparties (name, kind) VALUES (${JOZEF_NFC}, 'person')`,
+    ).rejects.toThrow(/counterparties_name_uq/);
+
+    // Only now does the test work around the refusal it just proved:
+    // archiving the first frees its folded name (the index is partial,
+    // `WHERE NOT archived`) so the second insert's own `name_folded` can be
+    // read back and compared directly.
     await s.sql`UPDATE counterparties SET archived = true WHERE id = ${decomposed?.id as string}`;
 
     const [composed] = await s.sql<{ id: string; name_folded: string }[]>`
@@ -106,5 +122,32 @@ describe("Postgres's generated name_folded agrees with the phone's fold()", () =
     expect(decomposed?.name_folded).toBe(fold(JOZEF_NFC));
 
     await s.sql`DELETE FROM counterparties WHERE id IN (${decomposed?.id as string}, ${composed?.id as string})`;
+  });
+});
+
+/**
+ * R3 M1 — a name that JS `.trim()` would still shorten is refused outright,
+ * never silently folded. `counterparties_name_trimmed` (`schema.ts`) is what
+ * refuses it; `FOLD_SQL` no longer trims at all, so there is nothing for the
+ * fold itself to disagree with `fold()` about.
+ */
+const UNTRIMMED_CASES: readonly [name: string, why: string][] = [
+  // A plain ASCII space, both ends — the case `btrim()` alone did strip, kept
+  // here so the refusal covers the ordinary case too, not only the Unicode
+  // ones below.
+  ["  Ola Nowak  ", "leading and trailing ASCII space"],
+  // R3 M1's own reproduction: `btrim("name")` keeps a trailing tab; `.trim()`
+  // does not.
+  ["Marek\t", "a trailing tab"],
+  // NBSP (U+00A0) — outside `btrim()`'s default charset, inside JS
+  // White_Space.
+  [" Marek", "a leading NBSP"],
+];
+
+describe("Postgres refuses a name JS .trim() would still shorten (R3 M1)", () => {
+  it.each(UNTRIMMED_CASES)("refuses %j (%s)", async (name) => {
+    await expect(
+      s.sql`INSERT INTO counterparties (name, kind) VALUES (${name}, 'person')`,
+    ).rejects.toThrow(/counterparties_name_trimmed/);
   });
 });

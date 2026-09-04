@@ -74,7 +74,7 @@ function convertLeafGroup(input: ConvertLeafGroupInput, tx: ReplicaTx): LocalCat
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("convert_leaf_group: the row changed between read and write");
+    throw new Error("convert_leaf_group: the row changed between read and write");
   }
   return updated;
 }

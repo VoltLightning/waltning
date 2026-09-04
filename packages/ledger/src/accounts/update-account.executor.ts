@@ -75,7 +75,7 @@ function patchAccount(input: UpdateAccountInput, tx: ReplicaTx): LocalAccountRow
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("update_account: the row changed between read and write");
+    throw new Error("update_account: the row changed between read and write");
   }
   return updated;
 }

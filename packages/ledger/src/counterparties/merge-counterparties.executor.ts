@@ -234,7 +234,7 @@ function mergeCounterparties(
     .returning()
     .all();
   if (!archivedLoser) {
-    throw new LocalRefusal("merge_counterparties: the loser row changed between read and write");
+    throw new Error("merge_counterparties: the loser row changed between read and write");
   }
 
   // R2 M1 — distinct-pairs are transitive across a merge. Whoever the loser

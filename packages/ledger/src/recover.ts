@@ -25,7 +25,12 @@
  */
 
 import { and, asc, eq, gt, isNull, ne, or } from "drizzle-orm";
-import type { AnyLocalExecutor, LocalRegistry } from "./executor.ts";
+import {
+  type AnyLocalExecutor,
+  LocalDeferral,
+  LocalRefusal,
+  type LocalRegistry,
+} from "./executor.ts";
 import { advanceAppliedSeq, readAppliedSeq } from "./migrate.ts";
 import type { Ledger, LedgerSchema } from "./open.ts";
 import { outbox } from "./outbox.ts";
@@ -90,14 +95,18 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
   // later entry updates, so replaying out of order applies an update to
   // something that does not exist yet.
   //
-  // R2 M4 — a `refused` entry (`write.ts`'s own catch) is skipped here. Its
-  // `apply` already threw once, on this exact payload; replaying it every
+  // R2 M4 — a `refused` entry (`write.ts`'s own catch, or this function's own
+  // `blockRefusedAt` below, on a *previous* launch — R3 M2) is skipped here.
+  // Its `apply` already threw once, on this exact payload; replaying it every
   // launch would repeat the identical refusal and re-halt everything behind
   // it forever, for a row that was never applied and creates nothing later
   // entries could depend on. A `replay_halted` entry (`recover.ts`'s own
   // `haltAt`) is **not** skipped — it keeps halting replay behind it exactly
   // as before, since it may hold a row a later entry depends on, and an app
-  // update may yet supply the executor that was missing.
+  // update may yet supply the executor that was missing. A `LocalDeferral`
+  // leaves no trace in the outbox at all (R3 H1), so there is nothing here to
+  // filter for it — it is simply outstanding again, every launch, until it
+  // stops throwing.
   const outstanding = ledger.outbox.db
     .select({
       id: outbox.id,
@@ -141,6 +150,32 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
         advanceAppliedSeq(tx, entry.seq);
       });
     } catch (error) {
+      // R3 M2 — mirrors `write.ts`'s own catch, because replay is the same
+      // `apply` call from a different caller and the same three outcomes
+      // apply.
+      //
+      // `LocalRefusal`: the entry's own payload is invalid on any retry —
+      // marked `blocked(refused)` here, same as `write.ts`, so a future
+      // launch's `outstanding` query (above) skips it rather than re-refusing
+      // it and re-halting everything behind it forever, which is what this
+      // finding fixes. Replay continues past it: it never applied, so it
+      // creates nothing later entries could depend on.
+      //
+      // `LocalDeferral`: the missing local state may exist by the *next*
+      // launch, so nothing is marked and nothing is recorded here — the entry
+      // is simply skipped this time, exactly as `write.ts` leaves it
+      // `pending`, and `recoverOnLaunch` retries it again next launch.
+      //
+      // Anything else is the crash-window/impossible-state case `haltAt`
+      // documents, unchanged from before.
+      if (error instanceof LocalRefusal) {
+        blockRefusedAt(ledger, entry, error.message);
+        continue;
+      }
+      if (error instanceof LocalDeferral) {
+        continue;
+      }
+
       // `catch` bindings are `unknown` because the language gives no choice —
       // normalised to a real `Error` right here so `haltAt` below never has
       // to hold one.
@@ -219,4 +254,49 @@ function haltAt<TRun, TSchema extends LedgerSchema>(
     replayed,
     halted: { entryId: entry.id, seq: entry.seq, operation: entry.operation, reason },
   };
+}
+
+/**
+ * Mark an entry `blocked(refused)` after replay's own `apply` call refuses it.
+ *
+ * **R3 M2.** The counterpart to `write.ts`'s identical marking, needed here
+ * for the same reason: without it, the *only* thing that noticed the refusal
+ * is this stack frame, and the next launch would call `apply` on the same
+ * payload again, get the same `LocalRefusal`, and (before this fix) re-halt
+ * every entry behind it — forever, since the refusal is stable across
+ * retries. Marking it here is what lets the `outstanding` query above skip it
+ * on every later launch, same as a refusal from `write.ts` itself.
+ *
+ * Unlike `haltAt`, this does not stop replay and does not return a
+ * `LaunchRecovery` — the caller `continue`s past it in the same loop, because
+ * a refused entry applied nothing and creates no row a later entry could
+ * depend on.
+ */
+function blockRefusedAt<TRun, TSchema extends LedgerSchema>(
+  ledger: Ledger<TRun, TSchema>,
+  entry: { id: string; seq: number; operation: string },
+  reason: string,
+): void {
+  try {
+    ledger.outbox.db
+      .update(outbox)
+      .set({
+        state: "blocked",
+        blockedKind: "terminal",
+        blockedDisposition: "refused",
+        blockedReason: reason,
+      })
+      .where(eq(outbox.id, entry.id))
+      .run();
+  } catch (blockError) {
+    // R2 L1's reasoning, applied here: a failure to *record* the refusal
+    // would leave the entry looking `pending` and sendable, silently, when
+    // replay already knows it refuses. The original refusal travels as
+    // `cause` rather than being swallowed.
+    throw new Error(
+      `recoverOnLaunch: failed to mark ${entry.id} blocked after a replay refusal — ` +
+        (blockError instanceof Error ? blockError.message : String(blockError)),
+      { cause: new Error(reason) },
+    );
+  }
 }

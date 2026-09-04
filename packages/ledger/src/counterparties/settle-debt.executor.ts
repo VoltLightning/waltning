@@ -169,9 +169,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .returning()
     .all();
   if (!stamped) {
-    throw new LocalRefusal(
-      "settle_debt: the row changed between insert and the debt-fields update",
-    );
+    throw new Error("settle_debt: the row changed between insert and the debt-fields update");
   }
 
   const after = balancesForCounterparty(tx, input.counterpartyId).find(

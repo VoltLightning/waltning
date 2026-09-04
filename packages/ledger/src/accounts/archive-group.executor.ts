@@ -65,7 +65,7 @@ function archiveGroup(input: ArchiveGroupInput, tx: ReplicaTx): LocalGroupRow {
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("archive_group: the row changed between read and write");
+    throw new Error("archive_group: the row changed between read and write");
   }
   return updated;
 }

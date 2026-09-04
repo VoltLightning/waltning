@@ -1171,7 +1171,7 @@
           "primaryKey": false,
           "notNull": true,
           "generated": {
-            "as": "lower(translate(normalize(btrim(\"name\"), NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))",
+            "as": "lower(translate(normalize(\"name\", NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))",
             "type": "stored"
           }
         },

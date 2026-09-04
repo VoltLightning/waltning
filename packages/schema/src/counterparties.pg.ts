@@ -21,7 +21,22 @@ import { pgKit as k } from "./kit.ts";
 export const counterpartiesColumns = () => ({
   id: k.id<"counterparties">("id"),
   name: k.text("name").notNull(),
-  /** `fold(name)` — see above. Written by `create_counterparty`/`update_counterparty`, never derived by a query. */
+  /**
+   * `fold(name)` — see above. **This declaration describes the SQLite table
+   * only.** There, it is exactly what it says: app-written, by
+   * `create_counterparty`/`update_counterparty`, never derived by a query —
+   * SQLite has no generated columns.
+   *
+   * **Not true for Postgres, and has not been since R2 H2 (R3 L2).**
+   * `packages/db/src/schema.ts`'s `counterparties` table spreads this shared
+   * column list and then re-declares `nameFolded` itself, as
+   * `GENERATED ALWAYS AS (…) STORED` — a later object key wins over an
+   * earlier one, so that redeclaration silently replaces this plain one for
+   * every Postgres write. This shared `text` column exists at all only for
+   * the two tables' shapes to match; on Postgres nothing ever writes it
+   * directly; see `counterparties.sqlite.ts` for the asymmetry this mirrors
+   * and its own reasoning for why the fold cannot be generated on the phone.
+   */
   nameFolded: k.text("name_folded").notNull(),
   kind: counterpartyKind("kind").notNull().default("person"),
   settlementCurrency: k.currency("settlement_currency").references(() => currencies.code),

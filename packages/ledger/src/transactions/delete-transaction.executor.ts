@@ -73,7 +73,7 @@ function softDeleteTransaction(input: DeleteTransactionInput, tx: ReplicaTx): Lo
     .get();
 
   if (!updated) {
-    throw new LocalRefusal("delete_transaction: the row changed between read and write");
+    throw new Error("delete_transaction: the row changed between read and write");
   }
   return updated;
 }

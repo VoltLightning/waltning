@@ -98,7 +98,7 @@ function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurre
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("archive_currency: the row changed between read and write");
+    throw new Error("archive_currency: the row changed between read and write");
   }
   return updated;
 }

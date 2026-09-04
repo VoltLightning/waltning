@@ -49,7 +49,7 @@ function setPinned(input: SetPinnedInput, tx: ReplicaTx): LocalCurrencyRow {
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("set_pinned: the row changed between read and write");
+    throw new Error("set_pinned: the row changed between read and write");
   }
   return updated;
 }

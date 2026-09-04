@@ -99,7 +99,7 @@ function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCateg
     .returning()
     .all();
   if (!archivedLoser) {
-    throw new LocalRefusal("merge_categories: the loser row changed between read and write");
+    throw new Error("merge_categories: the loser row changed between read and write");
   }
 
   return { loser: archivedLoser, movedTransactions, movedLines, movedRecurring };

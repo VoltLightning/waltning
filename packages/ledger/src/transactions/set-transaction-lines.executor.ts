@@ -108,7 +108,7 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     .get();
 
   if (!updated) {
-    throw new LocalRefusal("set_transaction_lines: the row changed between read and write");
+    throw new Error("set_transaction_lines: the row changed between read and write");
   }
   return updated;
 }

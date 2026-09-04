@@ -67,7 +67,7 @@ function archiveCategory(input: ArchiveCategoryInput, tx: ReplicaTx): LocalCateg
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("archive_category: the row changed between read and write");
+    throw new Error("archive_category: the row changed between read and write");
   }
   return updated;
 }

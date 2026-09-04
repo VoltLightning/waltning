@@ -145,7 +145,7 @@ function unmergeCounterparties(
     .returning()
     .all();
   if (!unarchivedLoser) {
-    throw new LocalRefusal("unmerge_counterparties: the loser row changed between read and write");
+    throw new Error("unmerge_counterparties: the loser row changed between read and write");
   }
 
   const [unmergedRow] = tx
@@ -155,7 +155,7 @@ function unmergeCounterparties(
     .returning()
     .all();
   if (!unmergedRow) {
-    throw new LocalRefusal("unmerge_counterparties: the merge row changed between read and write");
+    throw new Error("unmerge_counterparties: the merge row changed between read and write");
   }
 
   return {

@@ -106,7 +106,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     // Unreachable given the checks above ran inside the same transaction —
     // a throw here rolls the replica half back and leaves the outbox entry
     // standing, which `recover.ts` replays at the next launch.
-    throw new LocalRefusal("update_transaction: the row changed between read and write");
+    throw new Error("update_transaction: the row changed between read and write");
   }
   return updated;
 }

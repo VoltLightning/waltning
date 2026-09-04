@@ -18,7 +18,7 @@ import type Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { defineLocalExecutor, localRegistry } from "../executor.ts";
+import { defineLocalExecutor, LocalDeferral, LocalRefusal, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
 import { recoverOnLaunch } from "../recover.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -33,6 +33,7 @@ let s: ScratchStores;
 
 beforeEach(() => {
   s = scratchStores();
+  deferGate = true;
   s.ledger.replica.db
     .insert(currencies)
     .values({ code: currencyCode("PLN"), name: "Placeholder" })
@@ -74,6 +75,57 @@ const createTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: s
 });
 
 const registry = localRegistry<Tx>([createTransaction]);
+
+/** Always throws `LocalRefusal` — the business-rule case, R3 M2's own test. */
+const refusingTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "refuses",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: (input) => [input.id],
+  apply: () => {
+    throw new LocalRefusal("refuses on every attempt");
+  },
+});
+
+/**
+ * Throws `LocalDeferral` while `deferGate` is `true` — the missing-local-state
+ * case — and applies normally once it flips, standing in for a rate row (or
+ * any other local fact) arriving between two launches. Reset in `beforeEach`
+ * so one test's flip cannot leak into the next.
+ */
+let deferGate = true;
+const deferringTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "defers",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: (input) => [input.id],
+  apply: (input, tx) => {
+    if (deferGate) {
+      throw new LocalDeferral("missing local state, not yet supplied");
+    }
+    const [row] = tx
+      .insert(transactions)
+      .values({
+        id: id<"transactions">(input.id) as Id<"transactions">,
+        date: accountingDate("2026-03-12"),
+        type: "expense",
+        accountId: id<"accounts">("acc-1"),
+        amountOriginal: money.toMoney(input.amount_original),
+        currency: currencyCode("PLN"),
+        fxRate: money.pivotPerUnit("1.000000000000"),
+      })
+      .returning({ id: transactions.id })
+      .all();
+    if (!row) throw new Error("no row returned");
+    return row;
+  },
+});
+
+const registryWithFailures = localRegistry<Tx>([
+  createTransaction,
+  refusingTransaction,
+  deferringTransaction,
+]);
 
 /**
  * The first half of a write, and nothing else.
@@ -313,5 +365,88 @@ describe("a `refused` entry is skipped on later launches", () => {
     expect(second.halted?.seq).toBe(2);
     expect(second.replayed).toEqual([]);
     expect(rows().map((r) => r.id)).toEqual(["txn-1"]);
+  });
+});
+
+/**
+ * R3 M2 — before this fix, a `LocalRefusal` met *during* replay (as opposed
+ * to one already `blocked` from an earlier launch, above) fell into the
+ * generic catch and called `haltAt`: `replay_halted`, and everything behind
+ * it stopped, on every launch, forever — the mirror image of the bug M2
+ * names. Now it is marked `blocked(refused)` in the same step `write.ts`
+ * itself would have, and replay continues.
+ */
+describe("a refusal met during replay is blocked and skipped, not halted (R3 M2)", () => {
+  it("marks it refused, applies the entries behind it, and does not halt", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "refuses");
+    intentOnly(3, "txn-3");
+
+    const recovery = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(recovery.halted).toBeNull();
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+
+    const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(entry2?.state).toBe("blocked");
+    expect(entry2?.blockedKind).toBe("terminal");
+    expect(entry2?.blockedDisposition).toBe("refused");
+    expect(entry2?.blockedReason).toBe("refuses on every attempt");
+  });
+
+  it("is not re-attempted on the next launch, same as a refusal write.ts itself marked", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "refuses");
+    intentOnly(3, "txn-3");
+
+    recoverOnLaunch(s.ledger, registryWithFailures);
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(second.halted).toBeNull();
+    expect(second.replayed).toEqual([]);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+  });
+});
+
+/**
+ * R3 H1/M2 — the counterpart for `LocalDeferral`: skipped without marking
+ * anything, so — unlike a refusal — it is genuinely retried at every launch,
+ * and succeeds the moment whatever local state it was missing arrives.
+ */
+describe("a deferral met during replay is skipped without marking anything (R3 H1/M2)", () => {
+  it("does not halt, applies the entries behind it, and leaves the entry pending", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "defers");
+    intentOnly(3, "txn-3");
+
+    const recovery = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(recovery.halted).toBeNull();
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+
+    const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(entry2?.state).toBe("pending");
+    expect(entry2?.blockedKind).toBeNull();
+    expect(entry2?.blockedDisposition).toBeNull();
+  });
+
+  it("is retried on the next launch, unlike a refusal, and applies once resolved", () => {
+    intentOnly(1, "txn-1", "defers");
+
+    const first = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(first.halted).toBeNull();
+    expect(first.replayed).toEqual([]);
+    expect(rows()).toHaveLength(0);
+
+    // Whatever local state `apply` was missing has arrived by the next launch
+    // — a fresh rate row, say. Nothing about the entry itself changed; only
+    // what the executor can now do with it.
+    deferGate = false;
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(second.halted).toBeNull();
+    expect(second.replayed).toHaveLength(1);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1"]);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(1);
   });
 });

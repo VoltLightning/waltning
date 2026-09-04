@@ -89,7 +89,7 @@ function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrency
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("update_currency: the row changed between read and write");
+    throw new Error("update_currency: the row changed between read and write");
   }
   return updated;
 }

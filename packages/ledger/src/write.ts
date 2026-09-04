@@ -120,7 +120,24 @@ export type LocalWrite<Input extends z.ZodTypeAny, Row, Tx> = {
 
   capture: Capture;
 
-  /** Operational evidence only; it never receives the input or payload. */
+  /**
+   * Operational evidence, local to this device.
+   *
+   * **R3 M4.** This never receives the raw `input` or `payload` object — every
+   * event above is a fixed shape of scope/phase/boundary/operation/seq, plus,
+   * on failure, `describeLedgerError(error)`. That last part is not silence
+   * about the write's content: a `LocalRefusal`'s `message` is built *from*
+   * the input it refused (a name, an id, a balance — see any
+   * `*.executor.ts`), and `describeDiagnosticError` (`packages/core`) keeps a
+   * caught error's `message` verbatim. So a refusal's diagnostic event carries
+   * whatever that refusal's text names. That is deliberate, not a leak to fix:
+   * the message is the same user-facing refusal text a client maps to UI
+   * copy, and redacting it here would make the sink disagree with what the
+   * person who triggered it was shown. What stays true is narrower than the
+   * old claim: this sink is a local callback the caller supplies — nothing in
+   * this module sends it anywhere — so whatever it does receive stays on the
+   * device unless the caller's own sink chooses to forward it.
+   */
   diagnostics?: LedgerDiagnostics;
 };
 
@@ -270,6 +287,14 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
     // (`recover.ts`'s own halt): this write's own `apply` rejected it, so it
     // will refuse identically on any retry or on a server. `outbox.ts`
     // documents the distinction `recover.ts`'s `outstanding` query reads.
+    //
+    // R3 H1 — `LocalDeferral` is deliberately **not** matched below and falls
+    // through to the plain rethrow at the bottom of this catch, same as any
+    // other non-`LocalRefusal` throw: the entry stays exactly as the outbox
+    // commit left it — `pending`, no `blockedDisposition` — because the
+    // missing local state a deferral names (no pivot, no last-known rate) is
+    // not a fact about this input that a retry would repeat. `recover.ts`
+    // retries it at every launch until that state arrives.
     if (error instanceof LocalRefusal) {
       const reason = error.message;
       try {

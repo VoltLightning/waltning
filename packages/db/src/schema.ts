@@ -243,6 +243,29 @@ export const categoryMappings = pgTable(
  * ------------------------------------------------------------------ */
 
 /**
+ * The Unicode whitespace set JS's `String.prototype.trim()` strips, as a
+ * `btrim()` character argument.
+ *
+ * **R3 M1.** `btrim("name")` with no explicit charset trims ASCII space only
+ * — confirmed on Postgres 16, `btrim(E'Name\t')` keeps the tab. JS `.trim()`
+ * drops it, along with NBSP and every other Unicode `White_Space` character.
+ * A raw insert of a tab- or NBSP-padded name therefore used to fold
+ * differently on the two engines even though the app path is already safe
+ * (`z.string().trim()` on every name-bearing input). `FOLD_SQL` below no
+ * longer calls `btrim` at all — trimming an untrimmed name would still let it
+ * *through*, silently disagreeing with `fold()`'s stricter idea of trimmed,
+ * so the `counterparties_name_trimmed` CHECK this constant also builds
+ * refuses an untrimmed name outright instead. ASCII space/tab/newline/
+ * vertical-tab/form-feed are the `E'…'` half; everything else JS treats as
+ * whitespace — NBSP, the Unicode space separators, the line/paragraph
+ * separators, and the BOM — is the `U&'…'` half, `\XXXX` being Postgres's
+ * four-hex-digit Unicode string escape.
+ */
+const JS_TRIM_CHARSET_SQL =
+  `E' \\t\\n\\r\\v\\f' || U&'\\00A0\\1680\\2000\\2001\\2002\\2003` +
+  `\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000\\FEFF'`;
+
+/**
  * `name_folded`'s Postgres-only fold, reused by the migration's collision
  * pre-check (R2 M2) as well as this column's own `GENERATED ALWAYS AS`.
  * Kept as one string, not retyped in two places: the migration is
@@ -259,12 +282,32 @@ export const categoryMappings = pgTable(
  * `translate()`/`btrim()` under this database's collation
  * (`docker-compose.yml`'s `--icu-locale=und-x-icu`) — checked directly
  * against a live instance before committing to this over a trigger.
+ *
+ * **No `btrim(…)` around `"name"` (R3 M1).** It used to open with
+ * `btrim("name")`, which only strips ASCII space and so silently disagreed
+ * with `fold()`'s full-Unicode-whitespace `.trim()` on a tab- or
+ * NBSP-padded name. Folding an untrimmed name — with whatever charset —
+ * would still be *a* fold, just not the one the phone computed for the
+ * identical input, and the two would keep disagreeing for some future
+ * whitespace character neither list happens to name. So this fold no
+ * longer trims at all: `counterparties_name_trimmed` below refuses an
+ * untrimmed `name` before this expression ever runs on it, and every row
+ * this function does see is already the trimmed string `fold()` folds too.
  */
-export const FOLD_SQL = `lower(translate(normalize(btrim("name"), NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))`;
+export const FOLD_SQL = `lower(translate(normalize("name", NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))`;
 
 export const counterparties = pgTable(
   "counterparties",
   {
+    // R3 L2 — `nameFolded` below **must follow** this spread, not precede it:
+    // `counterpartiesColumns()` (`packages/schema/src/counterparties.pg.ts`)
+    // already declares a plain, app-written `nameFolded`, for parity with the
+    // SQLite table that has no generated columns to declare instead. Object
+    // literals resolve a repeated key to its *last* occurrence, so the
+    // `generatedAlwaysAs` column below silently replaces the shared plain one
+    // — correctly, but only because of where it sits in this list. Swapping
+    // the two would compile and would build a `counterparties` table whose
+    // `name_folded` is the app-written kind Postgres does not need.
     ...counterpartiesColumns(),
     /**
      * `GENERATED ALWAYS AS (…) STORED`, not app-written (R2 H2).
@@ -291,6 +334,15 @@ export const counterparties = pgTable(
     // old name is free for reuse once its owner is archived (§9.2 —
     // history stays under the old row).
     uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
+    // R3 M1 — the engine half of the fix, alongside `FOLD_SQL` dropping
+    // `btrim`: a `name` that is not already trimmed to JS `.trim()`'s exact
+    // definition of trimmed is refused here, outright, rather than folded
+    // under some charset that quietly disagrees with `fold()`. See
+    // `JS_TRIM_CHARSET_SQL` above for what "trimmed" means.
+    check(
+      "counterparties_name_trimmed",
+      sql`${t.name} = btrim(${t.name}, ${sql.raw(JS_TRIM_CHARSET_SQL)})`,
+    ),
   ],
 );
 

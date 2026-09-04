@@ -95,7 +95,7 @@ function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTra
     .returning()
     .all();
   if (!updatedAccount) {
-    throw new LocalRefusal("reconcile_account: the account row changed between read and write");
+    throw new Error("reconcile_account: the account row changed between read and write");
   }
 
   return adjustmentRow;

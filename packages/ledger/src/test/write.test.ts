@@ -22,7 +22,7 @@ import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { defineLocalExecutor, LocalRefusal, localRegistry } from "../executor.ts";
+import { defineLocalExecutor, LocalDeferral, LocalRefusal, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { type Capture, type LocalTx, writeLocally } from "../write.ts";
@@ -144,7 +144,28 @@ const crashes = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, T
   },
 });
 
-const registry = localRegistry<Tx>([createTransaction, createCounterparty, refuses, crashes]);
+/**
+ * An executor whose `apply` throws `LocalDeferral` — R3 H1: local state is
+ * missing, not a business rule violated, so the entry it queued must be left
+ * exactly as `crashes`' plain `Error` leaves it, never marked `blocked`.
+ */
+const defers = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "defers",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: () => [],
+  apply: () => {
+    throw new LocalDeferral("missing local state, not yet supplied");
+  },
+});
+
+const registry = localRegistry<Tx>([
+  createTransaction,
+  createCounterparty,
+  refuses,
+  crashes,
+  defers,
+]);
 
 const capture: Capture = { timeZone: "Europe/Warsaw", offsetMinutes: 60 };
 
@@ -304,6 +325,30 @@ describe("a failure between the two commits keeps the intent", () => {
     expect(() =>
       writeLocally(s.ledger, { executor: crashes, registry, input: input("txn-1"), capture }),
     ).toThrow("the driver went away");
+
+    expect(entries()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
+    expect(entry?.blockedKind).toBeNull();
+    expect(entry?.blockedDisposition).toBeNull();
+  });
+
+  /**
+   * R3 H1 — a `LocalDeferral` takes the same branch as a plain `Error` here
+   * (both fall through the `instanceof LocalRefusal` check), but for a
+   * different reason worth its own test: this one is a *named*, expected
+   * outcome — missing local state, not a driver failure — and it must stay
+   * retryable for exactly the same reason. Marking it `blocked` would tell
+   * `recover.ts` never to look at it again, which is the R2-era bug this
+   * class exists to avoid repeating.
+   */
+  it("leaves the entry pending — not blocked — when apply defers", () => {
+    expect(() =>
+      writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+    ).toThrow("missing local state, not yet supplied");
 
     expect(entries()).toHaveLength(1);
     expect(rows()).toHaveLength(0);

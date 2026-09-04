@@ -143,7 +143,7 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("update_counterparty: the row changed between read and write");
+    throw new Error("update_counterparty: the row changed between read and write");
   }
   return updated;
 }

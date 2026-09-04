@@ -2,6 +2,10 @@
 -- `name_folded` (case-fold plus the nine Polish diacritics), the same
 -- normalisation the SQLite replica now indexes.
 --
+-- R3 M1 adds one more piece before that: a CHECK that "name" is already
+-- trimmed by JS `.trim()`'s definition of trimmed, not `btrim()`'s narrower
+-- one — see the comment on that ALTER TABLE below.
+--
 -- `GENERATED ALWAYS AS (…) STORED`, not app-written and backfilled (R2 H2):
 -- a plain column here relied on every writer remembering to set it, and a
 -- raw insert that skipped it — or supplied a stale one — wrote straight past
@@ -19,7 +23,25 @@
 -- `@waltning/core/capture/names`'s `fold()` — which normalises to NFC before
 -- anything else — refuses the identical name on the phone. `normalize()` has
 -- been IMMUTABLE on `text` since Postgres 13.
-ALTER TABLE "counterparties" ADD COLUMN "name_folded" text GENERATED ALWAYS AS (lower(translate(normalize(btrim("name"), NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))) STORED NOT NULL;--> statement-breakpoint
+--
+-- R3 M1 — no `btrim(…)` around "name": plain `btrim("name")` strips ASCII
+-- space only (confirmed on Postgres 16 — a trailing tab survives it), while
+-- JS `.trim()`, which `fold()` runs through, drops every Unicode
+-- White_Space character. A raw insert of a tab- or NBSP-padded name used to
+-- fold differently on the two engines. Rather than widen this expression's
+-- charset to match — leaving it one future whitespace character away from
+-- disagreeing again — the CHECK just below refuses an untrimmed "name"
+-- outright, so nothing reaches this expression already wrong.
+ALTER TABLE "counterparties" ADD COLUMN "name_folded" text GENERATED ALWAYS AS (lower(translate(normalize("name", NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))) STORED NOT NULL;--> statement-breakpoint
+-- R3 M1 — the charset is exactly what JS `String.prototype.trim()` treats as
+-- whitespace: ASCII space/tab/LF/CR/VT/FF (the `E'…'` half) plus NBSP, the
+-- Unicode space separators, the line/paragraph separators and the BOM (the
+-- `U&'…'` half, `\XXXX` being Postgres's four-hex-digit Unicode string
+-- escape) — `schema.ts`'s `JS_TRIM_CHARSET_SQL` names the same set, and this
+-- text must stay byte-identical to it. A name a phone would have `.trim()`ed
+-- before ever reaching `fold()` is refused here rather than silently folded
+-- under `btrim`'s narrower idea of trimmed.
+ALTER TABLE "counterparties" ADD CONSTRAINT "counterparties_name_trimmed" CHECK ("name" = btrim("name", E' \t\n\r\v\f' || U&'\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF'));--> statement-breakpoint
 DROP INDEX "counterparties_name_uq";--> statement-breakpoint
 -- R2 M2 — without this, two counterparties that already fold to the same
 -- value abort the `CREATE UNIQUE INDEX` below with a bare "could not create

@@ -91,9 +91,7 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
     .returning()
     .get();
   if (!deleted) {
-    throw new LocalRefusal(
-      "supersede_transaction: the superseded row changed between read and write",
-    );
+    throw new Error("supersede_transaction: the superseded row changed between read and write");
   }
 
   return insertTransaction(input.replacement, tx);

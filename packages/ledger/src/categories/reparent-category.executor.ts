@@ -85,7 +85,7 @@ function reparentCategory(input: ReparentCategoryInput, tx: ReplicaTx): LocalCat
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("reparent_category: the row changed between read and write");
+    throw new Error("reparent_category: the row changed between read and write");
   }
   return updated;
 }

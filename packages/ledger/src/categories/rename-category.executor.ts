@@ -55,7 +55,7 @@ function renameCategory(input: RenameCategoryInput, tx: ReplicaTx): LocalCategor
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("rename_category: the row changed between read and write");
+    throw new Error("rename_category: the row changed between read and write");
   }
   return updated;
 }

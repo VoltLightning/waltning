@@ -193,7 +193,7 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
 
   const [updated] = tx.select().from(currencies).where(eq(currencies.code, newPivot.code)).all();
   if (!updated) {
-    throw new LocalRefusal("change_pivot: the new pivot's row vanished mid-write");
+    throw new Error("change_pivot: the new pivot's row vanished mid-write");
   }
   return updated;
 }

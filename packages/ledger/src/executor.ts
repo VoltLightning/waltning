@@ -38,9 +38,52 @@ import type { z } from "zod";
  * plain `Error` for everything else: a return value the driver should never
  * produce, a constraint that should already be impossible. `write.ts`
  * narrows on `instanceof LocalRefusal` to decide which.
+ *
+ * **R3 M3 — three shapes stay plain `Error`, never `LocalRefusal`, because none
+ * of them is reachable with a conforming driver:** the driver returning nothing
+ * from an `insert` (seven call sites: "insert returned no row"), a row that
+ * "changed between read and write" after its own version already matched on
+ * read (the compare-and-swap update or delete finds zero rows despite running
+ * inside the same synchronous SQLite transaction that just confirmed the
+ * version, so nothing else could have raced it), and a constraint that should
+ * already be impossible given the checks above it. A `LocalRefusal` right
+ * beside one of these — the stale-version check itself, say — is the real,
+ * reachable business case; only the *second*, post-write check of the same row
+ * is the impossible one. See `write.ts`'s catch for what the distinction
+ * buys: a business refusal blocks the entry forever, so misclassifying an
+ * impossible branch as one would drop a capture that a fixed driver could
+ * still apply.
  */
 export class LocalRefusal extends Error {
   override readonly name = "LocalRefusal";
+}
+
+/**
+ * A deferral — the replica cannot apply this write yet, but a later launch or
+ * a server can; the entry stays pending.
+ *
+ * **R3 H1.** `create_transaction`'s two no-rate branches (no pivot currency in
+ * the replica; no last-known rate for the pair) were `LocalRefusal` through
+ * round 3, which `write.ts` marks `blocked(refused)` — and `recover.ts`'s
+ * `outstanding` query skips a `refused` entry forever, so the drain never
+ * sends it either. That silently drops a capture the operation's own doc
+ * comment says survives: *"the throw is not a lost capture … the capture
+ * still drains to a server that can resolve the rate"* — and it contradicts
+ * `architecture/08` §5's "never drop".
+ *
+ * The distinction from `LocalRefusal` is retryability, not severity: a
+ * refusal is wrong on every retry with the same input, because the business
+ * rule it names does not change. A deferral is right on a later retry with
+ * the *identical* input, because what is missing is local state — a pivot, a
+ * rate row — that a later sync or a fresh launch can supply without the
+ * caller doing anything differently. `write.ts` leaves the entry exactly as
+ * the outbox commit left it (`pending`, no `blockedDisposition`) rather than
+ * blocking it, and `recover.ts` skips it on replay without halting anything
+ * behind it, so it is retried at every launch until the missing state
+ * arrives.
+ */
+export class LocalDeferral extends Error {
+  override readonly name = "LocalDeferral";
 }
 
 /**

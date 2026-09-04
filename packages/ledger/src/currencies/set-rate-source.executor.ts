@@ -55,7 +55,7 @@ function setRateSource(input: SetRateSourceInput, tx: ReplicaTx): LocalCurrencyR
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("set_rate_source: the row changed between read and write");
+    throw new Error("set_rate_source: the row changed between read and write");
   }
   return updated;
 }

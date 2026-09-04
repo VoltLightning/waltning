@@ -56,7 +56,7 @@ function archiveAccount(input: ArchiveAccountInput, tx: ReplicaTx): LocalAccount
     .all();
 
   if (!updated) {
-    throw new LocalRefusal("archive_account: the row changed between read and write");
+    throw new Error("archive_account: the row changed between read and write");
   }
   return updated;
 }
