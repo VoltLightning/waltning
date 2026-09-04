@@ -24,17 +24,21 @@
  *
  * **The motion, named: each dot lifts and settles**, `translateY` 0 → −3 →
  * 0 with opacity 0.45 → 1 → 0.45, `Easing.inOut(Easing.quad)`-shaped — the
- * classic Messenger/iMessage wave. Dot 2 lags dot 1 by a sixth of the cycle,
- * dot 3 by two sixths, so the wave always reads 1 → 2 → 3, left to right,
- * never backwards. Each dot's own rise-and-fall window is *wider* than that
- * sixth-of-a-cycle stagger — wide enough that adjacent dots' windows overlap
- * all the way around the loop — so at no instant is every dot at rest
- * together: the row never goes flat, and nothing cuts.
+ * classic Messenger/iMessage wave. Dot *i* sits at phase `i / 3` of the
+ * cycle — equal thirds, a true circular 1 → 2 → 3 with no dot favoured — so
+ * the wave always reads left to right, never backwards. Each dot's own
+ * rise-and-fall window (half-width 0.4) is wider than the third-of-a-cycle
+ * spacing between dots, so adjacent dots' windows overlap all the way around
+ * the loop and at no instant are all three at rest together: the row never
+ * goes flat, and nothing cuts.
  *
- * `envelope` is the shared shape: a dot's own window is `[phase −
- * HALF_WIDTH, phase, phase + HALF_WIDTH]`, evaluated at `t`, `t − 1` and
- * `t + 1` and the max taken, so a window that straddles the 0/1 loop point
- * (dot 1's own) reads continuously across it rather than jumping. §2.7
+ * `envelope` is the shared shape, plain arithmetic with no Reanimated
+ * `interpolate` in it (that call is a no-op in this package's test
+ * environment, so a function the tests must exercise for real cannot depend
+ * on it): a dot's own window is a triangle centred on `phase`, ±`HALF_WIDTH`,
+ * mapped through `Easing.inOut(Easing.quad)`. It is evaluated at `t`, `t − 1`
+ * and `t + 1` and the max taken, so a window that straddles the 0/1 loop
+ * point (dot 1's own) reads continuously across it rather than jumping. §2.7
  * permits a loop only for *loading*, which this is; every other animation in
  * the package plays once. The dots are `radius.pill` — the fourth circular
  * exception `02-tokens.md` §2.4 now names, beside the radio, the switch and
@@ -52,7 +56,6 @@ import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, {
   Easing,
-  Extrapolation,
   interpolate,
   type SharedValue,
   useAnimatedStyle,
@@ -90,39 +93,45 @@ const LIFT = 3;
 /** A resting dot's opacity — never fully dark, so the row always reads as three dots, not a gap. */
 const MIN_OPACITY = 0.45;
 /**
- * Dot *i*'s phase within the cycle, a sixth apart — 0, 1/6, 2/6 — so the
- * wave always reads 1 → 2 → 3 and never two dots peak together.
+ * Dot *i*'s phase within the cycle, equal thirds apart — 0, 1/3, 2/3 — a true
+ * circular 1 → 2 → 3 with no dot favoured over another.
  */
-const DOT_PHASES = [0, 1 / 6, 2 / 6] as const;
+const DOT_PHASES = [0, 1 / 3, 2 / 3] as const;
 /**
  * Half the width of one dot's own rise-and-fall window — wider than the
- * sixth-of-a-cycle stagger between dots, so consecutive dots' windows
+ * third-of-a-cycle stagger between dots, so consecutive dots' windows
  * overlap all the way around the loop and the row is never simultaneously
  * at rest.
  */
-const HALF_WIDTH = 1 / 3;
+const HALF_WIDTH = 0.4;
 
 const liftEasing = Easing.inOut(Easing.quad);
+
+/**
+ * A linear triangle centred on `phase`: 1 at `phase`, falling to 0 at
+ * `phase ± HALF_WIDTH`, 0 beyond it. Plain arithmetic, deliberately not
+ * Reanimated's `interpolate` — that call is a no-op in this package's test
+ * stand-in, so a shape the tests must exercise for real cannot be built from
+ * it.
+ */
+function triangle(t: number, phase: number): number {
+  "worklet";
+  const distance = Math.abs(t - phase) / HALF_WIDTH;
+  return distance >= 1 ? 0 : 1 - distance;
+}
 
 /**
  * Dot at `phase`'s lift-and-settle envelope at clock position `t` (0..1) —
  * 0 at rest, 1 at the peak of its own rise, `Easing.inOut(Easing.quad)`-shaped
  * rather than a linear tent.
  *
- * The three-point window `[phase − HALF_WIDTH, phase, phase + HALF_WIDTH]`
- * maps to `[0, 1, 0]`; evaluating it at `t`, `t − 1` and `t + 1` and taking
- * the max is what lets a window straddle the loop's 0/1 seam — dot 1's own,
+ * `triangle` is evaluated at `t`, `t − 1` and `t + 1` and the max taken,
+ * which is what lets a window straddle the loop's 0/1 seam — dot 1's own,
  * whose window runs from before 0 to after it — without a discontinuity.
  */
-function envelope(t: number, phase: number): number {
+export function envelope(t: number, phase: number): number {
   "worklet";
-  const points = [phase - HALF_WIDTH, phase, phase + HALF_WIDTH];
-  const output = [0, 1, 0];
-  const raw = Math.max(
-    interpolate(t, points, output, Extrapolation.CLAMP),
-    interpolate(t - 1, points, output, Extrapolation.CLAMP),
-    interpolate(t + 1, points, output, Extrapolation.CLAMP),
-  );
+  const raw = Math.max(triangle(t, phase), triangle(t - 1, phase), triangle(t + 1, phase));
   return liftEasing(raw);
 }
 

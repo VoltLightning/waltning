@@ -37,7 +37,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { type AccessibilityActionEvent, type LayoutChangeEvent, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle } from "react-native-reanimated";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { useInteraction } from "../primitives/interaction.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
@@ -127,12 +127,24 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
   const { focused, handlers } = useInteraction();
   const press = usePressScale();
   const [trackWidth, setTrackWidth] = useState(0);
-
-  const onLayout = useCallback((event: LayoutChangeEvent) => {
-    setTrackWidth(event.nativeEvent.layout.width);
-  }, []);
-
   const usable = Math.max(0, trackWidth - THUMB);
+  // Mirrors `usable` for the worklets below. A resize or a keyboard-driven
+  // reflow mid-drag updates this shared value directly rather than going
+  // through `pan`'s own `useMemo` deps — the gesture is built once for the
+  // component's life (see the note on `pan` itself), so anything a worklet
+  // needs that can change after mount has to arrive this way, not as a
+  // closed-over JS variable.
+  const usableShared = useSharedValue(usable);
+
+  const onLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const width = event.nativeEvent.layout.width;
+      setTrackWidth(width);
+      usableShared.value = Math.max(0, width - THUMB);
+    },
+    [usableShared],
+  );
+
   const clamped = clamp(value);
 
   /**
@@ -147,10 +159,24 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
    * web that drops the pointer capture mid-drag: the first frame moves the
    * thumb and every frame after is silently lost — the owner's *"can't move
    * it"*. `press.onPressIn`/`onPressOut` get the same treatment for the same
-   * reason, rather than trusting `usePressScale`'s own memoization to hold:
-   * `pan`'s identity must depend only on what actually changing it should
-   * rebuild the gesture for — an actual layout change (`usable`) or a11y
-   * setting (`reduced`) — and nothing else.
+   * reason, rather than trusting `usePressScale`'s own memoization to hold.
+   *
+   * `usable` gets the same treatment as `value`/`onChange`, but through a
+   * shared value (`usableShared`) rather than a ref, since the worklets
+   * below read it on the UI thread: a resize or a keyboard-driven reflow
+   * mid-drag used to rebuild `pan` (`usable` was a dep) and drop pointer
+   * capture exactly like a `value` change would — the row goes unresponsive
+   * mid-gesture even though nothing about the *drag itself* changed. `pan`'s
+   * identity now depends only on `reduced`, an a11y setting that changes
+   * rarely and never mid-drag.
+   *
+   * `usableShared` itself is deliberately **not** a `pan` dep either — a
+   * shared value is a ref by contract, stable for the component's life, so
+   * putting it in a dependency array asks React to compare it against
+   * itself. It would still do nothing on real Reanimated, but this
+   * package's jsdom stand-in (`.vitest/reanimated.ts`) hands back a fresh
+   * object from `useSharedValue` on every render, so depending on it there
+   * rebuilds `pan` on every render — the exact bug this fix removes.
    */
   const clampedRef = useRef(clamped);
   clampedRef.current = clamped;
@@ -168,10 +194,17 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
   const handlePressIn = useCallback(() => pressInRef.current(), []);
   const handlePressOut = useCallback(() => pressOutRef.current(), []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: usableShared is a shared value, read live inside the worklets via `.value` — it is never stale, and it is deliberately not a dep (see the note above `clampedRef`).
   const pan = useMemo(() => {
     return (
       Gesture.Pan()
-        .enabled(usable > 0)
+        // Not gated on `usable > 0`: that would freeze the row disabled
+        // forever if it mounts before the first `onLayout` measurement,
+        // since this gesture is now built once and never rebuilt for a
+        // layout change. `offsetToValue` already falls back to the floor
+        // when `usableShared.value` is 0, which only a touch in that
+        // unmeasured instant could ever reach.
+        //
         // Zero minimum distance: this row *is* the "choose a value" gesture,
         // so a plain tap-and-release has to set it on its own, not only a drag
         // past some slop.
@@ -179,18 +212,18 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
         .onStart((event) => {
           "worklet";
           if (!reduced) runOnJS(handlePressIn)();
-          runOnJS(handleChange)(offsetToValue(event.x, usable));
+          runOnJS(handleChange)(offsetToValue(event.x, usableShared.value));
         })
         .onUpdate((event) => {
           "worklet";
-          runOnJS(handleChange)(offsetToValue(event.x, usable));
+          runOnJS(handleChange)(offsetToValue(event.x, usableShared.value));
         })
         .onEnd(() => {
           "worklet";
           if (!reduced) runOnJS(handlePressOut)();
         })
     );
-  }, [usable, reduced, handleChange, handlePressIn, handlePressOut]);
+  }, [reduced, handleChange, handlePressIn, handlePressOut]);
 
   const positionStyle = useAnimatedStyle(
     () => ({ left: fraction(value) * usable }),
