@@ -463,8 +463,9 @@ export const en = {
     "matchWarning.same": "This is the same one",
     "matchWarning.different": "These are different",
     "matchWarning.transactionCount": "Transactions: {{count}}",
-    /** §8.5 — the phase with no output yet. */
-    "thinking.thinking": "Thinking…",
+    /** §8.5 — the phase with no output yet. The three animated dots beside it
+     * are the ellipsis; the label carries none of its own. */
+    "thinking.thinking": "Thinking",
     /** §8.5 — after 20 s, explicit rather than a silent spinner. */
     "thinking.stillWorking": "Still working",
     threshold: "Confidence threshold",

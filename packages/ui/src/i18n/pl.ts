@@ -295,7 +295,7 @@ export const pl: Messages = {
     "matchWarning.same": "To ta sama osoba",
     "matchWarning.different": "To różne osoby",
     "matchWarning.transactionCount": "Transakcje: {{count}}",
-    "thinking.thinking": "Myślę…",
+    "thinking.thinking": "Myślę",
     "thinking.stillWorking": "Wciąż pracuję",
     threshold: "Próg pewności",
     "rule.healthy": "Sprawna",

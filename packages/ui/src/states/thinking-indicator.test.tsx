@@ -6,12 +6,12 @@ import { ThinkingIndicator } from "./thinking-indicator";
 describe("ThinkingIndicator", () => {
   it("shows no elapsed timer before 2 s", () => {
     render(<ThinkingIndicator phase="thinking" elapsedMs={500} onCancel={vi.fn()} />);
-    expect(screen.getByText("Thinking…")).toBeDefined();
+    expect(screen.getByText("Thinking")).toBeDefined();
   });
 
   it("shows the elapsed timer once 2 s have passed", () => {
     render(<ThinkingIndicator phase="thinking" elapsedMs={3_000} onCancel={vi.fn()} />);
-    expect(screen.getByText("Thinking… · 3s")).toBeDefined();
+    expect(screen.getByText("Thinking · 3s")).toBeDefined();
   });
 
   it("names the tool while one runs", () => {

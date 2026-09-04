@@ -62,6 +62,12 @@ const TICK_TOP = TRACK_TOP + TRACK_HEIGHT + 2;
 /** The caption line (16) plus its `xxs` vertical padding on both sides. */
 const BADGE_HEIGHT = 20;
 const BADGE_GAP = space.xs;
+/**
+ * Fixed rather than intrinsic: the value is always `0.XX` (`tabularNums`),
+ * so one width covers the floor, the ceiling and everything between, and
+ * that same number drives `badgeLeft`'s clamp below.
+ */
+export const BADGE_WIDTH = 40;
 
 /**
  * Every 0.10 from the floor — 0.50, 0.60 … 0.90 — hardcoded rather than
@@ -98,6 +104,20 @@ export function offsetToValue(offsetX: number, usable: number): number {
   if (usable <= 0) return THRESHOLD_MIN;
   const adjusted = Math.min(usable, Math.max(0, offsetX - THUMB / 2));
   return clamp(THRESHOLD_MIN + (adjusted / usable) * (THRESHOLD_MAX - THRESHOLD_MIN));
+}
+
+/**
+ * The badge's own `left` — centred on the thumb everywhere except the two
+ * ends, where that centring would run it off the track: at the floor
+ * (`0.50`) the thumb's own centre is inside `BADGE_WIDTH / 2` of the left
+ * edge, and at the ceiling (`0.99`) the same is true of the right edge.
+ * Clamped into `[0, trackWidth - BADGE_WIDTH]` instead.
+ */
+export function badgeLeft(value: number, usable: number): number {
+  const trackWidth = usable + THUMB;
+  const thumbCenter = fraction(value) * usable + THUMB / 2;
+  const max = Math.max(0, trackWidth - BADGE_WIDTH);
+  return Math.min(max, Math.max(0, thumbCenter - BADGE_WIDTH / 2));
 }
 
 export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
@@ -155,6 +175,7 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
     () => ({ width: fraction(value) * usable + THUMB / 2 }),
     [value, usable],
   );
+  const badgeStyle = useAnimatedStyle(() => ({ left: badgeLeft(value, usable) }), [value, usable]);
 
   // Built here, not as an object literal in the JSX below (`dock.tsx`'s own
   // `clearance` precedent) — each tick's `left` is per-render arithmetic, not
@@ -246,7 +267,7 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
             <View key={tick.value} style={[styles.tick, tick.style]} />
           ))}
           <Animated.View style={[styles.thumb, positionStyle, reduced ? null : press.style]} />
-          <Animated.View style={[styles.badge, positionStyle]}>
+          <Animated.View style={[styles.badge, badgeStyle]}>
             <View style={styles.badgeInner}>
               <Text style={styles.badgeText}>{clamped.toFixed(2)}</Text>
             </View>
@@ -310,7 +331,7 @@ const useStyles = makeStyles((theme) => ({
   badge: {
     position: "absolute",
     top: -(BADGE_HEIGHT + BADGE_GAP),
-    width: THUMB,
+    width: BADGE_WIDTH,
     alignItems: "center",
   },
   badgeInner: {

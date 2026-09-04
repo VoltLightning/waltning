@@ -1,7 +1,14 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { offsetToValue, THRESHOLD_MAX, THRESHOLD_MIN, ThresholdSlider } from "./threshold-slider";
+import {
+  BADGE_WIDTH,
+  badgeLeft,
+  offsetToValue,
+  THRESHOLD_MAX,
+  THRESHOLD_MIN,
+  ThresholdSlider,
+} from "./threshold-slider";
 
 describe("ThresholdSlider", () => {
   it("shows the value as a two-decimal figure in the badge", () => {
@@ -81,5 +88,26 @@ describe("offsetToValue", () => {
 
   it("has no usable range to fall back to the floor rather than divide by zero", () => {
     expect(offsetToValue(20, 0)).toBe(THRESHOLD_MIN);
+  });
+});
+
+describe("badgeLeft", () => {
+  // usable=176, THUMB=28 → trackWidth=204 (matches the fixtures above).
+  const usable = 176;
+
+  it("clamps at the floor rather than running the badge off the left edge", () => {
+    // Centred on the thumb, the badge would sit at THUMB / 2 - BADGE_WIDTH / 2 — negative.
+    expect(badgeLeft(THRESHOLD_MIN, usable)).toBe(0);
+  });
+
+  it("clamps at the ceiling rather than running the badge off the right edge", () => {
+    const trackWidth = usable + 28;
+    expect(badgeLeft(THRESHOLD_MAX, usable)).toBe(trackWidth - BADGE_WIDTH);
+  });
+
+  it("centres on the thumb mid-track, where clamping does not apply", () => {
+    const left = badgeLeft(0.75, usable);
+    expect(left).toBeGreaterThan(0);
+    expect(left).toBeLessThan(usable + 28 - BADGE_WIDTH);
   });
 });
