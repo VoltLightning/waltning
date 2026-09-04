@@ -123,9 +123,6 @@ export type LocalLedgerSession = {
   ) => readonly LocalTransactionRow[];
   /** S09's whole subject, one query — `null` for a row that is gone or soft-deleted. */
   getTransaction: (id: Id<"transactions">) => LocalTransactionDetail | null;
-  createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
-  createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
-  createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
   updateTransaction: (input: UpdateTransactionInput, capture: Capture) => LocalTransactionRow;
   deleteTransaction: (input: DeleteTransactionInput, capture: Capture) => LocalTransactionRow;
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
