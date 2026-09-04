@@ -324,6 +324,7 @@ describe("phone ledger controller", () => {
       categories: [],
       categoryTree: [],
       counterparties: [],
+      archivedCounterparties: [],
       subtotals: [],
       netWorth: [],
       unsettledClearing: [],
@@ -1402,6 +1403,18 @@ describe("phone ledger controller — counterparties and settlement", () => {
           `update_counterparty: stale version — read ${input.version}, row is at ${version}`,
         );
       }
+      if (input.patch.name !== undefined) {
+        const collision = counterparties.find(
+          (c) =>
+            c.id !== input.id &&
+            c.name.trim().toLowerCase() === (input.patch.name ?? "").trim().toLowerCase(),
+        );
+        if (collision) {
+          throw new Error(
+            `update_counterparty: "${input.patch.name}" collides with existing counterparty "${collision.name}" (${collision.id}) — counterparties_name_uq`,
+          );
+        }
+      }
       version += 1;
       counterparties = counterparties.map((c) =>
         c.id === input.id
@@ -1429,6 +1442,12 @@ describe("phone ledger controller — counterparties and settlement", () => {
       }
       return { residual: money.toMoney("-70"), overSettled: false };
     });
+    // `includeArchived` threaded through, mirroring `readCounterparties`'
+    // own default — the fixture is the port, so it filters the way the
+    // replica reader does rather than leaving that to the controller alone.
+    const listCounterparties = vi.fn<PhoneLedgerPort["listCounterparties"]>((options) =>
+      options?.includeArchived ? counterparties : counterparties.filter((c) => !c.archived),
+    );
 
     const port: PhoneLedgerPort = {
       listAccounts: () => [],
@@ -1437,7 +1456,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       listRecent: () => [],
       listCategories: () => [],
       listCategoryTree: () => [],
-      listCounterparties: () => counterparties,
+      listCounterparties,
       listNetWorth: () => [],
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
@@ -1486,6 +1505,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       unmergeCounterparties,
       recordDistinctCounterparties,
       settleDebt,
+      listCounterparties,
     };
   }
 
@@ -1538,6 +1558,24 @@ describe("phone ledger controller — counterparties and settlement", () => {
     ]);
   });
 
+  it("refuses renaming into a folded-name collision, on the name field", () => {
+    const { controller } = counterpartyHarness();
+
+    const result = controller.updateCounterparty({
+      id: MAREK,
+      version: 1,
+      patch: { name: "nina" },
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "name",
+        message: expect.stringContaining('collides with existing counterparty "Nina"'),
+        messageKey: "counterparties.nameCollision",
+      },
+    ]);
+  });
+
   it("merges, unmerges, and records a distinct pair — the port is called with the parsed shape", () => {
     const { controller, mergeCounterparties, unmergeCounterparties, recordDistinctCounterparties } =
       counterpartyHarness();
@@ -1563,6 +1601,23 @@ describe("phone ledger controller — counterparties and settlement", () => {
       expect.objectContaining({ aId: NINA, bId: MAREK }),
       expect.anything(),
     );
+  });
+
+  describe("loadArchivedCounterparties", () => {
+    it("is empty until asked, then carries archived counterparties apart from the active list", () => {
+      const { controller, listCounterparties } = counterpartyHarness();
+      controller.updateCounterparty({ id: MAREK, version: 1, patch: { archived: true } });
+
+      expect(controller.getSnapshot().archivedCounterparties).toEqual([]);
+      expect(controller.getSnapshot().counterparties.map((c) => c.id)).toEqual([NINA]);
+      expect(listCounterparties).toHaveBeenLastCalledWith();
+
+      controller.loadArchivedCounterparties();
+
+      expect(listCounterparties).toHaveBeenLastCalledWith({ includeArchived: true });
+      expect(controller.getSnapshot().archivedCounterparties.map((c) => c.id)).toEqual([MAREK]);
+      expect(controller.getSnapshot().counterparties.map((c) => c.id)).toEqual([NINA]);
+    });
   });
 
   it("settle_debt: the residual and overSettled come from the port, never derived locally", () => {
@@ -1602,9 +1657,114 @@ describe("phone ledger controller — counterparties and settlement", () => {
 
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
       {
-        path: "dischargesAmount",
+        path: "discharges.currency",
         message: expect.stringContaining("nothing to settle"),
         messageKey: "settleDebt.nothingToSettle",
+      },
+    ]);
+  });
+
+  /*
+   * H — an executor throw this controller does not recognise must still
+   * surface as a form-level `fieldErrors` entry, never rethrown past the
+   * controller (finding 2: one shape for all six counterparty/settlement
+   * writes, `accountWriteRefusal`'s own contract).
+   */
+  it("createCounterparty: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, createCounterparty } = counterpartyHarness();
+    createCounterparty.mockImplementationOnce(() => {
+      throw new Error("create_counterparty: the replica insert returned no row");
+    });
+
+    const result = controller.createCounterparty({
+      name: "Ola",
+      kind: "person",
+      settlementCurrency: null,
+      contact: null,
+      note: "",
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "create_counterparty: the replica insert returned no row" },
+    ]);
+  });
+
+  it("updateCounterparty: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, updateCounterparty } = counterpartyHarness();
+    updateCounterparty.mockImplementationOnce(() => {
+      throw new Error("update_counterparty: the row changed between read and write");
+    });
+
+    const result = controller.updateCounterparty({ id: NINA, version: 1, patch: { note: "x" } });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "update_counterparty: the row changed between read and write" },
+    ]);
+  });
+
+  it("mergeCounterparties: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, mergeCounterparties } = counterpartyHarness();
+    mergeCounterparties.mockImplementationOnce(() => {
+      throw new Error("merge_counterparties: the merge insert returned no row");
+    });
+
+    const result = controller.mergeCounterparties({ winnerId: NINA, loserId: MAREK });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "merge_counterparties: the merge insert returned no row" },
+    ]);
+  });
+
+  it("unmergeCounterparties: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, unmergeCounterparties } = counterpartyHarness();
+    unmergeCounterparties.mockImplementationOnce(() => {
+      throw new Error("unmerge_counterparties: the merge row changed between read and write");
+    });
+
+    const result = controller.unmergeCounterparties({
+      mergeId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "unmerge_counterparties: the merge row changed between read and write" },
+    ]);
+  });
+
+  it("recordDistinctCounterparties: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, recordDistinctCounterparties } = counterpartyHarness();
+    recordDistinctCounterparties.mockImplementationOnce(() => {
+      throw new Error("record_distinct_counterparties: boom");
+    });
+
+    const result = controller.recordDistinctCounterparties({ aId: NINA, bId: MAREK });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "record_distinct_counterparties: boom" },
+    ]);
+  });
+
+  it("settleDebt: an unrecognised refusal reaches fieldErrors, not a throw", () => {
+    const { controller, settleDebt } = counterpartyHarness();
+    settleDebt.mockImplementationOnce(() => {
+      throw new Error("settle_debt: the row changed between insert and the debt-fields update");
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "EUR",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "",
+        message: "settle_debt: the row changed between insert and the debt-fields update",
       },
     ]);
   });

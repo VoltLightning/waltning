@@ -20,6 +20,11 @@
  * reader that queries the replica and calls it — is E1's, a parallel PR not
  * on this base. `open-balances.ts` is the query it will replace, shared with
  * `settle_debt`'s own read rather than a second copy of the same fold.
+ *
+ * **A renamed `patch.name` gets the same folded-name pre-check
+ * `create_counterparty` runs**, for the same reason: without it, the raw
+ * SQLite `UNIQUE constraint failed: index 'counterparties_name_uq'` would
+ * reach the caller instead of a refusal naming the collision.
  */
 
 import * as money from "@waltning/core/money";
@@ -27,7 +32,7 @@ import {
   type UpdateCounterpartyInput,
   updateCounterpartyInput,
 } from "@waltning/core/registry/inputs";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
@@ -58,6 +63,25 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
     throw new Error(
       `update_counterparty: stale version — read ${input.version}, row is at ${current.version}`,
     );
+  }
+
+  if (input.patch.name !== undefined) {
+    const [collision] = tx
+      .select({ id: counterparties.id, name: counterparties.name })
+      .from(counterparties)
+      .where(
+        and(
+          sql`lower(trim(${counterparties.name})) = lower(trim(${input.patch.name}))`,
+          ne(counterparties.id, input.id),
+        ),
+      )
+      .all();
+    if (collision) {
+      throw new Error(
+        `update_counterparty: "${input.patch.name}" collides with existing counterparty ` +
+          `"${collision.name}" (${collision.id}) — counterparties_name_uq`,
+      );
+    }
   }
 
   const willArchive = input.patch.archived === true && !current.archived;

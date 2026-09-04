@@ -10,6 +10,10 @@
  * (`pg_trgm`) and out of scope for a local executor. Checking here rather
  * than only letting the SQLite constraint fire means the refusal names the
  * colliding counterparty instead of a raw `UNIQUE constraint failed`.
+ *
+ * **Not H13's rule.** A collision the *server* admits at H13 is a merge
+ * decision for arc 2 to make, never an error there; this refusal is the
+ * phone's own capture-time rule (S15 §6), scoped to what this replica holds.
  */
 
 import {

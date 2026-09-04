@@ -159,6 +159,18 @@ describe("update_counterparty", () => {
     ).toThrow(/stale version/);
   });
 
+  it("refuses renaming into a folded-name collision with a live counterparty", () => {
+    const before = counterparty(MAREK);
+
+    expect(() =>
+      write(updateCounterpartyExecutor, {
+        id: MAREK,
+        version: before?.version,
+        patch: { name: "  nina  " },
+      }),
+    ).toThrow(/collides with existing counterparty "Nina"/);
+  });
+
   it("refuses archiving while a §7 balance is open", () => {
     debtRow({
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",

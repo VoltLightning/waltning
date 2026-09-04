@@ -354,7 +354,8 @@ export type PhoneLedgerPort = {
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
   listCategoryTree: () => readonly PhoneCategoryNode[];
-  listCounterparties: () => readonly PhoneCounterparty[];
+  /** `includeArchived` — default `false`, same toggle as `listAccounts`. */
+  listCounterparties: (options?: { includeArchived?: boolean }) => readonly PhoneCounterparty[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
@@ -479,6 +480,11 @@ export type PhoneLedgerSnapshot = {
   categories: readonly PhoneCategory[];
   categoryTree: readonly PhoneCategoryNode[];
   counterparties: readonly PhoneCounterparty[];
+  /**
+   * Empty until `loadArchivedCounterparties()` runs — the same lazy toggle
+   * `archivedAccounts` / `loadArchived()` gives S16's register.
+   */
+  archivedCounterparties: readonly PhoneCounterparty[];
   /**
    * Ordered by the account list, so the currency of your first account leads.
    *
@@ -870,6 +876,8 @@ export type PhoneLedgerController = {
   ) =>
     | { aId: Id<"counterparties">; bId: Id<"counterparties"> }
     | { fieldErrors: readonly FieldError[] };
+  /** The same lazy toggle as `loadArchived()`, for counterparties. */
+  loadArchivedCounterparties: () => void;
   settleDebt: (
     draft: SettleDebtDraft,
   ) =>
@@ -966,6 +974,17 @@ function reconcileAccountRefusal(error: unknown): FieldError | null {
   return null;
 }
 
+/**
+ * The six counterparty and settlement writes' refusal mappers, one contract
+ * — the same shape `accountWriteRefusal` above already fixes on: a message
+ * this mapper recognises names the field it belongs to and a `messageKey`
+ * the screen resolves through `useT()`; a message it does not recognise
+ * returns `null`. **Every caller below tries its mapper first and falls back
+ * to `refusalFromThrow` on `null`** — never rethrows — so a refusal the
+ * mapper has not met yet still reaches the screen as a form-level
+ * `fieldErrors` entry instead of an unhandled throw out of the controller.
+ */
+
 /** `create_counterparty`'s one refusal — S15 §6: an exact collision lands on `name`. */
 function createCounterpartyRefusal(error: unknown): FieldError | null {
   if (!(error instanceof Error)) return null;
@@ -975,11 +994,18 @@ function createCounterpartyRefusal(error: unknown): FieldError | null {
   return null;
 }
 
-/** `update_counterparty`'s refusals — S15 §6: stale version and the archive gate. */
+/**
+ * `update_counterparty`'s refusals — S15 §6: stale version, a renamed
+ * folded-name collision (the same check `create_counterparty` runs), and
+ * the archive gate.
+ */
 function counterpartyWriteRefusal(error: unknown): FieldError | null {
   if (!(error instanceof Error)) return null;
   if (error.message.includes("stale version")) {
     return { path: "version", message: error.message, messageKey: "counterparties.staleVersion" };
+  }
+  if (error.message.includes("collides with existing counterparty")) {
+    return { path: "name", message: error.message, messageKey: "counterparties.nameCollision" };
   }
   if (error.message.includes("archiving is for settled relationships")) {
     return {
@@ -991,12 +1017,62 @@ function counterpartyWriteRefusal(error: unknown): FieldError | null {
   return null;
 }
 
-/** `settle_debt`'s one refusal (H9) — a zero balance lands on the discharges picker. */
+/**
+ * `merge_counterparties`'s refusals — S15 §9.1/§9.2: either side missing
+ * lands on `counterpartyId`, either side already archived lands on
+ * `archived`. A pair recorded distinct (§9.1) names no single field and is
+ * left to `refusalFromThrow`'s form-level message.
+ */
+function mergeCounterpartiesRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("no counterparty")) {
+    return {
+      path: "counterpartyId",
+      message: error.message,
+      messageKey: "counterparties.mergeNoCounterparty",
+    };
+  }
+  if (error.message.includes("archived")) {
+    return {
+      path: "archived",
+      message: error.message,
+      messageKey: "counterparties.mergeArchived",
+    };
+  }
+  return null;
+}
+
+/** `unmerge_counterparties`'s refusals — S15 §9.2: both name the merge itself. */
+function unmergeCounterpartiesRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("no merge") || error.message.includes("already unmerged")) {
+    return {
+      path: "mergeId",
+      message: error.message,
+      messageKey: "counterparties.mergeNotFound",
+    };
+  }
+  return null;
+}
+
+/**
+ * `settle_debt`'s refusals (H9) — a missing counterparty lands on
+ * `counterpartyId`; a zero balance in the chosen currency lands on
+ * `discharges.currency`, the field that picked a currency with nothing open
+ * rather than the amount typed against it.
+ */
 function settleDebtRefusal(error: unknown): FieldError | null {
   if (!(error instanceof Error)) return null;
+  if (error.message.includes("no counterparty")) {
+    return {
+      path: "counterpartyId",
+      message: error.message,
+      messageKey: "settleDebt.noCounterparty",
+    };
+  }
   if (error.message.includes("nothing to settle")) {
     return {
-      path: "dischargesAmount",
+      path: "discharges.currency",
       message: error.message,
       messageKey: "settleDebt.nothingToSettle",
     };
@@ -1017,6 +1093,7 @@ export function createPhoneLedger(
     categories: [],
     categoryTree: [],
     counterparties: [],
+    archivedCounterparties: [],
     subtotals: [],
     netWorth: [],
     unsettledClearing: [],
@@ -1027,6 +1104,8 @@ export function createPhoneLedger(
   // `refresh()` so a write made with the section open does not collapse it;
   // `reset()` below is the one place it goes back to `false`.
   let archivedRequested = false;
+  /** The same toggle as `archivedRequested`, for `loadArchivedCounterparties()`. */
+  let archivedCounterpartiesRequested = false;
 
   const refresh = () => {
     emitClientDiagnostic(diagnostics, {
@@ -1044,6 +1123,13 @@ export function createPhoneLedger(
       const capturable = new Set(
         currencies.filter((currency) => currency.capturable).map((currency) => currency.code),
       );
+      const counterpartyRows = archivedCounterpartiesRequested
+        ? port.listCounterparties({ includeArchived: true })
+        : port.listCounterparties();
+      const counterparties = counterpartyRows.filter((counterparty) => !counterparty.archived);
+      const archivedCounterparties = archivedCounterpartiesRequested
+        ? counterpartyRows.filter((counterparty) => counterparty.archived)
+        : [];
       snapshot = {
         accounts: accounts.map((account) => ({
           ...account,
@@ -1055,7 +1141,8 @@ export function createPhoneLedger(
         recent: port.listRecent(5),
         categories: port.listCategories(),
         categoryTree: port.listCategoryTree(),
-        counterparties: port.listCounterparties(),
+        counterparties,
+        archivedCounterparties,
         subtotals: subtotalsOf(accounts),
         netWorth: port.listNetWorth(),
         unsettledClearing: port.listUnsettledClearing(),
@@ -1422,13 +1509,12 @@ export function createPhoneLedger(
           port.createCounterparty(parsed.data, capture);
         } catch (refusal) {
           const fieldError = createCounterpartyRefusal(refusal);
-          if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_counterparty",
             phase: "success",
           });
-          return { fieldErrors: [fieldError] };
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {
@@ -1472,13 +1558,12 @@ export function createPhoneLedger(
           port.updateCounterparty(parsed.data, capture);
         } catch (refusal) {
           const fieldError = counterpartyWriteRefusal(refusal);
-          if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "update_counterparty",
             phase: "success",
           });
-          return { fieldErrors: [fieldError] };
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {
@@ -1521,12 +1606,13 @@ export function createPhoneLedger(
         try {
           port.mergeCounterparties(parsed.data, capture);
         } catch (writeError) {
+          const fieldError = mergeCounterpartiesRefusal(writeError);
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "merge_counterparties",
             phase: "success",
           });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {
@@ -1565,12 +1651,13 @@ export function createPhoneLedger(
         try {
           port.unmergeCounterparties(parsed.data, capture);
         } catch (writeError) {
+          const fieldError = unmergeCounterpartiesRefusal(writeError);
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "unmerge_counterparties",
             phase: "success",
           });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {
@@ -1612,6 +1699,11 @@ export function createPhoneLedger(
         try {
           port.recordDistinctCounterparties(parsed.data, capture);
         } catch (writeError) {
+          // No mapper of its own: the executor is idempotent (S15 §9.1) and
+          // backed only by a primary key, so nothing it throws in ordinary
+          // operation names a field a form could point at — every refusal
+          // here is already the fallback `refusalFromThrow` gives the other
+          // five writes for a message their own mapper does not recognise.
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "record_distinct_counterparties",
@@ -1635,6 +1727,10 @@ export function createPhoneLedger(
         });
         throw error;
       }
+    },
+    loadArchivedCounterparties: () => {
+      archivedCounterpartiesRequested = true;
+      refresh();
     },
     settleDebt: (draft) => {
       emitClientDiagnostic(diagnostics, {
@@ -1668,13 +1764,12 @@ export function createPhoneLedger(
           settled = port.settleDebt(parsed.data, capture);
         } catch (refusal) {
           const fieldError = settleDebtRefusal(refusal);
-          if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
             phase: "success",
           });
-          return { fieldErrors: [fieldError] };
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {
@@ -2371,9 +2466,10 @@ export function createPhoneLedger(
       });
       try {
         port.reset();
-        // A wiped ledger has nothing archived to show — the toggle starts
+        // A wiped ledger has nothing archived to show — both toggles start
         // collapsed again, the same as a fresh launch.
         archivedRequested = false;
+        archivedCounterpartiesRequested = false;
         refresh();
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",

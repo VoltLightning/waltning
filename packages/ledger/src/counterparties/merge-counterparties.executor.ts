@@ -96,6 +96,18 @@ function mergeCounterparties(
     .returning({ id: transactions.id })
     .all();
 
+  // A plain insert, not `onConflictDoUpdate` — the entry mints `mergeId`
+  // (`mints` above), so a genuine replay of this exact write is "twice is
+  // once" by the id, the same H13 argument `create_counterparty`'s idempotent
+  // insert gives. An upsert here would additionally have to be *correct*
+  // about `movedTransactionIds` on a second pass, and it cannot be: the
+  // transactions this query would find on a re-run have, by then, already
+  // been repointed to `winnerId` by the *first* run, so a recomputed list
+  // reads back empty and would silently overwrite the real one. That never
+  // fires today — `loser.archived` above refuses any second attempt at this
+  // same `winnerId`/`loserId` pair before this insert is reached — but a
+  // silent `[]` is the wrong failure mode to leave reachable by a future
+  // change to that guard; a duplicate `mergeId` now fails loudly instead.
   const [mergeRow] = tx
     .insert(counterpartyMerges)
     .values({
@@ -103,14 +115,6 @@ function mergeCounterparties(
       winnerId: input.winnerId,
       loserId: input.loserId,
       movedTransactionIds: movedRows.map((row) => row.id),
-    })
-    .onConflictDoUpdate({
-      target: counterpartyMerges.id,
-      set: {
-        winnerId: input.winnerId,
-        loserId: input.loserId,
-        movedTransactionIds: movedRows.map((row) => row.id),
-      },
     })
     .returning()
     .all();

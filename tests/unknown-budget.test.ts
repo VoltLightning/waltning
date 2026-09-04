@@ -235,8 +235,8 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
   },
   "packages/client/src/ledger/create-phone-ledger.ts": {
-    max: 5,
-    why: "accountWriteRefusal, reconcileAccountRefusal, createCounterpartyRefusal, counterpartyWriteRefusal and settleDebtRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
+    max: 7,
+    why: "accountWriteRefusal, reconcileAccountRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal and settleDebtRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
   },
   // E2 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per executor file — the driver's
