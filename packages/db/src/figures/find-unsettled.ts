@@ -15,6 +15,22 @@
  * answer, because FIFO consumption always draws from the oldest opens first
  * and (in a well-formed ledger) never outruns what has opened by the time it
  * runs.
+ *
+ * **This closed form holds even once the balance crosses zero more than
+ * once** — a review of this PR suspected it shared `money.ts`'s
+ * running-direction bug (fixed there: classifying every leg against the
+ * *final* balance's sign, rather than tracking the queue's own live
+ * direction, discarded a reversal's excess instead of reopening it). It does
+ * not: a reversal that fully drains the queue and reopens with excess is,
+ * from this query's point of view, indistinguishable from that excess simply
+ * being a smaller "opening" leg dated later — because `total_consumed` sums
+ * *every* opposite-sign leg regardless of what it drained, the arithmetic
+ * cancels out to the same running-open/consumed threshold either way.
+ * Verified two ways: 500,000 random multi-flip series fuzzed against a
+ * literal queue simulation (both in the PR description and, formally, by
+ * `differential.test.ts`'s "Flip clearing" fixture — `+50, −80, +100, +20,
+ * −75` — where this file's *unmodified* query already names the `+20` leg,
+ * matching `money.fifoOldestOpen` once fixed).
  */
 
 import type { AccountingDate } from "@waltning/core/date";

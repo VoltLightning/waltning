@@ -11,6 +11,20 @@
  * "which row is oldest and open" for every counterparty; the caller decides
  * whether that answer is worth showing (`readCounterpartyBalances` on the
  * phone makes the identical choice — see its own `kind === "company"` guard).
+ *
+ * **The closed form (`opens` vs `consumed`, classified by `final_sign`) is
+ * verified against `money.fifoOldestOpen`'s running-direction algorithm on a
+ * series that crosses zero twice** — `find-unsettled.ts`'s own doc comment
+ * has the fuzzed proof; `differential.test.ts`'s FlipCo fixture is the
+ * concrete case, and this file needed no algorithm change to pass it, only
+ * the `debt_amount` coalesce inherited from `counterparty-balance.ts`.
+ *
+ * **Archived is not filtered here, and does not need to be.** A row only
+ * ever appears when `balance <> 0` (below); an archived counterparty settled
+ * to zero already produces none, and one still carrying a balance is exactly
+ * the case `counterparty-balance.ts`'s own archived filter keeps visible —
+ * this file staying kind- and archived-agnostic is the same choice, made
+ * once.
  */
 
 import type { AccountingDate } from "@waltning/core/date";

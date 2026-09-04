@@ -269,9 +269,9 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
   },
-  "packages/ledger/src/counterparties/open-balances.ts": {
+  "packages/ledger/src/counterparties/read-counterparty-balances.ts": {
     max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+    why: "balancesForCounterparty's ReplicaTx = LocalTx<unknown, typeof ledgerSchema> — the driver's run-result, in a position nothing consumes — same as create-account.executor.ts. Formerly open-balances.ts, deleted once nothing imported it (E1 review fix).",
   },
   // E3 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per FX executor file — the

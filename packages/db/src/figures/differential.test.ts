@@ -22,7 +22,7 @@ import { type Scratch, scratchDatabase } from "../test/scratch.ts";
 import { oldestOpenDebt } from "./counterparty-ageing.ts";
 import { counterpartyBalances } from "./counterparty-balance.ts";
 import { findUnsettled } from "./find-unsettled.ts";
-import { ACCOUNTS, COMPANY, COUNTERPARTY, CURRENCIES, TRANSACTIONS } from "./fixture.ts";
+import { ACCOUNTS, COMPANY, COUNTERPARTY, CURRENCIES, FLIPCO, TRANSACTIONS } from "./fixture.ts";
 import { netWorth } from "./net-worth.ts";
 import { signedFromLeg } from "./signed.sql.ts";
 
@@ -65,6 +65,25 @@ const legRows: money.LegRow[] = TRANSACTIONS.filter((t) => !t.deleted).map((t) =
 }));
 
 /**
+ * `amount_original`/`to_amount`, coalesced with `debt_amount` when
+ * `debt_currency` is set — the same substitution
+ * `read-counterparty-balances.ts` and `counterparty-balance.ts` each make,
+ * kept here as a third, independent copy on purpose: this fixture-side
+ * helper is what would stay wrong if only the two production sides changed
+ * in lockstep.
+ */
+function coalescedAmounts(t: (typeof TRANSACTIONS)[number]): {
+  amountOriginal: string;
+  toAmount: string | null;
+} {
+  const value = t.debtCurrency != null ? (t.debtAmount ?? t.amountOriginal) : null;
+  return {
+    amountOriginal: value ?? t.amountOriginal,
+    toAmount: value ?? t.toAmount ?? null,
+  };
+}
+
+/**
  * §7's rows, with `side` and `currency` resolved the way a caller would:
  * from `counterparty_id`, `counterparty_role`, and `coalesce(debt_currency,
  * currency)`. `side` is a rule on `type` alone — see the comment on
@@ -72,13 +91,16 @@ const legRows: money.LegRow[] = TRANSACTIONS.filter((t) => !t.deleted).map((t) =
  * counterparty always sits on the `to` leg here, not case-by-case per row.
  */
 function debtRowsFor(counterpartyId: string): money.DebtRow[] {
-  return TRANSACTIONS.filter((t) => !t.deleted && t.counterpartyId === counterpartyId).map((t) => ({
-    type: t.type,
-    amountOriginal: money.toMoney(t.amountOriginal),
-    toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
-    side: t.type === "transfer" ? "to" : "from",
-    currency: money.currencyCode(t.currency),
-  }));
+  return TRANSACTIONS.filter((t) => !t.deleted && t.counterpartyId === counterpartyId).map((t) => {
+    const { amountOriginal, toAmount } = coalescedAmounts(t);
+    return {
+      type: t.type,
+      amountOriginal: money.toMoney(amountOriginal),
+      toAmount: toAmount != null ? money.toMoney(toAmount) : null,
+      side: t.type === "transfer" ? "to" : "from",
+      currency: money.currencyCode(t.debtCurrency ?? t.currency),
+    };
+  });
 }
 const debtRows = debtRowsFor(COUNTERPARTY.id);
 
@@ -91,14 +113,18 @@ const debtRows = debtRowsFor(COUNTERPARTY.id);
  */
 function fifoDebtRowsFor(counterpartyId: string, currency: string): money.FifoDelta<string>[] {
   return TRANSACTIONS.filter(
-    (t) => !t.deleted && t.counterpartyId === counterpartyId && t.currency === currency,
+    (t) =>
+      !t.deleted &&
+      t.counterpartyId === counterpartyId &&
+      (t.debtCurrency ?? t.currency) === currency,
   ).map((t) => {
     const side: "from" | "to" = t.type === "transfer" ? "to" : "from";
+    const { amountOriginal, toAmount } = coalescedAmounts(t);
     const delta = money.debtDelta(
       {
         type: t.type,
-        amountOriginal: money.toMoney(t.amountOriginal),
-        toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
+        amountOriginal: money.toMoney(amountOriginal),
+        toAmount: toAmount != null ? money.toMoney(toAmount) : null,
       },
       side,
     );
@@ -140,17 +166,20 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
     }
     await scratch.sql`insert into counterparties (id, name, kind)
       values (${COUNTERPARTY.id}, ${COUNTERPARTY.name}, 'person'),
-             (${COMPANY.id}, ${COMPANY.name}, 'company')`;
+             (${COMPANY.id}, ${COMPANY.name}, 'company'),
+             (${FLIPCO.id}, ${FLIPCO.name}, 'company')`;
     for (const t of TRANSACTIONS) {
       await scratch.sql`insert into transactions
         (id, date, type, account_id, to_account_id, amount_original, to_amount,
-         currency, to_currency, fx_rate, to_fx_rate, counterparty_id, counterparty_role, deleted_at)
+         currency, to_currency, fx_rate, to_fx_rate, counterparty_id, counterparty_role,
+         debt_currency, debt_amount, deleted_at)
         values (
           ${t.id}, ${t.date}, ${t.type}, ${t.accountId}, ${t.toAccountId ?? null},
           ${t.amountOriginal}, ${t.toAmount ?? null},
           ${t.currency}, ${t.toCurrency ?? null},
           ${"1"}, ${t.toAccountId ? "1" : null},
           ${t.counterpartyId ?? null}, ${t.counterpartyRole ?? null},
+          ${t.debtCurrency ?? null}, ${t.debtAmount ?? null},
           ${t.deleted ? scratch.sql`now()` : null}
         )`;
     }
@@ -200,8 +229,11 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
     const tsSide = money.counterpartyBalance(debtRows);
 
     expect(sqlSide).toEqual(tsSide);
+    // 200 lent, 214.05 discharged by the EUR settlement (coalesced through
+    // debt_currency/debt_amount, never the 50 that changed hands) — the PLN
+    // balance goes negative (over-settled, S14 §9.2), not 150.
     expect(tsSide).toEqual([
-      { currency: "PLN", balance: "150.00000000" },
+      { currency: "PLN", balance: "-64.05000000" },
       { currency: "USD", balance: "30.00000000" },
     ]);
   });
@@ -227,6 +259,7 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       [COMPANY.id, "PLN"],
       [COUNTERPARTY.id, "PLN"],
       [COUNTERPARTY.id, "USD"],
+      [FLIPCO.id, "PLN"],
     ] as const) {
       const tsOldest = money.fifoOldestOpen(fifoDebtRowsFor(counterpartyId, currency));
       const sqlOldest = sqlByKey.get(`${counterpartyId}:${currency}`) ?? null;
@@ -239,6 +272,13 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
     // FIFO already consumed the 200 lent first with the 200 repaid third.
     const acme = sqlByKey.get(`${COMPANY.id}:PLN`);
     expect(acme).toEqual({ id: "20000000-0000-4000-8000-000000000012", date: "2026-08-15" });
+
+    // FlipCo's crossing-zero-twice series (+50, −80, +100, +20, −75):
+    // classifying every row against the *final* +15 balance's sign would
+    // name the +100 row (…0020) oldest-open; the running direction instead
+    // names the +20 row (…001f), dated 2026-08-04.
+    const flipco = sqlByKey.get(`${FLIPCO.id}:PLN`);
+    expect(flipco).toEqual({ id: "20000000-0000-4000-8000-00000000001f", date: "2026-08-04" });
   });
 
   /**
@@ -271,6 +311,38 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       balance: "80.00000000",
       oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000015",
       oldestDate: "2026-08-05",
+    });
+  });
+
+  /**
+   * The same reading, on a series that crosses zero twice: `+50, −80, +100,
+   * +20, −75`. Classifying every leg against the *final* balance's (+15)
+   * sign — the bug — names the +100 leg (…001a) oldest-open; walking the
+   * running direction instead names the +20 leg (…001b), remainder 15.
+   */
+  it("§8 find_unsettled — a balance that crosses zero twice", async () => {
+    const flipClearing = ACCOUNTS[7];
+    const sqlRows = await findUnsettled(scratch.db);
+    const sqlRow = sqlRows.find((r) => r.accountId === flipClearing.id);
+
+    const tsBalance = money.accountBalance(
+      money.toMoney(flipClearing.opening),
+      flipClearing.id,
+      legRows,
+    );
+    const tsOldest = money.fifoOldestOpen(clearingLegRowsFor(flipClearing.id));
+
+    expect(sqlRow).toEqual({
+      accountId: flipClearing.id,
+      balance: tsBalance,
+      oldestUnconsumedTransactionId: tsOldest?.id,
+      oldestDate: tsOldest?.date,
+    });
+    expect(sqlRow).toEqual({
+      accountId: flipClearing.id,
+      balance: "15.00000000",
+      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-00000000001b",
+      oldestDate: "2026-08-04",
     });
   });
 
