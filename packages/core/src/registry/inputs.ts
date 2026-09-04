@@ -79,6 +79,9 @@ const TXN_SOURCE = ["manual", "import", "receipt", "agent", "migration"] as cons
 /** §6.6 — naming a counterparty is not the same as owing them. */
 const COUNTERPARTY_ROLE = ["debt", "contribution", "reference"] as const;
 
+/** §6.6 — a person or a company; `O15`'s ageing applies to companies only. */
+const COUNTERPARTY_KIND = ["person", "company"] as const;
+
 /* ── create_account ──────────────────────────────────────────────────────── */
 
 /**
@@ -914,4 +917,156 @@ export type ClearManualRateInput = z.output<typeof clearManualRateInput>;
 
 /* ════════════════════════════════════════════════════════════════════════
  * end E3 block
+ * E2 · counterparties and settlement — its own block for the same reason
+ * A3's own append is: a rebase against A2's or A3's append stays a
+ * line-level merge rather than a symbol-level one.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── counterparties and settlement ───────────────────────────────────────── */
+
+/**
+ * `create_counterparty` — §6.6: *"counterparties become first-class
+ * entities."* Auto-eligible (`operations.md`), unlike every structural
+ * account/category op — naming a person carries no guarantee to break.
+ */
+export const createCounterpartyInput = z.object({
+  id: zId<"counterparties">(),
+  name: z.string().trim().min(1).max(120),
+  kind: z.enum(COUNTERPARTY_KIND).default("person"),
+  /** Their preference, not a system concept (§6.6 cross-currency debt). */
+  settlementCurrency: zCurrencyCode.nullable().default(null),
+  contact: z.string().trim().max(200).nullable().default(null),
+  note: z.string().trim().max(2000).default(""),
+});
+export type CreateCounterpartyInput = z.output<typeof createCounterpartyInput>;
+export type CounterpartyKind = CreateCounterpartyInput["kind"];
+
+/**
+ * `update_counterparty` — a patch with a version, same shape as
+ * `updateGroupInput`.
+ *
+ * **`archived` lives on this patch, not a separate operation.**
+ * `operations.md`'s counterparties row lists no `archive_counterparty` —
+ * unlike an account or a category, archiving one is an ordinary field flip
+ * the executor gates (S15 §6: refused while any §7 balance is open), not a
+ * structural op of its own.
+ */
+const counterpartyPatch = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    kind: z.enum(COUNTERPARTY_KIND).optional(),
+    settlementCurrency: zCurrencyCode.nullable().optional(),
+    contact: z.string().trim().max(200).nullable().optional(),
+    note: z.string().trim().max(2000).optional(),
+    archived: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateCounterpartyInput = z
+  .object({
+    id: zId<"counterparties">(),
+    version: z.number().int().positive(),
+    patch: counterpartyPatch,
+  })
+  .refine((v) => Object.keys(v.patch).length > 0, {
+    message: "a patch must set at least one field",
+    path: ["patch"],
+  });
+export type UpdateCounterpartyInput = z.output<typeof updateCounterpartyInput>;
+
+/**
+ * `merge_counterparties` — S15 §9.2. `mergeId` is client-minted (H13), the
+ * same reason `create_account`'s `id` is: the id this write mints (the merge
+ * record) travels with the queued entry, not a value the server hands back.
+ */
+export const mergeCounterpartiesInput = z
+  .object({
+    mergeId: zId<"counterpartyMerges">(),
+    winnerId: zId<"counterparties">(),
+    loserId: zId<"counterparties">(),
+  })
+  .refine((v) => v.winnerId !== v.loserId, {
+    message: "a counterparty cannot merge into itself",
+    path: ["loserId"],
+  });
+export type MergeCounterpartiesInput = z.output<typeof mergeCounterpartiesInput>;
+
+/** `unmerge_counterparties` — S15 §9.2, reversing exactly the record named. */
+export const unmergeCounterpartiesInput = z.object({
+  mergeId: zId<"counterpartyMerges">(),
+});
+export type UnmergeCounterpartiesInput = z.output<typeof unmergeCounterpartiesInput>;
+
+/**
+ * `record_distinct_counterparties` — S15 §9.1's *these are different*
+ * decision. Auto-eligible: it records a person's judgement, not a structural
+ * change. Unordered here; the executor normalises `a < b` before it writes
+ * (`counterparty_distinct_pairs_ordered`).
+ */
+export const recordDistinctCounterpartiesInput = z
+  .object({
+    aId: zId<"counterparties">(),
+    bId: zId<"counterparties">(),
+  })
+  .refine((v) => v.aId !== v.bId, {
+    message: "a counterparty is not distinct from itself",
+    path: ["bId"],
+  });
+export type RecordDistinctCounterpartiesInput = z.output<typeof recordDistinctCounterpartiesInput>;
+
+/**
+ * `settle_debt` — H9's whole resolution. Takes **the amount that changed
+ * hands and the debt it discharges — never the residual**, which the server
+ * (or, with none yet, the executor itself) derives from live data and
+ * returns. S14 previously called `create_transaction`, which has no notion
+ * of a residual and no channel to return a corrected one.
+ *
+ * **No `residual` field exists here, by design** — see the file header's
+ * "what is deliberately not here": a residual is computed *from* this write,
+ * never supplied *to* it. Supplying one would let a stale client figure
+ * overwrite a balance that moved since the sheet opened (`architecture/08`
+ * H9).
+ */
+export const settleDebtInput = z
+  .object({
+    id: zId<"transactions">(),
+    counterpartyId: zId<"counterparties">(),
+    /** Where the money lands (S14 §3's "Into" field). */
+    accountId: zId<"accounts">(),
+    date: zAccountingDate,
+    /** What actually changed hands. Positive — direction is derived, not entered. */
+    amount: zMoney,
+    currency: zCurrencyCode,
+    /** Which balance this discharges, and how much of it — §6.6's settlement table. */
+    discharges: z.object({
+      currency: zCurrencyCode,
+      amount: zMoney,
+    }),
+    note: z.string().trim().max(2000).default(""),
+    categoryId: zId<"categories">().optional(),
+    // Not here, on purpose:
+    //   `residual`  — derived from the live balance, never supplied (H9, above).
+    //   `rate`      — §7.5: `discharges.amount ÷ amount` is derived by the
+    //                 screen and never stored (S14 §7).
+  })
+  .superRefine((v, ctx) => {
+    if (dec(v.amount).lte(0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "the amount that changed hands is positive — direction comes from the balance",
+      });
+    }
+    if (dec(v.discharges.amount).lte(0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["discharges", "amount"],
+        message: "the discharged amount is positive",
+      });
+    }
+  });
+export type SettleDebtInput = z.output<typeof settleDebtInput>;
+
+/* ════════════════════════════════════════════════════════════════════════
+ * end E2 block
  * ════════════════════════════════════════════════════════════════════════ */
