@@ -1,3 +1,3 @@
-import DebtStub from "../../src/debt-screen";
+import Debt from "../../src/debt-screen";
 
-export default DebtStub;
+export default Debt;

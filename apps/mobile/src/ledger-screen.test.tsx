@@ -63,6 +63,7 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
+    counterpartyRole: null,
     ...overrides,
   };
 }
@@ -87,6 +88,7 @@ function transferRow(): PhoneSearchTransaction {
     toDecimals: 2,
     isBusiness: false,
     isCapital: false,
+    counterpartyRole: null,
   };
 }
 

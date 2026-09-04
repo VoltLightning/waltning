@@ -1574,8 +1574,26 @@ describe("phone ledger controller — counterparties and settlement", () => {
 
   function counterpartyHarness() {
     let counterparties: PhoneCounterparty[] = [
-      { id: NINA, name: "Nina", kind: "person", settlementCurrency: null, archived: false },
-      { id: MAREK, name: "Marek", kind: "person", settlementCurrency: null, archived: false },
+      {
+        id: NINA,
+        name: "Nina",
+        kind: "person",
+        settlementCurrency: null,
+        contact: null,
+        note: "",
+        archived: false,
+        version: 1,
+      },
+      {
+        id: MAREK,
+        name: "Marek",
+        kind: "person",
+        settlementCurrency: null,
+        contact: null,
+        note: "",
+        archived: false,
+        version: 1,
+      },
     ];
     let version = 1;
 
@@ -1595,7 +1613,10 @@ describe("phone ledger controller — counterparties and settlement", () => {
           name: input.name,
           kind: input.kind,
           settlementCurrency: input.settlementCurrency,
+          contact: input.contact,
+          note: input.note,
           archived: false,
+          version: 1,
         },
       ];
     });
@@ -1628,7 +1649,10 @@ describe("phone ledger controller — counterparties and settlement", () => {
                 input.patch.settlementCurrency === undefined
                   ? c.settlementCurrency
                   : input.patch.settlementCurrency,
+              contact: input.patch.contact === undefined ? c.contact : input.patch.contact,
+              note: input.patch.note ?? c.note,
               archived: input.patch.archived ?? c.archived,
+              version,
             }
           : c,
       );

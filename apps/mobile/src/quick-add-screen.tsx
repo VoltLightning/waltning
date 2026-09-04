@@ -127,6 +127,7 @@ export default function QuickAdd() {
     amount?: string | string[];
     accountId?: string | string[];
     type?: string | string[];
+    counterpartyId?: string | string[];
   }>();
   const draft = parseQuickAddRoute(raw);
   const ledger = useLedgerController();
@@ -226,7 +227,9 @@ export default function QuickAdd() {
   const [composerDate, setComposerDate] = useState<string>(today);
   const [composerNote, setComposerNote] = useState("");
   const [composerIsBusiness, setComposerIsBusiness] = useState(false);
-  const [composerCounterpartyId, setComposerCounterpartyId] = useState<string | null>(null);
+  const [composerCounterpartyId, setComposerCounterpartyId] = useState<string | null>(
+    draft.counterpartyId ?? null,
+  );
   const [composerCounterpartyRole, setComposerCounterpartyRole] = useState<CounterpartyRole | null>(
     null,
   );
@@ -301,6 +304,22 @@ export default function QuickAdd() {
   const handleComposerCreateAccount = useCallback(() => {
     router.push({
       pathname: "/account/new",
+      params: {
+        returnTo: "quick-add",
+        amount: composerAmountRaw,
+        ...(effectiveAccountId ? { accountId: effectiveAccountId } : {}),
+      },
+    });
+  }, [composerAmountRaw, effectiveAccountId]);
+  /**
+   * S15 §2's own entry — the counterparty chip's *+ New*. Round-trips the
+   * draft the same way `handleComposerCreateAccount` above does: this screen
+   * unmounts on the push, so the amount and account come back through the
+   * route rather than surviving in state that no longer exists.
+   */
+  const handleComposerCreateCounterparty = useCallback(() => {
+    router.push({
+      pathname: "/counterparty/new",
       params: {
         returnTo: "quick-add",
         amount: composerAmountRaw,
@@ -516,6 +535,7 @@ export default function QuickAdd() {
           onCounterpartyChange={handleComposerCounterpartyChange}
           counterpartyRole={composerCounterpartyRole}
           onCounterpartyRoleChange={handleComposerCounterpartyRoleChange}
+          onCreateCounterparty={handleComposerCreateCounterparty}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
           onCancel={handleComposerCancel}
         />

@@ -25,6 +25,7 @@ export const pl: Messages = {
     cancel: "Anuluj",
     back: "Wstecz",
     save: "Zapisz",
+    edit: "Edytuj",
     close: "Zamknij",
     name: "Nazwa",
     loading: "Wczytywanie…",

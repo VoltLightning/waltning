@@ -286,7 +286,12 @@ export type PhoneCounterparty = {
   name: string;
   kind: CounterpartyKind;
   settlementCurrency: CurrencyCode | null;
+  /** S15's editor — the two free-text fields `create_counterparty`/`update_counterparty` also carry. */
+  contact: string | null;
+  note: string;
   archived: boolean;
+  /** `update_counterparty`'s optimistic-concurrency check (`counterparties.staleVersion`). */
+  version: number;
 };
 
 /** What settling with someone actually did — H9, never supplied, only returned. */
