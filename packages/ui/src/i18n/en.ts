@@ -125,8 +125,13 @@ export const en = {
     new: "New",
     /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */
     create: 'Create "{{query}}"',
-    /** The pinned footer's primary — the keyboard path; a tap on the leaf itself is the ordinary one (§7). */
-    use: 'Use "{{name}}"',
+    /**
+     * The pinned footer's primary, before a leaf is highlighted — the
+     * keyboard path; a tap on the leaf itself is the ordinary one (§7).
+     * `useLeaf` below is the same button once one is.
+     */
+    use: "Use",
+    useLeaf: 'Use "{{name}}"',
     /** Heading over D2's proposal row. */
     suggested: "Suggested",
     /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */

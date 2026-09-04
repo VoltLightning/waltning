@@ -191,7 +191,11 @@ export function CategorySheet({
     if (highlighted !== null) handlePick(highlighted);
   }, [handlePick, highlighted]);
 
-  const highlightedLeaf = ordinaryLeaves.find((leaf) => leaf.id === highlighted);
+  // `Uncategorized` is excluded from `ordinaryLeaves` (it renders in its own
+  // row) but is still a pickable leaf — `Use` must resolve its name too.
+  const highlightedLeaf =
+    ordinaryLeaves.find((leaf) => leaf.id === highlighted) ??
+    (uncategorized?.id === highlighted ? uncategorized : undefined);
   const proposedLeaf =
     proposal && !searching
       ? ordinaryLeaves.find((leaf) => leaf.id === proposal.categoryId)
@@ -215,6 +219,7 @@ export function CategorySheet({
         value={query}
         onChangeText={setQuery}
         placeholder={t("categories.search", { count: ordinaryLeaves.length })}
+        hideLabel
       />
       {searching ? null : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
@@ -291,7 +296,11 @@ export function CategorySheet({
           disabled={onCreate === undefined}
         />
         <Button
-          label={t("categories.use", { name: highlightedLeaf?.name ?? "" })}
+          label={
+            highlightedLeaf === undefined
+              ? t("categories.use")
+              : t("categories.useLeaf", { name: highlightedLeaf.name })
+          }
           onPress={handleUsePress}
           variant="primary"
           disabled={highlighted === null}
@@ -307,9 +316,19 @@ type ProposalRowProps = {
   onPick: (categoryId: string) => void;
 };
 
+/**
+ * Amber only below the §14 threshold. `design-system/02` reserves amber for
+ * P4 — asserted or aged rather than observed — and a proposal that clears
+ * 0.85 is not that; it is good news, and takes the same accent green as
+ * every other confirmed pick in this sheet (`Chip`'s `selected`,
+ * `RadioGroup`'s dot). Amber on a 93% match would teach "amber usually means
+ * fine", which is the one thing P4 cannot afford to mean.
+ */
 function ProposalRow({ leaf, confidence, onPick }: ProposalRowProps) {
   const t = useT();
   const styles = useStyles();
+  const confident = confidence >= 0.85;
+  const percent = `${Math.round(confidence * 100)}%`;
   const handlePress = useCallback(() => onPick(leaf.id), [leaf.id, onPick]);
   const press = usePressScale();
   const { hovered, focused, handlers } = useInteraction();
@@ -327,20 +346,25 @@ function ProposalRow({ leaf, confidence, onPick }: ProposalRowProps) {
         {...handlers}
         style={[
           styles.proposal,
+          confident ? styles.proposalConfident : styles.proposalLow,
           hovered ? styles.proposalHovered : null,
           focused ? styles.focused : null,
         ]}
       >
-        <Text style={styles.proposalKicker}>{t("categories.suggested")}</Text>
+        <Text style={[styles.proposalKicker, confident ? styles.proposalKickerConfident : null]}>
+          {t("categories.suggested")}
+        </Text>
         <View style={styles.proposalBody}>
           <Text style={styles.proposalName}>{leaf.name}</Text>
-          <Tag
-            variant={confidence < 0.85 ? "warn" : "neutral"}
-          >{`${Math.round(confidence * 100)}%`}</Tag>
+          {confident ? (
+            <Text style={styles.proposalPercentConfident}>{percent}</Text>
+          ) : (
+            <Tag variant="warn">{percent}</Tag>
+          )}
         </View>
-        {confidence < 0.85 ? (
+        {confident ? null : (
           <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
-        ) : null}
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -604,15 +628,23 @@ const useStyles = makeStyles((theme) => ({
   proposal: {
     gap: space.xs,
     borderWidth: 1,
-    borderColor: theme.assertedBorder,
-    backgroundColor: theme.assertedFill,
     borderRadius: radius.md,
     padding: space.x3,
   },
+  /** ≥ 0.85 — a confirmed match, the same accent green every other pick uses. */
+  proposalConfident: { borderColor: theme.accentFillBorder, backgroundColor: theme.accentFill },
+  /** < 0.85 — P4's amber: asserted rather than observed. */
+  proposalLow: { borderColor: theme.assertedBorder, backgroundColor: theme.assertedFill },
   proposalHovered: { backgroundColor: theme.hoverFill },
   proposalKicker: { color: theme.assertedText, ...text.ui("kicker") },
+  proposalKickerConfident: { color: theme.accentText },
   proposalBody: { flexDirection: "row", alignItems: "center", gap: space.md },
   proposalName: { flex: 1, color: theme.text, ...text.ui("body", 600) },
+  proposalPercentConfident: {
+    color: theme.accentText,
+    ...text.ui("tag"),
+    textTransform: "uppercase",
+  },
   lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
   label: { color: theme.textMuted, ...text.ui("kicker") },
   createRow: {

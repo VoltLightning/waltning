@@ -244,6 +244,21 @@ it("disables + New when the caller offers no onCreate", () => {
   expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-disabled")).toBe("true");
 });
 
+/** S06 §4: creating in place is an ordinary part of the sheet, not an opt-in — enabled the moment a handler exists. */
+it("enables + New the moment the caller offers onCreate, while just browsing", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={vi.fn()}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-disabled")).toBeNull();
+});
+
 /** S06 §9.2: present, subordinate — last, muted, and still one tap away. */
 it("renders Uncategorized at the bottom and picks it on a tap", () => {
   const onPick = vi.fn();
@@ -252,11 +267,25 @@ it("renders Uncategorized at the bottom and picks it on a tap", () => {
   expect(onPick).toHaveBeenCalledWith("uncategorized");
 });
 
+/** `Uncategorized` sits outside the leaf grid — `Use` still has to name it. */
+it("names Uncategorized in the Use button once it is picked", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  fireEvent.click(screen.getByRole("radio", { name: "Uncategorized" }));
+  expect(screen.getByRole("button", { name: 'Use "Uncategorized"' })).toBeDefined();
+});
+
+/** The placeholder already carries the label — a second, identical kicker line is noise. */
+it("gives the search field no visible label, only an accessible one", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  expect(screen.getByLabelText("Search…")).toBeDefined();
+  expect(screen.queryByText("Search…")).toBeNull();
+});
+
 /** §7: one tap picks immediately; `Use ‹leaf›` is the double-check path. */
 it("picks immediately on a tap, and Use re-fires the same pick", () => {
   const onPick = vi.fn();
   render(<CategorySheet visible kind="expense" tree={TREE} onPick={onPick} onDismiss={vi.fn()} />);
-  expect(screen.getByRole("button", { name: 'Use ""' }).getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByRole("button", { name: "Use" }).getAttribute("aria-disabled")).toBe("true");
 
   fireEvent.click(screen.getByRole("radio", { name: "Fuel" }));
   expect(onPick).toHaveBeenCalledTimes(1);
