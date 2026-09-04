@@ -16,15 +16,21 @@ import type {
   ClearManualRateInput,
   CreateAccountInput,
   CreateCategoryInput,
+  CreateCounterpartyInput,
   CreateGroupInput,
   CreateTransactionInput,
   DeleteTransactionInput,
+  MergeCounterpartiesInput,
   ReconcileAccountInput,
   SetManualRateInput,
   SetPinnedInput,
   SetRateSourceInput,
+  RecordDistinctCounterpartiesInput,
   SetTransactionLinesInput,
+  SettleDebtInput,
+  UnmergeCounterpartiesInput,
   UpdateAccountInput,
+  UpdateCounterpartyInput,
   UpdateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
@@ -44,8 +50,18 @@ import {
   type LocalCategoryRow,
 } from "./categories/create-category.executor.ts";
 import { type LocalCategory, readCategoryTree } from "./categories/read-category-tree.ts";
+// ── E2 · counterparties and settlement — its own block, same reason ────────
+import {
+  createCounterpartyExecutor,
+  type LocalCounterpartyRow,
+} from "./counterparties/create-counterparty.executor.ts";
+import {
+  type MergeCounterpartiesResult,
+  mergeCounterpartiesExecutor,
+} from "./counterparties/merge-counterparties.executor.ts";
 import {
   type LocalCounterparty,
+  type ReadCounterpartiesOptions,
   readCounterparties,
 } from "./counterparties/read-counterparties.ts";
 // ── E3 · FX operations — the phone half ────────────────────────────────────
@@ -56,6 +72,20 @@ import {
   type ClearManualRateResult,
   clearManualRateExecutor,
 } from "./currencies/clear-manual-rate.executor.ts";
+import {
+  type LocalDistinctPairRow,
+  recordDistinctCounterpartiesExecutor,
+} from "./counterparties/record-distinct-counterparties.executor.ts";
+import {
+  type SettleDebtResult,
+  settleDebtExecutor,
+} from "./counterparties/settle-debt.executor.ts";
+import {
+  type UnmergeCounterpartiesResult,
+  unmergeCounterpartiesExecutor,
+} from "./counterparties/unmerge-counterparties.executor.ts";
+import { updateCounterpartyExecutor } from "./counterparties/update-counterparty.executor.ts";
+// ── end E2 block ─────────────────────────────────────────────────────────
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 import {
   type LocalCoverage,
@@ -142,7 +172,8 @@ export type LocalLedgerSession = {
   listCategories: () => readonly LocalCapturableCategory[];
   /** The whole tree — groups and leaves both — for S06's sheet. See `readCategoryTree`. */
   listCategoryTree: () => readonly LocalCategory[];
-  listCounterparties: () => readonly LocalCounterparty[];
+  /** `includeArchived` — default `false`, same toggle as `listAccounts`. */
+  listCounterparties: (options?: ReadCounterpartiesOptions) => readonly LocalCounterparty[];
   /** §3, per currency — C2's hero (`DualTotal`), not the phone-preview's single subtotal. */
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
@@ -195,6 +226,24 @@ export type LocalLedgerSession = {
   setManualRate: (input: SetManualRateInput, capture: Capture) => SetManualRateResult;
   clearManualRate: (input: ClearManualRateInput, capture: Capture) => ClearManualRateResult;
   /* ── end E3 block ─────────────────────────────────────────────────────── */
+  // ── E2 · counterparties and settlement ────────────────────────────────────
+  createCounterparty: (input: CreateCounterpartyInput, capture: Capture) => LocalCounterpartyRow;
+  updateCounterparty: (input: UpdateCounterpartyInput, capture: Capture) => LocalCounterpartyRow;
+  mergeCounterparties: (
+    input: MergeCounterpartiesInput,
+    capture: Capture,
+  ) => MergeCounterpartiesResult;
+  unmergeCounterparties: (
+    input: UnmergeCounterpartiesInput,
+    capture: Capture,
+  ) => UnmergeCounterpartiesResult;
+  recordDistinctCounterparties: (
+    input: RecordDistinctCounterpartiesInput,
+    capture: Capture,
+  ) => LocalDistinctPairRow;
+  /** H9: takes the amount and what it discharges — never a residual. Returns one. */
+  settleDebt: (input: SettleDebtInput, capture: Capture) => SettleDebtResult;
+  // ── end E2 block ─────────────────────────────────────────────────────────
   reset: () => void;
   close: () => void;
 };
@@ -321,7 +370,7 @@ export function createLocalLedgerSession<TRun>(
     // is exactly where "offerable" matters.
     listCategoryTree: () =>
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
-    listCounterparties: () => readCounterparties(requireOpen().replica.db),
+    listCounterparties: (options) => readCounterparties(requireOpen().replica.db, options),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
@@ -478,6 +527,56 @@ export function createLocalLedgerSession<TRun>(
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
     /* ── end E3 block ───────────────────────────────────────────────────── */
+    // ── E2 · counterparties and settlement ──────────────────────────────────
+    createCounterparty: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: createCounterpartyExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    updateCounterparty: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: updateCounterpartyExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    mergeCounterparties: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: mergeCounterpartiesExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    unmergeCounterparties: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: unmergeCounterpartiesExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    recordDistinctCounterparties: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: recordDistinctCounterpartiesExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    settleDebt: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: settleDebtExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    // ── end E2 block ─────────────────────────────────────────────────────────
     reset: () => {
       const current = requireOpen();
       closed = true;
