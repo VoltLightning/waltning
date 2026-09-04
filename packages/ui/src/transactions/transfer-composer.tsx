@@ -177,6 +177,15 @@ export function TransferComposer({
       ? undefined
       : money.toMoney(money.dec(marginResult.marginPivot).times(referenceRate.rate));
 
+  // S31 §3's own footer — the two costs, summed for the one figure this
+  // screen states while typing. `FX Cost` (§12.2) still reports them apart;
+  // this is a capture-time convenience, not a second definition of "total".
+  const feeAmount = fee === "" ? undefined : money.toMoney(fee.replace(",", "."));
+  const total =
+    marginInDestination === undefined && feeAmount === undefined
+      ? undefined
+      : money.add(marginInDestination ?? money.ZERO, feeAmount ?? money.ZERO);
+
   const feeError = fieldErrors?.byField["fee"]?.[0];
   const toAccountError = fieldErrors?.byField["toAccountId"]?.[0];
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
@@ -266,6 +275,13 @@ export function TransferComposer({
             onChangeText={onFeeChange}
             {...(feeError === undefined ? {} : { error: feeError })}
           />
+
+          {total === undefined || to === undefined ? null : (
+            <View style={styles.marginRow}>
+              <Text style={styles.marginLabel}>{t("transactions.total")}</Text>
+              <Amount value={total} currency={to.currency} decimals={to.decimals} />
+            </View>
+          )}
         </>
       )}
 

@@ -205,7 +205,10 @@ describe("Transfer — the phone path", () => {
     expect(screen.getByText("565.20")).toBeDefined();
 
     // §4a: margin_pivot = 150 − 565.20 ÷ 3.8100 ≈ 1.6535 USD ≈ 6.30 PLN.
-    expect(screen.getByText((_, element) => element?.textContent === "6.30 PLN")).toBeDefined();
+    // With no fee typed, the footer's Total repeats the same figure.
+    expect(screen.getAllByText((_, element) => element?.textContent === "6.30 PLN")).toHaveLength(
+      2,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
