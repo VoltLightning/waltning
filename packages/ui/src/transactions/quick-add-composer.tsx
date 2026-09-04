@@ -59,6 +59,8 @@ export type QuickAddComposerAccount = {
   id: string;
   name: string;
   currency: CurrencyCode;
+  /** The account's own fraction digits — `amount-keys.ts#applyKey`'s `decimals` cap. */
+  decimals: number;
   capturable: boolean;
   ownership: "own" | "shared";
 };

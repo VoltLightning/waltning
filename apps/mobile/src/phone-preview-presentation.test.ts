@@ -90,9 +90,16 @@ describe("phone-alone preview presentation", () => {
    * this list. `PeriodPicker` (granularity, presets, an arbitrary range)
    * stays deferred: `PeriodHeader`'s arrows step a month and nothing here
    * opens a sheet.
+   *
+   * `"Voice"` moved out in D4b: `Dock`'s mode row (`123 · ◉ · ▣ · 💬`, D3)
+   * names voice, receipt and converse **disabled** so the row's eventual
+   * shape is visible (`dock.tsx`'s own comment) — that is the opposite of
+   * hiding the affordance, and this screen is the first to compose `Dock`
+   * at all. `"Scan"` never named the receipt mode here — it is `▣`/`Receipt`
+   * in the mode row, so it stays checked.
    */
   it("keeps deferred capture and dashboard affordances out", () => {
-    const deferred = ["PeriodPicker", "Voice", "Scan", "Sync status", "FxAmount", "TabBar"];
+    const deferred = ["PeriodPicker", "Scan", "Sync status", "FxAmount", "TabBar"];
     for (const affordance of deferred) {
       expect(`${today}\n${quickAdd}`).not.toContain(affordance);
     }
