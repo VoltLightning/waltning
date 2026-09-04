@@ -29,6 +29,13 @@ export type LocalCategory = {
   isEarnings: boolean;
   archived: boolean;
   sort: number;
+  /**
+   * The compare-and-swap token every structural write (`rename_category`,
+   * `reparent_category`, `convert_leaf_group`, `archive_category`) needs —
+   * S19's editor reads a row from here and hands the version straight back
+   * on the write, the same way `session.ts`'s other reads feed its writes.
+   */
+  version: number;
   /** 0 for a root category, incrementing one per ancestor. */
   depth: number;
 };
@@ -46,6 +53,7 @@ export function readCategoryTree<TRun, TSchema extends typeof ledgerSchema>(
       isEarnings: categories.isEarnings,
       archived: categories.archived,
       sort: categories.sort,
+      version: categories.version,
     })
     .from(categories)
     .orderBy(asc(categories.sort), asc(categories.name), asc(categories.id))

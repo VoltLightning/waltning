@@ -9,11 +9,32 @@ import {
   createPhoneLedger,
   type PhoneAccount,
   type PhoneCategoryNode,
+  type PhoneFullCategoryNode,
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
   type PhoneTransactionDetail,
   type QuickAddDraft,
 } from "./create-phone-ledger.ts";
+
+/** A full-tree category node fixture, `version: 1` unless a test bumps it. */
+function categoryNode(
+  overrides: Partial<Omit<PhoneFullCategoryNode, "id">> & {
+    id: string;
+    name: string;
+    kind: "income" | "expense";
+  },
+): PhoneFullCategoryNode {
+  return {
+    parentId: null,
+    isLeaf: true,
+    archived: false,
+    sort: 0,
+    depth: 0,
+    version: 1,
+    ...overrides,
+    id: id<"categories">(overrides.id),
+  };
+}
 
 /** Unwraps the write result in a test, or fails with the refusal's field errors. */
 function idOf<Table extends IdTable>(
@@ -89,9 +110,37 @@ function account(
   };
 }
 
-function harness(diagnostics?: (event: object) => void) {
+function harness(
+  diagnostics?: (event: object) => void,
+  options?: {
+    categoryTree?: readonly PhoneFullCategoryNode[];
+    categoryUsage?: ReadonlyMap<Id<"categories">, number>;
+  },
+) {
   let accounts: PhoneAccount[] = [];
   let recent: PhoneRecentTransaction[] = [];
+  let fullCategoryTree: readonly PhoneFullCategoryNode[] = options?.categoryTree ?? [];
+  const categoryUsage = options?.categoryUsage ?? new Map();
+  const bump = (categoryId: Id<"categories">, patch: Partial<PhoneFullCategoryNode>) => {
+    fullCategoryTree = fullCategoryTree.map((node) =>
+      node.id === categoryId ? { ...node, ...patch, version: node.version + 1 } : node,
+    );
+  };
+  const renameCategory = vi.fn<PhoneLedgerPort["renameCategory"]>((input) =>
+    bump(input.id, { name: input.name }),
+  );
+  const reparentCategory = vi.fn<PhoneLedgerPort["reparentCategory"]>((input) =>
+    bump(input.id, { parentId: input.parentId }),
+  );
+  const convertLeafGroup = vi.fn<PhoneLedgerPort["convertLeafGroup"]>((input) =>
+    bump(input.id, { isLeaf: input.to === "leaf" }),
+  );
+  const mergeCategories = vi.fn<PhoneLedgerPort["mergeCategories"]>((input) =>
+    bump(input.loserId, { archived: true }),
+  );
+  const archiveCategory = vi.fn<PhoneLedgerPort["archiveCategory"]>((input) =>
+    bump(input.id, { archived: true }),
+  );
   const createAccount = vi.fn<PhoneLedgerPort["createAccount"]>((input) => {
     accounts = [
       ...accounts,
@@ -139,6 +188,9 @@ function harness(diagnostics?: (event: object) => void) {
     listRecent: (limit) => recent.slice(0, limit),
     listCategories: () => [],
     listCategoryTree: () => [],
+    listFullCategoryTree: () => fullCategoryTree,
+    listCategoryUsage: () => categoryUsage,
+    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
     listCounterparties: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
@@ -156,6 +208,11 @@ function harness(diagnostics?: (event: object) => void) {
     updateTransaction: vi.fn(),
     deleteTransaction: vi.fn(),
     setTransactionLines: vi.fn(),
+    renameCategory,
+    reparentCategory,
+    convertLeafGroup,
+    mergeCategories,
+    archiveCategory,
     reset,
   };
   const capture = vi.fn(() => ({
@@ -173,7 +230,18 @@ function harness(diagnostics?: (event: object) => void) {
       return id<Table>(`00000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`);
     },
   });
-  return { controller, capture, createAccount, createTransaction, reset };
+  return {
+    controller,
+    capture,
+    createAccount,
+    createTransaction,
+    renameCategory,
+    reparentCategory,
+    convertLeafGroup,
+    mergeCategories,
+    archiveCategory,
+    reset,
+  };
 }
 
 describe("phone ledger controller", () => {
@@ -186,6 +254,9 @@ describe("phone ledger controller", () => {
       recent: [],
       categories: [],
       categoryTree: [],
+      fullCategoryTree: [],
+      categoryUsage: new Map(),
+      categoryCollisions: [],
       counterparties: [],
       subtotals: [],
       netWorth: [],
@@ -232,6 +303,9 @@ describe("phone ledger controller", () => {
       listRecent: () => [],
       listCategories: () => [],
       listCategoryTree: () => [],
+      listFullCategoryTree: () => [],
+      listCategoryUsage: () => new Map(),
+      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
       listCounterparties: () => [],
       listNetWorth: () => [],
       readPeriodSpend: () => [],
@@ -249,6 +323,11 @@ describe("phone ledger controller", () => {
       updateTransaction: vi.fn(),
       deleteTransaction: vi.fn(),
       setTransactionLines: vi.fn(),
+      renameCategory: vi.fn(),
+      reparentCategory: vi.fn(),
+      convertLeafGroup: vi.fn(),
+      mergeCategories: vi.fn(),
+      archiveCategory: vi.fn(),
       reset: vi.fn(),
     };
 
@@ -280,6 +359,9 @@ describe("phone ledger controller", () => {
       listRecent: () => [],
       listCategories: () => [],
       listCategoryTree: () => [],
+      listFullCategoryTree: () => [],
+      listCategoryUsage: () => new Map(),
+      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
       listCounterparties: () => [],
       listNetWorth: () => [],
       readPeriodSpend: () => [],
@@ -297,6 +379,11 @@ describe("phone ledger controller", () => {
       updateTransaction: vi.fn(),
       deleteTransaction: vi.fn(),
       setTransactionLines: vi.fn(),
+      renameCategory: vi.fn(),
+      reparentCategory: vi.fn(),
+      convertLeafGroup: vi.fn(),
+      mergeCategories: vi.fn(),
+      archiveCategory: vi.fn(),
       reset: vi.fn(),
     };
 
@@ -392,6 +479,9 @@ describe("phone ledger controller", () => {
       listRecent: () => [],
       listCategories: () => [],
       listCategoryTree: () => [],
+      listFullCategoryTree: () => [],
+      listCategoryUsage: () => new Map(),
+      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
       listCounterparties: () => [],
       listNetWorth: () => [],
       readPeriodSpend: () => [],
@@ -409,6 +499,11 @@ describe("phone ledger controller", () => {
       updateTransaction: vi.fn(),
       deleteTransaction: vi.fn(),
       setTransactionLines: vi.fn(),
+      renameCategory: vi.fn(),
+      reparentCategory: vi.fn(),
+      convertLeafGroup: vi.fn(),
+      mergeCategories: vi.fn(),
+      archiveCategory: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -513,6 +608,9 @@ describe("phone ledger controller — createCategory", () => {
       listRecent: () => [],
       listCategories: () => [],
       listCategoryTree: () => tree,
+      listFullCategoryTree: () => [],
+      listCategoryUsage: () => new Map(),
+      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
       listCounterparties: () => [],
       listNetWorth: () => [],
       readPeriodSpend: () => [],
@@ -530,6 +628,11 @@ describe("phone ledger controller — createCategory", () => {
       updateTransaction: vi.fn(),
       deleteTransaction: vi.fn(),
       setTransactionLines: vi.fn(),
+      renameCategory: vi.fn(),
+      reparentCategory: vi.fn(),
+      convertLeafGroup: vi.fn(),
+      mergeCategories: vi.fn(),
+      archiveCategory: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -693,6 +796,14 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
         total: { count: 0, currencies: [] },
       }),
       categorizeBatch: () => undefined,
+      listFullCategoryTree: () => [],
+      listCategoryUsage: () => new Map(),
+      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
+      renameCategory: () => undefined,
+      reparentCategory: () => undefined,
+      convertLeafGroup: () => undefined,
+      mergeCategories: () => undefined,
+      archiveCategory: () => undefined,
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -801,5 +912,447 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
         message: "set_transaction_lines: lines sum to 10.00000000, the transaction is 48.90",
       },
     ]);
+  });
+});
+
+describe("category writes", () => {
+  const FOOD_GROUP = "22222222-2222-4222-8222-222222222222";
+  const GROCERIES = "33333333-3333-4333-8333-333333333333";
+  const EATING_OUT = "44444444-4444-4444-8444-444444444444";
+  const INCOME_GROUP = "55555555-5555-4555-8555-555555555555";
+  const SALARY = "66666666-6666-4666-8666-666666666666";
+
+  const tree = () => [
+    categoryNode({ id: FOOD_GROUP, name: "Food", kind: "expense", isLeaf: false }),
+    categoryNode({ id: GROCERIES, name: "Groceries", kind: "expense", parentId: id(FOOD_GROUP) }),
+    categoryNode({ id: EATING_OUT, name: "Eating out", kind: "expense", parentId: id(FOOD_GROUP) }),
+    categoryNode({ id: INCOME_GROUP, name: "Earnings", kind: "income", isLeaf: false }),
+    categoryNode({ id: SALARY, name: "Salary", kind: "income", parentId: id(INCOME_GROUP) }),
+  ];
+
+  describe("renameCategory", () => {
+    it("propagates the new name and bumps the version on the port call", () => {
+      const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
+
+      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries & household" });
+
+      expect(idOf(result)).toBe(GROCERIES);
+      expect(renameCategory.mock.calls[0]?.[0]).toMatchObject({
+        id: GROCERIES,
+        version: 1,
+        name: "Groceries & household",
+      });
+      expect(controller.getSnapshot().fullCategoryTree.find((n) => n.id === GROCERIES)?.name).toBe(
+        "Groceries & household",
+      );
+    });
+
+    it("refuses a sibling collision before writing, naming the existing sibling", () => {
+      const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
+
+      const result = controller.renameCategory({ id: EATING_OUT, name: "groceries" });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "name", message: '"Groceries" already exists here' },
+      ]);
+      expect(renameCategory).not.toHaveBeenCalled();
+    });
+
+    it("does not collide with itself when the name is unchanged", () => {
+      const { controller } = harness(undefined, { categoryTree: tree() });
+      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries" });
+      expect(idOf(result)).toBe(GROCERIES);
+    });
+  });
+
+  describe("moveCategory", () => {
+    it("moves a leaf to another group of the same kind", () => {
+      const { controller, reparentCategory } = harness(undefined, {
+        categoryTree: [
+          ...tree(),
+          categoryNode({
+            id: "77777777-7777-4777-8777-777777777777",
+            name: "Household",
+            kind: "expense",
+            isLeaf: false,
+          }),
+        ],
+      });
+
+      const result = controller.moveCategory({
+        id: GROCERIES,
+        parentId: "77777777-7777-4777-8777-777777777777",
+      });
+
+      expect(idOf(result)).toBe(GROCERIES);
+      expect(reparentCategory.mock.calls[0]?.[0]).toMatchObject({
+        id: GROCERIES,
+        parentId: "77777777-7777-4777-8777-777777777777",
+      });
+    });
+
+    it("refuses a leaf as the target — not a group", () => {
+      const { controller, reparentCategory } = harness(undefined, { categoryTree: tree() });
+      const result = controller.moveCategory({ id: GROCERIES, parentId: EATING_OUT });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "parentId", message: '"Eating out" is not a group' },
+      ]);
+      expect(reparentCategory).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `TAXONOMY.md` R2 — mirrors `reparent-category.executor.ts`'s own
+     * guard. The actions sheet never offers Move for a group, so this is
+     * defense in depth against any other caller.
+     */
+    it("refuses moving a group anywhere but the root", () => {
+      const { controller, reparentCategory } = harness(undefined, {
+        categoryTree: [
+          ...tree(),
+          categoryNode({
+            id: "88888888-8888-4888-8888-888888888888",
+            name: "Household",
+            kind: "expense",
+            isLeaf: false,
+          }),
+        ],
+      });
+
+      const result = controller.moveCategory({
+        id: FOOD_GROUP,
+        parentId: "88888888-8888-4888-8888-888888888888",
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "parentId", message: '"Food" is a group — a group may only sit at the root' },
+      ]);
+      expect(reparentCategory).not.toHaveBeenCalled();
+    });
+
+    it("refuses crossing kinds", () => {
+      const { controller } = harness(undefined, { categoryTree: tree() });
+      const result = controller.moveCategory({ id: SALARY, parentId: FOOD_GROUP });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "parentId", message: '"Food" is a expense group — refused across kinds' },
+      ]);
+    });
+
+    /**
+     * The same scenario the old cycle test used — `FOOD_GROUP` moved onto
+     * `GROCERIES` after `GROCERIES` becomes a group — now refuses at the R2
+     * guard above (tested separately), before `wouldCycle` ever runs: only a
+     * leaf reaches that check, matching `reparent-category.executor.ts`'s
+     * own reasoning.
+     */
+    it("refuses the R2 way before it would ever reach the cycle check", () => {
+      const { controller } = harness(undefined, {
+        categoryTree: tree().map((node) =>
+          node.id === GROCERIES ? { ...node, isLeaf: false } : node,
+        ),
+      });
+      const result = controller.moveCategory({ id: FOOD_GROUP, parentId: GROCERIES });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "parentId", message: '"Food" is a group — a group may only sit at the root' },
+      ]);
+    });
+  });
+
+  describe("convertCategory", () => {
+    it("refuses converting to a group while a transaction uses it, naming the usage count", () => {
+      const { controller, convertLeafGroup } = harness(undefined, {
+        categoryTree: tree(),
+        categoryUsage: new Map([[id(GROCERIES), 3]]),
+      });
+
+      const result = controller.convertCategory({ id: GROCERIES, to: "group" });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "id", message: '3 transaction(s) use "Groceries" — recategorise or merge first' },
+      ]);
+      expect(convertLeafGroup).not.toHaveBeenCalled();
+    });
+
+    it("converts an unused leaf to a group", () => {
+      const { controller } = harness(undefined, { categoryTree: tree() });
+      const result = controller.convertCategory({ id: EATING_OUT, to: "group" });
+      expect(idOf(result)).toBe(EATING_OUT);
+      expect(
+        controller.getSnapshot().fullCategoryTree.find((n) => n.id === EATING_OUT)?.isLeaf,
+      ).toBe(false);
+    });
+
+    it("refuses converting a group with children to a leaf", () => {
+      const { controller } = harness(undefined, { categoryTree: tree() });
+      const result = controller.convertCategory({ id: FOOD_GROUP, to: "leaf" });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "id", message: '"Food" has 2 categories inside it' },
+      ]);
+    });
+  });
+
+  describe("mergeCategories", () => {
+    it("merges the loser into the winner and returns the winner's id", () => {
+      const { controller, mergeCategories } = harness(undefined, { categoryTree: tree() });
+
+      const result = controller.mergeCategories({ loserId: EATING_OUT, winnerId: GROCERIES });
+
+      expect(idOf(result)).toBe(GROCERIES);
+      expect(mergeCategories.mock.calls[0]?.[0]).toEqual({
+        loserId: EATING_OUT,
+        winnerId: GROCERIES,
+      });
+    });
+
+    it("refuses a group on either side — only leaves hold transactions", () => {
+      const { controller, mergeCategories } = harness(undefined, { categoryTree: tree() });
+      const result = controller.mergeCategories({ loserId: FOOD_GROUP, winnerId: GROCERIES });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "winnerId", message: "Only leaves hold transactions — refused on a group" },
+      ]);
+      expect(mergeCategories).not.toHaveBeenCalled();
+    });
+
+    it("refuses merging across kinds", () => {
+      const { controller } = harness(undefined, { categoryTree: tree() });
+      const result = controller.mergeCategories({ loserId: SALARY, winnerId: GROCERIES });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        {
+          path: "winnerId",
+          message: '"Groceries" is expense, "Salary" is income — refused across kinds',
+        },
+      ]);
+    });
+  });
+
+  describe("archiveCategory", () => {
+    it("archives a leaf, even with transactions — the whole point", () => {
+      const { controller, archiveCategory } = harness(undefined, {
+        categoryTree: tree(),
+        categoryUsage: new Map([[id(GROCERIES), 12]]),
+      });
+
+      const result = controller.archiveCategory({ id: GROCERIES });
+
+      expect(idOf(result)).toBe(GROCERIES);
+      expect(archiveCategory.mock.calls[0]?.[0]).toMatchObject({ id: GROCERIES, version: 1 });
+    });
+
+    it("refuses a group with unarchived children", () => {
+      const { controller, archiveCategory } = harness(undefined, { categoryTree: tree() });
+      const result = controller.archiveCategory({ id: FOOD_GROUP });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "id", message: '"Food" has 2 unarchived categories inside it' },
+      ]);
+      expect(archiveCategory).not.toHaveBeenCalled();
+    });
+
+    it("refuses a category that is already archived", () => {
+      const { controller } = harness(undefined, {
+        categoryTree: tree().map((node) =>
+          node.id === GROCERIES ? { ...node, archived: true } : node,
+        ),
+      });
+      const result = controller.archiveCategory({ id: GROCERIES });
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "id", message: '"Groceries" is already archived' },
+      ]);
+    });
+  });
+});
+
+describe("category collisions", () => {
+  it("flags §9.2's own worked example — Groceries and Grocery, under different groups", () => {
+    const { controller } = harness(undefined, {
+      categoryTree: [
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000001",
+          name: "Groceries",
+          kind: "expense",
+        }),
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000002",
+          name: "Grocery",
+          kind: "expense",
+          parentId: id("bbbbbbbb-0000-4000-8000-000000000001"),
+        }),
+      ],
+    });
+
+    const collisions = controller.getSnapshot().categoryCollisions;
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0]?.a.name).toBe("Groceries");
+    expect(collisions[0]?.b.name).toBe("Grocery");
+  });
+
+  it("does not flag two unrelated names", () => {
+    const { controller } = harness(undefined, {
+      categoryTree: [
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000001",
+          name: "Groceries",
+          kind: "expense",
+        }),
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000002",
+          name: "Software",
+          kind: "expense",
+        }),
+      ],
+    });
+
+    expect(controller.getSnapshot().categoryCollisions).toHaveLength(0);
+  });
+
+  it("never flags across kinds, a group, or an archived leaf", () => {
+    const { controller } = harness(undefined, {
+      categoryTree: [
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000001",
+          name: "Groceries",
+          kind: "expense",
+        }),
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000002",
+          name: "Grocery",
+          kind: "income",
+        }),
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000003",
+          name: "Grocery",
+          kind: "expense",
+          isLeaf: false,
+        }),
+        categoryNode({
+          id: "aaaaaaaa-0000-4000-8000-000000000004",
+          name: "Grocery",
+          kind: "expense",
+          archived: true,
+        }),
+      ],
+    });
+
+    expect(controller.getSnapshot().categoryCollisions).toHaveLength(0);
+  });
+
+  /**
+   * A real false positive on the seeded taxonomy: `Taxi` and `Tax` are
+   * unrelated (transport vs. financial — different groups, same kind), but
+   * `jaccard(trigrams("taxi"), trigrams("tax"))` is `0.5` — over threshold —
+   * purely because both names are short. A short string has few trigrams, so
+   * sharing just its first two or three inflates the *ratio* without the two
+   * names sharing much of anything structurally. `Groceries`/`Grocery` share
+   * 6 actual trigrams; `Taxi`/`Tax` share 3.
+   */
+  it("does not flag Taxi and Tax — a short-name false positive", () => {
+    const { controller } = harness(undefined, {
+      categoryTree: [
+        categoryNode({ id: "aaaaaaaa-0000-4000-8000-000000000001", name: "Taxi", kind: "expense" }),
+        categoryNode({ id: "aaaaaaaa-0000-4000-8000-000000000002", name: "Tax", kind: "expense" }),
+      ],
+    });
+
+    expect(controller.getSnapshot().categoryCollisions).toHaveLength(0);
+  });
+
+  /**
+   * Every leaf `TAXONOMY.md` actually seeds (`packages/db/src/seed/data.ts`),
+   * name and kind only. **Copied literally, not imported** —
+   * `tests/architecture.test.ts` refuses any client package a path into
+   * `packages/db`, by any route, so this list is duplicated rather than
+   * shared; a seed change that renames or adds a leaf needs this list kept in
+   * step, which is the cost of the boundary rather than a costless one. The
+   * whole point of this test: the real 59-leaf taxonomy produces **zero**
+   * collisions at this threshold, not just the two names picked for the tests
+   * above.
+   */
+  it("finds zero collisions across the real seeded taxonomy", () => {
+    const seededLeaves: { name: string; kind: "income" | "expense" }[] = [
+      // Income
+      { name: "Services", kind: "income" },
+      { name: "Other revenue", kind: "income" },
+      { name: "Salary", kind: "income" },
+      { name: "Bonus & equity", kind: "income" },
+      { name: "Investment returns", kind: "income" },
+      { name: "Interest", kind: "income" },
+      { name: "Gift received", kind: "income" },
+      { name: "Refund", kind: "income" },
+      { name: "Borrowed", kind: "income" },
+      { name: "Repayment received", kind: "income" },
+      { name: "Other inflow", kind: "income" },
+      // Expense — Home
+      { name: "Property purchase", kind: "expense" },
+      { name: "Rent", kind: "expense" },
+      { name: "Utilities", kind: "expense" },
+      { name: "Furniture & appliances", kind: "expense" },
+      { name: "Household supplies", kind: "expense" },
+      { name: "Renovation & building", kind: "expense" },
+      { name: "Plumbing", kind: "expense" },
+      { name: "Electrical & network", kind: "expense" },
+      { name: "Facade & exterior", kind: "expense" },
+      { name: "Garden", kind: "expense" },
+      // Food
+      { name: "Groceries", kind: "expense" },
+      { name: "Eating out", kind: "expense" },
+      { name: "Delivery", kind: "expense" },
+      { name: "Alcohol", kind: "expense" },
+      // Transport
+      { name: "Car", kind: "expense" },
+      { name: "Taxi", kind: "expense" },
+      { name: "Public transport", kind: "expense" },
+      { name: "Fuel & parking", kind: "expense" },
+      // Travel
+      { name: "Flights & tickets", kind: "expense" },
+      { name: "Accommodation", kind: "expense" },
+      { name: "Travel food & activities", kind: "expense" },
+      // Health
+      { name: "Medical & dental", kind: "expense" },
+      { name: "Pharmacy", kind: "expense" },
+      { name: "Sport & fitness", kind: "expense" },
+      { name: "Beauty & grooming", kind: "expense" },
+      // Personal
+      { name: "Clothing & shoes", kind: "expense" },
+      { name: "Technology", kind: "expense" },
+      { name: "Hobbies", kind: "expense" },
+      { name: "Education", kind: "expense" },
+      // Social
+      { name: "Friends & going out", kind: "expense" },
+      { name: "Gifts given", kind: "expense" },
+      { name: "Celebrations", kind: "expense" },
+      { name: "Entertainment", kind: "expense" },
+      // Subscriptions
+      { name: "Software & tools", kind: "expense" },
+      { name: "Media & streaming", kind: "expense" },
+      { name: "Mobile & internet", kind: "expense" },
+      // Financial
+      { name: "Tax", kind: "expense" },
+      { name: "Bank fees & commission", kind: "expense" },
+      { name: "Legal & professional", kind: "expense" },
+      { name: "Insurance", kind: "expense" },
+      // Business
+      { name: "Accountant", kind: "expense" },
+      { name: "Business services", kind: "expense" },
+      { name: "ZUS & business tax", kind: "expense" },
+      { name: "Business other", kind: "expense" },
+      // Debt & giving
+      { name: "Lent out", kind: "expense" },
+      { name: "Repayment made", kind: "expense" },
+      { name: "Charity", kind: "expense" },
+      // Top-level
+      { name: "Uncategorized", kind: "expense" },
+    ];
+    expect(seededLeaves).toHaveLength(59);
+
+    const { controller } = harness(undefined, {
+      categoryTree: seededLeaves.map((leaf, index) =>
+        categoryNode({
+          id: `cccccccc-0000-4000-${String(8000 + index).padStart(4, "0")}-000000000000`,
+          name: leaf.name,
+          kind: leaf.kind,
+        }),
+      ),
+    });
+
+    const collisions = controller.getSnapshot().categoryCollisions;
+    expect(collisions.map((c) => `${c.a.name} <-> ${c.b.name}`)).toEqual([]);
   });
 });

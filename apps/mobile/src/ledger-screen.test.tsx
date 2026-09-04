@@ -115,6 +115,14 @@ function fakeController(search: FakeSearch) {
     updateTransaction: () => undefined,
     deleteTransaction: () => undefined,
     setTransactionLines: () => undefined,
+    listFullCategoryTree: () => [],
+    listCategoryUsage: () => new Map(),
+    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
+    renameCategory: () => undefined,
+    reparentCategory: () => undefined,
+    convertLeafGroup: () => undefined,
+    mergeCategories: () => undefined,
+    archiveCategory: () => undefined,
     reset: () => undefined,
   };
   return createPhoneLedger(port, {
