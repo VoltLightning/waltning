@@ -9,16 +9,20 @@
  * Proves: flows/J16-move-money.md §2–§4.
  * Findings: R5 C2, R5 H1, R4 H1-r4, R4 H2-r4, R4 H-r4 (date), R4 M-r4 (",5").
  *
- * **R5 H1 is fixed for a currency change, not for a date change (R4 H-r4
- * is the same gap, one input over).** `referenceRate` itself is a
- * `useMemo` keyed on `date`/`fromAccount`/`toAccount`
- * (`transfer-screen.tsx`), so it always answers correctly — but the
- * *destination amount string* only ever recomputes from `handleKey` (a
- * keypress) or the two account-change handlers, never from an effect on
- * `date`. Picking `To: EUR` after typing the source amount reprices the
- * figure correctly (a plain `it`, below); picking a different *date* after
- * typing it does not — the figure stays priced at the old date's rate,
- * silently (`it.fails("R4 H-r4")`, its own scenario below).
+ * **R5 H1 and R4 H2-r4 are fixed for a currency change, not for a date
+ * change (R4 H-r4 is the same gap, one input over).** R4 H2-r4 (PR #118's
+ * round-3 finding) named exactly this: "the destination leg keeps a figure
+ * converted at the previous currency's rate" — a stale conversion left
+ * behind by a currency switch. `referenceRate` itself is a `useMemo` keyed
+ * on `date`/`fromAccount`/`toAccount` (`transfer-screen.tsx`), so it always
+ * answers correctly — but the *destination amount string* only ever
+ * recomputes from `handleKey` (a keypress) or the two account-change
+ * handlers, never from an effect on `date`. Picking `To: EUR` after typing
+ * the source amount reprices the figure correctly and the stale `25.00`
+ * figure is gone (`#114` landed the reset — a plain `it`, below, credits
+ * both R5 H1 and R4 H2-r4 on that one assertion); picking a different
+ * *date* after typing it does not — the figure stays priced at the old
+ * date's rate, silently (`it.fails("R4 H-r4")`, its own scenario below).
  *
  * **R4 H1-r4 and R4 M-r4, as this file actually found them.** The brief's
  * own scripted fee value, `1,234.56`, carries two separators (a comma *and*
@@ -164,12 +168,14 @@ describe("J16 — move money", () => {
     // 25.00 USD.
     expect(screen.getByRole("button", { name: "Destination amount: 25.00" })).toBeDefined();
 
-    // §4 — a currency change re-prices the destination (R5 H1, fixed).
-    // 100 PLN at 4.00 PLN/USD and 0.9200 EUR/USD is 100 × (0.92 / 4.00) =
-    // 23.00 EUR.
+    // §4 — a currency change re-prices the destination (R5 H1, R4 H2-r4,
+    // both fixed): the stale USD-rate figure is gone, not left behind at
+    // the previous currency's own conversion. 100 PLN at 4.00 PLN/USD and
+    // 0.9200 EUR/USD is 100 × (0.92 / 4.00) = 23.00 EUR.
     fireEvent.click(screen.getByRole("button", { name: "To: Bank B · USD" }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank C · EUR" }));
     expect(screen.getByRole("button", { name: "Destination amount: 23.00" })).toBeDefined();
+    // R4 H2-r4 — the previous currency's stale figure must not survive.
     expect(screen.queryByRole("button", { name: "Destination amount: 25.00" })).toBeNull();
 
     // Back to USD, so the rest of the script prices at the fixture's own

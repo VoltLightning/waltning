@@ -8,7 +8,8 @@
  *
  * Proves: flows/J10-currency-and-rates.md, screens/S18-settings-exchange-
  * rates.md §3–§5.
- * Findings: R1 L5-r5.
+ * Findings: R1 H1-r4 (a Sunday capture is priced at Monday's rate), R1 L5-r5
+ * (the rates screen and a capture on that date disagree).
  *
  * **`USD` is this ledger's pivot** (`@waltning/core/currencies`), not a
  * quoted currency — it carries no `fx_rates` row and no Settings › Rates
