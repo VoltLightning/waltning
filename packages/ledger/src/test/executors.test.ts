@@ -22,6 +22,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { createAccountExecutor } from "../accounts/create-account.executor.ts";
+import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
@@ -533,6 +534,71 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     // The server answers this at drain; `false` is the column's default and not
     // a claim this executor made.
     expect(result.row.fxRateEstimated).toBe(false);
+  });
+});
+
+// H2/M1 — end to end, through the real `change_pivot` and `create_transaction`
+// executors: a `change_pivot` whose earliest bridge date is itself a
+// carried-forward copy with no real quote before it must neither mint an
+// orphaned reciprocal row (M1) nor leave a later capture unable to price
+// itself off the real quote that does exist (H2). This is the exact
+// reproduction from the review: `USD/CHF 2026-01-03 carried_forward |
+// 2026-01-05 nbp`, pivot changed to CHF, then a capture on the orphan's own
+// former date.
+describe("H2 — an orphaned carried_forward bridge must not refuse a capture, end to end", () => {
+  it("change_pivot drops the orphan, and the capture still prices from the real quote", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // The earliest USD→CHF bridge date in range — carried forward, with
+        // no real quote for the pair anywhere before it.
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-03"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+        // The only real quote for the pair.
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "CHF" });
+
+    // M1 — the pivot change itself must not have minted an orphan for the
+    // new pair: exactly the real quote's date survives, sourced honestly.
+    const chfToUsd = s.ledger.replica.db
+      .select()
+      .from(fxRates)
+      .where(eq(fxRates.base, CHF))
+      .all()
+      .filter((row) => row.quote === USD);
+    expect(chfToUsd).toHaveLength(1);
+    expect(chfToUsd[0]?.date).toBe(accountingDate("2026-01-05"));
+    expect(chfToUsd[0]?.source).toBe("derived");
+    // 1 USD = 0.25 CHF (the seeded rate) ⇒ 1 CHF = 4 USD.
+    expect(chfToUsd[0]?.rate).toBe(money.unitsPerPivot("4"));
+
+    // H2 — the capture, on the orphan's own former date, resolves through
+    // the real quote rather than throwing "no last-known rate for CHF/USD".
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_USD, "USD"),
+      date: "2026-01-03",
+    });
+
+    // fx_rate is pivot(CHF)-per-unit(USD) — the reciprocal of the row above,
+    // which lands back on the original 0.25 (1 USD = 0.25 CHF).
+    expect(result.row.fxRate).toBe(money.pivotPerUnit("0.25"));
+    // The resolved rate is dated 2026-01-05, two days from this row's own
+    // 2026-01-03 — not exact for this date, so estimated.
+    expect(result.row.fxRateEstimated).toBe(true);
   });
 });
 

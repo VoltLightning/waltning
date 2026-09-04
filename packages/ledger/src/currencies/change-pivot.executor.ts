@@ -25,6 +25,17 @@
  * own, only a copy of the nearest earlier real quote, so it rebases by *that
  * quote's own date's* bridge even when its own date has none — dropped only
  * when the origin itself has no bridge to trace to (C2).
+ *
+ * **M1 — the bridge row itself is not exempt from that guard.** The
+ * reciprocal `(newPivot, oldPivot)` row this writes once per date descends
+ * from the *bridge* row (`base = P, quote = Q`) the same way every other
+ * rebased row descends from its own — so when the bridge is itself
+ * `carried_forward`, the reciprocal is dropped unless that bridge traces to
+ * a real origin too, exactly like any other carried row above. Skipping this
+ * guard used to mint the one orphaned `carried_forward` row `readNearestRate`
+ * (H2) and `readCurrencies.capturable` both refuse to serve for the new
+ * pair — the earliest bridge date in range, carried, with nothing real
+ * before it.
  */
 
 import { dec, type UnitsPerPivot, unitsPerPivot } from "@waltning/core/money";
@@ -180,6 +191,20 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
     }
 
     if (!bridge || !k) continue; // no bridge on this date — nothing to reciprocate for it.
+
+    // M1 — the same origin guard the per-row rebase applies above (C2/M8):
+    // when the bridge row itself is a carried-forward copy, the reciprocal
+    // `(newPivot, oldPivot)` row must trace to a real origin too, or this
+    // mints exactly the orphaned carried row `readNearestRate` (H2) and
+    // `capturable` both refuse to hand back — a row for the new pair with
+    // no real source anywhere behind it. `bridgeDates.has(origin)` is
+    // guaranteed once `origin` is found (the origin row itself is what put
+    // its own date in `bridgeDates`), checked anyway for the same reason
+    // the per-row guard checks it: never trust one lookup to imply another.
+    if (bridge.source === CARRIED_FORWARD) {
+      const origin = originDateOf(newPivot.code, bridge.date);
+      if (origin === undefined || !bridgeDates.has(origin)) continue;
+    }
     const reciprocal: UnitsPerPivot = unitsPerPivot(dec(1).dividedBy(k));
     // M4 — same reasoning as the per-row rebase above, and the bridge
     // quote's own `fetchedAt` carried forward rather than dropped.

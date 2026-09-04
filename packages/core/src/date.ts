@@ -108,6 +108,16 @@ export function addDays(date: AccountingDate, n: number): AccountingDate {
  * uses, not a subtraction of two instants that would need a timezone this
  * file does not have. `money.ts`'s `ageInDays` is this, named for §7's
  * ageing — a company's debt is *old* as of `today`, never *overdue*.
+ *
+ * **L3 — this function's real domain is years ≥ 0100.** `Date.UTC` folds a
+ * two-digit year (0–99) into 1900+year rather than leaving it alone, which
+ * would silently mis-count a date in that range by roughly nineteen
+ * centuries; this file stays shape-only (M3's own comment above says why)
+ * and takes no year floor itself. `zAccountingDate` (`zod.ts`) is what
+ * guarantees one: `isRealCalendarDate`'s round trip through the same
+ * `Date.UTC` fails for any year below `0100`, since the folded year never
+ * reads back as the year that went in — so every `AccountingDate` that
+ * reached this function through the contract edge is already ≥ 0100.
  */
 export function daysBetween(a: AccountingDate, b: AccountingDate): number {
   const [ay, am, ad] = a.split("-").map(Number) as [number, number, number];

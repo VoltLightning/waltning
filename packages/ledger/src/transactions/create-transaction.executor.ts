@@ -16,8 +16,9 @@
  * **C1/C2 — a missing rate must never cost you the transaction.**
  * `provisionalFxRate` prices every capture at the nearest rate this replica
  * holds for the row's own date, however far away that rate is
- * (`readNearestRate`, uncapped); it defers only when the pair has no rate at
- * all — never on distance, which is `readRate`'s cap and belongs to its
+ * (`readNearestRate`, uncapped); it defers only when the pair has no
+ * real-source rate at all (H1/H2 — never off an orphaned `carried_forward`
+ * row) — never on distance, which is `readRate`'s cap and belongs to its
  * read-side callers, not to this write.
  */
 
@@ -289,10 +290,20 @@ function isSharedAccount(tx: ReplicaTx, accountId: CreateTransactionInput["accou
  *    read-side rule (S18, reference figures), not a write-side one.
  * 4. **No rate at all for the pair: defer.** Argued below.
  */
-type ProvisionalFxRate = { rate: PivotPerUnit; estimated: boolean };
+/**
+ * L4 — `daysAway` rides alongside `estimated` for the same reason
+ * `NearestRate.daysAway` exists: a boolean cannot tell "estimated by one
+ * day" from "estimated by 2,342". `0` for a supplied rate (case 1) and the
+ * same-currency `1` (case 2); `readNearestRate`'s own `daysAway` for a
+ * resolved cross-currency rate (case 3). Not persisted — no transactions
+ * column holds it and no screen reads it yet; it exists so a later
+ * diagnostic (S18/S30) can surface it without a second query, the same
+ * intent as `NearestRate.daysAway`.
+ */
+type ProvisionalFxRate = { rate: PivotPerUnit; estimated: boolean; daysAway: number };
 
 function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): ProvisionalFxRate {
-  if (input.fxRate !== undefined) return { rate: input.fxRate, estimated: false };
+  if (input.fxRate !== undefined) return { rate: input.fxRate, estimated: false, daysAway: 0 };
 
   const pivot = pivotCurrency(tx);
 
@@ -310,7 +321,9 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): Provis
   // `1`, at storage scale rather than as the literal string. `pivotPerUnit`
   // produces the twelve places `numeric(24,12)` holds, so the same value read
   // back from either engine compares equal as a string.
-  if (input.currency === pivot) return { rate: money.pivotPerUnit("1"), estimated: false };
+  if (input.currency === pivot) {
+    return { rate: money.pivotPerUnit("1"), estimated: false, daysAway: 0 };
+  }
 
   const local = readNearestRate(tx, { base: pivot, quote: input.currency, date: input.date });
 
@@ -340,15 +353,20 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): Provis
      * finding this entry at every launch even once a later write has pushed
      * the watermark past it, until this branch stops throwing.
      *
-     * **C1/C2 — the only reachable case now is "no row for this pair at
-     * all".** `readNearestRate` is uncapped, so a back-dated capture 31 days
-     * from the only held row still resolves (case 3, `estimated: true`)
-     * rather than landing here; this branch is a currency added to the
-     * ledger while the phone was offline, with no rate row yet for the pair
-     * — exactly what `readCurrencies.capturable` already checks for,
-     * date-blind, so a screen can decline the capture before ever reaching
-     * this throw. It is not the same as "the rate is stale", which is case 3
-     * and is fine.
+     * **C1/C2/H2 — the only reachable case is "no real-source row for this
+     * pair at all".** `readNearestRate` is uncapped, so a back-dated capture
+     * 31 days from the only held row still resolves (case 3,
+     * `estimated: true`) rather than landing here; this branch is a currency
+     * added to the ledger while the phone was offline, with no real-source
+     * rate row yet for the pair — exactly what `readCurrencies.capturable`
+     * already checks for, date-blind, so a screen can decline the capture
+     * before ever reaching this throw. H1/H2 made this the *only* reachable
+     * case: `readNearestRate` compares real-source candidates on both sides
+     * of the date, so a pair holding a real row plus an orphaned
+     * `carried_forward` row nearer this date's own capture no longer throws
+     * here — it resolves off the real row instead, the same as `capturable`
+     * already promised. It is not the same as "the rate is stale", which is
+     * case 3 and is fine.
      */
     throw new LocalDeferral(
       `create_transaction: no last-known rate for ${pivot}/${input.currency}, and a ` +
@@ -368,7 +386,11 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): Provis
    * the only sanctioned crossing, and it is called once: a rate lives at twelve
    * decimal places, so flipping back cannot recover what truncation removed.
    */
-  return { rate: money.reciprocal(local.rate), estimated: local.asOf !== input.date };
+  return {
+    rate: money.reciprocal(local.rate),
+    estimated: local.asOf !== input.date,
+    daysAway: local.daysAway,
+  };
 }
 
 /**

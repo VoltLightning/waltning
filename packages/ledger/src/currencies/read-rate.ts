@@ -148,6 +148,16 @@ export type NearestRate = {
   source: string;
   /** The rate row's own date — never `date` itself unless they coincide. */
   asOf: AccountingDate;
+  /**
+   * L4 — `|daysBetween(asOf, date)|`, `0` on an exact real-source hit for
+   * `date`. Always non-negative: `asOf` can land on either side of `date`
+   * (H1), and this is the distance, never the signed offset.
+   * `fxRateEstimated` on the transaction is a bare boolean; nothing above
+   * `packages/ledger` can otherwise tell a rate estimated by one day from
+   * one estimated by 2,342 — this is that distance, carried through so a
+   * future diagnostic (S18/S30) can surface it without a second query.
+   */
+  daysAway: number;
 };
 
 /**
@@ -158,45 +168,47 @@ export type NearestRate = {
  * with `fx_rate_estimated` set, per `SPEC.md` §7.6 and `architecture/01`/`06`
  * ("a missing rate must never cost you the transaction").
  *
- * **Not the same refusal as `readCurrencies.capturable`, only made to agree
- * on the ordinary case.** `capturable` asks a coarser, date-blind question —
- * *does the pair hold any row at all* — and `read-currencies.ts`'s own query
- * excludes a pair whose only rows are `carried_forward` with no real origin
- * anywhere, so the two answer the same for a pair that is entirely orphaned.
- * But a pair can still hold a real row **and** an orphaned `carried_forward`
- * row that happens to land nearer `date` — `capturable` has no per-date view
- * to catch that, so this still refuses whenever the row nearest `date` has
- * no locatable origin, even on a pair `capturable` marks `true`.
+ * **Now the same refusal as `readCurrencies.capturable`, exactly** — both
+ * answer "does this pair have at least one real-source row", `capturable`
+ * date-blind and this one nearest `date`. H1/H2 made that true: this
+ * compares two *real-source* candidates rather than picking the nearest row
+ * of any source and only then walking a loser back to its origin, so a
+ * `carried_forward` row — orphaned or not — is never the thing being
+ * compared or returned. A pair `capturable` marks `true` always has a
+ * real-source row here too, on some date.
  *
- * **H1 — nearest by calendar distance on both sides, ties to before.** Reads
- * the closest row at-or-before `date` and the closest row at-or-after it,
- * compares the two with `daysBetween`, and keeps whichever is closer — the
- * before row on a tie, preferring the rate already in effect on `date` over
- * one that only takes effect later. Either side may hold nothing (a currency
- * just added to the ledger has nothing before its first synced quote; one
- * whose source went quiet has nothing after); this refuses only when neither
- * side holds a row at all.
- *
- * Walks past a `carried_forward` row to its origin the same way `readRate`
- * does (`findOrigin`) and returns the *origin's* rate, never the carried
- * copy's stale snapshot (H3's argument, unchanged here).
+ * **H1 — nearest by calendar distance on both sides, ties to before.**
+ * Queries the nearest **real-source** row at-or-before `date` (`findOrigin`,
+ * the same query `readRate` uses to walk a carried row back to its origin)
+ * and the nearest **real-source** row at-or-after `date`
+ * (`source <> 'carried_forward'`, ascending), then compares the two with
+ * `daysBetween` and keeps whichever is closer — the before row on a tie,
+ * preferring the rate already in effect on `date` over one that only takes
+ * effect later. Either side may hold nothing (a currency just added to the
+ * ledger has nothing before its first synced quote; one whose source went
+ * quiet has nothing after); this refuses only when neither side holds a
+ * real-source row at all — never because the *nearer* candidate happened to
+ * be a carried copy, which is what used to make this return a farther row
+ * than the one it had just measured as closer (H1), or refuse outright
+ * although a real row existed on the other side (H2).
  */
 export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
   db: Queryable<TRun, TSchema>,
   { base, quote, date }: { base: CurrencyCode; quote: CurrencyCode; date: AccountingDate },
 ): NearestRate | undefined {
-  const [before] = db
-    .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
-    .from(fxRates)
-    .where(and(eq(fxRates.base, base), eq(fxRates.quote, quote), lte(fxRates.date, date)))
-    .orderBy(desc(fxRates.date))
-    .limit(1)
-    .all();
+  const before = findOrigin(db, { base, quote, asOf: date });
 
   const [after] = db
     .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
     .from(fxRates)
-    .where(and(eq(fxRates.base, base), eq(fxRates.quote, quote), gte(fxRates.date, date)))
+    .where(
+      and(
+        eq(fxRates.base, base),
+        eq(fxRates.quote, quote),
+        gte(fxRates.date, date),
+        ne(fxRates.source, CARRIED_FORWARD),
+      ),
+    )
     .orderBy(asc(fxRates.date))
     .limit(1)
     .all();
@@ -204,26 +216,25 @@ export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
   // H1 — compare distances rather than always preferring `before`: a row 26
   // days after `date` is nearer than one from 2020, and the newest-before
   // pick used to win regardless of how far it was. Tie (equal distance on
-  // both sides) goes to `before`.
-  const nearest =
+  // both sides) goes to `before`. Both candidates are already real-source
+  // rows (H1/H2), so the winner needs no further walk to an origin.
+  const origin =
     before && after
       ? daysBetween(before.date, date) <= daysBetween(date, after.date)
         ? before
         : after
       : (before ?? after);
-  if (!nearest) return undefined;
+  if (!origin) return undefined;
 
-  let origin: { date: AccountingDate; source: string; rate: UnitsPerPivot } = nearest;
-  if (nearest.source === CARRIED_FORWARD) {
-    const real = findOrigin(db, { base, quote, asOf: nearest.date });
-    // No locatable origin (C2) — same refusal `readRate` makes for the same
-    // reason: `change_pivot` can drop the bridge row a carried date descends
-    // from while leaving the carried row itself.
-    if (!real) return undefined;
-    origin = real;
-  }
-
-  return { rate: origin.rate, source: origin.source, asOf: origin.date };
+  return {
+    rate: origin.rate,
+    source: origin.source,
+    asOf: origin.date,
+    // `daysBetween` is signed (positive when its second date is later); the
+    // origin can land on either side of `date`, so this is the distance,
+    // never the signed offset.
+    daysAway: Math.abs(daysBetween(origin.date, date)),
+  };
 }
 
 export type LocalCoverage = {

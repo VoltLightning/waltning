@@ -14,6 +14,14 @@
  * instead — the real files, run in two calls to the same `migrate()` the
  * template uses, so a fabricated migration path never diverges from the real
  * one.
+ *
+ * **L2 — `pg_constraint.convalidated` is read directly, not inferred from
+ * prose.** The migration's own comment claims a fresh install ends up
+ * `VALID` and a database holding a violating row is left `NOT VALID` until
+ * the owner runs `VALIDATE CONSTRAINT` by hand; nothing checked either half
+ * of that before now. `conrelid = 'transactions'::regclass` scopes the name
+ * lookup to this table, the same way `conname` alone would not if another
+ * table ever grew a constraint with the same short name.
  */
 
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -23,7 +31,16 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { migrateUrl, migrationsFolder } from "./scratch.ts";
+import { migrateUrl, migrationsFolder, scratchDatabase } from "./scratch.ts";
+
+/** `pg_constraint.convalidated` for `transactions_amount_positive` — L2. */
+async function isConvalidated(sql: postgres.Sql): Promise<boolean | undefined> {
+  const rows = await sql<{ convalidated: boolean }[]>`
+    SELECT convalidated FROM pg_constraint
+    WHERE conname = 'transactions_amount_positive'
+      AND conrelid = 'transactions'::regclass`;
+  return rows[0]?.convalidated;
+}
 
 const TARGET_TAG = "0014_transactions_amount_strictly_positive";
 
@@ -125,6 +142,10 @@ describe("M1 — 0014 on a database already holding a zero-amount transfer", () 
     expect(rows[0]?.amount_original).toBe("0.00000000");
   });
 
+  it("L2 — leaves the constraint NOT VALID, since a violating row is still there", async () => {
+    expect(await isConvalidated(client)).toBe(false);
+  });
+
   it("refuses a new zero-amount, non-adjustment row from this point on", async () => {
     await expect(
       client.unsafe(`
@@ -137,5 +158,16 @@ describe("M1 — 0014 on a database already holding a zero-amount transfer", () 
            0.00, 0.00, 'USD', 'PLN', 1, 1)
       `),
     ).rejects.toThrow(/transactions_amount_positive/);
+  });
+});
+
+describe("L2 — 0014 on a fresh install", () => {
+  it("validates transactions_amount_positive immediately — no violating row exists", async () => {
+    const scratch = await scratchDatabase("amt_fresh");
+    try {
+      expect(await isConvalidated(scratch.sql)).toBe(true);
+    } finally {
+      await scratch.drop();
+    }
   });
 });

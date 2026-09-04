@@ -713,6 +713,58 @@ describe("change_pivot", () => {
     // Rebased by the origin's (day 1) bridge: 0.23 / 0.25 = 0.92.
     expect(day2?.rate).toBe(money.unitsPerPivot("0.92"));
   });
+
+  // M1/H2 — the exact scenario the reciprocal insert used to mint an orphan
+  // for: the *bridge itself* is a carried-forward copy with no real quote
+  // anywhere before it. The per-row loop already refuses to rebase a row
+  // like this (C2's origin guard); the reciprocal `(newPivot, oldPivot)` row
+  // this test scans for must be refused the same way, never minted as a
+  // `carried_forward` row with nothing real behind it — the exact row
+  // `readNearestRate` (H2) and `capturable` both refuse to serve.
+  it("M1 — never mints an orphaned carried_forward reciprocal for the new pair", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // The earliest bridge date in range — carried forward, and with no
+        // real (PLN, USD) quote anywhere before it to trace to.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-03"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+        // The only real quote for the pair, strictly after the carried row.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "USD" });
+
+    // Scan the whole table for the new pair: not one row is a carried copy
+    // with no real source anywhere before it.
+    const usdToPln = rateRows().filter((r) => r.base === "USD" && r.quote === "PLN");
+    for (const row of usdToPln) {
+      if (row.source !== "carried_forward") continue;
+      const hasRealBefore = usdToPln.some(
+        (other) => other.source !== "carried_forward" && other.date <= row.date,
+      );
+      expect(hasRealBefore).toBe(true);
+    }
+
+    // The orphaned date is dropped outright, never carried into the new pair.
+    expect(usdToPln.find((r) => r.date === accountingDate("2026-01-03"))).toBeUndefined();
+    // The real quote's date still rebases, sourced honestly as `derived`.
+    const day5 = usdToPln.find((r) => r.date === accountingDate("2026-01-05"));
+    expect(day5?.source).toBe("derived");
+    expect(day5?.rate).toBe(money.unitsPerPivot("4")); // 1 PLN = 0.25 USD ⇒ 1 USD = 4 PLN
+  });
 });
 
 /* ── set_manual_rate / clear_manual_rate ─────────────────────────────────── */
@@ -1416,6 +1468,198 @@ describe("readNearestRate", () => {
       date: accountingDate("2026-01-10"),
     });
     expect(rate).toBeUndefined();
+  });
+
+  // L4 — a real-source hit reports daysAway alongside asOf.
+  it("L4 — daysAway is 0 on an exact real-source hit", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-10"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "nbp",
+      })
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.daysAway).toBe(0);
+  });
+
+  // H1(a) — the closer candidate is `carried_forward`; the old code compared
+  // it against the after row, lost the comparison, then walked the *loser*
+  // back to its own origin and returned that instead — 9 days away rather
+  // than the 1-day row it had just measured as closer.
+  it("H1 — the closer candidate is carried_forward; must not fall back to a farther real row", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-10"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-11"),
+          rate: money.unitsPerPivot("4.90"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.90"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-11"));
+    expect(rate?.daysAway).toBe(1);
+  });
+
+  // H1(b) — the common weekend case: a source publishes Friday and Monday,
+  // carrying forward over the weekend. SPEC.md §7.6's round-3 sentence says
+  // nearest in calendar days on either side — Monday (1 day) beats Friday
+  // (2 days), even though the carried Saturday/Sunday rows sit closer in the
+  // table's own row order.
+  it("H1 — Monday's real quote beats Friday's, across a carried weekend", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"), // Friday
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-03"), // Saturday, carried
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-04"), // Sunday, carried — the query date
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"), // Monday
+          rate: money.unitsPerPivot("4.30"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-04"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-05"));
+    expect(rate?.daysAway).toBe(1);
+  });
+
+  // H2 — the nearer candidate is a carried_forward row with no locatable
+  // origin at all (no real row anywhere before it). The old code picked it
+  // as `nearest` on distance alone, then refused outright on the failed
+  // origin walk — although a real row exists further out on the other side.
+  it("H2 — an orphaned carried_forward row nearer than the query date must not refuse a usable real rate (before side)", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Orphaned: no real (PLN, USD) row anywhere at or before this date.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-03"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("4.30"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    // Queried exactly on the orphan's own date — the old code's "nearest"
+    // picked it at distance 0 and refused, exactly the H2 reproduction from
+    // `create_transaction`: a real rate exists, but the read still failed.
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-03"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-05"));
+    expect(rate?.daysAway).toBe(2);
+  });
+
+  // H2, mirrored — the orphaned carried row is nearer on the *after* side,
+  // with the only real row further out and strictly before the query date's
+  // possible before-candidates (there are none here at all).
+  it("H2 — an orphaned carried_forward row nearer than the query date must not refuse a usable real rate (after side)", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Orphaned: no real (PLN, USD) row anywhere at or before this date.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        // The only real row for the pair — farther away than the orphan,
+        // and later still.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-02-01"),
+          rate: money.unitsPerPivot("4.30"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    // Nothing at or before this date — the orphaned carried row (4 days
+    // after) used to win the "nearest, any source" comparison outright,
+    // since there was no before-candidate to compare it against.
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
+    expect(rate?.asOf).toBe(accountingDate("2026-02-01"));
+    expect(rate?.daysAway).toBe(31);
   });
 });
 
