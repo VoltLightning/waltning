@@ -130,6 +130,8 @@ export type Theme = {
   shellTextMuted: string;
   /** The fill behind the active control on the shell — `DeskBand`'s nav. */
   shellNavActiveFill: string;
+  /** A recessed track on the shell — `DeskBand`'s scope `SegmentControl`. */
+  shellInsetTrackFill: string;
   /** The dimming layer behind a modal surface. */
   scrim: string;
 
@@ -229,6 +231,7 @@ export const light: Theme = {
   shellText: color.shellText,
   shellTextMuted: color.shellTextMuted,
   shellNavActiveFill: color.shellNavActive,
+  shellInsetTrackFill: color.shellInsetTrack,
   scrim: color.ink,
 
   elevation: {
@@ -284,6 +287,7 @@ export const dark: Theme = {
   // one surface that does not repaint between themes (`tokens.ts`: "the
   // shell stays sage in both themes"), so its highlight does not either.
   shellNavActiveFill: color.shellNavActive,
+  shellInsetTrackFill: color.shellInsetTrack,
   scrim: darkColor.ground,
 
   elevation: {

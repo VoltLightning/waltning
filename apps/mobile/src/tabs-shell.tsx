@@ -126,8 +126,12 @@ function DeskCurrency() {
  * rather than a second figure nobody has computed yet. `null` before the
  * first account, matching `CurrencyTotals` returning nothing rather than a
  * fabricated zero balance in an invented currency.
+ *
+ * `collapsed` picks `DualTotal`'s shape, not just its size: `"band"` on the
+ * landing route, `"compact"` everywhere else — only the hero row changes
+ * shape when the band collapses, per the design correction on #95.
  */
-function DeskHero() {
+function DeskHero({ collapsed }: { collapsed: boolean }) {
   const lead = useLeadCurrency();
   if (lead === null) return null;
 
@@ -137,7 +141,7 @@ function DeskHero() {
       ours={null}
       currency={lead.currency}
       decimals={lead.decimals}
-      size="band"
+      size={collapsed ? "compact" : "band"}
     />
   );
 }
@@ -146,6 +150,9 @@ function DeskHero() {
  * Bound to state nothing reads yet — no screen filters on scope this arc, so
  * switching it changes nothing below the band. Named here rather than left
  * unbuilt: the control is part of `DESK1`'s card, and the read is `DESK4`'s.
+ *
+ * `tone="shell"` — the canvas's scope control is a dark inset on the band,
+ * not the light control `SegmentControl` draws everywhere else it is used.
  */
 function DeskScope() {
   const t = useT();
@@ -157,7 +164,7 @@ function DeskScope() {
     { value: "business", label: t("shell.scopeBusiness") },
   ] as const;
 
-  return <SegmentControl segments={segments} value={scope} onChange={setScope} />;
+  return <SegmentControl segments={segments} value={scope} onChange={setScope} tone="shell" />;
 }
 
 function DeskLayer({ slot }: { slot: React.ReactNode }) {
@@ -174,7 +181,7 @@ function DeskLayer({ slot }: { slot: React.ReactNode }) {
         commandBar={<CommandBarPlaceholder />}
         currency={<DeskCurrency />}
         scope={<DeskScope />}
-        hero={<DeskHero />}
+        hero={<DeskHero collapsed={collapsed} />}
         collapsed={collapsed}
       />
       {slot}

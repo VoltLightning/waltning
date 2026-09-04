@@ -23,14 +23,18 @@
  * **Two rows expanded; one, collapsed, everywhere but the landing route** —
  * the same split `02-tokens` §2.9 already draws for the phone header
  * (title+tag left, total right, one row tall). Expanded: brand+nav, the
- * command bar and the currency chip share the top row; scope and the hero
- * share the bottom one — the hero's neighbour once `DESK4`'s spend/net/
- * business triple exists (arc-full, `SPEC.md` §5/§12), empty until then.
- * Collapsed drops the command bar, the currency chip and the scope segment:
- * a route that is not the dashboard has no command to type and no filter
- * this arc reads, and showing controls nothing answers is worse than
- * omitting them. What survives collapsing is identity (brand, nav) and the
- * one figure every route can still state.
+ * command bar and the currency chip share the top row; the hero — left,
+ * aligned under the brand — and scope share the bottom one, the hero's
+ * neighbour once `DESK4`'s spend/net/business triple exists (arc-full,
+ * `SPEC.md` §5/§12), empty until then. **Only the currency chip drops when
+ * collapsed** — a route that is not the dashboard still reads its own
+ * currency from the chip beside it, not from a marker this arc has nowhere
+ * else to put; `N` still opens the composer and scope still filters
+ * wherever a screen reads it. What changes is the hero: `DualTotal` shrinks
+ * to `size="compact"` — one line, *mine* and *ours* side by side rather
+ * than stacked — so identity, the compact figure, the command bar and scope
+ * all fit one row, brand-to-scope, with a single flexible gap absorbing
+ * whatever width is left between the figure and the command bar.
  */
 
 import { Pressable, Text, View } from "react-native";
@@ -46,15 +50,18 @@ export type DeskBandProps = {
   brand: React.ReactNode;
   /** `DeskNavItem`s, in route order. */
   nav: React.ReactNode;
-  /** `N`'s composer slot — a disabled placeholder until `DESK2`. */
+  /** `N`'s composer slot — a disabled placeholder until `DESK2`. Kept when collapsed. */
   commandBar: React.ReactNode;
-  /** The ledger's leading currency — `CurrencyChip`, or nothing to show. */
+  /** The ledger's leading currency — `CurrencyChip`, or nothing to show. Dropped when collapsed. */
   currency: React.ReactNode;
-  /** The scope `SegmentControl` — a filter, never shown on `DualTotal`. */
+  /** The scope `SegmentControl`, `tone="shell"` — a filter, never shown on `DualTotal`. Kept when collapsed. */
   scope: React.ReactNode;
-  /** `DualTotal` at `size="band"`, or its single-currency fallback. */
+  /**
+   * `DualTotal` — `size="band"` expanded, `size="compact"` collapsed (the
+   * caller's job: this component only lays out whatever it is handed).
+   */
   hero: React.ReactNode;
-  /** One row: every route but the landing one. */
+  /** One row — identity, the compact hero, the command bar and scope — every route but the landing one. */
   collapsed?: boolean;
 };
 
@@ -91,9 +98,14 @@ export function DeskBand({
   if (collapsed) {
     return (
       <View style={[styles.band, clearance]}>
-        <View style={styles.row}>
-          {identity}
-          <View style={styles.heroSlot}>{hero}</View>
+        <View style={styles.collapsedRow}>
+          <View style={styles.collapsedLeft}>
+            {identity}
+            <View>{hero}</View>
+          </View>
+          <View style={styles.flexSpacer} />
+          <View>{commandBar}</View>
+          <View>{scope}</View>
         </View>
       </View>
     );
@@ -107,8 +119,8 @@ export function DeskBand({
         <View style={styles.currencySlot}>{currency}</View>
       </View>
       <View style={styles.row}>
+        <View>{hero}</View>
         <View>{scope}</View>
-        <View style={styles.heroSlot}>{hero}</View>
       </View>
     </View>
   );
@@ -209,7 +221,19 @@ const useStyles = makeStyles((theme) => ({
   nav: { flexDirection: "row", gap: space.xs },
   commandBar: { flex: 1 },
   currencySlot: { flexShrink: 0 },
-  heroSlot: { alignItems: "flex-end" },
+
+  // Collapsed: identity+figure hug the left, command bar+scope hug the
+  // right, and `flexSpacer` alone carries the space between them — unlike
+  // `row`'s `justifyContent: "space-between"`, which would spread all four
+  // children evenly rather than leaving one gap where the design puts it.
+  collapsedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.x4,
+    paddingVertical: space.x2,
+  },
+  collapsedLeft: { flexDirection: "row", alignItems: "center", gap: space.x4 },
+  flexSpacer: { flex: 1 },
 
   commandBarPlaceholder: {
     minHeight: touchTarget.min,

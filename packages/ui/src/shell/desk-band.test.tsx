@@ -30,15 +30,15 @@ describe("DeskBand", () => {
     expect(screen.getByText("Hero")).toBeDefined();
   });
 
-  it("collapsed keeps identity and the hero, and drops the rest", () => {
+  it("collapsed drops only the currency chip", () => {
     render(<DeskBand {...SLOTS} collapsed />);
 
     expect(screen.getByText("Brand")).toBeDefined();
     expect(screen.getByText("Nav")).toBeDefined();
     expect(screen.getByText("Hero")).toBeDefined();
-    expect(screen.queryByText("CommandBar")).toBeNull();
+    expect(screen.getByText("CommandBar")).toBeDefined();
+    expect(screen.getByText("Scope")).toBeDefined();
     expect(screen.queryByText("Currency")).toBeNull();
-    expect(screen.queryByText("Scope")).toBeNull();
   });
 });
 

@@ -24,8 +24,8 @@ import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { tabularNums } from "../tokens.ts";
 
-export type AmountSize = "hero" | "medium" | "large" | "body" | "small";
-export type AmountEmphasis = "default" | "muted" | "shell";
+export type AmountSize = "hero" | "medium" | "large" | "body" | "small" | "compact";
+export type AmountEmphasis = "default" | "muted" | "shell" | "shellMuted";
 
 /**
  * What kind of movement the figure is.
@@ -69,6 +69,10 @@ const SIZES: Record<AmountSize, TextStyle> = {
   large: text.display("displayTwo"),
   body: text.display("body"),
   small: text.display("bodySm"),
+  // `DeskBand`'s *collapsed* hero: `displayThree` is the same step §2.9's
+  // phone header collapses its own total to — one row, no room for even
+  // `displayOne`.
+  compact: text.display("displayThree"),
 };
 
 export function Amount({
@@ -94,26 +98,27 @@ export function Amount({
 
   // On the shell, emphasis wins: the hero total is one colour whatever its
   // sign, because the shell has its own ink and a red total on dark green is
-  // neither legible nor what the screen is for.
-  const tone =
-    emphasis === "shell"
-      ? styles.shell
-      : kind === "income"
-        ? styles.income
-        : kind === "transfer"
-          ? styles.transfer
-          : kind === "spend" || negative
-            ? styles.spend
-            : null;
+  // neither legible nor what the screen is for. `shellMuted` is the same
+  // rule at the shell's secondary ink — `DeskBand`'s collapsed *ours*,
+  // beside the compact figure rather than stacked under its own kicker.
+  const onShell = emphasis === "shell" || emphasis === "shellMuted";
+  const tone = onShell
+    ? emphasis === "shellMuted"
+      ? styles.shellMuted
+      : styles.shell
+    : kind === "income"
+      ? styles.income
+      : kind === "transfer"
+        ? styles.transfer
+        : kind === "spend" || negative
+          ? styles.spend
+          : null;
 
   return (
     <Text style={[styles.base, SIZES[size], tone, emphasis === "muted" ? styles.muted : null]}>
       {prefix}
       {figure}
-      <Text style={[styles.currency, emphasis === "shell" ? styles.shellCurrency : null]}>
-        {" "}
-        {currency}
-      </Text>
+      <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}> {currency}</Text>
     </Text>
   );
 }
@@ -136,6 +141,7 @@ const useStyles = makeStyles((theme) => ({
   transfer: { color: theme.textMuted },
   muted: { color: theme.textMuted },
   shell: { color: theme.shellText },
+  shellMuted: { color: theme.shellTextMuted },
   currency: { color: theme.textMuted, ...text.ui("caption") },
   shellCurrency: { color: theme.shellTextMuted },
 }));

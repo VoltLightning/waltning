@@ -141,6 +141,13 @@ export const color = {
    * whichever theme is active, with no second colour to keep in sync.
    */
   shellNavActive: "rgba(255,255,255,0.10)",
+  /**
+   * The scope `SegmentControl`'s track on `DeskBand` — a recess, not a
+   * card. A dark overlay rather than a step off `shell` for the same reason
+   * as `shellNavActive`: the shell is one flat colour in both themes, so
+   * there is nothing to derive a second, darker shell tone from.
+   */
+  shellInsetTrack: "rgba(0,0,0,0.18)",
 
   /**
    * The ink the one shadow is cast in — a near-black with the page's warm

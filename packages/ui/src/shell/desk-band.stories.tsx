@@ -72,8 +72,15 @@ function Composed({
       ))}
       commandBar={<CommandBarPlaceholder />}
       currency={<CurrencyChip currency="PLN" />}
-      scope={<SegmentControl segments={SCOPES} value={scope} onChange={setScope} />}
-      hero={<DualTotal mine={money.toMoney("12480.20")} ours={null} currency="PLN" size="band" />}
+      scope={<SegmentControl segments={SCOPES} value={scope} onChange={setScope} tone="shell" />}
+      hero={
+        <DualTotal
+          mine={money.toMoney("12480.20")}
+          ours={money.toMoney("18940.60")}
+          currency="PLN"
+          size={collapsed ? "compact" : "band"}
+        />
+      }
       collapsed={collapsed}
     />
   );
@@ -99,12 +106,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The landing route: two rows — identity and command bar, then scope and hero. */
+/** The landing route: two rows — identity and command bar, then the hero (left) and scope (right). */
 export const Expanded: Story = {
   render: () => <Composed collapsed={false} initialRoute="Today" />,
 };
 
-/** Every other route: one row — identity at the left, the hero at the right. */
+/** Every other route: one row — identity, the compact hero, a flexible gap, then command bar and scope. */
 export const Collapsed: Story = {
   render: () => <Composed collapsed={true} initialRoute="Ledger" />,
 };

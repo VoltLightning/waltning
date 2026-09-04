@@ -24,6 +24,14 @@
  * shell's green. `DeskBand` is its first real caller, at `size="band"`, ahead
  * of the display-currency hero this component is written for (E9); until
  * then it renders whatever single-currency figure its caller has.
+ *
+ * **`size="compact"` is a different shape, not a smaller `"band"`.** It is
+ * `DeskBand`'s *collapsed* row — one line tall, no room for two stacked
+ * kickers-plus-figures — so *mine* and *ours* sit side by side with no
+ * label at all: `displayThree` beside a smaller, `shellMuted` figure. That
+ * is the same move §2.9 already makes for the phone header's own collapse
+ * (title and tag left, the total right, one row), applied to the pair this
+ * component draws instead of a single total.
  */
 
 import type * as money from "@waltning/core/money";
@@ -49,13 +57,15 @@ export type DualTotalProps = {
   decimals?: number;
   /**
    * `"shell"` (the default) is the phone's full-width hero — `mine` at
-   * `displayHero`. `"band"` is `DeskBand`'s (`02-tokens` §2.10): `mine` at
-   * `displayOne`, one step down, because a figure sharing a row with nav and
-   * a scope control has no 54px to spend. `ours` stays `displayTwo` either
-   * way — it is already the secondary line, and the row that shrank it is
-   * the one it was already smaller than.
+   * `displayHero`. `"band"` is `DeskBand`'s expanded row (`02-tokens` §2.10):
+   * `mine` at `displayOne`, one step down, because a figure sharing a row
+   * with nav and a scope control has no 54px to spend. `ours` stays
+   * `displayTwo` in both — it is already the secondary line, and the row
+   * that shrank *mine* is the one it was already smaller than. `"compact"`
+   * is `DeskBand`'s *collapsed* row — a different shape, not a smaller
+   * `"band"`; see the file doc.
    */
-  size?: "shell" | "band";
+  size?: "shell" | "band" | "compact";
 };
 
 const MINE_SIZE = { shell: "hero", band: "medium" } as const;
@@ -63,6 +73,29 @@ const MINE_SIZE = { shell: "hero", band: "medium" } as const;
 export function DualTotal({ mine, ours, currency, decimals = 2, size = "shell" }: DualTotalProps) {
   const t = useT();
   const styles = useStyles();
+
+  if (size === "compact") {
+    return (
+      <View style={styles.compactBlock}>
+        <Amount
+          value={mine}
+          currency={currency}
+          decimals={decimals}
+          size="compact"
+          emphasis="shell"
+        />
+        {ours === null ? null : (
+          <Amount
+            value={ours}
+            currency={currency}
+            decimals={decimals}
+            size="small"
+            emphasis="shellMuted"
+          />
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.block}>
@@ -94,6 +127,7 @@ export function DualTotal({ mine, ours, currency, decimals = 2, size = "shell" }
 
 const useStyles = makeStyles((theme) => ({
   block: { gap: space.xl },
+  compactBlock: { flexDirection: "row", alignItems: "baseline", gap: space.lg },
   label: {
     color: theme.shellTextMuted,
     ...text.ui("kicker"),
