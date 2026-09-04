@@ -55,6 +55,7 @@ type CurrencyRowCoverage = {
   days: number;
   realDays: number;
   calendarDays: number;
+  futureRows: number;
   pct: number;
   lastDate?: string;
 };
@@ -119,6 +120,7 @@ function CurrencyRow({
             days={coverage.days}
             realDays={coverage.realDays}
             calendarDays={coverage.calendarDays}
+            futureRows={coverage.futureRows}
             pct={coverage.pct}
             lastDate={coverage.lastDate}
             {...(coverage.days === 0 ? { onPress: handleViewRates } : {})}
@@ -192,6 +194,7 @@ export default function SettingsCurrenciesScreen() {
             days: row.days,
             realDays: row.realDays,
             calendarDays: row.calendarDays,
+            futureRows: row.futureRows,
             pct: row.coveragePct,
             ...(row.lastDate !== null ? { lastDate: row.lastDate } : {}),
           },

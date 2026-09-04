@@ -10,7 +10,7 @@ import { drizzle } from "drizzle-orm/expo-sqlite";
 import { Directory, File, Paths } from "expo-file-system";
 import { deleteDatabaseSync, openDatabaseSync, type SQLiteRunResult } from "expo-sqlite";
 import { mobileDiagnostics } from "./diagnostics.ts";
-import { displayCurrency, setLivePivotReader } from "./platform.ts";
+import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform.ts";
 
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
@@ -60,6 +60,9 @@ export const phoneLedger = createPhoneLedger(session, deviceRuntime(mobileDiagno
 // H1 — the header's live fallback, wired before anything reads it: every
 // `getSnapshot()` call resolves through this reader once nothing is chosen.
 setLivePivotReader(() => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null);
+// M2 — `phoneLedger.subscribe` fires after every successful write, `change_
+// pivot` included, so a mounted display-currency consumer follows live.
+setLivePivotSubscriber(phoneLedger.subscribe);
 
 // §7.0's default (first pinned, else the live pivot), read from this ledger
 // rather than `platform.ts`'s bootstrap constant — see

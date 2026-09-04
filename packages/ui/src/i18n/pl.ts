@@ -300,6 +300,7 @@ export const pl: Messages = {
     coverageBelow: "{{pct}}% · ostatni kurs {{date}}",
     coverageTitle: "Pokrycie",
     noRatesYet: "brak kursów · ustaw ręcznie",
+    noRatesYetFuture: "brak kursów · {{n}} ustawionych na później",
     noQuoteYet: "brak kursu",
     rateFieldSynced: "Zsynchronizowany: {{rate}}",
     ratePositive: "Kurs musi być liczbą dodatnią.",

@@ -41,7 +41,7 @@ import {
 } from "expo-sqlite";
 import { useSyncExternalStore } from "react";
 import { mobileDiagnostics } from "./diagnostics.ts";
-import { displayCurrency, setLivePivotReader } from "./platform.ts";
+import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform.ts";
 
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
@@ -178,6 +178,10 @@ export function requirePhoneLedger() {
     setLivePivotReader(
       () => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null,
     );
+    // M2 — `controller.subscribe` fires after every successful write,
+    // `change_pivot` included, so a mounted display-currency consumer
+    // follows live.
+    setLivePivotSubscriber(controller.subscribe);
     // §7.0's default (first pinned, else the live pivot), read from this
     // ledger rather than `platform.ts`'s bootstrap constant — see
     // `initialize-display-currency.ts`. Guarded on hydration inside; never

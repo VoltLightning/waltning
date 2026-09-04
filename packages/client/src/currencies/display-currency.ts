@@ -60,15 +60,27 @@ const codec = {
   serialize: (value: CurrencyCode): string => value,
 };
 
+export type DisplayCurrencyPreferenceOptions = {
+  /**
+   * M2 — the ledger's own write notifications (e.g. `phoneLedger.subscribe`),
+   * composed into this preference's `subscribe` so `change_pivot` reaches a
+   * mounted `useSyncExternalStore` consumer live, with no device-store write
+   * to piggyback on. `undefined` before the ledger session exists — the same
+   * bootstrap ordering `readPivot` already lives with (H1).
+   */
+  subscribeToLedger?: (listener: () => void) => () => void;
+  diagnostics?: ClientDiagnostics;
+};
+
 export function createDisplayCurrencyPreference(
   store: DevicePreferenceStore,
   /** A live read of the ledger's current pivot — `currencies.find(isPivot)` over a session snapshot. `null` before the ledger is ready. */
   readPivot: () => CurrencyCode | null,
   /** The build-time fallback, used only when `readPivot` has nothing yet. */
   seed: CurrencyCode,
-  diagnostics?: ClientDiagnostics,
+  options?: DisplayCurrencyPreferenceOptions,
 ): DisplayCurrencyController {
-  const inner = createDevicePreference<CurrencyCode>(store, codec, diagnostics);
+  const inner = createDevicePreference<CurrencyCode>(store, codec, options?.diagnostics);
 
   // See the file doc: cached so `useSyncExternalStore` sees the same
   // reference across renders where nothing actually changed. Rebuilt when
@@ -89,7 +101,18 @@ export function createDisplayCurrencyPreference(
       cached = { currency, hydrated: snapshot.hydrated };
       return cached;
     },
-    subscribe: inner.subscribe,
+    // M2 — composed with the ledger's own notifications, not the device
+    // store's alone: `change_pivot` writes no device preference, so a
+    // subscriber that only heard the store would keep the old pivot until an
+    // unrelated re-render happened to call `getSnapshot()` again.
+    subscribe: (listener) => {
+      const unsubscribeStore = inner.subscribe(listener);
+      const unsubscribeLedger = options?.subscribeToLedger?.(listener);
+      return () => {
+        unsubscribeStore();
+        unsubscribeLedger?.();
+      };
+    },
     hydrate: inner.hydrate,
     set: inner.set,
     initializeFromPinned: (pinned) => {

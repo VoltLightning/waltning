@@ -85,6 +85,20 @@ export function setLivePivotReader(reader: () => CurrencyCode | null): void {
 }
 
 /**
+ * M2 — the same indirection as `livePivotReader`, for the ledger's write
+ * notifications. `displayCurrency`'s own `subscribe` calls through this on
+ * every mount, so it always reaches whatever `setLivePivotSubscriber`
+ * currently holds — the real `phoneLedger.subscribe` once the ledger session
+ * has wired it, a no-op before that.
+ */
+let livePivotSubscribe: (listener: () => void) => () => void = () => () => {};
+
+/** Called once by the phone's ledger session: its own controller's `subscribe`, so `change_pivot` reaches a mounted display-currency consumer live. */
+export function setLivePivotSubscriber(subscribe: (listener: () => void) => () => void): void {
+  livePivotSubscribe = subscribe;
+}
+
+/**
  * `SPEC.md` §7.0's header toggle — a device preference, never a registry
  * write. The live pivot (`livePivotReader`) is the fallback until something
  * is chosen or `initializeFromPinned` runs; `pivotCurrency.code`
@@ -99,7 +113,10 @@ export const displayCurrency = createDisplayCurrencyPreference(
   },
   () => livePivotReader(),
   pivotCurrency.code,
-  mobileDiagnostics,
+  {
+    subscribeToLedger: (listener) => livePivotSubscribe(listener),
+    diagnostics: mobileDiagnostics,
+  },
 );
 
 /**

@@ -454,6 +454,8 @@ export type PhoneCoverage = {
   /** Calendar days from `firstDate` to today, inclusive (H3). */
   calendarDays: number;
   coveragePct: number;
+  /** L7 — rows held past today, excluded from every figure above (M4). */
+  futureRows: number;
 };
 
 /** One row of S18's rate table — `listFxRates`'s answer. */

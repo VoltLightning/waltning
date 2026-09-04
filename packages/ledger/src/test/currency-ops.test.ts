@@ -568,6 +568,51 @@ describe("change_pivot", () => {
     // bridge answer of 0.23 / 0.20 = 1.15.
     expect(rates).toEqual(new Set([money.unitsPerPivot("0.92")]));
   });
+
+  // L3 — the outer loop used to `continue` a whole date bucket with no
+  // bridge of its own, dropping every row on it including a carried row
+  // whose *origin* (an earlier date) does have a bridge. M8's own per-row
+  // rebase never even ran for that row. Day 2 here has no USD bridge at
+  // all, only EUR carried forward from day 1 — it must still survive.
+  it("L3 — keeps a carried row on a date with no bridge of its own, when its origin's date has one", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Day 1 — EUR's real quote, and the bridge to USD.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        // Day 2 — EUR carried forward from day 1, and no bridge at all.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "USD" });
+
+    const eurRows = rateRows().filter((r) => r.base === "USD" && r.quote === "EUR");
+    expect(eurRows).toHaveLength(2);
+    const day2 = eurRows.find((r) => r.date === accountingDate("2026-01-02"));
+    expect(day2?.source).toBe("carried_forward");
+    // Rebased by the origin's (day 1) bridge: 0.23 / 0.25 = 0.92.
+    expect(day2?.rate).toBe(money.unitsPerPivot("0.92"));
+  });
 });
 
 /* ── set_manual_rate / clear_manual_rate ─────────────────────────────────── */
@@ -966,7 +1011,9 @@ describe("readCoverage", () => {
 
   // M3 — a source dead for months but carried forward every day since reads
   // `days === calendarDays` (100%, "complete") even though only one row is a
-  // real quote. `realDays` is the honest decision variable.
+  // real quote. `realDays` is the honest decision variable — and (M1)
+  // `coveragePct` must be derived from it too, not from `days`: 1 real quote
+  // over 10 calendar days is `10%`, never `100%`.
   it("M3 — realDays stays low when a dead source is carried all the way to today", () => {
     const first = accountingDate("2026-01-01");
     s.ledger.replica.db
@@ -991,6 +1038,7 @@ describe("readCoverage", () => {
         calendarDays: 10,
         realDays: 1,
         lastDate: first,
+        coveragePct: 10,
       }),
     );
   });
@@ -1024,7 +1072,45 @@ describe("readCoverage", () => {
 
     const coverage = readCoverage(s.ledger.replica.db, today);
     expect(coverage.find((c) => c.code === "USD")).toEqual(
-      expect.objectContaining({ days: 5, realDays: 5, calendarDays: 5, coveragePct: 100 }),
+      expect.objectContaining({
+        days: 5,
+        realDays: 5,
+        calendarDays: 5,
+        coveragePct: 100,
+        futureRows: 1,
+      }),
+    );
+  });
+
+  // L7 — a currency whose only rows are future-dated has `days === 0`, the
+  // same shape as no rows at all — but it is not "no rates yet": someone set
+  // a rate, it just is not due yet. `futureRows` is how `CoverageTag` tells
+  // the two states apart.
+  it("L7 — a currency with only future-dated rows reports futureRows, not empty", () => {
+    const today = accountingDate("2026-01-05");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-10"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "manual",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-11"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "manual",
+        },
+      ])
+      .run();
+
+    const coverage = readCoverage(s.ledger.replica.db, today);
+    expect(coverage.find((c) => c.code === "USD")).toEqual(
+      expect.objectContaining({ days: 0, calendarDays: 0, coveragePct: 0, futureRows: 2 }),
     );
   });
 

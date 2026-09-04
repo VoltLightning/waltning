@@ -11,7 +11,7 @@ function noop() {}
 const meta = {
   title: "FX/CoverageTag",
   component: CoverageTag,
-  args: { days: 100, realDays: 100, calendarDays: 100, pct: 100 },
+  args: { days: 100, realDays: 100, calendarDays: 100, futureRows: 0, pct: 100 },
 } satisfies Meta<typeof CoverageTag>;
 
 export default meta;
@@ -34,7 +34,12 @@ export const NoRatesYet: Story = {
   args: { days: 0, realDays: 0, calendarDays: 0, pct: 0, onPress: noop },
 };
 
-/** M3 — a dead source carried every day to today: filled by count, amber by real quotes. */
+/** L7 — nothing due yet is not nothing set: rates are held, just future-dated. */
+export const NoRatesYetFuture: Story = {
+  args: { days: 0, realDays: 0, calendarDays: 0, futureRows: 3, pct: 0, onPress: noop },
+};
+
+/** M1/M3 — a dead source carried every day to today: filled by count, amber by real quotes. */
 export const DeadSourceCarried: Story = {
-  args: { days: 100, realDays: 1, calendarDays: 100, pct: 100, lastDate: "2024-01-01" },
+  args: { days: 100, realDays: 1, calendarDays: 100, pct: 1, lastDate: "2024-01-01" },
 };

@@ -146,9 +146,20 @@ export type LocalCoverage = {
   /**
    * Display-only (H3) — `CoverageTag` decides *no rates yet* on `days === 0`
    * and *complete* on `realDays === calendarDays`, never on this rounding.
-   * Floored while incomplete, so 2,075/2,080 reads `99%`, never `100%`.
+   * Derived from `realDays`, never `days` (M1): a dead source carried every
+   * day to today must not read `100%` off nine carried rows and one real
+   * quote. Floored while incomplete, so 2,075/2,080 reads `99%`, never `100%`.
    */
   coveragePct: number;
+  /**
+   * L7 — rows held *past* today (S18 §7's "set a range" allows a future end
+   * date), excluded from `days`/`calendarDays`/`coveragePct` alike (M4) so
+   * they cannot inflate a figure `calendarDays` only counts through today.
+   * `CoverageTag` reads this instead when `days === 0`: a currency with only
+   * future rows has held rates set, just none due yet — a different state
+   * from *no rates yet*, and worth saying so rather than reading identically.
+   */
+  futureRows: number;
 };
 
 /**
@@ -192,6 +203,7 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       realDays: 0,
       calendarDays: 0,
       coveragePct: 0,
+      futureRows: 0,
     };
     // No pivot set at all — vacuous, same empty answer as a currency with
     // no rows (`fx_rates` is always stored `base = pivot`, §4).
@@ -202,31 +214,45 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
     // `carried_forward` (H4, S17 §8: *last quote date*, not last held row).
     // `realDays` counts the same real rows (M3) — the decision variable for
     // *complete*, never `days`, which a dead source carried to today fills
-    // without a fresh quote. `date <= today` (M4) keeps a future-dated
-    // manual row from inflating `days` past what `calendarDays` — counted
-    // only through today — actually covers.
+    // without a fresh quote. Every count but `futureN` is scoped `date <=
+    // today` in the `case` itself (M4) rather than the `where` — L7 needs
+    // `futureN`'s complementary count from the very same aggregate, still
+    // one query per currency.
     const [agg] = db
       .select({
-        n: sql<number>`count(*)`,
-        realN: sql<number>`count(case when ${fxRates.source} <> ${CARRIED_FORWARD} then 1 else null end)`,
-        firstDate: sql<string | null>`min(${fxRates.date})`,
+        n: sql<number>`count(case when ${fxRates.date} <= ${today} then 1 else null end)`,
+        realN: sql<number>`count(case when ${fxRates.date} <= ${today} and ${fxRates.source} <> ${CARRIED_FORWARD} then 1 else null end)`,
+        firstDate: sql<
+          string | null
+        >`min(case when ${fxRates.date} <= ${today} then ${fxRates.date} else null end)`,
         lastRealDate: sql<
           string | null
-        >`max(case when ${fxRates.source} <> ${CARRIED_FORWARD} then ${fxRates.date} else null end)`,
+        >`max(case when ${fxRates.date} <= ${today} and ${fxRates.source} <> ${CARRIED_FORWARD} then ${fxRates.date} else null end)`,
+        futureN: sql<number>`count(case when ${fxRates.date} > ${today} then 1 else null end)`,
       })
       .from(fxRates)
-      .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot), lte(fxRates.date, today)))
+      .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot)))
       .all();
 
     const days = agg?.n ?? 0;
-    if (days === 0 || !agg?.firstDate) return empty;
+    const futureRows = agg?.futureN ?? 0;
+    if (days === 0 || !agg?.firstDate) return { ...empty, futureRows };
 
     const firstDate = agg.firstDate as AccountingDate;
     const realDays = agg.realN ?? 0;
     const lastDate = agg.lastRealDate as AccountingDate | null;
     const calendarDays = daysBetween(firstDate, today) + 1;
+    // M1 — derived from `realDays`, never `days`: a dead source carried
+    // every day since the one real quote must not read `100%`. Never
+    // reaches `100` unless `realDays === calendarDays` (the same test
+    // `CoverageTag` uses for *complete*) — floored otherwise, so
+    // 1 real quote over 10 calendar days reads `10%`, not `100%`.
     const coveragePct =
-      calendarDays <= 0 ? 0 : days >= calendarDays ? 100 : Math.floor((days / calendarDays) * 100);
+      calendarDays <= 0
+        ? 0
+        : realDays >= calendarDays
+          ? 100
+          : Math.floor((realDays / calendarDays) * 100);
 
     return {
       code,
@@ -237,6 +263,7 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       realDays,
       calendarDays,
       coveragePct,
+      futureRows,
     };
   });
 }

@@ -1,6 +1,9 @@
+/** @vitest-environment jsdom */
+
+import { act, renderHook } from "@testing-library/react";
 import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
-import { createDisplayCurrencyPreference } from "./display-currency.ts";
+import { createDisplayCurrencyPreference, useDisplayCurrency } from "./display-currency.ts";
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -25,6 +28,20 @@ function livePivot(initial: CurrencyCode | null) {
 
 const noPivot = () => null;
 
+/** Stands in for `phoneLedger.subscribe` — every listener fires on `notify()`, the same shape `refresh()` calls after a successful write. */
+function fakeLedgerNotifier() {
+  const listeners = new Set<() => void>();
+  return {
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    notify: () => {
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
 describe("createDisplayCurrencyPreference", () => {
   it("falls back to the seed when nothing is chosen and no live pivot exists yet", () => {
     const pref = createDisplayCurrencyPreference(memoryStore(null), noPivot, USD);
@@ -47,6 +64,27 @@ describe("createDisplayCurrencyPreference", () => {
     expect(pref.getSnapshot().currency).toBe(PLN);
     pivot.set(EUR);
     expect(pref.getSnapshot().currency).toBe(EUR);
+  });
+
+  // M2 — `subscribe` was the device store's alone, and `change_pivot` writes
+  // no device preference, so a mounted `useSyncExternalStore` consumer kept
+  // the old pivot until an unrelated re-render happened to call
+  // `getSnapshot()` again. `subscribeToLedger` composes the ledger's own
+  // write notifications in, so the rendered value follows live.
+  it("M2 — a mounted consumer follows the live pivot on a ledger notification, with no device-store write", () => {
+    const pivot = livePivot(PLN);
+    const ledger = fakeLedgerNotifier();
+    const pref = createDisplayCurrencyPreference(memoryStore(null), pivot.read, USD, {
+      subscribeToLedger: ledger.subscribe,
+    });
+    const { result } = renderHook(() => useDisplayCurrency(pref));
+
+    expect(result.current.currency).toBe(PLN);
+
+    pivot.set(EUR);
+    act(() => ledger.notify());
+
+    expect(result.current.currency).toBe(EUR);
   });
 
   it("never surfaces null — the guarantee this wraps createDevicePreference for", async () => {

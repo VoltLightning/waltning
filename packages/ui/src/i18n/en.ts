@@ -464,6 +464,8 @@ export const en = {
     coverageTitle: "Coverage",
     /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
     noRatesYet: "no rates yet · set one by hand",
+    /** L7 — the only rows held are future-dated (M4 excludes them from `days`): rates are set, just none due yet. */
+    noRatesYetFuture: "no rates yet · {{n}} set for later",
     /** H2 — rows held, but none a real quote (every one `carried_forward`): no date exists to state. */
     noQuoteYet: "no quote yet",
     /** `RateField` — `03` §3.7. */
