@@ -1,12 +1,12 @@
 /**
- * `0011_counterparty_name_folded.sql`'s own pre-check (R2 M2), tested by
+ * `0010_counterparty_name_folded.sql`'s own pre-check (R2 M2), tested by
  * execution rather than by reading the SQL.
  *
  * `scratchDatabase()` always hands back a database with every migration
  * already applied — useless here, since the whole point is a database that
- * has *not yet* run 0011, carrying exactly the colliding data a real
+ * has *not yet* run 0010, carrying exactly the colliding data a real
  * Money Manager migration could leave behind. So this builds its own,
- * migration-by-migration, stopping short of 0011 on purpose.
+ * migration-by-migration, stopping short of 0010 on purpose.
  *
  * Replayed inside one transaction per attempt, the same as the real
  * migrator (`drizzle-orm`'s `PgDialect.migrate` wraps every statement of
@@ -22,7 +22,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { migrateUrl } from "./scratch.ts";
 
 const STATEMENT_BREAK = "--> statement-breakpoint";
-const MIGRATION_0011 = "0011_counterparty_name_folded";
+const MIGRATION_0010 = "0010_counterparty_name_folded";
 
 /** One migration file's statements, in the order the migrator would run them. */
 function statementsOf(tag: string): string[] {
@@ -33,14 +33,14 @@ function statementsOf(tag: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-/** Every migration tag before `0011`, in the journal's own order. */
-function tagsBefore0011(): string[] {
+/** Every migration tag before `0010`, in the journal's own order. */
+function tagsBefore0010(): string[] {
   const journal = JSON.parse(
     readFileSync(new URL("../../drizzle/meta/_journal.json", import.meta.url), "utf8"),
   ) as { entries: { tag: string }[] };
   const tags = journal.entries.map((e) => e.tag);
-  const cut = tags.indexOf(MIGRATION_0011);
-  if (cut === -1) throw new Error(`${MIGRATION_0011} is not in the journal`);
+  const cut = tags.indexOf(MIGRATION_0010);
+  if (cut === -1) throw new Error(`${MIGRATION_0010} is not in the journal`);
   return tags.slice(0, cut);
 }
 
@@ -61,9 +61,9 @@ beforeAll(async () => {
   await admin.unsafe(`CREATE DATABASE "${DB_NAME}"`);
 
   target = postgres(urlFor(DB_NAME), { max: 1 });
-  // Every migration up to, but not including, 0011 — the state a real
+  // Every migration up to, but not including, 0010 — the state a real
   // upgrade is in the instant before this one runs.
-  for (const tag of tagsBefore0011()) {
+  for (const tag of tagsBefore0010()) {
     for (const statement of statementsOf(tag)) {
       await target.unsafe(statement);
     }
@@ -82,10 +82,10 @@ beforeEach(async () => {
   await target`DELETE FROM counterparties`;
 });
 
-/** Replays 0011 the way the real migrator would: as one transaction. */
-async function apply0011(): Promise<void> {
+/** Replays 0010 the way the real migrator would: as one transaction. */
+async function apply0010(): Promise<void> {
   await target.begin(async (tx) => {
-    for (const statement of statementsOf(MIGRATION_0011)) {
+    for (const statement of statementsOf(MIGRATION_0010)) {
       await tx.unsafe(statement);
     }
   });
@@ -95,7 +95,7 @@ describe("a colliding pair aborts with both ids named, before the index ever fir
   it("raises naming the folded value and both ids, not a bare unique-violation", async () => {
     // R2 C1's own case: `lower(btrim(...))` — the *old* index this migration
     // replaces — does not see these two collide (`Łukasz` keeps its `ł`
-    // under a plain `lower()`), so both inserts land under the pre-0011
+    // under a plain `lower()`), so both inserts land under the pre-0010
     // schema; only the fold this migration adds sees them as the same name.
     const [a] = await target`
       INSERT INTO counterparties (name, kind) VALUES ('Łukasz', 'person') RETURNING id`;
@@ -104,7 +104,7 @@ describe("a colliding pair aborts with both ids named, before the index ever fir
 
     let caught: unknown;
     try {
-      await apply0011();
+      await apply0010();
     } catch (e) {
       caught = e;
     }
@@ -130,7 +130,7 @@ describe("no collision — the migration runs clean", () => {
   it("adds the generated column and the index without raising", async () => {
     await target`INSERT INTO counterparties (name, kind) VALUES ('Marek', 'person')`;
 
-    await apply0011();
+    await apply0010();
 
     const [row] = await target<{ name_folded: string }[]>`
       SELECT name_folded FROM counterparties WHERE name = 'Marek'`;
