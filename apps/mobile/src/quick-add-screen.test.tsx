@@ -62,6 +62,9 @@ const SHARED_ACCOUNT = {
 const COUNTERPARTY = {
   id: id<"counterparties">("44444444-4444-4444-8444-444444444444"),
   name: "Costa",
+  kind: "person" as const,
+  settlementCurrency: null,
+  archived: false,
 };
 
 function fakeController(
@@ -110,6 +113,22 @@ function fakeController(
     updateTransaction: () => undefined,
     deleteTransaction: () => undefined,
     setTransactionLines: () => undefined,
+    readRate: vi.fn(() => null),
+    readCoverage: vi.fn(() => []),
+    listFxRates: vi.fn(() => []),
+    addCurrency: vi.fn(),
+    archiveCurrency: vi.fn(),
+    setRateSource: vi.fn(),
+    setPinned: vi.fn(),
+    changePivot: vi.fn(),
+    setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
+    clearManualRate: vi.fn(() => ({ deleted: 0 })),
+    createCounterparty: vi.fn(),
+    updateCounterparty: vi.fn(),
+    mergeCounterparties: vi.fn(),
+    unmergeCounterparties: vi.fn(),
+    recordDistinctCounterparties: vi.fn(),
+    settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

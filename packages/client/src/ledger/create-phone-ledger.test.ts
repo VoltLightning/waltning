@@ -1536,6 +1536,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      listPayeeHistory: vi.fn(() => []),
       reset: vi.fn(),
     };
 
