@@ -3,6 +3,7 @@ import {
   parseNewAccountRoute,
   parseQuickAddRoute,
   parseTransactionRoute,
+  parseTransferRoute,
 } from "./preview-routes.ts";
 
 describe("phone preview route state", () => {
@@ -61,5 +62,11 @@ describe("phone preview route state", () => {
     expect(parseTransactionRoute({ id: "txn-a" })).toBe("txn-a");
     expect(parseTransactionRoute({})).toBeUndefined();
     expect(parseTransactionRoute({ id: ["txn-a", "txn-b"] })).toBeUndefined();
+  });
+
+  it("reads S16's `from` account, or undefined for a missing or duplicated segment", () => {
+    expect(parseTransferRoute({ from: "account-a" })).toEqual({ from: "account-a" });
+    expect(parseTransferRoute({})).toEqual({ from: undefined });
+    expect(parseTransferRoute({ from: ["account-a", "account-b"] })).toEqual({ from: undefined });
   });
 });

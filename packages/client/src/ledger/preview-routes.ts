@@ -71,3 +71,8 @@ export function parseQuickAddRoute(params: {
 export function parseTransactionRoute(params: { id?: RouteValue }): string | undefined {
   return one(params.id);
 }
+
+/** `/transfer` (S31 §2) — S16's row action pre-fills `from`; every other entry point leaves it unset. */
+export function parseTransferRoute(params: { from?: RouteValue }): { from: string | undefined } {
+  return { from: one(params.from) };
+}
