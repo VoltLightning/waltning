@@ -301,6 +301,20 @@ export type PhoneSettleDebtResult = {
 };
 
 /**
+ * S13's overflow — one merge into a counterparty, still live. Structural,
+ * like `PhoneCounterparty` above: this package stays free of
+ * `@waltning/ledger`.
+ */
+export type PhoneCounterpartyMerge = {
+  mergeId: Id<"counterpartyMerges">;
+  /** The absorbed counterparty's own name — archived, not deleted (S15 §9.2). */
+  loserName: string;
+  mergedAt: Date;
+  /** How many transactions this merge repointed. */
+  movedCount: number;
+};
+
+/**
  * §7, one row per counterparty per currency — S12's list. Structural, like
  * `PhoneCounterparty` above: `kind` and `bucket` are restated rather than
  * imported so this package stays free of `@waltning/schema` and
@@ -515,6 +529,15 @@ export type PhoneLedgerPort = {
   listCategoryUsage: () => ReadonlyMap<Id<"categories">, number>;
   /** The merge preview's exact pre-write counts — see `readCategoryReferenceCounts`. */
   readCategoryReferenceCounts: (categoryId: Id<"categories">) => PhoneCategoryReferenceCounts;
+  /** S13's overflow, on demand — merges into one counterparty, still live. */
+  listCounterpartyMerges: (
+    counterpartyId: Id<"counterparties">,
+  ) => readonly PhoneCounterpartyMerge[];
+  /** S15 §9.1's own table — read whole, on every refresh (it is small). */
+  listDistinctCounterpartyPairs: () => readonly (readonly [
+    Id<"counterparties">,
+    Id<"counterparties">,
+  ])[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
@@ -688,6 +711,13 @@ export type PhoneLedgerSnapshot = {
   netWorth: readonly PhoneNetWorth[];
   /** §8's unsettled clearing accounts — non-empty only when the banner shows (C2). */
   unsettledClearing: readonly PhoneClearingAccount[];
+  /**
+   * S15 §9.1 — every pair `record_distinct_counterparties` has recorded,
+   * read whole on every `refresh()` (a small table). `nearMatches`' own
+   * `distinctPairs` option, so a pair told apart once is never asked about
+   * again, across sessions.
+   */
+  distinctCounterpartyPairs: readonly (readonly [Id<"counterparties">, Id<"counterparties">])[];
   /**
    * Set from a failed `refresh()`, cleared by the next successful one.
    *
@@ -1039,6 +1069,10 @@ export type PhoneLedgerController = {
    * this call's own result — a pure function, not a second round trip.
    */
   listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  /** S13's overflow, on demand — merges into one counterparty, still live. */
+  listCounterpartyMerges: (
+    counterpartyId: Id<"counterparties">,
+  ) => readonly PhoneCounterpartyMerge[];
   /**
    * S16 §5, on demand — `ReconcileSheet`'s "Computed" figure, refolded every
    * time its own date field moves rather than fixed to the balance the sheet
@@ -1532,6 +1566,7 @@ export function createPhoneLedger(
     subtotals: [],
     netWorth: [],
     unsettledClearing: [],
+    distinctCounterpartyPairs: [],
   };
   const listeners = new Set<() => void>();
   const { diagnostics } = runtime;
@@ -1586,6 +1621,7 @@ export function createPhoneLedger(
         subtotals: subtotalsOf(accounts),
         netWorth: port.listNetWorth(),
         unsettledClearing: port.listUnsettledClearing(),
+        distinctCounterpartyPairs: port.listDistinctCounterpartyPairs(),
       };
       for (const listener of listeners) listener();
       emitClientDiagnostic(diagnostics, {
@@ -1624,6 +1660,7 @@ export function createPhoneLedger(
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
+    listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listPayeeHistory: () => port.listPayeeHistory(),
     searchTransactions: (filter, cursor) =>

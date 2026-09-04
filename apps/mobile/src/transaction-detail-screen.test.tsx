@@ -108,6 +108,8 @@ function fakeController(
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
     listCounterpartyBalances: () => [],
+    listCounterpartyMerges: () => [],
+    listDistinctCounterpartyPairs: () => [],
     getTransaction: () => row,
     createAccount: vi.fn(),
     createTransaction: vi.fn(),

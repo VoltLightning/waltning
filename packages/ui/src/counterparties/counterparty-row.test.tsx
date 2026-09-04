@@ -61,6 +61,27 @@ describe("CounterpartyRow", () => {
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
+  it("shows the per-currency balances stacked, each with its own direction, when there is no net (P1)", () => {
+    render(
+      <CounterpartyRow
+        name="Nina"
+        kind="person"
+        settlement={{ value: null, currency: "EUR" }}
+        balances={[
+          { currency: "PLN", balance: toMoney("840.00000000") },
+          { currency: "EUR", balance: toMoney("-120.00000000") },
+        ]}
+        onPress={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("840.00", { exact: false })).toBeDefined();
+    expect(screen.getByText("120.00", { exact: false })).toBeDefined();
+    expect(screen.getAllByText("owes you")).toHaveLength(1);
+    expect(screen.getAllByText("you owe")).toHaveLength(1);
+    // Never a single net line standing in for the un-folded position.
+    expect(screen.queryByText("74.44", { exact: false })).toBeNull();
+  });
+
   it("fires onPress", () => {
     const onPress = vi.fn();
     render(

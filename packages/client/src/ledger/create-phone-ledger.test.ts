@@ -358,6 +358,8 @@ function harness(
     convertLeafGroup,
     mergeCategories,
     archiveCategory,
+    listCounterpartyMerges: vi.fn(() => []),
+    listDistinctCounterpartyPairs: vi.fn(() => []),
     reset,
   };
   const capture = vi.fn(() => ({
@@ -415,6 +417,7 @@ describe("phone ledger controller", () => {
       subtotals: [],
       netWorth: [],
       unsettledClearing: [],
+      distinctCounterpartyPairs: [],
     });
   });
 
@@ -508,6 +511,8 @@ describe("phone ledger controller", () => {
       convertLeafGroup: vi.fn(),
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
+      listCounterpartyMerges: vi.fn(() => []),
+      listDistinctCounterpartyPairs: vi.fn(() => []),
       reset: vi.fn(),
     };
 
@@ -590,6 +595,8 @@ describe("phone ledger controller", () => {
       convertLeafGroup: vi.fn(),
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
+      listCounterpartyMerges: vi.fn(() => []),
+      listDistinctCounterpartyPairs: vi.fn(() => []),
       reset: vi.fn(),
     };
 
@@ -771,6 +778,8 @@ describe("phone ledger controller", () => {
       convertLeafGroup: vi.fn(),
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
+      listCounterpartyMerges: vi.fn(() => []),
+      listDistinctCounterpartyPairs: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1267,6 +1276,8 @@ describe("phone ledger controller — createCategory", () => {
       convertLeafGroup: vi.fn(),
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
+      listCounterpartyMerges: vi.fn(() => []),
+      listDistinctCounterpartyPairs: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1464,6 +1475,8 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       convertLeafGroup: () => undefined,
       mergeCategories: () => undefined,
       archiveCategory: () => undefined,
+      listCounterpartyMerges: vi.fn(() => []),
+      listDistinctCounterpartyPairs: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -1579,7 +1592,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
   const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
   const MAREK = id<"counterparties">("22222222-2222-4222-8222-222222222222");
 
-  function counterpartyHarness() {
+  function counterpartyHarness(overrides: Partial<PhoneLedgerPort> = {}) {
     let counterparties: PhoneCounterparty[] = [
       {
         id: NINA,
@@ -1664,8 +1677,42 @@ describe("phone ledger controller — counterparties and settlement", () => {
           : c,
       );
     });
-    const mergeCounterparties = vi.fn<PhoneLedgerPort["mergeCounterparties"]>(() => undefined);
-    const unmergeCounterparties = vi.fn<PhoneLedgerPort["unmergeCounterparties"]>(() => undefined);
+    // The merge fixture's own live state — enough for `listCounterpartyMerges`
+    // to answer, and for `unmergeCounterparties` to make one disappear again.
+    let merges: {
+      mergeId: string;
+      winnerId: string;
+      loserName: string;
+      movedCount: number;
+      unmerged: boolean;
+    }[] = [];
+    const mergeCounterparties = vi.fn<PhoneLedgerPort["mergeCounterparties"]>((input) => {
+      const loser = counterparties.find((c) => c.id === input.loserId);
+      merges = [
+        ...merges,
+        {
+          mergeId: input.mergeId,
+          winnerId: input.winnerId,
+          loserName: loser?.name ?? "",
+          movedCount: 0,
+          unmerged: false,
+        },
+      ];
+    });
+    const unmergeCounterparties = vi.fn<PhoneLedgerPort["unmergeCounterparties"]>((input) => {
+      merges = merges.map((m) => (m.mergeId === input.mergeId ? { ...m, unmerged: true } : m));
+    });
+    const listCounterpartyMerges = vi.fn<PhoneLedgerPort["listCounterpartyMerges"]>(
+      (counterpartyId) =>
+        merges
+          .filter((m) => m.winnerId === counterpartyId && !m.unmerged)
+          .map((m) => ({
+            mergeId: id<"counterpartyMerges">(m.mergeId),
+            loserName: m.loserName,
+            mergedAt: new Date("2026-08-23T10:00:00Z"),
+            movedCount: m.movedCount,
+          })),
+    );
     const recordDistinctCounterparties = vi.fn<PhoneLedgerPort["recordDistinctCounterparties"]>(
       () => undefined,
     );
@@ -1740,7 +1787,10 @@ describe("phone ledger controller — counterparties and settlement", () => {
       convertLeafGroup: vi.fn(),
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
+      listCounterpartyMerges,
+      listDistinctCounterpartyPairs: vi.fn(() => []),
       reset: vi.fn(),
+      ...overrides,
     };
 
     const controller = createPhoneLedger(port, {
@@ -1759,6 +1809,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       updateCounterparty,
       mergeCounterparties,
       unmergeCounterparties,
+      listCounterpartyMerges,
       recordDistinctCounterparties,
       settleDebt,
       listCounterparties,
@@ -1857,6 +1908,40 @@ describe("phone ledger controller — counterparties and settlement", () => {
       expect.objectContaining({ aId: NINA, bId: MAREK }),
       expect.anything(),
     );
+  });
+
+  it("carries recorded-distinct pairs in the snapshot, read on refresh (finding 5)", () => {
+    const pairs: readonly (readonly [Id<"counterparties">, Id<"counterparties">])[] = [
+      [NINA, MAREK],
+    ];
+    const listDistinctCounterpartyPairs = vi.fn(() => pairs);
+    const { controller } = counterpartyHarness({ listDistinctCounterpartyPairs });
+
+    expect(controller.getSnapshot().distinctCounterpartyPairs).toEqual([[NINA, MAREK]]);
+    expect(listDistinctCounterpartyPairs).toHaveBeenCalled();
+  });
+
+  it("S13's overflow — lists a live merge, and unmerging it removes it again (finding 4)", () => {
+    const { controller, listCounterpartyMerges } = counterpartyHarness();
+
+    expect(controller.listCounterpartyMerges(NINA)).toEqual([]);
+
+    const merged = controller.mergeCounterparties({ winnerId: NINA, loserId: MAREK });
+    if (!("id" in merged)) throw new Error("expected a merge id");
+
+    const live = controller.listCounterpartyMerges(NINA);
+    expect(live).toEqual([
+      {
+        mergeId: merged.id,
+        loserName: "Marek",
+        mergedAt: expect.any(Date),
+        movedCount: 0,
+      },
+    ]);
+    expect(listCounterpartyMerges).toHaveBeenCalledWith(NINA);
+
+    controller.unmergeCounterparties({ mergeId: merged.id });
+    expect(controller.listCounterpartyMerges(NINA)).toEqual([]);
   });
 
   describe("loadArchivedCounterparties", () => {
@@ -2067,6 +2152,8 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
       listCounterpartyBalances,
+      listCounterpartyMerges: vi.fn(() => []),
+      listDistinctCounterpartyPairs: vi.fn(() => []),
       balanceAsOf: vi.fn(),
       searchTransactions: () => ({
         rows: [],

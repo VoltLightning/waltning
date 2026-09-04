@@ -11,8 +11,12 @@
  * settlement currency** (`counterparty-figures.ts`'s `resolveCounterpartyFigures`
  * — the same fold `CounterpartyRow` was built to render (P1: no rate, no
  * converted figure). A counterparty with any currency this replica has no
- * rate for falls back to their settlement currency's own balance alone
- * (always complete — no conversion needed) rather than hiding a real debt.
+ * rate for gets **no net at all** — `figures.value` is `null`, never a
+ * substitute single-currency balance — and `CounterpartyRow` renders their
+ * held balances stacked instead. The segment filter below classifies that
+ * counterparty from those same balances (any positive line → *they owe*, any
+ * negative → *you owe*, both → shown under both), never from a net that does
+ * not exist.
  */
 
 import {
@@ -47,6 +51,8 @@ type DebtRow = {
   name: string;
   kind: "person" | "company";
   figures: ReturnType<typeof resolveCounterpartyFigures>;
+  /** Every held balance — `CounterpartyRow`'s stacked fallback when `figures.value` is `null` (P1). */
+  balances: CounterpartyGroup["balances"];
   ageDays: number | null;
   ageBucket: CounterpartyGroup["ageBucket"];
 };
@@ -71,6 +77,7 @@ function DebtCounterpartyRow({ row, onSelect }: DebtCounterpartyRowProps) {
         currency: row.figures.currency,
         decimals: row.figures.decimals,
       }}
+      balances={row.balances}
       display={row.figures.display}
       ageDays={row.ageDays}
       ageBucket={row.ageBucket}
@@ -81,6 +88,19 @@ function DebtCounterpartyRow({ row, onSelect }: DebtCounterpartyRowProps) {
 
 function handleAdd() {
   router.push({ pathname: "/counterparty/new", params: { returnTo: "debt" } });
+}
+
+/**
+ * S12's segment filter. `figures.value` is the ordinary case; a `null` net
+ * (P1 — a held currency has no rate) classifies from the raw balances
+ * instead: any positive line puts the row under *they owe*, any negative
+ * under *you owe*, and a counterparty holding both shows under both rather
+ * than being hidden by a net that was never computed.
+ */
+function matchesDirectionSegment(row: DebtRow, segment: DirectionSegment): boolean {
+  if (segment === "all") return true;
+  if (row.figures.value !== null) return money.debtDirection(row.figures.value) === segment;
+  return row.balances.some((line) => money.debtDirection(line.balance) === segment);
 }
 
 export default function Debt() {
@@ -104,16 +124,14 @@ export default function Debt() {
       name: group.name,
       kind: group.kind,
       figures: resolveCounterpartyFigures(group, pivot, rateOf),
+      balances: group.balances,
       ageDays: group.ageDays,
       ageBucket: group.ageBucket,
     }));
   }, [balances, ledger.readRate, pivot, today]);
 
   const visibleRows = useMemo(() => {
-    const filtered = rows.filter((row) => {
-      if (segment === "all") return true;
-      return money.debtDirection(row.figures.value) === segment;
-    });
+    const filtered = rows.filter((row) => matchesDirectionSegment(row, segment));
     // S12 §3: companies by age desc, then by name.
     return [...filtered].sort((a, b) => {
       if (a.kind === "company" && b.kind === "company") return (b.ageDays ?? 0) - (a.ageDays ?? 0);

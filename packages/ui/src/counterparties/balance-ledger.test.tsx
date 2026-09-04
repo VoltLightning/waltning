@@ -39,10 +39,34 @@ describe("BalanceLedger", () => {
         rows={[{ currency: "EUR", balance: toMoney("74.44000000") }]}
         settlementCurrency="EUR"
         settlementNet={toMoney("74.44000000")}
-        display={{ currency: "PLN", rate: pivotPerUnit("4.32") }}
+        display={{ currency: "PLN", rate: pivotPerUnit("4.32"), asOf: "2026-08-30" }}
       />,
     );
     expect(screen.getByText("4.3200")).toBeDefined();
+  });
+
+  /** P1 — `counterparties.atRateDate`, the rate and date the display total actually converted at. */
+  it("states the display total's own rate and date, from readRate's asOf", () => {
+    render(
+      <BalanceLedger
+        rows={[{ currency: "EUR", balance: toMoney("74.44000000") }]}
+        settlementCurrency="EUR"
+        settlementNet={toMoney("74.44000000")}
+        display={{ currency: "PLN", rate: pivotPerUnit("4.32"), asOf: "2026-08-30" }}
+      />,
+    );
+    expect(screen.getByText("@ 4.3200 · 2026-08-30")).toBeDefined();
+  });
+
+  it("carries no rate-and-date line when there is no display total to state one for", () => {
+    render(
+      <BalanceLedger
+        rows={[{ currency: "EUR", balance: toMoney("74.44000000") }]}
+        settlementCurrency="EUR"
+        settlementNet={toMoney("74.44000000")}
+      />,
+    );
+    expect(screen.queryByText("@", { exact: false })).toBeNull();
   });
 
   it("shows only the settlement net, no display line, without a display rate", () => {

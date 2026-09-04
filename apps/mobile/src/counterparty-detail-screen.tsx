@@ -11,6 +11,12 @@
  * it is hiding, the same rule S10's own filtered `EmptyState` follows
  * (`design-system/08` §8.1): a default filter that silently omits real data
  * is the failure mode, and naming the count is the cheapest guard against it.
+ *
+ * **Unmerge is a row under history, not a sheet.** S15 §9.2's merge is
+ * reversible; a live merge into this counterparty (`listCounterpartyMerges`)
+ * gets one line naming the absorbed record and how many rows moved, with an
+ * inline undo — the lighter of the two shapes the plan offers, since there
+ * is nothing here that needs a sheet's own confirmation step.
  */
 
 import {
@@ -22,6 +28,7 @@ import type { PhoneSearchTransaction } from "@waltning/client/ledger/create-phon
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { id } from "@waltning/core/id";
 import { BalanceLedger } from "@waltning/ui/counterparties/balance-ledger";
 import { CounterpartyCard } from "@waltning/ui/counterparties/counterparty-card";
 import { useT } from "@waltning/ui/i18n/provider";
@@ -83,6 +90,28 @@ function HistoryRow({ row, onPress }: HistoryRowProps) {
   );
 }
 
+type MergeRowProps = {
+  mergeId: string;
+  loserName: string;
+  movedCount: number;
+  onUnmerge: (mergeId: string) => void;
+};
+
+/** One live merge into this counterparty — its own row, its own bound handler. */
+function MergeRow({ mergeId, loserName, movedCount, onUnmerge }: MergeRowProps) {
+  const t = useT();
+  const styles = useStyles();
+  const handleUnmerge = useCallback(() => onUnmerge(mergeId), [mergeId, onUnmerge]);
+  return (
+    <View style={styles.mergeRow}>
+      <Text style={styles.mergeText}>
+        {t("counterparties.mergedInto", { name: loserName, count: movedCount })}
+      </Text>
+      <Button label={t("counterparties.unmerge")} onPress={handleUnmerge} variant="ghost" />
+    </View>
+  );
+}
+
 export default function CounterpartyDetail() {
   const t = useT();
   const styles = useStyles();
@@ -92,6 +121,7 @@ export default function CounterpartyDetail() {
   const today = deviceRuntime().capture().date;
   const [showAllRows, setShowAllRows] = useState(false);
   const [settleToast, setSettleToast] = useState(false);
+  const [unmergeToast, setUnmergeToast] = useState(false);
 
   const counterparty =
     snapshot.counterparties.find((candidate) => candidate.id === rawId) ??
@@ -123,12 +153,23 @@ export default function CounterpartyDetail() {
   const otherCount = everyHistory.total.count - debtHistory.total.count;
   const historyRows = showAllRows ? everyHistory.rows : debtHistory.rows;
 
+  // S13's overflow — every merge still live into this record (S15 §9.2).
+  const merges = rawId ? ledger.listCounterpartyMerges(id<"counterparties">(rawId)) : [];
+
   const handleToggleHistory = useCallback(() => setShowAllRows((current) => !current), []);
   const handleOpenRow = useCallback((transactionId: string) => {
     router.push({ pathname: "/transaction/[id]", params: { id: transactionId } });
   }, []);
   const handleOpenSettle = useCallback(() => setSettleToast(true), []);
   const handleDismissSettleToast = useCallback(() => setSettleToast(false), []);
+  const handleDismissUnmergeToast = useCallback(() => setUnmergeToast(false), []);
+  const handleUnmerge = useCallback(
+    (mergeId: string) => {
+      const result = ledger.unmergeCounterparties({ mergeId });
+      if ("id" in result) setUnmergeToast(true);
+    },
+    [ledger],
+  );
   const handleAddTransaction = useCallback(() => {
     if (!rawId) return;
     router.push({ pathname: "/quick-add", params: { counterpartyId: rawId } });
@@ -181,6 +222,16 @@ export default function CounterpartyDetail() {
         </View>
       </Card>
 
+      {merges.map((merge) => (
+        <MergeRow
+          key={merge.mergeId}
+          mergeId={merge.mergeId}
+          loserName={merge.loserName}
+          movedCount={merge.movedCount}
+          onUnmerge={handleUnmerge}
+        />
+      ))}
+
       <View style={styles.historyHeader}>
         <Text style={styles.historyTitle}>{t("counterparties.history")}</Text>
         <Button
@@ -220,6 +271,9 @@ export default function CounterpartyDetail() {
           onDismiss={handleDismissSettleToast}
         />
       ) : null}
+      {unmergeToast ? (
+        <Toast message={t("counterparties.unmergeToast")} onDismiss={handleDismissUnmergeToast} />
+      ) : null}
     </GroundPanel>
   );
 }
@@ -233,4 +287,12 @@ const useStyles = makeStyles((theme) => ({
     paddingTop: space.x4,
   },
   historyTitle: { color: theme.textMuted, ...text.ui("kicker") },
+  mergeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.md,
+    paddingTop: space.md,
+  },
+  mergeText: { flexShrink: 1, color: theme.textMuted, ...text.ui("caption") },
 }));

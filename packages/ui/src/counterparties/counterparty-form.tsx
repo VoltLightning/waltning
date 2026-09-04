@@ -44,7 +44,8 @@ export type CounterpartyFormValues = {
 export type CounterpartyFormCandidate = {
   id: string;
   name: string;
-  balance: money.Money;
+  /** `null` when the candidate's own net could not be computed (P1) — `MatchWarning` omits the figure. */
+  balance: money.Money | null;
   currency: string;
   decimals?: number;
   transactionCount: number;

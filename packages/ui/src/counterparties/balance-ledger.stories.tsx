@@ -22,7 +22,7 @@ export const MixedDirection: Story = {};
 
 export const WithDisplayEquivalent: Story = {
   args: {
-    display: { currency: "PLN", rate: pivotPerUnit("4.32") },
+    display: { currency: "PLN", rate: pivotPerUnit("4.32"), asOf: "2026-08-30" },
   },
 };
 

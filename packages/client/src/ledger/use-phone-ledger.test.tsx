@@ -43,6 +43,8 @@ describe("usePhoneLedger", () => {
         readPeriodSpend: () => [],
         listUnsettledClearing: () => [],
         listCounterpartyBalances: () => [],
+        listCounterpartyMerges: () => [],
+        listDistinctCounterpartyPairs: () => [],
         balanceAsOf: vi.fn(),
         searchTransactions: () => ({
           rows: [],

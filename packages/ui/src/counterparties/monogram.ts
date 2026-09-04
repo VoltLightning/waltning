@@ -18,6 +18,7 @@
  */
 
 import { fold } from "@waltning/core/capture/names";
+import type { Theme } from "../theme/roles.ts";
 import { color } from "../tokens.ts";
 
 /** Five steps, skipping the near-white and near-black ends of the ramp. */
@@ -30,7 +31,6 @@ const RAMP_STEPS: readonly [string, number][] = [
   [color.green700, 700],
 ];
 
-const LIGHT_INK = "#ffffff";
 const DARK_INK = color.green900;
 
 export type Monogram = {
@@ -47,7 +47,16 @@ function hashOf(s: string): number {
   return total;
 }
 
-export function monogramFor(name: string): Monogram {
+/**
+ * `theme.textOnAccent` for the light-ink steps, never a bare `#ffffff` — a
+ * component names a role, not a colour, and `textOnAccent` is the one this
+ * value already has everywhere else it sits on a filled background
+ * (`Button`, `Checkbox`, `Toggle`). `DARK_INK` stays the ramp's own value,
+ * unlike the light case: it is the ramp's dark end, not a theme role, and
+ * `monogram.ts`'s own header explains why the ramp is reused as data ink
+ * regardless of theme.
+ */
+export function monogramFor(name: string, theme: Theme): Monogram {
   const trimmed = name.trim();
   const folded = fold(trimmed);
   const [fill, step] = RAMP_STEPS[hashOf(folded) % RAMP_STEPS.length] ??
@@ -55,6 +64,6 @@ export function monogramFor(name: string): Monogram {
   return {
     letter: trimmed === "" ? "?" : (trimmed[0]?.toUpperCase() ?? "?"),
     fill,
-    ink: step >= 500 ? LIGHT_INK : DARK_INK,
+    ink: step >= 500 ? theme.textOnAccent : DARK_INK,
   };
 }

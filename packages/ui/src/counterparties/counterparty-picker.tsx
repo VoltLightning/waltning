@@ -22,6 +22,7 @@ import { usePressScale } from "../primitives/press-scale.ts";
 import { SearchField } from "../primitives/search-field";
 import { BottomSheet } from "../shell/bottom-sheet";
 import { text } from "../theme/fonts.ts";
+import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { monogramFor } from "./monogram.ts";
@@ -126,11 +127,12 @@ type PickerRowProps = {
 
 function PickerRow({ counterparty, onPick }: PickerRowProps) {
   const t = useT();
+  const theme = useTheme();
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
   const press = usePressScale();
   const handlePress = useCallback(() => onPick(counterparty.id), [counterparty.id, onPick]);
-  const monogram = monogramFor(counterparty.name);
+  const monogram = monogramFor(counterparty.name, theme);
   // Computed rather than in `useStyles`, matching `tag.tsx`'s own `fill`/`ink`.
   const monogramFill = { backgroundColor: monogram.fill };
   const monogramInk = { color: monogram.ink };
@@ -188,7 +190,7 @@ const useStyles = makeStyles((theme) => ({
   monogram: {
     width: 28,
     height: 28,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     alignItems: "center",
     justifyContent: "center",
   },

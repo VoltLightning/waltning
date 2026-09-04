@@ -49,3 +49,19 @@ export const Settled: Story = {
     settlement: { value: toMoney("0.00000000"), currency: "PLN" },
   },
 };
+
+/**
+ * P1's BLOCKER case — a held currency has no rate, so the fold is
+ * incomplete. `settlement.value` is `null`, never a substitute
+ * single-currency balance, and `balances` renders every held line stacked
+ * instead, each with its own direction.
+ */
+export const NoNet: Story = {
+  args: {
+    settlement: { value: null, currency: "EUR" },
+    balances: [
+      { currency: "PLN", balance: toMoney("840.00000000") },
+      { currency: "EUR", balance: toMoney("-120.00000000") },
+    ],
+  },
+};

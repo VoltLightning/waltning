@@ -16,7 +16,7 @@ import {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
-import { id } from "@waltning/core/id";
+import { type Id, id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,6 +35,7 @@ import CounterpartyEditor from "./counterparty-editor-screen";
 import Debt from "./debt-screen";
 
 const PLN = currencyCode("PLN");
+const EUR = currencyCode("EUR");
 const TODAY = accountingDate("2026-09-03");
 const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
 const MAREK = id<"counterparties">("22222222-2222-4222-8222-222222222222");
@@ -61,6 +62,25 @@ const NINA_COUNTERPARTY: PhoneCounterparty = {
   archived: false,
   version: 1,
 };
+
+/**
+ * The BLOCKER's own case (finding 1) — Nina settles in EUR, holds PLN +840
+ * (no PLN rate on the replica) and EUR −120. `EUR` is this fixture's pivot,
+ * so it is exactly the PLN leg that has nothing to convert with.
+ */
+const NINA_MIXED_ROWS: readonly PhoneCounterpartyBalance[] = [
+  { ...NINA_ROW, currency: PLN, settlementCurrency: EUR, balance: toMoney("840.00000000") },
+  { ...NINA_ROW, currency: EUR, settlementCurrency: EUR, balance: toMoney("-120.00000000") },
+];
+
+const EUR_PIVOT_CURRENCY = {
+  code: EUR,
+  name: "Euro",
+  symbol: "€",
+  decimals: 2,
+  capturable: true,
+  isPivot: true,
+} as const;
 
 const EMPTY_PAGE: PhoneSearchPage = {
   rows: [],
@@ -93,6 +113,8 @@ function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerPort {
     listCounterparties: () => [],
     listPayeeHistory: () => [],
     listCounterpartyBalances: () => [],
+    listCounterpartyMerges: () => [],
+    listDistinctCounterpartyPairs: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
@@ -191,6 +213,56 @@ describe("Debt (S12)", () => {
     );
     expect(screen.getByText("All settled")).toBeDefined();
   });
+
+  /**
+   * The BLOCKER (finding 1) — Nina holds PLN +840 (no rate) and EUR −120.
+   * The old fallback rendered a single wrong net, *−120,00 € you owe*.
+   * `CounterpartyRow` must show both balances stacked instead, and the
+   * segment filter must classify her from those balances, not a net that
+   * does not exist.
+   */
+  it("never substitutes one currency's balance for the net — the balances stack, each with its own direction", () => {
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [EUR_PIVOT_CURRENCY],
+        listCounterparties: () => [{ ...NINA_COUNTERPARTY, settlementCurrency: EUR }],
+        listCounterpartyBalances: () => NINA_MIXED_ROWS,
+        readRate: () => null,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Nina")).toBeDefined();
+    // Both directions render — the true, un-folded position — never a
+    // single "you owe" standing in for the whole thing.
+    expect(screen.getByText("owes you")).toBeDefined();
+    expect(screen.getByText("you owe")).toBeDefined();
+  });
+
+  it("shows Nina under both They owe and You owe when her balances split both ways", () => {
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [EUR_PIVOT_CURRENCY],
+        listCounterparties: () => [{ ...NINA_COUNTERPARTY, settlementCurrency: EUR }],
+        listCounterpartyBalances: () => NINA_MIXED_ROWS,
+        readRate: () => null,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+
+    fireEvent.click(screen.getByText("They owe"));
+    expect(screen.getByText("Nina")).toBeDefined();
+
+    fireEvent.click(screen.getByText("You owe"));
+    expect(screen.getByText("Nina")).toBeDefined();
+  });
 });
 
 describe("CounterpartyDetail (S13)", () => {
@@ -244,6 +316,64 @@ describe("CounterpartyDetail (S13)", () => {
     expect(screen.getByText("Nina")).toBeDefined();
     expect(screen.getByText("All settled")).toBeDefined();
   });
+
+  /** The BLOCKER (finding 1), on S13 — no net line when the fold is incomplete. */
+  it("omits the net line entirely rather than showing a wrong one (P1)", () => {
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [EUR_PIVOT_CURRENCY],
+        listCounterparties: () => [{ ...NINA_COUNTERPARTY, settlementCurrency: EUR }],
+        listCounterpartyBalances: () => NINA_MIXED_ROWS,
+        readRate: () => null,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Nina")).toBeDefined();
+    // The two held balances still render, honestly — it is only the derived
+    // "net in EUR" line that is absent, never computed from an incomplete fold.
+    expect(screen.getByText("-120.00", { exact: false })).toBeDefined();
+    expect(screen.getByText("840.00", { exact: false })).toBeDefined();
+    expect(screen.queryByText("net in EUR")).toBeNull();
+  });
+
+  /** Finding 4 — S13's overflow lists a live merge and unmerges it. */
+  it("lists a live merge and unmerges it, with the shared toast (finding 4)", () => {
+    const unmergeCounterparties = vi.fn<PhoneLedgerPort["unmergeCounterparties"]>(() => undefined);
+    const MERGE_ID = "33333333-3333-4333-8333-333333333333";
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listCounterpartyMerges: () => [
+          {
+            mergeId: id("33333333-3333-4333-8333-333333333333"),
+            loserName: "Marek",
+            mergedAt: new Date("2026-08-23T10:00:00Z"),
+            movedCount: 3,
+          },
+        ],
+        unmergeCounterparties,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+
+    expect(screen.getByText("Merged Marek into this record · 3 rows")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Unmerge" }));
+
+    expect(unmergeCounterparties).toHaveBeenCalledWith(
+      expect.objectContaining({ mergeId: MERGE_ID }),
+      expect.anything(),
+    );
+    expect(screen.getByText("Merge undone — the record is restored.")).toBeDefined();
+  });
 });
 
 describe("CounterpartyEditor (S15)", () => {
@@ -291,5 +421,110 @@ describe("CounterpartyEditor (S15)", () => {
     fireEvent.blur(nameField);
     expect(screen.getByText("Ninna")).toBeDefined();
     expect(screen.getByText("This is the same one")).toBeDefined();
+  });
+
+  /** Finding 2 — a stale version reaches form-level text, never a byField bucket nothing renders. */
+  it("shows a stale version as form-level text on save (finding 2)", () => {
+    useLocalSearchParams.mockReturnValue({ id: NINA });
+    const updateCounterparty = vi.fn<PhoneLedgerPort["updateCounterparty"]>(() => {
+      throw new Error("update_counterparty: stale version — read 1, row is at 2");
+    });
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        updateCounterparty,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyEditor />
+      </LedgerProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Nina B." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("This counterparty changed elsewhere");
+  });
+
+  /** Finding 2 — an open-balance refusal on archive shows the executor's own message on a Toast. */
+  it("shows an open-balance refusal on archive as a Toast (finding 2)", () => {
+    useLocalSearchParams.mockReturnValue({ id: NINA });
+    const updateCounterparty = vi.fn<PhoneLedgerPort["updateCounterparty"]>((input) => {
+      if (input.patch.archived) {
+        throw new Error(
+          "update_counterparty: archiving is for settled relationships — an open balance exists",
+        );
+      }
+    });
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        updateCounterparty,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyEditor />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    expect(
+      screen.getByText("Archiving is for settled relationships — this still has an open balance."),
+    ).toBeDefined();
+  });
+
+  /**
+   * Finding 5 — record a pair, reopen the editor, the match does not fire.
+   * The read path this finding adds (`listDistinctCounterpartyPairs`, read
+   * on `refresh()`) is what makes this true *across sessions* — not the
+   * in-memory `dismissedIds` a single session already handled on its own.
+   */
+  it("records a distinct pair, and it is not asked about again after reopening (finding 5)", () => {
+    useLocalSearchParams.mockReturnValue({ id: NINA });
+    let recordedPairs: readonly (readonly [Id<"counterparties">, Id<"counterparties">])[] = [];
+    const recordDistinctCounterparties = vi.fn<PhoneLedgerPort["recordDistinctCounterparties"]>(
+      (input) => {
+        recordedPairs = [...recordedPairs, [input.aId, input.bId]];
+      },
+    );
+    const port = () =>
+      basePort({
+        listCounterparties: () => [
+          NINA_COUNTERPARTY,
+          { ...NINA_COUNTERPARTY, id: MAREK, name: "Ninna" },
+        ],
+        recordDistinctCounterparties,
+        listDistinctCounterpartyPairs: () => recordedPairs,
+      });
+
+    const first = render(
+      <LedgerProvider controller={controllerOf(port())}>
+        <CounterpartyEditor />
+      </LedgerProvider>,
+    );
+    const nameField = first.getByLabelText("Name");
+    fireEvent.change(nameField, { target: { value: "Nina" } });
+    fireEvent.blur(nameField);
+    expect(first.getByText("Ninna")).toBeDefined();
+    fireEvent.click(first.getByText("These are different"));
+    expect(recordDistinctCounterparties).toHaveBeenCalledWith(
+      expect.objectContaining({ aId: NINA, bId: MAREK }),
+      expect.anything(),
+    );
+    first.unmount();
+
+    // Reopen — a fresh screen, a fresh session, the pair now on the snapshot.
+    render(
+      <LedgerProvider controller={controllerOf(port())}>
+        <CounterpartyEditor />
+      </LedgerProvider>,
+    );
+    const reopenedNameField = screen.getByLabelText("Name");
+    fireEvent.change(reopenedNameField, { target: { value: "Nina" } });
+    fireEvent.blur(reopenedNameField);
+
+    expect(screen.queryByText("Ninna")).toBeNull();
   });
 });

@@ -13,9 +13,16 @@
  * settlement currency has no display line to compute *and* needs no rate to
  * show `net`: `selected by presence`, the same rule `<BalanceRow>` already
  * follows for an account balance.
+ *
+ * **The display total carries its own rate and date, never one without the
+ * other** (P1) — `display.asOf` is `readRate`'s own answer for the day the
+ * rate is actually from, never `today`, the same distinction `FxAmount`'s
+ * own header draws. `counterparties.atRateDate` states both beneath the
+ * converted figure.
  */
 
 import type { Money, PivotPerUnit } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { FxAmount } from "../fx/fx-amount";
@@ -38,8 +45,8 @@ export type BalanceLedgerProps = {
   /** `null` when a currency this counterparty holds has no rate to fold into it (P1) — the row is omitted. */
   settlementNet: Money | null;
   settlementDecimals?: number;
-  /** Present only when `readRate(settlement → display)` answered. */
-  display?: { currency: string; rate: PivotPerUnit; decimals?: number } | null;
+  /** Present only when `readRate(settlement → display)` answered — carries the rate's own date (P1). */
+  display?: { currency: string; rate: PivotPerUnit; decimals?: number; asOf: string } | null;
 };
 
 export function BalanceLedger({
@@ -68,14 +75,22 @@ export function BalanceLedger({
               {t("counterparties.netIn", { currency: settlementCurrency })}
             </Text>
             {display ? (
-              <FxAmount
-                value={settlementNet}
-                currency={settlementCurrency}
-                rate={display.rate}
-                displayCurrency={display.currency}
-                decimals={settlementDecimals}
-                displayDecimals={display.decimals ?? 2}
-              />
+              <View style={styles.netFigure}>
+                <FxAmount
+                  value={settlementNet}
+                  currency={settlementCurrency}
+                  rate={display.rate}
+                  displayCurrency={display.currency}
+                  decimals={settlementDecimals}
+                  displayDecimals={display.decimals ?? 2}
+                />
+                <Text style={styles.rateDate}>
+                  {t("counterparties.atRateDate", {
+                    rate: money.toMoney(display.rate, 4),
+                    date: display.asOf,
+                  })}
+                </Text>
+              </View>
             ) : (
               <Amount
                 value={settlementNet}
@@ -103,4 +118,6 @@ const useStyles = makeStyles((theme) => ({
     gap: space.md,
   },
   netLabel: { color: theme.textMuted, ...text.ui("bodySm", 600) },
+  netFigure: { alignItems: "flex-end", gap: space.xs },
+  rateDate: { color: theme.textMuted, ...text.ui("caption") },
 }));

@@ -398,6 +398,8 @@ export const en = {
     "role.debt": "debt",
     "role.contribution": "contribution",
     "role.reference": "reference",
+    /** S13's overflow — one live merge into this record. */
+    mergedInto: "Merged {{name}} into this record · {{count}} rows",
     unmerge: "Unmerge",
     unmergeToast: "Merge undone — the record is restored.",
     /* ── S15 · create and edit ───────────────────────────────────────────── */

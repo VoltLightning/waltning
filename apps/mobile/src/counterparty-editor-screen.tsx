@@ -15,13 +15,14 @@
  * created yet to merge, so it simply picks the existing counterparty and
  * finishes the same way a save would.
  *
- * **"These are different" is local-only.** `record_distinct_counterparties`
- * needs two existing ids, so in create mode there is nothing to persist yet
- * — the warning is dismissed for this session and reappears if the name is
- * blurred again from scratch after a reload. In edit mode it is persisted.
- * There is no read path for previously recorded pairs yet (`#e2` built the
- * write, not a list), so a pair told apart in an earlier session can
- * resurface once — a known gap, not a silent one.
+ * **"These are different" is local-only in create mode.**
+ * `record_distinct_counterparties` needs two existing ids, so a brand-new
+ * draft has nothing to persist yet — the warning is dismissed for this
+ * session and reappears if the name is blurred again from scratch after a
+ * reload. In edit mode it is persisted, and `snapshot.distinctCounterpartyPairs`
+ * (read whole on every `refresh()`) is threaded into `nearMatches` as
+ * `distinctPairs`, so a pair told apart in an earlier session is never asked
+ * about again either — the same guarantee S15 §9.1 states for one session.
  */
 
 import {
@@ -46,8 +47,19 @@ import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 
-/** `update_counterparty` and `create_counterparty`'s own field paths — everything else lands at form level. */
-const KNOWN_PATHS = ["name", "version", "archived"];
+/**
+ * `update_counterparty` and `create_counterparty`'s own field paths —
+ * everything else lands at form level. **Not `"version"` or `"archived"`,
+ * deliberately**: `CounterpartyForm` only ever reads `byField.name` and
+ * `formLevel`, so listing them here routed a stale-version or open-balance
+ * refusal straight into a `byField` bucket nothing renders, and it vanished.
+ * A stale version now reaches `formLevel` (`transactions.changedElsewhere`'s
+ * own shape — the whole row is stale, not one field of it); `handleArchive`
+ * below intercepts an open-balance refusal before it ever reaches
+ * `mapFieldErrors` at all, and shows it on a `Toast` instead — the plan's
+ * own wording, and the executor's own message.
+ */
+const KNOWN_PATHS = ["name"];
 
 function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
   if (error.messageKey === "counterparties.nameCollision") return t("counterparties.nameCollision");
@@ -109,6 +121,7 @@ export default function CounterpartyEditor() {
     }));
     const ranked = nearMatches(blurredName, candidates, {
       ...(counterparty ? { excludeId: counterparty.id } : {}),
+      distinctPairs: snapshot.distinctCounterpartyPairs,
     }).filter((match) => !dismissedIds.has(match.candidate.id));
 
     const rateOf = makeRateOf(ledger.readRate, pivot, today);
@@ -138,6 +151,7 @@ export default function CounterpartyEditor() {
     ledger,
     pivot,
     snapshot.counterparties,
+    snapshot.distinctCounterpartyPairs,
     today,
   ]);
 
@@ -250,6 +264,16 @@ export default function CounterpartyEditor() {
         patch: { archived: true },
       });
       if (!("id" in result)) {
+        // An open balance refuses archiving on the `archived` field — the
+        // executor's own message, on a `Toast`, never a form-level line no
+        // one asked to archive twice to notice.
+        const openBalance = result.fieldErrors.find(
+          (error) => error.messageKey === "counterparties.openBalance",
+        );
+        if (openBalance) {
+          setToast(resolveFieldErrorMessage(t, openBalance));
+          return;
+        }
         const resolved = result.fieldErrors.map((error) => ({
           path: error.path,
           message: resolveFieldErrorMessage(t, error),

@@ -65,6 +65,8 @@ function fakeController() {
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
       listCounterpartyBalances: () => [],
+      listCounterpartyMerges: () => [],
+      listDistinctCounterpartyPairs: () => [],
       balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],

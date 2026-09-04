@@ -98,60 +98,73 @@ export function groupByCounterparty(
 }
 
 /**
- * Units of `currency` per one pivot, `"1"` for the pivot itself (`fx_rates`
- * never quotes it against itself), `null` when the replica holds none.
+ * `readRate`'s answer, stripped to what `resolveCounterpartyFigures` needs —
+ * the rate itself, in `fx_rates`' own direction, and the date it is actually
+ * for (`asOf`, never `date`: a carried rate is for an earlier day than the
+ * one asked about, and `atRateDate` states the day the rate is really from).
+ * `"1"` for the pivot itself (`fx_rates` never quotes it against itself),
+ * `null` when the replica holds none.
  */
 export function makeRateOf(
   readRate: (pair: {
     base: CurrencyCode;
     quote: CurrencyCode;
     date: AccountingDate;
-  }) => { rate: UnitsPerPivot } | null,
+  }) => { rate: UnitsPerPivot; asOf: AccountingDate } | null,
   pivot: CurrencyCode,
   date: AccountingDate,
-): (currency: CurrencyCode) => UnitsPerPivot | null {
+): (currency: CurrencyCode) => { rate: UnitsPerPivot; asOf: AccountingDate } | null {
   return (currency) => {
-    if (currency === pivot) return money.unitsPerPivot("1");
-    return readRate({ base: pivot, quote: currency, date })?.rate ?? null;
+    if (currency === pivot) return { rate: money.unitsPerPivot("1"), asOf: date };
+    return readRate({ base: pivot, quote: currency, date });
   };
 }
 
 export type ResolvedCounterpartyFigures = {
-  /** The currency the settlement figure ended up in — the preference when computable, a held fallback otherwise. */
+  /** The counterparty's own preferred settlement currency (or a held fallback with no preference set). */
   currency: CurrencyCode;
-  value: Money;
+  /**
+   * `null` when a currency this counterparty holds has no rate to fold into
+   * `currency` — **never a substitute single-currency balance** (P1: an
+   * incomplete net is absent, not swapped for a number that looks like one).
+   * A caller with nothing else to show renders the per-currency balances
+   * themselves instead (`CounterpartyRow`, `BalanceLedger`'s own rows).
+   */
+  value: Money | null;
   decimals: number;
-  /** Present only when the settlement figure converts to something other than itself, and a rate answered. */
-  display: { currency: CurrencyCode; rate: PivotPerUnit } | null;
+  /** Present only when `value` is not `null` and it converts to something other than itself, with a rate that answered. */
+  display: { currency: CurrencyCode; rate: PivotPerUnit; asOf: AccountingDate } | null;
 };
 
 /**
- * §6.6's net, in the counterparty's preferred settlement currency — falling
- * back to their own balance in whichever currency they actually hold when
- * the full cross-currency fold cannot be computed (P1: never a partial sum,
- * and never a hidden debt either — a single currency needs no rate at all).
+ * §6.6's net, in the counterparty's preferred settlement currency — `null`
+ * when the full cross-currency fold cannot be computed (P1: never a partial
+ * sum, and never a hidden debt either — a single currency needs no rate at
+ * all, so a counterparty holding only their own settlement currency is
+ * always complete).
  */
 export function resolveCounterpartyFigures(
   group: Pick<CounterpartyGroup, "settlementCurrency" | "balances">,
   pivot: CurrencyCode,
-  rateOf: (currency: CurrencyCode) => UnitsPerPivot | null,
+  rateOf: (currency: CurrencyCode) => { rate: UnitsPerPivot; asOf: AccountingDate } | null,
 ): ResolvedCounterpartyFigures {
   const preferred = group.settlementCurrency ?? group.balances[0]?.currency ?? pivot;
-  const fold = counterpartyNet(group.balances, preferred, rateOf);
-  const preferredLine = group.balances.find((line) => line.currency === preferred);
+  const numericRateOf = (currency: CurrencyCode): UnitsPerPivot | null =>
+    rateOf(currency)?.rate ?? null;
+  const fold = counterpartyNet(group.balances, preferred, numericRateOf);
+  const decimals = group.balances.find((line) => line.currency === preferred)?.decimals ?? 2;
 
-  const currency =
-    fold.complete || preferredLine ? preferred : (group.balances[0]?.currency ?? preferred);
-  const value = fold.complete
-    ? fold.value
-    : (preferredLine?.balance ?? group.balances[0]?.balance ?? money.toMoney("0"));
-  const decimals = group.balances.find((line) => line.currency === currency)?.decimals ?? 2;
-
-  let display: ResolvedCounterpartyFigures["display"] = null;
-  if (currency !== pivot) {
-    const rate = rateOf(currency);
-    if (rate !== null) display = { currency: pivot, rate: money.reciprocal(rate) };
+  if (!fold.complete) {
+    return { currency: preferred, value: null, decimals, display: null };
   }
 
-  return { currency, value, decimals, display };
+  let display: ResolvedCounterpartyFigures["display"] = null;
+  if (preferred !== pivot) {
+    const answer = rateOf(preferred);
+    if (answer !== null) {
+      display = { currency: pivot, rate: money.reciprocal(answer.rate), asOf: answer.asOf };
+    }
+  }
+
+  return { currency: preferred, value: fold.value, decimals, display };
 }

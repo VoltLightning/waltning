@@ -191,6 +191,8 @@ function fakeController(
     readPeriodSpend: () => periodSpendRows,
     listUnsettledClearing: () => unsettledOf(accounts),
     listCounterpartyBalances: () => [],
+    listCounterpartyMerges: () => [],
+    listDistinctCounterpartyPairs: () => [],
     balanceAsOf: () => toMoney("0"),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
     // does) — an empty page and a no-op are enough to satisfy the port.
@@ -473,6 +475,8 @@ describe("Today", () => {
         },
       ],
       listCounterpartyBalances: () => [],
+      listCounterpartyMerges: () => [],
+      listDistinctCounterpartyPairs: () => [],
       balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],
@@ -616,6 +620,8 @@ describe("Today", () => {
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
       listCounterpartyBalances: () => [],
+      listCounterpartyMerges: () => [],
+      listDistinctCounterpartyPairs: () => [],
       balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],

@@ -12,6 +12,7 @@ import type { AgeBucket } from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
+import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
 import { radius, space } from "../tokens.ts";
 import { AgeingBar } from "./ageing-bar";
@@ -32,8 +33,9 @@ export function CounterpartyCard({
   ageing,
 }: CounterpartyCardProps) {
   const t = useT();
+  const theme = useTheme();
   const styles = useStyles();
-  const monogram = monogramFor(name);
+  const monogram = monogramFor(name, theme);
   // Computed rather than in `useStyles`: the tint is per-name, a prop, not a
   // theme-scale constant — `tag.tsx`'s own `fill`/`ink` are the same shape, a
   // plain object built beside the JSX rather than inline inside it.
@@ -66,7 +68,7 @@ const useStyles = makeStyles((theme) => ({
   monogram: {
     width: 48,
     height: 48,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     alignItems: "center",
     justifyContent: "center",
   },

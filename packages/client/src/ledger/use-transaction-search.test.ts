@@ -54,6 +54,8 @@ function fakeController() {
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
       listCounterpartyBalances: () => [],
+      listCounterpartyMerges: () => [],
+      listDistinctCounterpartyPairs: () => [],
       balanceAsOf: vi.fn(),
       searchTransactions: (filter, cursor) => {
         const start = cursor === undefined ? 0 : rows.findIndex((r) => r.id === cursor.id) + 1;
@@ -205,6 +207,8 @@ describe("useTransactionSearch", () => {
         readPeriodSpend: () => [],
         listUnsettledClearing: () => [],
         listCounterpartyBalances: () => [],
+        listCounterpartyMerges: () => [],
+        listDistinctCounterpartyPairs: () => [],
         balanceAsOf: vi.fn(),
         searchTransactions: () => {
           if (broken) throw new Error("replica is unreadable");

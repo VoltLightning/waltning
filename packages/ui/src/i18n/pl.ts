@@ -267,6 +267,7 @@ export const pl: Messages = {
     "role.debt": "dług",
     "role.contribution": "wkład",
     "role.reference": "odniesienie",
+    mergedInto: "Scalono {{name}} z tym rekordem · {{count}} wierszy",
     unmerge: "Cofnij scalenie",
     unmergeToast: "Scalenie cofnięte — rekord przywrócony.",
     contact: "Kontakt",

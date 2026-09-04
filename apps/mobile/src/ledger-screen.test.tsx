@@ -110,6 +110,8 @@ function fakeController(search: FakeSearch) {
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
     listCounterpartyBalances: () => [],
+    listCounterpartyMerges: () => [],
+    listDistinctCounterpartyPairs: () => [],
     balanceAsOf: () => toMoney("0"),
     searchTransactions: search,
     createAccount: () => undefined,
