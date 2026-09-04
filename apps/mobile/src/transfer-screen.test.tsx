@@ -127,6 +127,7 @@ function fakeController(
     changePivot: vi.fn(),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
+    updateCurrency: vi.fn(),
     createCounterparty: vi.fn(),
     updateCounterparty: vi.fn(),
     mergeCounterparties: vi.fn(),

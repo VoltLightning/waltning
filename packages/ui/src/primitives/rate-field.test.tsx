@@ -6,11 +6,42 @@
  * `decimalMark(locale)` — the same helper `<Amount>` renders through).
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { pivotPerUnit, toMoney } from "@waltning/core/money";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/provider";
-import { RateField } from "./rate-field";
+import { parseRate, RateField } from "./rate-field";
+
+describe("parseRate", () => {
+  it("accepts a dot-separated positive rate", () => {
+    expect(parseRate("4.281")).toBe("4.281");
+  });
+
+  it("accepts a comma-separated positive rate — a Polish keyboard's own key", () => {
+    expect(parseRate("4,281")).toBe("4.281");
+  });
+
+  it("refuses a value with two separators", () => {
+    expect(parseRate("1,234.5")).toBeNull();
+  });
+
+  it("refuses 0 — a rate is never zero", () => {
+    expect(parseRate("0")).toBeNull();
+  });
+
+  it("refuses an all-zero decimal", () => {
+    expect(parseRate("0,00")).toBeNull();
+  });
+
+  it("refuses a negative rate", () => {
+    expect(parseRate("-4.281")).toBeNull();
+  });
+
+  it("refuses malformed input", () => {
+    expect(parseRate("abc")).toBeNull();
+    expect(parseRate("")).toBeNull();
+  });
+});
 
 describe("RateField", () => {
   it("renders the dot under English", () => {
@@ -43,5 +74,66 @@ describe("RateField", () => {
         (_, element) => element?.textContent === "referencyjny 4,3120 · nbp · 2026-08-10",
       ),
     ).toBeDefined();
+  });
+
+  it("shows the unit beside the label — the direction a rate has no reading without", () => {
+    render(<RateField label="Rate" value={toMoney("4.281")} unit="PLN per USD" />);
+    expect(screen.getByText("PLN per USD")).toBeDefined();
+  });
+
+  it("emits the parsed rate as it is typed", () => {
+    const onChange = vi.fn();
+    render(<RateField label="Manual rate" value="" editable onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "3.75" } });
+    expect(onChange).toHaveBeenCalledWith("3.75");
+  });
+
+  it("emits null for a value with two separators", () => {
+    const onChange = vi.fn();
+    render(<RateField label="Manual rate" value="" editable onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "1,234.5" } });
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it("rejects 0 — a rate is never zero", () => {
+    const onChange = vi.fn();
+    render(<RateField label="Manual rate" value="" editable onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "0" } });
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it("shows an inline error, unprompted, when what is typed is not a positive rate", () => {
+    const onChange = vi.fn();
+    render(<RateField label="Manual rate" value="" editable onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "0" } });
+    expect(screen.getByText("A rate must be a positive number.")).toBeDefined();
+  });
+
+  it("clears the inline error once a valid positive rate is typed", () => {
+    const onChange = vi.fn();
+    render(<RateField label="Manual rate" value="" editable onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "0" } });
+    expect(screen.getByText("A rate must be a positive number.")).toBeDefined();
+    fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "3.75" } });
+    expect(screen.queryByText("A rate must be a positive number.")).toBeNull();
+  });
+
+  it("shows the caller's own error in place of the field's unprompted one", () => {
+    render(
+      <RateField
+        label="Manual rate"
+        value="1,234.5"
+        editable
+        onChange={vi.fn()}
+        error="A rate takes one decimal separator."
+      />,
+    );
+    expect(screen.getByText("A rate takes one decimal separator.")).toBeDefined();
+  });
+
+  it("read-only renders text, not an editable input", () => {
+    render(<RateField label="Manual rate" value={toMoney("3.7556")} />);
+    expect(screen.getByText("3.7556")).toBeDefined();
+    expect(screen.queryByLabelText("Manual rate")).toBeNull();
   });
 });

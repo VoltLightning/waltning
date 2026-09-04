@@ -107,6 +107,7 @@ export function RateEditor({
       <RateField
         label={t("fx.rateEditorRateLabel", { quote, base })}
         value={rate}
+        editable
         onChange={onRateChange}
       />
 
