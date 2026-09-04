@@ -1410,6 +1410,11 @@ CREATE VIEW counterparty_balances AS
              )) = 0);
 ```
 
+This view is documentation of the rule, not what runs it: the shipped
+implementation is `packages/db/src/figures/counterparty-balance.ts`, a query
+builder over the same fold, and no `counterparty_balances` view exists in the
+migrations.
+
 **The negation is the whole trick.** The ledger signs by *cash flow*; a debt
 balance signs by *obligation*, and they are exact opposites. All four cases fall
 out of one rule:

@@ -41,7 +41,7 @@
  * **A constraint added to a table that already ships means a versioned,
  * in-place rebuild from now on (M2) — never folding it into `REPLICA_DDL`'s
  * single version.** SQLite has no `ALTER TABLE … ADD CONSTRAINT`, so a new
- * `CHECK` on an existing table is a copy-rename-drop (`REPLICA_DDL_REBUILD_*`,
+ * `CHECK` on an existing table is a copy-rename-drop (`REPLICA_REBUILDS`,
  * `ddl.ts`'s own header) — and folding that into version 1's `up`, as the
  * single-version chain used to, is exactly wrong for a phone already at
  * version 1: this module's only lever for *any* version mismatch there was
@@ -71,7 +71,7 @@
 
 import { type SQL, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
-import { OUTBOX_DDL, REPLICA_DDL, REPLICA_DDL_REBUILD_0007_SCHEMA } from "./ddl.ts";
+import { OUTBOX_DDL, REPLICA_DDL, REPLICA_REBUILDS } from "./ddl.ts";
 import type { LedgerSchema, OutboxStore, ReplicaDb, ReplicaStore } from "./open.ts";
 
 /* ── the shapes ──────────────────────────────────────────────────────────── */
@@ -102,6 +102,14 @@ export type Migration = {
    * than guessing a step preserves data it never said it does.
    */
   readonly inPlace?: boolean;
+  /**
+   * The `REPLICA_REBUILDS` key this step's `up` runs, when it runs one (M2).
+   * Purely descriptive — `migrateReplica` never reads it — and exists so
+   * `test/migrate.test.ts` can assert every `REPLICA_REBUILDS` entry has a
+   * chain step naming it: a rebuild file `embed-ddl.ts` emitted that no
+   * version ever runs would sit in `ddl.ts` and never reach a phone.
+   */
+  readonly rebuildTag?: string;
 };
 
 /**
@@ -226,6 +234,25 @@ export const COPY_SUFFIX = ".pre-migration";
  * it reaches an already-installed phone — offline-only ones included —
  * without the drop-and-refetch rule engaging at all.
  */
+
+/**
+ * One `REPLICA_REBUILDS` entry, by tag rather than by the identifier
+ * `embed-ddl.ts` would otherwise have to generate and this module import by
+ * name (M2). The chain names a tag it does not find only if `ddl.ts` and
+ * `migrate.ts` have drifted from each other by hand-edit — `embed-ddl.ts`
+ * derives every tag from the same `drizzle/replica` directory it derives the
+ * versions here from.
+ */
+function rebuildStatements(tag: string): readonly string[] {
+  const statements = REPLICA_REBUILDS[tag];
+  if (!statements) {
+    throw new Error(
+      `REPLICA_REBUILDS has no entry for "${tag}" — regenerate with pnpm ledger:generate`,
+    );
+  }
+  return statements;
+}
+
 export const REPLICA_MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
@@ -236,9 +263,10 @@ export const REPLICA_MIGRATIONS: readonly Migration[] = [
   {
     version: 2,
     up: (tx) => {
-      for (const statement of REPLICA_DDL_REBUILD_0007_SCHEMA) tx.run(sql.raw(statement));
+      for (const statement of rebuildStatements("0007_schema")) tx.run(sql.raw(statement));
     },
     inPlace: true,
+    rebuildTag: "0007_schema",
   },
 ];
 
@@ -316,8 +344,60 @@ function readUserVersion<TRun, TSchema extends LedgerSchema>(
   return value;
 }
 
-/** The chain must ascend, or "the versions after `found`" is not a well-defined set. */
-function checkChain(migrations: readonly Migration[]): number {
+/**
+ * A change detector, in plain JS — FNV-1a, not `node:crypto`. This module
+ * runs on the phone (this file's own header, `open.ts`'s argument for the
+ * driver), and `node:crypto` is exactly the kind of platform package that
+ * cannot be named here; nothing below needs collision resistance, only "did
+ * this move".
+ */
+function fnv1a(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function hashOf(statements: readonly string[]): string {
+  return fnv1a(statements.join("\n"));
+}
+
+/**
+ * `REPLICA_DDL`'s content hash, frozen at the shape version 1 shipped with.
+ *
+ * **H2, the design gap this only catches rather than closes.** `REPLICA_DDL`
+ * is unversioned: `REPLICA_MIGRATIONS`' version 1 is the only step that ever
+ * runs it, so a schema change that lands in `REPLICA_DDL` *after* version 1
+ * has already reached a phone reaches a fresh install and never that phone —
+ * silently, because nothing bumps `REPLICA_MIGRATIONS` to say a change
+ * happened at all. Closing the gap needs one of: a version per generated
+ * file, or failing loudly whenever this hash moves with no chain entry to
+ * explain it. This constant and `checkChain`'s guard below are the second
+ * option, done now rather than designed — the PR report carries a follow-up
+ * card for choosing between the two for real.
+ *
+ * Update this constant only alongside a change that also added a new
+ * `REPLICA_MIGRATIONS` version for whatever moved `REPLICA_DDL` (a plain
+ * `CREATE INDEX` needs no *rebuild*, but it still needs a *version* — the
+ * follow-up card again), or a change provably about `embed-ddl.ts`'s own
+ * output shape rather than what a phone runs. Never merely to make a red
+ * `checkChain` pass.
+ */
+const REPLICA_DDL_HASH = "848c1935";
+
+/**
+ * The chain must ascend, or "the versions after `found`" is not a
+ * well-defined set. `ddlGuard`, when given, is the second, unrelated check
+ * H2 adds: `REPLICA_DDL`'s content must still hash to what version 1 was
+ * pinned against, or a schema change reached fresh installs only (see
+ * `REPLICA_DDL_HASH`'s own comment).
+ */
+function checkChain(
+  migrations: readonly Migration[],
+  ddlGuard?: { readonly ddl: readonly string[]; readonly expectedHash: string },
+): number {
   let previous = 0;
   for (const step of migrations) {
     if (!Number.isInteger(step.version) || step.version <= previous) {
@@ -328,6 +408,17 @@ function checkChain(migrations: readonly Migration[]): number {
     previous = step.version;
   }
   if (previous === 0) throw new Error("a migration chain must have at least one version");
+  if (ddlGuard) {
+    const actual = hashOf(ddlGuard.ddl);
+    if (actual !== ddlGuard.expectedHash) {
+      throw new Error(
+        `REPLICA_DDL's content hash moved (was ${ddlGuard.expectedHash}, is now ${actual}) with no ` +
+          `REPLICA_MIGRATIONS entry to carry the change to an already-installed phone (H2 — see the ` +
+          `PR's follow-up card). Add a versioned step for the change, or update REPLICA_DDL_HASH if ` +
+          `only embed-ddl.ts's own output shape changed.`,
+      );
+    }
+  }
   return previous;
 }
 
@@ -566,7 +657,7 @@ export function migrateReplica<TRun, TSchema extends LedgerSchema>(
 ): ReplicaMigrationResult {
   const { fs, canRefetch } = options;
   const migrations = options.migrations ?? REPLICA_MIGRATIONS;
-  const current = checkChain(migrations);
+  const current = checkChain(migrations, { ddl: REPLICA_DDL, expectedHash: REPLICA_DDL_HASH });
   const found = readUserVersion(store.db);
 
   if (found === current) {

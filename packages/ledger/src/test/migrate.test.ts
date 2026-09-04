@@ -22,7 +22,9 @@ import { currencyCode } from "@waltning/core/money";
 import Database from "better-sqlite3";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { getTableConfig } from "drizzle-orm/sqlite-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { REPLICA_REBUILDS } from "../ddl.ts";
 import {
   advanceAppliedSeq,
   COPY_SUFFIX,
@@ -534,6 +536,30 @@ describe("an in-place rebuild migrates a phone already at version 1", () => {
       "and so did the child row `ON DELETE CASCADE` could otherwise have taken with it",
     ).toEqual({ n: 1 });
   });
+
+  /**
+   * M2's other half. `embed-ddl.ts` derives `REPLICA_REBUILDS`' keys straight
+   * from `drizzle/replica`'s rebuild files, and `REPLICA_MIGRATIONS` is meant
+   * to run every one of them by tag (`rebuildTag`) — but nothing stops a
+   * chain entry from going in without its rebuild, or a rebuild file landing
+   * with no step naming it, and either way the rebuild never reaches an
+   * installed phone. This is the mechanical check for that, over the real
+   * exports rather than a synthetic chain.
+   */
+  it("gives every REPLICA_REBUILDS tag a REPLICA_MIGRATIONS entry that runs it", () => {
+    const tags = Object.keys(REPLICA_REBUILDS);
+    expect(tags.length, "vacuity guard — this repo has at least one rebuild file").toBeGreaterThan(
+      0,
+    );
+
+    const referenced = new Set(
+      REPLICA_MIGRATIONS.flatMap((m) => (m.rebuildTag === undefined ? [] : [m.rebuildTag])),
+    );
+    expect(
+      referenced,
+      "a rebuild file nobody's chain runs never reaches an installed phone",
+    ).toEqual(new Set(tags));
+  });
 });
 
 /* ── the pre-migration copy ──────────────────────────────────────────────── */
@@ -917,6 +943,51 @@ describe("a constraint declared in the schema is present on the device", () => {
       "and the outbox file holds the outbox's two, and nothing else",
     ).toEqual(declared(outboxSchema));
     expect(shipped(join(dir, "drift-outbox.db"))).toEqual(declaredColumns(outboxSchema));
+  });
+
+  /**
+   * **H1's own regression net.** A table rebuild's `DROP TABLE` drops every
+   * index declared against it, and nothing declares anything against the
+   * `__new_<table>` copy that replaces it — so a rebuild that does not
+   * explicitly recreate them ships a table with none. Checked over both
+   * paths a real phone can take: a **fresh** install, where the whole chain
+   * (including the rebuild) runs once against a blank database, and
+   * **v1→v2**, where the rebuild runs in place against a database that
+   * already has version 1's indexes — the path an already-installed phone
+   * takes, and the one a fix that only worked on a blank database would
+   * still fail.
+   */
+  it("keeps every index its schema module declares, fresh and after an in-place rebuild (H1)", () => {
+    type IndexedSchemaModule = Record<string, Parameters<typeof getTableConfig>[0]>;
+    const declaredIndexes = (module: IndexedSchemaModule) =>
+      Object.values(module)
+        .flatMap((table) => getTableConfig(table).indexes.map((index) => index.config.name))
+        .sort();
+
+    // Vacuity guard — this is meaningless if the replica schema declares no
+    // indexes, and it does (`counterparties_name_uq`, `fx_rates_pk`).
+    expect(declaredIndexes(replicaSchema).length, "vacuity guard").toBeGreaterThan(0);
+
+    const fresh = openAt("index-fresh");
+    migrateReplica(fresh.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    fresh.close();
+    expect(
+      inspect(join(dir, "index-fresh-replica.db"), (db) => objects(db, "index")),
+      "fresh install — the whole chain, rebuild included, ran once",
+    ).toEqual(declaredIndexes(replicaSchema));
+
+    const v1v2 = openAt("index-v1v2");
+    migrateReplica(v1v2.replica, {
+      fs: realFs,
+      canRefetch: false,
+      migrations: REPLICA_V1,
+    }).copy?.release();
+    migrateReplica(v1v2.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    v1v2.close();
+    expect(
+      inspect(join(dir, "index-v1v2-replica.db"), (db) => objects(db, "index")),
+      "v1→v2 — the rebuild ran in place against a database version 1 had already indexed",
+    ).toEqual(declaredIndexes(replicaSchema));
   });
 });
 

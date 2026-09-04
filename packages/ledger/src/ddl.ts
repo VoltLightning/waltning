@@ -17,11 +17,13 @@
  * refusals is a constraint that emitter did not emit. `outbox.ts` declares
  * `index("outbox_pending_by_seq")` and the phone did not have it.
  *
- * A `REPLICA_DDL_REBUILD_*` export, when there is one, is a migration file
- * that rebuilds an existing table rather than only adding to the schema —
+ * `REPLICA_REBUILDS`, when it holds an entry, keys a migration file that
+ * rebuilds an existing table rather than only adding to the schema —
  * `tools/embed-ddl.ts`'s own header says why it ships apart from
- * `REPLICA_DDL`, and `migrate.ts`'s `REPLICA_MIGRATIONS` is what turns it
- * into its own version.
+ * `REPLICA_DDL`, and `migrate.ts`'s `REPLICA_MIGRATIONS` is what turns a tag
+ * into its own version. Each entry's own trailing statements recreate every
+ * index the rebuilt table declares (H1) — `DROP TABLE` takes them with it,
+ * and nothing declared them against the copy that replaces it.
  */
 
 /** The fifteen shared tables, plus `local_meta` and its one row. */
@@ -250,9 +252,10 @@ export const REPLICA_DDL: readonly string[] = [
   `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (lower(trim("name")))`,
 ];
 
-/** A table rebuild (M2) — its own `REPLICA_MIGRATIONS` version, run in place. */
-export const REPLICA_DDL_REBUILD_0007_SCHEMA: readonly string[] = [
-  `CREATE TABLE \`__new_transactions\` (
+/** Every table-rebuild file (M2), keyed by tag — `migrate.ts`'s `REPLICA_MIGRATIONS` runs one by looking its tag up here. */
+export const REPLICA_REBUILDS: Readonly<Record<string, readonly string[]>> = {
+  "0007_schema": [
+    `CREATE TABLE \`__new_transactions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`date\` text NOT NULL,
 	\`type\` text NOT NULL,
@@ -301,10 +304,11 @@ export const REPLICA_DDL_REBUILD_0007_SCHEMA: readonly string[] = [
 	FOREIGN KEY (\`recurring_id\`) REFERENCES \`recurring_transactions\`(\`id\`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "transactions_debt_amount_requires_currency" CHECK("__new_transactions"."debt_amount" IS NULL OR "__new_transactions"."debt_currency" IS NOT NULL)
 )`,
-  `INSERT INTO \`__new_transactions\`("id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at") SELECT "id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at" FROM \`transactions\``,
-  `DROP TABLE \`transactions\``,
-  `ALTER TABLE \`__new_transactions\` RENAME TO \`transactions\``,
-];
+    `INSERT INTO \`__new_transactions\`("id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at") SELECT "id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at" FROM \`transactions\``,
+    `DROP TABLE \`transactions\``,
+    `ALTER TABLE \`__new_transactions\` RENAME TO \`transactions\``,
+  ],
+};
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */
 export const OUTBOX_DDL: readonly string[] = [
