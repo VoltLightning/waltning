@@ -20,10 +20,20 @@
  * filter) already had; the shell reads as a recess in a band that is
  * otherwise flat colour, where the default tone read as a floating light
  * card laid on top of the green.
+ *
+ * **A segment can be `disabled`** — added for `Dock`'s mode row, where
+ * `voice`/`receipt`/`converse` are named but unbuilt in arc 1. `common.later`
+ * is folded into the accessible label itself (`"Voice, Later"`) rather than
+ * carried on `accessibilityHint`: that prop has no DOM equivalent under
+ * `react-native-web` — `createDOMProps` never reads it — so on the one
+ * surface this app ships to a browser on, a disabled segment would announce
+ * nothing beyond its bare name. `chip.tsx`'s machine-filled marker takes the
+ * same route for the same reason.
  */
 
 import { useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
@@ -34,6 +44,8 @@ export type Segment = {
   label: string;
   /** Shown beside the label. Live — a stale count is worse than none. */
   count?: number;
+  /** Named but not yet reachable — announced via `common.later`, never removed from the row. */
+  disabled?: boolean;
 };
 
 export type SegmentControlTone = "surface" | "shell";
@@ -81,29 +93,35 @@ type SegmentOptionProps = {
 };
 
 function SegmentOption({ segment, active, onChange, tone }: SegmentOptionProps) {
+  const t = useT();
   const { hovered, focused, handlers } = useInteraction();
   const styles = useStyles();
+  const disabled = segment.disabled ?? false;
   const handlePress = useCallback(() => onChange(segment.value), [onChange, segment.value]);
   const shell = tone === "shell";
+
+  const base =
+    segment.count === undefined ? segment.label : `${segment.label}, ${segment.count} items`;
+  const accessibleLabel = disabled ? `${base}, ${t("common.later")}` : base;
 
   return (
     <Pressable
       accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={
-        segment.count === undefined ? segment.label : `${segment.label}, ${segment.count} items`
-      }
+      accessibilityState={{ selected: active, disabled }}
+      accessibilityLabel={accessibleLabel}
+      disabled={disabled}
       onPress={handlePress}
       {...handlers}
       style={[
         styles.segment,
         // The active segment already sits lifted (`surface` or, on the
-        // shell, `ground`); hovering it promises nothing, so only a resting
-        // segment answers the pointer. The shell tone answers with nothing
-        // at all — "inactive items are `shellTextMuted` on nothing".
-        hovered && !active && !shell ? styles.hovered : null,
+        // shell, `ground`); hovering it promises nothing, so only a resting,
+        // enabled segment answers the pointer. The shell tone answers with
+        // nothing at all — "inactive items are `shellTextMuted` on nothing".
+        hovered && !active && !shell && !disabled ? styles.hovered : null,
         active ? (shell ? styles.activeShell : styles.active) : null,
         focused ? styles.focused : null,
+        disabled ? styles.disabled : null,
       ]}
     >
       <Text style={[shell ? styles.labelShell : styles.label, active ? styles.labelActive : null]}>
@@ -157,4 +175,5 @@ const useStyles = makeStyles((theme) => ({
   labelActive: { color: theme.text, ...text.ui("bodySm", 600) },
   count: { color: theme.textMuted, ...text.ui("caption") },
   countActive: { color: theme.accentText },
+  disabled: { opacity: 0.45 },
 }));

@@ -7,6 +7,7 @@ import { AmountField, parseAmount } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
+import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { RadioGroup, type RadioGroupProps } from "../primitives/radio";
 import { SegmentControl, type SegmentControlProps } from "../primitives/segment-control";
@@ -262,10 +263,11 @@ export function QuickAddForm({
 
       {moreOpen ? (
         <View style={styles.more}>
-          <TextField
+          <DateField
             label={t("transactions.date")}
             value={date}
-            onChangeText={handleDateChange}
+            onChange={handleDateChange}
+            today={today}
             {...(dateValid ? {} : { error: t("transactions.invalidDate") })}
           />
           <TextField

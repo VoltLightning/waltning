@@ -27,6 +27,7 @@ const meta = {
   component: CreateAccountForm,
   args: {
     currencies: CURRENCIES,
+    today: "2026-08-24",
     groups: GROUPS,
     onCancel: noop,
     onSave: noop,

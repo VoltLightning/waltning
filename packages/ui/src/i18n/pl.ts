@@ -37,6 +37,12 @@ export const pl: Messages = {
     couldNotSave: "Nie udało się zapisać",
     note: "Notatka",
     memo: "Notatka",
+    clear: "Wyczyść",
+    delete: "Usuń",
+    yesterday: "Wczoraj",
+    resultsOne: "{{count}} wynik",
+    resultsMany: "{{count}} wyników",
+    later: "Później",
   },
   accounts: {
     currency: "Waluta",
