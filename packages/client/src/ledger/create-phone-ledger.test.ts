@@ -2035,6 +2035,7 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       convertLeafGroup: vi.fn(),
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
+      readCrossRate: vi.fn(() => null),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
