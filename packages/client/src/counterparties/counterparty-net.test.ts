@@ -54,4 +54,9 @@ describe("counterpartyNet", () => {
     const net = counterpartyNet([], EUR, rateOf);
     expect(net).toEqual({ complete: true, value: toMoney("0") });
   });
+
+  it("is complete even with no rate at all, when every held currency already is the target", () => {
+    const net = counterpartyNet([{ currency: PLN, balance: toMoney("50") }], PLN, () => null);
+    expect(net).toEqual({ complete: true, value: toMoney("50") });
+  });
 });

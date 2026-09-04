@@ -358,6 +358,9 @@ export const en = {
     kindPerson: "person",
     kindCompany: "company",
     settlesIn: "settles in {{currency}}",
+    /** `CounterpartyForm`'s field label — distinct from `settlesIn`'s sentence fragment above. */
+    settlementLabel: "Settles in",
+    noSettlementCurrency: "No preference set",
     /** `AgeingBar` — O15: *old*, never *overdue* (no `payment_terms_days` field exists). */
     ageingDays: "{{days}} days · old",
     /* ── S12 · the register ─────────────────────────────────────────────── */

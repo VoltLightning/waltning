@@ -11,10 +11,12 @@
  * (`readRate`), not `packages/core`'s.
  *
  * **P1, and it is why this returns a union rather than a possibly-wrong
- * `Money`.** A rate missing for *any* currency the counterparty holds makes
- * the whole net unknowable — a partial sum would be a wrong number that looks
- * right — so `complete: false` is the only way to report that, and every
- * caller must render nothing rather than guess.
+ * `Money`.** A rate missing for *any* currency that actually needs converting
+ * makes the whole net unknowable — a partial sum would be a wrong number that
+ * looks right — so `complete: false` is the only way to report that, and
+ * every caller must render nothing rather than guess. A counterparty holding
+ * nothing but their own settlement currency stays `complete` even with no
+ * rate held at all — no conversion is ever attempted for it.
  */
 
 import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
@@ -38,8 +40,15 @@ export function counterpartyNet(
   target: CurrencyCode,
   rateOf: (currency: CurrencyCode) => UnitsPerPivot | null,
 ): CounterpartyNet {
-  const targetRate = rateOf(target);
-  if (targetRate === null) return { complete: false };
+  // `target`'s own rate is fetched lazily, only once a line actually needs
+  // converting — a counterparty holding nothing but their own settlement
+  // currency has a complete net even when the replica holds no rate for it
+  // at all (no conversion is ever attempted).
+  let targetRate: UnitsPerPivot | null | undefined;
+  const rateOfTarget = (): UnitsPerPivot | null => {
+    if (targetRate === undefined) targetRate = rateOf(target);
+    return targetRate;
+  };
 
   let total = money.toMoney("0");
   for (const line of balances) {
@@ -48,8 +57,9 @@ export function counterpartyNet(
       continue;
     }
     const lineRate = rateOf(line.currency);
-    if (lineRate === null) return { complete: false };
-    total = money.add(total, money.convert(line.balance, lineRate, targetRate));
+    const resolvedTargetRate = rateOfTarget();
+    if (lineRate === null || resolvedTargetRate === null) return { complete: false };
+    total = money.add(total, money.convert(line.balance, lineRate, resolvedTargetRate));
   }
   return { complete: true, value: total };
 }

@@ -236,6 +236,8 @@ export const pl: Messages = {
     kindPerson: "osoba",
     kindCompany: "firma",
     settlesIn: "rozlicza się w {{currency}}",
+    settlementLabel: "Rozlicza się w",
+    noSettlementCurrency: "Brak preferencji",
     ageingDays: "{{days}} dni · otwarte",
     segmentAll: "Wszyscy",
     segmentTheyOwe: "Winni tobie",
