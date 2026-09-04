@@ -13,7 +13,7 @@ import {
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
@@ -46,6 +46,10 @@ export default function Accounts() {
   // `restore_*` operation exists), so this is a plain `Toast`, not `UndoToast`.
   const { message } = useLocalSearchParams<{ message?: string }>();
   const [toast, setToast] = useState<string | null>(message ?? null);
+  // Shown at most once — straight from the route param's initial value,
+  // never re-set — so a single token (`useTimer`/`useToastMotion`'s
+  // `resetKey`, H1) is all a re-arm could ever need here.
+  const toastToken = useRef(1).current;
 
   const handleSelectAccount = useCallback((id: string) => {
     router.push(`/accounts/${id}`);
@@ -63,7 +67,9 @@ export default function Accounts() {
         onCreateAccount={handleCreateAccount}
         onTransferFrom={handleTransferFrom}
       />
-      {toast === null ? null : <Toast message={toast} onDismiss={handleDismissToast} />}
+      {toast === null ? null : (
+        <Toast message={toast} onDismiss={handleDismissToast} token={toastToken} />
+      )}
     </GroundPanel>
   );
 }

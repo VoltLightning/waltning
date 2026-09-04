@@ -63,17 +63,27 @@ type SheetState = ActionsState | RenameState | MoveState | MergeState | null;
 type ToastState = { message: string; undo?: () => void; token: number } | null;
 
 /**
- * Uncategorized is found at the root by name — the seed names it, nothing
- * brands it (no reserved id reaches the phone's replica; see
- * `packages/db/src/seed/data.ts`). `isLeaf` narrows the match to the seed's
- * own shape (`topLevelLeaves`, TAXONOMY.md: the *one* top-level leaf) rather
- * than name alone (M1) — a user-created root *group* also named
- * "Uncategorized" is a different node (`isLeaf: false`) and must stay
- * reachable in the tree rather than being swept into this match and hidden.
+ * Uncategorized, matched by the seed's own tag first: `externalId ===
+ * "seed:uncategorized"` (`packages/db/src/seed/run.ts` writes `seed:<key>`)
+ * names this exact row, nothing else can collide with it, and no shape
+ * assumption is needed at all.
+ *
+ * The shape match below is the fallback, for a replica seeded before
+ * `externalId` reached this table. It has to be the *whole* seeded shape,
+ * not name alone (M1) or name-plus-`isLeaf` (M2): sibling uniqueness is
+ * `(parent, kind, name)`, so the one legal duplicate — same `parent`, same
+ * `name`, different `kind` — is a perfectly reachable "Uncategorized" leaf
+ * that isn't this row, and dropping `kind` from the match swept it into
+ * this one and hid it from the tree entirely.
  */
 function isUncategorized(node: CategoryTreeNode): boolean {
+  if (node.externalId === "seed:uncategorized") return true;
+  if (node.externalId != null) return false;
   return (
-    node.parentId === null && node.isLeaf && node.name.trim().toLowerCase() === "uncategorized"
+    node.parentId === null &&
+    node.kind === "expense" &&
+    node.isLeaf &&
+    node.name.trim().toLowerCase() === "uncategorized"
   );
 }
 
@@ -145,6 +155,7 @@ export default function CategoriesScreen() {
         archived: node.archived,
         depth: node.depth,
         usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
+        externalId: node.externalId,
       })),
     [snapshot.fullCategoryTree, snapshot.categoryUsage],
   );
@@ -423,7 +434,7 @@ export default function CategoriesScreen() {
           token={toast.token}
         />
       ) : (
-        <Toast message={toast.message} onDismiss={handleDismissToast} />
+        <Toast message={toast.message} onDismiss={handleDismissToast} token={toast.token} />
       )}
     </GroundPanel>
   );

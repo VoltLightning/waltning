@@ -249,6 +249,8 @@ export type PhoneFullCategoryNode = {
   sort: number;
   depth: number;
   version: number;
+  /** The seed's own tag (`seed:uncategorized`, say) — see `LocalCategory`. */
+  externalId: string | null;
 };
 
 /**

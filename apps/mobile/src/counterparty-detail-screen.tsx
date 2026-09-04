@@ -66,7 +66,7 @@ import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 
 /** `settle_debt`'s own field paths (`registry/inputs.ts`) — everything else lands at form level. */
@@ -213,6 +213,12 @@ export default function CounterpartyDetail() {
   const [showAllRows, setShowAllRows] = useState(false);
   const [unmergeToast, setUnmergeToast] = useState(false);
   const [settledToastMessage, setSettledToastMessage] = useState<string | null>(null);
+  // Each toast's own re-arm token (`useTimer`/`useToastMotion`'s `resetKey`,
+  // H1) — a settle or an unmerge can repeat with an identical message, and
+  // the ref is bumped synchronously before the state setter that triggers
+  // the re-render, so the new value is already current by the time it's read.
+  const settledToastTokenRef = useRef(0);
+  const unmergeToastTokenRef = useRef(0);
 
   const [settleVisible, setSettleVisible] = useState(false);
   const [settleAmountRaw, setSettleAmountRaw] = useState("");
@@ -409,6 +415,7 @@ export default function CounterpartyDetail() {
     const direction = t(
       `counterparties.${settleResidualDirection(result.residual, settleDischargesDecimals)}`,
     );
+    settledToastTokenRef.current += 1;
     setSettledToastMessage(
       t("counterparties.settledToast", {
         amount: money.forDisplay(money.abs(result.residual), settleDischargesDecimals, mark),
@@ -433,7 +440,10 @@ export default function CounterpartyDetail() {
   const handleUnmerge = useCallback(
     (mergeId: string) => {
       const result = ledger.unmergeCounterparties({ mergeId });
-      if ("id" in result) setUnmergeToast(true);
+      if ("id" in result) {
+        unmergeToastTokenRef.current += 1;
+        setUnmergeToast(true);
+      }
     },
     [ledger],
   );
@@ -617,10 +627,18 @@ export default function CounterpartyDetail() {
       />
 
       {settledToastMessage === null ? null : (
-        <Toast message={settledToastMessage} onDismiss={handleDismissSettledToast} />
+        <Toast
+          message={settledToastMessage}
+          onDismiss={handleDismissSettledToast}
+          token={settledToastTokenRef.current}
+        />
       )}
       {unmergeToast ? (
-        <Toast message={t("counterparties.unmergeToast")} onDismiss={handleDismissUnmergeToast} />
+        <Toast
+          message={t("counterparties.unmergeToast")}
+          onDismiss={handleDismissUnmergeToast}
+          token={unmergeToastTokenRef.current}
+        />
       ) : null}
     </GroundPanel>
   );

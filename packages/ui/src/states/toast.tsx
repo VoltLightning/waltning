@@ -6,10 +6,13 @@
  * — the caller re-renders the same `UndoToast` with a new `message`/`count`
  * pair, and `count` renders as `×3` beside it, so *"3 rows accepted · Undo"*
  * reads as one growing action rather than three toasts fighting for the same
- * corner of the screen. **`token`, not `message`/`count`, is the 8 s
- * window's `resetKey` (H1)** — two shows can share a message and a count (or
+ * corner of the screen. **`token`, not `message`/`count`, is each window's
+ * `resetKey` (H1)** — two shows can share a message and a count (or
  * neither), so only a value the caller is required to change on every show
- * re-arms `useTimer` reliably.
+ * re-arms `useTimer` reliably. `Toast` takes the same required `token` for
+ * the same reason: a plain toast re-shown with an identical `message` (the
+ * same validation error twice, say) is otherwise indistinguishable from a
+ * re-render of the one already on screen.
  *
  * **It floats — the owner's own words: *"not pronounced, should be easier to
  * distinguish from the main UI"*.** It used to be a flush, full-width bar on
@@ -178,21 +181,29 @@ function StatusMark() {
 export type ToastProps = {
   message: string;
   onDismiss: () => void;
+  /**
+   * Incremented by the caller on every show (H1) — the same re-arm signal
+   * `UndoToast.token` is. `message` alone under-counts: two shows can carry
+   * the same text (a repeated validation error, the same archive message
+   * twice), and `useTimer`/`useToastMotion` keyed on it would then treat the
+   * second show as a no-op re-render instead of a fresh 4 s window.
+   */
+  token: number;
 };
 
-export function Toast({ message, onDismiss }: ToastProps) {
+export function Toast({ message, onDismiss, token }: ToastProps) {
   const t = useT();
   const styles = useStyles();
   const reduced = useReducedMotion();
   const insets = useSafeArea();
-  const toastMotion = useToastMotion(reduced);
+  const toastMotion = useToastMotion(reduced, token);
   const cancelRef = useRef<() => void>(() => {});
 
   const handleDismiss = useCallback(() => {
     cancelRef.current();
     toastMotion.exit(onDismiss);
   }, [toastMotion, onDismiss]);
-  cancelRef.current = useTimer(TOAST_MS, handleDismiss, message);
+  cancelRef.current = useTimer(TOAST_MS, handleDismiss, token);
 
   // Computed rather than cached in `useStyles`: the inset is per-device, and
   // a theme-keyed cache would hand the second device the first one's home

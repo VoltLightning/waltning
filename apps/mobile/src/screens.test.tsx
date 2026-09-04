@@ -129,6 +129,7 @@ type FakeCategory = {
   sort: number;
   depth: number;
   version: number;
+  externalId: string | null;
 };
 
 /** A category fixture, `version: 1` unless a test bumps it — plain string ids, branded here. */
@@ -146,6 +147,7 @@ function fakeCategory(
     sort: 0,
     depth: 0,
     version: 1,
+    externalId: null,
     ...overrides,
     id: id<"categories">(overrides.id),
     parentId: overrides.parentId ? id<"categories">(overrides.parentId) : null,
@@ -889,25 +891,25 @@ describe("CategoriesScreen", () => {
     expect(screen.queryByText("This can't be undone in one step")).toBeNull();
   });
 
-  // M1 — matching by name alone swept a same-named root *group* into the
-  // seeded leaf's own "apart, not in the tree" treatment, and the group
-  // became unreachable: no row, no actions button, nothing to rename it
-  // back. `isLeaf` is what actually distinguishes the seed's own shape
-  // (TAXONOMY.md: the one top-level leaf) from a user's group.
-  it("keeps a root group named 'Uncategorized' visible in the tree, apart from the seeded leaf", () => {
-    const rootGroup = "88888888-8888-4888-8888-888888888888";
-    const groupChild = "77777777-8888-4777-8888-777777777777";
-    const treeWithGroup = [
+  // M2 — matching by name and `isLeaf` alone, with no `kind` check, swept a
+  // same-named-and-shaped sibling into the seeded leaf's own "apart, not in
+  // the tree" treatment. Sibling uniqueness is `(parent, kind, name)`, so
+  // the *reachable* legal duplicate is one that differs only in `kind` — an
+  // "Uncategorized" income leaf at the root, alongside the seeded expense
+  // one. (A same-`kind` root also named "Uncategorized" — leaf or group —
+  // would collide with the seeded row on that same constraint and could
+  // never reach the replica in the first place.)
+  it("keeps a same-named root leaf of a different kind visible in the tree, apart from the seeded one", () => {
+    const incomeLeaf = "88888888-8888-4888-8888-888888888888";
+    const treeWithDuplicate = [
       ...tree,
-      fakeCategory({ id: rootGroup, name: "Uncategorized", kind: "expense", isLeaf: false }),
-      fakeCategory({ id: groupChild, name: "Loose ends", parentId: rootGroup, kind: "expense" }),
+      fakeCategory({ id: incomeLeaf, name: "Uncategorized", kind: "income", isLeaf: true }),
     ];
-    withLedger(<CategoriesScreen />, fakeController([], [], treeWithGroup, usage));
+    withLedger(<CategoriesScreen />, fakeController([], [], treeWithDuplicate, usage));
 
-    // The seeded leaf still shows apart, and the group still shows in the
-    // tree body — two rows, not one collapsed into the other.
+    // The seeded expense leaf still shows apart, and the income leaf still
+    // shows in the tree body — two rows, not one collapsed into the other.
     expect(screen.getAllByText("Uncategorized")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Uncategorized actions" })).toBeDefined();
-    expect(screen.getByText("Loose ends")).toBeDefined();
   });
 });

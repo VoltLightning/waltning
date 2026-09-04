@@ -16,7 +16,7 @@ const { Toast, UndoToast } = await import("./toast");
 
 describe("Toast under reduced motion", () => {
   it("renders with no transform style", () => {
-    render(<Toast message="Saved" onDismiss={vi.fn()} />);
+    render(<Toast message="Saved" onDismiss={vi.fn()} token={1} />);
     const alert = screen.getByRole("alert");
     expect(getComputedStyle(alert).transform).toBe("none");
   });

@@ -35,7 +35,7 @@ import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 type RangePreset = "30d" | "90d" | "year" | "custom";
@@ -90,6 +90,12 @@ export default function SettingsRatesScreen() {
   const [editorRange, setEditorRange] = useState<Range>({ from: today, to: today });
   const [rate, setRate] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  // The toast's own re-arm token (`useTimer`/`useToastMotion`'s `resetKey`,
+  // H1) — two shows can repeat an identical message (the same validation
+  // error twice), and the ref is bumped synchronously before the state
+  // setter that triggers the re-render, so the new value is already
+  // current by the time it's read.
+  const toastTokenRef = useRef(0);
 
   const range = presetRange(today, preset, custom);
   const handleDismissToast = useCallback(() => setToast(null), []);
@@ -144,6 +150,7 @@ export default function SettingsRatesScreen() {
         overwriteManual,
       });
       if ("fieldErrors" in result) {
+        toastTokenRef.current += 1;
         setToast(result.fieldErrors[0]?.message ?? t("fx.rateWriteFailed"));
         return;
       }
@@ -160,8 +167,10 @@ export default function SettingsRatesScreen() {
       from: range.from,
       to: range.to,
     });
-    if ("fieldErrors" in result)
+    if ("fieldErrors" in result) {
+      toastTokenRef.current += 1;
       setToast(result.fieldErrors[0]?.message ?? t("fx.rateWriteFailed"));
+    }
   }, [ledger, quote, pivot, range, t]);
 
   const coverage = ledger.readCoverage(today);
@@ -277,7 +286,9 @@ export default function SettingsRatesScreen() {
         ))}
       </Card>
 
-      {toast === null ? null : <Toast message={toast} onDismiss={handleDismissToast} />}
+      {toast === null ? null : (
+        <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
+      )}
     </GroundPanel>
   );
 }

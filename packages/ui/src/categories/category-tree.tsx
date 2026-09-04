@@ -35,6 +35,13 @@ export type CategoryTreeNode = {
   depth: number;
   /** How many live rows touch this category — `readCategoryUsage`. */
   usageCount: number;
+  /**
+   * The seed's own tag (`seed:uncategorized`, say) — never rendered here,
+   * carried only so a caller's own "is this the seeded row" match
+   * (`categories-screen.tsx`'s `isUncategorized`) doesn't have to fall back
+   * to matching by shape. Optional: a fixture that doesn't care can omit it.
+   */
+  externalId?: string | null;
 };
 
 export type CategoryTreeProps = {

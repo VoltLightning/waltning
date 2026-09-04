@@ -37,7 +37,7 @@ import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 type CurrencyRowData = {
@@ -204,6 +204,12 @@ export default function SettingsCurrenciesScreen() {
   );
 
   const [toast, setToast] = useState<string | null>(null);
+  // The toast's own re-arm token (`useTimer`/`useToastMotion`'s `resetKey`,
+  // H1) — two shows can repeat an identical message (the same validation
+  // error twice), and the ref is bumped synchronously before the state
+  // setter that triggers the re-render, so the new value is already
+  // current by the time it's read.
+  const toastTokenRef = useRef(0);
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [pivotConfirmOpen, setPivotConfirmOpen] = useState(false);
@@ -236,6 +242,7 @@ export default function SettingsCurrenciesScreen() {
     (code: string, version: number, next: boolean) => {
       const result = ledger.setPinned({ code, version, pinned: next });
       if ("fieldErrors" in result) {
+        toastTokenRef.current += 1;
         setToast(result.fieldErrors[0]?.message ?? t("fx.currencyWriteFailed"));
       }
     },
@@ -246,6 +253,7 @@ export default function SettingsCurrenciesScreen() {
     (code: string, version: number, source: string) => {
       const result = ledger.setRateSource({ code, version, rateSource: source });
       if ("fieldErrors" in result) {
+        toastTokenRef.current += 1;
         setToast(result.fieldErrors[0]?.message ?? t("fx.currencyWriteFailed"));
       }
     },
@@ -256,6 +264,7 @@ export default function SettingsCurrenciesScreen() {
     (code: string, version: number) => {
       const result = ledger.archiveCurrency({ code, version });
       if ("fieldErrors" in result) {
+        toastTokenRef.current += 1;
         setToast(result.fieldErrors[0]?.message ?? t("fx.currencyArchiveRefused"));
       }
     },
@@ -286,6 +295,7 @@ export default function SettingsCurrenciesScreen() {
   const handleSaveDraft = useCallback(() => {
     const result = ledger.addCurrency({ code: draft.code, name: draft.name, symbol: draft.symbol });
     if ("fieldErrors" in result) {
+      toastTokenRef.current += 1;
       setToast(result.fieldErrors[0]?.message ?? t("fx.currencyWriteFailed"));
       return;
     }
@@ -338,6 +348,7 @@ export default function SettingsCurrenciesScreen() {
       patch,
     });
     if ("fieldErrors" in result) {
+      toastTokenRef.current += 1;
       setToast(result.fieldErrors[0]?.message ?? t("fx.currencyWriteFailed"));
       return;
     }
@@ -355,6 +366,7 @@ export default function SettingsCurrenciesScreen() {
     const result = ledger.changePivot({ code: selectedPivotTarget });
     if ("fieldErrors" in result) {
       const [fieldError] = result.fieldErrors;
+      toastTokenRef.current += 1;
       setToast(fieldError ? resolvePivotErrorMessage(t, fieldError) : t("fx.pivotChangeRefused"));
       return;
     }
@@ -467,7 +479,9 @@ export default function SettingsCurrenciesScreen() {
         onCancel={handleCancelPivotConfirm}
       />
 
-      {toast === null ? null : <Toast message={toast} onDismiss={handleDismissToast} />}
+      {toast === null ? null : (
+        <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
+      )}
     </GroundPanel>
   );
 }

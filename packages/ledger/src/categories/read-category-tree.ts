@@ -30,6 +30,14 @@ export type LocalCategory = {
   archived: boolean;
   sort: number;
   /**
+   * The seed's own tag (`packages/db/src/seed/run.ts` writes `seed:<key>`,
+   * e.g. `seed:uncategorized`) — the reliable way to find a specific seeded
+   * row again, since sibling uniqueness is `(parent, kind, name)` and a
+   * legal duplicate can share this row's name (`categories-screen.tsx`'s
+   * `isUncategorized`).
+   */
+  externalId: string | null;
+  /**
    * The compare-and-swap token every structural write (`rename_category`,
    * `reparent_category`, `convert_leaf_group`, `archive_category`) needs —
    * S19's editor reads a row from here and hands the version straight back
@@ -54,6 +62,7 @@ export function readCategoryTree<TRun, TSchema extends typeof ledgerSchema>(
       archived: categories.archived,
       sort: categories.sort,
       version: categories.version,
+      externalId: categories.externalId,
     })
     .from(categories)
     .orderBy(asc(categories.sort), asc(categories.name), asc(categories.id))

@@ -34,6 +34,7 @@ function categoryNode(
     sort: 0,
     depth: 0,
     version: 1,
+    externalId: null,
     ...overrides,
     id: id<"categories">(overrides.id),
   };

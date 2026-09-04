@@ -25,7 +25,7 @@ import {
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, useColorScheme, View } from "react-native";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
@@ -112,6 +112,10 @@ export default function Today() {
   // this needs state, and `undefined` there just means "still showing".
   const [toastDismissed, setToastDismissed] = useState(false);
   const handleDismissToast = useCallback(() => setToastDismissed(true), []);
+  // Shown at most once per push — same route-param convention as above —
+  // so a single token (`useTimer`/`useToastMotion`'s `resetKey`, H1) is
+  // all a re-arm could ever need here.
+  const toastToken = useRef(1).current;
   const hasAccounts = snapshot.accounts.length > 0;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
   // The error a failed refresh set stays on the snapshot until the next
@@ -289,7 +293,7 @@ export default function Today() {
   const body = (
     <>
       {typeof message === "string" && !toastDismissed ? (
-        <Toast message={message} onDismiss={handleDismissToast} />
+        <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
       ) : null}
       {ledgerBody}
     </>
