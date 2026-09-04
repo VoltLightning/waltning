@@ -54,7 +54,7 @@ function handleAdd() {
  * route so the composer opens on that side of the toggle rather than the
  * ordinary default.
  */
-function handleSelectType(type: "expense" | "transfer" | "income") {
+export function handleSelectType(type: "expense" | "transfer" | "income") {
   if (type === "transfer") {
     router.push("/transfer");
     return;

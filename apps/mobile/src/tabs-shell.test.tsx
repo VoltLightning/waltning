@@ -38,7 +38,8 @@ vi.mock("expo-router", () => ({
   router: { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() },
 }));
 
-const { TabsShell } = await import("./tabs-shell");
+const { TabsShell, handleSelectType } = await import("./tabs-shell");
+const { router } = await import("expo-router");
 
 function fakeController() {
   return createPhoneLedger(
@@ -151,5 +152,31 @@ describe("TabsShell", () => {
     expect(screen.getByText("Route content")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.getByText("Add — press N")).toBeDefined();
+  });
+});
+
+/**
+ * `FloatingAdd`'s long-press picker (S05 §9.1) routes through this function —
+ * tested directly rather than through a simulated `Gesture.LongPress`, which
+ * the jsdom gesture-handler stub has no timing model for (`floating-add.test.
+ * tsx`'s own note on the same gap).
+ */
+describe("handleSelectType", () => {
+  it("routes Transfer to /transfer", () => {
+    handleSelectType("transfer");
+    expect(router.push).toHaveBeenCalledWith("/transfer");
+  });
+
+  it("routes Income to /quick-add with its type named in the route", () => {
+    handleSelectType("income");
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/quick-add",
+      params: { type: "income" },
+    });
+  });
+
+  it("routes Expense to the ordinary /quick-add default", () => {
+    handleSelectType("expense");
+    expect(router.push).toHaveBeenCalledWith("/quick-add");
   });
 });

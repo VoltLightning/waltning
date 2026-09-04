@@ -361,11 +361,12 @@ type AccountRowProps = {
 };
 
 function AccountRow({ account, selected, onPick }: AccountRowProps) {
+  const t = useT();
   const handlePick = useCallback(() => onPick(account.id), [account.id, onPick]);
   return (
     <Chip
-      placeholder={account.name}
-      value={`${account.name} · ${account.currency}`}
+      placeholder={t("transactions.account")}
+      value={account.name}
       selected={selected}
       onPress={handlePick}
       machineFilled={false}
