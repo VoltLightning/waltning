@@ -87,6 +87,6 @@ export function useLastUsedAccount(
   if (!value) return null;
   if (now - value.at >= LAST_USED_WINDOW_MS) return null;
   const account = accounts.find((candidate) => candidate.id === value.accountId);
-  if (!account || !account.capturable) return null;
+  if (!account?.capturable) return null;
   return account.id;
 }
