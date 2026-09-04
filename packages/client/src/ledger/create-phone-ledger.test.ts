@@ -10,6 +10,7 @@ import {
   type PhoneAccount,
   type PhoneCategoryNode,
   type PhoneCounterparty,
+  type PhoneCounterpartyBalance,
   type PhoneGroup,
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
@@ -1820,5 +1821,95 @@ describe("phone ledger controller — counterparties and settlement", () => {
         message: "settle_debt: the row changed between insert and the debt-fields update",
       },
     ]);
+  });
+});
+
+/**
+ * §6.6's own table, through the controller's on-demand `listCounterpartyBalances`
+ * — a fixture that accrues the four events in turn (lend, they repay, you
+ * borrow, you repay), yielding `+200`, `0`, `−200`, `0` (the plan's own
+ * board-card case for E1's task 6).
+ */
+describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
+  const PLN = currencyCode("PLN");
+  const NINA = id<"counterparties">("77777777-7777-4777-8777-777777777777");
+  const TODAY = accountingDate("2026-09-10");
+
+  function row(balance: string): readonly PhoneCounterpartyBalance[] {
+    return [
+      {
+        counterpartyId: NINA,
+        name: "Nina",
+        kind: "person",
+        settlementCurrency: null,
+        currency: PLN,
+        decimals: 2,
+        balance: money.toMoney(balance),
+        ageDays: null,
+        bucket: null,
+      },
+    ];
+  }
+
+  function balancesHarness() {
+    const listCounterpartyBalances = vi.fn<PhoneLedgerPort["listCounterpartyBalances"]>();
+    const port: PhoneLedgerPort = {
+      listAccounts: () => [],
+      listCurrencies: () => [],
+      listGroups: () => [],
+      listRecent: () => [],
+      listCategories: () => [],
+      listCategoryTree: () => [],
+      listCounterparties: () => [],
+      listNetWorth: () => [],
+      readPeriodSpend: () => [],
+      listUnsettledClearing: () => [],
+      listCounterpartyBalances,
+      balanceAsOf: vi.fn(),
+      searchTransactions: () => ({
+        rows: [],
+        nextCursor: undefined,
+        total: { count: 0, currencies: [] },
+      }),
+      categorizeBatch: () => undefined,
+      createAccount: vi.fn(),
+      createTransaction: vi.fn(),
+      createCategory: vi.fn(),
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
+      updateAccount: vi.fn(),
+      archiveAccount: vi.fn(),
+      reconcileAccount: vi.fn(),
+      createGroup: vi.fn(),
+      reset: vi.fn(),
+    };
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: TODAY,
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-09-10T10:00:00Z"),
+      }),
+      id: <Table extends IdTable>() => id<Table>("00000000-0000-4000-8000-000000000001"),
+    });
+    return { controller, listCounterpartyBalances };
+  }
+
+  it("lend 200 · they repay 200 · you borrow 200 · you repay 200 → +200, 0, −200, 0", () => {
+    const { controller, listCounterpartyBalances } = balancesHarness();
+    listCounterpartyBalances
+      .mockReturnValueOnce(row("200.00000000"))
+      .mockReturnValueOnce(row("0.00000000"))
+      .mockReturnValueOnce(row("-200.00000000"))
+      .mockReturnValueOnce(row("0.00000000"));
+
+    expect(controller.listCounterpartyBalances(TODAY)[0]?.balance).toBe("200.00000000");
+    expect(controller.listCounterpartyBalances(TODAY)[0]?.balance).toBe("0.00000000");
+    expect(controller.listCounterpartyBalances(TODAY)[0]?.balance).toBe("-200.00000000");
+    expect(controller.listCounterpartyBalances(TODAY)[0]?.balance).toBe("0.00000000");
+    expect(listCounterpartyBalances).toHaveBeenCalledTimes(4);
+    expect(listCounterpartyBalances).toHaveBeenCalledWith(TODAY);
   });
 });

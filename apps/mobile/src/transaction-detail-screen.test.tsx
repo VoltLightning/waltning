@@ -80,6 +80,7 @@ function fakeController(
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
+    listCounterpartyBalances: () => [],
     getTransaction: () => row,
     createAccount: vi.fn(),
     createTransaction: vi.fn(),

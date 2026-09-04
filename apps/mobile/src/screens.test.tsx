@@ -14,6 +14,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
+  type PhoneClearingAccount,
   type PhoneLedgerPort,
   type PhoneNetWorth,
 } from "@waltning/client/ledger/create-phone-ledger";
@@ -22,7 +23,6 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import {
   type BalanceRow,
-  type ClearingAccountRow,
   type CurrencyCode,
   currencyCode,
   type Money,
@@ -90,7 +90,7 @@ function netWorthOf(accounts: readonly FakeAccount[]): readonly PhoneNetWorth[] 
 }
 
 /** `money.unsettledClearing` (§8) over the clearing-kind fake accounts. */
-function unsettledOf(accounts: readonly FakeAccount[]): readonly ClearingAccountRow[] {
+function unsettledOf(accounts: readonly FakeAccount[]): readonly PhoneClearingAccount[] {
   return unsettledClearing(
     accounts
       .filter((account) => account.kind === "clearing")
@@ -101,7 +101,12 @@ function unsettledOf(accounts: readonly FakeAccount[]): readonly ClearingAccount
         decimals: account.decimals,
         balance: account.balance,
       })),
-  );
+  ).map((row) => ({
+    ...row,
+    oldestUnconsumedTransactionId: null,
+    oldestDate: null,
+    oldestUnconsumedPayee: null,
+  }));
 }
 
 /**
@@ -138,6 +143,7 @@ function fakeController(
     listNetWorth: () => netWorthOf(accounts),
     readPeriodSpend: () => periodSpendRows,
     listUnsettledClearing: () => unsettledOf(accounts),
+    listCounterpartyBalances: () => [],
     balanceAsOf: () => toMoney("0"),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
     // does) — an empty page and a no-op are enough to satisfy the port.
@@ -441,6 +447,7 @@ describe("Today", () => {
       listNetWorth: () => netWorthOf([PLN_ACCOUNT]),
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
+      listCounterpartyBalances: () => [],
       balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],

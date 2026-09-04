@@ -157,8 +157,20 @@ export default function Today() {
     : undefined;
 
   const unsettled = snapshot.unsettledClearing[0];
+  // S04 §3, Shared: "Tapping the unsettled banner goes straight to the
+  // unallocated transaction, not to a list." Falls back to the filtered
+  // ledger only when no oldest leg is on hand — never observed once §8's
+  // FIFO fold runs (a non-zero clearing balance always has one), but a
+  // fixture-fed port might still hand one back without it.
   const handleOpenUnsettled = useCallback(() => {
     if (!unsettled) return;
+    if (unsettled.oldestUnconsumedTransactionId) {
+      router.push({
+        pathname: "/transaction/[id]",
+        params: { id: unsettled.oldestUnconsumedTransactionId },
+      });
+      return;
+    }
     router.push({ pathname: "/ledger", params: { account: unsettled.accountId } });
   }, [unsettled]);
 
@@ -213,15 +225,29 @@ export default function Today() {
   // text as a count. `Open` still lands on the first (`unsettled` above),
   // the same account the message names.
   const unsettledMore = snapshot.unsettledClearing.length - 1;
+  // §8's third field is what lets this name a transaction rather than a
+  // number — used only once a payee is actually on hand; an unpayeed leg
+  // (or a fixture that never set one) falls back to naming the account,
+  // exactly as before this card.
+  const unsettledPayee = unsettled?.oldestUnconsumedPayee;
   const unsettledBanner = unsettled ? (
     <Banner
       tone="warn"
-      message={t(unsettledMore > 0 ? "shell.unsettledMore" : "shell.unsettled", {
-        amount: money.forDisplay(unsettled.balance, unsettled.decimals, decimalMark(locale)),
-        currency: unsettled.currency,
-        account: unsettled.name,
-        count: unsettledMore,
-      })}
+      message={
+        unsettledPayee
+          ? t(unsettledMore > 0 ? "shell.unsettledNamedMore" : "shell.unsettledNamed", {
+              amount: money.forDisplay(unsettled.balance, unsettled.decimals, decimalMark(locale)),
+              currency: unsettled.currency,
+              payee: unsettledPayee,
+              count: unsettledMore,
+            })
+          : t(unsettledMore > 0 ? "shell.unsettledMore" : "shell.unsettled", {
+              amount: money.forDisplay(unsettled.balance, unsettled.decimals, decimalMark(locale)),
+              currency: unsettled.currency,
+              account: unsettled.name,
+              count: unsettledMore,
+            })
+      }
       action={{ label: t("shell.unsettledOpen"), onPress: handleOpenUnsettled }}
     />
   ) : null;

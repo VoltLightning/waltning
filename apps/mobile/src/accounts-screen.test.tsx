@@ -78,6 +78,7 @@ function fakeController(rows: readonly Row[]) {
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
+    listCounterpartyBalances: () => [],
     balanceAsOf: () => toMoney("0"),
     createAccount: vi.fn(),
     createTransaction: vi.fn(),

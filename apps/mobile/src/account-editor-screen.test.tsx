@@ -71,6 +71,7 @@ function fakeController(overrides: {
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
+    listCounterpartyBalances: () => [],
     balanceAsOf: overrides.balanceAsOf ?? (() => ACCOUNT.balance),
     createAccount: vi.fn(),
     createTransaction: vi.fn(),
