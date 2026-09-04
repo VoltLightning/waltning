@@ -245,7 +245,9 @@ describe("Debt (S12)", () => {
       </LedgerProvider>,
     );
     expect(screen.getByText("Couldn't load your counterparties")).toBeDefined();
-    expect(screen.getByText(/disagree on decimals/)).toBeDefined();
+    // M — the executor's own English (`/disagree on decimals/`) is
+    // diagnostics-only now; a person sees the fixed, translated `why`.
+    expect(screen.getByText("Something went wrong totalling what's owed.")).toBeDefined();
   });
 
   /**
@@ -294,6 +296,42 @@ describe("Debt (S12)", () => {
     expect(marekIndex).toBeGreaterThanOrEqual(0);
     expect(ninaIndex).toBeGreaterThan(marekIndex);
     expect(zetaIndex).toBeGreaterThan(ninaIndex);
+  });
+
+  /**
+   * H — nothing enforces the bootstrap that would make this unreachable: a
+   * *non-empty* `currencies` list with no `isPivot` row is
+   * `architecture/09`'s bootstrap guarantee broken. The totals above read
+   * straight off `balances`, not `pivot`, so without this guard they render
+   * over an empty row list — "They owe · PLN 840,00" above "All settled".
+   * Must surface as a recoverable error instead, and never fall through to
+   * either empty state.
+   */
+  it("shows a recoverable error, never the empty state, when currencies hold no pivot", () => {
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+            isPivot: false,
+          },
+        ],
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
+    expect(screen.queryByText("All settled")).toBeNull();
+    expect(screen.queryByText("No one yet")).toBeNull();
   });
 
   it("shows the first-run empty state with nothing on the ledger", () => {
@@ -375,6 +413,38 @@ describe("Debt (S12)", () => {
 describe("CounterpartyDetail (S13)", () => {
   beforeEach(() => useLocalSearchParams.mockReturnValue({ id: NINA }));
 
+  /**
+   * H — a *non-empty* `currencies` list with no `isPivot` row is not a state
+   * this screen can render past: `architecture/09`'s bootstrap guarantee
+   * broken must surface as a recoverable error rather than the blank screen
+   * `!figures` used to fall through to.
+   */
+  it("shows a recoverable error, never a blank screen, when currencies hold no pivot", () => {
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+            isPivot: false,
+          },
+        ],
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
+    expect(screen.queryByText("Nina")).toBeNull();
+  });
+
   it("shows the card, the ledger, and defaults history to debt rows", () => {
     const controller = controllerOf(
       basePort({
@@ -410,6 +480,92 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
     expect(screen.getByText("Settling with Nina")).toBeDefined();
+  });
+
+  /**
+   * M — a dust-only counterparty (settled at its own currency's scale, M1)
+   * has nothing `handleOpenSettle` can default to: the old unfiltered
+   * `group?.balances[0]` armed a hidden currency behind an empty Discharges
+   * section. Defaulting from the open subset lands on `null` instead, and
+   * the sheet states plainly that there is nothing to settle.
+   */
+  it("shows nothing to settle and disables Settle when the only balance is dust", () => {
+    const dustRow: PhoneCounterpartyBalance = { ...NINA_ROW, balance: toMoney("0.004") };
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [dustRow],
+        listAccounts: () => [CASH_PLN],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    expect(sheet.getByText("Nothing to settle.")).toBeDefined();
+    expect(sheet.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+  });
+
+  /**
+   * M — the default reads the same *open* subset the sheet lists (M1),
+   * never raw array order: two dust rows sort first here, and the one real
+   * balance (GBP) is still what gets preselected and settled.
+   */
+  it("preselects the one open balance even when settled rows are listed first", () => {
+    const settleDebt = vi.fn<PhoneLedgerPort["settleDebt"]>(() => ({
+      residual: toMoney("0"),
+      overSettled: false,
+    }));
+    const settledPln: PhoneCounterpartyBalance = { ...NINA_ROW, balance: toMoney("0.004") };
+    const settledEur: PhoneCounterpartyBalance = {
+      ...NINA_ROW,
+      currency: EUR,
+      balance: toMoney("0.004"),
+    };
+    const openGbp: PhoneCounterpartyBalance = {
+      ...NINA_ROW,
+      currency: currencyCode("GBP"),
+      balance: toMoney("-45.00000000"),
+    };
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [settledPln, settledEur, openGbp],
+        listAccounts: () => [CASH_PLN],
+        settleDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    // One open balance among three — a plain fact, never a radio group —
+    // and it is GBP even though the settled PLN row sorts first.
+    expect(sheet.queryByRole("radiogroup")).toBeNull();
+    expect(sheet.getByText(/GBP · 45.00 · you owe them/)).toBeDefined();
+
+    // GBP is `youOwe` (negative) — the account label follows the balance's
+    // own sign (S14 §3), "From" rather than "Into".
+    fireEvent.click(sheet.getByRole("button", { name: "From" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Amount: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "5" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "5" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
+
+    expect(settleDebt).toHaveBeenCalledOnce();
+    expect(settleDebt.mock.calls[0]?.[0]).toMatchObject({ discharges: { currency: "GBP" } });
   });
 
   /**
@@ -575,7 +731,7 @@ describe("CounterpartyDetail (S13)", () => {
     // carries its own body text, which a test (or a future copy edit) can
     // tell apart even though the two titles read the same.
     expect(screen.getByText("Nothing open with them right now.")).toBeDefined();
-    expect(screen.getByText("No debt rows with Nina yet.")).toBeDefined();
+    expect(screen.getByText("No debt rows yet: Nina.")).toBeDefined();
   });
 
   /** The BLOCKER (finding 1), on S13 — no net line when the fold is incomplete. */

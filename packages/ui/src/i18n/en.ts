@@ -333,6 +333,8 @@ export const en = {
     settlingWith: "Settling with {{name}}",
     /** The balance picker (S14 §9.1). */
     discharges: "Discharges",
+    /** M — every held balance is dust at its own currency's scale (M1's own filter, empty): nothing for Settle to discharge. */
+    nothingToSettle: "Nothing to settle.",
     theyOweYou: "they owe you",
     youOweThem: "you owe them",
     /** A balance row's offline stamp (S14 §6) — the phone's own last write, never today's date. */
@@ -382,16 +384,15 @@ export const en = {
     emptySettledBody: "Nobody owes anything right now.",
     loadFailedTitle: "Couldn't load your counterparties",
     loadFailedWhy: "Something went wrong reading the debt ledger.",
-    /** H1 — the loading state (S12 §6, S13 §6), never the empty state, while the first `refresh()` is still in flight. */
-    loadingDebts: "Loading debts",
-    loadingLedger: "Loading counterparty ledger",
     /**
-     * H1 — a non-empty `currencies` list with no `isPivot` row is an invariant
+     * H — a non-empty `currencies` list with no `isPivot` row is an invariant
      * violation (`architecture/09`'s bootstrap guarantee), never a state to
      * silently render past as "All settled" or a blank screen.
      */
     noPivotTitle: "Couldn't read your currencies",
     noPivotWhy: "This ledger holds currencies but none is marked as the reference one.",
+    /** M — `directionTotals` throwing on a genuine invariant violation (S12 debt-screen.tsx); the executor's own message is diagnostics-only. */
+    totalsInconsistentWhy: "Something went wrong totalling what's owed.",
     /* ── S13 · one person's whole position ──────────────────────────────── */
     netIn: "net in {{currency}}",
     /** L (this round) — the ledger card (S13 §6, `BalanceLedger`) and the history section below it (`historySettled`) each own their key now, rather than the history section borrowing S12's `emptySettledTitle`/`Body` — two unrelated screens sharing a key meant an edit to one's copy silently changed the other's. */
@@ -399,7 +400,7 @@ export const en = {
     ledgerSettledBody: "Nothing open with them right now.",
     /** The history section's own empty state (S13 §3) — same words `emptySettledTitle`/`Body` (S12) carried before the two were split apart, kept unchanged. */
     historySettled: "All settled",
-    historySettledBody: "No debt rows with {{name}} yet.",
+    historySettledBody: "No debt rows yet: {{name}}.",
     /** P1 — the derived total's own rate and date, never shown without both. */
     atRateDate: "@ {{rate}} · {{date}}",
     /** S13 — after a successful settle: the residual, named in words, never a bare sign (P5). */

@@ -317,11 +317,19 @@ export default function CounterpartyDetail() {
     router.push({ pathname: "/transaction/[id]", params: { id: transactionId } });
   }, []);
   const handleOpenSettle = useCallback(() => {
-    // S14 §9.1 — defaulted to the counterparty's own settlement currency, a
-    // suggestion the picker shows past rather than a guess.
+    // M — defaults from the same *open* subset `SettleSheet`'s own
+    // `openBalances` lists (M1 there): a dust balance, settled at its own
+    // currency's scale, is never a Discharges choice, so it can never be the
+    // default either — that armed a hidden currency behind an empty section.
+    // S14 §9.1 — the counterparty's own settlement currency if it is one of
+    // those open balances, a suggestion the picker shows past rather than a
+    // guess; otherwise the first open balance; `null` only when none is open.
+    const openBalances = (group?.balances ?? []).filter(
+      (row) => money.debtDirection(row.balance, row.decimals) !== "settled",
+    );
     const defaultCurrency =
-      group?.balances.find((row) => row.currency === figures?.currency)?.currency ??
-      group?.balances[0]?.currency ??
+      openBalances.find((row) => row.currency === figures?.currency)?.currency ??
+      openBalances[0]?.currency ??
       null;
     setSettleAmountRaw("");
     setSettleDischargesCurrency(defaultCurrency);
@@ -429,6 +437,24 @@ export default function CounterpartyDetail() {
           what={t("counterparties.loadFailedTitle")}
           why={t("counterparties.loadFailedWhy")}
           action={{ label: t("common.retry"), onPress: ledger.refresh }}
+        />
+      </GroundPanel>
+    );
+  }
+
+  // H — nothing enforces the bootstrap that would make this unreachable: a
+  // non-empty `currencies` list with no `isPivot` row is `architecture/09`'s
+  // bootstrap guarantee broken, and must never render as a blank screen —
+  // `figures` is `null` exactly when `pivot` is, so this also resolves the
+  // old `!figures` half of the guard below. No retry action — it would only
+  // re-read the same broken replica.
+  if (pivot === undefined) {
+    return (
+      <GroundPanel>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.noPivotTitle")}
+          why={t("counterparties.noPivotWhy")}
         />
       </GroundPanel>
     );

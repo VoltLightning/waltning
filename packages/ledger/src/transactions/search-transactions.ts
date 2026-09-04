@@ -5,7 +5,7 @@ import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
-import { and, count, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
@@ -162,14 +162,17 @@ function scopeCondition(scope: TransactionSearchScope) {
  * the trade-off `matchesText`'s own doc names above, unavoidable without
  * `pg_trgm`.
  *
- * **L — `total.count`, in the text-free path, is a genuine SQL `count(*)`,
- * not `totalRows.length`.** Unlike a per-currency sum, "how many rows
- * matched" needs no `money.signed` fold and no decimal precision — SQLite's
- * `count(*)` is exact and bounded by the same `structuralWhere` the totals
- * query already runs, so there is no reason to make it wait on reading and
- * folding every row in JS first. The currency sums beside it still cannot
- * make that trip: `money.signed` per row is not expressible in SQL, so they
- * stay a `decimal.js` fold over `totalRows`, for the reason stated above.
+ * **L — `total.count` is `totalRows.length`, not a second SQL `count(*)`.**
+ * A standalone aggregate looks cheaper — no `money.signed` fold, no decimal
+ * precision needed for a row count — but it buys nothing here: `totalRows`
+ * is read and folded in full regardless, for the currency sums beside it
+ * (M2's own doc above), so a second query over the same `structuralWhere`
+ * was a pure pessimization, one more round trip paying for an answer this
+ * function already had. It had also drifted from `totalRows`'s own join
+ * set (missing `innerJoin(currencies)`), which an inner join can turn from
+ * "redundant" into "silently disagrees with the totals beside it" the
+ * moment a row's currency is missing from `currencies`. One query, one join
+ * set, one honest count.
  */
 export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
@@ -305,19 +308,10 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
       .all()
       .map(signRow);
 
-    // L — the count alone is bounded in SQL: no `accounts`/`toAccounts`
-    // join, no `money.signed` fold, just `structuralWhere` and an aggregate.
-    const [{ value: totalCount } = { value: 0 }] = db
-      .select({ value: count() })
-      .from(transactions)
-      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-      .where(structuralWhere)
-      .all();
-
     return {
       rows: page.map(({ amountOriginal, ...row }) => row),
       nextCursor,
-      total: { ...totalsOf(totalRows), count: totalCount },
+      total: totalsOf(totalRows),
     };
   }
 

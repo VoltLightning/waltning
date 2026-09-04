@@ -25,6 +25,7 @@ import {
   makeRateOf,
   resolveCounterpartyFigures,
 } from "@waltning/client/counterparties/counterparty-figures";
+import { clientFailure, emitClientDiagnostic } from "@waltning/client/diagnostics";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -43,6 +44,7 @@ import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
+import { mobileDiagnostics } from "./diagnostics.ts";
 
 type DirectionSegment = "all" | "theyOwe" | "youOwe";
 
@@ -119,14 +121,22 @@ export default function Debt() {
   // (two rows naming one currency at two different `decimals`), and a throw
   // inside a `useMemo` that runs above every guard below must not take the
   // whole screen down. Caught here, once, and rendered as a recoverable
-  // error rather than a blank screen or a crash.
+  // error rather than a blank screen or a crash. The executor's own message
+  // is diagnostics-only (§ M — never a person's `why`, which stays the fixed
+  // `totalsInconsistentWhy` key below).
   const directionTotalsResult = useMemo(():
     | { ok: true; rows: readonly money.DirectionTotalRow[] }
-    | { ok: false; reason: string } => {
+    | { ok: false } => {
     try {
       return { ok: true, rows: money.directionTotals(balances) };
     } catch (error) {
-      return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+      emitClientDiagnostic(mobileDiagnostics, {
+        scope: "client_state",
+        update: "counterparty_direction_totals",
+        phase: "failure",
+        error: clientFailure(error),
+      });
+      return { ok: false };
     }
   }, [balances]);
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
@@ -215,7 +225,7 @@ export default function Debt() {
         <ErrorState
           variant="recoverable"
           what={t("counterparties.loadFailedTitle")}
-          why={directionTotalsResult.reason}
+          why={t("counterparties.totalsInconsistentWhy")}
           action={{ label: t("common.retry"), onPress: ledger.refresh }}
         />
       </GroundPanel>
@@ -230,6 +240,24 @@ export default function Debt() {
           what={t("counterparties.loadFailedTitle")}
           why={t("counterparties.loadFailedWhy")}
           action={{ label: t("common.retry"), onPress: ledger.refresh }}
+        />
+      </GroundPanel>
+    );
+  }
+
+  // H — nothing enforces the bootstrap that would make this unreachable: a
+  // non-empty `currencies` list with no `isPivot` row is `architecture/09`'s
+  // bootstrap guarantee broken, and must never render as "All settled" (the
+  // rows below are empty without a pivot) or as the totals above them, which
+  // read straight off `balances` and know nothing about `pivot`. No retry
+  // action — it would only re-read the same broken replica.
+  if (pivot === undefined) {
+    return (
+      <GroundPanel>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.noPivotTitle")}
+          why={t("counterparties.noPivotWhy")}
         />
       </GroundPanel>
     );

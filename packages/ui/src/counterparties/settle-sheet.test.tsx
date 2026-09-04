@@ -99,6 +99,21 @@ it("flips to over-settlement rather than clamping at zero, and says which way in
   expect(screen.getByText(/Becomes 30.00 EUR the other way\..*they owe you/)).toBeDefined();
 });
 
+/**
+ * M — every balance held is dust at its own currency's scale (M1's filter,
+ * empty): the Discharges section states that plainly, and Settle stays
+ * disabled rather than an empty section with a hidden currency armed.
+ */
+it("shows nothing to settle and disables Settle when every balance is dust", () => {
+  renderSheet({
+    balances: [{ currency: "PLN", balance: toMoney("0.004"), decimals: 2 }],
+    dischargesCurrency: null,
+  });
+  expect(screen.getByText("Nothing to settle.")).toBeDefined();
+  expect(screen.queryByRole("radiogroup")).toBeNull();
+  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+});
+
 it("marks the result an estimate and stamps it once the snapshot is older than the session", () => {
   renderSheet({ stale: true, stampedAt: new Date("2026-08-12T14:20:00Z").getTime() });
   expect(screen.getByText("remaining (estimated)")).toBeDefined();

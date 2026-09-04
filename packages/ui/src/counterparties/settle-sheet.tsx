@@ -294,6 +294,10 @@ export function SettleSheet({
   const accountCaption = accountNeedsRate ?? accountError;
 
   const saveDisabled =
+    // M — nothing open to discharge; explicit rather than resting solely on
+    // `dischargesCurrency === null` below, which a stale caller could still
+    // pass non-null for a balance that has since settled.
+    openBalances.length === 0 ||
     dischargesCurrency === null ||
     accountId === null ||
     money.isZero(amount) ||
@@ -322,7 +326,13 @@ export function SettleSheet({
 
         <Text style={styles.sectionLabel}>{t("counterparties.discharges")}</Text>
         {balanceOptions === undefined ? (
-          singleOpenBalance === undefined ? null : (
+          singleOpenBalance === undefined ? (
+            // M — every balance held is dust at its own currency's scale
+            // (M1's own filter, empty): nothing here for Settle to discharge,
+            // stated plainly rather than an empty section with the button
+            // still armed.
+            <Text style={styles.nothingToSettle}>{t("counterparties.nothingToSettle")}</Text>
+          ) : (
             <Text style={styles.singleBalance}>
               {balanceLabel(singleOpenBalance)}
               {balanceHint === undefined ? "" : ` · ${balanceHint}`}
@@ -474,6 +484,7 @@ const useStyles = makeStyles((theme) => ({
     textTransform: "uppercase",
   },
   singleBalance: { color: theme.text, ...text.ui("body") },
+  nothingToSettle: { color: theme.textMuted, ...text.ui("body") },
   result: {
     gap: space.xs,
     padding: space.x3,
