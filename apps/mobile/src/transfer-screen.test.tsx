@@ -77,6 +77,15 @@ function fakeController(
         capturable: overrides.capturableUsd ?? true,
       },
       { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true },
+      { code: USD, name: "US Dollar", symbol: "$", decimals: 2, capturable: true, isPivot: true },
+      {
+        code: PLN,
+        name: "Polish Złoty",
+        symbol: "zł",
+        decimals: 2,
+        capturable: true,
+        isPivot: false,
+      },
     ],
     listGroups: () => [],
     listRecent: () => [],
@@ -143,7 +152,12 @@ function fakeController(
     convertLeafGroup: vi.fn(),
     mergeCategories: vi.fn(),
     archiveCategory: vi.fn(),
+<<<<<<< HEAD
     listCurrencySettings: vi.fn(() => []),
+=======
+    listCounterpartyMerges: vi.fn(() => []),
+    listDistinctCounterpartyPairs: vi.fn(() => []),
+>>>>>>> ae12a67 (Rebase E4 onto main: route parser merged with E5's type, i18n unions, fixtures completed)
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

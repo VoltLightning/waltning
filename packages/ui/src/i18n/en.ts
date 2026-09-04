@@ -269,31 +269,6 @@ export const en = {
     /** S31 §6 — same account both sides. `transactions_transfer_distinct`'s own message already reaches the screen through the field error; this is the sheet's own inline caption when nothing has been typed wrong yet. */
     sameAccountRefused: "A transfer needs two different accounts.",
   },
-  /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
-  counterparties: {
-    /** `SettleSheet`'s title (S14 §3). */
-    settlingWith: "Settling with {{name}}",
-    /** The balance picker (S14 §9.1). */
-    discharges: "Discharges",
-    theyOweYou: "they owe you",
-    youOweThem: "you owe them",
-    /** A balance row's offline stamp (S14 §6) — the phone's own last write, never today's date. */
-    asOf: "as of {{date}}",
-    /** The account picker — label follows the balance's sign (S14 §3). */
-    into: "Into",
-    /** The primary action — full-width, S14 §7. */
-    settle: "Settle",
-    /** The result card, before commit, always (S14 §5). Lower case, matching `shell.spent`/`shell.net`. */
-    resultDischarges: "discharges",
-    resultRemaining: "remaining",
-    resultRemainingEstimated: "remaining (estimated)",
-    /** The amber line under a stale result (S14 §6) — the phone's own ledger, not the counterparty's. */
-    stampedFrom: "From this device's ledger as of {{time}}.",
-    /** Over-settlement, stated rather than clamped (S14 §9.2). */
-    overSettled: "Becomes {{amount}} the other way.",
-    /** Q11 — prompted, not required. */
-    notePrompt: "A note here is what settles a dispute later.",
-  },
   categories: {
     /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
     search: "Search {{count}} categories",
@@ -350,8 +325,33 @@ export const en = {
     collisionsTitle: "Possibly the same category",
     collisionsReview: "Review",
   },
+  /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
+
   /** S12, S13, S15 (E4) — `SPEC.md` §6.6, §6.7. */
   counterparties: {
+    /** `SettleSheet`'s title (S14 §3). */
+    settlingWith: "Settling with {{name}}",
+    /** The balance picker (S14 §9.1). */
+    discharges: "Discharges",
+    theyOweYou: "they owe you",
+    youOweThem: "you owe them",
+    /** A balance row's offline stamp (S14 §6) — the phone's own last write, never today's date. */
+    asOf: "as of {{date}}",
+    /** The account picker — label follows the balance's sign (S14 §3). */
+    into: "Into",
+    /** The primary action — full-width, S14 §7. */
+    settle: "Settle",
+    /** The result card, before commit, always (S14 §5). Lower case, matching `shell.spent`/`shell.net`. */
+    resultDischarges: "discharges",
+    resultRemaining: "remaining",
+    resultRemainingEstimated: "remaining (estimated)",
+    /** The amber line under a stale result (S14 §6) — the phone's own ledger, not the counterparty's. */
+    stampedFrom: "From this device's ledger as of {{time}}.",
+    /** Over-settlement, stated rather than clamped (S14 §9.2). */
+    overSettled: "Becomes {{amount}} the other way.",
+    /** Q11 — prompted, not required. */
+    notePrompt: "A note here is what settles a dispute later.",
+
     /** `DebtDirectionTag` — text, never colour alone (P5). */
     owesYou: "owes you",
     youOwe: "you owe",
@@ -386,7 +386,6 @@ export const en = {
     netIn: "net in {{currency}}",
     /** P1 — the derived total's own rate and date, never shown without both. */
     atRateDate: "@ {{rate}} · {{date}}",
-    settle: "Settle",
     /** E5 has not merged yet — the button routes to a `Toast` naming this. */
     settleComingSoon: "Settling isn't built yet — it's coming in a later update.",
     addTransaction: "Add transaction",
@@ -512,8 +511,15 @@ export const en = {
     /** S31's own nav title. */
     transfer: "Transfer",
 
+<<<<<<< HEAD
     currencies: "Currencies",
     rates: "Exchange rates",
+=======
+    /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
+    counterparty: "Counterparty",
+    newCounterparty: "New counterparty",
+    editCounterparty: "Edit counterparty",
+>>>>>>> ae12a67 (Rebase E4 onto main: route parser merged with E5's type, i18n unions, fixtures completed)
   },
   /**
    * `settle_debt`'s refusals (H9), resolved through `useT()` the same way

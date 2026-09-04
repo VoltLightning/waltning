@@ -47,7 +47,6 @@ vi.mock("expo-router", () => ({
 import NewAccount from "./account-creation-screen";
 import CalendarStub from "./calendar-screen";
 import CategoriesScreen from "./categories-screen";
-import DebtStub from "./debt-screen";
 import QuickAdd from "./quick-add-screen";
 import SettingsScreen from "./settings-screen";
 import Today from "./today-screen";

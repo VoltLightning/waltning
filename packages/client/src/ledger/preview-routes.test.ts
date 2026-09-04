@@ -43,7 +43,12 @@ describe("phone preview route state", () => {
   });
 
   it("accepts an empty quick-add draft and only scalar route values", () => {
-    expect(parseQuickAddRoute({})).toEqual({ amount: "", accountId: undefined, type: undefined, counterpartyId: undefined });
+    expect(parseQuickAddRoute({})).toEqual({
+      amount: "",
+      accountId: undefined,
+      type: undefined,
+      counterpartyId: undefined,
+    });
     expect(parseQuickAddRoute({ amount: ["1", "2"], accountId: ["a", "b"] })).toEqual({
       amount: "",
       accountId: undefined,

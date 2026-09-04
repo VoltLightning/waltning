@@ -178,21 +178,6 @@ export const pl: Messages = {
     fee: "Opłata",
     sameAccountRefused: "Przelew wymaga dwóch różnych kont.",
   },
-  counterparties: {
-    settlingWith: "Rozliczenie z {{name}}",
-    discharges: "Rozlicza",
-    theyOweYou: "winni Ci",
-    youOweThem: "jesteś winien/winna",
-    asOf: "stan na {{date}}",
-    into: "Na konto",
-    settle: "Rozlicz",
-    resultDischarges: "rozlicza",
-    resultRemaining: "pozostaje",
-    resultRemainingEstimated: "pozostaje (szacunkowo)",
-    stampedFrom: "Z księgi tego urządzenia, stan na {{time}}.",
-    overSettled: "Zamienia się w {{amount}} w drugą stronę.",
-    notePrompt: "Notatka tutaj rozstrzyga spór później.",
-  },
   categories: {
     search: "Szukaj wśród {{count}} kategorii",
     new: "Nowa",
@@ -231,6 +216,20 @@ export const pl: Messages = {
     collisionsReview: "Sprawdź",
   },
   counterparties: {
+    settlingWith: "Rozliczenie z {{name}}",
+    discharges: "Rozlicza",
+    theyOweYou: "winni Ci",
+    youOweThem: "jesteś winien/winna",
+    asOf: "stan na {{date}}",
+    into: "Na konto",
+    settle: "Rozlicz",
+    resultDischarges: "rozlicza",
+    resultRemaining: "pozostaje",
+    resultRemainingEstimated: "pozostaje (szacunkowo)",
+    stampedFrom: "Z księgi tego urządzenia, stan na {{time}}.",
+    overSettled: "Zamienia się w {{amount}} w drugą stronę.",
+    notePrompt: "Notatka tutaj rozstrzyga spór później.",
+
     owesYou: "jest winien(-na) tobie",
     youOwe: "jesteś winien(-na)",
     settled: "rozliczone",
@@ -258,7 +257,6 @@ export const pl: Messages = {
     loadFailedWhy: "Coś poszło nie tak podczas odczytu księgi długów.",
     netIn: "saldo w {{currency}}",
     atRateDate: "@ {{rate}} · {{date}}",
-    settle: "Rozlicz",
     settleComingSoon: "Rozliczanie nie jest jeszcze gotowe — pojawi się w kolejnej aktualizacji.",
     addTransaction: "Dodaj transakcję",
     history: "Historia",
@@ -343,8 +341,14 @@ export const pl: Messages = {
     categories: "Kategorie",
     transfer: "Przelew",
 
+<<<<<<< HEAD
     currencies: "Waluty",
     rates: "Kursy wymiany",
+=======
+    counterparty: "Kontrahent",
+    newCounterparty: "Nowy kontrahent",
+    editCounterparty: "Edytuj kontrahenta",
+>>>>>>> ae12a67 (Rebase E4 onto main: route parser merged with E5's type, i18n unions, fixtures completed)
   },
   settleDebt: {
     noCounterparty: "Ten kontrahent już nie istnieje.",
