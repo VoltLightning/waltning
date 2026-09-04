@@ -34,7 +34,7 @@ import {
   createCounterpartyInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, ne } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -77,7 +77,7 @@ function insertCounterparty(input: CreateCounterpartyInput, tx: ReplicaTx): Loca
     .all();
 
   if (collision) {
-    throw new Error(
+    throw new LocalRefusal(
       `create_counterparty: "${input.name}" collides with existing counterparty ` +
         `"${collision.name}" (${collision.id}) — counterparties_name_uq`,
     );

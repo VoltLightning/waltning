@@ -15,7 +15,7 @@
 
 import { type CreateCategoryInput, createCategoryInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import { refuseSiblingCollision } from "./sibling-collision.ts";
@@ -43,15 +43,15 @@ function insertCategory(input: CreateCategoryInput, tx: ReplicaTx): LocalCategor
   if (input.parentId !== null) {
     const [parent] = tx.select().from(categories).where(eq(categories.id, input.parentId)).all();
     if (!parent) {
-      throw new Error(`create_category: no parent ${input.parentId}`);
+      throw new LocalRefusal(`create_category: no parent ${input.parentId}`);
     }
     if (parent.isLeaf) {
-      throw new Error(
+      throw new LocalRefusal(
         `create_category: ${input.parentId} is a leaf — a category is a group or a leaf, never both (TAXONOMY.md R1)`,
       );
     }
     if (parent.kind !== input.kind) {
-      throw new Error(
+      throw new LocalRefusal(
         `create_category: parent ${input.parentId} is ${parent.kind}, this category is ${input.kind} — an income leaf under an expense group (or the reverse) sums into the wrong side of every report`,
       );
     }

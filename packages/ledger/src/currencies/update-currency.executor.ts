@@ -21,7 +21,7 @@
 
 import { type UpdateCurrencyInput, updateCurrencyInput } from "@waltning/core/registry/inputs";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
@@ -44,10 +44,10 @@ export const updateCurrencyExecutor = defineLocalExecutor<
 function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrencyRow {
   const [current] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!current) {
-    throw new Error(`update_currency: no currency ${input.code}`);
+    throw new LocalRefusal(`update_currency: no currency ${input.code}`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `update_currency: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -74,7 +74,7 @@ function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrency
       .all();
     const live = liveAccounts + liveTransactions;
     if (live > 0) {
-      throw new Error(
+      throw new LocalRefusal(
         `update_currency: refused — decimals cannot shrink from ${current.decimals} to ` +
           `${input.patch.decimals} while ${input.code} still names ${live} live account(s)/transaction(s)`,
       );
@@ -89,7 +89,7 @@ function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrency
     .all();
 
   if (!updated) {
-    throw new Error("update_currency: the row changed between read and write");
+    throw new LocalRefusal("update_currency: the row changed between read and write");
   }
   return updated;
 }

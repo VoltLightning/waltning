@@ -22,7 +22,7 @@ import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { defineLocalExecutor, localRegistry } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { type Capture, type LocalTx, writeLocally } from "../write.ts";
@@ -118,18 +118,33 @@ const createTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: s
   },
 });
 
-/** An executor that mints nothing and always refuses — the crash in test form. */
+/** An executor that mints nothing and always refuses — a `LocalRefusal`. */
 const refuses = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
   operation: "refuses",
   opVersion: 1,
   input: CREATE_TRANSACTION,
   mints: () => [],
   apply: () => {
-    throw new Error("the replica half failed");
+    throw new LocalRefusal("the replica half failed");
   },
 });
 
-const registry = localRegistry<Tx>([createTransaction, createCounterparty, refuses]);
+/**
+ * An executor whose `apply` throws a genuine driver/invariant error — never
+ * a `LocalRefusal`. R2 M2: this is the crash-window case, not a refusal, so
+ * the entry it queued must be left `pending`, not marked `blocked`.
+ */
+const crashes = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "crashes",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: () => [],
+  apply: () => {
+    throw new Error("the driver went away");
+  },
+});
+
+const registry = localRegistry<Tx>([createTransaction, createCounterparty, refuses, crashes]);
 
 const capture: Capture = { timeZone: "Europe/Warsaw", offsetMinutes: 60 };
 
@@ -277,6 +292,27 @@ describe("a failure between the two commits keeps the intent", () => {
     // R2 M4 — `refused`, never `recover.ts`'s `replay_halted`: this write's
     // own `apply` rejected it, so it will refuse identically on any retry.
     expect(entry?.blockedDisposition).toBe("refused");
+  });
+
+  /**
+   * R2 M2 — a throw that is not a `LocalRefusal` is the crash window, not a
+   * refusal: the entry must be left exactly as the first commit left it, so
+   * `recover.ts` replays it rather than a drain resending a write `write.ts`
+   * itself decided was doomed.
+   */
+  it("leaves the entry pending — not blocked — when apply throws a plain error", () => {
+    expect(() =>
+      writeLocally(s.ledger, { executor: crashes, registry, input: input("txn-1"), capture }),
+    ).toThrow("the driver went away");
+
+    expect(entries()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
+    expect(entry?.blockedKind).toBeNull();
+    expect(entry?.blockedDisposition).toBeNull();
   });
 
   /**

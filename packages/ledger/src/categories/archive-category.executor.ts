@@ -12,7 +12,7 @@
 
 import { type ArchiveCategoryInput, archiveCategoryInput } from "@waltning/core/registry/inputs";
 import { and, count, eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
@@ -35,13 +35,13 @@ export const archiveCategoryExecutor = defineLocalExecutor<
 function archiveCategory(input: ArchiveCategoryInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new Error(`archive_category: no category ${input.id}`);
+    throw new LocalRefusal(`archive_category: no category ${input.id}`);
   }
   if (current.archived) {
-    throw new Error(`archive_category: ${input.id} is already archived`);
+    throw new LocalRefusal(`archive_category: ${input.id} is already archived`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `archive_category: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -53,7 +53,7 @@ function archiveCategory(input: ArchiveCategoryInput, tx: ReplicaTx): LocalCateg
       .where(and(eq(categories.parentId, input.id), eq(categories.archived, false)))
       .all();
     if (unarchivedChildren > 0) {
-      throw new Error(
+      throw new LocalRefusal(
         `archive_category: ${input.id} has ${unarchivedChildren} unarchived child(ren) — refused`,
       );
     }
@@ -67,7 +67,7 @@ function archiveCategory(input: ArchiveCategoryInput, tx: ReplicaTx): LocalCateg
     .all();
 
   if (!updated) {
-    throw new Error("archive_category: the row changed between read and write");
+    throw new LocalRefusal("archive_category: the row changed between read and write");
   }
   return updated;
 }

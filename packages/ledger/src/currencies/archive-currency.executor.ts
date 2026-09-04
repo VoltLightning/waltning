@@ -19,7 +19,7 @@
 
 import { type ArchiveCurrencyInput, archiveCurrencyInput } from "@waltning/core/registry/inputs";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
@@ -43,18 +43,18 @@ export const archiveCurrencyExecutor = defineLocalExecutor<
 function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurrencyRow {
   const [current] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!current) {
-    throw new Error(`archive_currency: no currency ${input.code}`);
+    throw new LocalRefusal(`archive_currency: no currency ${input.code}`);
   }
   if (current.archived) {
-    throw new Error(`archive_currency: ${input.code} is already archived`);
+    throw new LocalRefusal(`archive_currency: ${input.code} is already archived`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `archive_currency: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
   if (current.isPivot) {
-    throw new Error(
+    throw new LocalRefusal(
       `archive_currency: ${input.code} is the pivot — change_pivot before archiving it`,
     );
   }
@@ -65,7 +65,9 @@ function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurre
     .where(and(eq(accounts.currency, input.code), eq(accounts.archived, false)))
     .all();
   if (liveAccounts > 0) {
-    throw new Error(`archive_currency: ${input.code} still names ${liveAccounts} live account(s)`);
+    throw new LocalRefusal(
+      `archive_currency: ${input.code} still names ${liveAccounts} live account(s)`,
+    );
   }
 
   const [{ n: liveTransactions } = { n: 0 }] = tx
@@ -83,7 +85,7 @@ function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurre
     )
     .all();
   if (liveTransactions > 0) {
-    throw new Error(
+    throw new LocalRefusal(
       `archive_currency: ${input.code} still names ${liveTransactions} live transaction(s)`,
     );
   }
@@ -96,7 +98,7 @@ function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurre
     .all();
 
   if (!updated) {
-    throw new Error("archive_currency: the row changed between read and write");
+    throw new LocalRefusal("archive_currency: the row changed between read and write");
   }
   return updated;
 }

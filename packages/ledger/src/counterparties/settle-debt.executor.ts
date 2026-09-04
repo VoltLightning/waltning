@@ -40,7 +40,7 @@ import {
   settleDebtInput,
 } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import {
   insertTransaction,
@@ -80,7 +80,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .where(eq(counterparties.id, input.counterpartyId))
     .all();
   if (!counterparty) {
-    throw new Error(`settle_debt: no counterparty ${input.counterpartyId}`);
+    throw new LocalRefusal(`settle_debt: no counterparty ${input.counterpartyId}`);
   }
 
   // R2 H3 — §6.5: a transaction's currency is its account's currency.
@@ -92,10 +92,10 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .where(eq(accounts.id, input.accountId))
     .all();
   if (!account) {
-    throw new Error(`settle_debt: no account ${input.accountId}`);
+    throw new LocalRefusal(`settle_debt: no account ${input.accountId}`);
   }
   if (account.currency !== input.currency) {
-    throw new Error(
+    throw new LocalRefusal(
       `settle_debt: currency ${input.currency} does not match account currency ` +
         `${account.currency} (account ${input.accountId})`,
     );
@@ -112,7 +112,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .where(eq(currencies.code, input.discharges.currency))
     .all();
   if (!currencyRow) {
-    throw new Error(`settle_debt: no currency ${input.discharges.currency}`);
+    throw new LocalRefusal(`settle_debt: no currency ${input.discharges.currency}`);
   }
   const decimals = currencyRow.decimals;
 
@@ -123,7 +123,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
   const sign = money.cmp(money.round(balanceBefore, decimals), money.ZERO);
 
   if (sign === 0) {
-    throw new Error(`settle_debt: nothing to settle in ${input.discharges.currency}`);
+    throw new LocalRefusal(`settle_debt: nothing to settle in ${input.discharges.currency}`);
   }
 
   // R2 H4 — §6.6's four cases, collapsed: they owe you (positive) → money
@@ -134,7 +134,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
   // balance moved since the sheet was shown.
   const liveType = sign > 0 ? ("income" as const) : ("expense" as const);
   if (input.type !== liveType) {
-    throw new Error(
+    throw new LocalRefusal(
       `settle_debt: expected ${input.type} but the live balance in ` +
         `${input.discharges.currency} now settles as ${liveType} — the balance moved, reload`,
     );
@@ -169,7 +169,9 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .returning()
     .all();
   if (!stamped) {
-    throw new Error("settle_debt: the row changed between insert and the debt-fields update");
+    throw new LocalRefusal(
+      "settle_debt: the row changed between insert and the debt-fields update",
+    );
   }
 
   const after = balancesForCounterparty(tx, input.counterpartyId).find(

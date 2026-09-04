@@ -23,7 +23,7 @@ import {
   setTransactionLinesInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalTransactionRow } from "./create-transaction.executor.ts";
@@ -58,20 +58,20 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     .where(eq(transactions.id, input.transactionId))
     .get();
   if (!current) {
-    throw new Error(`set_transaction_lines: no transaction ${input.transactionId}`);
+    throw new LocalRefusal(`set_transaction_lines: no transaction ${input.transactionId}`);
   }
   if (current.deletedAt !== null) {
-    throw new Error(`set_transaction_lines: ${input.transactionId} is deleted`);
+    throw new LocalRefusal(`set_transaction_lines: ${input.transactionId} is deleted`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `set_transaction_lines: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
 
   const total = money.sum(input.lines.map((line) => line.amount));
   if (input.lines.length > 0 && !money.eq(total, current.amountOriginal)) {
-    throw new Error(
+    throw new LocalRefusal(
       `set_transaction_lines: lines sum to ${total}, the transaction is ${current.amountOriginal}`,
     );
   }
@@ -108,7 +108,7 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     .get();
 
   if (!updated) {
-    throw new Error("set_transaction_lines: the row changed between read and write");
+    throw new LocalRefusal("set_transaction_lines: the row changed between read and write");
   }
   return updated;
 }

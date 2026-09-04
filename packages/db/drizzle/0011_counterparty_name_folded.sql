@@ -8,11 +8,18 @@
 -- the index this migration builds. Postgres computes and stores it for every
 -- existing row as part of `ADD COLUMN`, so there is no separate backfill
 -- step here the way there would be for an ordinary column. `lower()`,
--- `translate()` and `btrim()` on `text` are IMMUTABLE under this database's
--- collation (`docker-compose.yml`'s `--icu-locale=und-x-icu`) — checked
--- directly against a live instance before committing to this over a
--- `BEFORE INSERT OR UPDATE` trigger.
-ALTER TABLE "counterparties" ADD COLUMN "name_folded" text GENERATED ALWAYS AS (lower(translate(btrim("name"), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))) STORED NOT NULL;--> statement-breakpoint
+-- `translate()`, `btrim()` and `normalize()` on `text` are IMMUTABLE under
+-- this database's collation (`docker-compose.yml`'s `--icu-locale=und-x-icu`)
+-- — checked directly against a live instance before committing to this over
+-- a `BEFORE INSERT OR UPDATE` trigger.
+--
+-- R2 H1 — `normalize(…, NFC)` first: without it this expression folds
+-- without normalising, so an NFD name (`o` plus a combining acute, the form
+-- some IMEs and iOS's own text fields produce) is admitted here while
+-- `@waltning/core/capture/names`'s `fold()` — which normalises to NFC before
+-- anything else — refuses the identical name on the phone. `normalize()` has
+-- been IMMUTABLE on `text` since Postgres 13.
+ALTER TABLE "counterparties" ADD COLUMN "name_folded" text GENERATED ALWAYS AS (lower(translate(normalize(btrim("name"), NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))) STORED NOT NULL;--> statement-breakpoint
 DROP INDEX "counterparties_name_uq";--> statement-breakpoint
 -- R2 M2 — without this, two counterparties that already fold to the same
 -- value abort the `CREATE UNIQUE INDEX` below with a bare "could not create

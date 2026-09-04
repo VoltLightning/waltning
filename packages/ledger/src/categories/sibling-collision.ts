@@ -26,12 +26,18 @@
  * carries no `WHERE NOT archived` clause either: a name is a name, live or
  * retired, and a person renaming into an archived sibling's spot would get a
  * write that syncs, then conflicts, then loses — worse than a refusal now.
+ *
+ * **Trimmed before folding (R2 L2).** `fold()` never trims by itself — the
+ * Postgres index is `lower(btrim(name))`, so `" Food"` and `"Food"` collide
+ * there. Folding without trimming first missed that collision here, which let
+ * the phone admit a name the server would then refuse.
  */
 
 import { fold } from "@waltning/core/capture/names";
 import type { Id } from "@waltning/core/id";
 import type { CategoryKind } from "@waltning/schema/enums";
 import { and, eq, isNull, ne } from "drizzle-orm";
+import { LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -62,10 +68,10 @@ export function refuseSiblingCollision(
     )
     .all();
 
-  const folded = fold(target.name);
-  const collision = siblings.find((sibling) => fold(sibling.name) === folded);
+  const folded = fold(target.name.trim());
+  const collision = siblings.find((sibling) => fold(sibling.name.trim()) === folded);
   if (collision) {
-    throw new Error(
+    throw new LocalRefusal(
       `${target.operation}: "${collision.name}" already exists here — a category is unique by name within its parent and kind`,
     );
   }

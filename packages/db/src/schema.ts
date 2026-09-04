@@ -248,8 +248,19 @@ export const categoryMappings = pgTable(
  * Kept as one string, not retyped in two places: the migration is
  * hand-checked SQL and cannot `import` this, but a reviewer comparing them
  * can at least diff identical text.
+ *
+ * **`normalize(…, NFC)` first (R2 H1).** Without it this expression folded
+ * without normalising, so an NFD *Józef* — `o` plus a combining acute, the
+ * form some IMEs and iOS's own text fields produce — was admitted here while
+ * `@waltning/core/capture/names`'s `fold()` (which does `normalize("NFC")`
+ * before anything else) refused the identical name on the phone: one engine
+ * enforced `counterparties_name_uq`, the other did not. `normalize()` on
+ * `text` has been IMMUTABLE since Postgres 13, same as `lower()`/
+ * `translate()`/`btrim()` under this database's collation
+ * (`docker-compose.yml`'s `--icu-locale=und-x-icu`) — checked directly
+ * against a live instance before committing to this over a trigger.
  */
-export const FOLD_SQL = `lower(translate(btrim("name"), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))`;
+export const FOLD_SQL = `lower(translate(normalize(btrim("name"), NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))`;
 
 export const counterparties = pgTable(
   "counterparties",
@@ -267,10 +278,8 @@ export const counterparties = pgTable(
      * `name_folded` — or supplied a stale one — used to write straight
      * past `counterparties_name_uq` and nothing caught it. Generated here
      * instead, so the column cannot exist without being this fold of
-     * `name`, ever, regardless of what wrote the row. `lower()`/`translate()`
-     * /`btrim()` on `text` are IMMUTABLE under this database's collation
-     * (`docker-compose.yml`'s `--icu-locale=und-x-icu`) — checked directly
-     * against a live instance before committing to this over a trigger.
+     * `name`, ever, regardless of what wrote the row. `FOLD_SQL`'s own
+     * comment above covers why every function in it is IMMUTABLE.
      */
     nameFolded: text("name_folded").notNull().generatedAlwaysAs(sql.raw(FOLD_SQL)),
   },

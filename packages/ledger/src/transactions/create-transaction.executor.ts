@@ -21,7 +21,7 @@ import {
   createTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { and, desc, eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -158,12 +158,12 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
   if (!input.isBusiness) return;
 
   if (isSharedAccount(tx, input.accountId)) {
-    throw new Error(
+    throw new LocalRefusal(
       "create_transaction: a business transaction cannot sit in a shared account (SPEC.md §6.7, §13.1)",
     );
   }
   if (input.toAccountId !== undefined && isSharedAccount(tx, input.toAccountId)) {
-    throw new Error(
+    throw new LocalRefusal(
       "create_transaction: a business transaction cannot move into a shared account (SPEC.md §6.7)",
     );
   }
@@ -233,7 +233,7 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
     // these?" for *any* currency, including the transaction's own — `1` would
     // only be right if this currency happened to be the pivot, which is the
     // fact that is missing. Refusing is the same branch as case 4.
-    throw new Error(
+    throw new LocalRefusal(
       "create_transaction: no pivot currency in the replica, so no rate can be resolved — " +
         "the intent remains in the outbox for a later backend to value",
     );
@@ -270,7 +270,7 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
      * offline has no rate row yet. It is not the same as "the rate is stale",
      * which is case 3 and is fine.
      */
-    throw new Error(
+    throw new LocalRefusal(
       `create_transaction: no last-known rate for ${pivot}/${input.currency}, and a ` +
         "cross-currency row must not be valued at 1 — the intent remains in the outbox " +
         "for a later backend to value",

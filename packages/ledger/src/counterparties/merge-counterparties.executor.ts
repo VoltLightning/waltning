@@ -32,7 +32,7 @@ import {
   mergeCounterpartiesInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import { chunkIds } from "./chunk-ids.ts";
@@ -82,13 +82,13 @@ function mergeCounterparties(
     .from(counterparties)
     .where(eq(counterparties.id, input.loserId))
     .all();
-  if (!winner) throw new Error(`merge_counterparties: no counterparty ${input.winnerId}`);
-  if (!loser) throw new Error(`merge_counterparties: no counterparty ${input.loserId}`);
+  if (!winner) throw new LocalRefusal(`merge_counterparties: no counterparty ${input.winnerId}`);
+  if (!loser) throw new LocalRefusal(`merge_counterparties: no counterparty ${input.loserId}`);
   if (winner.archived) {
-    throw new Error(`merge_counterparties: ${input.winnerId} is archived`);
+    throw new LocalRefusal(`merge_counterparties: ${input.winnerId} is archived`);
   }
   if (loser.archived) {
-    throw new Error(`merge_counterparties: ${input.loserId} is already archived`);
+    throw new LocalRefusal(`merge_counterparties: ${input.loserId} is already archived`);
   }
 
   // R2 H2 — neither id may already sit on an open merge, as either role. A→B
@@ -110,7 +110,7 @@ function mergeCounterparties(
     )
     .all();
   if (openConflicts.length > 0) {
-    throw new Error(
+    throw new LocalRefusal(
       `merge_counterparties: ${input.winnerId} or ${input.loserId} already appears on an open ` +
         `merge (${openConflicts.map((row) => row.id).join(", ")}) — unmerge it first`,
     );
@@ -128,7 +128,7 @@ function mergeCounterparties(
     .where(and(eq(counterpartyDistinctPairs.aId, aId), eq(counterpartyDistinctPairs.bId, bId)))
     .all();
   if (distinct) {
-    throw new Error(
+    throw new LocalRefusal(
       `merge_counterparties: ${input.winnerId} and ${input.loserId} were recorded as distinct ` +
         "(S15 §9.1) — record_distinct_counterparties would need reversing first",
     );
@@ -157,7 +157,7 @@ function mergeCounterparties(
       (id) => counterpartyById.get(id) !== input.loserId,
     );
     if (stale.length > 0) {
-      throw new Error(
+      throw new LocalRefusal(
         `merge_counterparties: ${stale.length} named transaction(s) no longer name ` +
           `${input.loserId} (${stale.join(", ")}) — reload and try again`,
       );
@@ -190,7 +190,7 @@ function mergeCounterparties(
     .limit(1)
     .all();
   if (stillLive) {
-    throw new Error(
+    throw new LocalRefusal(
       `merge_counterparties: ${input.loserId} still has a live transaction ` +
         `(${stillLive.id}) after the move — refusing to archive it`,
     );
@@ -234,7 +234,7 @@ function mergeCounterparties(
     .returning()
     .all();
   if (!archivedLoser) {
-    throw new Error("merge_counterparties: the loser row changed between read and write");
+    throw new LocalRefusal("merge_counterparties: the loser row changed between read and write");
   }
 
   // R2 M1 — distinct-pairs are transitive across a merge. Whoever the loser

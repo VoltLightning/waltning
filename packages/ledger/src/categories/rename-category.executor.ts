@@ -7,7 +7,7 @@
 
 import { type RenameCategoryInput, renameCategoryInput } from "@waltning/core/registry/inputs";
 import { and, eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
@@ -31,10 +31,10 @@ export const renameCategoryExecutor = defineLocalExecutor<
 function renameCategory(input: RenameCategoryInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new Error(`rename_category: no category ${input.id}`);
+    throw new LocalRefusal(`rename_category: no category ${input.id}`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `rename_category: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -55,7 +55,7 @@ function renameCategory(input: RenameCategoryInput, tx: ReplicaTx): LocalCategor
     .all();
 
   if (!updated) {
-    throw new Error("rename_category: the row changed between read and write");
+    throw new LocalRefusal("rename_category: the row changed between read and write");
   }
   return updated;
 }

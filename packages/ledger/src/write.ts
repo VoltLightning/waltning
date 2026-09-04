@@ -43,7 +43,12 @@ import {
   emitLedgerDiagnostic,
   type LedgerDiagnostics,
 } from "./diagnostics.ts";
-import type { AnyLocalExecutor, LocalExecutor, LocalRegistry } from "./executor.ts";
+import {
+  type AnyLocalExecutor,
+  type LocalExecutor,
+  LocalRefusal,
+  type LocalRegistry,
+} from "./executor.ts";
 import { advanceAppliedSeq } from "./migrate.ts";
 import type { Ledger, LedgerSchema } from "./open.ts";
 import { claimSeq, deriveDeps, type OutboxPayload, outbox } from "./outbox.ts";
@@ -250,48 +255,54 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
       return applied;
     });
   } catch (error) {
-    // R2 H6 — a refusal here (a collision `create_counterparty` throws, a
-    // stale `update_counterparty` version, any executor's own `apply`
-    // failing) used to leave the outbox entry `pending`: real, unsent, and
-    // drainable — the drain would resend the same refused write forever, and
-    // the watermark would never catch up to explain why. Marked `blocked`,
-    // in this same catch — the entry never gets a chance to look sendable.
+    // R2 M2 — only a `LocalRefusal` is a refusal. It used to be every throw
+    // out of `apply`: a collision `create_counterparty` throws, a stale
+    // `update_counterparty` version, *and* a broken driver or a violated
+    // invariant, indistinguishably. The first group refuses identically on
+    // any retry, so it is marked `blocked` here, in this same catch — the
+    // entry never gets a chance to look sendable (R2 H6). The second is the
+    // crash window `architecture/08` exists for: the write itself may still
+    // be good, so the entry is left exactly as the first commit left it —
+    // `pending`, real, unsent, and drainable — and `recover.ts` is what
+    // replays it, never this catch.
     //
     // R2 M4 — `blockedDisposition: "refused"`, never `"replay_halted"`
     // (`recover.ts`'s own halt): this write's own `apply` rejected it, so it
     // will refuse identically on any retry or on a server. `outbox.ts`
     // documents the distinction `recover.ts`'s `outstanding` query reads.
-    const reason = error instanceof Error ? error.message : String(error);
-    try {
-      ledger.outbox.db
-        .update(outbox)
-        .set({
-          state: "blocked",
-          blockedKind: "terminal",
-          blockedDisposition: "refused",
-          blockedReason: reason,
-        })
-        .where(eq(outbox.id, enqueued.entryId))
-        .run();
-    } catch (blockError) {
-      // R2 L1 — the entry would otherwise be left `pending`, silently, if
-      // marking it `blocked` itself failed: the caller sees only this write's
-      // own error and never learns the entry it queued is still sitting there
-      // looking sendable. The original refusal travels as `cause` rather than
-      // being swallowed.
-      const blockReason = blockError instanceof Error ? blockError.message : String(blockError);
-      emitLedgerDiagnostic(diagnostics, {
-        scope: "local_write",
-        phase: "failure",
-        boundary: "replica",
-        operation: executor.operation,
-        seq: enqueued.seq,
-        error: describeLedgerError(blockError),
-      });
-      throw new Error(
-        `local_write: failed to mark ${enqueued.entryId} blocked after a refusal — ${blockReason}`,
-        { cause: error },
-      );
+    if (error instanceof LocalRefusal) {
+      const reason = error.message;
+      try {
+        ledger.outbox.db
+          .update(outbox)
+          .set({
+            state: "blocked",
+            blockedKind: "terminal",
+            blockedDisposition: "refused",
+            blockedReason: reason,
+          })
+          .where(eq(outbox.id, enqueued.entryId))
+          .run();
+      } catch (blockError) {
+        // R2 L1 — the entry would otherwise be left `pending`, silently, if
+        // marking it `blocked` itself failed: the caller sees only this write's
+        // own error and never learns the entry it queued is still sitting there
+        // looking sendable. The original refusal travels as `cause` rather than
+        // being swallowed.
+        const blockReason = blockError instanceof Error ? blockError.message : String(blockError);
+        emitLedgerDiagnostic(diagnostics, {
+          scope: "local_write",
+          phase: "failure",
+          boundary: "replica",
+          operation: executor.operation,
+          seq: enqueued.seq,
+          error: describeLedgerError(blockError),
+        });
+        throw new Error(
+          `local_write: failed to mark ${enqueued.entryId} blocked after a refusal — ${blockReason}`,
+          { cause: error },
+        );
+      }
     }
 
     emitLedgerDiagnostic(diagnostics, {

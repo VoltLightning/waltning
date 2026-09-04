@@ -9,7 +9,7 @@
 
 import { type UpdateGroupInput, updateGroupInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalGroupRow } from "./create-group.executor.ts";
@@ -38,7 +38,7 @@ function patchGroup(input: UpdateGroupInput, tx: ReplicaTx): LocalGroupRow {
     .all();
 
   if (!updated) {
-    throw new Error(`update_group: no group ${input.id}`);
+    throw new LocalRefusal(`update_group: no group ${input.id}`);
   }
   return updated;
 }

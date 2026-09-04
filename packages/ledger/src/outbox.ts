@@ -176,6 +176,11 @@ export const outbox = sqliteTable(
      * Null except while `state` is `blocked`, the same lifetime as
      * `blockedKind`, and the same compile-time-only guarantee: nothing in
      * this table's DDL stops a raw insert from writing a third string.
+     *
+     * R2 L3 — S30 reads this, when it is set, to choose its wording: a
+     * `refused` entry gets no retry (it would only refuse identically), a
+     * `replay_halted` one still offers to wait for an app update. Null — the
+     * ordinary `pending`/`sending`/`stalled` entry — surfaces neither.
      */
     blockedDisposition: text("blocked_disposition", { enum: BLOCKED_DISPOSITION }),
 

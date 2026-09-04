@@ -30,7 +30,7 @@
 import { dec, type UnitsPerPivot, unitsPerPivot } from "@waltning/core/money";
 import { type ChangePivotInput, changePivotInput } from "@waltning/core/registry/inputs";
 import { eq, isNull, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
@@ -58,18 +58,18 @@ export const changePivotExecutor = defineLocalExecutor<
 function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
   const [newPivot] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!newPivot) {
-    throw new Error(`change_pivot: no currency ${input.code}`);
+    throw new LocalRefusal(`change_pivot: no currency ${input.code}`);
   }
   if (newPivot.archived) {
-    throw new Error(`change_pivot: ${input.code} is archived`);
+    throw new LocalRefusal(`change_pivot: ${input.code} is archived`);
   }
   if (newPivot.isPivot) {
-    throw new Error(`change_pivot: ${input.code} is already the pivot`);
+    throw new LocalRefusal(`change_pivot: ${input.code} is already the pivot`);
   }
 
   const [oldPivot] = tx.select().from(currencies).where(eq(currencies.isPivot, true)).all();
   if (!oldPivot) {
-    throw new Error("change_pivot: no pivot currency is set");
+    throw new LocalRefusal("change_pivot: no pivot currency is set");
   }
 
   const [{ n: txnCount } = { n: 0 }] = tx
@@ -78,7 +78,7 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
     .where(isNull(transactions.deletedAt))
     .all();
   if (txnCount > 0) {
-    throw new Error(
+    throw new LocalRefusal(
       "change_pivot: refused — a phone alone cannot re-rate existing transactions; " +
         "change the pivot before the first capture (S29a)",
     );
@@ -193,7 +193,7 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
 
   const [updated] = tx.select().from(currencies).where(eq(currencies.code, newPivot.code)).all();
   if (!updated) {
-    throw new Error("change_pivot: the new pivot's row vanished mid-write");
+    throw new LocalRefusal("change_pivot: the new pivot's row vanished mid-write");
   }
   return updated;
 }

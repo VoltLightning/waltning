@@ -27,7 +27,7 @@ import {
   reconcileAccountInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import {
   insertTransaction,
@@ -54,17 +54,17 @@ export const reconcileAccountExecutor = defineLocalExecutor<
 function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTransactionRow {
   const [account] = tx.select().from(accounts).where(eq(accounts.id, input.accountId)).all();
   if (!account) {
-    throw new Error(`reconcile_account: no account ${input.accountId}`);
+    throw new LocalRefusal(`reconcile_account: no account ${input.accountId}`);
   }
   if (account.archived) {
-    throw new Error(`reconcile_account: ${input.accountId} is archived`);
+    throw new LocalRefusal(`reconcile_account: ${input.accountId} is archived`);
   }
 
   const computed = computedBalance(account.id, account.openingBalance, input.asOf, tx);
   const difference = money.sub(input.observedBalance, computed);
 
   if (money.isZero(difference)) {
-    throw new Error(
+    throw new LocalRefusal(
       `reconcile_account: nothing to reconcile — the ledger already says ${input.observedBalance}`,
     );
   }
@@ -95,7 +95,7 @@ function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTra
     .returning()
     .all();
   if (!updatedAccount) {
-    throw new Error("reconcile_account: the account row changed between read and write");
+    throw new LocalRefusal("reconcile_account: the account row changed between read and write");
   }
 
   return adjustmentRow;

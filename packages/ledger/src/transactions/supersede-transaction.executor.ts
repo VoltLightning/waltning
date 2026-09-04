@@ -17,7 +17,7 @@ import {
   supersedeTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import { insertTransaction, type LocalTransactionRow } from "./create-transaction.executor.ts";
@@ -44,13 +44,13 @@ export const supersedeTransactionExecutor = defineLocalExecutor<
 function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransactionRow {
   const old = tx.select().from(transactions).where(eq(transactions.id, input.supersedesId)).get();
   if (!old) {
-    throw new Error(`supersede_transaction: no transaction ${input.supersedesId}`);
+    throw new LocalRefusal(`supersede_transaction: no transaction ${input.supersedesId}`);
   }
   if (old.deletedAt !== null) {
-    throw new Error(`supersede_transaction: ${input.supersedesId} is already deleted`);
+    throw new LocalRefusal(`supersede_transaction: ${input.supersedesId} is already deleted`);
   }
   if (old.version !== input.supersedesVersion) {
-    throw new Error(
+    throw new LocalRefusal(
       `supersede_transaction: stale version — read ${input.supersedesVersion}, row is at ${old.version}`,
     );
   }
@@ -72,7 +72,7 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
     .where(eq(transactions.id, input.replacement.id))
     .get();
   if (collision) {
-    throw new Error(
+    throw new LocalRefusal(
       `supersede_transaction: replacement id ${input.replacement.id} already names a row — ` +
         "the replacement must be new",
     );
@@ -91,7 +91,9 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
     .returning()
     .get();
   if (!deleted) {
-    throw new Error("supersede_transaction: the superseded row changed between read and write");
+    throw new LocalRefusal(
+      "supersede_transaction: the superseded row changed between read and write",
+    );
   }
 
   return insertTransaction(input.replacement, tx);

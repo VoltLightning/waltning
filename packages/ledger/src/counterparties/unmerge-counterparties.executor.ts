@@ -32,7 +32,7 @@
 import type { Id } from "@waltning/core/id";
 import { unmergeCounterpartiesInput } from "@waltning/core/registry/inputs";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import { chunkIds } from "./chunk-ids.ts";
@@ -71,10 +71,10 @@ function unmergeCounterparties(
     .where(eq(counterpartyMerges.id, mergeId))
     .all();
   if (!merge) {
-    throw new Error(`unmerge_counterparties: no merge ${mergeId}`);
+    throw new LocalRefusal(`unmerge_counterparties: no merge ${mergeId}`);
   }
   if (merge.unmergedAt !== null) {
-    throw new Error(`unmerge_counterparties: ${mergeId} was already unmerged`);
+    throw new LocalRefusal(`unmerge_counterparties: ${mergeId} was already unmerged`);
   }
 
   // R2 H1 — `counterparties_name_uq` only covers unarchived rows, so a fresh
@@ -88,7 +88,7 @@ function unmergeCounterparties(
     .where(eq(counterparties.id, merge.loserId))
     .all();
   if (!loserRow) {
-    throw new Error(`unmerge_counterparties: no counterparty ${merge.loserId}`);
+    throw new LocalRefusal(`unmerge_counterparties: no counterparty ${merge.loserId}`);
   }
   const [collision] = tx
     .select({ id: counterparties.id, name: counterparties.name })
@@ -102,7 +102,7 @@ function unmergeCounterparties(
     )
     .all();
   if (collision) {
-    throw new Error(
+    throw new LocalRefusal(
       `unmerge_counterparties: un-archiving "${loserRow.name}" collides with existing ` +
         `counterparty "${collision.name}" (${collision.id}) — counterparties_name_uq`,
     );
@@ -145,7 +145,7 @@ function unmergeCounterparties(
     .returning()
     .all();
   if (!unarchivedLoser) {
-    throw new Error("unmerge_counterparties: the loser row changed between read and write");
+    throw new LocalRefusal("unmerge_counterparties: the loser row changed between read and write");
   }
 
   const [unmergedRow] = tx
@@ -155,7 +155,7 @@ function unmergeCounterparties(
     .returning()
     .all();
   if (!unmergedRow) {
-    throw new Error("unmerge_counterparties: the merge row changed between read and write");
+    throw new LocalRefusal("unmerge_counterparties: the merge row changed between read and write");
   }
 
   return {

@@ -18,7 +18,7 @@
 import { type AccountingDate, addDays } from "@waltning/core/date";
 import { type SetManualRateInput, setManualRateInput } from "@waltning/core/registry/inputs";
 import { and, eq, gte, lte } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -50,10 +50,10 @@ function dateRange(from: AccountingDate, to: AccountingDate): AccountingDate[] {
 function setManualRate(input: SetManualRateInput, tx: ReplicaTx): SetManualRateResult {
   const [pivot] = tx.select().from(currencies).where(eq(currencies.isPivot, true)).all();
   if (!pivot) {
-    throw new Error("set_manual_rate: no pivot currency is set");
+    throw new LocalRefusal("set_manual_rate: no pivot currency is set");
   }
   if (input.base !== pivot.code) {
-    throw new Error(
+    throw new LocalRefusal(
       `set_manual_rate: base must be the pivot (${pivot.code}) — every rate is quoted against it`,
     );
   }
@@ -76,7 +76,7 @@ function setManualRate(input: SetManualRateInput, tx: ReplicaTx): SetManualRateR
   if (!input.overwriteManual) {
     const conflict = dates.find((date) => existingByDate.get(date) === "manual");
     if (conflict) {
-      throw new Error(
+      throw new LocalRefusal(
         `set_manual_rate: ${conflict} already has a manual rate — pass overwriteManual to replace it`,
       );
     }

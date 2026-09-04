@@ -35,7 +35,7 @@ import {
   updateCounterpartyInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, ne, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
@@ -59,10 +59,10 @@ export const updateCounterpartyExecutor = defineLocalExecutor<
 function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): LocalCounterpartyRow {
   const [current] = tx.select().from(counterparties).where(eq(counterparties.id, input.id)).all();
   if (!current) {
-    throw new Error(`update_counterparty: no counterparty ${input.id}`);
+    throw new LocalRefusal(`update_counterparty: no counterparty ${input.id}`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `update_counterparty: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -83,7 +83,7 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
       )
       .all();
     if (collision) {
-      throw new Error(
+      throw new LocalRefusal(
         `update_counterparty: "${input.patch.name}" collides with existing counterparty ` +
           `"${collision.name}" (${collision.id}) — counterparties_name_uq`,
       );
@@ -111,7 +111,7 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
       )
       .all();
     if (archiveCollision) {
-      throw new Error(
+      throw new LocalRefusal(
         `update_counterparty: un-archiving "${current.name}" collides with existing ` +
           `counterparty "${archiveCollision.name}" (${archiveCollision.id}) — counterparties_name_uq`,
       );
@@ -123,7 +123,7 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
     const balances = balancesForCounterparty(tx, input.id);
     const open = balances.find((row) => !money.isZero(row.balance));
     if (open) {
-      throw new Error(
+      throw new LocalRefusal(
         `update_counterparty: ${input.id} still holds an open balance of ${open.balance} ` +
           `${open.currency} — archiving is for settled relationships (S15 §6)`,
       );
@@ -143,7 +143,7 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
     .all();
 
   if (!updated) {
-    throw new Error("update_counterparty: the row changed between read and write");
+    throw new LocalRefusal("update_counterparty: the row changed between read and write");
   }
   return updated;
 }

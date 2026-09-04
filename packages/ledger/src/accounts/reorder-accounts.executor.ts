@@ -10,7 +10,7 @@
 
 import { type ReorderAccountsInput, reorderAccountsInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalAccountRow } from "./create-account.executor.ts";
@@ -43,7 +43,7 @@ function reorderAccounts(input: ReorderAccountsInput, tx: ReplicaTx): readonly L
       // "Refuse if any id is missing" — a reorder naming an id nothing holds
       // is not a smaller edit than the one it looks like; it is silently
       // dropping an account from the list the caller thought it was writing.
-      throw new Error(`reorder_accounts: no account ${id}`);
+      throw new LocalRefusal(`reorder_accounts: no account ${id}`);
     }
     rows.push(row);
   }

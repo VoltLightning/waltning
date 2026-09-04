@@ -24,6 +24,26 @@
 import type { z } from "zod";
 
 /**
+ * A business refusal — the write is invalid, not merely undelivered.
+ *
+ * **R2 M2.** `write.ts` used to mark *every* throw out of `apply` as
+ * `blocked(refused)` — a collision, a stale version, and a broken driver or a
+ * violated invariant all landed on the identical row. Only the first group
+ * refuses identically on any retry; the second is the crash-window case
+ * `architecture/08` exists for, and forcing it into `refused` told a future
+ * launch never to replay a write it should retry.
+ *
+ * An executor throws `LocalRefusal` for the business case — no such row,
+ * already archived, a stale `version`, a rule the write violates — and a
+ * plain `Error` for everything else: a return value the driver should never
+ * produce, a constraint that should already be impossible. `write.ts`
+ * narrows on `instanceof LocalRefusal` to decide which.
+ */
+export class LocalRefusal extends Error {
+  override readonly name = "LocalRefusal";
+}
+
+/**
  * How one operation applies to the local tables.
  *
  * `Tx` is the transaction handle rather than the database, for the same reason
