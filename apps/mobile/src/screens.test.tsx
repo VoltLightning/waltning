@@ -47,7 +47,6 @@ vi.mock("expo-router", () => ({
 import NewAccount from "./account-creation-screen";
 import CalendarStub from "./calendar-screen";
 import DebtStub from "./debt-screen";
-import LedgerStub from "./ledger-screen";
 import QuickAdd from "./quick-add-screen";
 import Today from "./today-screen";
 
@@ -130,6 +129,14 @@ function fakeController(
     listNetWorth: () => netWorthOf(accounts),
     readPeriodSpend: () => periodSpendRows,
     listUnsettledClearing: () => unsettledOf(accounts),
+    // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
+    // does) — an empty page and a no-op are enough to satisfy the port.
+    searchTransactions: () => ({
+      rows: [],
+      nextCursor: undefined,
+      total: { count: 0, currencies: [] },
+    }),
+    categorizeBatch: () => undefined,
     createAccount: (input) => {
       accounts = [
         ...accounts,
@@ -356,6 +363,12 @@ describe("Today", () => {
       listNetWorth: () => netWorthOf([PLN_ACCOUNT]),
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
+      searchTransactions: () => ({
+        rows: [],
+        nextCursor: undefined,
+        total: { count: 0, currencies: [] },
+      }),
+      categorizeBatch: () => undefined,
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       createCategory: vi.fn(),
@@ -402,12 +415,13 @@ describe("NewAccount", () => {
 });
 
 /**
- * The three tab stubs — S10/S11/S12 until their own arcs build the real
+ * The remaining tab stubs — S11/S12 until their own arcs build the real
  * screen. Each names itself and offers the one honest way out: Today.
+ * `Ledger` graduated out of this list — C4 built S10 for real, its own
+ * `ledger-screen.test.tsx`.
  */
 describe("tab stubs", () => {
   it.each([
-    ["Ledger", LedgerStub],
     ["Calendar", CalendarStub],
     ["Debt", DebtStub],
   ])("%s names itself and returns to Today", (title, Stub) => {

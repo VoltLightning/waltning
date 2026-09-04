@@ -36,6 +36,12 @@ describe("usePhoneLedger", () => {
         listNetWorth: () => [],
         readPeriodSpend: () => [],
         listUnsettledClearing: () => [],
+        searchTransactions: () => ({
+          rows: [],
+          nextCursor: undefined,
+          total: { count: 0, currencies: [] },
+        }),
+        categorizeBatch: () => undefined,
         createAccount: (input) => {
           accounts = [
             {

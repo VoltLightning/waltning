@@ -11,6 +11,7 @@ export type ClientAction =
   | "create_account"
   | "create_transaction"
   | "create_category"
+  | "categorize_batch"
   | "reset_preview"
   | "change_appearance";
 

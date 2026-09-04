@@ -1,13 +1,15 @@
 import { fold } from "@waltning/core/capture/names";
-import type { AccountingDate } from "@waltning/core/date";
-import type { Id, IdTable } from "@waltning/core/id";
+import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
+import { type Id, type IdTable, id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
   type AccountKind,
+  type CategorizeBatchInput,
   type CreateAccountInput,
   type CreateCategoryInput,
   type CreateTransactionInput,
+  categorizeBatchInput,
   createAccountInput,
   createCategoryInput,
   createTransactionInput,
@@ -133,6 +135,71 @@ export type PhoneCounterparty = {
   name: string;
 };
 
+/** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
+export type PhoneTransactionScope = "all" | "mine" | "shared" | "business";
+
+/**
+ * `searchTransactions`'s port-level filter — branded ids and a real
+ * `AccountingDate`, mirroring `@waltning/ledger`'s `TransactionSearchFilter`
+ * structurally (`architecture/11`: no value import across that seam). The
+ * controller's own `TransactionFilterDraft`, below, is the plain-string shape
+ * a screen builds; `searchTransactions` casts one into the other, the same
+ * split `QuickAddDraft` → `CreateTransactionInput` already draws.
+ */
+export type PhoneSearchFilter = {
+  text?: string;
+  accountIds?: readonly Id<"accounts">[];
+  categoryIds?: readonly Id<"categories">[];
+  scope?: PhoneTransactionScope;
+  from?: AccountingDate;
+  to?: AccountingDate;
+};
+
+export type PhoneSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
+
+/** One row of a search page — every field S10's mobile row (or `TransferRow`) needs. */
+export type PhoneSearchTransaction = {
+  id: Id<"transactions">;
+  date: AccountingDate;
+  type: "income" | "expense" | "transfer" | "adjustment";
+  payee: string;
+  note: string;
+  categoryName: string | null;
+  accountId: Id<"accounts">;
+  accountName: string;
+  /** Present only on a transfer. */
+  toAccountId: Id<"accounts"> | null;
+  toAccountName: string | null;
+  /** Already signed, the "from" leg. */
+  amount: Money;
+  currency: CurrencyCode;
+  decimals: number;
+  /** Already signed, the "to" leg. `null` off a transfer. */
+  toAmount: Money | null;
+  toCurrency: CurrencyCode | null;
+  toDecimals: number | null;
+  isBusiness: boolean;
+  isCapital: boolean;
+};
+
+export type PhoneCurrencyTotal = {
+  currency: CurrencyCode;
+  decimals: number;
+  /** Every live row in range, this currency — both legs of a transfer counted separately. */
+  sum: Money;
+  /** The same sum with every `isCapital` row's leg left out — S10 §9. */
+  sumExcludingCapital: Money;
+  /** How many legs of `sum` were capital — 0 means the second total is not worth drawing. */
+  capitalCount: number;
+};
+
+export type PhoneSearchPage = {
+  rows: readonly PhoneSearchTransaction[];
+  nextCursor: PhoneSearchCursor | undefined;
+  /** Over the whole filtered set, every page — never a per-page figure (S10 §3). */
+  total: { count: number; currencies: readonly PhoneCurrencyTotal[] };
+};
+
 export type PhoneLedgerPort = {
   listAccounts: () => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
@@ -144,9 +211,13 @@ export type PhoneLedgerPort = {
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
+  /** C4 — S10's list. A query, not a snapshot field. */
+  searchTransactions: (filter: PhoneSearchFilter, cursor?: PhoneSearchCursor) => PhoneSearchPage;
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
   createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
+  /** C4 — S10's swipe-categorize. One category over N ids, refused as a whole or not at all. */
+  categorizeBatch: (input: CategorizeBatchInput, capture: PhoneCapture) => void;
   reset: () => void;
 };
 
@@ -290,6 +361,32 @@ export type CreateCategoryDraft = {
   parentId: string | null;
 };
 
+/**
+ * S10's filter bar, plain-string ids and all — matching `QuickAddDraft`'s own
+ * reasoning: this is the shape a screen builds from `MultiSelect`/`Chip`
+ * values and a `DateField`'s typed text, and `searchTransactions` below is
+ * where those get cast into `Id<Table>` and a real `AccountingDate` (or
+ * dropped, for a date still mid-edit — see `validAccountingDate`).
+ */
+export type TransactionFilterDraft = {
+  text?: string;
+  accountIds?: readonly string[];
+  categoryIds?: readonly string[];
+  scope?: PhoneTransactionScope;
+  from?: string;
+  to?: string;
+};
+
+export type TransactionSearchCursorDraft = { date: string; id: string };
+
+/**
+ * What a swipe-categorize gesture saves — `categorize_batch`'s own input,
+ * plain strings. No `id` to mint (every named row already exists), so the
+ * controller's success shape is `{ count }` — how many rows the batch
+ * touched — rather than B1's usual `{ id }`.
+ */
+export type CategorizeBatchDraft = { transactionIds: readonly string[]; categoryId: string };
+
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
@@ -310,6 +407,18 @@ export type PhoneLedgerController = {
    * `refresh()` recomputes for every subscriber on every write.
    */
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /**
+   * S10, on demand — like `readPeriodSpend` above, a query rather than a
+   * snapshot field: a filtered, paged list is asked for, not held for every
+   * subscriber to recompute on every write.
+   */
+  searchTransactions: (
+    filter: TransactionFilterDraft,
+    cursor?: TransactionSearchCursorDraft,
+  ) => PhoneSearchPage;
+  categorizeBatch: (
+    draft: CategorizeBatchDraft,
+  ) => { count: number } | { fieldErrors: readonly FieldError[] };
   reset: () => void;
 };
 
@@ -418,6 +527,69 @@ export function createPhoneLedger(
     },
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
+    searchTransactions: (filter, cursor) =>
+      port.searchTransactions(
+        {
+          ...(filter.text !== undefined ? { text: filter.text } : {}),
+          ...(filter.accountIds
+            ? { accountIds: filter.accountIds.map((accountId) => id<"accounts">(accountId)) }
+            : {}),
+          ...(filter.categoryIds
+            ? { categoryIds: filter.categoryIds.map((categoryId) => id<"categories">(categoryId)) }
+            : {}),
+          ...(filter.scope ? { scope: filter.scope } : {}),
+          // A `DateField` mid-edit is not yet a real date — dropped from the
+          // filter rather than thrown, the same "not yet a value" treatment
+          // `isRealCalendarDate` gives an in-progress typed date elsewhere.
+          ...(filter.from !== undefined && isAccountingDate(filter.from)
+            ? { from: accountingDate(filter.from) }
+            : {}),
+          ...(filter.to !== undefined && isAccountingDate(filter.to)
+            ? { to: accountingDate(filter.to) }
+            : {}),
+        },
+        cursor
+          ? { date: accountingDate(cursor.date), id: id<"transactions">(cursor.id) }
+          : undefined,
+      ),
+    categorizeBatch: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "categorize_batch",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = categorizeBatchInput.safeParse({
+          transactionIds: draft.transactionIds,
+          categoryId: draft.categoryId,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "categorize_batch",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.categorizeBatch(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "categorize_batch",
+          phase: "success",
+        });
+        return { count: parsed.data.transactionIds.length };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "categorize_batch",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
     createAccount: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",

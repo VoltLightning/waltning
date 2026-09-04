@@ -358,6 +358,50 @@ describe("the phone ledger session", () => {
     session.close();
   });
 
+  /**
+   * C4 — `categorizeBatch` and `searchTransactions` are the two methods this
+   * PR adds to `LocalLedgerSession`. This only proves each is a one-line
+   * passthrough onto the executor/query already tested in depth elsewhere
+   * (`transaction-ops.test.ts`'s `categorize_batch` suite,
+   * `search-transactions.test.ts`) — end to end, through the real session.
+   */
+  it("categorizeBatch sets the category, and searchTransactions finds the row by it", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    session.createTransaction(expenseInput(), capture);
+    const categoryId = id<"categories">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    const sqlite = new Database(paths.replica);
+    sqlite
+      .prepare(
+        "insert into categories (id, parent_id, name, kind, is_leaf, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(categoryId, null, "Groceries", "expense", 1, 0, 0);
+    sqlite.close();
+
+    const updated = session.categorizeBatch(
+      { transactionIds: [transactionId], categoryId },
+      capture,
+    );
+    expect(updated).toHaveLength(1);
+    expect(updated[0]?.categoryId).toBe(categoryId);
+
+    const found = session.searchTransactions({ categoryIds: [categoryId] });
+    expect(found.rows.map((row) => row.id)).toEqual([transactionId]);
+    expect(found.total).toEqual({
+      count: 1,
+      currencies: [
+        {
+          currency: "PLN",
+          decimals: 2,
+          sum: "-10.00000000",
+          sumExcludingCapital: "-10.00000000",
+          capitalCount: 0,
+        },
+      ],
+    });
+    session.close();
+  });
+
   it("reset deletes an unmaterialised outbox entry too", () => {
     const session = createLocalLedgerSession(options());
     const sqlite = new Database(paths.outbox);
