@@ -12,6 +12,10 @@
  * generate` runs before deciding whether to write a new migration file. An
  * empty statement list is the claim; a non-empty one is drift.
  *
+ * `architecture/05-deployment.md`'s "The `db:push` prohibition" section names
+ * the split this file checks: "`0000_schema.sql` generated from `schema.ts`
+ * by drizzle-kit" — a claim only as true as this test makes it.
+ *
  * Findings: R2 M1-r4 names this as an open risk rather than a measured one —
  * this file measures it. See
  * `packages/ledger/src/invariants/migration-drift.test.ts` for the same

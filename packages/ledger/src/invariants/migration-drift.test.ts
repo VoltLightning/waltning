@@ -13,6 +13,11 @@
  * outbox config's own single-file schema (`./src/outbox.ts`) instead. Each
  * half is checked against its own `meta/*_snapshot.json`.
  *
+ * `architecture/14-local-first.md` §14.6 ("The write path, with and without
+ * a backend") names the replica chain this file guards: "A migration must
+ * not be able to destroy the ledger" only holds if the schema the phone
+ * migrates to is the one `schema-map.ts` actually declares.
+ *
  * Findings: R2 M1-r4 names this as an open risk rather than a measured one —
  * this file (with `packages/db/src/invariants/migration-drift.test.ts`)
  * measures it.

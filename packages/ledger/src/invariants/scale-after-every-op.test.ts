@@ -1,5 +1,7 @@
 /**
- * Proves: SPEC.md §7.2. Findings: R4 H2, R4 C1-r3, R4 M1-r3.
+ * Proves: SPEC.md §6.5 ("Integrity constraints" — `currencies_decimals_sane`,
+ * `decimals BETWEEN 0 AND 8`, the rule this script scans every op for).
+ * Findings: R4 H2, R4 C1-r3, R4 M1-r3.
  *
  * **Why `createAccount` carries the finding here.** The header's three ids
  * name candidate defects this fixed script can surface, not three separate

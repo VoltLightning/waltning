@@ -15,6 +15,8 @@
  * *and* §6.5. A list built by reading either alone would silently omit some
  * of the thirteen.
  *
+ * Findings: none — the rule is CLAUDE.md's, not a review finding.
+ *
  * 1. No CHECK is `NOT VALID` — a constraint declared but never validated
  *    against existing rows would pass every test here and refuse nothing on
  *    a database that already had bad data when it was added.

@@ -166,9 +166,15 @@ describe("journeys and invariants", () => {
    * `*` is allowed in that gap, so this still cannot bridge two unrelated
    * words of prose — only a JSDoc line-wrap boundary is all-whitespace(-and-
    * one-star) enough to match.
+   *
+   * The marker itself ends `\w`, not `[\w.]`: a citation sitting at the end
+   * of a sentence — `§7.2.`, `§4a,` — must not swallow the punctuation into
+   * the token, or it stops matching the heading's own (already-stripped)
+   * token. `§14.6` mid-sentence is unaffected; only a trailing non-word
+   * character right after the marker is ever dropped.
    */
   const CITATION_RE =
-    /(?:\b(architecture|screens|flows)\/([A-Za-z0-9][\w.-]*)|\b(SPEC\.md)\b|\b(computations\.md)\b)(?:\s*\*?\s*(§[\w.]+|H\d+))?/g;
+    /(?:\b(architecture|screens|flows)\/([A-Za-z0-9][\w.-]*)|\b(SPEC\.md)\b|\b(computations\.md)\b)(?:\s*\*?\s*(§[\w.]*\w|H\d+))?/g;
 
   /**
    * Every citation the block comment attempts, resolved or not. Only one
@@ -255,6 +261,15 @@ describe("journeys and invariants", () => {
     expect(
       resolveCitations("SPEC.md is mentioned here.\n\nElsewhere, §7.0 is unrelated.").resolved,
     ).toEqual([]);
+
+    // A citation at the end of a sentence must not swallow the punctuation
+    // into the token: `§7.2.` resolves as `7.2`, `§4a,` as `4a`.
+    expect(resolveCitations("SPEC.md §7.2. Findings: nothing here.").resolved).toEqual([
+      "SPEC.md §7.2",
+    ]);
+    expect(resolveCitations("computations.md §4a, margin").resolved).toEqual([
+      "computations.md §4a",
+    ]);
   });
 
   it("every file's first block comment cites a real spec section and states its findings", () => {
