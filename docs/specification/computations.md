@@ -37,7 +37,7 @@ from:
 | §5 Period spend | **R** for the base figure · **S** for shared-boundary netting | Netting needs `to_amount_pivot`, and getting it wrong silently uses the source amount |
 | §6 Spend by category | **S** | Two `UNION ALL` branches; a `LEFT JOIN … COALESCE` counts a four-line transaction four times |
 | §7 Counterparty balances | **F** per currency · **R** for ageing | Ageing is FIFO over the full history — reclassified from **S**: that reasoning was the pre-`14-local-first.md` replica not holding the full history, and now it does |
-| §8 Clearing and `find_unsettled` | **F** for the balance · **S** for allocation | Largest-remainder allocation must not be reimplemented |
+| §8 Clearing and `find_unsettled` | **F** for the balance · **R** for the oldest-unconsumed pointer · **S** for allocation | The pointer is §7's ageing reclassification applied a second time — the same FIFO fold, the same full-history replica; largest-remainder allocation must not be reimplemented |
 | §9 Duplicate and transfer detection | **S** | Runs server-side on commit, for every path |
 | §10 Recurring materialization | **S** | The occurrence date is resolved under a row lock |
 | §11 Targets | **S** | Period-to-date with capital excluded |
@@ -338,7 +338,10 @@ means *old*, never *overdue*, and the label must say so.
 clearing_balance(a) = balance(a)              -- an ordinary balance
 ```
 
-Attribution: allocations consume clearing inflows **FIFO**, so
+Attribution: allocations consume clearing inflows **FIFO** — one reading,
+in one sentence: **inflows to a clearing account open it; outflows consume
+those inflows oldest-first; the oldest one not yet fully consumed is what
+`find_unsettled` names.** So
 
 ```
 find_unsettled() → (account_id, balance, oldest_unconsumed_transaction_id)

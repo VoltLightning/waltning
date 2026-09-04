@@ -20,7 +20,7 @@ const live = sql`${transactions.deletedAt} is null`;
  * (S14); where `debt_currency` is null, the transaction's own currency
  * applies.
  */
-const debtCurrency = sql<string>`coalesce(${transactions.debtCurrency}, ${transactions.currency})`;
+export const debtCurrency = sql<string>`coalesce(${transactions.debtCurrency}, ${transactions.currency})`;
 
 /**
  * §7's `side`: the leg carrying the counterparty. For `income`, `expense`
@@ -36,7 +36,7 @@ const debtCurrency = sql<string>`coalesce(${transactions.debtCurrency}, ${transa
  * `debtDelta = −signed(side)`: for `transfer`, `−signed(to) = −to_amount`;
  * otherwise `−signed(from)`, i.e. `−signedFromLeg`.
  */
-const debtDeltaOnCarryingLeg = sql<Money>`(
+export const debtDeltaOnCarryingLeg = sql<Money>`(
   case when ${transactions.type} = 'transfer'
     then -${transactions.toAmount}
     else -${signedFromLeg}

@@ -13,13 +13,16 @@
  * run, reverted — see the PR description for the failing output).
  */
 
+import { accountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { getTableName, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { accounts, transactions } from "../schema.ts";
 import { type Scratch, scratchDatabase } from "../test/scratch.ts";
+import { oldestOpenDebt } from "./counterparty-ageing.ts";
 import { counterpartyBalances } from "./counterparty-balance.ts";
-import { ACCOUNTS, COUNTERPARTY, CURRENCIES, TRANSACTIONS } from "./fixture.ts";
+import { findUnsettled } from "./find-unsettled.ts";
+import { ACCOUNTS, COMPANY, COUNTERPARTY, CURRENCIES, TRANSACTIONS } from "./fixture.ts";
 import { netWorth } from "./net-worth.ts";
 import { signedFromLeg } from "./signed.sql.ts";
 
@@ -68,15 +71,58 @@ const legRows: money.LegRow[] = TRANSACTIONS.filter((t) => !t.deleted).map((t) =
  * `debtDeltaOnCarryingLeg` in `counterparty-balance.ts` for why a transfer's
  * counterparty always sits on the `to` leg here, not case-by-case per row.
  */
-const debtRows: money.DebtRow[] = TRANSACTIONS.filter(
-  (t) => !t.deleted && t.counterpartyId === COUNTERPARTY.id,
-).map((t) => ({
-  type: t.type,
-  amountOriginal: money.toMoney(t.amountOriginal),
-  toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
-  side: t.type === "transfer" ? "to" : "from",
-  currency: money.currencyCode(t.currency),
-}));
+function debtRowsFor(counterpartyId: string): money.DebtRow[] {
+  return TRANSACTIONS.filter((t) => !t.deleted && t.counterpartyId === counterpartyId).map((t) => ({
+    type: t.type,
+    amountOriginal: money.toMoney(t.amountOriginal),
+    toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
+    side: t.type === "transfer" ? "to" : "from",
+    currency: money.currencyCode(t.currency),
+  }));
+}
+const debtRows = debtRowsFor(COUNTERPARTY.id);
+
+/**
+ * §7's rows as `money.fifoOldestOpen` wants them, for one counterparty **in
+ * one currency** — ageing is per `(counterparty, currency)`, the same
+ * partition `counterparty-ageing.ts` groups by. `debtDelta` is already
+ * applied (the fold, not the raw amount); `id` and `date` are kept so the
+ * oldest-open row can be named.
+ */
+function fifoDebtRowsFor(counterpartyId: string, currency: string): money.FifoDelta<string>[] {
+  return TRANSACTIONS.filter(
+    (t) => !t.deleted && t.counterpartyId === counterpartyId && t.currency === currency,
+  ).map((t) => {
+    const side: "from" | "to" = t.type === "transfer" ? "to" : "from";
+    const delta = money.debtDelta(
+      {
+        type: t.type,
+        amountOriginal: money.toMoney(t.amountOriginal),
+        toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
+      },
+      side,
+    );
+    return { id: t.id, date: accountingDate(t.date), delta };
+  });
+}
+
+/** §8's rows for one clearing account, `money.fifoOldestOpen`'s own shape. */
+function clearingLegRowsFor(accountId: string): money.FifoDelta<string>[] {
+  return TRANSACTIONS.filter((t) => !t.deleted)
+    .filter((t) => t.accountId === accountId || t.toAccountId === accountId)
+    .map((t) => ({
+      id: t.id,
+      date: accountingDate(t.date),
+      delta: money.signed(
+        {
+          type: t.type,
+          amountOriginal: money.toMoney(t.amountOriginal),
+          toAmount: t.toAmount != null ? money.toMoney(t.toAmount) : null,
+        },
+        t.accountId === accountId ? "from" : "to",
+      ),
+    }));
+}
 
 describe("class-F figures agree to eight decimals, SQL against money.ts", () => {
   let scratch: Scratch;
@@ -89,10 +135,12 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
         values (${c.code}, ${c.name}, ${c.decimals}, ${c.code === "PLN"})`;
     }
     for (const a of ACCOUNTS) {
-      await scratch.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance)
-        values (${a.id}, ${a.name}, ${a.currency}, ${a.ownership}, ${a.isBusiness}, ${a.opening})`;
+      await scratch.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance, kind)
+        values (${a.id}, ${a.name}, ${a.currency}, ${a.ownership}, ${a.isBusiness}, ${a.opening}, ${a.kind})`;
     }
-    await scratch.sql`insert into counterparties (id, name) values (${COUNTERPARTY.id}, ${COUNTERPARTY.name})`;
+    await scratch.sql`insert into counterparties (id, name, kind)
+      values (${COUNTERPARTY.id}, ${COUNTERPARTY.name}, 'person'),
+             (${COMPANY.id}, ${COMPANY.name}, 'company')`;
     for (const t of TRANSACTIONS) {
       await scratch.sql`insert into transactions
         (id, date, type, account_id, to_account_id, amount_original, to_amount,
@@ -156,6 +204,74 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       { currency: "PLN", balance: "150.00000000" },
       { currency: "USD", balance: "30.00000000" },
     ]);
+  });
+
+  /**
+   * §7's ageing — Acme (a company): 200 lent, 300 lent, 200 repaid. FIFO
+   * consumes the 200 first, so the oldest **open** row is the 300 lent
+   * second, not the 200 lent first. `oldestOpenDebt` (SQL) is kind-agnostic
+   * by design, so this also checks Counterparty A's own PLN and USD rows —
+   * the differential holds for a person too, even though only a company's
+   * age reaches a screen (O15).
+   */
+  it("§7 ageing — the oldest open debt row, per counterparty per currency", async () => {
+    const sqlRows = await oldestOpenDebt(scratch.db);
+    const sqlByKey = new Map(
+      sqlRows.map((r) => [
+        `${r.counterpartyId}:${r.currency}`,
+        { id: r.oldestUnconsumedTransactionId, date: r.oldestDate },
+      ]),
+    );
+
+    for (const [counterpartyId, currency] of [
+      [COMPANY.id, "PLN"],
+      [COUNTERPARTY.id, "PLN"],
+      [COUNTERPARTY.id, "USD"],
+    ] as const) {
+      const tsOldest = money.fifoOldestOpen(fifoDebtRowsFor(counterpartyId, currency));
+      const sqlOldest = sqlByKey.get(`${counterpartyId}:${currency}`) ?? null;
+      expect(sqlOldest, `${counterpartyId} ${currency}`).toEqual(
+        tsOldest ? { id: tsOldest.id, date: tsOldest.date } : null,
+      );
+    }
+
+    // The named case: Acme's still-open row is the 300 lent 2026-08-15 —
+    // FIFO already consumed the 200 lent first with the 200 repaid third.
+    const acme = sqlByKey.get(`${COMPANY.id}:PLN`);
+    expect(acme).toEqual({ id: "20000000-0000-4000-8000-000000000012", date: "2026-08-15" });
+  });
+
+  /**
+   * §8's own reading, written into `computations.md` in this PR: inflows
+   * opened, outflows consume, FIFO. Two inflows to Trip clearing, one
+   * allocation that exhausts the older, so the still-unconsumed inflow —
+   * `find_unsettled`'s third field — is the 80 dated 2026-08-05, not the
+   * 120 dated 2026-08-01.
+   */
+  it("§8 find_unsettled — balance and the oldest unconsumed leg", async () => {
+    const tripClearing = ACCOUNTS[5];
+    const sqlRows = await findUnsettled(scratch.db);
+    const sqlRow = sqlRows.find((r) => r.accountId === tripClearing.id);
+
+    const tsBalance = money.accountBalance(
+      money.toMoney(tripClearing.opening),
+      tripClearing.id,
+      legRows,
+    );
+    const tsOldest = money.fifoOldestOpen(clearingLegRowsFor(tripClearing.id));
+
+    expect(sqlRow).toEqual({
+      accountId: tripClearing.id,
+      balance: tsBalance,
+      oldestUnconsumedTransactionId: tsOldest?.id,
+      oldestDate: tsOldest?.date,
+    });
+    expect(sqlRow).toEqual({
+      accountId: tripClearing.id,
+      balance: "80.00000000",
+      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000015",
+      oldestDate: "2026-08-05",
+    });
   });
 
   it("excludes soft-deleted rows on both sides", async () => {

@@ -31,6 +31,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "10.12345678",
+    kind: "other",
   },
   {
     id: "00000000-0000-4000-8000-00000000000b",
@@ -39,6 +40,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: true,
     opening: "0",
+    kind: "other",
   },
   {
     id: "00000000-0000-4000-8000-00000000000c",
@@ -47,6 +49,7 @@ export const ACCOUNTS = [
     ownership: "shared",
     isBusiness: false,
     opening: "-5.5",
+    kind: "other",
   },
   {
     id: "00000000-0000-4000-8000-00000000000d",
@@ -55,6 +58,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "3",
+    kind: "other",
   },
   {
     id: "00000000-0000-4000-8000-00000000000e",
@@ -63,6 +67,21 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    kind: "other",
+  },
+  /**
+   * §8's own account, class **F** for the balance — a clearing account
+   * whose two inflows and one allocation are what `find-unsettled.ts` and
+   * `money.fifoOldestOpen` are each asked to name the oldest of.
+   */
+  {
+    id: "00000000-0000-4000-8000-00000000000f",
+    name: "Trip clearing · PLN",
+    currency: "PLN",
+    ownership: "own",
+    isBusiness: false,
+    opening: "0",
+    kind: "clearing",
   },
 ] as const;
 
@@ -74,6 +93,14 @@ export const ACCOUNTS = [
  * exchange rate nobody agreed to.
  */
 export const COUNTERPARTY = { id: "10000000-0000-4000-8000-000000000001", name: "Counterparty A" };
+
+/**
+ * §7's ageing (companies only, O15) — three debt rows so the oldest OPEN one
+ * is not simply the oldest one written: a 200 lent first is fully consumed
+ * by the 200 repaid third, leaving the 300 lent second as the row both
+ * `oldestOpenDebt` (SQL) and `money.fifoOldestOpen` must each name.
+ */
+export const COMPANY = { id: "10000000-0000-4000-8000-000000000002", name: "Acme Sp. z o.o." };
 
 export type FixtureTx = {
   id: string;
@@ -201,6 +228,68 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     currency: "USD",
     counterpartyId: COUNTERPARTY.id,
     counterpartyRole: "debt",
+  },
+  // §7 ageing — Acme, a company: lent 200 (oldest), lent 300, repaid 200.
+  // The repayment fully consumes the 200 (FIFO, oldest-first), so the
+  // still-open row — the one ageing reports — is the 300 lent second, not
+  // the 200 lent first.
+  {
+    id: "20000000-0000-4000-8000-000000000011",
+    date: "2026-07-01",
+    type: "expense",
+    accountId: ACCOUNTS[0].id,
+    amountOriginal: "200",
+    currency: "PLN",
+    counterpartyId: COMPANY.id,
+    counterpartyRole: "debt",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000012",
+    date: "2026-08-15",
+    type: "expense",
+    accountId: ACCOUNTS[0].id,
+    amountOriginal: "300",
+    currency: "PLN",
+    counterpartyId: COMPANY.id,
+    counterpartyRole: "debt",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000013",
+    date: "2026-08-20",
+    type: "income",
+    accountId: ACCOUNTS[0].id,
+    amountOriginal: "200",
+    currency: "PLN",
+    counterpartyId: COMPANY.id,
+    counterpartyRole: "debt",
+  },
+  // §8 — two inflows to Trip clearing, one allocation exhausting the older:
+  // the still-unconsumed inflow is the 80 dated second, not the 120 dated
+  // first — `find_unsettled`'s own reading, "inflows opened, outflows
+  // consume, FIFO" (`computations.md` §8).
+  {
+    id: "20000000-0000-4000-8000-000000000014",
+    date: "2026-08-01",
+    type: "income",
+    accountId: ACCOUNTS[5].id,
+    amountOriginal: "120",
+    currency: "PLN",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000015",
+    date: "2026-08-05",
+    type: "income",
+    accountId: ACCOUNTS[5].id,
+    amountOriginal: "80",
+    currency: "PLN",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000016",
+    date: "2026-08-06",
+    type: "expense",
+    accountId: ACCOUNTS[5].id,
+    amountOriginal: "120",
+    currency: "PLN",
   },
 ];
 
