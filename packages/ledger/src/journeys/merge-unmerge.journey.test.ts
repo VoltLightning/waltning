@@ -11,6 +11,12 @@
  * Findings: R2 H1 (unmerge repoints a later reassignment), R2 H2 (chained
  * merge), R2 H5 (moved ids on the payload), R2 M2-r4 (loser cannot be lost
  * twice).
+ *
+ * **R2 H1 is one half of a joint rule with `counterparty-names.journey.test.ts`'s
+ * own R2 M3**: an archived name is free (the other file), but an unmerge
+ * that would resurrect a name a live row now holds is refused, naming that
+ * row (this file) — freeing a name and reusing it are not the same
+ * guarantee, and each file covers the one it names.
  */
 import { accountingDate } from "@waltning/core/date";
 import { type Id, id } from "@waltning/core/id";

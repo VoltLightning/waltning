@@ -81,7 +81,11 @@ describe("J02 — a capture in a currency with no rate row", () => {
         },
         j.capture,
       );
-      expect(appliedSeq(j)).toBe(2);
+      // main's watermark advances past this still-pending entry — that
+      // corruption is R2 C2 itself, not this scenario's contract. A fix that
+      // stops the watermark from advancing past an unapplied entry would
+      // leave it at 1, not 2; the exact value here is the defect under test.
+      expect(appliedSeq(j)).toBeLessThanOrEqual(2);
       j.relaunch();
       seedRate(j, PIVOT, CHF, "2026-03-10", "0.2300", "nbp");
       j.relaunch();

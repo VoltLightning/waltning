@@ -88,12 +88,12 @@ export const NAME_PAIRS: readonly NamePair[] = [
     a: "Café",
     b: "Cafe",
     collide: false,
-    why: "a non-Polish diacritic — é is not in the fold table (SPEC.md §6.6's two languages are en and pl), so a café and a cafe are two different spellings, not a collision",
+    why: "the other side of the same rule below: fold() (packages/core/src/capture/names.ts) folds case plus exactly nine Polish diacritics (ą ć ę ł ń ó ś ź ż) — é is not one of them, so café and cafe are two different spellings under the counterparty fold PR #116 enforces on both engines (SPEC.md §6.6), not a collision",
   },
   {
     a: "Zażółć",
     b: "ZAZOLC",
     collide: true,
-    why: "the same name under a full Polish diacritic fold plus case — every letter (ż, ó, ł) as well as the case",
+    why: "the same name under this product's own counterparty fold — case plus the nine Polish diacritics fold() (packages/core/src/capture/names.ts) already defines for name matching, the rule PR #116 enforces on both engines and writes into SPEC.md §6.6, superseding S15 §9's 'decorative' remark about normalized equality",
   },
 ];

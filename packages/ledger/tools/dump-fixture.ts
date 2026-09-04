@@ -34,7 +34,7 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { FX_SOURCE } from "@waltning/schema/enums";
 import Database from "better-sqlite3";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { dumpDatabase } from "../src/journeys/fixture-dump.ts";
 import { appliedSeq, openJourney } from "../src/journeys/harness.ts";
 import {
@@ -48,8 +48,15 @@ import {
 import { OUTBOX_MIGRATIONS, REPLICA_MIGRATIONS } from "../src/migrate.ts";
 import { ledgerSchema } from "../src/schema-map.ts";
 
-const { accounts, counterparties, counterpartyMerges, currencies, outbox, transactions } =
-  ledgerSchema;
+const {
+  accounts,
+  counterparties,
+  counterpartyMerges,
+  currencies,
+  outbox,
+  outboxSeq,
+  transactions,
+} = ledgerSchema;
 
 /** Fixed, so every write's `capturedAt` is the same on every run. */
 const CAPTURE = {
@@ -188,6 +195,20 @@ function main(): void {
         capturedAt: STAMP,
       })
       .run();
+
+    // Claim this entry's own seq through the same counter `outbox.ts`'s
+    // `claimSeq` bumps for every write that goes through the session — the
+    // insert above sets `seq` directly, without also bumping `outbox_seq`,
+    // which leaves `issued` at 3 (one per session write above) while a row
+    // claims `seq = 4`. `outbox.ts`'s own header calls that state fatal: the
+    // next real write would claim `4` too, a reused seq that loses a write.
+    // `SEQ_ROW` (`outbox.ts`) is always `0`; this upserts the same way
+    // `claimSeq` does, setting rather than incrementing since the value to
+    // land on is already known.
+    j.raw().outbox.db.run(
+      sql`insert into ${outboxSeq} (id, issued) values (0, ${watermark + 1})
+            on conflict(id) do update set issued = ${watermark + 1}`,
+    );
 
     // Replace the three session-written outbox ids with fixed ones, in `seq`
     // order — see the header. Nothing references `outbox.id` from another

@@ -165,43 +165,6 @@ describe("J07 — lend and settle", () => {
   });
 
   /**
-   * R2 H3's own silent gap, exercised through the real sheet: `SettleSheet`
-   * always derives `currency` from the picked account
-   * (`counterparty-detail-screen.tsx`'s `handleSettleSave`), so the literal
-   * mismatch the finding names — `currency` disagreeing with the account's
-   * own — can never reach it through a tap. What a tap *can* do is settle a
-   * PLN debt through the ledger's pivot-currency account, USD, which is
-   * always capturable (§7.0) regardless of whether any rate relates the two
-   * figures typed — so `accountNeedsRate`, the sheet's one proactive
-   * refusal, never fires, and nothing else on this path checks the pair
-   * either. `transactions.needsRate` is the real key that guard uses
-   * elsewhere (`j02-daily-capture.test.tsx`'s own EUR scenario); this
-   * asserts it would show for the USD leg too, which is what SPEC.md §6.5's
-   * own guarantee — "a row's currency is its account's" — would require if
-   * anything here checked it.
-   */
-  it.fails("R2 H3 — settle_debt trusts an account's currency with no check that it can honestly discharge the picked balance: settling the PLN debt through the ledger's own USD account shows no refusal at all before Save (SPEC.md §6.5)", async () => {
-    const { ledger, fixture, stub } = setupJourney();
-    stub.pushWithParams("counterparty", { id: fixture.counterpartyId });
-
-    render(<JourneyHarness controller={ledger.controller} stub={stub} />);
-    await settleLayout();
-
-    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
-    tapDigits(["1", "0", "0"]);
-    fireEvent.click(screen.getByRole("button", { name: "Discharges: 0" }));
-    tapDigits(["1", "0", "0"]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Into" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Bank B · USD" }));
-
-    expect(
-      screen.getByText("USD needs an exchange rate before a transaction can be recorded in it."),
-    ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
-  });
-
-  /**
    * R2 H3, proven where it is actually reachable — the controller, not the
    * sheet (the controller ruling: no UI control lets `currency` diverge from
    * the picked account's own). `SPEC.md`'s own table names the guarantee

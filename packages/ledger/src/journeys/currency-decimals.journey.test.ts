@@ -147,12 +147,23 @@ describe("update_currency — SPEC.md §7.2, a decimals shrink checked against l
     try {
       const txn = archiveAndBookLiveTransaction(j);
       j.session.deleteTransaction({ id: ID.txn1, version: txn.version }, j.capture);
-      j.session.updateCurrency(
-        { code: XAA, version: currencyRow(j).version, patch: { decimals: 2 } },
-        j.capture,
-      );
+
+      const decimalsBefore = currencyRow(j).decimals;
+      try {
+        j.session.updateCurrency(
+          { code: XAA, version: currencyRow(j).version, patch: { decimals: 2 } },
+          j.capture,
+        );
+      } catch {
+        // A fixed live-reference scan that also covers archived accounts and
+        // soft-deleted transactions' lines may refuse the shrink outright —
+        // that refusal is a legitimate outcome of a fix. This scenario's
+        // invariant is about what decimals ends up stored and what any
+        // surviving row carries, not about whether this call must succeed.
+      }
 
       const decimals = currencyRow(j).decimals;
+      expect(decimals).toBe(decimalsBefore); // shrink refused: nothing changed
       expect(money.dec(accountRow(j).openingBalance).decimalPlaces()).toBeLessThanOrEqual(decimals);
       for (const line of lineRows(j)) {
         expect(money.dec(line.amount).decimalPlaces()).toBeLessThanOrEqual(decimals);

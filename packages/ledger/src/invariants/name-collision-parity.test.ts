@@ -89,7 +89,7 @@ describe("create_counterparty — the phone's half of the fold-guard parity", ()
     const finding = LEDGER_FINDING[index];
     const test = finding ? it.fails : it;
     const label = finding
-      ? `${JSON.stringify(pair.a)} / ${JSON.stringify(pair.b)} — ${pair.why} (${finding})`
+      ? `${finding} — ${JSON.stringify(pair.a)} / ${JSON.stringify(pair.b)} — ${pair.why}`
       : `${JSON.stringify(pair.a)} / ${JSON.stringify(pair.b)} — ${pair.why}`;
 
     test(label, () => {

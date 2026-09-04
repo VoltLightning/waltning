@@ -101,10 +101,11 @@ describe("settle_debt — J07 §3–§5, a settlement never implicitly clears a 
 
       const rows = j.session.listCounterpartyBalances(accountingDate("2026-04-01"));
       const row = rows.find((r) => r.counterpartyId === ID.cpA && r.currency === PIVOT);
-      // Present-and-zero or dropped-because-zero both read as "settled" on
-      // S14's own screen — this accepts whichever `readCounterpartyBalances`
-      // produces rather than assuming one.
-      if (row) expect(money.isZero(row.balance)).toBe(true);
+      // The counterparty is never archived here, so `readCounterpartyBalances`
+      // keeps a zero row rather than dropping it — the row must be present,
+      // not merely "present if the reader happened to produce one".
+      expect(row).toBeDefined();
+      expect(money.isZero(row?.balance ?? money.ZERO)).toBe(true);
     } finally {
       j.close();
     }

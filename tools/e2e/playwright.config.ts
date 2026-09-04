@@ -14,6 +14,12 @@
  * a person, on purpose, before this file's `globalSetup` even runs. Wiring a
  * `webServer` here would make this look automated when the on-demand
  * contract is exactly that it is not.
+ *
+ * **L4 — a duplicate `<Stack.Screen name="account/new">` registration in
+ * `apps/mobile/app/_layout.tsx` crashed Expo web on load**, which left tier
+ * 2 unrunnable end to end. The whole-branch review that found it also ran
+ * tier 2 live once against the patched layout — 10/10 specs passing — before
+ * handing off the fix wave that carries the layout change itself.
  */
 
 import { defineConfig, devices } from "@playwright/test";

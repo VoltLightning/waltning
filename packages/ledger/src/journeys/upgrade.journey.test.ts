@@ -15,6 +15,18 @@
  * `createLocalLedgerSession` does to a real installed database — the same
  * migrator, the same two steps — which is what makes this a real upgrade
  * rather than a reconstruction of one.
+ *
+ * **What the "fresh equals upgraded" fingerprint proves today, honestly.**
+ * With one chain version on this branch, every fixture is loaded *at* that
+ * same version and `fresh` (`beforeAll`, below) is built by running that
+ * same one-step chain from empty — so `schemaFingerprint` is comparing two
+ * databases built by the identical migration, not a chain that actually ran
+ * a fixture through a later step. This assertion gains real teeth only once
+ * a second chain version exists and a fixture is upgraded across it; until
+ * then, the signal that a fixture has drifted from what `dump-fixture.ts`
+ * would produce today is the committed `INSERT` column lists themselves —
+ * `pnpm --filter @waltning/ledger fixture:dump` regenerating a diff is what
+ * actually catches drift, not this comparison.
  */
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -92,6 +104,25 @@ function outboxRows(sqlite: Database.Database): OutboxRow[] {
   return sqlite.prepare(`select id, seq, state from outbox order by seq`).all() as OutboxRow[];
 }
 
+/** `outbox_seq`'s own counter — the last number `claimSeq` (`outbox.ts`) handed out. */
+function outboxSeqIssuedOf(sqlite: Database.Database): number {
+  const [row] = sqlite.prepare(`select issued from outbox_seq where id = 0`).all() as {
+    issued?: number;
+  }[];
+  if (typeof row?.issued !== "number") {
+    throw new Error("outbox_seq holds no issued counter for this fixture");
+  }
+  return row.issued;
+}
+
+/** The highest `seq` any row in this fixture's `outbox` actually carries. */
+function maxOutboxSeqOf(sqlite: Database.Database): number {
+  const [row] = sqlite.prepare(`select coalesce(max(seq), 0) as m from outbox`).all() as {
+    m: number;
+  }[];
+  return row?.m ?? 0;
+}
+
 /* ── fixture discovery ────────────────────────────────────────────────────── */
 
 const FIXTURES_DIR = fileURLToPath(new URL("../../fixtures/upgrade/", import.meta.url));
@@ -148,6 +179,9 @@ type LoadedFixture = {
   watermarkBefore: number;
   /** Outbox rows whose `seq` was already above the watermark — what recovery must replay. */
   pendingBefore: OutboxRow[];
+  /** `outbox_seq.issued` and the highest `outbox.seq` present, both read before any upgrade runs. */
+  outboxSeqIssuedBefore: number;
+  maxOutboxSeqBefore: number;
   cleanup: () => void;
 };
 
@@ -184,6 +218,8 @@ function loadFixture(pair: FixturePair): LoadedFixture {
   outboxSqlite.exec(outboxSql);
   const outboxCountsBefore = tableRowCounts(outboxSqlite);
   const pendingBefore = outboxRows(outboxSqlite).filter((row) => row.seq > watermarkBefore);
+  const outboxSeqIssuedBefore = outboxSeqIssuedOf(outboxSqlite);
+  const maxOutboxSeqBefore = maxOutboxSeqOf(outboxSqlite);
   outboxSqlite.close();
 
   return {
@@ -193,6 +229,8 @@ function loadFixture(pair: FixturePair): LoadedFixture {
     outboxCountsBefore,
     watermarkBefore,
     pendingBefore,
+    outboxSeqIssuedBefore,
+    maxOutboxSeqBefore,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }
@@ -305,6 +343,28 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
       } finally {
         session.close();
       }
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  /**
+   * M2's own guard: `outbox_seq.issued` (`outbox.ts`'s `claimSeq` counter) must
+   * never sit below the highest `seq` a fixture's own `outbox` rows carry —
+   * that state is what `claimSeq` calls fatal the moment a real write claims
+   * the next number and reuses one already on a row (`outbox.ts`'s own
+   * header). Checked against the fixture's SQL as committed, before any
+   * upgrade runs, so a future `fixture:dump` that regresses this is caught
+   * here rather than by the reused-seq failure it would otherwise cause much
+   * later, mid-replay.
+   */
+  it("outbox_seq.issued was claimed for every row this fixture's own SQL wrote — never a reused seq", () => {
+    const fixture = loadFixture(pair);
+    try {
+      expect(
+        fixture.maxOutboxSeqBefore,
+        `outbox-v${pair.version}.sql's highest outbox.seq against its own outbox_seq.issued`,
+      ).toBeLessThanOrEqual(fixture.outboxSeqIssuedBefore);
     } finally {
       fixture.cleanup();
     }
