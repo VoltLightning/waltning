@@ -2075,7 +2075,9 @@ rather than observed.
 
 Carry-forward is capped at ten days (§7.7), so a dead source eventually leaves
 genuine holes. **A missing rate must never cost you the transaction.** The row
-is written with the nearest available rate and
+is written with the nearest available rate — nearest in calendar days on
+either side of the row's own date, ties going to the rate already in effect on
+it rather than one that only takes effect later — and
 `fx_rate_estimated = true`, which:
 
 - keeps every aggregate working, with no nullable `amount_pivot` to handle;

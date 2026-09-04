@@ -393,6 +393,32 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(result.row.fxRateEstimated).toBe(true);
   });
 
+  // L4/H1 — the after-side fallback, through the real write path: a
+  // back-dated capture with nothing at or before its own date still prices
+  // from the nearest row *after* it, rather than refusing — the same
+  // "currency just added to the ledger" case `readNearestRate`'s own
+  // docblock names, proven here end to end rather than only at the reader.
+  it("H1 — a capture before the only held rate still saves, priced from it", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-02-01"),
+        rate: money.unitsPerPivot("0.9100"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-01", // 31 days before the only row (2026-02-01)
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("0.9100")));
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+
   // C1/C2 — the executor refuses only when the pair holds no rate row at
   // all, the exact condition `readCurrencies.capturable` gates on — never on
   // distance from the capture's own date.

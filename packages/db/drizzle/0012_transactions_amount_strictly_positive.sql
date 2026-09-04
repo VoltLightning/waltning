@@ -10,4 +10,20 @@ ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_amount_positi
 -- owner resolves those rows and then runs, once:
 --   ALTER TABLE transactions VALIDATE CONSTRAINT transactions_amount_positive;
 -- That step belongs to the owner, not to this migration.
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_amount_positive" CHECK ("transactions"."amount_original" > 0 or "transactions"."type" = 'adjustment') NOT VALID;
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_amount_positive" CHECK ("transactions"."amount_original" > 0 or "transactions"."type" = 'adjustment') NOT VALID;--> statement-breakpoint
+-- L3 — the fresh-install path validates itself. A brand-new database (dev,
+-- CI, a test run) has no rows to violate this, so there is no reason to
+-- leave it `NOT VALID` there too — the guard re-runs the same scan the
+-- comment above asks the owner to run by hand, and only flips the
+-- constraint to `VALID` when it finds nothing. An existing database still
+-- holding a violating row is left exactly as the comment above describes:
+-- `NOT VALID`, until the owner resolves those rows and validates it.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM "transactions"
+    WHERE NOT ("amount_original" > 0 OR "type" = 'adjustment')
+  ) THEN
+    ALTER TABLE "transactions" VALIDATE CONSTRAINT "transactions_amount_positive";
+  END IF;
+END $$;

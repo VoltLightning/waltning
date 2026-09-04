@@ -21,8 +21,15 @@ import { addCurrencyExecutor } from "../currencies/add-currency.executor.ts";
 import { archiveCurrencyExecutor } from "../currencies/archive-currency.executor.ts";
 import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
 import { clearManualRateExecutor } from "../currencies/clear-manual-rate.executor.ts";
+import { readCurrencies } from "../currencies/read-currencies.ts";
 import { readCurrencySettings } from "../currencies/read-currency-settings.ts";
-import { listFxRates, readCoverage, readCrossRate, readRate } from "../currencies/read-rate.ts";
+import {
+  listFxRates,
+  readCoverage,
+  readCrossRate,
+  readNearestRate,
+  readRate,
+} from "../currencies/read-rate.ts";
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "../currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "../currencies/set-rate-source.executor.ts";
@@ -1267,6 +1274,151 @@ describe("readRate", () => {
   });
 });
 
+// H1 — `readNearestRate` compares the calendar distance on both sides of
+// `date` rather than always preferring the newest row at-or-before it.
+describe("readNearestRate", () => {
+  it("prefers the before row when it is closer", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-08"), // 2 days before
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-20"), // 10 days after
+          rate: money.unitsPerPivot("4.50"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-08"));
+  });
+
+  it("prefers the after row when it is closer — a 2020 row must not beat one 26 days later", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2020-01-01"), // years before
+          rate: money.unitsPerPivot("3.90"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-27"), // 26 days after
+          rate: money.unitsPerPivot("4.10"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.10"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-27"));
+  });
+
+  it("ties to the before row when both sides are equally far", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"), // 5 days before
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-15"), // 5 days after
+          rate: money.unitsPerPivot("4.50"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-05"));
+  });
+
+  it("falls back to the only row, when it is after date", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-02-01"),
+        rate: money.unitsPerPivot("4.20"),
+        source: "nbp",
+      })
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.20"));
+    expect(rate?.asOf).toBe(accountingDate("2026-02-01"));
+  });
+
+  it("falls back to the only row, when it is before date", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("3.80"),
+        source: "nbp",
+      })
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-02-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("3.80"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-01"));
+  });
+
+  it("is undefined with no rows at all", () => {
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: EUR,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate).toBeUndefined();
+  });
+});
+
 describe("readCoverage", () => {
   it("is 0% for a currency with no rows, and excludes the pivot", () => {
     const coverage = readCoverage(s.ledger.replica.db, accountingDate("2026-01-10"));
@@ -1676,6 +1828,44 @@ describe("readCurrencySettings", () => {
         (row) => row.code === "EUR",
       ),
     ).toBe(true);
+  });
+});
+
+// L1 — `readCurrencies.capturable` must agree with `readNearestRate`'s own
+// refusal: a pair whose only rows are `carried_forward`, with no real quote
+// anywhere for it to descend from, is not capturable, however many carried
+// rows it holds.
+describe("readCurrencies", () => {
+  it("is capturable once a real quote exists", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "nbp",
+      })
+      .run();
+
+    const usd = readCurrencies(s.ledger.replica.db).find((c) => c.code === "USD");
+    expect(usd?.capturable).toBe(true);
+  });
+
+  it("is not capturable when every row for the pair is an orphaned carried_forward copy", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-05"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "carried_forward",
+      })
+      .run();
+
+    const usd = readCurrencies(s.ledger.replica.db).find((c) => c.code === "USD");
+    expect(usd?.capturable).toBe(false);
   });
 });
 

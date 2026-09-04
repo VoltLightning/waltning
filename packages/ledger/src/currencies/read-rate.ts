@@ -156,17 +156,26 @@ export type NearestRate = {
  * *read-side* rule (S18, reference figures) and must not gate a capture — a
  * capture more than ten days from the nearest held rate still has to save,
  * with `fx_rate_estimated` set, per `SPEC.md` §7.6 and `architecture/01`/`06`
- * ("a missing rate must never cost you the transaction"). `readCurrencies`'s
- * own `capturable` flag already asks the coarser question this answers —
- * *does the pair have a row at all* — with no date and no cap, so the two
- * must agree: this refuses only when the pair has no row anywhere, the same
- * condition `capturable` gates on.
+ * ("a missing rate must never cost you the transaction").
  *
- * **Prefers the nearest row at or before `date`** — the ordinary case, a
- * capture entered for a date that already has a published rate. Falls back
- * to the nearest **after** only when nothing at or before exists: a
- * currency just added to the ledger, priced from the first quote synced for
- * it rather than refused outright.
+ * **Not the same refusal as `readCurrencies.capturable`, only made to agree
+ * on the ordinary case.** `capturable` asks a coarser, date-blind question —
+ * *does the pair hold any row at all* — and `read-currencies.ts`'s own query
+ * excludes a pair whose only rows are `carried_forward` with no real origin
+ * anywhere, so the two answer the same for a pair that is entirely orphaned.
+ * But a pair can still hold a real row **and** an orphaned `carried_forward`
+ * row that happens to land nearer `date` — `capturable` has no per-date view
+ * to catch that, so this still refuses whenever the row nearest `date` has
+ * no locatable origin, even on a pair `capturable` marks `true`.
+ *
+ * **H1 — nearest by calendar distance on both sides, ties to before.** Reads
+ * the closest row at-or-before `date` and the closest row at-or-after it,
+ * compares the two with `daysBetween`, and keeps whichever is closer — the
+ * before row on a tie, preferring the rate already in effect on `date` over
+ * one that only takes effect later. Either side may hold nothing (a currency
+ * just added to the ledger has nothing before its first synced quote; one
+ * whose source went quiet has nothing after); this refuses only when neither
+ * side holds a row at all.
  *
  * Walks past a `carried_forward` row to its origin the same way `readRate`
  * does (`findOrigin`) and returns the *origin's* rate, never the carried
@@ -184,17 +193,24 @@ export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
     .limit(1)
     .all();
 
-  let nearest = before;
-  if (!nearest) {
-    const [after] = db
-      .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
-      .from(fxRates)
-      .where(and(eq(fxRates.base, base), eq(fxRates.quote, quote), gte(fxRates.date, date)))
-      .orderBy(asc(fxRates.date))
-      .limit(1)
-      .all();
-    nearest = after;
-  }
+  const [after] = db
+    .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
+    .from(fxRates)
+    .where(and(eq(fxRates.base, base), eq(fxRates.quote, quote), gte(fxRates.date, date)))
+    .orderBy(asc(fxRates.date))
+    .limit(1)
+    .all();
+
+  // H1 — compare distances rather than always preferring `before`: a row 26
+  // days after `date` is nearer than one from 2020, and the newest-before
+  // pick used to win regardless of how far it was. Tie (equal distance on
+  // both sides) goes to `before`.
+  const nearest =
+    before && after
+      ? daysBetween(before.date, date) <= daysBetween(date, after.date)
+        ? before
+        : after
+      : (before ?? after);
   if (!nearest) return undefined;
 
   let origin: { date: AccountingDate; source: string; rate: UnitsPerPivot } = nearest;
