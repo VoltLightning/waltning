@@ -131,6 +131,16 @@ export const color = {
   shell: "#3c4f38",
   shellText: "#f2f0e7",
   shellTextMuted: "#b8c4ae",
+  /**
+   * The active state for a control that lives *on* the shell — `DeskBand`'s
+   * nav today. A translucent white rather than a step off the shell's own
+   * hue: the shell is one flat colour in both themes (`shell` above is
+   * identical light and dark), so a highlight built from it alone cannot
+   * separate itself from its own ground the way `hoverFill`/`pressedFill` do
+   * against a themed `surface`. Alpha over the fixed green reads as "lit",
+   * whichever theme is active, with no second colour to keep in sync.
+   */
+  shellNavActive: "rgba(255,255,255,0.10)",
 
   /**
    * The ink the one shadow is cast in — a near-black with the page's warm
@@ -484,6 +494,18 @@ export const floating = {
   tab: { width: 44, height: 22 },
   band: 22,
 } as const;
+
+/* ── 2.10 The desk breakpoint ────────────────────────────────────────────── */
+
+/**
+ * **One number, read through `useBreakpoint()`.** Every screen's web column
+ * is already written against 1024px — `screens/S01-dashboard.md` and its
+ * siblings each draw a *"Web — ≥1024px"* layout, and `architecture/14` §14.4
+ * names the width, not the platform, as the deciding fact. A literal `1024`
+ * copied into each media query is the same defect §2.9's other constants
+ * exist to prevent: one number, changed in eighteen places or none of them.
+ */
+export const breakpoint = { desk: 1024 } as const;
 
 /* ── §10 Accessibility ───────────────────────────────────────────────────── */
 

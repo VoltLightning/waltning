@@ -19,9 +19,11 @@
  * **Lives only on the shell**, like `CurrencyTotals` — `emphasis="shell"` on
  * both `<Amount>`s and `shellTextMuted` on the labels, not the `text`/
  * `textMuted` a component sitting on `ground` would reach for. Nothing had
- * ever rendered this component under axe until its own story did — it has no
- * caller yet (`DualTotal` is E9's hero, once a display currency exists) — and
- * the light-ground inks measured 1.48:1 and 1.58:1 against the shell's green.
+ * ever rendered this component under axe until its own story did, before it
+ * had a caller — the light-ground inks measured 1.48:1 and 1.58:1 against the
+ * shell's green. `DeskBand` is its first real caller, at `size="band"`, ahead
+ * of the display-currency hero this component is written for (E9); until
+ * then it renders whatever single-currency figure its caller has.
  */
 
 import type * as money from "@waltning/core/money";
@@ -45,9 +47,20 @@ export type DualTotalProps = {
   ours: money.Money | null;
   currency: string;
   decimals?: number;
+  /**
+   * `"shell"` (the default) is the phone's full-width hero — `mine` at
+   * `displayHero`. `"band"` is `DeskBand`'s (`02-tokens` §2.10): `mine` at
+   * `displayOne`, one step down, because a figure sharing a row with nav and
+   * a scope control has no 54px to spend. `ours` stays `displayTwo` either
+   * way — it is already the secondary line, and the row that shrank it is
+   * the one it was already smaller than.
+   */
+  size?: "shell" | "band";
 };
 
-export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps) {
+const MINE_SIZE = { shell: "hero", band: "medium" } as const;
+
+export function DualTotal({ mine, ours, currency, decimals = 2, size = "shell" }: DualTotalProps) {
   const t = useT();
   const styles = useStyles();
 
@@ -55,7 +68,13 @@ export function DualTotal({ mine, ours, currency, decimals = 2 }: DualTotalProps
     <View style={styles.block}>
       <View>
         <Text style={styles.label}>{t("shell.mine")}</Text>
-        <Amount value={mine} currency={currency} decimals={decimals} size="hero" emphasis="shell" />
+        <Amount
+          value={mine}
+          currency={currency}
+          decimals={decimals}
+          size={MINE_SIZE[size]}
+          emphasis="shell"
+        />
       </View>
       {ours === null ? null : (
         <View>

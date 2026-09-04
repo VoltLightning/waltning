@@ -97,6 +97,11 @@ export const pl: Messages = {
     ownCurrency: "Każde saldo jest w walucie swojego konta — to nie jest suma.",
     morePages: "Istnieje więcej transakcji — stronicowanie nie jest jeszcze gotowe.",
     thisOrigin: "bieżący adres",
+    deskAddPlaceholder: "Dodaj — naciśnij N",
+    scopeAll: "Wszystkie",
+    scopeMine: "Moje",
+    scopeShared: "Wspólne",
+    scopeBusiness: "Firmowe",
   },
   preview: {
     appearance: "Wygląd",

@@ -128,6 +128,8 @@ export type Theme = {
   shellText: string;
   /** Secondary text on the shell — the currency marker, the mine/ours line. */
   shellTextMuted: string;
+  /** The fill behind the active control on the shell — `DeskBand`'s nav. */
+  shellNavActiveFill: string;
   /** The dimming layer behind a modal surface. */
   scrim: string;
 
@@ -226,6 +228,7 @@ export const light: Theme = {
   shell: color.shell,
   shellText: color.shellText,
   shellTextMuted: color.shellTextMuted,
+  shellNavActiveFill: color.shellNavActive,
   scrim: color.ink,
 
   elevation: {
@@ -277,6 +280,10 @@ export const dark: Theme = {
   shell: darkColor.shell,
   shellText: darkColor.shellText,
   shellTextMuted: darkColor.shellTextMuted,
+  // Not `darkColor.shellNavActive` — there is no such entry. The shell is the
+  // one surface that does not repaint between themes (`tokens.ts`: "the
+  // shell stays sage in both themes"), so its highlight does not either.
+  shellNavActiveFill: color.shellNavActive,
   scrim: darkColor.ground,
 
   elevation: {

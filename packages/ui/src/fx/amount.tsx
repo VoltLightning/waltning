@@ -24,7 +24,7 @@ import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { tabularNums } from "../tokens.ts";
 
-export type AmountSize = "hero" | "large" | "body" | "small";
+export type AmountSize = "hero" | "medium" | "large" | "body" | "small";
 export type AmountEmphasis = "default" | "muted" | "shell";
 
 /**
@@ -61,6 +61,11 @@ export type AmountProps = {
  */
 const SIZES: Record<AmountSize, TextStyle> = {
   hero: text.display("displayHero"),
+  // `DeskBand`'s hero (`shell/desk-band.tsx`): a headline figure sharing a
+  // row with nav and a scope control has no room for `displayHero`'s 54px,
+  // so it is *mine*'s size there — one step down, still a figure rather than
+  // a step borrowed from body text.
+  medium: text.display("displayOne"),
   large: text.display("displayTwo"),
   body: text.display("body"),
   small: text.display("bodySm"),

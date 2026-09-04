@@ -5,6 +5,7 @@
 | Component | Contents |
 |---|---|
 | `Shell` | Dark gradient band — brand, nav, scope segment, `FxStatusChip`, `CurrencyChip`, `DualTotal` hero |
+| `DeskBand` | The shell at ≥1024px (`02-tokens` §2.10) — brand, nav, a command-bar slot, `CurrencyChip`, scope `SegmentControl`, the hero row, sharing `Shell`'s vocabulary rather than duplicating it. Two rows expanded; one row — brand, nav, hero — collapsed, on every route but the landing one, the same split `02-tokens` §2.9 already draws for the phone header. No floating add button renders at this width — the command-bar slot is where `+` lives instead |
 | `GroundPanel` | `radius-lg` surface lifting over the shell. Clears the bottom and side insets; the top belongs to the header above it |
 | `Card` | `surface`, `radius-md`, a one-pixel `border`, no shadow; optional title and action |
 | `StatTile` | Figure + label + delta. Delta takes `negative` ink when spend rose |

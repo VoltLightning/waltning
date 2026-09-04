@@ -123,6 +123,16 @@ export const en = {
     ownCurrency: "Each balance is in its own account's currency — not a total.",
     morePages: "More transactions exist — paging is not built yet.",
     thisOrigin: "this origin",
+    /**
+     * `DeskBand`'s command-bar slot (`02-tokens` §2.10) — a disabled
+     * placeholder until DESK2 wires `N` to a real composer.
+     */
+    deskAddPlaceholder: "Add — press N",
+    /** The scope `SegmentControl` on `DeskBand` — `SPEC.md` §6.7's partition. */
+    scopeAll: "All",
+    scopeMine: "Mine",
+    scopeShared: "Shared",
+    scopeBusiness: "Business",
   },
   preview: {
     appearance: "Appearance",

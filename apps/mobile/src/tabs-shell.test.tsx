@@ -1,0 +1,107 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * `<TabsShell>` across the breakpoint (`DESK1`, `02-tokens` §2.10) — a real
+ * resize, matching `use-breakpoint.test.tsx`, over a fixed `<TabSlot>` stub.
+ * `expo-router/ui`'s tab triggers are mocked the way `use-tab-bar-items.
+ * test.tsx` already mocks them: what this asserts is what the shell renders
+ * for a given width, not `expo-router`'s own behaviour.
+ */
+
+import { act, render, screen } from "@testing-library/react";
+import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
+import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { accountingDate } from "@waltning/core/date";
+import { id } from "@waltning/core/id";
+import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
+import { Text } from "react-native";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Module scope, before the first render — `react-native-web` creates its
+// `ResizeObserver` once and keeps it, so `FloatingAdd` (which renders nothing
+// until it knows its layer's size) can only ever be measured if this runs
+// before that first mount.
+installPhoneLayout();
+
+const switchTab = { today: vi.fn(), ledger: vi.fn(), calendar: vi.fn(), debt: vi.fn() };
+let focused: "today" | "ledger" | "calendar" | "debt" = "today";
+
+vi.mock("expo-router/ui", () => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "calendar" | "debt" }) => ({
+    trigger: { isFocused: name === focused },
+    switchTab: switchTab[name],
+  }),
+}));
+
+vi.mock("expo-router", () => ({
+  router: { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() },
+}));
+
+const { TabsShell } = await import("./tabs-shell");
+
+function fakeController() {
+  return createPhoneLedger(
+    {
+      listAccounts: () => [],
+      listCurrencies: () => [],
+      listGroups: () => [],
+      listRecent: () => [],
+      listCategories: () => [],
+      listCounterparties: () => [],
+      createAccount: () => undefined,
+      createTransaction: () => undefined,
+      reset: () => undefined,
+    },
+    {
+      capture: () => ({
+        date: accountingDate("2026-09-03"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-09-03T10:00:00Z"),
+      }),
+      id: () => id("11111111-1111-4111-8111-111111111111"),
+    },
+  );
+}
+
+/**
+ * `configurable: true`: a test that resizes twice redefines this property
+ * twice, and the second `defineProperty` throws on a non-configurable one.
+ */
+function resizeTo(width: number) {
+  Object.defineProperty(document.documentElement, "clientWidth", {
+    value: width,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
+beforeEach(() => {
+  focused = "today";
+});
+
+describe("TabsShell", () => {
+  it("renders the phone tab bar and add button at 390, and DeskBand at 1440", async () => {
+    // Set before the first render — `useWindowDimensions`' initial state
+    // reads `Dimensions.get`, which only re-measures on the process's first
+    // call; every later call answers from the cache until a `resize` fires.
+    resizeTo(390);
+
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("Route content")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Add" })).toBeDefined();
+    expect(screen.queryByText("Add — press N")).toBeNull();
+
+    act(() => resizeTo(1440));
+
+    expect(screen.getByText("Route content")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+    expect(screen.getByText("Add — press N")).toBeDefined();
+  });
+});
