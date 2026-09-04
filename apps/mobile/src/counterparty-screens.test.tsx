@@ -12,6 +12,7 @@ import {
   type PhoneAccount,
   type PhoneCounterparty,
   type PhoneCounterpartyBalance,
+  type PhoneLedgerController,
   type PhoneLedgerPort,
   type PhoneSearchPage,
 } from "@waltning/client/ledger/create-phone-ledger";
@@ -211,6 +212,23 @@ function controllerOf(port: PhoneLedgerPort) {
   });
 }
 
+/**
+ * H1 — `snapshot.revision` is `0` only until a real `PhoneLedgerController`'s
+ * first `refresh()` has completed, and every real one bumps it past `0`
+ * synchronously in its own constructor. This wraps a real controller and
+ * overrides just the one field a screen's loading branch reads, so a test
+ * can render the still-loading state a real controller cannot hold past
+ * construction.
+ */
+function unhydratedController(port: PhoneLedgerPort): PhoneLedgerController {
+  const real = controllerOf(port);
+  // `useSyncExternalStore` requires a referentially stable `getSnapshot`
+  // result across calls that have not actually changed — computed once here,
+  // never inline in the returned closure, or React reports an infinite loop.
+  const snapshot = { ...real.getSnapshot(), revision: 0 };
+  return { ...real, getSnapshot: () => snapshot };
+}
+
 beforeEach(() => {
   router.push.mockClear();
   router.back.mockClear();
@@ -395,19 +413,20 @@ describe("Debt (S12)", () => {
   });
 
   /**
-   * M1 — an *empty* `currencies` list (the first `refresh()` still in
-   * flight) is not the same state as a non-empty one missing its pivot: the
-   * old guard fired for both and lied about why, showing "Couldn't read your
-   * currencies" while the replica simply had not loaded yet.
+   * M1 — `snapshot.revision === 0` (the first `refresh()` still in flight)
+   * is not the same state as a completed refresh that found no pivot: the
+   * old guard read `currencies.length` for this and lied about why, showing
+   * "Couldn't read your currencies" while the replica simply had not loaded
+   * yet. One wrapping `accessibilityLabel` covers every skeleton row (H1).
    */
-  it("shows a loading skeleton, never the no-pivot error, while currencies has not loaded yet", () => {
-    const controller = controllerOf(basePort({ listCurrencies: () => [] }));
+  it("shows a loading skeleton, never the no-pivot error, before the first refresh has completed", () => {
+    const controller = unhydratedController(basePort());
     render(
       <LedgerProvider controller={controller}>
         <Debt />
       </LedgerProvider>,
     );
-    expect(screen.getAllByRole("progressbar", { name: "Loading debts" })).not.toHaveLength(0);
+    expect(screen.getByRole("progressbar", { name: "Loading debts" })).toBeDefined();
     expect(screen.queryByText("Couldn't read your currencies")).toBeNull();
   });
 
@@ -569,21 +588,22 @@ describe("CounterpartyDetail (S13)", () => {
   });
 
   /**
-   * M1 — an *empty* `currencies` list (the first `refresh()` still in
-   * flight) is not the same state as a non-empty one missing its pivot: the
-   * old guard fired for both and lied about why.
+   * M1 — an *empty* `currencies` list after a completed refresh
+   * (`snapshot.revision > 0`) is the same broken bootstrap guarantee as a
+   * non-empty one missing its pivot, not a loading state: `revision` is the
+   * signal now, not `currencies.length`, so this case — a replica whose
+   * first refresh landed holding no currencies at all — no longer falls
+   * through to the loading skeleton.
    */
-  it("shows a loading skeleton, never the no-pivot error, while currencies has not loaded yet", () => {
+  it("shows the no-pivot error, never a loading skeleton, once a completed refresh finds no currencies", () => {
     const controller = controllerOf(basePort({ listCurrencies: () => [] }));
     render(
       <LedgerProvider controller={controller}>
         <CounterpartyDetail />
       </LedgerProvider>,
     );
-    expect(
-      screen.getAllByRole("progressbar", { name: "Loading counterparty ledger" }),
-    ).not.toHaveLength(0);
-    expect(screen.queryByText("Couldn't read your currencies")).toBeNull();
+    expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
+    expect(screen.queryByRole("progressbar", { name: "Loading counterparty ledger" })).toBeNull();
   });
 
   it("shows the card, the ledger, and defaults history to debt rows", () => {

@@ -459,16 +459,41 @@ export default function CounterpartyDetail() {
     );
   }
 
+  // M1 — S13 §6's own loading state ("Skeleton ledger rows"), never the
+  // blank screen an unresolved `pivot`/`figures` would otherwise fall
+  // through to, or the no-pivot error, while the first `refresh()` is still
+  // in flight. `snapshot.revision` (`create-phone-ledger.ts`) is exactly
+  // that distinction — `0` until a `refresh()` has completed — unlike
+  // `currencies.length`, which cannot tell "not loaded yet" apart from "the
+  // replica genuinely holds no currencies" (H1).
+  if (snapshot.revision === 0) {
+    return (
+      <GroundPanel>
+        <Card>
+          <View
+            accessibilityRole="progressbar"
+            accessibilityLabel={t("counterparties.loadingLedger")}
+            style={styles.loadingLedger}
+          >
+            <Skeleton shape="hero" label="" />
+            <Skeleton shape="row" label="" />
+            <Skeleton shape="row" label="" />
+          </View>
+        </Card>
+      </GroundPanel>
+    );
+  }
+
   // H — nothing enforces the bootstrap that would make this unreachable: a
-  // *non-empty* `currencies` list with no `isPivot` row is `architecture/09`'s
+  // pivot-less replica after a completed refresh is `architecture/09`'s
   // bootstrap guarantee broken, and must never render as a blank screen —
   // `figures` is `null` exactly when `pivot` is, so this also resolves the
   // old `!figures` half of the guard below. No retry action — it would only
-  // re-read the same broken replica. M1 — `currencies` still *empty* is a
-  // different state (below): the replica has not finished its first
-  // `refresh()` yet, and this guard used to fire for both, lying about "no
-  // pivot" while the truth was "not loaded yet".
-  if (snapshot.currencies.length > 0 && pivot === undefined) {
+  // re-read the same broken replica. `revision === 0` already returned
+  // above, so this also covers a replica whose first refresh finished
+  // holding no currencies at all — the same broken guarantee, not a loading
+  // state.
+  if (pivot === undefined) {
     return (
       <GroundPanel>
         <ErrorState
@@ -476,21 +501,6 @@ export default function CounterpartyDetail() {
           what={t("counterparties.noPivotTitle")}
           why={t("counterparties.noPivotWhy")}
         />
-      </GroundPanel>
-    );
-  }
-
-  // M1 — S13 §6's own loading state ("Skeleton ledger rows"), never the
-  // blank screen an unresolved `pivot`/`figures` would otherwise fall
-  // through to on the very first render, while `currencies` has not loaded.
-  if (snapshot.currencies.length === 0) {
-    return (
-      <GroundPanel>
-        <Card>
-          <Skeleton shape="hero" label={t("counterparties.loadingLedger")} />
-          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
-          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
-        </Card>
       </GroundPanel>
     );
   }
@@ -617,6 +627,7 @@ export default function CounterpartyDetail() {
 }
 
 const useStyles = makeStyles((theme) => ({
+  loadingLedger: { gap: space.x3 },
   actions: { flexDirection: "row", gap: space.xl, paddingTop: space.xl },
   historyHeader: {
     flexDirection: "row",

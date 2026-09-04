@@ -43,9 +43,14 @@ import {
 } from "@waltning/ui/counterparties/counterparty-form";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { ErrorState } from "@waltning/ui/states/error-state";
+import { Skeleton } from "@waltning/ui/states/skeleton";
 import { Toast } from "@waltning/ui/states/toast";
+import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { View } from "react-native";
 
 /**
  * `update_counterparty` and `create_counterparty`'s own field paths —
@@ -70,6 +75,7 @@ function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError)
 
 export default function CounterpartyEditor() {
   const t = useT();
+  const styles = useStyles();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const today = deviceRuntime().capture().date;
@@ -304,6 +310,46 @@ export default function CounterpartyEditor() {
 
   if (editMode && !counterparty) return null;
 
+  // M1 — the loading state, never the form with matching silently off: while
+  // the first `refresh()` is still in flight (`snapshot.revision === 0`),
+  // `matches` above resolves to `[]` for want of a `pivot` — the near-match
+  // check would silently do nothing rather than say why. The same reasoning
+  // `debt-screen.tsx` and `counterparty-detail-screen.tsx` carry (H1).
+  if (snapshot.revision === 0) {
+    return (
+      <GroundPanel>
+        <Card>
+          <View
+            accessibilityRole="progressbar"
+            accessibilityLabel={t("counterparties.loadingEditor")}
+            style={styles.loadingEditor}
+          >
+            <Skeleton shape="row" label="" />
+            <Skeleton shape="row" label="" />
+          </View>
+        </Card>
+      </GroundPanel>
+    );
+  }
+
+  // H — a pivot-less replica after a completed refresh is
+  // `architecture/09`'s bootstrap guarantee broken, and must never render
+  // the form with matching silently off: `matches` above needs `pivot` to
+  // resolve a candidate's figures, and resolves to `[]` without it —
+  // indistinguishable, from this screen, from genuinely having no
+  // near-matches.
+  if (pivot === undefined) {
+    return (
+      <GroundPanel>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.noPivotTitle")}
+          why={t("counterparties.noPivotWhy")}
+        />
+      </GroundPanel>
+    );
+  }
+
   return (
     <GroundPanel>
       <Card>
@@ -324,3 +370,7 @@ export default function CounterpartyEditor() {
     </GroundPanel>
   );
 }
+
+const useStyles = makeStyles(() => ({
+  loadingEditor: { gap: space.x3 },
+}));

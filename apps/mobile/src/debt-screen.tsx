@@ -270,16 +270,42 @@ export default function Debt() {
     );
   }
 
+  // M1 — the loading state (S12 §6: "Skeleton rows; totals resolve last
+  // rather than showing a wrong number"), never the empty state or the
+  // no-pivot error, while the first `refresh()` is still in flight.
+  // `snapshot.revision` (`create-phone-ledger.ts`) is exactly the signal for
+  // that — `0` until a `refresh()` has completed, success or failure — unlike
+  // `currencies.length`, which cannot tell "not loaded yet" apart from "the
+  // replica genuinely holds no currencies" (H1).
+  if (snapshot.revision === 0) {
+    return (
+      <GroundPanel>
+        <View
+          style={styles.root}
+          accessibilityRole="progressbar"
+          accessibilityLabel={t("counterparties.loadingDebts")}
+        >
+          <View style={styles.totals}>
+            <Skeleton shape="row" label="" />
+          </View>
+          <Skeleton shape="row" label="" />
+          <Skeleton shape="row" label="" />
+          <Skeleton shape="row" label="" />
+        </View>
+      </GroundPanel>
+    );
+  }
+
   // H — nothing enforces the bootstrap that would make this unreachable: a
-  // *non-empty* `currencies` list with no `isPivot` row is `architecture/09`'s
+  // pivot-less replica after a completed refresh is `architecture/09`'s
   // bootstrap guarantee broken, and must never render as "All settled" (the
   // rows below are empty without a pivot) or as the totals above them, which
   // read straight off `balances` and know nothing about `pivot`. No retry
-  // action — it would only re-read the same broken replica. M1 — `currencies`
-  // still *empty* is a different state (below): the replica simply has not
-  // finished its first `refresh()` yet, and this guard used to fire for both,
-  // lying about "no pivot" while the truth was "not loaded yet".
-  if (snapshot.currencies.length > 0 && pivot === undefined) {
+  // action — it would only re-read the same broken replica. `revision === 0`
+  // already returned above, so this also covers a replica whose first
+  // refresh finished holding no currencies at all — the same broken
+  // guarantee, not a loading state.
+  if (pivot === undefined) {
     return (
       <GroundPanel>
         <ErrorState
@@ -287,27 +313,6 @@ export default function Debt() {
           what={t("counterparties.noPivotTitle")}
           why={t("counterparties.noPivotWhy")}
         />
-      </GroundPanel>
-    );
-  }
-
-  // M1 — the loading state (S12 §6: "Skeleton rows; totals resolve last
-  // rather than showing a wrong number"), never the empty state, while the
-  // first `refresh()` is still in flight: `currencies` starts empty and only
-  // ever reads whole from `port.listCurrencies()` (`create-phone-ledger.ts`),
-  // so an empty list here means "not loaded yet", not "genuinely zero
-  // currencies" (a replica always bootstraps at least one).
-  if (snapshot.currencies.length === 0) {
-    return (
-      <GroundPanel>
-        <View style={styles.root}>
-          <View style={styles.totals}>
-            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-          </View>
-          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-        </View>
       </GroundPanel>
     );
   }

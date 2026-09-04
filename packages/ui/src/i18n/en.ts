@@ -328,18 +328,21 @@ export const en = {
     emptySettledBody: "Nobody owes anything right now.",
     loadFailedTitle: "Couldn't load your counterparties",
     loadFailedWhy: "Something went wrong reading the debt ledger.",
-    /** M1 — the loading state (S12 §6, S13 §6), never the no-pivot error, while `currencies` is still empty and the first `refresh()` has not landed. */
+    /** M1 — the loading state (S12 §6, S13 §6, S15), never the no-pivot error, while `snapshot.revision` is still `0` and the first `refresh()` has not landed. */
     loadingDebts: "Loading debts",
     loadingLedger: "Loading counterparty ledger",
+    loadingEditor: "Loading counterparty editor",
     /**
-     * H — a non-empty `currencies` list with no `isPivot` row is an invariant
-     * violation (`architecture/09`'s bootstrap guarantee), never a state to
-     * silently render past as "All settled" or a blank screen. M1 — this is
-     * distinct from `currencies` being empty (still loading, above): only a
-     * *non-empty* list missing its pivot is the invariant violation.
+     * H — a pivot-less replica after a completed refresh (`snapshot.revision
+     * > 0`) is an invariant violation (`architecture/09`'s bootstrap
+     * guarantee), never a state to silently render past as "All settled" or
+     * a blank screen. M1 — this is distinct from the first `refresh()` still
+     * being in flight (loading, above), and covers an empty currency list
+     * after a successful refresh too — no currency held is still no
+     * reference currency held.
      */
     noPivotTitle: "Couldn't read your currencies",
-    noPivotWhy: "This ledger holds currencies but none is marked as the reference one.",
+    noPivotWhy: "No currency in this ledger is marked as the reference one.",
     /** M — `directionTotals` throwing on a genuine invariant violation (S12 debt-screen.tsx); the executor's own message is diagnostics-only. */
     totalsInconsistentWhy: "Something went wrong totalling what's owed.",
     /* ── S13 · one person's whole position ──────────────────────────────── */
