@@ -23,6 +23,7 @@ import type { Messages } from "./en.ts";
 export const pl: Messages = {
   common: {
     cancel: "Anuluj",
+    back: "Wstecz",
     save: "Zapisz",
     close: "Zamknij",
     name: "Nazwa",
@@ -113,6 +114,16 @@ export const pl: Messages = {
     loadFailedTitle: "Nie udało się wczytać transakcji",
     loadFailedWhy: "Coś poszło nie tak podczas odczytu księgi.",
     accountFilterFrom: "Z {{account}}",
+    payee: "Sprzedawca",
+    changedElsewhere:
+      "Ta transakcja zmieniła się gdzie indziej — wczytaj ją ponownie przed zapisaniem.",
+    delete: "Usuń",
+    deleted: "Transakcja usunięta.",
+    lines: "Rozbicie",
+    addLine: "+ Dodaj",
+    lineDescription: "Opis",
+    total: "Razem",
+    notFound: "Ta transakcja już nie istnieje.",
   },
   categories: {
     search: "Szukaj wśród {{count}} kategorii",
@@ -172,6 +183,7 @@ export const pl: Messages = {
     ledger: "Księga",
     calendar: "Kalendarz",
     debt: "Długi",
+    transaction: "Transakcja",
   },
   states: {
     filteredHidden: "Ukryte przez filtry: {{count}}",

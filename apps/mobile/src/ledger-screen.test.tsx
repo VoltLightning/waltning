@@ -111,6 +111,10 @@ function fakeController(search: FakeSearch) {
     createTransaction: () => undefined,
     createCategory: () => undefined,
     categorizeBatch: () => undefined,
+    getTransaction: () => null,
+    updateTransaction: () => undefined,
+    deleteTransaction: () => undefined,
+    setTransactionLines: () => undefined,
     reset: () => undefined,
   };
   return createPhoneLedger(port, {

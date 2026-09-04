@@ -154,6 +154,10 @@ function fakeController(
     },
     createTransaction: () => undefined,
     createCategory: () => undefined,
+    getTransaction: () => null,
+    updateTransaction: () => undefined,
+    deleteTransaction: () => undefined,
+    setTransactionLines: () => undefined,
     reset: () => {
       accounts = [];
     },
@@ -372,6 +376,10 @@ describe("Today", () => {
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
       createCategory: vi.fn(),
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

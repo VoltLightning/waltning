@@ -10,6 +10,9 @@ import type {
   CreateAccountInput,
   CreateCategoryInput,
   CreateTransactionInput,
+  DeleteTransactionInput,
+  SetTransactionLinesInput,
+  UpdateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
 import { currencies } from "@waltning/schema/sqlite/currencies";
@@ -44,14 +47,18 @@ import {
   createTransactionExecutor,
   type LocalTransactionRow,
 } from "./transactions/create-transaction.executor.ts";
+import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
+import { type LocalTransactionDetail, readTransaction } from "./transactions/read-transaction.ts";
 import {
   searchTransactions,
   type TransactionSearchCursor,
   type TransactionSearchFilter,
   type TransactionSearchPage,
 } from "./transactions/search-transactions.ts";
+import { setTransactionLinesExecutor } from "./transactions/set-transaction-lines.executor.ts";
+import { updateTransactionExecutor } from "./transactions/update-transaction.executor.ts";
 import { type Capture, writeLocally } from "./write.ts";
 
 /**
@@ -114,6 +121,14 @@ export type LocalLedgerSession = {
     input: CategorizeBatchInput,
     capture: Capture,
   ) => readonly LocalTransactionRow[];
+  /** S09's whole subject, one query — `null` for a row that is gone or soft-deleted. */
+  getTransaction: (id: Id<"transactions">) => LocalTransactionDetail | null;
+  createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
+  createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
+  createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
+  updateTransaction: (input: UpdateTransactionInput, capture: Capture) => LocalTransactionRow;
+  deleteTransaction: (input: DeleteTransactionInput, capture: Capture) => LocalTransactionRow;
+  setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
   reset: () => void;
   close: () => void;
 };
@@ -246,6 +261,7 @@ export function createLocalLedgerSession<TRun>(
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     searchTransactions: (filter, cursor) =>
       searchTransactions(requireOpen().replica.db, filter, cursor),
+    getTransaction: (id) => readTransaction(requireOpen().replica.db, id),
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createAccountExecutor,
@@ -273,6 +289,30 @@ export function createLocalLedgerSession<TRun>(
     categorizeBatch: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: categorizeBatchExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    updateTransaction: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: updateTransactionExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    deleteTransaction: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: deleteTransactionExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    setTransactionLines: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: setTransactionLinesExecutor,
         registry: ledgerRegistry,
         input,
         capture,

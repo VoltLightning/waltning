@@ -23,6 +23,7 @@
 export const en = {
   common: {
     cancel: "Cancel",
+    back: "Back",
     save: "Save",
     close: "Close",
     name: "Name",
@@ -159,6 +160,25 @@ export const en = {
     loadFailedWhy: "Something went wrong reading the ledger.",
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
     accountFilterFrom: "From {{account}}",
+    /** S09's `FieldsCard` — not offered on Quick add, which reads it from D2. */
+    payee: "Payee",
+    /**
+     * S09: `update_transaction`, `delete_transaction` and
+     * `set_transaction_lines` all refuse a stale version the same way — the
+     * row moved under the writer between the read and this save.
+     */
+    changedElsewhere: "This transaction changed elsewhere — reload it before saving.",
+    /** `Button(danger)` at the foot of S09 — the screen's one destructive control. */
+    delete: "Delete",
+    /** The `Toast` `deleteTransaction` leaves behind — no undo, see the shared plan. */
+    deleted: "Transaction deleted.",
+    /** S09's optional breakdown card (§10.3). */
+    lines: "Breakdown",
+    addLine: "+ Add",
+    lineDescription: "Description",
+    total: "Total",
+    /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
+    notFound: "This transaction no longer exists.",
   },
   categories: {
     /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
@@ -251,6 +271,8 @@ export const en = {
     ledger: "Ledger",
     calendar: "Calendar",
     debt: "Debt",
+    /** S09's nav title — no page heading repeats it (`TransactionHero` already states the amount). */
+    transaction: "Transaction",
   },
   states: {
     /**

@@ -61,6 +61,10 @@ function fakeController() {
       createTransaction: () => undefined,
       listCategoryTree: () => [],
       createCategory: () => undefined,
+      getTransaction: () => null,
+      updateTransaction: () => undefined,
+      deleteTransaction: () => undefined,
+      setTransactionLines: () => undefined,
       reset: () => undefined,
     },
     {
