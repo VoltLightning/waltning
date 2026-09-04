@@ -19,6 +19,7 @@
     "./registry": "./src/registry.ts",
     "./schema-map": "./src/schema-map.ts",
     "./session": "./src/session.ts",
+    "./test/stores": "./src/test/stores.ts",
     "./write": "./src/write.ts"
   },
   "scripts": {
