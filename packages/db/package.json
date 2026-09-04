@@ -7,7 +7,8 @@
     "./client": "./src/client.ts",
     "./figures/signed.sql": "./src/figures/signed.sql.ts",
     "./rows": "./src/rows.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./test/scratch": "./src/test/scratch.ts"
   },
   "scripts": {
     "migrate": "drizzle-kit migrate",
