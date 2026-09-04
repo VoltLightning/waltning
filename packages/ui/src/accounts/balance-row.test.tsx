@@ -4,9 +4,9 @@
  * `BalanceRow` — its own domain's test, beside its own component.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BalanceRow } from "./balance-row";
 
 describe("BalanceRow", () => {
@@ -36,5 +36,89 @@ describe("BalanceRow", () => {
     );
     expect(screen.getByText("4.0000")).toBeDefined();
     expect(screen.getByText("400.00")).toBeDefined();
+  });
+
+  it("renders the BIZ tag on a business account", () => {
+    render(
+      <BalanceRow
+        account="Bank A/BIZ"
+        kind="bank"
+        balance={money.toMoney("100")}
+        currency="PLN"
+        isBusiness
+      />,
+    );
+    expect(screen.getByText("BIZ")).toBeDefined();
+  });
+
+  it("renders the amber marker on an unsettled clearing account", () => {
+    render(
+      <BalanceRow
+        account="Clearing"
+        kind="clearing"
+        balance={money.toMoney("340")}
+        currency="PLN"
+        unsettled
+      />,
+    );
+    expect(screen.getByText("Unsettled")).toBeDefined();
+  });
+
+  it("renders neither tag by default", () => {
+    render(<BalanceRow account="Cash" kind="cash" balance={money.toMoney("840")} currency="PLN" />);
+    expect(screen.queryByText("BIZ")).toBeNull();
+    expect(screen.queryByText("Unsettled")).toBeNull();
+  });
+
+  it("is a plain row with no onPress, and a target once one is given", () => {
+    const { rerender } = render(
+      <BalanceRow account="Bank A" kind="bank" balance={money.toMoney("100")} currency="PLN" />,
+    );
+    expect(screen.queryByRole("button")).toBeNull();
+
+    const onPress = vi.fn();
+    rerender(
+      <BalanceRow
+        account="Bank A"
+        kind="bank"
+        balance={money.toMoney("100")}
+        currency="PLN"
+        onPress={onPress}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Bank A" }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows Last observed when expectedBalance is set", () => {
+    render(
+      <BalanceRow
+        account="Bank A"
+        kind="bank"
+        balance={money.toMoney("1240.50")}
+        currency="PLN"
+        expectedBalance={money.toMoney("1198.30")}
+      />,
+    );
+    expect(screen.getByText("Last observed:")).toBeDefined();
+    expect(screen.getByText("1 198.30")).toBeDefined();
+  });
+
+  it("omits Last observed when expectedBalance is null or absent", () => {
+    const { rerender } = render(
+      <BalanceRow account="Bank A" kind="bank" balance={money.toMoney("100")} currency="PLN" />,
+    );
+    expect(screen.queryByText("Last observed:")).toBeNull();
+
+    rerender(
+      <BalanceRow
+        account="Bank A"
+        kind="bank"
+        balance={money.toMoney("100")}
+        currency="PLN"
+        expectedBalance={null}
+      />,
+    );
+    expect(screen.queryByText("Last observed:")).toBeNull();
   });
 });

@@ -47,7 +47,7 @@ and the count is visibly sitting there not shrinking.
 | `ComparisonTable` | Merge preview — how many transactions move, and from where |
 | `MatchWarning` | The collision finder, reused. Looks for **near**-duplicates (`Groceries` / `Grocery`), since exact ones are already refused by the uniqueness index |
 | `ConfirmDialog` | Merge only. It is **not reversible in one step** |
-| `UndoToast` | Rename, reparent — both undo by calling the same operation again with the prior value. Archive shows a plain `Toast`: no `restore_category` (or any `restore_*`) operation exists yet, so there is nothing for an undo to call |
+| `UndoToast` | Rename, archive, reparent |
 
 ## 5. Data
 
@@ -65,7 +65,7 @@ and the count is visibly sitting there not shrinking.
 | Populated | Tree, archived hidden by default |
 | Empty | n/a — seeded |
 | Error | Rename collides with a sibling → refused by the uniqueness index, naming the existing sibling |
-| Offline | Read-only. Structural changes to a taxonomy that other queued writes reference are refused rather than queued. **Not modelled on the phone-alone ledger** (arc 1 has no server to be offline from); this rule applies once one exists |
+| Offline | Read-only. Structural changes to a taxonomy that other queued writes reference are refused rather than queued |
 | Gated | Convert to group refused while transactions reference it; reparent refused across kinds; merge onto a group refused |
 
 

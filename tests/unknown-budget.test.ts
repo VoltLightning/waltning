@@ -114,10 +114,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
   },
-  "packages/ledger/src/categories/sibling-collision.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
   "packages/ledger/src/transactions/update-transaction.executor.ts": {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
@@ -237,6 +233,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
   "packages/client/src/transport/field-errors.ts": {
     max: 1,
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
+  },
+  "packages/client/src/ledger/create-phone-ledger.ts": {
+    max: 2,
+    why: "accountWriteRefusal and reconcileAccountRefusal each take whatever update_account/archive_account/reconcile_account's executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
   },
 };
 

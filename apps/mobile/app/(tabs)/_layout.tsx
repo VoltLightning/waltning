@@ -8,7 +8,7 @@
  * does with it.
  *
  * `<TabList>` is real but invisible (`style={styles.hiddenList}`): its
- * `<TabTrigger>`s are what register the five routes with the router, and
+ * `<TabTrigger>`s are what register the four routes with the router, and
  * `useTabBarItems` (`../../src/use-tab-bar-items.tsx` — a route defines no
  * hooks) reads them back by name to drive both the phone's `<TabBar>` and,
  * at desk width, `DeskBand`'s nav — the pattern `expo-router/ui`'s docs call
@@ -36,7 +36,6 @@ export default function TabsLayout() {
         <TabTrigger name="ledger" href="/ledger" />
         <TabTrigger name="calendar" href="/calendar" />
         <TabTrigger name="debt" href="/debt" />
-        <TabTrigger name="settings" href="/settings" />
       </TabList>
     </Tabs>
   );
@@ -45,6 +44,6 @@ export default function TabsLayout() {
 const useStyles = makeStyles(() => ({
   // The registering triggers, not the visible bar — `<TabsShell>` draws
   // that. `display: "none"` rather than omitting `<TabList>`: the router
-  // still needs it mounted to know the five routes exist.
+  // still needs it mounted to know the four routes exist.
   hiddenList: { display: "none" },
 }));

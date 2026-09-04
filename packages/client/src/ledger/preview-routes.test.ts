@@ -12,6 +12,16 @@ describe("phone preview route state", () => {
     ).toEqual({ valid: true, returnTo: "quick-add", amount: "10.25", accountId: "account-a" });
   });
 
+  it("returns to the accounts register with nothing to restore — S16's empty state", () => {
+    expect(parseNewAccountRoute({ returnTo: "accounts" })).toEqual({
+      valid: true,
+      returnTo: "accounts",
+      amount: undefined,
+      accountId: undefined,
+    });
+    expect(parseNewAccountRoute({ returnTo: "accounts", amount: "10" }).valid).toBe(false);
+  });
+
   it("rejects malformed return paths instead of silently dropping them", () => {
     expect(parseNewAccountRoute({ returnTo: "ledger" })).toEqual({
       valid: false,

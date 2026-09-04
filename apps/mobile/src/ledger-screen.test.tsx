@@ -23,7 +23,7 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode } from "@waltning/core/money";
+import { currencyCode, toMoney } from "@waltning/core/money";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -106,6 +106,7 @@ function fakeController(search: FakeSearch) {
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],
+    balanceAsOf: () => toMoney("0"),
     searchTransactions: search,
     createAccount: () => undefined,
     createTransaction: () => undefined,
@@ -115,14 +116,10 @@ function fakeController(search: FakeSearch) {
     updateTransaction: () => undefined,
     deleteTransaction: () => undefined,
     setTransactionLines: () => undefined,
-    listFullCategoryTree: () => [],
-    listCategoryUsage: () => new Map(),
-    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-    renameCategory: () => undefined,
-    reparentCategory: () => undefined,
-    convertLeafGroup: () => undefined,
-    mergeCategories: () => undefined,
-    archiveCategory: () => undefined,
+    updateAccount: () => undefined,
+    archiveAccount: () => undefined,
+    reconcileAccount: () => undefined,
+    createGroup: () => undefined,
     reset: () => undefined,
   };
   return createPhoneLedger(port, {

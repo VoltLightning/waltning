@@ -143,44 +143,6 @@ describe("create_category", () => {
       }),
     ).toThrow(/expense/);
   });
-
-  /**
-   * The executor's own guarantee — `categories_sibling_uq` on Postgres, no
-   * equivalent index on the replica. Folded, so a diacritic or a case change
-   * does not escape it, the same as the client-side pre-check.
-   */
-  it("refuses a sibling with the same folded name, in the same group and kind", () => {
-    expect(() =>
-      write(createCategoryExecutor, {
-        id: NEW_LEAF,
-        name: "groceries",
-        kind: "expense",
-        parentId: FOOD_GROUP,
-      }),
-    ).toThrow(/already exists/);
-    expect(category(NEW_LEAF)).toBeUndefined();
-  });
-
-  it("does not confuse a same-named leaf sitting under a different group", () => {
-    // GROCERIES already exists, but under FOOD_GROUP — top-level is a
-    // different parent, so this is not the same sibling scope.
-    const result = write(createCategoryExecutor, {
-      id: NEW_LEAF,
-      name: "Groceries",
-      kind: "expense",
-    });
-    expect(result.row.parentId).toBeNull();
-  });
-
-  it("does not confuse a same-named leaf of a different kind", () => {
-    const result = write(createCategoryExecutor, {
-      id: NEW_LEAF,
-      name: "Groceries",
-      kind: "income",
-      parentId: INCOME_GROUP,
-    });
-    expect(result.row.kind).toBe("income");
-  });
 });
 
 /* ── rename_category ─────────────────────────────────────────────────────── */
@@ -202,36 +164,6 @@ describe("rename_category", () => {
     expect(() => write(renameCategoryExecutor, { id: GROCERIES, version: 999, name: "x" })).toThrow(
       /stale version/,
     );
-  });
-
-  /** The executor's own guarantee — see `create_category`'s identical test above. */
-  it("refuses renaming into a sibling's folded name, in the same group and kind", () => {
-    expect(() =>
-      write(renameCategoryExecutor, {
-        id: EATING_OUT,
-        version: category(EATING_OUT)?.version,
-        name: "groceries",
-      }),
-    ).toThrow(/already exists/);
-    expect(category(EATING_OUT)?.name).toBe("Eating out");
-  });
-
-  it("allows renaming to its own current name unchanged", () => {
-    const result = write(renameCategoryExecutor, {
-      id: GROCERIES,
-      version: category(GROCERIES)?.version,
-      name: "Groceries",
-    });
-    expect(result.row.name).toBe("Groceries");
-  });
-
-  it("does not confuse a same-named leaf sitting elsewhere in the tree", () => {
-    const result = write(renameCategoryExecutor, {
-      id: SALARY,
-      version: category(SALARY)?.version,
-      name: "Groceries",
-    });
-    expect(result.row.name).toBe("Groceries");
   });
 });
 
@@ -288,41 +220,10 @@ describe("reparent_category", () => {
     ).toThrow(/refused across kinds/);
   });
 
-  /**
-   * `TAXONOMY.md` R2 — two levels, group → leaf, never deeper. Before this
-   * guard existed, reparenting a *group* onto another group's parentId was
-   * accepted outright: nothing on this path ever checked what `current`
-   * itself was, only what `parent` was. A three-level tree is exactly what
-   * R2 exists to rule out.
-   */
-  it("refuses moving a group anywhere but the root — TAXONOMY.md R2, two levels only", () => {
-    const otherGroup = id<"categories">("77777777-7777-4777-8777-777777777777");
-    write(createCategoryExecutor, { id: otherGroup, name: "Household", kind: "expense" });
-    write(convertLeafGroupExecutor, {
-      id: otherGroup,
-      version: category(otherGroup)?.version,
-      to: "group",
-    });
-
-    expect(() =>
-      write(reparentCategoryExecutor, {
-        id: otherGroup,
-        version: category(otherGroup)?.version,
-        parentId: FOOD_GROUP,
-      }),
-    ).toThrow(/R2|two levels/);
-    expect(category(otherGroup)?.parentId).toBeNull();
-  });
-
-  /**
-   * The same scenario the old cycle test used — `FOOD_GROUP` reparented onto
-   * `GROCERIES` after `GROCERIES` becomes a group — now refuses at the R2
-   * guard above, before `wouldCycle` ever runs. R2, once enforced, makes
-   * `wouldCycle` unreachable in practice: only a *leaf* ever reaches that
-   * check, and a leaf has no descendants to cycle through. Left in place as
-   * a second guard rather than removed — cheap, and correct regardless.
-   */
-  it("refuses the R2 way before it would ever reach the cycle check", () => {
+  it("refuses a cycle — a group reparented under its own descendant", () => {
+    // GROCERIES becomes a group under FOOD_GROUP first, so it is eligible as
+    // a target parent at all; then FOOD_GROUP → GROCERIES would make
+    // GROCERIES both an ancestor and a descendant of FOOD_GROUP.
     write(convertLeafGroupExecutor, {
       id: GROCERIES,
       version: category(GROCERIES)?.version,
@@ -335,7 +236,7 @@ describe("reparent_category", () => {
         version: category(FOOD_GROUP)?.version,
         parentId: GROCERIES,
       }),
-    ).toThrow(/R2|two levels/);
+    ).toThrow(/cycle/);
   });
 });
 

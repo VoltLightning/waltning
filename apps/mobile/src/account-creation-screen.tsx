@@ -85,6 +85,8 @@ export default function NewAccount() {
           pathname: "/quick-add",
           params: { amount: target.amount, accountId },
         });
+      } else if (target.valid && target.returnTo === "accounts") {
+        router.dismissTo("/accounts");
       } else {
         router.dismissTo("/");
       }
