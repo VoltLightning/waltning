@@ -95,7 +95,8 @@ readable receipt, which is the one thing a phone genuinely cannot give you.
 | `Chip` | Every editable field |
 | `Tag` | `BIZ` · `manual` · `estimated` · `scheduled` |
 | `Button(danger)` | Delete — soft, and the only destructive control on the screen |
-| `ConfirmDialog` | Not used. Soft delete is recoverable, so it takes an `UndoToast` instead |
+| `ConfirmDialog` | Not used — a soft delete does not block on a confirmation |
+| `Toast` | States the delete happened. `UndoToast` is the eventual component once `restore_transaction` exists (§7's follow-up); until then a plain `Toast` does not offer an undo it cannot honour |
 
 ## 5. Data
 
@@ -135,18 +136,23 @@ gate — getting it wrong costs a trend line, not a filed figure.
 ## 7. Interaction
 
 ### Mobile
-Tap a field to edit inline. Save is implicit per field; there is no form-level
-Save, because a detail screen you have to remember to save is how corrections
-get lost. Delete lives at the bottom, behind a swipe-free tap, and undoes via
-toast.
+Tap a field to open it inline; several can be open at once. **Save is one
+button, not implicit per field** — it stays disabled until something has
+actually changed, and sends only the fields that did. A detail screen with a
+save on every keystroke has no state to disable that button against, which is
+what a person needs before trusting it. Delete lives at the bottom, behind a
+swipe-free tap.
 
 ### Web
 `E` edits the focused field, `Esc` cancels, `Cmd+Z` undoes the last field
 change. Tab order runs fields → receipt → splits → history.
 
 ### Shared
-**Deletion is soft and undoable.** No confirm dialog — the `UndoToast` is the
-confirmation, and it does not block.
+**Deletion is soft.** No confirm dialog: on the phone today it takes a plain
+toast rather than the `UndoToast` an undo would use — `operations.md` has no
+`restore_transaction` for one to call yet, so a `Toast` states what happened
+and nothing more, and *restore ops for delete/archive* is the named follow-up
+that would let this line say "and undoable" again.
 
 ## 8. Rules this screen must obey
 
