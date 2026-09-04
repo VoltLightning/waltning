@@ -32,11 +32,12 @@ import { Amount } from "../fx/amount";
 import type { Messages } from "../i18n/en.ts";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
+import { IconButton } from "../primitives/icon-button";
 import { SearchField } from "../primitives/search-field";
 import { EmptyState } from "../states/empty-state";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { space } from "../tokens.ts";
+import { radius, space } from "../tokens.ts";
 import { BalanceRow } from "./balance-row";
 import { SharedGroup, type SharedGroupAccount } from "./shared-group";
 import { subtotalsOf } from "./subtotals.ts";
@@ -64,6 +65,17 @@ export type AccountRegisterProps = {
   onLoadArchived: () => void;
   /** `EmptyState(first-run)`'s primary action — offered only with nothing to hold. */
   onCreateAccount: () => void;
+  /**
+   * S31's own entry point — S16 §7, an own-account row's "Transfer from
+   * here". **Optional**, and offered only on an own account's own row: a
+   * shared or archived row has no such action yet.
+   *
+   * A sibling `IconButton` beside `BalanceRow`, never nested inside it — the
+   * whole row is already one target (`onSelectAccount`), and a control
+   * inside a control is `nested-interactive`, the same violation
+   * `primitives/select.tsx`'s own doc names for `MultiSelect`'s token ×.
+   */
+  onTransferFrom?: (id: string) => void;
 };
 
 /** `bank · cash · card · clearing · loan_receivable · loan_payable · investment · deposit · other`. */
@@ -101,6 +113,7 @@ export function AccountRegister({
   onSelectAccount,
   onLoadArchived,
   onCreateAccount,
+  onTransferFrom,
 }: AccountRegisterProps) {
   const t = useT();
   const styles = useStyles();
@@ -183,6 +196,7 @@ export function AccountRegister({
           label={t(`accounts.${KIND_LABEL_KEY[group.kind]}`)}
           rows={group.rows}
           onSelectAccount={onSelectAccount}
+          {...(onTransferFrom ? { onTransferFrom } : {})}
         />
       ))}
 
@@ -201,9 +215,10 @@ type KindGroupProps = {
   label: string;
   rows: readonly AccountRegisterAccount[];
   onSelectAccount: (id: string) => void;
+  onTransferFrom?: (id: string) => void;
 };
 
-function KindGroup({ label, rows, onSelectAccount }: KindGroupProps) {
+function KindGroup({ label, rows, onSelectAccount, onTransferFrom }: KindGroupProps) {
   const styles = useStyles();
   const subtotals = subtotalsOf(rows);
 
@@ -224,7 +239,12 @@ function KindGroup({ label, rows, onSelectAccount }: KindGroupProps) {
         </View>
       </View>
       {rows.map((row) => (
-        <AccountRegisterRow key={row.id} account={row} onSelect={onSelectAccount} />
+        <AccountRegisterRow
+          key={row.id}
+          account={row}
+          onSelect={onSelectAccount}
+          {...(onTransferFrom ? { onTransferFrom } : {})}
+        />
       ))}
     </View>
   );
@@ -233,12 +253,19 @@ function KindGroup({ label, rows, onSelectAccount }: KindGroupProps) {
 type AccountRegisterRowProps = {
   account: AccountRegisterAccount;
   onSelect: (id: string) => void;
+  onTransferFrom?: (id: string) => void;
 };
 
-function AccountRegisterRow({ account, onSelect }: AccountRegisterRowProps) {
+function AccountRegisterRow({ account, onSelect, onTransferFrom }: AccountRegisterRowProps) {
   const t = useT();
+  const styles = useStyles();
   const handlePress = useCallback(() => onSelect(account.id), [account.id, onSelect]);
-  return (
+  const handleTransferFrom = useCallback(
+    () => onTransferFrom?.(account.id),
+    [account.id, onTransferFrom],
+  );
+
+  const row = (
     <BalanceRow
       account={account.name}
       kind={t(`accounts.${KIND_LABEL_KEY[account.kind]}`)}
@@ -250,6 +277,28 @@ function AccountRegisterRow({ account, onSelect }: AccountRegisterRowProps) {
       expectedBalance={account.expectedBalance}
       onPress={handlePress}
     />
+  );
+
+  if (!onTransferFrom) return row;
+
+  return (
+    <View style={styles.rowWithAction}>
+      <View style={styles.rowMain}>{row}</View>
+      <IconButton label={t("shell.transferFromHere")} onPress={handleTransferFrom}>
+        <TransferGlyph />
+      </IconButton>
+    </View>
+  );
+}
+
+/** The drawn transfer glyph — two arrows, opposed (`TransferComposer`'s own `SwapArrow`, matched rather than shared: one more use, still under the third). */
+function TransferGlyph() {
+  const styles = useStyles();
+  return (
+    <View style={styles.transferGlyph}>
+      <View style={[styles.transferGlyphBar, styles.transferGlyphBarTop]} />
+      <View style={[styles.transferGlyphBar, styles.transferGlyphBarBottom]} />
+    </View>
   );
 }
 
@@ -305,4 +354,10 @@ const useStyles = makeStyles((theme) => ({
   groupLabel: { color: theme.textMuted, ...text.ui("kicker"), textTransform: "uppercase" },
   subtotals: { flexDirection: "row", flexWrap: "wrap", gap: space.lg },
   archived: { gap: space.md, marginTop: space.xl },
+  rowWithAction: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  rowMain: { flex: 1 },
+  transferGlyph: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
+  transferGlyphBar: { position: "absolute", width: 14, height: 2, backgroundColor: theme.text },
+  transferGlyphBarTop: { top: 5, borderRadius: radius.xs },
+  transferGlyphBarBottom: { bottom: 5, borderRadius: radius.xs },
 }));

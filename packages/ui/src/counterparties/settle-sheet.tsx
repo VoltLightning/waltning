@@ -89,7 +89,7 @@ export type SettleSheetProps = {
   onAccountChange: (accountId: string) => void;
 
   /** `readCrossRate` for the currently picked pair — `undefined` with nothing held (offline, S14 §6). */
-  referenceRate?: SettleSheetReferenceRate;
+  referenceRate?: SettleSheetReferenceRate | undefined;
 
   note: string;
   onNoteChange: (note: string) => void;

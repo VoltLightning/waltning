@@ -77,7 +77,7 @@ export type TransferComposerProps = {
   onActiveFieldChange: (field: TransferComposerField) => void;
 
   /** `readCrossRate` for the current pair — `undefined` offline with nothing held (§6). */
-  referenceRate?: TransferComposerReferenceRate;
+  referenceRate?: TransferComposerReferenceRate | undefined;
 
   /** The bank's stated fee — optional, distinct from the margin (§9.1). */
   fee: string;

@@ -19,6 +19,11 @@ function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
 }
 
+/** S16 §7's row action — opens S31 with this row's own account pre-picked. */
+function handleTransferFrom(id: string) {
+  router.push({ pathname: "/transfer", params: { from: id } });
+}
+
 /** The ledger's own row onto the register's — the one place the two field sets meet. */
 function toRegisterAccount(account: PhoneAccount): AccountRegisterAccount {
   return {
@@ -56,6 +61,7 @@ export default function Accounts() {
         onSelectAccount={handleSelectAccount}
         onLoadArchived={handleLoadArchived}
         onCreateAccount={handleCreateAccount}
+        onTransferFrom={handleTransferFrom}
       />
       {toast === null ? null : <Toast message={toast} onDismiss={handleDismissToast} />}
     </GroundPanel>
