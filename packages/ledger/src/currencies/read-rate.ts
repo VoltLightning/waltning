@@ -347,11 +347,16 @@ export type LocalCrossRate = {
    * writing once each.
    */
   rate: PivotPerUnit;
-  source: string;
-  /** The staler of the two legs' own dates — the honest answer for a figure built from two reads. */
-  asOf: AccountingDate;
-  /** The staler of the two legs' own carry — `readRate`'s cap already refused anything worse. */
-  carriedDays: number;
+  /**
+   * H2 — both legs' own provenance, whole and unmixed. A flattened
+   * `source`/`asOf`/`carriedDays` here used to borrow `source` from whichever
+   * leg was manual and `asOf`/`carriedDays` from whichever was worse — two
+   * different rows' facts glued into one that named neither honestly. This
+   * function triangulates a *rate*; which leg to show, and how, is a display
+   * decision for the caller (`crossRateProvenance`, `packages/client`) — not
+   * this data layer's to pre-merge.
+   */
+  legs: { from: LocalRate; to: LocalRate };
 };
 
 /**
@@ -397,7 +402,10 @@ export function readCrossRate<TRun, TSchema extends typeof ledgerSchema>(
   // `toLeg.rate` times as many units of `to` — so the cross rate is the
   // ratio of the two, pivot cancelled.
   const rate = pivotPerUnit(dec(toLeg.rate).dividedBy(fromLeg.rate));
-  const worse = fromLeg.carriedDays >= toLeg.carriedDays ? fromLeg : toLeg;
 
-  return { rate, source: worse.source, asOf: worse.asOf, carriedDays: worse.carriedDays };
+  // H2 — both legs, whole and unmixed. Which one is "worse", whether either
+  // is a fabricated pivot self-leg, and whether to say "manual" are all
+  // display decisions a caller makes over the two real facts here, never a
+  // single merged fact this function hands back pre-decided.
+  return { rate, legs: { from: fromLeg, to: toLeg } };
 }

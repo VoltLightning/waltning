@@ -328,7 +328,10 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
     "transactions_to_amount_shape",
     sql`(${t.type} = 'transfer') = (${t.toAmount} is not null)`,
   ),
-  check("transactions_to_amount_positive", sql`${t.toAmount} is null or ${t.toAmount} >= 0`),
+  // H3 — a zero destination amount is a transfer that moves nothing into the
+  // other leg; `>= 0` let it through end to end (§7.5's shape only asks the
+  // two legs be *present* together, never that either be non-empty).
+  check("transactions_to_amount_positive", sql`${t.toAmount} is null or ${t.toAmount} > 0`),
   // The destination leg's pivot value is computed as to_amount × to_fx_rate
   // (§7.4), so a transfer missing either is a balance that comes out silently
   // wrong rather than a write that fails.
@@ -354,6 +357,11 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
     "transactions_occurrence_shape",
     sql`(${t.recurringId} is null) = (${t.occurrenceDate} is null)`,
   ),
+  // H3 — a negative fee used to store: `zMoney` alone accepts any sign, and
+  // the app-level refine is not itself a guarantee. Zero is never valid
+  // either — a typed `0` fee is "no fee", and the app drops it to `null`
+  // before the write ever reaches here.
+  check("transactions_fee_positive", sql`${t.fee} is null or ${t.fee} > 0`),
 ]);
 
 export const tags = pgTable("tags", tagsColumns(), (t) => [

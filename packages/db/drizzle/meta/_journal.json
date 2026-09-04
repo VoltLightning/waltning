@@ -64,6 +64,13 @@
       "when": 1788533082978,
       "tag": "0008_transaction_lines_category_index",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788532365808,
+      "tag": "0009_transactions_to_amount_and_fee_positive",
+      "breakpoints": true
     }
   ]
 }

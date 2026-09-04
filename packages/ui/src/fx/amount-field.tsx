@@ -94,6 +94,11 @@ export function parseAmount(input: string): string | null {
   const normalized = trimmed.replace(",", ".");
   if (!/^-?\d*\.?\d*$/.test(normalized)) return null;
   if (!/\d/.test(normalized)) return null;
+  // M3 — "5," normalizes to "5.", a shape `zMoney` refuses (its regex
+  // requires a digit after the mark once one is typed). A trailing
+  // separator is still mid-entry, the same "not yet a number" state as "."
+  // alone, and belongs on the same side of the refusal.
+  if (normalized.endsWith(".")) return null;
 
   return normalized;
 }

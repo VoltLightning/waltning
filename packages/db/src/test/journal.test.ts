@@ -43,8 +43,30 @@ describe("migration journal", () => {
     ).toEqual([]);
   });
 
-  it("is ordered, with contiguous indexes", () => {
-    expect(journal.entries.map((e) => e.idx)).toEqual(journal.entries.map((_, i) => i));
+  // M2 — `idx` is no longer required to be contiguous: this branch's own
+  // `0009` entry deliberately leaves `8` unclaimed, reserved for a migration
+  // landing first on another branch. What still must hold is order (no
+  // entry out of sequence) and uniqueness (no two entries claiming the same
+  // slot) — either of those breaking is the real bug a forgotten or
+  // duplicated `idx` would cause.
+  it("is ordered, with no duplicate index", () => {
+    const idxs = journal.entries.map((e) => e.idx);
+    expect(idxs).toEqual([...idxs].sort((a, b) => a - b));
+    expect(new Set(idxs).size).toBe(idxs.length);
     expect(tags).toEqual([...tags].sort());
+  });
+
+  // M2 — the bug itself: an entry's `idx` drifting from the number already
+  // in its own `tag` (`idx: 8` beside `tag: "0009_…"`) is exactly what makes
+  // `drizzle-kit`'s own next-prefix-from-`entries.length` collide with a tag
+  // that already exists. Every entry's `idx` must match the prefix baked
+  // into its own tag, always.
+  it("every entry's idx matches its own tag's numeric prefix", () => {
+    for (const entry of journal.entries) {
+      expect(
+        entry.tag.startsWith(String(entry.idx).padStart(4, "0")),
+        `idx ${entry.idx} does not match tag ${entry.tag}`,
+      ).toBe(true);
+    }
   });
 });

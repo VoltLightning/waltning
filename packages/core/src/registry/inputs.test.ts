@@ -383,6 +383,35 @@ describe("createTransactionInput", () => {
       expect(result.success).toBe(false);
       expect(paths(result)).toContain("toAmount");
     });
+
+    it("refuses a zero destination amount (H3, transactions_to_amount_positive)", () => {
+      // A transfer that moves nothing into the other leg is not a transfer —
+      // `>= 0` used to let this through end to end; the CHECK is now `> 0`.
+      const result = createTransactionInput.safeParse({ ...transfer, toAmount: "0.00" });
+
+      expect(result.success).toBe(false);
+      expect(paths(result)).toContain("toAmount");
+    });
+
+    it("refuses a negative fee (H3, transactions_fee_positive)", () => {
+      const result = createTransactionInput.safeParse({ ...transfer, fee: "-1.00" });
+
+      expect(result.success).toBe(false);
+      expect(paths(result)).toContain("fee");
+    });
+
+    it("refuses a zero fee — zero is 'no fee', never sent as a value (H3, transactions_fee_positive)", () => {
+      const result = createTransactionInput.safeParse({ ...transfer, fee: "0.00" });
+
+      expect(result.success).toBe(false);
+      expect(paths(result)).toContain("fee");
+    });
+
+    it("allows a positive fee", () => {
+      const result = createTransactionInput.safeParse({ ...transfer, fee: "2.50" });
+
+      expect(result.success).toBe(true);
+    });
   });
 
   describe("the shapes that are not about money", () => {
@@ -688,6 +717,48 @@ describe("update_transaction", () => {
         patch: { createdAt: "2026-01-01" },
       }),
     ).toThrow();
+  });
+
+  /**
+   * M2 — the same `> 0` refine `create_transaction` carries: a patch that
+   * sets `toAmount` follows `transactions_to_amount_positive` too, not only
+   * a fresh row.
+   */
+  it("refuses a patch that sets a zero or negative destination amount (M2, transactions_to_amount_positive)", () => {
+    expect(() =>
+      updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: { toAmount: "0.00" } }),
+    ).toThrow();
+    expect(() =>
+      updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: { toAmount: "-4.60" } }),
+    ).toThrow();
+  });
+
+  it("allows a patch that clears the destination amount", () => {
+    const parsed = updateTransactionInput.parse({
+      id: TXN_ID,
+      version: 1,
+      patch: { toAmount: null },
+    });
+    expect(parsed.patch.toAmount).toBeNull();
+  });
+
+  /** H3 — `transactions_fee_positive` binds a patched row exactly as it binds a fresh one. */
+  it("refuses a patch that sets a zero or negative fee (H3, transactions_fee_positive)", () => {
+    expect(() =>
+      updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: { fee: "0.00" } }),
+    ).toThrow();
+    expect(() =>
+      updateTransactionInput.parse({ id: TXN_ID, version: 1, patch: { fee: "-1.00" } }),
+    ).toThrow();
+  });
+
+  it("allows a patch that clears the fee", () => {
+    const parsed = updateTransactionInput.parse({
+      id: TXN_ID,
+      version: 1,
+      patch: { fee: null },
+    });
+    expect(parsed.patch.fee).toBeNull();
   });
 });
 

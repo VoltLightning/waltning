@@ -76,6 +76,63 @@ describe("RateField", () => {
     ).toBeDefined();
   });
 
+  /**
+   * H2 — a carried reference states the carry explicitly rather than folding
+   * it silently into a bare date.
+   */
+  it("states the carry explicitly when the reference is carried forward", () => {
+    render(
+      <RateField
+        label="Realized"
+        value={toMoney("4.281")}
+        reference={{
+          rate: pivotPerUnit("4.312"),
+          source: "nbp",
+          date: "2026-08-05",
+          carriedDays: 7,
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === "reference 4.3120 · nbp · carried 7 d from 2026-08-05",
+      ),
+    ).toBeDefined();
+  });
+
+  /**
+   * H1/H2 — the bug itself: `manual` used to overwrite `{{source}}`, gluing
+   * "manual" to whichever leg's `date`/`carriedDays` happened to be shown —
+   * "manual · carried 7 d from 2026-08-05" read as one claim (this manual
+   * figure was carried from 2026-08-05) even when the correction actually
+   * belonged to the *other* leg. `{{source}}` now always names the shown
+   * leg's own, real source; `manual` renders as its own `Tag` beside the
+   * line instead, an independent fact about the pair.
+   */
+  it("keeps the shown leg's real source and marks manual as its own tag (H1/H2)", () => {
+    render(
+      <RateField
+        label="Realized"
+        value={toMoney("4.281")}
+        reference={{
+          rate: pivotPerUnit("4.312"),
+          source: "nbp",
+          date: "2026-08-05",
+          carriedDays: 7,
+          manual: true,
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent === "reference 4.3120 · nbp · carried 7 d from 2026-08-05",
+      ),
+    ).toBeDefined();
+    expect(screen.getByText("Manual")).toBeDefined();
+  });
+
   it("shows the unit beside the label — the direction a rate has no reading without", () => {
     render(<RateField label="Rate" value={toMoney("4.281")} unit="PLN per USD" />);
     expect(screen.getByText("PLN per USD")).toBeDefined();
@@ -117,6 +174,17 @@ describe("RateField", () => {
     render(<RateField label="Manual rate" value="" editable onChange={onChange} />);
     fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "1,234.5" } });
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  // L — the editable field's own displayed text is the typed buffer
+  // (`text`), never re-derived from the parsed/formatted value: reformatting
+  // mid-type would erase whatever character the parser just rejected before
+  // the next one could be typed (the same rule `AmountField`'s own editable
+  // path already keeps).
+  it("keeps the raw typed text on screen while it does not parse — never the formatted value", () => {
+    render(<RateField label="Manual rate" value="" editable onChange={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Manual rate"), { target: { value: "4.5.6" } });
+    expect(screen.getByLabelText("Manual rate")).toHaveProperty("value", "4.5.6");
   });
 
   it("rejects 0 — a rate is never zero", () => {

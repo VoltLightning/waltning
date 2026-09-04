@@ -253,6 +253,8 @@ export const en = {
     realized: "Realized",
     /** `RateField`'s reference line, one sentence rather than three words joined — word order is not the same in every language. */
     referenceRate: "reference {{rate}} · {{source}} · {{date}}",
+    /** H2 — the reference line when the shown leg is carried forward: "reference 3.8100 · manual · carried 7 d from 2026-08-05" states the carry honestly rather than folding it silently into `{{date}}` alone. */
+    referenceRateCarried: "reference {{rate}} · {{source}} · carried {{count}} d from {{date}}",
     /** The amber tag beside a rate a person typed directly (P4) — `RateField`'s own `manual` prop. */
     manualRate: "Manual",
     /** S31's account chips. */
@@ -265,6 +267,8 @@ export const en = {
     /** S31's rate panel — the bank's spread against the reference (§7.5), and its optional stated fee. */
     margin: "Margin",
     fee: "Fee",
+    /** C2 — `parseAmount` returns `null` for anything typed that is not a number; shown only once something has actually been typed. */
+    feeInvalid: "Enter a number, or leave it blank.",
     /** S31 §6 — same account both sides. `transactions_transfer_distinct`'s own message already reaches the screen through the field error; this is the sheet's own inline caption when nothing has been typed wrong yet. */
     sameAccountRefused: "A transfer needs two different accounts.",
 

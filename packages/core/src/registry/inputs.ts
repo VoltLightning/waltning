@@ -409,11 +409,28 @@ export const createTransactionInput = z
       });
     }
 
-    if (t.toAmount !== undefined && dec(t.toAmount).lt(0)) {
+    // H3 — `<= 0`, not `< 0`: a zero destination amount is a transfer that
+    // moves nothing into the other leg, refused the same as a negative one
+    // (transactions_to_amount_positive, now `> 0`).
+    if (t.toAmount !== undefined && dec(t.toAmount).lte(0)) {
       ctx.addIssue({
         code: "custom",
         path: ["toAmount"],
         message: "the destination amount is positive (transactions_to_amount_positive)",
+      });
+    }
+
+    // H3 — a negative fee used to store: `zMoney` alone accepts any sign.
+    // Zero is never sent here (the screen drops a typed `0` to "no fee"
+    // before this is reached), so `<= 0` reads the same as `< 0` in practice
+    // — stated as `<= 0` anyway to match `transactions_fee_positive`'s own
+    // `fee > 0` exactly, rather than a looser contract the CHECK still
+    // refuses.
+    if (t.fee !== undefined && dec(t.fee).lte(0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["fee"],
+        message: "a stated fee is positive (transactions_fee_positive)",
       });
     }
 
@@ -696,6 +713,31 @@ export const updateTransactionInput = z
   .refine((v) => Object.keys(v.patch).length > 0, {
     message: "a patch must set at least one field",
     path: ["patch"],
+  })
+  .superRefine((v, ctx) => {
+    // M2 — the same `> 0` refine `create_transaction` carries: a patch that
+    // sets `to_amount` follows `transactions_to_amount_positive` too, not
+    // only a fresh row. `null` clears the field and is never a violation.
+    if (
+      v.patch.toAmount !== undefined &&
+      v.patch.toAmount !== null &&
+      dec(v.patch.toAmount).lte(0)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["patch", "toAmount"],
+        message: "the destination amount is positive (transactions_to_amount_positive)",
+      });
+    }
+    // H3 — same for `fee`: `transactions_fee_positive` binds a patched row
+    // exactly as it binds a fresh one.
+    if (v.patch.fee !== undefined && v.patch.fee !== null && dec(v.patch.fee).lte(0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["patch", "fee"],
+        message: "a stated fee is positive (transactions_fee_positive)",
+      });
+    }
   });
 export type UpdateTransactionInput = z.output<typeof updateTransactionInput>;
 

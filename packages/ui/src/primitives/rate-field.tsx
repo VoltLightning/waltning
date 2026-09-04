@@ -47,6 +47,10 @@ export type RateFieldReference = {
   source: string;
   /** `AccountingDate`'s shape — the reference row's own date, never today's. */
   date: string;
+  /** H2 — `crossRateProvenance`'s own carry for the leg named by `source`/`date` above, together. `0`/absent renders the plain "· {{date}}" line; positive renders "· carried {{count}} d from {{date}}" so the carry is stated, not folded silently into a bare date. */
+  carriedDays?: number;
+  /** H2 — true when either leg behind this reference was a person's own correction (`crossRateProvenance`), regardless of which leg's own date is shown. Overrides the displayed `source` to read "manual" honestly, without implying the carried leg above is the one someone typed. */
+  manual?: boolean;
 };
 
 export type RateFieldProps = {
@@ -159,6 +163,28 @@ export function RateField({
   const message = error ?? (invalid ? t("fx.ratePositive") : undefined);
   const displayed = editable ? text : formatRate(value, locale, decimals);
 
+  // H1/H2 — `{{source}}` is always the *shown* leg's own, real source;
+  // `manual` never overwrites it, because that glued "manual" to whichever
+  // leg's `date`/`carriedDays` happened to be displayed even when the
+  // correction was on the *other* leg. `manual` renders as its own `Tag`
+  // beside the line instead — an independent fact about the pair, not a
+  // claim about which leg this line's date belongs to.
+  const referenceText =
+    reference === undefined
+      ? undefined
+      : reference.carriedDays !== undefined && reference.carriedDays > 0
+        ? t("transactions.referenceRateCarried", {
+            rate: formatRate(reference.rate, locale, decimals),
+            source: reference.source,
+            count: reference.carriedDays,
+            date: reference.date,
+          })
+        : t("transactions.referenceRate", {
+            rate: formatRate(reference.rate, locale, decimals),
+            source: reference.source,
+            date: reference.date,
+          });
+
   return (
     <View style={styles.block}>
       <View style={styles.labelRow}>
@@ -179,14 +205,13 @@ export function RateField({
         <Text style={styles.value}>{displayed}</Text>
       )}
       {message ? <Text style={styles.error}>{message}</Text> : null}
-      {reference === undefined ? null : (
-        <Text style={styles.reference}>
-          {t("transactions.referenceRate", {
-            rate: formatRate(reference.rate, locale, decimals),
-            source: reference.source,
-            date: reference.date,
-          })}
-        </Text>
+      {referenceText === undefined ? null : !reference?.manual ? (
+        <Text style={styles.reference}>{referenceText}</Text>
+      ) : (
+        <View style={styles.referenceRow}>
+          <Text style={styles.reference}>{referenceText}</Text>
+          <Tag variant="warn">{t("transactions.manualRate")}</Tag>
+        </View>
       )}
     </View>
   );
@@ -223,6 +248,7 @@ const useStyles = makeStyles((theme) => ({
   },
   invalid: { borderColor: theme.dangerBorder },
   error: { color: theme.dangerText, ...text.ui("caption") },
+  referenceRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   reference: {
     color: theme.textMuted,
     ...text.mono("caption"),

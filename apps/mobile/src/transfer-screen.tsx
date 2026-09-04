@@ -15,6 +15,7 @@
 
 import { convertAmountRaw } from "@waltning/client/ledger/convert-amount";
 import type { PhoneCapturableAccount } from "@waltning/client/ledger/create-phone-ledger";
+import { crossRateProvenance } from "@waltning/client/ledger/cross-rate-provenance";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseTransferRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -142,9 +143,18 @@ export default function Transfer() {
       date: accountingDate(date),
     });
     if (result === null) return undefined;
-    // `TransferComposerReferenceRate.date` — `readCrossRate`'s own `asOf`,
-    // the day the rate actually holds for, not the row's own capture date.
-    return { rate: result.rate, source: result.source, date: result.asOf };
+    // H2 — `crossRateProvenance` turns the two legs into one honest fact:
+    // `source`/`date`/`carriedDays` all describe the *same*, staler leg, and
+    // `manual` is its own flag, true whenever either leg is a person's own
+    // correction, regardless of which leg is the one shown as stale.
+    const provenance = crossRateProvenance(result.legs);
+    return {
+      rate: result.rate,
+      source: provenance.source,
+      date: provenance.asOf,
+      carriedDays: provenance.carriedDays,
+      manual: provenance.manual,
+    };
   }, [ledger, crossCurrency, fromAccount, toAccount, date]);
 
   const handleKey = useCallback(
@@ -185,14 +195,57 @@ export default function Transfer() {
     ],
   );
 
-  const handleFromAccountChange = useCallback((id: string) => {
-    setFromAccountId(id);
-    setToAmountEdited(false);
-  }, []);
-  const handleToAccountChange = useCallback((id: string) => {
-    setToAccountId(id);
-    setToAmountEdited(false);
-  }, []);
+  // H1 — a destination amount typed (or prefilled) for one currency pair must
+  // not survive a change to either leg: same-currency collapses to the
+  // source figure (§3), a cross-currency pair with a reference re-prefills
+  // from it, and one with no reference held offline clears rather than
+  // showing a stale conversion for a currency that no longer matches.
+  const computeToAmountPrefill = useCallback(
+    (nextFromId: string | null, nextToId: string | null): string => {
+      const nextFrom = accounts.find((account) => account.id === nextFromId);
+      const nextTo = accounts.find((account) => account.id === nextToId);
+      if (nextFrom === undefined || nextTo === undefined) return "";
+      if (nextFrom.currency === nextTo.currency) return amountRaw;
+      if (!isAccountingDate(date)) return "";
+      const result = ledger.readCrossRate({
+        from: money.currencyCode(nextFrom.currency),
+        to: money.currencyCode(nextTo.currency),
+        date: accountingDate(date),
+      });
+      if (result === null) return "";
+      const parsed = parseAmount(amountRaw);
+      if (parsed === null) return "";
+      return convertAmountRaw(parsed, result.rate, nextTo.decimals);
+    },
+    [accounts, amountRaw, date, ledger],
+  );
+
+  // H1 — a typed destination must not be discarded by a currency-preserving
+  // account change: switching *From* (or *To*) to another account in the
+  // same currency leaves the pair itself unchanged, so the figure (and
+  // `toAmountEdited`) a person already typed stays exactly as it was. Only a
+  // change to the currency actually on one side re-triggers the prefill
+  // above.
+  const handleFromAccountChange = useCallback(
+    (id: string) => {
+      const nextFrom = accounts.find((account) => account.id === id);
+      setFromAccountId(id);
+      if (nextFrom?.currency === fromAccount?.currency) return;
+      setToAmountEdited(false);
+      setToAmountRaw(computeToAmountPrefill(id, toAccountId));
+    },
+    [accounts, computeToAmountPrefill, fromAccount, toAccountId],
+  );
+  const handleToAccountChange = useCallback(
+    (id: string) => {
+      const nextTo = accounts.find((account) => account.id === id);
+      setToAccountId(id);
+      if (nextTo?.currency === toAccount?.currency) return;
+      setToAmountEdited(false);
+      setToAmountRaw(computeToAmountPrefill(fromAccountId, id));
+    },
+    [accounts, computeToAmountPrefill, toAccount, fromAccountId],
+  );
 
   /**
    * `AccountPicker` (`accounts/`) is a sibling domain — the same rule
@@ -237,6 +290,21 @@ export default function Transfer() {
   const sameAccount = fromAccountId !== null && fromAccountId === toAccountId;
   const parsedAmount = parseAmount(amountRaw);
   const parsedToAmount = parseAmount(toAmountRaw);
+  // H3 — a zero destination (or source) amount is a transfer that moves
+  // nothing; `dec(…).isZero()` catches "0", "0,00" and the like the same way
+  // `TransferComposer`'s own margin guard already does, before the write
+  // ever reaches `createTransactionInput`'s refine or the CHECK. `dec` here,
+  // not the `Money` constructor — `architecture.test.ts` bans that call
+  // outside `packages/ui` (render figures through `<Amount>`, never format
+  // them by hand), and this is a save-gate check, not a render.
+  const amountIsZero = parsedAmount !== null && money.dec(parsedAmount).isZero();
+  const toAmountIsZero = parsedToAmount !== null && money.dec(parsedToAmount).isZero();
+  // C2 — a fee that has been typed but does not yet parse (a stray letter,
+  // or `parseAmount`'s own "trailing separator" rejection — typing "1," on
+  // its way to "1,50" parses to `null` until a digit follows the comma) must
+  // not be silently dropped from the write; Save stays disabled — correctly,
+  // mid-keystroke — until it is either finished or cleared.
+  const feeUnparsable = feeRaw !== "" && parseAmount(feeRaw) === null;
   // §14.6 — refused before the write on an uncapturable *From* account; Save
   // stays disabled the same way it already does for every other refusal this
   // screen can see coming, rather than letting a tap reach the controller
@@ -247,12 +315,23 @@ export default function Transfer() {
     toAccountId === null ||
     sameAccount ||
     parsedToAmount === null ||
+    amountIsZero ||
+    toAmountIsZero ||
+    feeUnparsable ||
     fromAccount?.capturable === false;
 
   const handleSave = useCallback(() => {
     if (parsedAmount === null || fromAccountId === null || toAccountId === null) return;
     if (parsedToAmount === null || toAccount === undefined) return;
+    // M4 — closes the source leg the same way `saveDisabled` already does:
+    // a zero either side is refused here too, not only by the button's own
+    // disabled state, so a stray `handleSave` call can never reach the write.
+    if (amountIsZero || toAmountIsZero) return;
     const parsedFee = parseAmount(feeRaw);
+    // H3 — a typed `0`/`0,00` fee is the same as no fee at all: dropped here
+    // rather than sent as a zero the contract's `> 0` refine would then
+    // refuse.
+    const feeIsZero = parsedFee !== null && money.dec(parsedFee).isZero();
 
     const result = ledger.createTransaction({
       type: "transfer",
@@ -267,7 +346,7 @@ export default function Transfer() {
       toAccountId,
       toAmount: parsedToAmount,
       toCurrency: toAccount.currency,
-      ...(parsedFee === null ? {} : { fee: parsedFee }),
+      ...(parsedFee === null || feeIsZero ? {} : { fee: parsedFee }),
     });
     if (!("id" in result)) {
       setFieldErrors(mapFieldErrors(result.fieldErrors, KNOWN_PATHS));
@@ -278,6 +357,8 @@ export default function Transfer() {
   }, [
     parsedAmount,
     parsedToAmount,
+    amountIsZero,
+    toAmountIsZero,
     fromAccountId,
     toAccountId,
     toAccount,

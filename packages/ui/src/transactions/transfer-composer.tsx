@@ -39,7 +39,7 @@ import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
-import { AmountField } from "../fx/amount-field";
+import { AmountField, parseAmount } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
@@ -66,6 +66,10 @@ export type TransferComposerReferenceRate = {
   rate: money.PivotPerUnit;
   source: string;
   date: string;
+  /** H2 — `crossRateProvenance`'s own carry, for the same leg `source`/`date` name. */
+  carriedDays: number;
+  /** H2 — true when either leg is a person's own correction, independent of which leg's `date` is shown. */
+  manual: boolean;
 };
 
 export type TransferComposerField = "amount" | "toAmount";
@@ -151,6 +155,14 @@ export function TransferComposer({
   const amount = money.toMoney(amountRaw === "" ? "0" : amountRaw.replace(",", "."));
   const toAmount = money.toMoney(toAmountRaw === "" ? "0" : toAmountRaw.replace(",", "."));
 
+  // M2 — `toAmount ÷ amount` needs neither a reference rate nor the pivot;
+  // gating it behind `referenceRate` rendered `0,0000` offline with nothing
+  // held (S31 §6), even though both figures typed are enough on their own.
+  // Guarded only against dividing by zero, the same as `margin`'s own guard.
+  const realizedRate = money.isZero(amount)
+    ? undefined
+    : money.toMoney(money.dec(toAmount).dividedBy(amount));
+
   // §7.5's own worked example, generalised: `amount` valued at `1` (this
   // leg's own currency, treated as the common ground), `toAmount` valued at
   // the reciprocal of the reference rate. Neither figure is the system's real
@@ -174,13 +186,22 @@ export function TransferComposer({
   // S31 §3's own footer — the two costs, summed for the one figure this
   // screen states while typing. `FX Cost` (§12.2) still reports them apart;
   // this is a capture-time convenience, not a second definition of "total".
-  const feeAmount = fee === "" ? undefined : money.toMoney(fee.replace(",", "."));
+  //
+  // C2 — `fee` is raw typed text, and `money.toMoney` throws on anything that
+  // is not a number (a letter, mid-typed punctuation). `parseAmount` is the
+  // one place that boundary is crossed; `null` on a non-empty field is
+  // *unparsable*, not *absent*, so the total omits it (never a mid-typed
+  // fraction of a fee) and the field shows its own caption instead.
+  const parsedFee = fee === "" ? null : parseAmount(fee);
+  const feeAmount = parsedFee === null ? undefined : money.toMoney(parsedFee);
+  const feeUnparsable = fee !== "" && parsedFee === null;
   const total =
     marginInDestination === undefined && feeAmount === undefined
       ? undefined
       : money.add(marginInDestination ?? money.ZERO, feeAmount ?? money.ZERO);
 
-  const feeError = fieldErrors?.byField["fee"]?.[0];
+  const feeError =
+    fieldErrors?.byField["fee"]?.[0] ?? (feeUnparsable ? t("transactions.feeInvalid") : undefined);
   const toAccountError = fieldErrors?.byField["toAccountId"]?.[0];
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
   const toAmountError = fieldErrors?.byField["toAmount"]?.[0];
@@ -259,7 +280,7 @@ export function TransferComposer({
 
           <RateField
             label={t("transactions.realized")}
-            value={marginResult?.realizedRate ?? money.ZERO}
+            value={realizedRate ?? money.ZERO}
             // L9 — a rate has no unit of its own (`RateField`'s own doc);
             // the realized rate reads destination per source, the same
             // `{{quote}} per {{base}}` `RateTable`'s header states.
@@ -272,6 +293,8 @@ export function TransferComposer({
                     rate: referenceRate.rate,
                     source: referenceRate.source,
                     date: referenceRate.date,
+                    carriedDays: referenceRate.carriedDays,
+                    manual: referenceRate.manual,
                   },
                 }
               : {})}
@@ -288,6 +311,7 @@ export function TransferComposer({
             label={t("transactions.fee")}
             value={fee}
             onChangeText={onFeeChange}
+            keyboardType="decimal-pad"
             {...(feeError === undefined ? {} : { error: feeError })}
           />
 
