@@ -871,9 +871,27 @@ describe("every component builds its styles the same way", () => {
    * and Storybook's own panel, both of which read `themes[name]` by hand
    * because their `View` sat *above* the provider. Both are now components
    * underneath it.
+   *
+   * **Caught two ways, both of them one `{ … }` reaching a component**:
+   * `style={{ … }}` directly, and the shape `quick-add-screen.tsx` had —
+   * `style={[styles.scroll, { paddingLeft: … }]}`, an object literal riding
+   * inside the array `dock.tsx`'s own `[styles.root, clearance]` precedent
+   * says to use instead. `STYLE_ARRAY_OBJECT` requires the `{` inside the
+   * array to open like a real style object (`{ key:`), the same shape every
+   * offender takes, so `[styles.a, condition ? styles.b : null]` — no object
+   * literal in sight — stays unflagged, and `[styles.a, computedInsets]`
+   * (the fix: a plain object built *above* the JSX) reads as what it is,
+   * a reference, not a literal.
    */
   it("passes no style object literal through JSX", () => {
-    const offenders = rendering.filter((f) => /style=\{\{/.test(readFileSync(f, "utf8"))).map(rel);
+    const STYLE_OBJECT = /style=\{\{/;
+    const STYLE_ARRAY_OBJECT = /style=\{\[[^\]]*?\{\s*[A-Za-z_$]\w*\s*:/;
+    const offenders = rendering
+      .filter((f) => {
+        const source = readFileSync(f, "utf8");
+        return STYLE_OBJECT.test(source) || STYLE_ARRAY_OBJECT.test(source);
+      })
+      .map(rel);
 
     expect(offenders, "build it with makeStyles instead").toEqual([]);
   });

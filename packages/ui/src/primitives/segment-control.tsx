@@ -46,6 +46,15 @@ export type Segment = {
   count?: number;
   /** Named but not yet reachable — announced via `common.later`, never removed from the row. */
   disabled?: boolean;
+  /**
+   * Overrides `common.later` as the announced reason a `disabled` segment
+   * gives. For a segment that is unreachable for a caller-specific reason —
+   * not because it is unbuilt — `common.later` would be the wrong claim
+   * (`quick-add-composer.tsx`'s `ScopeSegments`, disabling *Business* for a
+   * shared account, §6.7). Already-resolved text: the caller has its own
+   * `useT()`, the same way it resolves `label`.
+   */
+  disabledReason?: string;
 };
 
 export type SegmentControlTone = "surface" | "shell";
@@ -102,7 +111,9 @@ function SegmentOption({ segment, active, onChange, tone }: SegmentOptionProps) 
 
   const base =
     segment.count === undefined ? segment.label : `${segment.label}, ${segment.count} items`;
-  const accessibleLabel = disabled ? `${base}, ${t("common.later")}` : base;
+  const accessibleLabel = disabled
+    ? `${base}, ${segment.disabledReason ?? t("common.later")}`
+    : base;
 
   return (
     <Pressable

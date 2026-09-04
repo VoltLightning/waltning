@@ -11,7 +11,7 @@
  * ledger, and where they *ask* to go — not expo-router's own behaviour.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneLedgerPort,
@@ -134,6 +134,7 @@ function fakeController(
     listCategories: () => [],
     listCategoryTree: () => [],
     listCounterparties: () => [],
+    listPayeeHistory: () => [],
     listNetWorth: () => netWorthOf(accounts),
     readPeriodSpend: () => periodSpendRows,
     listUnsettledClearing: () => unsettledOf(accounts),
@@ -435,6 +436,7 @@ describe("Today", () => {
       listRecent: () => [],
       listCategories: () => [],
       listCounterparties: () => [],
+      listPayeeHistory: () => [],
       listCategoryTree: () => [],
       listNetWorth: () => netWorthOf([PLN_ACCOUNT]),
       readPeriodSpend: () => [],
@@ -498,7 +500,28 @@ describe("Today", () => {
 });
 
 describe("QuickAdd", () => {
-  it("offers the ledger's accounts to capture against", () => {
+  // jsdom's default width is below `breakpoint.desk` (`use-breakpoint.test.tsx`
+  // measures it), so an unresized render already exercises D4b's phone path —
+  // `QuickAddComposer` above a `Dock`. `quick-add-screen.test.tsx` covers that
+  // path in full (keypad, chip picks, Save); this file keeps the one smoke
+  // test plus the desk fallback (`QuickAddForm`, unchanged by D4b) below.
+  it("offers the ledger's accounts to capture against, via the account sheet", () => {
+    withLedger(<QuickAdd />, fakeController([PLN_ACCOUNT]));
+
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(screen.getByText("Bank A · PLN")).toBeDefined();
+  });
+
+  it("offers the ledger's accounts inline at the desk breakpoint (QuickAddForm's own fallback)", () => {
+    // `use-breakpoint.test.tsx`'s own pattern: `Dimensions.get`'s initial
+    // read only re-measures on the process's first call, so a width set
+    // after some earlier render needs a real `resize` event, not just the
+    // property write, to reach this one.
+    Object.defineProperty(document.documentElement, "clientWidth", {
+      value: 1024,
+      configurable: true,
+    });
+    act(() => window.dispatchEvent(new Event("resize")));
     withLedger(<QuickAdd />, fakeController([PLN_ACCOUNT]));
 
     expect(screen.getByText("Bank A · PLN")).toBeDefined();

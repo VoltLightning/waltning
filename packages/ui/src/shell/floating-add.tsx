@@ -292,6 +292,9 @@ const TAB_SLOP = { top: touchTarget.min - floating.tab.height };
 function DockTab({ frame, onPress, label }: DockTabProps) {
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
+  // Computed rather than inline: `frame` is a per-render position, not a
+  // theme-scale constant — the same `dock.tsx`/`tag.tsx` shape.
+  const position = { left: frame.x, top: frame.y };
   return (
     <Pressable
       accessibilityRole="button"
@@ -299,7 +302,7 @@ function DockTab({ frame, onPress, label }: DockTabProps) {
       onPress={onPress}
       hitSlop={TAB_SLOP}
       {...handlers}
-      style={[styles.tab, { left: frame.x, top: frame.y }, focused ? styles.focused : null]}
+      style={[styles.tab, position, focused ? styles.focused : null]}
     >
       <View style={styles.chevronUp} />
     </Pressable>

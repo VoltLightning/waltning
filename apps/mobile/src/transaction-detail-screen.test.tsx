@@ -76,6 +76,7 @@ function fakeController(
     listCategories: () => [],
     listCategoryTree: () => [],
     listCounterparties: () => [],
+    listPayeeHistory: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],

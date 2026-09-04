@@ -49,6 +49,7 @@ function fakeController() {
       listRecent: () => [],
       listCategories: () => [],
       listCounterparties: () => [],
+      listPayeeHistory: () => [],
       listNetWorth: () => [],
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],

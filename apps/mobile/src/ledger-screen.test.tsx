@@ -103,6 +103,7 @@ function fakeController(search: FakeSearch) {
     listCategories: () => [],
     listCategoryTree: () => [],
     listCounterparties: () => [],
+    listPayeeHistory: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     listUnsettledClearing: () => [],

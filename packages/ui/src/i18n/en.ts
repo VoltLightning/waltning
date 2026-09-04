@@ -65,6 +65,10 @@ export const en = {
     /** A `Dock` mode that has no screen yet — the accessibility hint on top of `disabled`. */
     later: "Later",
     retry: "Try again",
+    /** S05 §7 — the ✕ confirm, shown only over a machine-filled draft. */
+    discard: "Discard",
+    discardTitle: "Discard this transaction?",
+    discardBody: "It carries an auto-filled account — discarding it is cheap to redo.",
   },
   accounts: {
     currency: "Currency",
@@ -147,10 +151,17 @@ export const en = {
     counterparty: "Counterparty",
     noCounterparty: "No counterparty",
     role: "Role",
+    /** §6.6 — the counterparty chip's own value while a role is unresolved. Never defaulted. */
+    counterpartyRoleMissing: "{{name}} · role?",
     /** §6.6 — what naming a counterparty on this row means. */
     "role.debt": "Debt — expected back",
     "role.contribution": "Contribution to a shared account",
     "role.reference": "Just involved — no obligation",
+    /** `Dock`'s mode row (S05 §3) — the keypad is the one arc 1 builds; the other three are named, disabled. */
+    modeKeypad: "Keypad",
+    modeVoice: "Voice",
+    modeReceipt: "Receipt",
+    modeConverse: "Converse",
     /* ── S10 · the ledger list (C4) ─────────────────────────────────────── */
     /** `SearchField`'s placeholder — S10 §3 mobile. */
     searchPlaceholder: "Search payee, note, amount",
@@ -192,8 +203,20 @@ export const en = {
     loadFailedWhy: "Something went wrong reading the ledger.",
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
     accountFilterFrom: "From {{account}}",
-    /** S09's `FieldsCard` — not offered on Quick add, which reads it from D2. */
+    /** S09's `FieldsCard`, and D4b's own chip label — a person types it there, D2 only ever reads it back. */
     payee: "Payee",
+    /** D4b's chip row, empty — S05 §3: `[+ payee]`, typed, optional. */
+    addPayee: "+ Payee",
+    /** D4b's chip row, empty. */
+    addNote: "+ Note",
+    /** D4b's chip row, empty — offered only when the ledger holds a counterparty (S05 §5). */
+    addPerson: "+ Person",
+    /** D4b's scope chip label — Mine · Shared · Business, `shell.scope*`'s own words. */
+    scope: "Scope",
+    /** The scope sheet's own `SegmentControl` — why *Business* is unreachable for a shared account (§6.7). */
+    sharedNeverBusiness: "A shared account is never business.",
+    /** D4b's account sheet, machine-filled only — `useLastUsedAccount`'s own window (S05 §9.2). */
+    lastCapture: "From your last capture, {{time}}",
     /**
      * S09: `update_transaction`, `delete_transaction` and
      * `set_transaction_lines` all refuse a stale version the same way — the

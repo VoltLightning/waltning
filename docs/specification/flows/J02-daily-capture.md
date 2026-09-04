@@ -38,7 +38,7 @@ S04 Today  ──tap +──→  S05 Quick add
         │              │            │              │
         └──────────────┴────────────┴──────┬───────┘
                                            │
-                    chips: account · category · date · scope · note
+                    chips: account · category · payee · date · scope · note
                           │              └─ counterparty, when attached
                           │
                      S06 Category sheet   (if category tapped)
@@ -59,10 +59,12 @@ which a single pass cannot do.
 all. Choosing to converse is choosing a slower, better interaction; the budget
 follows the path rather than the screen.
 
-**The chip row is the whole model.** Account, category, date, scope, note, and
-counterparty when present. Each chip is empty, filled, or **machine-filled** —
-and the third state is visually distinct, because P2 says anything a model
-produced declares itself.
+**The chip row is the whole model.** Account, category, payee, date, scope,
+note, and counterparty when present. Each chip is empty, filled, or
+**machine-filled** — and the third state is visually distinct, because P2 says
+anything a model produced declares itself. The payee chip matters beyond its
+own field: D2's memory proposes a category from it, so a keypad row with no
+payee is a row that memory can never fire on.
 
 ## 4. Branches
 

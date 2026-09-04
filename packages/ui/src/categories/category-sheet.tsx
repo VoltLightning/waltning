@@ -30,7 +30,10 @@
  */
 
 import { fold } from "@waltning/core/capture/names";
-import type { CategoryProposal } from "@waltning/core/capture/payee-memory";
+import {
+  type CategoryProposal,
+  PROPOSAL_DISPLAY_THRESHOLD,
+} from "@waltning/core/capture/payee-memory";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -327,7 +330,7 @@ type ProposalRowProps = {
 function ProposalRow({ leaf, confidence, onPick }: ProposalRowProps) {
   const t = useT();
   const styles = useStyles();
-  const confident = confidence >= 0.85;
+  const confident = confidence >= PROPOSAL_DISPLAY_THRESHOLD;
   const percent = `${Math.round(confidence * 100)}%`;
   const handlePress = useCallback(() => onPick(leaf.id), [leaf.id, onPick]);
   const press = usePressScale();

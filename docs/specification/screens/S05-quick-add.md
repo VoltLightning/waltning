@@ -43,7 +43,7 @@ mid-draft never discards what is there.
 │  │   coffee"                            Undo  │ │
 │  └────────────────────────────────────────────┘ │
 │                                                 │
-│  [Cash · PLN]  [Eating out]  [Today]            │  ← chips, ≥44px
+│  [Cash · PLN]  [Eating out]  [+ payee]  [Today]  │  ← chips, ≥44px
 │  [Mine]  [+ note]                               │
 │                                                 │
 ├─ dock · bottom-anchored ────────────────────────┤
@@ -63,22 +63,12 @@ mid-draft never discards what is there.
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed.
 
-Under the disposable preview profile, amount and account stay the fast default
-path — the two fields the app cannot supply on your behalf. Beneath them, the
-form now carries every other user-owned field `create_transaction` takes: an
-Expense · Income segment (default expense; the keypad never signs — §7.2's
-`type` alone carries direction), a searchable category limited to the chosen
-type's leaves, and a collapsed *More* fold holding an editable accounting date
-(defaults to today's device-local date), a note, the business toggle, and —
-only when the ledger holds any — a counterparty with its role (§6.6). Its
-*Create account…* exit still returns to the same draft with the new account
-selected. That profile still omits the keypad, voice, scan, sync, and FX
-affordances, and offers no transfer — `+` long-press opens that composer
-separately.
-
-**The chip row is the whole model.** Account, category, date, scope, note, and
-counterparty when attached. Each chip is empty (placeholder), filled, or
-**machine-filled** — the third carries the trail marker (P2).
+**The chip row is the whole model.** Account, category, payee, date, scope,
+note, and counterparty when attached. Each chip is empty (placeholder),
+filled, or **machine-filled** — the third carries the trail marker (P2). The
+payee chip (`[+ payee]`, typed, optional) sits between category and date —
+without it the keypad path had no payee, so D2's memory could never fire on a
+row it produced and every keypad capture reached the ledger nameless.
 
 **The dock is fixed to the bottom** so the keypad, the mode switch and Save are
 all within thumb reach without a hand shift. Save is full-width because it is
@@ -230,7 +220,7 @@ fact.
    deliberately does not is how sign-flip bugs return.
 2. ~~**Should Save be disabled until an account is chosen?**~~ **Decided:
    last-used, but only within a short window.** If something was saved in the
-   last few hours the chip fills from it, machine-filled and carrying a trail.
+   last four hours the chip fills from it, machine-filled and carrying a trail.
    Beyond that the chip is **empty and Save is disabled** until you choose.
 
    The ten-second target holds *within a session* — a shopping trip, an evening —
@@ -240,7 +230,8 @@ fact.
    a question. Making the guess expire converts a silent error into a one-tap
    cost, paid only when the guess had stopped being good.
 
-   Window length is unset; a few hours is the intent, not a specification.
+   **Window: four hours**, named `LAST_USED_WINDOW_MS` in
+   `packages/client/src/transactions/last-capture.ts`.
 3. ~~**Web command-bar parsing is unspecified.**~~ **Decided: deterministic
    grammar first, model as an explicit fallback.**
 

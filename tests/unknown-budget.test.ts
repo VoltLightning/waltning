@@ -146,6 +146,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "JSON off the disk — the stored button position, which is exactly as trustworthy as JSON off a wire and is checked field by field before it becomes a position",
   },
+  "packages/client/src/transactions/last-capture.ts": {
+    max: 2,
+    why: "JSON off the disk — the stored last-captured account, the same shape float-geometry.ts's own budget is for, checked field by field before it becomes a LastCapture",
+  },
   "packages/ui/.vitest/reanimated.ts": {
     max: 1,
     why: "a CommonJS mock with no declared type, cast once to the module it stands in for",
@@ -235,8 +239,8 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
   },
   "packages/client/src/ledger/create-phone-ledger.ts": {
-    max: 7,
-    why: "accountWriteRefusal, reconcileAccountRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal and settleDebtRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
+    max: 8,
+    why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal and settleDebtRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
   },
   // E2 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per executor file — the driver's

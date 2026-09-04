@@ -25,7 +25,7 @@ import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
-const { currencies, fxRates, transactions } = schema;
+const { accounts, currencies, fxRates, transactions } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalTransactionRow = typeof transactions.$inferSelect;
@@ -73,6 +73,8 @@ export function insertTransaction(
   input: CreateTransactionInput,
   tx: ReplicaTx,
 ): LocalTransactionRow {
+  assertBusinessNotShared(input, tx);
+
   /**
    * **`to_amount` is copied from the input and is never derived.** §14.6:
    * *"offline, a cross-currency transfer leaves the destination amount empty,
@@ -133,6 +135,48 @@ export function insertTransaction(
     throw new Error("create_transaction: the replica insert returned no row");
   }
   return row;
+}
+
+/**
+ * `SPEC.md` §6.7: *a shared account is never business.*
+ *
+ * **The Postgres mirror, not a duplicate of it.** `0001_database_objects.sql`
+ * (~L243, `assert_business_not_shared` and its transfer-target twin
+ * `assert_business_not_shared_target`) is the guarantee's real home — a
+ * trigger closes the hole no client can, someone writing straight to the
+ * table. But the replica is SQLite with no cross-table trigger of its own
+ * (`ddl.ts` states every `CHECK` this schema can enforce alone; a foreign
+ * table's own column is not one of them), so a business row into a shared
+ * account would sit on the phone, look saved, and only be caught the day a
+ * backend drains it — the exact silent-until-sync failure §14.6 exists to
+ * rule out. This is that check, run here instead: **every** row this table
+ * receives passes through `insertTransaction` (`create_transaction`,
+ * `reconcile_account`'s adjustment, `supersede_transaction`'s replacement),
+ * so one check here covers what three triggers would on the server.
+ */
+function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): void {
+  if (!input.isBusiness) return;
+
+  if (isSharedAccount(tx, input.accountId)) {
+    throw new Error(
+      "create_transaction: a business transaction cannot sit in a shared account (SPEC.md §6.7, §13.1)",
+    );
+  }
+  if (input.toAccountId !== undefined && isSharedAccount(tx, input.toAccountId)) {
+    throw new Error(
+      "create_transaction: a business transaction cannot move into a shared account (SPEC.md §6.7)",
+    );
+  }
+}
+
+function isSharedAccount(tx: ReplicaTx, accountId: CreateTransactionInput["accountId"]): boolean {
+  const [row] = tx
+    .select({ ownership: accounts.ownership })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1)
+    .all();
+  return row?.ownership === "shared";
 }
 
 /**

@@ -12,15 +12,27 @@
  * **It emits a decimal string or `null`, never a number.** A JS number holding
  * money is a bug (`SPEC.md` §7.0), and a field that returns `NaN` for "1,2,3"
  * pushes the decision about bad input onto whoever forgot to check.
+ *
+ * **`variant="hero"` is a second face on the same component, not a second
+ * component.** S05 §3's `display-hero` amount is the same value this field
+ * always held — a decimal string typed with a comma — read out at the largest
+ * size on the screen instead of a `TextInput`. `Keypad` owns the editing on
+ * that path (`amount-keys.ts#applyKey`); this only renders whatever raw string
+ * the screen hands it, through the one `parseAmount` every caller already
+ * shares. Two render paths, one parser — a second implementation here would be
+ * the thing `parseAmount`'s own comment exists to prevent.
  */
 
 import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
+import { decimalMark } from "../i18n/locales.ts";
+import { useLocale, useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../tokens.ts";
 
-export type AmountFieldProps = {
+export type AmountFieldFieldProps = {
+  variant?: "field";
   label: string;
   /**
    * ISO code, shown as the affix. Never used to convert — that is `FxAmount`.
@@ -37,6 +49,22 @@ export type AmountFieldProps = {
   error?: string | undefined;
 };
 
+export type AmountFieldHeroProps = {
+  variant: "hero";
+  label: string;
+  /** Same "not yet known" rule as the field variant — see there. */
+  currency?: string;
+  /**
+   * The raw string a `Keypad` edits (`"48,90"`) — the canonical comma,
+   * regardless of locale. Rendered through the locale's own decimal mark;
+   * `parseAmount` is what turns this into the value `create_transaction`
+   * takes, and it happens once, in the screen, not here.
+   */
+  value: string;
+};
+
+export type AmountFieldProps = AmountFieldFieldProps | AmountFieldHeroProps;
+
 /**
  * What was typed → a decimal string, or `null`.
  *
@@ -47,7 +75,7 @@ export type AmountFieldProps = {
  * by a thousand.
  */
 export function parseAmount(input: string): string | null {
-  const trimmed = input.replace(/\s| /g, "");
+  const trimmed = input.replace(/\s| /g, "");
   if (trimmed === "" || trimmed === "-") return null;
 
   const separators = (trimmed.match(/[.,]/g) ?? []).length;
@@ -60,7 +88,37 @@ export function parseAmount(input: string): string | null {
   return normalized;
 }
 
-export function AmountField({ label, currency, onChange, initial = "", error }: AmountFieldProps) {
+export function AmountField(props: AmountFieldProps) {
+  if (props.variant === "hero") return <HeroAmountField {...props} />;
+  return <EditableAmountField {...props} />;
+}
+
+function HeroAmountField({ label, currency, value }: AmountFieldHeroProps) {
+  const t = useT();
+  const locale = useLocale();
+  const styles = useStyles();
+  const mark = decimalMark(locale);
+  const display = value === "" ? "0" : value.replace(",", mark);
+
+  return (
+    <View
+      accessibilityRole="text"
+      accessibilityLabel={t("common.fieldValue", { field: label, value: display })}
+      style={styles.heroField}
+    >
+      <Text style={styles.heroValue}>{display}</Text>
+      {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
+    </View>
+  );
+}
+
+function EditableAmountField({
+  label,
+  currency,
+  onChange,
+  initial = "",
+  error,
+}: AmountFieldFieldProps) {
   const [text, setText] = useState(initial);
   const [focused, setFocused] = useState(false);
 
@@ -131,4 +189,16 @@ const useStyles = makeStyles((theme) => ({
   },
   invalid: { borderColor: theme.dangerBorder },
   error: { color: theme.dangerText, ...text.ui("caption") },
+  heroField: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "center",
+    gap: space.sm,
+  },
+  heroValue: {
+    color: theme.text,
+    ...text.display("displayHero"),
+    fontVariant: [...tabularNums],
+  },
+  heroAffix: { color: theme.textMuted, ...text.ui("displayThree") },
 }));
