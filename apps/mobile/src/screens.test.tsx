@@ -380,6 +380,86 @@ describe("Today", () => {
   });
 
   /**
+   * §8's own reason for existing — `find_unsettled`'s third field — once
+   * `readUnsettledClearing` names a payee: the banner names the transaction,
+   * not the account, and `Open` goes straight there (S04 §3 Shared).
+   */
+  it("names the transaction once fifoOldestOpen finds one, and Open goes straight to it", () => {
+    const oldestId = id<"transactions">("66666666-6666-4666-8666-666666666666");
+    const port: PhoneLedgerPort = {
+      listAccounts: () => [PLN_ACCOUNT],
+      listCurrencies: () => [
+        {
+          code: currencyCode("PLN"),
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+        },
+      ],
+      listGroups: () => [],
+      listRecent: () => [],
+      listCategories: () => [],
+      listCategoryTree: () => [],
+      listCounterparties: () => [],
+      listNetWorth: () => netWorthOf([PLN_ACCOUNT]),
+      readPeriodSpend: () => [],
+      listUnsettledClearing: () => [
+        {
+          accountId: CLEARING_ACCOUNT.id,
+          name: CLEARING_ACCOUNT.name,
+          currency: CLEARING_ACCOUNT.currency,
+          decimals: CLEARING_ACCOUNT.decimals,
+          balance: CLEARING_ACCOUNT.balance,
+          oldestUnconsumedTransactionId: oldestId,
+          oldestDate: accountingDate("2026-08-05"),
+          oldestUnconsumedPayee: "Dinner",
+        },
+      ],
+      listCounterpartyBalances: () => [],
+      balanceAsOf: () => toMoney("0"),
+      searchTransactions: () => ({
+        rows: [],
+        nextCursor: undefined,
+        total: { count: 0, currencies: [] },
+      }),
+      categorizeBatch: () => undefined,
+      createAccount: vi.fn(),
+      createTransaction: vi.fn(),
+      createCategory: vi.fn(),
+      getTransaction: vi.fn(() => null),
+      updateTransaction: vi.fn(),
+      deleteTransaction: vi.fn(),
+      setTransactionLines: vi.fn(),
+      updateAccount: vi.fn(),
+      archiveAccount: vi.fn(),
+      reconcileAccount: vi.fn(),
+      createGroup: vi.fn(),
+      reset: vi.fn(),
+    };
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: accountingDate("2026-09-03"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-09-03T10:00:00Z"),
+      }),
+      id: () => id("11111111-1111-4111-8111-111111111111"),
+    });
+    withLedger(<Today />, controller);
+
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).toContain("Dinner");
+    expect(rendered).not.toContain(CLEARING_ACCOUNT.name);
+
+    fireEvent.click(screen.getByText("Open"));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/transaction/[id]",
+      params: { id: oldestId },
+    });
+  });
+
+  /**
    * S04 §3 draws exactly one banner row and `Banner`'s own doc says
    * "page-level, one tone, one action" — a second unsettled account does not
    * stack a second alert. It folds into the same banner's text instead, and
