@@ -63,13 +63,14 @@ type SheetState = ActionsState | RenameState | MoveState | MergeState | null;
 type ToastState = { message: string; undo?: () => void; token: number } | null;
 
 /**
- * Uncategorized, matched by the seed's own tag first: `externalId ===
+ * Uncategorized, matched by the seed's own tag first — once sync lands and
+ * carries `externalId` down to the phone's replica, `externalId ===
  * "seed:uncategorized"` (`packages/db/src/seed/run.ts` writes `seed:<key>`)
- * names this exact row, nothing else can collide with it, and no shape
- * assumption is needed at all.
+ * will name this exact row, and no shape assumption will be needed at all.
  *
- * The shape match below is the fallback, for a replica seeded before
- * `externalId` reached this table. It has to be the *whole* seeded shape,
+ * The shape match below is what actually matches today: arc-phone has no
+ * sync, so nothing sets `externalId` on the phone's own categories yet, and
+ * this fallback runs for every node. It has to be the *whole* seeded shape,
  * not name alone (M1) or name-plus-`isLeaf` (M2): sibling uniqueness is
  * `(parent, kind, name)`, so the one legal duplicate — same `parent`, same
  * `name`, different `kind` — is a perfectly reachable "Uncategorized" leaf
@@ -78,7 +79,6 @@ type ToastState = { message: string; undo?: () => void; token: number } | null;
  */
 function isUncategorized(node: CategoryTreeNode): boolean {
   if (node.externalId === "seed:uncategorized") return true;
-  if (node.externalId != null) return false;
   return (
     node.parentId === null &&
     node.kind === "expense" &&

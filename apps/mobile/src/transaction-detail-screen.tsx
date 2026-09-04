@@ -223,7 +223,10 @@ export default function TransactionDetail() {
       // un-notice", the mock's `UndoToast` has no `restore_transaction` to
       // call, so this is the plain `Toast` — the same route param
       // `account-creation-screen.tsx` already uses to carry one to Today.
-      router.dismissTo({ pathname: "/", params: { message: t("transactions.deleted") } });
+      router.dismissTo({
+        pathname: "/",
+        params: { message: t("transactions.deleted"), nonce: String(Date.now()) },
+      });
       return;
     }
     setFieldsErrors(toFormLevel(t, result.fieldErrors));

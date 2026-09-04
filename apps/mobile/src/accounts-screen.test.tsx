@@ -264,8 +264,32 @@ describe("Accounts", () => {
   });
 
   it("shows a Toast from the message param — the archive confirmation", () => {
-    useLocalSearchParams.mockReturnValue({ message: "Account archived." });
+    useLocalSearchParams.mockReturnValue({ message: "Account archived.", nonce: "1" });
     withLedger([]);
+    expect(screen.getByRole("alert").textContent).toContain("Account archived.");
+  });
+
+  /**
+   * M3: the screen can stay mounted across two archives in a row
+   * (`account-editor-screen.tsx`'s `dismissTo`) — `message` has to be read
+   * on every arrival, not only at mount (`useState(message ?? null)` would
+   * miss a second one entirely).
+   */
+  it("shows the archive toast again after a dismissTo that arrives on the mounted screen", () => {
+    useLocalSearchParams.mockReturnValue({ message: "Account archived.", nonce: "1" });
+    const { rerender } = withLedger([]);
+    expect(screen.getByRole("alert").textContent).toContain("Account archived.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    useLocalSearchParams.mockReturnValue({ message: "Account archived.", nonce: "2" });
+    rerender(
+      <LedgerProvider controller={fakeController([])}>
+        <Accounts />
+      </LedgerProvider>,
+    );
+
     expect(screen.getByRole("alert").textContent).toContain("Account archived.");
   });
 });

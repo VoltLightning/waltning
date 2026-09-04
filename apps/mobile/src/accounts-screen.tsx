@@ -13,7 +13,7 @@ import {
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
@@ -44,12 +44,23 @@ export default function Accounts() {
   const snapshot = usePhoneLedger(ledger);
   // `archive_account` has no undo (the shared wave-3 plan says why — no
   // `restore_*` operation exists), so this is a plain `Toast`, not `UndoToast`.
-  const { message } = useLocalSearchParams<{ message?: string }>();
+  // The screen can stay mounted across two archives in a row
+  // (`account-editor-screen.tsx`'s `dismissTo`), so `message` has to be read
+  // on every arrival, not once at mount — and `nonce` (that same push's own
+  // `Date.now()`) is what tells a genuinely new arrival apart from a
+  // re-render, even when the message text repeats. Both updates happen
+  // during render — the endorsed pattern for adjusting state from a changed
+  // prop — so the new toast is already showing by the time this render
+  // commits.
+  const { message, nonce } = useLocalSearchParams<{ message?: string; nonce?: string }>();
+  const [lastNonce, setLastNonce] = useState(nonce);
   const [toast, setToast] = useState<string | null>(message ?? null);
-  // Shown at most once — straight from the route param's initial value,
-  // never re-set — so a single token (`useTimer`/`useToastMotion`'s
-  // `resetKey`, H1) is all a re-arm could ever need here.
-  const toastToken = useRef(1).current;
+  const [toastToken, setToastToken] = useState(1);
+  if (nonce !== lastNonce) {
+    setLastNonce(nonce);
+    setToast(message ?? null);
+    setToastToken((token) => token + 1);
+  }
 
   const handleSelectAccount = useCallback((id: string) => {
     router.push(`/accounts/${id}`);

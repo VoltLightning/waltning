@@ -687,6 +687,48 @@ describe("Today", () => {
     expect(screen.getByText("Couldn't refresh")).toBeDefined();
     expect(screen.getByText("mine")).toBeDefined();
   });
+
+  /**
+   * Two deletes from S09, 3 s apart, both landing on the mounted Today —
+   * `transaction-detail-screen.tsx`'s `dismissTo` carries the same message
+   * text each time, distinguished only by `nonce`. Before the fix, a
+   * constant `token` left the first toast's 4 s window running underneath —
+   * the second confirmation would vanish 1 s later instead of living its
+   * own full window.
+   */
+  it("re-arms the toast's window when a second delete arrives with the same message", () => {
+    vi.useFakeTimers();
+    try {
+      useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "1" });
+      const { rerender } = withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+      expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
+
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "2" });
+      rerender(
+        <LedgerProvider controller={fakeController([PLN_ACCOUNT])}>
+          <Today />
+        </LedgerProvider>,
+      );
+      expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
+
+      // The un-rearmed bug: the first window would expire 1 s from here.
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(screen.getByRole("alert")).toBeDefined();
+
+      // The re-armed window lives its own full 4 s from the second arrival.
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("QuickAdd", () => {

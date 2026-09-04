@@ -126,7 +126,10 @@ export default function AccountEditorScreen() {
       setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
       return;
     }
-    router.dismissTo({ pathname: "/accounts", params: { message: t("accounts.archivedToast") } });
+    router.dismissTo({
+      pathname: "/accounts",
+      params: { message: t("accounts.archivedToast"), nonce: String(Date.now()) },
+    });
   }, [account, ledger, t]);
 
   const handleOpenReconcile = useCallback(() => {
