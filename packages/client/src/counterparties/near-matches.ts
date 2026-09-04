@@ -72,8 +72,7 @@ export function nearMatches<T extends NearMatchCandidate>(
   const isRecordedDistinct = (candidateId: string): boolean =>
     excludeId !== undefined &&
     distinctPairs.some(
-      ([a, b]) =>
-        (a === excludeId && b === candidateId) || (b === excludeId && a === candidateId),
+      ([a, b]) => (a === excludeId && b === candidateId) || (b === excludeId && a === candidateId),
     );
 
   const needle = trigrams(fold(trimmed));

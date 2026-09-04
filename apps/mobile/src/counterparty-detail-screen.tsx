@@ -13,8 +13,13 @@
  * is the failure mode, and naming the count is the cheapest guard against it.
  */
 
-import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import {
+  groupByCounterparty,
+  makeRateOf,
+  resolveCounterpartyFigures,
+} from "@waltning/client/counterparties/counterparty-figures";
 import type { PhoneSearchTransaction } from "@waltning/client/ledger/create-phone-ledger";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { BalanceLedger } from "@waltning/ui/counterparties/balance-ledger";
@@ -33,7 +38,6 @@ import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { groupByCounterparty, makeRateOf, resolveCounterpartyFigures } from "@waltning/client/counterparties/counterparty-figures";
 
 type HistoryRowProps = {
   row: PhoneSearchTransaction;
@@ -102,7 +106,8 @@ export default function CounterpartyDetail() {
   const figures = useMemo(() => {
     if (!pivot) return null;
     const rateOf = makeRateOf(ledger.readRate, pivot, today);
-    const settlementCurrency = group?.settlementCurrency ?? counterparty?.settlementCurrency ?? null;
+    const settlementCurrency =
+      group?.settlementCurrency ?? counterparty?.settlementCurrency ?? null;
     return resolveCounterpartyFigures(
       { settlementCurrency, balances: group?.balances ?? [] },
       pivot,
@@ -110,7 +115,10 @@ export default function CounterpartyDetail() {
     );
   }, [counterparty?.settlementCurrency, group, ledger.readRate, pivot, today]);
 
-  const debtHistory = ledger.searchTransactions({ counterpartyId: rawId, counterpartyRole: "debt" });
+  const debtHistory = ledger.searchTransactions({
+    counterpartyId: rawId,
+    counterpartyRole: "debt",
+  });
   const everyHistory = ledger.searchTransactions({ counterpartyId: rawId });
   const otherCount = everyHistory.total.count - debtHistory.total.count;
   const historyRows = showAllRows ? everyHistory.rows : debtHistory.rows;
@@ -191,7 +199,10 @@ export default function CounterpartyDetail() {
           variant="range"
           title={t("counterparties.emptySettledTitle")}
           body={t("counterparties.emptySettledBody")}
-          primaryAction={{ label: t("counterparties.addTransaction"), onPress: handleAddTransaction }}
+          primaryAction={{
+            label: t("counterparties.addTransaction"),
+            onPress: handleAddTransaction,
+          }}
         />
       ) : (
         <ScrollView>
@@ -204,7 +215,10 @@ export default function CounterpartyDetail() {
       <Button label={t("common.edit")} onPress={handleEdit} variant="ghost" />
 
       {settleToast ? (
-        <Toast message={t("counterparties.settleComingSoon")} onDismiss={handleDismissSettleToast} />
+        <Toast
+          message={t("counterparties.settleComingSoon")}
+          onDismiss={handleDismissSettleToast}
+        />
       ) : null}
     </GroundPanel>
   );

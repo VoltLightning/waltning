@@ -17,7 +17,10 @@ export type DebtDirectionTagProps = {
   balance: money.Money;
 };
 
-const KEY: Record<money.DebtDirection, "counterparties.owesYou" | "counterparties.youOwe" | "counterparties.settled"> = {
+const KEY: Record<
+  money.DebtDirection,
+  "counterparties.owesYou" | "counterparties.youOwe" | "counterparties.settled"
+> = {
   theyOwe: "counterparties.owesYou",
   youOwe: "counterparties.youOwe",
   settled: "counterparties.settled",

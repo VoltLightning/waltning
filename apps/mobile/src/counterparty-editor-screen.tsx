@@ -24,10 +24,15 @@
  * resurface once — a known gap, not a silent one.
  */
 
+import {
+  groupByCounterparty,
+  makeRateOf,
+  resolveCounterpartyFigures,
+} from "@waltning/client/counterparties/counterparty-figures";
+import { nearMatches } from "@waltning/client/counterparties/near-matches";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import { nearMatches } from "@waltning/client/counterparties/near-matches";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import {
@@ -40,7 +45,6 @@ import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { groupByCounterparty, makeRateOf, resolveCounterpartyFigures } from "@waltning/client/counterparties/counterparty-figures";
 
 /** `update_counterparty` and `create_counterparty`'s own field paths — everything else lands at form level. */
 const KNOWN_PATHS = ["name", "version", "archived"];
@@ -57,7 +61,12 @@ export default function CounterpartyEditor() {
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const today = deviceRuntime().capture().date;
-  const { id: rawId, returnTo, amount, accountId } = useLocalSearchParams<{
+  const {
+    id: rawId,
+    returnTo,
+    amount,
+    accountId,
+  } = useLocalSearchParams<{
     id?: string;
     returnTo?: string;
     amount?: string;
@@ -110,7 +119,8 @@ export default function CounterpartyEditor() {
         pivot,
         rateOf,
       );
-      const transactionCount = ledger.searchTransactions({ counterpartyId: candidate.id }).total.count;
+      const transactionCount = ledger.searchTransactions({ counterpartyId: candidate.id }).total
+        .count;
       return {
         id: candidate.id,
         name: candidate.name,
@@ -120,7 +130,16 @@ export default function CounterpartyEditor() {
         transactionCount,
       };
     });
-  }, [balances, blurredName, counterparty, dismissedIds, ledger, pivot, snapshot.counterparties, today]);
+  }, [
+    balances,
+    blurredName,
+    counterparty,
+    dismissedIds,
+    ledger,
+    pivot,
+    snapshot.counterparties,
+    today,
+  ]);
 
   const handleNameBlur = useCallback((name: string) => setBlurredName(name), []);
 
@@ -154,7 +173,11 @@ export default function CounterpartyEditor() {
           router.back();
           return;
         }
-        const result = ledger.updateCounterparty({ id: counterparty.id, version: counterparty.version, patch });
+        const result = ledger.updateCounterparty({
+          id: counterparty.id,
+          version: counterparty.version,
+          patch,
+        });
         if (!("id" in result)) {
           const resolved = result.fieldErrors.map((error) => ({
             path: error.path,
@@ -186,7 +209,10 @@ export default function CounterpartyEditor() {
   const handleSame = useCallback(
     (candidateId: string) => {
       if (editMode && counterparty) {
-        const result = ledger.mergeCounterparties({ winnerId: candidateId, loserId: counterparty.id });
+        const result = ledger.mergeCounterparties({
+          winnerId: candidateId,
+          loserId: counterparty.id,
+        });
         if (!("id" in result)) {
           setToast(result.fieldErrors[0]?.message ?? t("common.couldNotSave"));
           return;
@@ -202,7 +228,10 @@ export default function CounterpartyEditor() {
   const handleDifferent = useCallback(
     (candidateId: string) => {
       if (editMode && counterparty) {
-        const result = ledger.recordDistinctCounterparties({ aId: counterparty.id, bId: candidateId });
+        const result = ledger.recordDistinctCounterparties({
+          aId: counterparty.id,
+          bId: candidateId,
+        });
         if (!("aId" in result)) {
           setToast(result.fieldErrors[0]?.message ?? t("common.couldNotSave"));
         }

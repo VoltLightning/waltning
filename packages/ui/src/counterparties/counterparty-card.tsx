@@ -25,7 +25,12 @@ export type CounterpartyCardProps = {
   ageing?: { ageDays: number; bucket: AgeBucket } | null;
 };
 
-export function CounterpartyCard({ name, kind, settlementCurrency, ageing }: CounterpartyCardProps) {
+export function CounterpartyCard({
+  name,
+  kind,
+  settlementCurrency,
+  ageing,
+}: CounterpartyCardProps) {
   const t = useT();
   const styles = useStyles();
   const monogram = monogramFor(name);

@@ -218,7 +218,10 @@ function AppStack() {
       <Stack.Screen name="settings/rates" options={{ title: t("routes.rates") }} />
       <Stack.Screen name="counterparty/[id]" options={{ title: t("routes.counterparty") }} />
       <Stack.Screen name="counterparty/new" options={{ title: t("routes.newCounterparty") }} />
-      <Stack.Screen name="counterparty/[id]/edit" options={{ title: t("routes.editCounterparty") }} />
+      <Stack.Screen
+        name="counterparty/[id]/edit"
+        options={{ title: t("routes.editCounterparty") }}
+      />
     </Stack>
   );
 }

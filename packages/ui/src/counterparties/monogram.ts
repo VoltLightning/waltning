@@ -50,12 +50,10 @@ function hashOf(s: string): number {
 export function monogramFor(name: string): Monogram {
   const trimmed = name.trim();
   const folded = fold(trimmed);
-  const [fill, step] = RAMP_STEPS[hashOf(folded) % RAMP_STEPS.length] ?? RAMP_STEPS[0] ?? [
-    color.green300,
-    300,
-  ];
+  const [fill, step] = RAMP_STEPS[hashOf(folded) % RAMP_STEPS.length] ??
+    RAMP_STEPS[0] ?? [color.green300, 300];
   return {
-    letter: trimmed === "" ? "?" : trimmed[0]?.toUpperCase() ?? "?",
+    letter: trimmed === "" ? "?" : (trimmed[0]?.toUpperCase() ?? "?"),
     fill,
     ink: step >= 500 ? LIGHT_INK : DARK_INK,
   };

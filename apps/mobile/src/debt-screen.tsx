@@ -15,6 +15,12 @@
  * (always complete — no conversion needed) rather than hiding a real debt.
  */
 
+import {
+  type CounterpartyGroup,
+  groupByCounterparty,
+  makeRateOf,
+  resolveCounterpartyFigures,
+} from "@waltning/client/counterparties/counterparty-figures";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -33,12 +39,6 @@ import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import {
-  type CounterpartyGroup,
-  groupByCounterparty,
-  makeRateOf,
-  resolveCounterpartyFigures,
-} from "@waltning/client/counterparties/counterparty-figures";
 
 type DirectionSegment = "all" | "theyOwe" | "youOwe";
 
@@ -58,7 +58,10 @@ type DebtCounterpartyRowProps = {
 
 /** One row, bound to its own id — a `.map`'s handler lives in a component, never an inline arrow in JSX. */
 function DebtCounterpartyRow({ row, onSelect }: DebtCounterpartyRowProps) {
-  const handlePress = useCallback(() => onSelect(row.counterpartyId), [onSelect, row.counterpartyId]);
+  const handlePress = useCallback(
+    () => onSelect(row.counterpartyId),
+    [onSelect, row.counterpartyId],
+  );
   return (
     <CounterpartyRow
       name={row.name}
@@ -164,7 +167,10 @@ export default function Debt() {
     ],
     [t],
   );
-  const handleSegmentChange = useCallback((next: string) => setSegment(next as DirectionSegment), []);
+  const handleSegmentChange = useCallback(
+    (next: string) => setSegment(next as DirectionSegment),
+    [],
+  );
 
   const handleSelect = useCallback((id: string) => {
     router.push(`/counterparty/${id}`);

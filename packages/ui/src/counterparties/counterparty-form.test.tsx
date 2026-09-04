@@ -45,8 +45,20 @@ describe("CounterpartyForm", () => {
         initial={INITIAL}
         currencies={CURRENCIES}
         matches={[
-          { id: "nina", name: "Nina", balance: toMoney("840"), currency: "PLN", transactionCount: 23 },
-          { id: "ninon", name: "Ninon", balance: toMoney("0"), currency: "PLN", transactionCount: 1 },
+          {
+            id: "nina",
+            name: "Nina",
+            balance: toMoney("840"),
+            currency: "PLN",
+            transactionCount: 23,
+          },
+          {
+            id: "ninon",
+            name: "Ninon",
+            balance: toMoney("0"),
+            currency: "PLN",
+            transactionCount: 1,
+          },
         ]}
         onNameBlur={vi.fn()}
         onSame={vi.fn()}
@@ -68,7 +80,13 @@ describe("CounterpartyForm", () => {
         initial={INITIAL}
         currencies={CURRENCIES}
         matches={[
-          { id: "nina", name: "Nina", balance: toMoney("840"), currency: "PLN", transactionCount: 23 },
+          {
+            id: "nina",
+            name: "Nina",
+            balance: toMoney("840"),
+            currency: "PLN",
+            transactionCount: 23,
+          },
         ]}
         onNameBlur={vi.fn()}
         onSame={onSame}

@@ -14,7 +14,13 @@
  */
 
 import type { AccountingDate } from "@waltning/core/date";
-import type { AgeBucket, CurrencyCode, Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
+import type {
+  AgeBucket,
+  CurrencyCode,
+  Money,
+  PivotPerUnit,
+  UnitsPerPivot,
+} from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import { counterpartyNet } from "./counterparty-net.ts";
 
@@ -65,7 +71,11 @@ export function groupByCounterparty(
     if (money.isZero(row.balance)) continue;
     const existing = byId.get(row.counterpartyId);
     if (existing) {
-      existing.balances.push({ currency: row.currency, balance: row.balance, decimals: row.decimals });
+      existing.balances.push({
+        currency: row.currency,
+        balance: row.balance,
+        decimals: row.decimals,
+      });
       // The oldest line across every currency this counterparty holds — one
       // ageing figure per person, taken at its oldest open row.
       if (row.ageDays !== null && (existing.ageDays === null || row.ageDays > existing.ageDays)) {
@@ -130,7 +140,8 @@ export function resolveCounterpartyFigures(
   const fold = counterpartyNet(group.balances, preferred, rateOf);
   const preferredLine = group.balances.find((line) => line.currency === preferred);
 
-  const currency = fold.complete || preferredLine ? preferred : (group.balances[0]?.currency ?? preferred);
+  const currency =
+    fold.complete || preferredLine ? preferred : (group.balances[0]?.currency ?? preferred);
   const value = fold.complete
     ? fold.value
     : (preferredLine?.balance ?? group.balances[0]?.balance ?? money.toMoney("0"));

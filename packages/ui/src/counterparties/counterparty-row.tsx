@@ -87,7 +87,9 @@ export function CounterpartyRow({
           </View>
           <Text style={styles.meta}>
             {t(kind === "company" ? "counterparties.kindCompany" : "counterparties.kindPerson")}
-            {showAgeing ? "" : ` · ${t("counterparties.settlesIn", { currency: settlement.currency })}`}
+            {showAgeing
+              ? ""
+              : ` · ${t("counterparties.settlesIn", { currency: settlement.currency })}`}
           </Text>
           {showAgeing && ageDays != null && ageBucket != null ? (
             <AgeingBar ageDays={ageDays} bucket={ageBucket} />

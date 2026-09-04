@@ -77,7 +77,11 @@ export function BalanceLedger({
                 displayDecimals={display.decimals ?? 2}
               />
             ) : (
-              <Amount value={settlementNet} currency={settlementCurrency} decimals={settlementDecimals} />
+              <Amount
+                value={settlementNet}
+                currency={settlementCurrency}
+                decimals={settlementDecimals}
+              />
             )}
           </View>
         </View>

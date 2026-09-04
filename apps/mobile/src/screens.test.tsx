@@ -450,7 +450,7 @@ describe("Today", () => {
           symbol: "zł",
           decimals: 2,
           capturable: true,
-        isPivot: true,
+          isPivot: true,
         },
       ],
       listGroups: () => [],
@@ -600,7 +600,7 @@ describe("Today", () => {
           symbol: "zł",
           decimals: 2,
           capturable: true,
-        isPivot: true,
+          isPivot: true,
         },
       ],
       listGroups: () => [],
@@ -729,15 +729,12 @@ describe("NewAccount", () => {
  * E4 (S12, `debt-screen.test.tsx`).
  */
 describe("tab stubs", () => {
-  it.each([["Calendar", CalendarStub]])(
-    "%s names itself and returns to Today",
-    (title, Stub) => {
-      render(<Stub />);
-      expect(screen.getByText(title)).toBeDefined();
-      fireEvent.click(screen.getByRole("button", { name: "Go to Today" }));
-      expect(router.push).toHaveBeenCalledWith("/");
-    },
-  );
+  it.each([["Calendar", CalendarStub]])("%s names itself and returns to Today", (title, Stub) => {
+    render(<Stub />);
+    expect(screen.getByText(title)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Go to Today" }));
+    expect(router.push).toHaveBeenCalledWith("/");
+  });
 });
 
 describe("Settings", () => {

@@ -707,7 +707,14 @@ describe("phone ledger controller", () => {
         account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "0"),
       ],
       listCurrencies: () => [
-        { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: false, isPivot: false },
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: false,
+          isPivot: false,
+        },
       ],
       listGroups: () => [],
       listRecent: () => [],

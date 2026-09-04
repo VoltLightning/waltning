@@ -71,9 +71,7 @@ export function CounterpartyPicker({
   const needle = fold(query);
   const visibleList = useMemo(
     () =>
-      searching
-        ? counterparties.filter((cp) => fold(cp.name).includes(needle))
-        : counterparties,
+      searching ? counterparties.filter((cp) => fold(cp.name).includes(needle)) : counterparties,
     [counterparties, needle, searching],
   );
   const recent = useMemo(
@@ -87,7 +85,11 @@ export function CounterpartyPicker({
   );
 
   return (
-    <BottomSheet visible={visible} title={t("counterparties.pickerTitle")} onDismiss={handleDismiss}>
+    <BottomSheet
+      visible={visible}
+      title={t("counterparties.pickerTitle")}
+      onDismiss={handleDismiss}
+    >
       <SearchField
         value={query}
         onChangeText={setQuery}
@@ -108,9 +110,7 @@ export function CounterpartyPicker({
           {visibleList.length === 0 ? (
             <Text style={styles.noMatches}>{t("counterparties.pickerNoMatches")}</Text>
           ) : (
-            visibleList.map((cp) => (
-              <PickerRow key={cp.id} counterparty={cp} onPick={handlePick} />
-            ))
+            visibleList.map((cp) => <PickerRow key={cp.id} counterparty={cp} onPick={handlePick} />)
           )}
         </View>
       </ScrollView>

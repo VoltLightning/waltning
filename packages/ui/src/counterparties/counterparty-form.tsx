@@ -105,10 +105,7 @@ export function CounterpartyForm({
     ],
     [t],
   );
-  const handleKindChange = useCallback(
-    (next: string) => setKind(next as CounterpartyKind),
-    [],
-  );
+  const handleKindChange = useCallback((next: string) => setKind(next as CounterpartyKind), []);
 
   const currencyOptions = useMemo(
     () => currencies.map((currency) => ({ value: currency.code, label: currency.code })),
