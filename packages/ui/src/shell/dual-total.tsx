@@ -32,6 +32,16 @@
  * is the same move §2.9 already makes for the phone header's own collapse
  * (title and tag left, the total right, one row), applied to the pair this
  * component draws instead of a single total.
+ *
+ * **`lead` steps both figures down one size**, for the same reason
+ * `CurrencyTotals` steps its own rest down: C2's hero is `money.netWorth`
+ * *per currency* (mine/ours needs no FX — it is an ownership split within one
+ * currency, not a conversion), so a ledger holding two currencies stacks two
+ * `DualTotal`s rather than inventing a converted sum, at `size="shell"`.
+ * `Today` renders the "held separately" note beneath the stack, the same
+ * line and the same reason `CurrencyTotals` prints it. `lead` only has an
+ * effect at `size="shell"` — `DeskBand`'s `"band"` never stacks by currency,
+ * so `mine` there stays `medium` regardless.
  */
 
 import type * as money from "@waltning/core/money";
@@ -66,13 +76,28 @@ export type DualTotalProps = {
    * `"band"`; see the file doc.
    */
   size?: "shell" | "band" | "compact";
+  /**
+   * The hero currency's figure — `hero`/`large` at `size="shell"`. `false`
+   * steps to `large`/`body`, for a second currency stacked beneath the lead.
+   * No effect at `size="band"` — see the file doc.
+   */
+  lead?: boolean;
 };
 
-const MINE_SIZE = { shell: "hero", band: "medium" } as const;
+const MINE_SIZE = { lead: "hero", rest: "large" } as const;
+const OURS_SIZE = { lead: "large", rest: "body" } as const;
 
-export function DualTotal({ mine, ours, currency, decimals = 2, size = "shell" }: DualTotalProps) {
+export function DualTotal({
+  mine,
+  ours,
+  currency,
+  decimals = 2,
+  size = "shell",
+  lead = true,
+}: DualTotalProps) {
   const t = useT();
   const styles = useStyles();
+  const rank = lead ? "lead" : "rest";
 
   if (size === "compact") {
     return (
@@ -105,7 +130,7 @@ export function DualTotal({ mine, ours, currency, decimals = 2, size = "shell" }
           value={mine}
           currency={currency}
           decimals={decimals}
-          size={MINE_SIZE[size]}
+          size={size === "band" ? "medium" : MINE_SIZE[rank]}
           emphasis="shell"
         />
       </View>
@@ -116,7 +141,7 @@ export function DualTotal({ mine, ours, currency, decimals = 2, size = "shell" }
             value={ours}
             currency={currency}
             decimals={decimals}
-            size="large"
+            size={OURS_SIZE[rank]}
             emphasis="shell"
           />
         </View>

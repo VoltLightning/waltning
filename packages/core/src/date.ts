@@ -91,3 +91,44 @@ export function addDays(date: AccountingDate, n: number): AccountingDate {
   const shifted = new Date(Date.UTC(year, month - 1, day + n));
   return accountingDate(shifted.toISOString().slice(0, 10));
 }
+
+declare const YEAR_MONTH: unique symbol;
+
+/** A bare calendar month, `YYYY-MM`, in no timezone — `AccountingDate` minus the day. */
+export type YearMonth = string & { readonly [YEAR_MONTH]: "YearMonth" };
+
+const YEAR_MONTH_SHAPE = /^\d{4}-\d{2}$/;
+
+/** Parse a bare year-month. Throws, matching `accountingDate` — see there for why. */
+export function yearMonth(value: string): YearMonth {
+  if (!YEAR_MONTH_SHAPE.test(value)) {
+    throw new Error(
+      `not a bare year-month: ${JSON.stringify(value)} — expected YYYY-MM with no day`,
+    );
+  }
+  const month = Number(value.slice(5, 7));
+  if (month < 1 || month > 12) {
+    throw new Error(`not a calendar month: ${JSON.stringify(value)}`);
+  }
+  return value as YearMonth;
+}
+
+/**
+ * Step a bare year-month by whole months — `PeriodHeader`'s arrows, and month
+ * granularity is all arc 1 offers (`S04-today.md` §9; week/year/range are
+ * `PeriodPicker`'s, S25).
+ *
+ * **Calendar arithmetic, not clock arithmetic — `addDays`'s distinction,
+ * applied one field over.** `Date.UTC` here is a Gregorian month-count device
+ * over two numbers that already name a calendar month, with no `now`, no
+ * local zone and no `toISOString`. The day is fixed at 1 so there is no
+ * month-length to get wrong: `2026-01-31` shifted forward is not asked to mean
+ * "the 31st of February."
+ */
+export function shiftMonth(month: YearMonth, n: number): YearMonth {
+  const [year, mo] = month.split("-").map(Number) as [number, number];
+  const shifted = new Date(Date.UTC(year, mo - 1 + n, 1));
+  const yyyy = String(shifted.getUTCFullYear()).padStart(4, "0");
+  const mm = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  return yearMonth(`${yyyy}-${mm}`);
+}

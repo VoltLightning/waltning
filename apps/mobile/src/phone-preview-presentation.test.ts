@@ -22,7 +22,10 @@ const tabsShell = readFileSync(resolve(app, "../src/tabs-shell.tsx"), "utf8");
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
     expect(today).toContain('label: t("routes.createAccount")');
-    expect(today).toContain("<CurrencyTotals subtotals={snapshot.subtotals} />");
+    // C2 replaced the combined-currency `CurrencyTotals` hero with
+    // `money.netWorth`'s mine/ours split, per currency — `DualTotal` stacked
+    // the way `CurrencyTotals` stacked, never a summed total.
+    expect(today).toContain("snapshot.netWorth.map");
     expect(today).toContain('title={t("shell.recent")}');
     // The `+` is not wired here — `(tabs)/_layout.tsx` mounts one
     // `FloatingAdd` above the whole tab slot, so it survives a tab switch
@@ -32,9 +35,9 @@ describe("phone-alone preview presentation", () => {
     // The route file composes `<TabsShell>` and wires none of it itself.
     expect(tabsLayout).toContain("<TabsShell");
     expect(tabsLayout).not.toContain('router.push("/quick-add")');
-    // The hero is a list of subtotals, not a figure. `snapshot.total` was a
-    // `money.sum` over every balance labelled USD, which only held because a
-    // throw refused any account that was not in dollars.
+    // The hero is per-currency figures, never a summed total. `snapshot.total`
+    // was a `money.sum` over every balance labelled USD, which only held
+    // because a throw refused any account that was not in dollars.
     expect(today).not.toContain("snapshot.total");
   });
 
@@ -81,16 +84,15 @@ describe("phone-alone preview presentation", () => {
     expect(english).toContain('appearanceFailed: "Appearance could not be saved."');
   });
 
+  /**
+   * `PeriodHeader` and *ours* (§3's shared total) shipped in C2 — the S04
+   * hero and period row this profile always specified, so they moved out of
+   * this list. `PeriodPicker` (granularity, presets, an arbitrary range)
+   * stays deferred: `PeriodHeader`'s arrows step a month and nothing here
+   * opens a sheet.
+   */
   it("keeps deferred capture and dashboard affordances out", () => {
-    const deferred = [
-      "PeriodPicker",
-      "Voice",
-      "Scan",
-      "Sync status",
-      "Shared total",
-      "FxAmount",
-      "TabBar",
-    ];
+    const deferred = ["PeriodPicker", "Voice", "Scan", "Sync status", "FxAmount", "TabBar"];
     for (const affordance of deferred) {
       expect(`${today}\n${quickAdd}`).not.toContain(affordance);
     }

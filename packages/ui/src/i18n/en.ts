@@ -63,6 +63,7 @@ export const en = {
     resultsMany: "{{count}} results",
     /** A `Dock` mode that has no screen yet — the accessibility hint on top of `disabled`. */
     later: "Later",
+    retry: "Try again",
   },
   accounts: {
     currency: "Currency",
@@ -172,6 +173,19 @@ export const en = {
     scopeMine: "Mine",
     scopeShared: "Shared",
     scopeBusiness: "Business",
+    /** `PeriodHeader`'s arrows — C2. Accessible names, not visible labels. */
+    periodPrevious: "Previous period",
+    periodNext: "Next period",
+    /** `StatTile` labels — C2, S04 §3. Lower case, matching `mine`/`ours` above. */
+    spent: "spent",
+    net: "net",
+    showAll: "Show all →",
+    /** The unsettled-clearing banner (§8) — C2. `Open` goes to the account, filtered. */
+    unsettled: "{{amount}} {{currency}} unallocated · {{account}}",
+    unsettledOpen: "Open",
+    /** S04 §6 — the balance query failed; the hero keeps its last known figure. */
+    balanceQueryFailed: "Couldn't refresh",
+    balanceQueryFailedBody: "Showing the numbers from the last successful load.",
   },
   preview: {
     appearance: "Appearance",

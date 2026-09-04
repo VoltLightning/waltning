@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { accountingDate } from "./date.ts";
 import * as money from "./money.ts";
 
 const m = (s: string) => money.toMoney(s);
@@ -79,5 +80,127 @@ describe("counterpartyBalance — §7", () => {
 describe("clearingBalance — §8", () => {
   it("is an ordinary account balance", () => {
     expect(money.clearingBalance).toBe(money.accountBalance);
+  });
+});
+
+describe("periodSpend — §5 (base figure, C2)", () => {
+  const PLN = money.currencyCode("PLN");
+  const USD = money.currencyCode("USD");
+  const period = { start: accountingDate("2026-08-01"), end: accountingDate("2026-09-01") };
+
+  it("sums signed income/expense rows dated within the period, own accounts only", () => {
+    const rows: money.PeriodTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("100"),
+      },
+      {
+        type: "income",
+        date: accountingDate("2026-08-10"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("30"),
+      },
+      // before the period — excluded
+      {
+        type: "expense",
+        date: accountingDate("2026-07-31"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("999"),
+      },
+      // `end` is exclusive — the first of the next month is out
+      {
+        type: "expense",
+        date: accountingDate("2026-09-01"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("999"),
+      },
+      // shared — excluded from this fold entirely, not netted (that is §5's S half)
+      {
+        type: "expense",
+        date: accountingDate("2026-08-06"),
+        ownership: "shared",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("50"),
+      },
+      // a transfer is neither income nor expense — excluded
+      {
+        type: "transfer",
+        date: accountingDate("2026-08-07"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("20"),
+      },
+    ];
+    expect(money.periodSpend(rows, period)).toEqual([
+      { currency: PLN, decimals: 2, spend: "-100.00000000", net: "-70.00000000" },
+    ]);
+  });
+
+  it("never sums two currencies into one row — the H21 mistake netWorth already refuses", () => {
+    const rows: money.PeriodTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("100"),
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-08-06"),
+        ownership: "own",
+        currency: USD,
+        decimals: 2,
+        amountOriginal: m("40"),
+      },
+    ];
+    expect(money.periodSpend(rows, period)).toEqual([
+      { currency: PLN, decimals: 2, spend: "-100.00000000", net: "-100.00000000" },
+      { currency: USD, decimals: 2, spend: "-40.00000000", net: "-40.00000000" },
+    ]);
+  });
+
+  it("is empty over no rows", () => {
+    expect(money.periodSpend([], period)).toEqual([]);
+  });
+});
+
+describe("unsettledClearing — §8", () => {
+  const PLN = money.currencyCode("PLN");
+
+  it("keeps only the clearing accounts with a non-zero balance", () => {
+    const balances: money.ClearingAccountRow[] = [
+      { accountId: "a", name: "Shared clearing", currency: PLN, decimals: 2, balance: m("340") },
+      { accountId: "b", name: "Settled clearing", currency: PLN, decimals: 2, balance: m("0") },
+    ];
+    expect(money.unsettledClearing(balances)).toEqual([
+      {
+        accountId: "a",
+        name: "Shared clearing",
+        currency: PLN,
+        decimals: 2,
+        balance: "340.00000000",
+      },
+    ]);
+  });
+
+  it("is empty when every clearing account nets to zero", () => {
+    const balances: money.ClearingAccountRow[] = [
+      { accountId: "a", name: "Shared clearing", currency: PLN, decimals: 2, balance: m("0") },
+    ];
+    expect(money.unsettledClearing(balances)).toEqual([]);
   });
 });

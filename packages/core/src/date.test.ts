@@ -8,7 +8,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { accountingDate, addDays, isAccountingDate, todayIn } from "./date.ts";
+import {
+  accountingDate,
+  addDays,
+  isAccountingDate,
+  shiftMonth,
+  todayIn,
+  yearMonth,
+} from "./date.ts";
 
 describe("what a bare date is not", () => {
   it("refuses an ISO timestamp", () => {
@@ -83,5 +90,41 @@ describe("addDays — calendar arithmetic, no clock", () => {
 
   it("n = 0 is the identity", () => {
     expect(addDays(accountingDate("2026-03-12"), 0)).toBe("2026-03-12");
+  });
+});
+
+describe("what a bare year-month is not", () => {
+  it("refuses a day", () => {
+    expect(() => yearMonth("2026-03-12")).toThrow(/bare year-month/);
+  });
+
+  it("refuses a month outside 1–12", () => {
+    expect(() => yearMonth("2026-00")).toThrow(/calendar month/);
+    expect(() => yearMonth("2026-13")).toThrow(/calendar month/);
+  });
+
+  it("accepts a bare year-month", () => {
+    expect(yearMonth("2026-03")).toBe("2026-03");
+  });
+});
+
+describe("shiftMonth — calendar arithmetic, no clock", () => {
+  it("steps within a year", () => {
+    expect(shiftMonth(yearMonth("2026-08"), 1)).toBe("2026-09");
+    expect(shiftMonth(yearMonth("2026-08"), -1)).toBe("2026-07");
+  });
+
+  it("carries across a year boundary, forward and back", () => {
+    expect(shiftMonth(yearMonth("2026-12"), 1)).toBe("2027-01");
+    expect(shiftMonth(yearMonth("2027-01"), -1)).toBe("2026-12");
+  });
+
+  it("n = 0 is the identity", () => {
+    expect(shiftMonth(yearMonth("2026-08"), 0)).toBe("2026-08");
+  });
+
+  /** The day-fixed-at-1 decision: a month with no 31st is never asked to have one. */
+  it("does not care that January has 31 days and February does not", () => {
+    expect(shiftMonth(yearMonth("2026-01"), 1)).toBe("2026-02");
   });
 });

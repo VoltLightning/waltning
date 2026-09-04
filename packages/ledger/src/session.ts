@@ -1,5 +1,10 @@
 import type { Id } from "@waltning/core/id";
-import type { CurrencyCode } from "@waltning/core/money";
+import type {
+  ClearingAccountRow,
+  CurrencyCode,
+  Period,
+  PeriodSpendRow,
+} from "@waltning/core/money";
 import type {
   CreateAccountInput,
   CreateCategoryInput,
@@ -10,6 +15,8 @@ import { currencies } from "@waltning/schema/sqlite/currencies";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
 import { type LocalGroup, readGroups } from "./accounts/read-groups.ts";
+import { type LocalNetWorth, readNetWorth } from "./accounts/read-net-worth.ts";
+import { readUnsettledClearing } from "./accounts/read-unsettled-clearing.ts";
 import {
   createCategoryExecutor,
   type LocalCategoryRow,
@@ -35,6 +42,7 @@ import {
   createTransactionExecutor,
   type LocalTransactionRow,
 } from "./transactions/create-transaction.executor.ts";
+import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
 import { type Capture, writeLocally } from "./write.ts";
 
@@ -79,6 +87,12 @@ export type LocalLedgerSession = {
   /** The whole tree — groups and leaves both — for S06's sheet. See `readCategoryTree`. */
   listCategoryTree: () => readonly LocalCategory[];
   listCounterparties: () => readonly LocalCounterparty[];
+  /** §3, per currency — C2's hero (`DualTotal`), not the phone-preview's single subtotal. */
+  listNetWorth: () => readonly LocalNetWorth[];
+  /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
+  readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
+  /** §8, minus FIFO attribution — C2's unsettled banner. */
+  listUnsettledClearing: () => readonly ClearingAccountRow[];
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
   createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
@@ -209,6 +223,9 @@ export function createLocalLedgerSession<TRun>(
     listCategoryTree: () =>
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
     listCounterparties: () => readCounterparties(requireOpen().replica.db),
+    listNetWorth: () => readNetWorth(requireOpen().replica.db),
+    readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
+    listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createAccountExecutor,

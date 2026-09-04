@@ -43,6 +43,7 @@ export const pl: Messages = {
     resultsOne: "{{count}} wynik",
     resultsMany: "{{count}} wyników",
     later: "Później",
+    retry: "Spróbuj ponownie",
   },
   accounts: {
     currency: "Waluta",
@@ -120,6 +121,15 @@ export const pl: Messages = {
     scopeMine: "Moje",
     scopeShared: "Wspólne",
     scopeBusiness: "Firmowe",
+    periodPrevious: "Poprzedni okres",
+    periodNext: "Następny okres",
+    spent: "wydano",
+    net: "saldo",
+    showAll: "Pokaż wszystkie →",
+    unsettled: "{{amount}} {{currency}} nierozliczone · {{account}}",
+    unsettledOpen: "Otwórz",
+    balanceQueryFailed: "Nie udało się odświeżyć",
+    balanceQueryFailedBody: "Pokazujemy dane z ostatniego udanego wczytania.",
   },
   preview: {
     appearance: "Wygląd",

@@ -1,12 +1,13 @@
 /** @vitest-environment jsdom */
 
 import { render } from "@testing-library/react";
+import { yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { createInstance } from "i18next";
 import { describe, expect, it } from "vitest";
 import { Amount } from "../fx/amount";
 import { en, type Messages } from "./en.ts";
-import { decimalMark, LOCALES, resolveLocale } from "./locales.ts";
+import { decimalMark, LOCALES, monthLabel, resolveLocale } from "./locales.ts";
 import { pl } from "./pl.ts";
 import { I18nProvider } from "./provider";
 
@@ -93,6 +94,11 @@ describe("punctuating a figure", () => {
   it("maps each language to its mark", () => {
     expect(decimalMark("en")).toBe(".");
     expect(decimalMark("pl")).toBe(",");
+  });
+
+  it("says the month in the reader's language — PeriodHeader's label (C2)", () => {
+    expect(monthLabel(yearMonth("2026-08"), "en")).toBe("August 2026");
+    expect(monthLabel(yearMonth("2026-08"), "pl")).toBe("sierpień 2026");
   });
 
   it("renders a dot in English and a comma in Polish", () => {

@@ -8,6 +8,7 @@
  * the choices.
  */
 
+import type { YearMonth } from "@waltning/core/date";
 import { en, type Messages } from "./en.ts";
 import { pl } from "./pl.ts";
 
@@ -46,6 +47,28 @@ const DECIMAL_MARK: Record<Locale, "." | ","> = { en: ".", pl: "," };
 
 export function decimalMark(locale: Locale): "." | "," {
   return DECIMAL_MARK[locale];
+}
+
+/**
+ * A bare year-month, said in words — "August 2026", "sierpień 2026".
+ *
+ * **`Intl.DateTimeFormat`, not a hand-rolled month name table.** Unlike
+ * `forDisplay`'s money figures (this file's own long comment says why —
+ * `NumberFormat` drops the fixed group separator §4.1 requires), a month
+ * *name* has no separator to drop and no half of it fixed across languages,
+ * so there is nothing here `Intl` gets wrong. `date.ts`'s `todayIn` already
+ * trusts `Intl.DateTimeFormat` for the same reason. `timeZone: "UTC"` matches
+ * how `shiftMonth` builds the date — day fixed at 1, no local zone to shift
+ * across a month boundary by one.
+ */
+export function monthLabel(month: YearMonth, locale: Locale): string {
+  const [year, mo] = month.split("-").map(Number) as [number, number];
+  const date = new Date(Date.UTC(year, mo - 1, 1));
+  return new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 /** Whether a string is a language this app ships. */
