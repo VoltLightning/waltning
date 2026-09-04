@@ -41,6 +41,15 @@ export type TextFieldProps = {
   counter?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
+  /**
+   * `label` becomes the accessible name only — no visible `<Text>` above the
+   * field. For a field whose `placeholder` already carries the label (a
+   * search field stating what it searches), a kicker line repeating the same
+   * word is a duplicate, not a second piece of information. `label` stays
+   * required either way: this option changes where it renders, not whether
+   * one exists.
+   */
+  hideLabel?: boolean;
 };
 
 export function TextField({
@@ -54,6 +63,7 @@ export function TextField({
   counter = false,
   disabled = false,
   autoFocus = false,
+  hideLabel = false,
 }: TextFieldProps) {
   const styles = useStyles();
   const theme = useTheme();
@@ -69,7 +79,7 @@ export function TextField({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.label}>{label}</Text>
+      {hideLabel ? null : <Text style={styles.label}>{label}</Text>}
       <TextInput
         accessibilityLabel={label}
         value={value}

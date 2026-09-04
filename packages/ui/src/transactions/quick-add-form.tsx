@@ -83,6 +83,21 @@ export type QuickAddFormProps = {
   initialAmount?: string;
   initialAccountId?: string;
   /**
+   * The chosen leaf, or `null` before one is picked — **controlled**, unlike
+   * every other field here. S06's sheet is composed by the screen, not by
+   * this form (`architecture/11`: a module composes at app routes, not by
+   * importing a sibling domain), so the pick has to travel back in through a
+   * prop rather than living in local state the way `accountId` does. A stale
+   * id from a type switch is handled on this side: see `effectiveCategoryId`.
+   */
+  categoryId: string | null;
+  /**
+   * Opens S06's category sheet, scoped to the current `type` — the form owns
+   * `type`, so it is the one place that knows which half of the taxonomy the
+   * screen should filter to.
+   */
+  onOpenCategoryPicker: (kind: "income" | "expense") => void;
+  /**
    * A refusal from the last save attempt, matched onto `amountOriginal` /
    * `accountId` — the input schema's own paths, so a controller refusal and a
    * server one bind to the same field the same way (`mapFieldErrors`,
@@ -101,6 +116,8 @@ export function QuickAddForm({
   today,
   initialAmount = "",
   initialAccountId,
+  categoryId,
+  onOpenCategoryPicker,
   fieldErrors,
   onCancel,
   onCreateAccount,
@@ -112,7 +129,6 @@ export function QuickAddForm({
     accounts.some((account) => account.id === initialAccountId) ? (initialAccountId ?? null) : null,
   );
   const [type, setType] = useState<"expense" | "income">("expense");
-  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [date, setDate] = useState(today);
   const [note, setNote] = useState("");
@@ -124,6 +140,16 @@ export function QuickAddForm({
   const selected = accounts.find((account) => account.id === accountId);
   const blocked = selected !== undefined && !selected.capturable;
   const dateValid = isAccountingDate(date);
+  const selectedCategory = categories.find((category) => category.id === categoryId);
+  /**
+   * A category chosen under one kind rarely belongs to the other — TAXONOMY
+   * R1 pairs `categoryId` with `type`. `categoryId` is controlled from the
+   * screen now, so this form cannot clear it the moment `type` flips the way
+   * it once did; masking a mismatch here, for both display and the save,
+   * gets the same guarantee without the form reaching into state it does not
+   * own. Switching back restores the pick rather than losing it.
+   */
+  const effectiveCategoryId = selectedCategory?.kind === type ? categoryId : null;
   let positive = false;
   try {
     positive = amount !== "" && money.dec(amount).gt(0);
@@ -137,13 +163,12 @@ export function QuickAddForm({
     [accountId, amount, onCreateAccount],
   );
   const handleTypeChange = useCallback((next: string) => {
-    // A category chosen under one kind rarely belongs to the other — TAXONOMY
-    // R1 pairs `categoryId` with `type`, so the pick is cleared rather than
-    // carried into a category the new type may not even offer.
     setType(next === "income" ? "income" : "expense");
-    setCategoryId(null);
   }, []);
-  const handleCategoryChange = useCallback((next: string) => setCategoryId(next), []);
+  const handleOpenCategoryPicker = useCallback(
+    () => onOpenCategoryPicker(type),
+    [onOpenCategoryPicker, type],
+  );
   const handleToggleMore = useCallback(() => setMoreOpen((open) => !open), []);
   const handleDateChange = useCallback((next: string) => setDate(next), []);
   const handleNoteChange = useCallback((next: string) => setNote(next), []);
@@ -158,7 +183,7 @@ export function QuickAddForm({
       type,
       amount,
       accountId,
-      categoryId,
+      categoryId: effectiveCategoryId,
       date,
       note,
       isBusiness,
@@ -169,7 +194,7 @@ export function QuickAddForm({
     accountId,
     amount,
     blocked,
-    categoryId,
+    effectiveCategoryId,
     counterpartyId,
     counterpartyRole,
     date,
@@ -181,10 +206,8 @@ export function QuickAddForm({
     type,
   ]);
   const accountError = fieldErrors?.byField["accountId"]?.[0];
+  const categoryError = fieldErrors?.byField["categoryId"]?.[0];
 
-  const categoryOptions = categories
-    .filter((category) => category.kind === type)
-    .map((category) => ({ value: category.id, label: category.name }));
   const counterpartyOptions = counterparties.map((counterparty) => ({
     value: counterparty.id,
     label: counterparty.name,
@@ -251,14 +274,13 @@ export function QuickAddForm({
       <Button label={t("accounts.create")} onPress={handleCreateAccount} variant="secondary" />
 
       <SegmentControl segments={typeSegments} value={type} onChange={handleTypeChange} />
-      <Select
-        label={t("transactions.category")}
-        placeholder={t("transactions.noCategory")}
-        options={categoryOptions}
-        value={categoryId}
-        onChange={handleCategoryChange}
-        searchable
+      <Chip
+        placeholder={t("transactions.category")}
+        value={selectedCategory?.kind === type ? selectedCategory.name : undefined}
+        onPress={handleOpenCategoryPicker}
+        machineFilled={false}
       />
+      {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
       <Button label={t("transactions.more")} onPress={handleToggleMore} variant="ghost" />
 
       {moreOpen ? (

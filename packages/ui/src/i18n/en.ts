@@ -118,6 +118,29 @@ export const en = {
     "role.contribution": "Contribution to a shared account",
     "role.reference": "Just involved — no obligation",
   },
+  categories: {
+    /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
+    search: "Search {{count}} categories",
+    /** The pinned footer's create affordance. */
+    new: "New",
+    /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */
+    create: 'Create "{{query}}"',
+    /**
+     * The pinned footer's primary, before a leaf is highlighted — the
+     * keyboard path; a tap on the leaf itself is the ordinary one (§7).
+     * `useLeaf` below is the same button once one is.
+     */
+    use: "Use",
+    useLeaf: 'Use "{{name}}"',
+    /** Heading over D2's proposal row. */
+    suggested: "Suggested",
+    /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */
+    lowConfidence: "Low confidence — check before using.",
+    noMatchTitle: "No matching category",
+    noMatchBody: 'Nothing here matches "{{query}}".',
+    /** The create row's group chooser, shown when no group chip narrowed the sheet first. */
+    chooseGroup: "Choose a group",
+  },
   shell: {
     today: "Today",
     /** The floating add button. A verb, because a `+` has no name a screen reader can say. */

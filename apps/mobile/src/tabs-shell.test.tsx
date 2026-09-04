@@ -50,6 +50,8 @@ function fakeController() {
       listCounterparties: () => [],
       createAccount: () => undefined,
       createTransaction: () => undefined,
+      listCategoryTree: () => [],
+      createCategory: () => undefined,
       reset: () => undefined,
     },
     {

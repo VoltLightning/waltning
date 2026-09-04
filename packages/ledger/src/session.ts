@@ -1,12 +1,20 @@
 import type { Id } from "@waltning/core/id";
 import type { CurrencyCode } from "@waltning/core/money";
-import type { CreateAccountInput, CreateTransactionInput } from "@waltning/core/registry/inputs";
+import type {
+  CreateAccountInput,
+  CreateCategoryInput,
+  CreateTransactionInput,
+} from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
 import { currencies } from "@waltning/schema/sqlite/currencies";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
 import { type LocalGroup, readGroups } from "./accounts/read-groups.ts";
-import { readCategoryTree } from "./categories/read-category-tree.ts";
+import {
+  createCategoryExecutor,
+  type LocalCategoryRow,
+} from "./categories/create-category.executor.ts";
+import { type LocalCategory, readCategoryTree } from "./categories/read-category-tree.ts";
 import {
   type LocalCounterparty,
   readCounterparties,
@@ -68,9 +76,12 @@ export type LocalLedgerSession = {
   listGroups: () => readonly LocalGroup[];
   listRecent: (limit: number) => readonly LocalRecentTransaction[];
   listCategories: () => readonly LocalCapturableCategory[];
+  /** The whole tree — groups and leaves both — for S06's sheet. See `readCategoryTree`. */
+  listCategoryTree: () => readonly LocalCategory[];
   listCounterparties: () => readonly LocalCounterparty[];
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
+  createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
   reset: () => void;
   close: () => void;
 };
@@ -192,6 +203,11 @@ export function createLocalLedgerSession<TRun>(
       readCategoryTree(requireOpen().replica.db)
         .filter((category) => category.isLeaf && !category.archived)
         .map(({ id, name, kind }) => ({ id, name, kind })),
+    // Archived nodes excluded, same as `listCategories` above — an archived
+    // category has stopped being offerable (`TAXONOMY.md` R2), and a picker
+    // is exactly where "offerable" matters.
+    listCategoryTree: () =>
+      readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
     listCounterparties: () => readCounterparties(requireOpen().replica.db),
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {
@@ -204,6 +220,14 @@ export function createLocalLedgerSession<TRun>(
     createTransaction: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createTransactionExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    createCategory: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: createCategoryExecutor,
         registry: ledgerRegistry,
         input,
         capture,

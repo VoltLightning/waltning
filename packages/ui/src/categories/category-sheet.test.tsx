@@ -1,0 +1,306 @@
+/** @vitest-environment jsdom */
+
+import { fireEvent, render, screen } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
+import { CategorySheet, type CategoryTreeNode } from "./category-sheet";
+
+const FOOD: CategoryTreeNode = {
+  id: "food",
+  parentId: null,
+  name: "Food",
+  kind: "expense",
+  isLeaf: false,
+};
+const GROCERIES: CategoryTreeNode = {
+  id: "groceries",
+  parentId: "food",
+  name: "Groceries",
+  kind: "expense",
+  isLeaf: true,
+};
+const EATING_OUT: CategoryTreeNode = {
+  id: "eating-out",
+  parentId: "food",
+  name: "Eating out",
+  kind: "expense",
+  isLeaf: true,
+};
+const TRANSPORT: CategoryTreeNode = {
+  id: "transport",
+  parentId: null,
+  name: "Transport",
+  kind: "expense",
+  isLeaf: false,
+};
+const FUEL: CategoryTreeNode = {
+  id: "fuel",
+  parentId: "transport",
+  name: "Fuel",
+  kind: "expense",
+  isLeaf: true,
+};
+const UNCATEGORIZED: CategoryTreeNode = {
+  id: "uncategorized",
+  parentId: null,
+  name: "Uncategorized",
+  kind: "expense",
+  isLeaf: true,
+};
+const SALARY: CategoryTreeNode = {
+  id: "salary",
+  parentId: null,
+  name: "Salary",
+  kind: "income",
+  isLeaf: true,
+};
+
+const TREE = [FOOD, GROCERIES, EATING_OUT, TRANSPORT, FUEL, UNCATEGORIZED, SALARY];
+
+it("shows every leaf across groups when browsing, and none of the other kind", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  expect(screen.getByRole("radio", { name: "Groceries" })).toBeDefined();
+  expect(screen.getByRole("radio", { name: "Eating out" })).toBeDefined();
+  expect(screen.getByRole("radio", { name: "Fuel" })).toBeDefined();
+  expect(screen.queryByText("Salary")).toBeNull();
+});
+
+/** S06 §9: search covers every leaf, ignoring whichever group is filtered. */
+it("finds a leaf by search regardless of which group chip is selected", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Transport" }));
+  expect(screen.queryByRole("radio", { name: "Groceries" })).toBeNull();
+
+  fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "groc" } });
+  expect(screen.getByRole("radio", { name: "Groceries" })).toBeDefined();
+  expect(screen.queryByRole("radio", { name: "Fuel" })).toBeNull();
+  // Group chips fold away while searching — narrowing by group is moot once
+  // the query already spans every leaf.
+  expect(screen.queryByRole("button", { name: "Transport" })).toBeNull();
+});
+
+/** Group chips narrow; they never select (`TAXONOMY.md` R1) — tapping the chosen one again clears it. */
+it("a group chip narrows to its own leaves and toggles off on a second tap", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Food" }));
+  expect(screen.getByRole("radio", { name: "Groceries" })).toBeDefined();
+  expect(screen.queryByRole("radio", { name: "Fuel" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Food" }));
+  expect(screen.getByRole("radio", { name: "Fuel" })).toBeDefined();
+});
+
+it("renders D2's proposal with a confidence tag, and the §14 marker below 0.85", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      proposal={{ categoryId: "groceries", confidence: 0.6, basis: "neighbours", neighbours: [] }}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("Suggested")).toBeDefined();
+  expect(screen.getAllByText("Groceries").length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText("60%")).toBeDefined();
+  expect(screen.getByText("Low confidence — check before using.")).toBeDefined();
+});
+
+it("hides the low-confidence marker at or above 0.85", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      proposal={{ categoryId: "groceries", confidence: 0.9, basis: "exact", neighbours: [] }}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.queryByText("Low confidence — check before using.")).toBeNull();
+});
+
+/** §6: no search match offers *Create "…"* scoped to the chosen group — never at top level. */
+it("offers no create action on a top-level search miss", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={vi.fn()}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "zzz" } });
+  expect(screen.getByText("Nothing matches.")).toBeDefined();
+  expect(screen.queryByRole("button", { name: /Create/ })).toBeNull();
+});
+
+it("offers Create scoped to the chosen group on a search miss inside it", () => {
+  const onCreate = vi.fn(() => ({ id: "new-id" }));
+  const onPick = vi.fn();
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={onCreate}
+      onPick={onPick}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Food" }));
+  fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "Snacks" } });
+  fireEvent.click(screen.getByRole("button", { name: 'Create "Snacks"' }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onCreate).toHaveBeenCalledWith({ name: "Snacks", kind: "expense", parentId: "food" });
+  expect(onPick).toHaveBeenCalledWith("new-id");
+});
+
+/** `+ New`, group already narrowed — the row locks to it rather than re-asking (S06 §6). */
+it("creates a leaf under the chip-narrowed group from the pinned + New button", () => {
+  const onCreate = vi.fn(() => ({ id: "new-id" }));
+  const onPick = vi.fn();
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={onCreate}
+      onPick={onPick}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Transport" }));
+  fireEvent.click(screen.getByRole("button", { name: "New" }));
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Parking" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(onCreate).toHaveBeenCalledWith({
+    name: "Parking",
+    kind: "expense",
+    parentId: "transport",
+  });
+  expect(onPick).toHaveBeenCalledWith("new-id");
+});
+
+/** No group chosen — the row asks first, and Save stays refused until one is picked. */
+it("asks for a group from + New with none chosen, and blocks Save until one is", () => {
+  const onCreate = vi.fn(() => ({ id: "new-id" }));
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={onCreate}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "New" }));
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Parking" } });
+  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+
+  // Two "Transport" chips exist while creating with no group chosen: the
+  // sheet's own filter row, and the create row's group chooser beneath it —
+  // the second is the one this step means to press.
+  const transportChips = screen.getAllByRole("button", { name: "Transport" });
+  fireEvent.click(transportChips[transportChips.length - 1] as HTMLElement);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onCreate).toHaveBeenCalledWith({
+    name: "Parking",
+    kind: "expense",
+    parentId: "transport",
+  });
+});
+
+/** S06 §6: the refusal names the existing sibling, lands on the field, and does not pick. */
+it("shows a name collision under the field and never calls onPick", () => {
+  const onCreate = vi.fn(() => ({ error: '"Groceries" already exists here' }));
+  const onPick = vi.fn();
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={onCreate}
+      onPick={onPick}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Food" }));
+  fireEvent.click(screen.getByRole("button", { name: "New" }));
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Groceries" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(screen.getByText('"Groceries" already exists here')).toBeDefined();
+  expect(onPick).not.toHaveBeenCalled();
+});
+
+it("disables + New when the caller offers no onCreate", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-disabled")).toBe("true");
+});
+
+/** S06 §4: creating in place is an ordinary part of the sheet, not an opt-in — enabled the moment a handler exists. */
+it("enables + New the moment the caller offers onCreate, while just browsing", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={vi.fn()}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-disabled")).toBeNull();
+});
+
+/** S06 §9.2: present, subordinate — last, muted, and still one tap away. */
+it("renders Uncategorized at the bottom and picks it on a tap", () => {
+  const onPick = vi.fn();
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={onPick} onDismiss={vi.fn()} />);
+  fireEvent.click(screen.getByRole("radio", { name: "Uncategorized" }));
+  expect(onPick).toHaveBeenCalledWith("uncategorized");
+});
+
+/** `Uncategorized` sits outside the leaf grid — `Use` still has to name it. */
+it("names Uncategorized in the Use button once it is picked", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  fireEvent.click(screen.getByRole("radio", { name: "Uncategorized" }));
+  expect(screen.getByRole("button", { name: 'Use "Uncategorized"' })).toBeDefined();
+});
+
+/** The placeholder already carries the label — a second, identical kicker line is noise. */
+it("gives the search field no visible label, only an accessible one", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  expect(screen.getByLabelText("Search…")).toBeDefined();
+  expect(screen.queryByText("Search…")).toBeNull();
+});
+
+/** §7: one tap picks immediately; `Use ‹leaf›` is the double-check path. */
+it("picks immediately on a tap, and Use re-fires the same pick", () => {
+  const onPick = vi.fn();
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={onPick} onDismiss={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "Use" }).getAttribute("aria-disabled")).toBe("true");
+
+  fireEvent.click(screen.getByRole("radio", { name: "Fuel" }));
+  expect(onPick).toHaveBeenCalledTimes(1);
+  expect(onPick).toHaveBeenLastCalledWith("fuel");
+
+  fireEvent.click(screen.getByRole("button", { name: 'Use "Fuel"' }));
+  expect(onPick).toHaveBeenCalledTimes(2);
+  expect(onPick).toHaveBeenLastCalledWith("fuel");
+});
+
+it("dismisses from the sheet's own close control", () => {
+  const onDismiss = vi.fn();
+  render(
+    <CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={onDismiss} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+});

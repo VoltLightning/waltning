@@ -31,6 +31,7 @@ describe("usePhoneLedger", () => {
         listGroups: () => [],
         listRecent: () => [],
         listCategories: () => [],
+        listCategoryTree: () => [],
         listCounterparties: () => [],
         createAccount: (input) => {
           accounts = [
@@ -46,6 +47,7 @@ describe("usePhoneLedger", () => {
           ];
         },
         createTransaction: () => undefined,
+        createCategory: () => undefined,
         reset: () => undefined,
       },
       {

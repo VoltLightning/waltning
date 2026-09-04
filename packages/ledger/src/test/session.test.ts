@@ -5,7 +5,11 @@ import { currencies as referenceCurrencies } from "@waltning/core/currencies";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, pivotPerUnit } from "@waltning/core/money";
-import { createAccountInput, createTransactionInput } from "@waltning/core/registry/inputs";
+import {
+  createAccountInput,
+  createCategoryInput,
+  createTransactionInput,
+} from "@waltning/core/registry/inputs";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -277,6 +281,80 @@ describe("the phone ledger session", () => {
 
     session.createAccount(accountInput(), capture);
     expect(session.listAccounts()[0]?.id).toBe(accountId);
+    session.close();
+  });
+
+  /**
+   * `listCategoryTree` carries groups and leaves both, unlike `listCategories`
+   * (leaves only, for the quick-add picker) — S06's sheet needs the whole
+   * shape to browse and filter by group.
+   */
+  it("lists the whole category tree, groups and leaves, archived excluded", () => {
+    const session = createLocalLedgerSession(options());
+    const sqlite = new Database(paths.replica);
+    const insert = sqlite.prepare(
+      "insert into categories (id, parent_id, name, kind, is_leaf, archived, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    insert.run("66666666-6666-4666-8666-666666666666", null, "Food", "expense", 0, 0, 0, 0);
+    insert.run(
+      "77777777-7777-4777-8777-777777777777",
+      "66666666-6666-4666-8666-666666666666",
+      "Groceries",
+      "expense",
+      1,
+      0,
+      0,
+      0,
+    );
+    insert.run(
+      "88888888-8888-4888-8888-888888888888",
+      "66666666-6666-4666-8666-666666666666",
+      "Retired",
+      "expense",
+      1,
+      1,
+      0,
+      0,
+    );
+    sqlite.close();
+
+    const tree = session.listCategoryTree();
+    expect(tree.map((c) => c.name)).toEqual(["Food", "Groceries"]);
+    expect(tree.find((c) => c.name === "Food")).toMatchObject({ isLeaf: false, parentId: null });
+    expect(tree.find((c) => c.name === "Groceries")).toMatchObject({
+      isLeaf: true,
+      parentId: "66666666-6666-4666-8666-666666666666",
+    });
+    session.close();
+  });
+
+  it("creates a category and the tree carries it immediately", () => {
+    const session = createLocalLedgerSession(options());
+    const groupId = "99999999-9999-4999-8999-999999999999";
+    const sqlite = new Database(paths.replica);
+    sqlite
+      .prepare(
+        "insert into categories (id, parent_id, name, kind, is_leaf, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(groupId, null, "Food", "expense", 0, 0, 0);
+    sqlite.close();
+
+    const leafId = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    const row = session.createCategory(
+      createCategoryInput.parse({
+        id: leafId,
+        name: "Eating out",
+        kind: "expense",
+        parentId: groupId,
+      }),
+      capture,
+    );
+    expect(row.name).toBe("Eating out");
+    expect(session.listCategoryTree().find((c) => c.id === leafId)).toMatchObject({
+      name: "Eating out",
+      isLeaf: true,
+      parentId: groupId,
+    });
     session.close();
   });
 

@@ -47,6 +47,8 @@ it("collapses to amount, account, type, category and More — nothing else", () 
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
@@ -83,6 +85,8 @@ it("reveals date, note, business and counterparty only after More", () => {
       categories={categories}
       counterparties={[{ id: "cp-a", name: "Counterparty A" }]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
@@ -104,6 +108,8 @@ it("saves the resting draft — amount and account, everything else at its defau
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={onSave}
@@ -128,6 +134,8 @@ it("restores a draft and carries it through Create account", () => {
       today={TODAY}
       initialAmount="10"
       initialAccountId="account-a"
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={onCreateAccount}
       onSave={vi.fn()}
@@ -151,6 +159,8 @@ it("labels the amount in the selected account's own currency", () => {
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
@@ -175,6 +185,8 @@ it("reaches onSave with type: income once the Income tab is chosen", () => {
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={onSave}
@@ -187,25 +199,109 @@ it("reaches onSave with type: income once the Income tab is chosen", () => {
   expect(onSave.mock.calls[0]?.[0]).toMatchObject({ type: "income" });
 });
 
-/** TAXONOMY R1 pairs a category with the type it belongs to — a stale pick is cleared, not carried over. */
-it("clears the category when the type changes under it", () => {
+/**
+ * D4a: S06's sheet is composed by the screen, not this form
+ * (`architecture/11` — a module composes at app routes, never a sibling
+ * domain), so the field is a trigger. The current `type` travels with the
+ * request, because the form is the one place that knows which half of the
+ * taxonomy is in play.
+ */
+it("opens the category picker for the current type when the field is pressed", () => {
+  const onOpenCategoryPicker = vi.fn();
   render(
     <QuickAddForm
       accounts={accounts}
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={onOpenCategoryPicker}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Category" }));
-  fireEvent.click(screen.getByRole("radio", { name: "Groceries" }));
-  expect(screen.getByRole("button", { name: "Category: Groceries" })).toBeDefined();
+  expect(onOpenCategoryPicker).toHaveBeenCalledWith("expense");
 
   fireEvent.click(screen.getByRole("tab", { name: "Income" }));
+  fireEvent.click(screen.getByRole("button", { name: "Category" }));
+  expect(onOpenCategoryPicker).toHaveBeenLastCalledWith("income");
+});
+
+/** The picked leaf is a controlled prop — the field shows it, and Save carries it. */
+it("shows the picked category and carries it into onSave", () => {
+  const onSave = vi.fn();
+  render(
+    <QuickAddForm
+      accounts={accounts}
+      categories={categories}
+      counterparties={[]}
+      today={TODAY}
+      categoryId="cat-groceries"
+      onOpenCategoryPicker={vi.fn()}
+      onCancel={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSave={onSave}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Category: Groceries" })).toBeDefined();
+
+  fillAndPickAccount();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave.mock.calls[0]?.[0]).toMatchObject({ categoryId: "cat-groceries" });
+});
+
+/**
+ * TAXONOMY R1 pairs a category with the type it belongs to. `categoryId` is
+ * controlled now — the form cannot clear a parent-owned prop — so a stale
+ * pick is masked instead: hidden from the field and left out of the save,
+ * without losing it if `type` switches back.
+ */
+it("masks a category that no longer matches the type, and restores it on switching back", () => {
+  const onSave = vi.fn();
+  render(
+    <QuickAddForm
+      accounts={accounts}
+      categories={categories}
+      counterparties={[]}
+      today={TODAY}
+      categoryId="cat-groceries"
+      onOpenCategoryPicker={vi.fn()}
+      onCancel={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSave={onSave}
+    />,
+  );
+  fireEvent.click(screen.getByRole("tab", { name: "Income" }));
   expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Category: Groceries" })).toBeNull();
+
+  fillAndPickAccount();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave.mock.calls[0]?.[0]).toMatchObject({ categoryId: null, type: "income" });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Expense" }));
+  expect(screen.getByRole("button", { name: "Category: Groceries" })).toBeDefined();
+});
+
+/** The reason belongs to the field that caused it (`architecture/12`). */
+it("renders a categoryId field error under the field", () => {
+  render(
+    <QuickAddForm
+      accounts={accounts}
+      categories={categories}
+      counterparties={[]}
+      today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
+      fieldErrors={{ byField: { categoryId: ["that category was archived"] }, formLevel: [] }}
+      onCancel={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("that category was archived")).toBeDefined();
 });
 
 /** The `capturedTz` card's editable-date half — an edited date reaches the write. */
@@ -217,6 +313,8 @@ it("carries an edited date through to onSave", () => {
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={onSave}
@@ -238,6 +336,8 @@ it("blocks Save on a malformed date", () => {
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
@@ -257,6 +357,8 @@ it("offers no counterparty field when the ledger holds none", () => {
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
@@ -274,6 +376,8 @@ it("offers a counterparty once the ledger holds one, and its role once it is pic
       categories={categories}
       counterparties={[{ id: "cp-a", name: "Counterparty A" }]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
@@ -309,6 +413,8 @@ it("declines a capture into a currency it holds no rate for, and says why", () =
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={onSave}
@@ -335,6 +441,8 @@ it("says nothing about rates before an account is chosen", () => {
       categories={categories}
       counterparties={[]}
       today={TODAY}
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}
@@ -350,6 +458,8 @@ it("renders two errors from one map on their own fields", () => {
       categories={[]}
       counterparties={[]}
       today="2026-08-24"
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       fieldErrors={{
         byField: { amountOriginal: ["must be positive"], accountId: ["choose one"] },
         formLevel: [],
@@ -370,6 +480,8 @@ it("renders an unknown path at form level, under an alert", () => {
       categories={[]}
       counterparties={[]}
       today="2026-08-24"
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       fieldErrors={{ byField: {}, formLevel: ["date: not accepted"] }}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
@@ -388,6 +500,8 @@ it("renders nothing extra with no fieldErrors prop", () => {
       categories={[]}
       counterparties={[]}
       today="2026-08-24"
+      categoryId={null}
+      onOpenCategoryPicker={vi.fn()}
       onCancel={vi.fn()}
       onCreateAccount={vi.fn()}
       onSave={vi.fn()}

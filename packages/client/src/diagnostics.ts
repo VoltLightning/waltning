@@ -10,6 +10,7 @@ import {
 export type ClientAction =
   | "create_account"
   | "create_transaction"
+  | "create_category"
   | "reset_preview"
   | "change_appearance";
 

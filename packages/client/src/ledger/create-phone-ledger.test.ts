@@ -8,6 +8,7 @@ import {
   type CreateAccountDraft,
   createPhoneLedger,
   type PhoneAccount,
+  type PhoneCategoryNode,
   type PhoneLedgerPort,
   type PhoneRecentTransaction,
   type QuickAddDraft,
@@ -136,9 +137,11 @@ function harness(diagnostics?: (event: object) => void) {
     listGroups: () => [],
     listRecent: (limit) => recent.slice(0, limit),
     listCategories: () => [],
+    listCategoryTree: () => [],
     listCounterparties: () => [],
     createAccount,
     createTransaction,
+    createCategory: vi.fn(),
     reset,
   };
   const capture = vi.fn(() => ({
@@ -168,6 +171,7 @@ describe("phone ledger controller", () => {
       groups: [],
       recent: [],
       categories: [],
+      categoryTree: [],
       counterparties: [],
       subtotals: [],
     });
@@ -211,9 +215,11 @@ describe("phone ledger controller", () => {
       listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
+      listCategoryTree: () => [],
       listCounterparties: () => [],
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
+      createCategory: vi.fn(),
       reset: vi.fn(),
     };
 
@@ -244,9 +250,11 @@ describe("phone ledger controller", () => {
       listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
+      listCategoryTree: () => [],
       listCounterparties: () => [],
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
+      createCategory: vi.fn(),
       reset: vi.fn(),
     };
 
@@ -341,9 +349,11 @@ describe("phone ledger controller", () => {
       listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
+      listCategoryTree: () => [],
       listCounterparties: () => [],
       createAccount: vi.fn(),
       createTransaction: vi.fn(),
+      createCategory: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -415,5 +425,100 @@ describe("phone ledger controller", () => {
     const serialized = JSON.stringify(diagnostics);
     expect(serialized).not.toContain("Bank A · PLN");
     expect(serialized).not.toContain("10.00000000");
+  });
+});
+
+describe("phone ledger controller — createCategory", () => {
+  const GROUP = id<"categories">("55555555-5555-4555-8555-555555555555");
+  const LEAF = id<"categories">("66666666-6666-4666-8666-666666666666");
+  const NEW_ID = id<"categories">("77777777-7777-4777-8777-777777777777");
+
+  function categoryHarness() {
+    let tree: PhoneCategoryNode[] = [
+      { id: GROUP, parentId: null, name: "Food", kind: "expense", isLeaf: false, sort: 0 },
+      { id: LEAF, parentId: GROUP, name: "Groceries", kind: "expense", isLeaf: true, sort: 0 },
+    ];
+    const createCategory = vi.fn<PhoneLedgerPort["createCategory"]>((input) => {
+      tree = [
+        ...tree,
+        {
+          id: input.id,
+          parentId: input.parentId,
+          name: input.name,
+          kind: input.kind,
+          isLeaf: true,
+          sort: 0,
+        },
+      ];
+    });
+    const port: PhoneLedgerPort = {
+      listAccounts: () => [],
+      listCurrencies: () => CURRENCIES,
+      listGroups: () => [],
+      listRecent: () => [],
+      listCategories: () => [],
+      listCategoryTree: () => tree,
+      listCounterparties: () => [],
+      createAccount: vi.fn(),
+      createTransaction: vi.fn(),
+      createCategory,
+      reset: vi.fn(),
+    };
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: accountingDate("2026-08-23"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-08-23T10:00:00Z"),
+      }),
+      id: <Table extends IdTable>() => id<Table>(NEW_ID),
+    });
+    return { controller, createCategory };
+  }
+
+  it("creates a leaf under the chosen group and the tree refreshes", () => {
+    const { controller, createCategory } = categoryHarness();
+    const result = controller.createCategory({
+      name: "Eating out",
+      kind: "expense",
+      parentId: GROUP,
+    });
+    const categoryId = idOf(result);
+    expect(categoryId).toBe(NEW_ID);
+    expect(createCategory).toHaveBeenCalledTimes(1);
+    expect(createCategory.mock.calls[0]?.[0]).toMatchObject({
+      name: "Eating out",
+      kind: "expense",
+      parentId: GROUP,
+    });
+    expect(controller.getSnapshot().categoryTree).toContainEqual(
+      expect.objectContaining({ id: categoryId, name: "Eating out", parentId: GROUP }),
+    );
+  });
+
+  /** S06 §6: a name collision lands on the field, naming the existing sibling. */
+  it("refuses a sibling with the same folded name in the same group, before writing", () => {
+    const { controller, createCategory } = categoryHarness();
+    const result = controller.createCategory({
+      name: "groceries",
+      kind: "expense",
+      parentId: GROUP,
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "name", message: '"Groceries" already exists here' },
+    ]);
+    expect(createCategory).not.toHaveBeenCalled();
+  });
+
+  it("does not confuse a same-named leaf sitting under a different group", () => {
+    const { controller, createCategory } = categoryHarness();
+    const OTHER_GROUP = id<"categories">("88888888-8888-4888-8888-888888888888");
+    const result = controller.createCategory({
+      name: "Groceries",
+      kind: "expense",
+      parentId: OTHER_GROUP,
+    });
+    expect("id" in result).toBe(true);
+    expect(createCategory).toHaveBeenCalledTimes(1);
   });
 });
