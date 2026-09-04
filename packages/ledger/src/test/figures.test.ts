@@ -83,7 +83,50 @@ describe("the phone's class-F figures", () => {
     expect(byId.get(id<"accounts">("22222222-2222-4222-8222-222222222222"))).toBe("40.00000000");
 
     expect(readNetWorth(db)).toEqual([
-      { currency: PLN, decimals: 2, mine: "70.00000000", ours: "110.00000000" },
+      {
+        currency: PLN,
+        decimals: 2,
+        mine: "70.00000000",
+        ours: "110.00000000",
+        hasShared: true,
+      },
+    ]);
+  });
+
+  /**
+   * `DualTotal`'s own contract wants `ours: null` when no shared account
+   * exists — never the same figure printed twice. `readNetWorth` is where
+   * ownership is still visible (§3's fold sees only summed balances), so
+   * `hasShared` is decided here and carried to the client as a field, not
+   * inferred by comparing `mine` and `ours` for equality — a shared account
+   * with a zero balance would net to the same number and read as "no shared
+   * account" by that comparison, which is a different fact.
+   */
+  it("says hasShared: false when every account for a currency is own", () => {
+    stores = scratchStores();
+    const db = stores.ledger.replica.db;
+
+    db.insert(currencies)
+      .values({ code: PLN, name: "Polish Złoty", decimals: 2, isPivot: true })
+      .run();
+    db.insert(accounts)
+      .values({
+        id: id<"accounts">("33333333-3333-4333-8333-333333333333"),
+        name: "Bank A · PLN",
+        currency: PLN,
+        openingBalance: money.toMoney("10"),
+        ownership: "own",
+      })
+      .run();
+
+    expect(readNetWorth(db)).toEqual([
+      {
+        currency: PLN,
+        decimals: 2,
+        mine: "10.00000000",
+        ours: "10.00000000",
+        hasShared: false,
+      },
     ]);
   });
 });

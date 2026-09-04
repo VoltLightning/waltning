@@ -96,11 +96,17 @@ export function Amount({
 
   const styles = useStyles();
 
-  // On the shell, emphasis wins: the hero total is one colour whatever its
-  // sign, because the shell has its own ink and a red total on dark green is
   // neither legible nor what the screen is for. `shellMuted` is the same
   // rule at the shell's secondary ink — `DeskBand`'s collapsed *ours*,
   // beside the compact figure rather than stacked under its own kicker.
+  //
+  // **Tried and reverted: tinting `kind="spend"`/`kind="income"` even under
+  // shell emphasis.** `theme.spend` on `theme.shell` measures 1.68:1 in light
+  // and 3.63:1 in dark — both well under the 4.5:1 floor `visual/stories.spec.ts`
+  // checks with axe, on both stories that carried it. `theme.spend` was never
+  // verified against the shell background; DualTotal's own history records the
+  // same discovery for plain text ink. A shell-safe spend tint would need a new,
+  // separately-verified token — real design-system work, not a StatTile fix.
   const onShell = emphasis === "shell" || emphasis === "shellMuted";
   const tone = onShell
     ? emphasis === "shellMuted"

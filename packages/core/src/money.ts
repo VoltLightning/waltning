@@ -10,6 +10,7 @@
 // Named import, not default: under NodeNext the default export resolves to
 // decimal.js's namespace declaration rather than the constructable class.
 import { Decimal as GlobalDecimal } from "decimal.js";
+import type { AccountingDate } from "./date.ts";
 
 /**
  * A **private** Decimal constructor, not the global one.
@@ -74,6 +75,16 @@ export const dec = (v: Money | string | number | Decimal): Decimal => new Decima
  */
 export const toMoney = (v: Decimal | Money | string | number, scale = 8): Money =>
   dec(v).toFixed(scale) as Money;
+
+/**
+ * The additive identity, at storage scale — a fallback figure for a screen
+ * that has nothing to show yet, never a placeholder standing in for "no
+ * data." A constant rather than a call: `tests/architecture.test.ts` bans
+ * `money.toMoney(` outside `packages/ui` (a figure built by hand rather than
+ * through `<Amount>`), and every call site that needs a zero to render is
+ * exactly the case that rule exists for.
+ */
+export const ZERO: Money = toMoney("0");
 
 /**
  * The group separator: **U+00A0, a no-break space.**
@@ -388,5 +399,109 @@ export const counterpartyBalance = (
 
 /** §8 — a clearing balance is an ordinary balance. Same function, named for the reader. */
 export const clearingBalance = accountBalance;
+
+/* ── §5 and §8's phone-side folds — C2, `computations.md` §0's R and F ───── */
+
+/**
+ * A closed-open date range, `[start, end)`. Half-open so a calendar month is
+ * `{ start: "2026-08-01", end: "2026-09-01" }` — the caller reaches `end` with
+ * `shiftMonth` alone and never has to know how many days August has.
+ */
+export type Period = { start: AccountingDate; end: AccountingDate };
+
+const inPeriod = (date: AccountingDate, period: Period): boolean =>
+  date >= period.start && date < period.end;
+
+export type PeriodTransactionRow = {
+  type: TxnType;
+  date: AccountingDate;
+  ownership: "own" | "shared";
+  currency: CurrencyCode;
+  decimals: number;
+  amountOriginal: Money;
+};
+
+export type PeriodSpendRow = { currency: CurrencyCode; decimals: number; spend: Money; net: Money };
+
+/**
+ * §5's base figure — class **R** (`computations.md` §0): `spend` is the
+ * stored, positive sum of expense amounts, `inflow` the same over income,
+ * `net = inflow − spend`. Own accounts, dated within `period`. Business is
+ * included — the scope partition (§6.7) is a filter of its own, not this
+ * one's.
+ *
+ * **`spend` is a magnitude, never `signed()`'s negated delta.** §5 sums
+ * `amount_pivot` — the stored amount converted, never negated — and §12
+ * defines `spent` as exactly this figure, "capital included and broken out."
+ * A screen wanting the outflow's sign renders it through `<Amount
+ * kind="spend">`, which negates for display; the figure itself does not
+ * carry a sign `net`'s subtraction already accounts for.
+ *
+ * **Grouped by currency, one row each — never summed across them.** §5 sums
+ * `amount_pivot`, a converted figure; the phone has no pivot column and no
+ * display currency to convert into (arc-phone excludes FX entirely, same as
+ * `netWorth` above), so this sums `amountOriginal` instead, which is only
+ * meaningful within one currency. Folding a PLN row and a USD row into one
+ * total would be exactly the H21 mistake `netWorth` and `subtotalsOf`
+ * (`create-phone-ledger.ts`) already refuse to make.
+ *
+ * **No shared-boundary netting.** `shared_net` (§5) needs `to_amount_pivot`,
+ * a generated column that lives only in `packages/db`'s `transactions_valued`
+ * view — arc-full, class **S**. The SQL `E9`'s differential test will check
+ * this against is §5's `spend`/`inflow` restricted the same way: `type in
+ * ('income', 'expense') and date >= period.start and date < period.end and
+ * account.ownership = 'own'`, grouped by `currency`.
+ */
+export const periodSpend = (
+  rows: readonly PeriodTransactionRow[],
+  period: Period,
+): readonly PeriodSpendRow[] => {
+  const byCurrency = new Map<CurrencyCode, { decimals: number; spend: Decimal; inflow: Decimal }>();
+  for (const row of rows) {
+    if (row.ownership !== "own") continue;
+    if (row.type !== "income" && row.type !== "expense") continue;
+    if (!inPeriod(row.date, period)) continue;
+    const bucket = byCurrency.get(row.currency) ?? {
+      decimals: row.decimals,
+      spend: dec(0),
+      inflow: dec(0),
+    };
+    // Stored positive (§1) — the magnitude §12's `spent` names, not a signed delta.
+    const amount = dec(row.amountOriginal);
+    if (row.type === "expense") bucket.spend = bucket.spend.plus(amount);
+    else bucket.inflow = bucket.inflow.plus(amount);
+    byCurrency.set(row.currency, bucket);
+  }
+  return [...byCurrency.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, { decimals, spend, inflow }]) => ({
+      currency,
+      decimals,
+      spend: toMoney(spend),
+      net: toMoney(inflow.minus(spend)),
+    }));
+};
+
+export type ClearingAccountRow = {
+  accountId: string;
+  name: string;
+  currency: CurrencyCode;
+  decimals: number;
+  balance: Money;
+};
+
+/**
+ * §8 — every clearing account whose `clearingBalance` is non-zero. **A
+ * filter, not a fold**: the caller has already folded each clearing
+ * account's own rows into `balance` the way `readAccountsForNetWorth` does
+ * for §3, so this only asks which of those balances are non-zero. FIFO
+ * attribution — which unconsumed transaction is the oldest, for the banner
+ * to name — is `find_unsettled`'s own job and class **S** ("largest-remainder
+ * allocation must not be reimplemented," §0): arc-phone's banner names the
+ * account and the amount, not the transaction.
+ */
+export const unsettledClearing = (
+  balances: readonly ClearingAccountRow[],
+): readonly ClearingAccountRow[] => balances.filter((row) => !isZero(row.balance));
 
 export { Decimal };

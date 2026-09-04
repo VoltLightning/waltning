@@ -9,6 +9,8 @@ import { Shell } from "./shell";
 export type TodayFrameProps = {
   appearanceAction: React.ReactNode;
   total: React.ReactNode;
+  /** `Shell`'s `children` slot — `PeriodHeader` and the *spent* and *net* `StatTile`s (C2). */
+  periodRow?: React.ReactNode;
   body: React.ReactNode;
 };
 
@@ -25,7 +27,7 @@ export type TodayFrameProps = {
  * `onFloatPositionChange` / `onAdd` / `addDisabled` are gone from
  * `TodayFrameProps` for that reason).
  */
-export function TodayFrame({ appearanceAction, total, body }: TodayFrameProps) {
+export function TodayFrame({ appearanceAction, total, periodRow, body }: TodayFrameProps) {
   const t = useT();
   const styles = useStyles();
 
@@ -35,7 +37,9 @@ export function TodayFrame({ appearanceAction, total, body }: TodayFrameProps) {
         leading={<Text style={styles.heading}>{t("shell.today")}</Text>}
         trailing={appearanceAction}
         hero={total}
-      />
+      >
+        {periodRow}
+      </Shell>
       <GroundPanel>
         <View style={styles.body}>{body}</View>
       </GroundPanel>

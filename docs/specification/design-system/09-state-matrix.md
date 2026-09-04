@@ -1,15 +1,16 @@
 # State matrix
 
-> **Coverage: 13 of 30 screens are listed here.** The other 17 each specify all
+> **Coverage: 14 of 30 screens are listed here.** The other 16 each specify all
 > six states in their own §6; what this table catches is the screens whose state
 > handling is *non-obvious*. Stating both numbers because §8.2 names the
 > alternative failure exactly — *"silent partial success is how a month goes
 > half-imported and nobody notices"* — and a coverage check that presents as
 > complete while covering 43% is that failure applied to itself.
 >
-> S04, S14, S12 and S30 belong here on their own merits and are being added:
-> S04 is the mobile landing surface, S14 can cost real money offline, S12 is the
-> most staleness-sensitive screen in the app, and S30 is where the outbox lives.
+> S04, S14, S12 and S30 belong here on their own merits: S04 is the mobile
+> landing surface, S14 can cost real money offline, S12 is the most
+> staleness-sensitive screen in the app, and S30 is where the outbox lives. S04
+> is added; the other three remain to be.
 
 
 Every screen specifies **all six** states — loading, populated, empty, error,
@@ -29,6 +30,7 @@ gate exists here" is a decision, and an undocumented one reads as an oversight.
 | Screen | Loading | Empty | Error | Offline | Gated | Conflict |
 |---|---|---|---|---|---|---|
 | Dashboard | skeleton tiles | `first-run` | rate sync failed | ✅ per-widget cache + age; never a zero (§8.3) | n/a | n/a |
+| Today | not modelled — the replica read is synchronous SQLite, with no in-between moment to show a skeleton for (C2) | ✅ `first-run` | ✅ `recoverable`; the hero keeps its last known figure (§8.3) | not modelled — this ledger has no backend relationship yet (C2) | n/a | n/a |
 | Import review | parsing progress | ✅ queue clear | `partial` — states both counts | queue locally | n/a | n/a |
 | Agent | ✅ `ThinkingIndicator`, 3 phases (§8.5) | no sessions | model failed · ✅ `RefusalCard` (§8.7) | disabled, stated | auto-mode grant (§11.2) | n/a |
 | Quick add | — | — | ✅ four states, `gaps.dc.html` G3 | ✅ outbox | n/a | ✅ **S35 · Conflict sheet** (specified, unbuilt) |

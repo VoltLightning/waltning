@@ -33,6 +33,9 @@ describe("usePhoneLedger", () => {
         listCategories: () => [],
         listCategoryTree: () => [],
         listCounterparties: () => [],
+        listNetWorth: () => [],
+        readPeriodSpend: () => [],
+        listUnsettledClearing: () => [],
         createAccount: (input) => {
           accounts = [
             {

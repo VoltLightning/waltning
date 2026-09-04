@@ -141,6 +141,9 @@ export type PhoneLedgerPort = {
   listCategories: () => readonly PhoneCategory[];
   listCategoryTree: () => readonly PhoneCategoryNode[];
   listCounterparties: () => readonly PhoneCounterparty[];
+  listNetWorth: () => readonly PhoneNetWorth[];
+  readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  listUnsettledClearing: () => readonly PhoneClearingAccount[];
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
   createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
@@ -168,6 +171,28 @@ export type PhoneCurrencySubtotal = {
   balance: Money;
 };
 
+/**
+ * §3, per currency — C2's `DualTotal` hero. See `money.netWorth`.
+ *
+ * `hasShared` decides whether the screen hands `DualTotal` `ours` at all —
+ * that component's own contract wants `null`, not the same figure as `mine`,
+ * when no shared account exists (`LocalNetWorth`'s own comment says why it is
+ * a field rather than a `mine === ours` comparison).
+ */
+export type PhoneNetWorth = {
+  currency: CurrencyCode;
+  decimals: number;
+  mine: Money;
+  ours: Money;
+  hasShared: boolean;
+};
+
+/** §5's base figure, per currency — C2's *spent* and *net* `StatTile`s. See `money.periodSpend`. */
+export type PhonePeriodSpend = money.PeriodSpendRow;
+
+/** §8, minus FIFO attribution — C2's unsettled banner. See `money.unsettledClearing`. */
+export type PhoneClearingAccount = money.ClearingAccountRow;
+
 export type PhoneLedgerSnapshot = {
   accounts: readonly PhoneCapturableAccount[];
   currencies: readonly PhoneCurrency[];
@@ -185,6 +210,21 @@ export type PhoneLedgerSnapshot = {
    * had.
    */
   subtotals: readonly PhoneCurrencySubtotal[];
+  /** §3, mine and ours, per currency — `DualTotal`'s hero (C2). */
+  netWorth: readonly PhoneNetWorth[];
+  /** §8's unsettled clearing accounts — non-empty only when the banner shows (C2). */
+  unsettledClearing: readonly PhoneClearingAccount[];
+  /**
+   * Set from a failed `refresh()`, cleared by the next successful one.
+   *
+   * **The rest of the snapshot is left as it was**, not blanked — `refresh()`
+   * spreads the prior snapshot and adds this field, so the hero keeps its last
+   * known figure while the ground panel shows `ErrorState(recoverable)`
+   * (S04 §6). Never rendered verbatim: `describeDiagnosticError`'s message is
+   * evidence for diagnostics, not catalogue text (`architecture/11`), so a
+   * screen reacts to this field's presence and speaks through `en.ts`.
+   */
+  error?: string;
 };
 
 /**
@@ -263,6 +303,13 @@ export type PhoneLedgerController = {
   createCategory: (
     draft: CreateCategoryDraft,
   ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
+  /**
+   * §5, on demand — not through the observable snapshot. `period` is the
+   * screen's own state (S04 §7: only the lower row is period-scoped), so a
+   * period change reads straight through the port rather than widening what
+   * `refresh()` recomputes for every subscriber on every write.
+   */
+  readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   reset: () => void;
 };
 
@@ -302,6 +349,8 @@ export function createPhoneLedger(
     categoryTree: [],
     counterparties: [],
     subtotals: [],
+    netWorth: [],
+    unsettledClearing: [],
   };
   const listeners = new Set<() => void>();
   const { diagnostics } = runtime;
@@ -330,6 +379,8 @@ export function createPhoneLedger(
         categoryTree: port.listCategoryTree(),
         counterparties: port.listCounterparties(),
         subtotals: subtotalsOf(accounts),
+        netWorth: port.listNetWorth(),
+        unsettledClearing: port.listUnsettledClearing(),
       };
       for (const listener of listeners) listener();
       emitClientDiagnostic(diagnostics, {
@@ -344,6 +395,13 @@ export function createPhoneLedger(
         phase: "failure",
         error: clientFailure(error),
       });
+      // S04 §6: the hero keeps its last known figure rather than blanking, so
+      // this spreads the prior snapshot instead of replacing it — only `error`
+      // is new. Listeners still fire: a screen already mounted needs to hear
+      // about this exactly as it hears about a success, or `ErrorState` never
+      // appears until something unrelated re-renders it.
+      snapshot = { ...snapshot, error: clientFailure(error).message };
+      for (const listener of listeners) listener();
       throw error;
     }
   };
@@ -359,6 +417,7 @@ export function createPhoneLedger(
       };
     },
     refresh,
+    readPeriodSpend: (period) => port.readPeriodSpend(period),
     createAccount: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
