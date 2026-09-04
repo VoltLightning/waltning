@@ -125,7 +125,8 @@ its own spike, blocked on a build.)
 **Shape.** D1 grammar + D2 payee memory are pure `packages/core` logic and
 run as parallel agents off `main` immediately — they need nothing from A–C.
 D3 capture components and D4 S05/S06 stack on C1. D5 is the acceptance
-journey: a test that times the grammar path.
+journey: a test that times the keypad path — J02's own target belongs to it,
+and the grammar is the desk's (DESK2).
 
 ### E · Money that moves
 
@@ -207,9 +208,14 @@ point at one list:
   stack when a lower PR merges, and composes screens. It does not implement.
 - **Cadence.** Wave 1: A1–A4, B1–B3, D1–D2, F (as many as parallel budget
   allows) — all off `main`. Wave 2: C1. Wave 3a: D3, D4a (S06), C2, DESK1 —
-  off `main`. Wave 3b, once D3 and D4a merge: C3–C6. Wave 4: D4b (S05 on the
-  Dock), D5, E. Wave 5: DESK2–DESK4, then DESK5. The wave-3 plans share
-  `plans/2026-09-04-wave-3-shared.md`.
+  off `main`. Wave 3b, once D3 and D4a merge: C3–C6. Wave 4a, off `main`:
+  D4b (S05 on the Dock), E1 (§7/§8 figures), E2 (counterparty and settlement
+  ops), E3 (§4/§4a, rates, FX ops). Wave 4b: D5 (after D4b), E4 (S15, S12,
+  S13), E5 (S14, S31), E6 (S17, S18). Wave 4c: J07 and J16 acceptance. Wave 5:
+  DESK2–DESK4, then DESK5. The wave-3 plans share
+  `plans/2026-09-04-wave-3-shared.md`; wave 4's share
+  `plans/2026-09-04-wave-4-shared.md`, which also moves the gate to the
+  orchestrator — an agent stops at green vitest and a pushed branch.
 
 ## 6. Risks named now
 

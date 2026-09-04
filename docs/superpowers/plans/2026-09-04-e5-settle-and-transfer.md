@@ -1,0 +1,22 @@
+# E5 · S14 Settle sheet and S31 Transfer — Implementation Plan (wave 4b)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans. Read `2026-09-04-wave-4-shared.md` first. Base on `main` after E2, E3 and D4b merge.
+
+**Goal:** Settling up records what changed hands and what it discharges, derives the rate, shows the spread and the residual before commit, and works offline against a stamped balance. Moving money between two of your own accounts is one action, and across currencies the bank's margin is visible while you type.
+
+**Architecture:** `RateField` primitive (`packages/ui/src/primitives/rate-field.tsx`, `03` §3.7 row: 4dp, read-only-or-editable, reference beside). `SettleSheet` (`packages/ui/src/counterparties/settle-sheet.tsx`) over `BottomSheet`, keypad-driven through D4b's `applyKey` and hero `AmountField`. `TransferComposer` (`packages/ui/src/transactions/transfer-composer.tsx`) reuses D4b's `Dock` and the chip vocabulary; `TransferAmount` (exists) is its live preview. Route `transfer` (`apps/mobile/src/transfer-screen.tsx`); `FloatingAdd` gains **long-press** (`Gesture.LongPress` beside its pan, exclusive) opening a three-item sheet Expense · Transfer · Income (S05 §9.1); D4b's screen takes `type` as a route param for the third.
+
+**Spec:** `screens/S14` §3–§9 (as corrected by E2: the write is `settle_debt`) · `S31` §3–§9 · `SPEC.md` §6.6 (settlement), §7.5, §7.6 · `architecture/08` H9 · `design-system/04` §4.3 · `05` §5.5.
+
+**Board cards closed:** *S14 · Settle sheet* · *S31 · Transfer* · the `SettleSheet` line of *D8*.
+
+**Branch:** `feature/e5-settle-and-transfer` off `main`.
+
+## Tasks
+
+1. **`RateField`.** Value at 4dp tabular; `editable` → `TextInput` accepting paste; `reference?: { rate; source; date }` rendered beside; `variant="manual"` amber when the value differs from the reference (P4). Stories.
+2. **`SettleSheet`.** Title *Settling with {name}*; amount (hero, keypad) + currency `Select`; **Discharges** radio over every balance, preselected to the settlement currency (S14 §9.1), each row `currency · amount · direction · as of {date}` when the snapshot is older than the session (offline stamp — the phone alone is always "offline": stamp it with `local_meta`'s last write time, and say *from this device's ledger as of …*); **Into/From** account `Select` (label follows the balance's sign); `RateField` derived = `discharges ÷ amount`, with E3's `readRate` as the reference when it exists and the spread beneath as typed; result card `discharges · remaining` (`remaining (estimated)` + amber line when stamped older than 24 h); over-settlement renders *becomes {amount} the other way*, not an error; Cancel · Settle full-width. Note field prompted (Q11). Save → `settleDebt`; the returned residual replaces the estimate on S13.
+3. **S31.** From · To account chips (picker; same account both sides refused inline before Save — the executor's constraint message on the `to` chip), swap control, source amount (hero, keypad), destination amount **prefilled from the reference rate and editable** (tapping it moves the keypad's target; an edit sets `toAmount` and nothing else), `realized` (derived), `reference · source · date`, `margin` via E3's `margin` as typed, optional `fee`, `total`, date and note chips; same-currency collapses to one amount. Offline with no rate: destination **empty**, reference absent, the person types it — the card's *Destination amount never derived*. Save → `createTransaction` with `type: "transfer"`, `toAccountId`, `toAmount`, `toCurrency`, `fee` (the controller's draft type widens; `toFxRate` is not sent — S31 §5).
+4. **Entry points.** `FloatingAdd` long-press sheet; S16 row overflow *Transfer from here* (`?from=`); S13 *Settle* now opens the sheet (replace E4's placeholder).
+5. **Tests and stories.** Sheet stories: `Entering`, `Partial`, `Exact`, `OverSettlement`, `Stamped`, `NoRate`; transfer stories: `SameCurrency`, `CrossCurrency`, `NoRateOffline`, `Fee`, `SameAccountRefused`. Screen tests: the S14 worked example end to end (owe 120 EUR, settle 50 EUR from `Cash · PLN` at 4.2810 → residual −70, spread shown against 4.3120); a transfer of `150 USD` → `565.20 PLN` at reference `3.8100` shows margin `6.30 zł`; same account refused; long-press opens the sheet and *Transfer* lands on the route.
+6. **Report.** Commit, push; report PR *"Settle, and move money — two amounts, a derived rate, the residual stated"*.
