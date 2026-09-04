@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { migrationsFolder } from "./scratch.ts";
 
-type Journal = { entries: { idx: number; tag: string }[] };
+type Journal = { entries: { idx: number; tag: string; when: number }[] };
 
 const journal: Journal = JSON.parse(
   readFileSync(fileURLToPath(new URL("../../drizzle/meta/_journal.json", import.meta.url)), "utf8"),
@@ -43,17 +43,22 @@ describe("migration journal", () => {
     ).toEqual([]);
   });
 
-  // M2 — `idx` is no longer required to be contiguous: this branch's own
-  // `0009` entry deliberately leaves `8` unclaimed, reserved for a migration
-  // landing first on another branch. What still must hold is order (no
-  // entry out of sequence) and uniqueness (no two entries claiming the same
-  // slot) — either of those breaking is the real bug a forgotten or
-  // duplicated `idx` would cause.
   it("is ordered, with no duplicate index", () => {
     const idxs = journal.entries.map((e) => e.idx);
     expect(idxs).toEqual([...idxs].sort((a, b) => a - b));
     expect(new Set(idxs).size).toBe(idxs.length);
     expect(tags).toEqual([...tags].sort());
+  });
+
+  // C1 — `drizzle-kit migrate` walks entries in `idx` order but skips any
+  // whose `when` is not newer than the last one it applied. A hand-edited
+  // `when` that lands before an earlier entry's is invisible to every check
+  // above (idx still ordered, tag still matches) and silently skips that
+  // migration on any database already past it.
+  it("has strictly increasing `when` across entries", () => {
+    const whens = journal.entries.map((e) => e.when);
+    expect(whens).toEqual([...whens].sort((a, b) => a - b));
+    expect(new Set(whens).size).toBe(whens.length);
   });
 
   // M2 — the bug itself: an entry's `idx` drifting from the number already

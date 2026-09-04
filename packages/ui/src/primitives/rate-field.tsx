@@ -49,7 +49,7 @@ export type RateFieldReference = {
   date: string;
   /** H2 — `crossRateProvenance`'s own carry for the leg named by `source`/`date` above, together. `0`/absent renders the plain "· {{date}}" line; positive renders "· carried {{count}} d from {{date}}" so the carry is stated, not folded silently into a bare date. */
   carriedDays?: number;
-  /** H2 — true when either leg behind this reference was a person's own correction (`crossRateProvenance`), regardless of which leg's own date is shown. Overrides the displayed `source` to read "manual" honestly, without implying the carried leg above is the one someone typed. */
+  /** H1/H2 — true when either leg behind this reference was a person's own correction (`crossRateProvenance`), regardless of which leg's own date is shown. Renders as its own `Tag` beside the reference line, never in place of the displayed `source` — the shown leg's own, real source, unglued from a correction that may belong to the *other* leg. */
   manual?: boolean;
 };
 
@@ -101,6 +101,10 @@ export function parseRate(input: string): string | null {
   const normalized = trimmed.replace(",", ".");
   if (!/^\d*\.?\d*$/.test(normalized)) return null;
   if (!/\d/.test(normalized)) return null;
+  // M3 — "5," normalizes to "5.", the same mid-entry, "not yet a number"
+  // shape `parseAmount` refuses for the same reason: `zMoney` requires a
+  // digit after the mark once one is typed.
+  if (normalized.endsWith(".")) return null;
 
   if (money.cmp(money.toMoney(normalized), money.ZERO) <= 0) return null;
 

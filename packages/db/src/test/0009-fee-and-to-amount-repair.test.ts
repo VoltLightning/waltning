@@ -4,9 +4,10 @@
  * added alongside the pre-existing `to_amount` one) and a same-currency
  * transfer's `to_amount` of `0`. `transactions-fee-and-to-amount-check.test.ts`
  * proves the CHECKs fire on a fully migrated database; this proves the
- * *repair* runs first, by migrating only up to `0007`, seeding both bad
- * shapes while nothing forbids them, then applying `0009` and reading the
- * rows back.
+ * *repair* runs first, by migrating only up to `0008` — the migration
+ * already renumbered onto this branch, so this proves `0009` runs on a
+ * database already at `0008` — seeding both bad shapes while nothing
+ * forbids them, then applying `0009` and reading the rows back.
  */
 
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -72,7 +73,7 @@ describe("0009 repairs a zero fee and a same-currency zero to_amount", () => {
   let partialFolder: string;
 
   beforeAll(async () => {
-    partialFolder = migrationsFolderUpto("0007_counterparty_merges_and_distinct_pairs");
+    partialFolder = migrationsFolderUpto("0008_transaction_lines_category_index");
 
     name = `waltning_test_0009_repair_${process.pid}`.toLowerCase();
     const sqlAdmin = admin();
@@ -154,5 +155,11 @@ describe("0009 repairs a zero fee and a same-currency zero to_amount", () => {
         (id, date, type, account_id, amount_original, currency, fx_rate, fee)
         values (gen_random_uuid(), '2026-08-12', 'expense', ${ACCOUNT.id}, '10.00', ${CURRENCY.code}, '1', '0.00')`,
     ).rejects.toThrow(/transactions_fee_positive/);
+
+    await expect(
+      sql`insert into transactions
+        (id, date, type, account_id, to_account_id, amount_original, to_amount, currency, to_currency, fx_rate, to_fx_rate)
+        values (gen_random_uuid(), '2026-08-12', 'transfer', ${ACCOUNT.id}, ${TO_ACCOUNT.id}, '10.00', '0.00', ${CURRENCY.code}, ${CURRENCY.code}, '1', '1')`,
+    ).rejects.toThrow(/transactions_to_amount_positive/);
   });
 });

@@ -41,6 +41,17 @@ describe("parseRate", () => {
     expect(parseRate("abc")).toBeNull();
     expect(parseRate("")).toBeNull();
   });
+
+  /**
+   * M3 — "5," normalizes to "5.", a shape `zMoney` refuses (its regex
+   * requires a digit after the mark once one is typed). Still mid-entry, the
+   * same "not yet a number" state `"."` alone already returns `null` for —
+   * the same rule `AmountField`'s own `parseAmount` states.
+   */
+  it("refuses a trailing separator rather than a shape zMoney would reject", () => {
+    expect(parseRate("5,")).toBeNull();
+    expect(parseRate("5.")).toBeNull();
+  });
 });
 
 describe("RateField", () => {
