@@ -37,6 +37,7 @@ const BASE_PROPS: QuickAddComposerProps = {
   accountId: null,
   accountMachineFilled: false,
   onAccountChange: vi.fn(),
+  onCreateAccount: vi.fn(),
   categories: CATEGORIES,
   categoryId: null,
   onOpenCategoryPicker: vi.fn(),
@@ -145,6 +146,14 @@ it("opens the account sheet and picks an account, closing it", () => {
   // becomes a radio (`chip.tsx`'s own contract) among an exclusive set.
   fireEvent.click(screen.getByRole("radio", { name: "Account: Cash · PLN" }));
   expect(onAccountChange).toHaveBeenCalledWith("account-a");
+});
+
+it("offers J02 §4's escape to create an account, from the account sheet", () => {
+  const onCreateAccount = vi.fn();
+  render(<QuickAddComposer {...props({ onCreateAccount })} />);
+  fireEvent.click(screen.getByRole("button", { name: "Account" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create account…" }));
+  expect(onCreateAccount).toHaveBeenCalledOnce();
 });
 
 it("shows the last-capture hint only when the account chip is machine-filled", () => {

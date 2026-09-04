@@ -35,6 +35,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { AmountField } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
+import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
@@ -77,6 +78,8 @@ export type QuickAddComposerProps = {
   /** Epoch ms — the sheet's own "from your last capture, 14:20" line. Absent when nothing was ever captured. */
   accountMachineFilledAt?: number;
   onAccountChange: (accountId: string) => void;
+  /** J02 §4: the account chip's own escape when nothing fits — S16's editor, same as `QuickAddForm`'s. */
+  onCreateAccount: () => void;
   categories: readonly QuickAddComposerCategory[];
   categoryId: string | null;
   /** D2's own proposal, already computed by the screen — this composer never proposes. */
@@ -115,6 +118,7 @@ export function QuickAddComposer({
   accountMachineFilled,
   accountMachineFilledAt,
   onAccountChange,
+  onCreateAccount,
   categories,
   categoryId,
   categoryProposal,
@@ -190,6 +194,7 @@ export function QuickAddComposer({
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
   const accountError = fieldErrors?.byField["accountId"]?.[0];
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
+  const payeeError = fieldErrors?.byField["payee"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
   const counterpartyError = fieldErrors?.byField["counterpartyId"]?.[0];
 
@@ -258,6 +263,7 @@ export function QuickAddComposer({
       </View>
       {accountError === undefined ? null : <Text style={styles.fieldError}>{accountError}</Text>}
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
+      {payeeError === undefined ? null : <Text style={styles.fieldError}>{payeeError}</Text>}
       {dateError === undefined ? null : <Text style={styles.fieldError}>{dateError}</Text>}
       {counterpartyError === undefined ? null : (
         <Text style={styles.fieldError}>{counterpartyError}</Text>
@@ -285,6 +291,7 @@ export function QuickAddComposer({
             ))}
           </View>
         </ScrollView>
+        <Button label={t("accounts.create")} onPress={onCreateAccount} variant="secondary" />
       </BottomSheet>
 
       <BottomSheet

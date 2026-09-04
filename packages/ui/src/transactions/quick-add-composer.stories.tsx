@@ -49,6 +49,7 @@ const meta = {
     accountId: null,
     accountMachineFilled: false,
     onAccountChange: noop,
+    onCreateAccount: noop,
     categories: CATEGORIES,
     categoryId: null,
     onOpenCategoryPicker: noop,

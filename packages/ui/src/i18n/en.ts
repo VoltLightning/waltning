@@ -65,6 +65,10 @@ export const en = {
     /** A `Dock` mode that has no screen yet — the accessibility hint on top of `disabled`. */
     later: "Later",
     retry: "Try again",
+    /** S05 §7 — the ✕ confirm, shown only over a machine-filled draft. */
+    discard: "Discard",
+    discardTitle: "Discard this transaction?",
+    discardBody: "It carries an auto-filled account — discarding it is cheap to redo.",
   },
   accounts: {
     currency: "Currency",
@@ -151,6 +155,11 @@ export const en = {
     "role.debt": "Debt — expected back",
     "role.contribution": "Contribution to a shared account",
     "role.reference": "Just involved — no obligation",
+    /** `Dock`'s mode row (S05 §3) — the keypad is the one arc 1 builds; the other three are named, disabled. */
+    modeKeypad: "Keypad",
+    modeVoice: "Voice",
+    modeReceipt: "Receipt",
+    modeConverse: "Converse",
     /* ── S10 · the ledger list (C4) ─────────────────────────────────────── */
     /** `SearchField`'s placeholder — S10 §3 mobile. */
     searchPlaceholder: "Search payee, note, amount",
