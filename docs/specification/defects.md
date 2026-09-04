@@ -416,8 +416,8 @@ from a transport blip and retried forever.
 **Nothing on the server could have caught it.** The response was well-formed, the
 status was right, and the suite asserted the body — correctly, and it passed.
 The defect existed only in a client parsing it, so it needed a real client
-against a running server: found by `pnpm e2e` the first time it ran, on a code
-path four tests already covered. The regression is now pinned by asserting the
+against a running server: found by `pnpm e2e:smoke` the first time it ran, on a
+code path four tests already covered. The regression is now pinned by asserting the
 *type* of `error.code`, which is the part no reader thinks to check.
 
 ### C30 — §2's balance formula subtracted every income

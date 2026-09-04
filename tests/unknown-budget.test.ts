@@ -47,6 +47,14 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 3,
     why: "two in one constraint — the driver's run-result and the schema map, neither of which this module touches — and the JSON payload the drain replays. It was eight: `TRun` and `TSchema` threaded by hand through three declarations, which is one decision typed out three times",
   },
+  "packages/ledger/src/journeys/fixture-dump.ts": {
+    max: 2,
+    why: "sqlLiteral's own value: a raw SQLite column read back off better-sqlite3, of genuinely unknown shape until narrowed by typeof (ddl.ts names no blob, so text, integer, bigint or null are the only cases) — and the row cast beside it, a constraint position for a table this function has not been taught about",
+  },
+  "packages/ledger/src/journeys/schema-fingerprint.ts": {
+    max: 8,
+    why: "SchemaRow's four pragma results (table_info, index_list, foreign_key_list, index_xinfo) are each a JSON-serialisable but genuinely heterogeneous row shape SQLite hands back — a constraint position, declared once on the type and once on the cast that builds each one",
+  },
   "packages/ledger/src/accounts/create-account.executor.ts": {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — `expo-sqlite` on the device and `better-sqlite3` in tests, and an executor never reads one because every statement ends in `.all()`",
@@ -229,6 +237,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
   "tools/e2e/src/smoke.ts": {
     max: 1,
     why: "a catch binding — the e2e probe reports whatever a failed fetch threw, and narrowing it would mean guessing at the shape of a failure it exists to discover",
+  },
+  "tools/e2e/specs/00-smoke.spec.ts": {
+    max: 2,
+    why: "the same catch binding as smoke.ts's own reasonOf, restated as a Playwright test — one in reasonOf itself, one holding whatever create_counterparty's mutate() threw before it is narrowed by an instanceof guard, not a cast",
   },
   "packages/client/src/transport/field-errors.ts": {
     max: 1,

@@ -1,0 +1,99 @@
+/**
+ * The corpus `name-collision-parity` proves both name-fold guards against.
+ *
+ * `packages/db/src/invariants/name-collision-parity.test.ts` and
+ * `packages/ledger/src/invariants/name-collision-parity.test.ts` each insert
+ * `a` into `counterparties`, then attempt `b`, and assert *their own* engine's
+ * refuse-or-accept verdict equals `collide` — Postgres's unique index on
+ * `lower(btrim(name))` (`packages/db/src/schema.ts`) on one side, SQLite's on
+ * `lower(trim(name))` (`packages/schema/src/counterparties.sqlite.ts`) fed
+ * through the executor's own `z.string().trim()` on the other
+ * (`create-counterparty.executor.ts`, `packages/core/src/registry/inputs.ts`).
+ * Neither engine folds a Polish letter or normalises NFD — the corpus states
+ * what a person would call a collision, not what today's code detects, and
+ * the two files' `it`/`it.fails` split is the record of where each engine's
+ * verdict lands relative to that.
+ *
+ * A pair does *not* say which finding it belongs to — that is per engine,
+ * decided at the call site, because the two engines can (and do) disagree on
+ * the same pair for different reasons.
+ */
+
+export type NamePair = {
+  /** Inserted first, always accepted. */
+  readonly a: string;
+  /** Attempted second. */
+  readonly b: string;
+  /** What a person would call this pair — the same name, or two different ones. */
+  readonly collide: boolean;
+  readonly why: string;
+};
+
+export const NAME_PAIRS: readonly NamePair[] = [
+  {
+    a: "Łukasz Placeholder",
+    b: "łukasz placeholder",
+    collide: true,
+    why: "a Polish letter's case pair — Ł and ł are the same letter",
+  },
+  {
+    a: "Józef Placeholder",
+    b: "Józef Placeholder".normalize("NFD"),
+    collide: true,
+    why: "the same name, once precomposed (NFC) and once decomposed (NFD) — one person's name in two Unicode representations of the identical text",
+  },
+  {
+    a: "Anna Placeholder",
+    b: "anna placeholder",
+    collide: true,
+    why: "a plain ASCII case difference",
+  },
+  {
+    a: "Anna Placeholder",
+    b: "Anna Placeholder ",
+    collide: true,
+    why: "a trailing ASCII space (U+0020) — trim covers it",
+  },
+  {
+    a: "Anna Placeholder",
+    b: "Anna Placeholder\t",
+    collide: true,
+    why: "a trailing tab (U+0009)",
+  },
+  {
+    a: "Anna Placeholder",
+    b: "Anna Placeholder\u00A0",
+    collide: true,
+    why: "a trailing no-break space (U+00A0) — whitespace to a person, not to every trim",
+  },
+  {
+    a: "Anna Placeholder",
+    b: "Anna Placeholder\v",
+    collide: true,
+    why: "a trailing vertical tab (U+000B, the \\v escape) — invisible, and easy to paste in from a spreadsheet export",
+  },
+  {
+    a: "Ivanov",
+    b: "Ivano",
+    collide: false,
+    why: "a prefix of the other name, not the same name",
+  },
+  {
+    a: "Lev",
+    b: "Le",
+    collide: false,
+    why: "a prefix of the other name, not the same name",
+  },
+  {
+    a: "Café",
+    b: "Cafe",
+    collide: false,
+    why: "the other side of the same rule below: fold() (packages/core/src/capture/names.ts) folds case plus exactly nine Polish diacritics (ą ć ę ł ń ó ś ź ż) — é is not one of them, so café and cafe are two different spellings under the counterparty fold PR #116 enforces on both engines (SPEC.md §6.6), not a collision",
+  },
+  {
+    a: "Zażółć",
+    b: "ZAZOLC",
+    collide: true,
+    why: "the same name under this product's own counterparty fold — case plus the nine Polish diacritics fold() (packages/core/src/capture/names.ts) already defines for name matching, the rule PR #116 enforces on both engines and writes into SPEC.md §6.6, superseding S15 §9's 'decorative' remark about normalized equality",
+  },
+];

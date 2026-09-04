@@ -5,11 +5,16 @@
   "type": "module",
   "scripts": {
     "smoke": "tsx src/smoke.ts",
+    "e2e": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@trpc/client": "^11.18.0",
     "@waltning/api": "workspace:*",
-    "@waltning/core": "workspace:*"
+    "@waltning/core": "workspace:*",
+    "@waltning/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }

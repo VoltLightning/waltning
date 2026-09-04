@@ -13,11 +13,18 @@
  * check rather than a copy of it — so a rename that breaks the client breaks
  * this too, instead of this quietly continuing to pass.
  *
- *   pnpm e2e            read-only; touches no data
- *   pnpm e2e --write    also creates one placeholder counterparty and shows it
+ *   pnpm e2e:smoke            read-only; touches no data
+ *   pnpm e2e:smoke --write    also creates one placeholder counterparty and shows it
  *
  * Read-only by default because this runs against a development ledger, and a
  * check that leaves rows behind is one people stop running.
+ *
+ * **`pnpm e2e` is a different check.** Tier 2 (`specs/`) wraps this file's
+ * probes in `00-smoke.spec.ts` and adds four more that drive the real Expo
+ * web build — `--write`'s reasoning does not apply there, because
+ * `setup/database.ts` hands the API a Postgres database that exists only for
+ * that run: every spec writes freely, and nothing it leaves behind is ever a
+ * development ledger's problem.
  */
 
 import { createTRPCClient, httpLink, TRPCClientError } from "@trpc/client";

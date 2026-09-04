@@ -24,6 +24,7 @@
   },
   "scripts": {
     "generate": "drizzle-kit generate --config=drizzle.replica.config.ts --name=schema && drizzle-kit generate --config=drizzle.outbox.config.ts --name=schema && tsx tools/embed-ddl.ts",
+    "fixture:dump": "tsx tools/dump-fixture.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

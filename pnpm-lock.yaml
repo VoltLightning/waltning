@@ -333,6 +333,13 @@ importers:
       '@waltning/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@waltning/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+    devDependencies:
+      '@playwright/test':
+        specifier: ^1.62.1
+        version: 1.62.1
 
   tools/migrate-mm:
     dependencies:
