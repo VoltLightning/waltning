@@ -245,7 +245,7 @@ export const REPLICA_DDL: readonly string[] = [
   `CREATE INDEX \`transaction_lines_category_idx\` ON \`transaction_lines\` (\`category_id\`)`,
   `CREATE INDEX \`transactions_category_idx\` ON \`transactions\` (\`category_id\`)`,
   `DROP INDEX \`counterparties_name_uq\``,
-  `ALTER TABLE \`counterparties\` ADD \`name_folded\` text NOT NULL`,
+  `ALTER TABLE \`counterparties\` ADD \`name_folded\` text DEFAULT '' NOT NULL`,
   `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
   `PRAGMA foreign_keys=OFF`,
   `CREATE TABLE \`__new_counterparty_merges\` (

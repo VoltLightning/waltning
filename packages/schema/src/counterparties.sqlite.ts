@@ -45,8 +45,16 @@ import { sqliteKit as k } from "./kit.ts";
 export const counterpartiesColumns = () => ({
   id: k.id<"counterparties">("id"),
   name: k.text("name").notNull(),
-  /** `fold(name)` — see above. Written by `create_counterparty`/`update_counterparty`, never derived by a query. */
-  nameFolded: k.text("name_folded").notNull(),
+  /**
+   * `fold(name)` — see above. Written by `create_counterparty`/
+   * `update_counterparty`, never derived by a query. The `''` default exists
+   * for one reason: SQLite refuses `ADD COLUMN … NOT NULL` without one on a
+   * table that has rows, so the migration step that introduces this column
+   * could not run on a phone that already holds counterparties. The in-place
+   * step backfills every row through `fold()` in the same transaction
+   * (`packages/ledger/src/migrate.ts`, the step's backfill); no row keeps `''`.
+   */
+  nameFolded: k.text("name_folded").notNull().default(""),
   kind: k.text("kind", { enum: COUNTERPARTY_KIND }).notNull().default("person"),
   settlementCurrency: k.currency("settlement_currency").references(() => currencies.code),
   contact: k.text("contact"),
