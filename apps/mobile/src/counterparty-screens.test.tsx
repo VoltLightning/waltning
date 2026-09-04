@@ -12,7 +12,6 @@ import {
   type PhoneAccount,
   type PhoneCounterparty,
   type PhoneCounterpartyBalance,
-  type PhoneLedgerController,
   type PhoneLedgerPort,
   type PhoneSearchPage,
 } from "@waltning/client/ledger/create-phone-ledger";
@@ -196,22 +195,6 @@ function controllerOf(port: PhoneLedgerPort) {
   });
 }
 
-/**
- * H1 — a controller reporting `revision: 0`, as if no `refresh()` has
- * completed yet. Every real `PhoneLedgerController` bumps `revision` past 0
- * synchronously in its own constructor, so this wraps a real one and
- * overrides just the one field a screen's loading branch reads, rather than
- * hand-building the whole port surface a second time.
- */
-function unhydratedController(port: PhoneLedgerPort): PhoneLedgerController {
-  const real = controllerOf(port);
-  // `useSyncExternalStore` requires a referentially stable `getSnapshot`
-  // result across calls that have not actually changed — computed once here,
-  // never inline in the returned closure, or React reports an infinite loop.
-  const snapshot = { ...real.getSnapshot(), revision: 0 };
-  return { ...real, getSnapshot: () => snapshot };
-}
-
 beforeEach(() => {
   router.push.mockClear();
   router.back.mockClear();
@@ -285,14 +268,15 @@ describe("Debt (S12)", () => {
   });
 
   /**
-   * H1 — the loading state (S12 §6), never "All settled", while the pivot
-   * is unresolved and no `refresh()` has completed. Live debts exist
+   * H1 — the loading state (S12 §6), never "All settled", while the replica
+   * has not bootstrapped any currency yet. Live debts exist
    * (`listCounterpartyBalances` answers a real balance) — the bug rendered
    * the empty state right over them.
    */
-  it("shows a loading skeleton, never the empty state, before the first refresh has completed", () => {
-    const controller = unhydratedController(
+  it("shows a loading skeleton, never the empty state, while no currency has been read yet", () => {
+    const controller = controllerOf(
       basePort({
+        listCurrencies: () => [],
         listCounterparties: () => [NINA_COUNTERPARTY],
         listCounterpartyBalances: () => [NINA_ROW],
       }),
@@ -305,6 +289,38 @@ describe("Debt (S12)", () => {
     expect(screen.queryByText("All settled")).toBeNull();
     expect(screen.queryByText("No one yet")).toBeNull();
     expect(screen.getAllByLabelText("Loading debts").length).toBeGreaterThan(0);
+  });
+
+  /**
+   * H1 — a *non-empty* `currencies` list with no `isPivot` row is not a
+   * loading state: it is `architecture/09`'s bootstrap guarantee broken, and
+   * must surface as a recoverable error rather than "All settled".
+   */
+  it("shows a recoverable error, never the empty state, when currencies hold no pivot", () => {
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+            isPivot: false,
+          },
+        ],
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
+    expect(screen.queryByText("All settled")).toBeNull();
+    expect(screen.queryByText("No one yet")).toBeNull();
   });
 
   it("shows the first-run empty state with nothing on the ledger", () => {
@@ -387,9 +403,10 @@ describe("CounterpartyDetail (S13)", () => {
   beforeEach(() => useLocalSearchParams.mockReturnValue({ id: NINA }));
 
   /** H1 — S13 §6's own loading state, never the `return null` an unresolved `figures` fell through to. */
-  it("shows a loading skeleton, never a blank screen, before the first refresh has completed", () => {
-    const controller = unhydratedController(
+  it("shows a loading skeleton, never a blank screen, while no currency has been read yet", () => {
+    const controller = controllerOf(
       basePort({
+        listCurrencies: () => [],
         listCounterparties: () => [NINA_COUNTERPARTY],
         listCounterpartyBalances: () => [NINA_ROW],
       }),
@@ -401,6 +418,37 @@ describe("CounterpartyDetail (S13)", () => {
     );
     expect(screen.queryByText("Nina")).toBeNull();
     expect(screen.getAllByLabelText("Loading counterparty ledger").length).toBeGreaterThan(0);
+  });
+
+  /**
+   * H1 — a *non-empty* `currencies` list with no `isPivot` row is not a
+   * loading state: it is `architecture/09`'s bootstrap guarantee broken, and
+   * must surface as a recoverable error rather than a blank screen.
+   */
+  it("shows a recoverable error, never a blank screen, when currencies hold no pivot", () => {
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+            isPivot: false,
+          },
+        ],
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
+    expect(screen.queryByText("Nina")).toBeNull();
   });
 
   it("shows the card, the ledger, and defaults history to debt rows", () => {
@@ -438,6 +486,46 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
     expect(screen.getByText("Settling with Nina")).toBeDefined();
+  });
+
+  /**
+   * C1 — the same guard `transfer-screen.test.tsx` covers after #112: the
+   * picker shows the uncapturable account muted (S05, by design), and the
+   * sheet itself declines it — caption under the chip, Settle disabled.
+   */
+  it("shows the needsRate caption and disables Settle for an uncapturable account (C1)", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listAccounts: () => [CASH_PLN],
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: false,
+            isPivot: true,
+          },
+        ],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    fireEvent.click(sheet.getByRole("button", { name: "Into" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+
+    expect(
+      sheet.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
+    ).toBeDefined();
+    expect(sheet.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
   });
 
   it("settles through the sheet — counterpartyId, the picked discharges, and the toast", () => {
@@ -489,6 +577,62 @@ describe("CounterpartyDetail (S13)", () => {
     expect(screen.getByText("Settled. 790.00 PLN they owe you.")).toBeDefined();
   });
 
+  /**
+   * M3 — the same H3 fix `resolveCounterpartyFigures` already carries:
+   * `settleDischargesDecimals` reads from `snapshot.currencies` first, never
+   * a possibly-stale balance row, when the two disagree.
+   */
+  it("reads discharge decimals from the currency list, not the balance row, when they disagree (M3)", () => {
+    const settleDebt = vi.fn<PhoneLedgerPort["settleDebt"]>(() => ({
+      residual: toMoney("790"),
+      overSettled: false,
+    }));
+    const controller = controllerOf(
+      basePort({
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 0,
+            capturable: true,
+            isPivot: true,
+          },
+        ],
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        // `NINA_ROW` itself carries `decimals: 2` — deliberately disagreeing
+        // with the currency list above, to prove which one wins.
+        listCounterpartyBalances: () => [NINA_ROW],
+        listAccounts: () => [CASH_PLN],
+        settleDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    fireEvent.click(sheet.getByRole("button", { name: "Into" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Amount: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "5" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "5" }));
+    fireEvent.click(sheet.getByRole("button", { name: "0" }));
+
+    fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
+
+    // 0dp, from `snapshot.currencies` — "790", never the balance row's own
+    // stale "790.00".
+    expect(screen.getByText("Settled. 790 PLN they owe you.")).toBeDefined();
+  });
+
   it("shows the all-settled empty state, keeping the card, when nothing is open", () => {
     const controller = controllerOf(basePort({ listCounterparties: () => [NINA_COUNTERPARTY] }));
     render(
@@ -502,6 +646,12 @@ describe("CounterpartyDetail (S13)", () => {
     // below it (no `debt` rows to list) — both real, both empty for their
     // own reason.
     expect(screen.getAllByText("All settled")).toHaveLength(2);
+    // L3 — now genuinely two keys (`ledgerSettled` vs `historySettled`),
+    // never one screen's copy silently doubling as the other's: each still
+    // carries its own body text, which a test (or a future copy edit) can
+    // tell apart even though the two titles read the same.
+    expect(screen.getByText("Nothing open with them right now.")).toBeDefined();
+    expect(screen.getByText("Nobody owes anything right now.")).toBeDefined();
   });
 
   /** The BLOCKER (finding 1), on S13 — no net line when the fold is incomplete. */

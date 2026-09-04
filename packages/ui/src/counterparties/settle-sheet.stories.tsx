@@ -20,7 +20,7 @@ const meta = {
     visible: true,
     counterpartyName: "Nina",
     balances: [{ currency: "EUR", balance: toMoney("-120"), decimals: 2 }],
-    accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN" }],
+    accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN", capturable: true }],
     amountRaw: "",
     dischargesCurrency: "EUR",
     onDischargesCurrencyChange: noop,

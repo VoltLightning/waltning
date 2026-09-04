@@ -62,6 +62,7 @@ export type SettleSheetAccount = {
   id: string;
   name: string;
   currency: string;
+  capturable: boolean;
 };
 
 export type SettleSheetReferenceRate = {
@@ -251,11 +252,24 @@ export function SettleSheet({
   const accountError = fieldErrors?.byField["accountId"]?.[0];
   const amountError = fieldErrors?.byField["amount"]?.[0];
 
+  // C1 — the same guard `TransferComposer`'s own `fromNeedsRate` states: the
+  // controller refuses `settle_debt` on `accountId` before the write once the
+  // picked account holds no rate (§14.6), so this sheet declines proactively
+  // rather than letting a tap reach the controller only to bounce. Takes
+  // priority over any other `accountId` refusal already on the field, the
+  // same ordering `fromCaption` keeps.
+  const accountNeedsRate =
+    account !== undefined && !account.capturable
+      ? t("transactions.needsRate", { currency: account.currency })
+      : undefined;
+  const accountCaption = accountNeedsRate ?? accountError;
+
   const saveDisabled =
     dischargesCurrency === null ||
     accountId === null ||
     money.isZero(amount) ||
-    money.isZero(dischargesAmount);
+    money.isZero(dischargesAmount) ||
+    accountNeedsRate !== undefined;
 
   return (
     <BottomSheet
@@ -311,7 +325,11 @@ export function SettleSheet({
           onPress={onOpenAccountPicker}
           machineFilled={false}
         />
-        {accountError === undefined ? null : <Text style={styles.fieldError}>{accountError}</Text>}
+        {accountCaption === undefined ? null : (
+          <Text style={accountNeedsRate === undefined ? styles.fieldError : styles.needsRate}>
+            {accountCaption}
+          </Text>
+        )}
 
         <RateField
           label={t("transactions.realized")}
@@ -405,6 +423,7 @@ export function SettleSheet({
 const useStyles = makeStyles((theme) => ({
   body: { gap: space.x3 },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
+  needsRate: { color: theme.textMuted, ...text.ui("caption") },
   sectionLabel: {
     color: theme.textMuted,
     ...text.ui("kicker"),

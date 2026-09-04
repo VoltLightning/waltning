@@ -460,6 +460,61 @@ describe("settle_debt", () => {
     ).toThrow(/nothing to settle/);
   });
 
+  /**
+   * L1 — "nothing to settle" rounds to the currency's own decimals first,
+   * the same rounding `settleResidualDirection` (packages/client) reads a
+   * residual at. A raw 8dp balance of `-0.001` EUR is sub-minor-unit dust,
+   * `0,00` on any screen that renders it (2dp) — it must refuse the same way
+   * a genuinely zero balance does, not silently settle against dust.
+   */
+  it("rounds to the currency's own decimals before refusing a zero balance", () => {
+    debtRow({
+      id: "e0e0e0e0-e0e0-4e0e-8e0e-e0e0e0e0e0e0",
+      type: "income",
+      amount: "0.001",
+      counterpartyId: NINA,
+    });
+
+    expect(() =>
+      write(settleDebtExecutor, {
+        id: "f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0",
+        counterpartyId: NINA,
+        accountId: ACCOUNT,
+        date: "2026-08-04",
+        amount: "0.001",
+        currency: "EUR",
+        discharges: { currency: "EUR", amount: "0.001" },
+      }),
+    ).toThrow(/nothing to settle/);
+  });
+
+  /**
+   * L1 — `overSettled` rounds to the currency's own decimals too, so it
+   * agrees with `settleResidualDirection`: a residual that rounds to `0,00`
+   * reads as settled everywhere, never a flipped direction here and
+   * "settled" on screen.
+   */
+  it("does not report over-settlement when the residual rounds to zero", () => {
+    debtRow({
+      id: "11111111-2222-4333-8444-555555555501",
+      type: "expense",
+      amount: "0.01",
+      counterpartyId: NINA,
+    });
+
+    const result = write(settleDebtExecutor, {
+      id: "11111111-2222-4333-8444-555555555502",
+      counterpartyId: NINA,
+      accountId: ACCOUNT,
+      date: "2026-08-04",
+      amount: "0.014",
+      currency: "EUR",
+      discharges: { currency: "EUR", amount: "0.014" },
+    });
+
+    expect(result.row.overSettled).toBe(false);
+  });
+
   it("never counts a contribution-role row", () => {
     debtRow({
       id: "c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0",

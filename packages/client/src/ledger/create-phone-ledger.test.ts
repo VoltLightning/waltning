@@ -1970,6 +1970,51 @@ describe("phone ledger controller — counterparties and settlement", () => {
     });
   });
 
+  /**
+   * C1 — mirrors `createTransaction`'s own uncapturable-account guard
+   * (§14.6): refuse before the outbox write, not after `settle_debt`'s
+   * executor has already committed the entry.
+   */
+  it("settleDebt: refuses an uncapturable account before the write", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: false,
+          isPivot: false,
+        },
+      ],
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "PLN",
+      dischargesCurrency: "PLN",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "accountId",
+        message: "PLN needs an exchange rate before a transaction can be recorded in it",
+        messageKey: "transactions.needsRate",
+        params: { currency: "PLN" },
+      },
+    ]);
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
   it("settle_debt: the residual and overSettled come from the port, never derived locally", () => {
     const { controller } = counterpartyHarness();
 
@@ -2111,10 +2156,14 @@ describe("phone ledger controller — counterparties and settlement", () => {
       categoryId: null,
     });
 
+    // C1 — never the executor's raw English: `settleDebtRefusal` never falls
+    // through to `refusalFromThrow`, so an unrecognised message still carries
+    // the shared `common.couldNotSave` key for the screen to resolve.
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
       {
         path: "",
         message: "settle_debt: the row changed between insert and the debt-fields update",
+        messageKey: "common.couldNotSave",
       },
     ]);
   });

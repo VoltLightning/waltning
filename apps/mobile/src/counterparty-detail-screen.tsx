@@ -186,6 +186,19 @@ function resolveSettleFieldErrorMessage(t: ReturnType<typeof useT>, error: Field
   if (error.messageKey === "settleDebt.nothingToSettle") {
     return t("settleDebt.nothingToSettle");
   }
+  // C1 — the same guard `quick-add-screen.tsx`'s own `resolveFieldErrorMessage`
+  // resolves for `createTransaction`: an uncapturable account, named by the
+  // controller before the write (§14.6). The sheet itself already declines
+  // proactively; this covers the same refusal reaching here another way.
+  if (error.messageKey === "transactions.needsRate") {
+    return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
+  }
+  // C1 — an executor refusal `settleDebtRefusal` does not recognise now
+  // carries `common.couldNotSave` rather than `null`, so it never falls
+  // through to the raw English `refusalFromThrow` would otherwise print.
+  if (error.messageKey === "common.couldNotSave") {
+    return t("common.couldNotSave");
+  }
   return error.message;
 }
 
@@ -213,11 +226,6 @@ export default function CounterpartyDetail() {
   // not import it, so this screen opens it, the same split `transfer-screen.tsx`
   // already draws for its own keypad-driven sheet.
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
-
-  // H1 — at least one `refresh()` has completed, success or failure. Gates
-  // the loading branch below, which must render before anything derived from
-  // `pivot`/`figures` is asked to stand in for "nothing is open".
-  const hydrated = snapshot.revision > 0;
 
   const counterparty =
     snapshot.counterparties.find((candidate) => candidate.id === rawId) ??
@@ -262,6 +270,7 @@ export default function CounterpartyDetail() {
         id: account.id,
         name: account.name,
         currency: account.currency,
+        capturable: account.capturable,
       })),
     [snapshot.accounts],
   );
@@ -280,8 +289,15 @@ export default function CounterpartyDetail() {
   // (a plain `{id, name, currency}` shape the sheet itself declares).
   const settleAccountDecimals =
     snapshot.accounts.find((account) => account.id === settleAccountId)?.decimals ?? 2;
+  // M3 — the same H3 fix `resolveCounterpartyFigures` already carries:
+  // `snapshot.currencies` is the replica's own authoritative scale for a
+  // currency, never guessed from whichever balance row happens to name it —
+  // the balance row is only a fallback for a currency the replica's own list
+  // does not (yet) carry.
   const settleDischargesDecimals =
-    group?.balances.find((row) => row.currency === settleDischargesCurrency)?.decimals ?? 2;
+    snapshot.currencies.find((currency) => currency.code === settleDischargesCurrency)?.decimals ??
+    group?.balances.find((row) => row.currency === settleDischargesCurrency)?.decimals ??
+    2;
 
   // §6 — the reference rate for the picked pair, or `undefined` offline with
   // nothing held: the same shape `transfer-screen.tsx`'s own `referenceRate`
@@ -419,17 +435,35 @@ export default function CounterpartyDetail() {
     );
   }
 
-  // H1 — S13 §6's own loading state ("Skeleton ledger rows"), never the
-  // `return null` an unresolved `pivot`/`figures` would otherwise fall
-  // through to on the very first render.
-  if (!hydrated) {
+  // H1 — the real distinction is `currencies`, not `revision` (every real
+  // controller calls `refresh()` synchronously before it is ever handed out,
+  // so `revision > 0` always holds and that gate was unreachable). An empty
+  // `currencies` list is the replica genuinely not bootstrapped yet — S13 §6's
+  // own loading state. A *non-empty* list with no `isPivot` row is not a
+  // loading state at all — it is `architecture/09`'s bootstrap guarantee
+  // broken, which must never render as a blank screen (`figures` is `null`
+  // exactly when `pivot` is, so this also resolves the old `!figures` half of
+  // the guard below).
+  if (pivot === undefined) {
+    if (snapshot.currencies.length === 0) {
+      return (
+        <GroundPanel>
+          <Card>
+            <Skeleton shape="hero" label={t("counterparties.loadingLedger")} />
+            <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
+            <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
+          </Card>
+        </GroundPanel>
+      );
+    }
     return (
       <GroundPanel>
-        <Card>
-          <Skeleton shape="hero" label={t("counterparties.loadingLedger")} />
-          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
-          <Skeleton shape="row" label={t("counterparties.loadingLedger")} />
-        </Card>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.noPivotTitle")}
+          why={t("counterparties.noPivotWhy")}
+          action={{ label: t("common.retry"), onPress: ledger.refresh }}
+        />
       </GroundPanel>
     );
   }
@@ -490,8 +524,13 @@ export default function CounterpartyDetail() {
       {historyRows.length === 0 ? (
         <EmptyState
           variant="range"
-          title={t("counterparties.emptySettledTitle")}
-          body={t("counterparties.emptySettledBody")}
+          // L3 — the history section's own key: distinct from
+          // `BalanceLedger`'s `ledgerSettled` (the card above) and from
+          // S12's own `emptySettledTitle` (`debt-screen.tsx`), which this
+          // used to borrow — two screens sharing one key meant an edit to
+          // either's copy silently changed the other's.
+          title={t("counterparties.historySettled")}
+          body={t("counterparties.historySettledBody")}
           primaryAction={{
             label: t("counterparties.addTransaction"),
             onPress: handleAddTransaction,

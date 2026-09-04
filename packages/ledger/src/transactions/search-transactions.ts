@@ -141,20 +141,26 @@ function scopeCondition(scope: TransactionSearchScope) {
  * `toCurrency`. Never summed into one figure across currencies (S10 §3: "per
  * currency, never summed across").
  *
- * **M2 — a text-free search pushes its `LIMIT` into SQL; a text search
- * cannot.** Every keystroke into a filter with no `text` (S13's whole
- * history, the settle sheet blurring a discharge candidate) used to run this
- * query with no `LIMIT` at all — reading and joining every structurally-
- * matching row, then slicing a 50-row page off in JS — regardless of how
- * many rows actually matched. With no `text` to fold, SQL alone can already
- * decide which rows the page needs (`(date, id)` keyset order plus the
- * cursor), so that path asks for `SEARCH_PAGE_SIZE + 1` rows and nothing
- * more; totals still need every matching row summed (`money.signed` per row
- * is not expressible in SQL), so that runs as its own query, over a leaner
- * column set with no `accounts`/`toAccounts`/`categories` join the page's own
- * display needs but a sum does not. A `text` filter still reads the whole
- * structurally-filtered set into JS first — the trade-off `matchesText`'s own
- * doc names above, unavoidable without `pg_trgm`.
+ * **M2 — the page is bounded; the total is not, and cannot be made an SQL
+ * aggregate without breaking `money.ts`'s own rule.** A text-free search
+ * pushes its `LIMIT` into SQL (`(date, id)` keyset order plus the cursor
+ * decide which `SEARCH_PAGE_SIZE + 1` rows the page needs, and nothing more)
+ * — but the total beside it still runs its own query with no `LIMIT` at all,
+ * reading and folding *every* structurally-matching row, over a leaner column
+ * set with no `accounts`/`toAccounts`/`categories` join the page needs but a
+ * sum does not. This is not an oversight: `money.signed` per row (income vs.
+ * expense vs. a transfer's two legs, §7.2) is not expressible in SQL, and
+ * SQLite has no genuine decimal type — its `SUM()` coerces the `TEXT` this
+ * replica stores money as into a `REAL`, handing this file back a JS
+ * `number` holding an amount, which `architecture/11` calls a bug regardless
+ * of where it happens. Folding every matching row through `decimal.js` in
+ * JS is the one way to keep the exact 8dp sum the six-currency-total tests
+ * assert on, at arc-1 sizes (a personal ledger's few thousand rows, further
+ * cut by whichever structural filter is active) the same trade-off the
+ * `text`-search branch below makes for the same reason. A `text` filter
+ * still reads the whole structurally-filtered set into JS first regardless —
+ * the trade-off `matchesText`'s own doc names above, unavoidable without
+ * `pg_trgm`.
  */
 export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
@@ -267,7 +273,10 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
 
     // A leaner query for the total — every matching row, but none of the
     // display-only joins (`accounts.name`, `toAccounts.name`,
-    // `categories.name`) the page above needs and a sum does not.
+    // `categories.name`) the page above needs and a sum does not. M2 —
+    // deliberately no `.limit()` here: unlike the page, the total is bounded
+    // only by how many rows the filter matches, never a fixed page size (see
+    // this function's own doc for why an SQL-side sum is not the fix).
     const totalRows = db
       .select({
         currency: transactions.currency,

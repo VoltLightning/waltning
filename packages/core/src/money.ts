@@ -133,8 +133,12 @@ const GROUP = "\u00a0";
 export const forDisplay = (v: Money, decimals: number, mark: "." | "," = "."): string => {
   const fixed = dec(v).toFixed(decimals);
   const [whole = "", fraction] = fixed.split(".");
-  const negative = whole.startsWith("-");
-  const digits = negative ? whole.slice(1) : whole;
+  const startsNegative = whole.startsWith("-");
+  const digits = startsNegative ? whole.slice(1) : whole;
+  // L2 — a value that rounds to zero at this scale renders unsigned: dust
+  // like `-0.004` at 2dp is `-0,00` from `toFixed` alone, a minus sign on a
+  // figure a reader sees as nothing.
+  const negative = startsNegative && !dec(fixed).isZero();
   const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, GROUP);
   return `${negative ? "-" : ""}${grouped}${fraction === undefined ? "" : `${mark}${fraction}`}`;
 };
@@ -741,6 +745,15 @@ export const debtDirection = (balance: Money, decimals: number): DebtDirection =
  * currency label and nothing under it. `decimals` rides along on the output
  * row too, so a caller never has to re-derive a currency's own scale to
  * render the figure it was just handed (H4).
+ *
+ * **The total is the sum of what the rows show (M1) — each balance rounds to
+ * the currency's own scale before it is added in, never after.** Rounding
+ * only the 8dp sum at the end lets sub-minor-unit dust across several rows
+ * accumulate into a whole minor unit nobody's own row displays: three
+ * counterparties at +0.004 PLN each round to `0,00` individually, but their
+ * raw 8dp sum is `0.012`, which rounds to a header of `0,01` while every row
+ * reads settled and the segment lists nobody. Rounding first means the sum
+ * of N already-rounded values needs no further rounding of its own.
  */
 export type DirectionTotalRow = {
   currency: CurrencyCode;
@@ -761,7 +774,19 @@ export const directionTotals = (
   >();
   for (const { currency, balance, decimals } of rows) {
     const bucket = byCurrency.get(currency) ?? { theyOwe: dec(0), youOwe: dec(0), decimals };
-    const b = dec(balance);
+    // L4 — a wrong scale must not be silent: two rows naming the same
+    // currency at two different `decimals` is an invariant violation (H3's
+    // own lesson — a currency's scale is a structural fact, never picked by
+    // whichever row happened to set the bucket first), so this throws rather
+    // than rounding one row at the wrong precision.
+    if (bucket.decimals !== decimals) {
+      throw new Error(
+        `directionTotals: ${currency} rows disagree on decimals (${bucket.decimals} vs ${decimals})`,
+      );
+    }
+    // M1 — rounded to this currency's own scale before it joins the running
+    // total, the same rounding every row itself renders at.
+    const b = dec(round(balance, decimals));
     if (b.isPositive()) bucket.theyOwe = bucket.theyOwe.plus(b);
     else if (b.isNegative()) bucket.youOwe = bucket.youOwe.plus(b.abs());
     byCurrency.set(currency, bucket);

@@ -17,7 +17,7 @@ const BASE_PROPS: SettleSheetProps = {
   visible: true,
   counterpartyName: "Nina",
   balances: [{ currency: "EUR", balance: toMoney("-120"), decimals: 2 }],
-  accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN" }],
+  accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN", capturable: true }],
   amountRaw: "214,05",
   dischargesCurrency: "EUR",
   onDischargesCurrencyChange: vi.fn(),
@@ -115,6 +115,23 @@ it("disables Settle until an account and a discharge currency are both picked", 
   expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
 });
 
+/**
+ * C1 — the same guard `TransferComposer`'s own `fromNeedsRate` states
+ * (§14.6): the controller refuses `settle_debt` on `accountId` before the
+ * write once the picked account holds no rate, so this sheet declines
+ * proactively — muted caption, disabled Settle — rather than letting a tap
+ * reach the controller only to bounce.
+ */
+it("shows the needsRate caption under the account chip and disables Settle when it can't be captured (C1)", () => {
+  renderSheet({
+    accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN", capturable: false }],
+  });
+  expect(
+    screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
+  ).toBeDefined();
+  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+});
+
 it("calls onSettle on the primary action", () => {
   const onSettle = vi.fn();
   renderSheet({ onSettle });
@@ -139,7 +156,7 @@ it("does not double the currency when the account name already carries it", () =
 
 it("still appends the currency when the account name does not carry it", () => {
   renderSheet({
-    accounts: [{ id: "acc-other", name: "Household", currency: "USD" }],
+    accounts: [{ id: "acc-other", name: "Household", currency: "USD", capturable: true }],
     accountId: "acc-other",
   });
   expect(screen.getByText("Household · USD")).toBeDefined();

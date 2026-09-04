@@ -37,7 +37,7 @@ import {
 import type { LocalTx } from "../write.ts";
 import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
-const { counterparties } = schema;
+const { counterparties, currencies } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export type SettleDebtResult = {
@@ -71,11 +71,23 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     throw new Error(`settle_debt: no counterparty ${input.counterpartyId}`);
   }
 
+  // L1 — the currency's own decimals, read here rather than trusted from a
+  // caller: `balancesForCounterparty` folds at full 8dp precision, and both
+  // signs below must agree with `settleResidualDirection`'s own rounded read
+  // of the same figures, or the executor and the screen can each name a
+  // different outcome for the same settlement.
+  const [currencyRow] = tx
+    .select({ decimals: currencies.decimals })
+    .from(currencies)
+    .where(eq(currencies.code, input.discharges.currency))
+    .all();
+  const decimals = currencyRow?.decimals ?? 2;
+
   const before = balancesForCounterparty(tx, input.counterpartyId).find(
     (row) => row.currency === input.discharges.currency,
   );
   const balanceBefore = before?.balance ?? money.ZERO;
-  const sign = money.cmp(balanceBefore, money.ZERO);
+  const sign = money.cmp(money.round(balanceBefore, decimals), money.ZERO);
 
   if (sign === 0) {
     throw new Error(`settle_debt: nothing to settle in ${input.discharges.currency}`);
@@ -121,7 +133,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     (r) => r.currency === input.discharges.currency,
   );
   const residual = after?.balance ?? money.ZERO;
-  const residualSign = money.cmp(residual, money.ZERO);
+  const residualSign = money.cmp(money.round(residual, decimals), money.ZERO);
   const overSettled = residualSign !== 0 && residualSign !== sign;
 
   return { row: stamped, residual, overSettled };

@@ -70,8 +70,8 @@ export function BalanceLedger({
   if (rows.length === 0) {
     return (
       <View style={styles.root}>
-        <Text style={styles.allSettledTitle}>{t("counterparties.allSettled")}</Text>
-        <Text style={styles.allSettledBody}>{t("counterparties.allSettledBody")}</Text>
+        <Text style={styles.allSettledTitle}>{t("counterparties.ledgerSettled")}</Text>
+        <Text style={styles.allSettledBody}>{t("counterparties.ledgerSettledBody")}</Text>
       </View>
     );
   }

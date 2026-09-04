@@ -115,12 +115,6 @@ export default function Debt() {
   const today = deviceRuntime().capture().date;
   const [segment, setSegment] = useState<DirectionSegment>("all");
 
-  // H1 — at least one `refresh()` has completed, success or failure. Before
-  // that, `currencies` (and every other list) is the initial snapshot's own
-  // empty placeholder, not "the replica genuinely holds nothing" — the two
-  // must never render the same way (a loading state, never the empty state).
-  const hydrated = snapshot.revision > 0;
-
   const balances = useMemo(() => ledger.listCounterpartyBalances(today), [ledger, today]);
   const directionTotals = useMemo(() => money.directionTotals(balances), [balances]);
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
@@ -216,20 +210,37 @@ export default function Debt() {
     );
   }
 
-  // H1 — a loading state (S12 §6: "Skeleton rows; totals resolve last rather
-  // than showing a wrong number"), never the empty state a `[]` `rows` and a
-  // `[]` `counterparties` would otherwise render as.
-  if (!hydrated) {
-    return (
-      <GroundPanel>
-        <View style={styles.root}>
-          <View style={styles.totals}>
+  // H1 — the real distinction is `currencies`, not `revision` (every real
+  // controller calls `refresh()` synchronously before it is ever handed out,
+  // so `revision > 0` always holds and that gate was unreachable). An empty
+  // `currencies` list is the replica genuinely not bootstrapped yet — the
+  // loading state (S12 §6: "Skeleton rows; totals resolve last rather than
+  // showing a wrong number"). A *non-empty* list with no `isPivot` row is not
+  // a loading state at all — it is `architecture/09`'s bootstrap guarantee
+  // broken, which must never render as "All settled" or a blank screen.
+  if (pivot === undefined) {
+    if (snapshot.currencies.length === 0) {
+      return (
+        <GroundPanel>
+          <View style={styles.root}>
+            <View style={styles.totals}>
+              <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+            </View>
+            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
+            <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
             <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
           </View>
-          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-          <Skeleton shape="row" label={t("counterparties.loadingDebts")} />
-        </View>
+        </GroundPanel>
+      );
+    }
+    return (
+      <GroundPanel>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.noPivotTitle")}
+          why={t("counterparties.noPivotWhy")}
+          action={{ label: t("common.retry"), onPress: ledger.refresh }}
+        />
       </GroundPanel>
     );
   }

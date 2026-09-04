@@ -1411,24 +1411,27 @@ function unmergeCounterpartiesRefusal(error: unknown): FieldError | null {
  * `counterpartyId`; a zero balance in the chosen currency lands on
  * `discharges.currency`, the field that picked a currency with nothing open
  * rather than the amount typed against it.
+ *
+ * **C1 — never falls through to `refusalFromThrow`'s raw English.** Every
+ * other write in this file (`accountWriteRefusal` and friends) is allowed to
+ * return `null` for an unrecognised message, because their own screens print
+ * `refusalFromThrow`'s `path: ""` text as-is — a developer-facing string, but
+ * one nobody has flagged. `settle_debt`'s own screen resolves every
+ * `messageKey` through `useT()`, so an unrecognised executor message reaching
+ * it unkeyed would be the one place that text leaks to a person. This mapper
+ * therefore never returns `null`: an unrecognised message still lands
+ * form-level (`path: ""`), carrying the shared `common.couldNotSave` key
+ * instead.
  */
-function settleDebtRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
-  if (error.message.includes("no counterparty")) {
-    return {
-      path: "counterpartyId",
-      message: error.message,
-      messageKey: "settleDebt.noCounterparty",
-    };
+function settleDebtRefusal(error: unknown): FieldError {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("no counterparty")) {
+    return { path: "counterpartyId", message, messageKey: "settleDebt.noCounterparty" };
   }
-  if (error.message.includes("nothing to settle")) {
-    return {
-      path: "discharges.currency",
-      message: error.message,
-      messageKey: "settleDebt.nothingToSettle",
-    };
+  if (message.includes("nothing to settle")) {
+    return { path: "discharges.currency", message, messageKey: "settleDebt.nothingToSettle" };
   }
-  return null;
+  return { path: "", message, messageKey: "common.couldNotSave" };
 }
 
 /**
@@ -2245,6 +2248,36 @@ export function createPhoneLedger(
         phase: "start",
       });
       try {
+        /**
+         * **Refused here, so it cannot throw from inside the write.**
+         *
+         * The same guard `createTransaction` runs above (§14.6): `settle_debt`'s
+         * executor derives a pivot valuation the same way `create_transaction`'s
+         * does, and refuses mid-write once the outbox entry has already
+         * committed. Declining first is the difference between "not yet" and a
+         * silent loss. Only checked when the account is known locally — an
+         * unrecognised `accountId` is left to the schema/executor exactly as
+         * before, this guard adds nothing there.
+         */
+        const account = snapshot.accounts.find((candidate) => candidate.id === draft.accountId);
+        if (account && !account.capturable) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "accountId",
+                message: `${account.currency} needs an exchange rate before a transaction can be recorded in it`,
+                messageKey: "transactions.needsRate",
+                params: { currency: account.currency },
+              },
+            ],
+          };
+        }
+
         const capture = runtime.capture();
         const parsed = settleDebtInput.safeParse({
           id: runtime.id<"transactions">(),
@@ -2269,13 +2302,12 @@ export function createPhoneLedger(
         try {
           settled = port.settleDebt(parsed.data, capture);
         } catch (refusal) {
-          const fieldError = settleDebtRefusal(refusal);
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
             phase: "success",
           });
-          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
+          return { fieldErrors: [settleDebtRefusal(refusal)] };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {
