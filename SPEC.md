@@ -1370,13 +1370,24 @@ balance cannot drift from its history:
 ```sql
 CREATE VIEW counterparty_balances AS
   SELECT counterparty_id,
-         currency,
-         SUM(-signed_amount(type, amount_original)) AS balance
+         COALESCE(debt_currency, currency)                       AS currency,
+         -- `side` is the leg carrying the counterparty: the destination
+         -- leg for a transfer (a repayment lands INTO an owned account),
+         -- the only leg otherwise. `debt_amount`/`debt_currency` value the
+         -- row wherever set (S14) — coalesced independently per leg, so a
+         -- transfer's `to` amount never falls back to the `from` leg's own
+         -- figure, in a different currency, when `debt_amount` is absent.
+         SUM(-signed_amount(
+               type,
+               CASE type WHEN 'transfer' THEN 'to' ELSE 'from' END,
+               COALESCE(debt_amount, amount_original),
+               COALESCE(debt_amount, to_amount)
+             )) AS balance
   FROM   transactions
   WHERE  counterparty_id IS NOT NULL
     AND  counterparty_role = 'debt'
     AND  deleted_at IS NULL
-  GROUP  BY counterparty_id, currency;
+  GROUP  BY counterparty_id, COALESCE(debt_currency, currency);
 ```
 
 **The negation is the whole trick.** The ledger signs by *cash flow*; a debt

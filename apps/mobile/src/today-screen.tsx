@@ -244,23 +244,66 @@ export default function Today() {
   // (or a fixture that never set one) falls back to naming the account,
   // exactly as before this card.
   const unsettledPayee = unsettled?.oldestUnconsumedPayee;
+  // H2 — the oldest unconsumed entry can be the account's own opening
+  // balance rather than a transaction; that entry never has a payee, so it
+  // gets its own message instead of falling back to the generic one.
+  const unsettledIsOpening = unsettled != null && unsettled.oldestUnconsumedTransactionId === null;
+  const unsettledRemainder =
+    unsettled?.oldestUnconsumedRemainder ?? unsettled?.balance ?? money.ZERO;
+  // H3 — more than one entry can still be open at once; the oldest one's own
+  // remainder can be less than the whole account balance, and showing the
+  // balance beside its payee would overstate what that leg accounts for.
+  const unsettledRemainderDiffers =
+    unsettled != null &&
+    unsettled.oldestUnconsumedRemainder != null &&
+    unsettled.oldestUnconsumedRemainder !== unsettled.balance;
+  const unsettledNamedKey = unsettledRemainderDiffers
+    ? unsettledMore > 0
+      ? "shell.unsettledNamedDiffersMore"
+      : "shell.unsettledNamedDiffers"
+    : unsettledMore > 0
+      ? "shell.unsettledNamedMore"
+      : "shell.unsettledNamed";
   const unsettledBanner = unsettled ? (
     <Banner
       tone="warn"
       message={
-        unsettledPayee
-          ? t(unsettledMore > 0 ? "shell.unsettledNamedMore" : "shell.unsettledNamed", {
-              amount: money.forDisplay(unsettled.balance, unsettled.decimals, decimalMark(locale)),
+        unsettledIsOpening
+          ? t(unsettledMore > 0 ? "shell.unsettledOpeningMore" : "shell.unsettledOpening", {
+              remainder: money.forDisplay(
+                unsettledRemainder,
+                unsettled.decimals,
+                decimalMark(locale),
+              ),
               currency: unsettled.currency,
-              payee: unsettledPayee,
               count: unsettledMore,
             })
-          : t(unsettledMore > 0 ? "shell.unsettledMore" : "shell.unsettled", {
-              amount: money.forDisplay(unsettled.balance, unsettled.decimals, decimalMark(locale)),
-              currency: unsettled.currency,
-              account: unsettled.name,
-              count: unsettledMore,
-            })
+          : unsettledPayee
+            ? t(unsettledNamedKey, {
+                remainder: money.forDisplay(
+                  unsettledRemainder,
+                  unsettled.decimals,
+                  decimalMark(locale),
+                ),
+                amount: money.forDisplay(
+                  unsettled.balance,
+                  unsettled.decimals,
+                  decimalMark(locale),
+                ),
+                currency: unsettled.currency,
+                payee: unsettledPayee,
+                count: unsettledMore,
+              })
+            : t(unsettledMore > 0 ? "shell.unsettledMore" : "shell.unsettled", {
+                amount: money.forDisplay(
+                  unsettled.balance,
+                  unsettled.decimals,
+                  decimalMark(locale),
+                ),
+                currency: unsettled.currency,
+                account: unsettled.name,
+                count: unsettledMore,
+              })
       }
       action={{ label: t("shell.unsettledOpen"), onPress: handleOpenUnsettled }}
     />

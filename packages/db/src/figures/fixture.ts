@@ -52,6 +52,7 @@ export const ACCOUNTS = [
     // `…006` below, in `ZZZ`, precisely so an *opening balance* never has to
     // carry that precision.
     opening: "10.12",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -61,6 +62,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: true,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -70,6 +72,7 @@ export const ACCOUNTS = [
     ownership: "shared",
     isBusiness: false,
     opening: "-5.5",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -79,6 +82,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "3",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -88,12 +92,20 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   /**
    * §8's own account, class **F** for the balance — a clearing account
    * whose two inflows and one allocation are what `find-unsettled.ts` and
    * `money.fifoOldestOpen` are each asked to name the oldest of.
+   *
+   * **A non-zero opening (C1, H2)** — 200 PLN, dated well before any of its
+   * legs — proves the balance CTE's `LEFT JOIN` (an account's opening
+   * balance counts even where its legs alone would not survive one) and the
+   * FIFO queue's own synthetic entry (H2): with the opening folded in, the
+   * oldest still-open row is the opening itself, not the 80 dated
+   * 2026-08-05 that answered this before the fix.
    */
   {
     id: "00000000-0000-4000-8000-00000000000f",
@@ -101,7 +113,8 @@ export const ACCOUNTS = [
     currency: "PLN",
     ownership: "own",
     isBusiness: false,
-    opening: "0",
+    opening: "200",
+    openingDate: "2026-07-15" as string | null,
     kind: "clearing",
   },
   /** The settlement's own currency (S14) — Counterparty A's EUR payment lands here. */
@@ -112,6 +125,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   /**
@@ -127,6 +141,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "clearing",
   },
   /**

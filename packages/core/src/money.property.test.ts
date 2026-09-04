@@ -295,6 +295,31 @@ describe("allocateLargestRemainder — for every input", () => {
       ),
     );
   });
+
+  /** H4 — a total carrying precision past `decimals` is refused, for any scale and any nonzero remainder. */
+  it("throws over a total that is not integral at the given scale", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 6 }),
+        fc.array(fc.integer({ min: 1, max: 100 }), { minLength: 1, maxLength: 5 }),
+        fc.bigInt({ min: 0n, max: 999_999n }),
+        fc.integer({ min: 1, max: 9 }),
+        (decimals, weights, wholeUnits, extraDigit) => {
+          // A whole-unit figure at `decimals` plus one more digit past it —
+          // never zero, so the total is genuinely off-scale.
+          const total = money.toMoney(
+            money
+              .dec(wholeUnits.toString())
+              .dividedBy(10 ** decimals)
+              .plus(money.dec(extraDigit).dividedBy(10 ** (decimals + 1))),
+          );
+          expect(() => money.allocateLargestRemainder(total, weights, decimals)).toThrow(
+            new RegExp(`${decimals} decimals`),
+          );
+        },
+      ),
+    );
+  });
 });
 
 describe("debtDirection — for every input (H2)", () => {

@@ -54,6 +54,16 @@ export function scratchLedger() {
 
   for (const migration of [...REPLICA_MIGRATIONS, ...OUTBOX_MIGRATIONS]) migration.up(db);
 
+  // Reasserted, not just set once above (L): a SQLite table rebuild — the
+  // shape drizzle-kit emits for a migration that adds a `CHECK`, this
+  // package's own `0005_schema.sql` included — wraps itself in `PRAGMA
+  // foreign_keys=OFF; … PRAGMA foreign_keys=ON;` to do the rebuild safely,
+  // regardless of what this connection had it set to going in. Left
+  // unreasserted, the *last* migration to touch a table this way silently
+  // decided whether this harness enforces foreign keys, rather than the line
+  // above.
+  sqlite.pragma("foreign_keys = OFF");
+
   // Non-vacuous: a chain that stopped emitting tables — an empty `ddl.ts`, a
   // schema map that lost its entries — would otherwise give every test an empty
   // database and a green suite.

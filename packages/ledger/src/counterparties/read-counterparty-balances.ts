@@ -49,6 +49,13 @@ type ReplicaTx = LocalTx<unknown, typeof ledgerSchema>;
  * `debt_currency` is set — the one substitution both
  * `readCounterpartyBalances` and `balancesForCounterparty` below make before
  * handing rows to `money.counterpartyBalance`/`money.debtDelta`.
+ *
+ * **Each field falls back to its OWN amount (L), not to `amountOriginal` for
+ * both.** `counterparty-balance.ts`'s SQL twin coalesces `debt_amount` against
+ * `amount_original` for the `from` leg and against `to_amount` for the `to`
+ * leg independently; folding both fields to the same fallback here read a
+ * transfer's `to` leg from `amountOriginal` — the wrong currency-cross-rate's
+ * worth of amount — whenever `debt_currency` was set without `debt_amount`.
  */
 function coalesceDebtAmount<T extends { amountOriginal: Money; toAmount?: Money | null }>(
   row: T,
@@ -56,8 +63,11 @@ function coalesceDebtAmount<T extends { amountOriginal: Money; toAmount?: Money 
   debtAmount: Money | null,
 ): T {
   if (debtCurrency === null) return row;
-  const value = debtAmount ?? row.amountOriginal;
-  return { ...row, amountOriginal: value, toAmount: value };
+  return {
+    ...row,
+    amountOriginal: debtAmount ?? row.amountOriginal,
+    toAmount: debtAmount ?? row.toAmount,
+  };
 }
 
 export type LocalCounterpartyBalance = {
@@ -179,13 +189,22 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
           bucket = money.ageBucket(ageDays);
         }
       }
+      // L — `?? 2` silently rendered every currency this replica has no
+      // scale for as though it were a two-decimal one; a currency reaching
+      // here always came off a `currencies` row (the FK this balance's own
+      // transactions carry), so a miss means the replica's `currencies`
+      // table is missing a row it must have, not a currency to guess about.
+      const decimals = decimalsByCurrency.get(currency);
+      if (decimals === undefined) {
+        throw new Error(`readCounterpartyBalances: no currency row for ${currency}`);
+      }
       result.push({
         counterpartyId,
         name,
         kind,
         settlementCurrency,
         currency,
-        decimals: decimalsByCurrency.get(currency) ?? 2,
+        decimals,
         balance,
         ageDays,
         bucket,

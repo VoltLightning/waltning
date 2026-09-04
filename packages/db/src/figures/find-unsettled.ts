@@ -31,6 +31,23 @@
  * `differential.test.ts`'s "Flip clearing" fixture — `+50, −80, +100, +20,
  * −75` — where this file's *unmodified* query already names the `+20` leg,
  * matching `money.fifoOldestOpen` once fixed).
+ *
+ * **The opening balance (C1, H2).** Two omissions previously fell out of the
+ * same missing piece: `balances` summed `legs` alone, so an account's
+ * `opening_balance` never counted, and one with a non-zero opening but no
+ * legs at all did not appear here even though `money.accountBalance` (the
+ * phone's own copy) gave it one — the exact figure the two engines exist to
+ * agree on. `opening` below is a one-row-per-clearing-account CTE precisely
+ * so `balances` can `LEFT JOIN` it: an account absent from `legs` still
+ * produces a row, on its opening balance alone. `fifo_legs` seeds the same
+ * opening balance into the FIFO queue as its own entry — `transaction_id`
+ * `NULL`, dated `opening_date` — the SQL twin of the synthetic delta
+ * `read-unsettled-clearing.ts` pushes on the phone; `NULLS FIRST` on every
+ * ordering that touches `transaction_id` matches `money.fifoOldestOpen`'s own
+ * tie-break, which sorts a `null` id before any real one at the same date.
+ * An account with no `opening_date` recorded falls back to `0001-01-01` —
+ * "already there before anything else was" — the same sentinel
+ * `read-unsettled-clearing.ts` uses.
  */
 
 import type { AccountingDate } from "@waltning/core/date";
@@ -43,7 +60,8 @@ import { signedFromLeg } from "./signed.sql.ts";
 export type FindUnsettledRow = {
   accountId: string;
   balance: Money;
-  oldestUnconsumedTransactionId: string;
+  /** `null` when the oldest unconsumed entry is the account's own opening balance, not a transaction (H2) — the SQL twin of `read-unsettled-clearing.ts`'s same field. */
+  oldestUnconsumedTransactionId: string | null;
   oldestDate: AccountingDate;
 };
 
@@ -51,7 +69,7 @@ export type FindUnsettledRow = {
 type RawRow = {
   account_id: string;
   balance: string;
-  oldest_unconsumed_transaction_id: string;
+  oldest_unconsumed_transaction_id: string | null;
   oldest_date: string;
 };
 
@@ -75,12 +93,30 @@ export async function findUnsettled(db: DbHandle): Promise<readonly FindUnsettle
        AND ${transactions.deletedAt} IS NULL
       WHERE ${accounts.kind} = 'clearing'
     ),
+    opening AS (
+      SELECT ${accounts.id} AS account_id,
+        ${accounts.openingBalance} AS opening_balance,
+        coalesce(${accounts.openingDate}, '0001-01-01') AS opening_date
+      FROM ${accountsTable}
+      WHERE ${accounts.kind} = 'clearing'
+    ),
     balances AS (
-      SELECT account_id, sum(delta) AS balance FROM legs GROUP BY account_id
+      SELECT o.account_id, (o.opening_balance + coalesce(sum(l.delta), 0)) AS balance
+      FROM opening o
+      LEFT JOIN legs l USING (account_id)
+      GROUP BY o.account_id, o.opening_balance
+    ),
+    fifo_legs AS (
+      SELECT account_id, transaction_id, date, delta FROM legs
+      UNION ALL
+      SELECT account_id, NULL::uuid AS transaction_id, opening_date AS date,
+        opening_balance AS delta
+      FROM opening
+      WHERE opening_balance <> 0
     ),
     signed_legs AS (
       SELECT l.account_id, l.transaction_id, l.date, l.delta, b.balance, sign(b.balance) AS final_sign
-      FROM legs l JOIN balances b USING (account_id)
+      FROM fifo_legs l JOIN balances b USING (account_id)
       WHERE b.balance <> 0
     ),
     consumed AS (
@@ -91,7 +127,9 @@ export async function findUnsettled(db: DbHandle): Promise<readonly FindUnsettle
     ),
     opens AS (
       SELECT account_id, transaction_id, date, delta,
-        sum(abs(delta)) OVER (PARTITION BY account_id ORDER BY date, transaction_id) AS running_open
+        sum(abs(delta)) OVER (
+          PARTITION BY account_id ORDER BY date, transaction_id NULLS FIRST
+        ) AS running_open
       FROM signed_legs
       WHERE delta <> 0 AND sign(delta) = final_sign
     )
@@ -104,7 +142,7 @@ export async function findUnsettled(db: DbHandle): Promise<readonly FindUnsettle
     JOIN balances b USING (account_id)
     LEFT JOIN consumed c USING (account_id)
     WHERE o.running_open > coalesce(c.total_consumed, 0)
-    ORDER BY o.account_id, o.date, o.transaction_id
+    ORDER BY o.account_id, o.date, o.transaction_id NULLS FIRST
   `;
 
   // A CTE with a window function has no fixed result shape for drizzle's

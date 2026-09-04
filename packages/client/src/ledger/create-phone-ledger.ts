@@ -737,6 +737,8 @@ export type PhonePeriodSpend = money.PeriodSpendRow;
 export type PhoneClearingAccount = money.ClearingAccountRow & {
   oldestUnconsumedTransactionId: Id<"transactions"> | null;
   oldestDate: AccountingDate | null;
+  /** The oldest entry's own unconsumed magnitude — may be less than `balance` when more than one entry is still open (H3). */
+  oldestUnconsumedRemainder: Money | null;
   oldestUnconsumedPayee: string | null;
 };
 

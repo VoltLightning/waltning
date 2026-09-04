@@ -132,9 +132,14 @@ function fifoDebtRowsFor(counterpartyId: string, currency: string): money.FifoDe
   });
 }
 
-/** §8's rows for one clearing account, `money.fifoOldestOpen`'s own shape. */
+/**
+ * §8's rows for one clearing account, `money.fifoOldestOpen`'s own shape —
+ * the opening balance included as its own `id: null` entry (H2), the same
+ * seed `read-unsettled-clearing.ts` pushes on the phone and `find-unsettled.ts`
+ * seeds via its `opening` CTE.
+ */
 function clearingLegRowsFor(accountId: string): money.FifoDelta<string>[] {
-  return TRANSACTIONS.filter((t) => !t.deleted)
+  const legRows: money.FifoDelta<string>[] = TRANSACTIONS.filter((t) => !t.deleted)
     .filter((t) => t.accountId === accountId || t.toAccountId === accountId)
     .map((t) => ({
       id: t.id,
@@ -148,6 +153,16 @@ function clearingLegRowsFor(accountId: string): money.FifoDelta<string>[] {
         t.accountId === accountId ? "from" : "to",
       ),
     }));
+  const account = ACCOUNTS.find((a) => a.id === accountId);
+  const opening = money.toMoney(account?.opening ?? "0");
+  if (account && !money.isZero(opening)) {
+    legRows.push({
+      id: null,
+      date: accountingDate(account.openingDate ?? "0001-01-01"),
+      delta: opening,
+    });
+  }
+  return legRows;
 }
 
 describe("class-F figures agree to eight decimals, SQL against money.ts", () => {
@@ -161,8 +176,8 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
         values (${c.code}, ${c.name}, ${c.decimals}, ${c.code === "PLN"})`;
     }
     for (const a of ACCOUNTS) {
-      await scratch.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance, kind)
-        values (${a.id}, ${a.name}, ${a.currency}, ${a.ownership}, ${a.isBusiness}, ${a.opening}, ${a.kind})`;
+      await scratch.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance, opening_date, kind)
+        values (${a.id}, ${a.name}, ${a.currency}, ${a.ownership}, ${a.isBusiness}, ${a.opening}, ${a.openingDate}, ${a.kind})`;
     }
     // R2 H2 — no name_folded column: it is GENERATED ALWAYS AS (…) STORED now.
     await scratch.sql`insert into counterparties (id, name, kind)
@@ -284,12 +299,15 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
 
   /**
    * §8's own reading, written into `computations.md` in this PR: inflows
-   * opened, outflows consume, FIFO. Two inflows to Trip clearing, one
-   * allocation that exhausts the older, so the still-unconsumed inflow —
-   * `find_unsettled`'s third field — is the 80 dated 2026-08-05, not the
-   * 120 dated 2026-08-01.
+   * opened, outflows consume, FIFO — **the account's opening balance opens
+   * first, before any leg** (C1, H2). Trip clearing opens 200 (2026-07-15),
+   * then two inflows and one allocation that exhausts the older inflow —
+   * without the opening balance folded in, the still-unconsumed entry would
+   * be the 80 dated 2026-08-05; with it, the opening itself is still open
+   * (remainder 80 of its own 200), so `find_unsettled`'s third field is
+   * `null` — no transaction names it — dated the account's own opening date.
    */
-  it("§8 find_unsettled — balance and the oldest unconsumed leg", async () => {
+  it("§8 find_unsettled — balance and the oldest unconsumed leg, opening balance included", async () => {
     const tripClearing = ACCOUNTS[5];
     const sqlRows = await findUnsettled(scratch.db);
     const sqlRow = sqlRows.find((r) => r.accountId === tripClearing.id);
@@ -309,9 +327,9 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
     });
     expect(sqlRow).toEqual({
       accountId: tripClearing.id,
-      balance: "80.00000000",
-      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000015",
-      oldestDate: "2026-08-05",
+      balance: "280.00000000",
+      oldestUnconsumedTransactionId: null,
+      oldestDate: "2026-07-15",
     });
   });
 
