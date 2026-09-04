@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountingDate,
   addDays,
+  daysBetween,
   isAccountingDate,
   shiftMonth,
   todayIn,
@@ -90,6 +91,27 @@ describe("addDays — calendar arithmetic, no clock", () => {
 
   it("n = 0 is the identity", () => {
     expect(addDays(accountingDate("2026-03-12"), 0)).toBe("2026-03-12");
+  });
+});
+
+describe("daysBetween — calendar arithmetic, no clock", () => {
+  it("is 0 for the same date", () => {
+    expect(daysBetween(accountingDate("2026-03-12"), accountingDate("2026-03-12"))).toBe(0);
+  });
+
+  it("is positive when b is later, negative when it is earlier", () => {
+    expect(daysBetween(accountingDate("2026-03-12"), accountingDate("2026-03-15"))).toBe(3);
+    expect(daysBetween(accountingDate("2026-03-15"), accountingDate("2026-03-12"))).toBe(-3);
+  });
+
+  it("crosses a month and a year boundary", () => {
+    expect(daysBetween(accountingDate("2026-02-27"), accountingDate("2026-03-02"))).toBe(3);
+    expect(daysBetween(accountingDate("2026-12-30"), accountingDate("2027-01-02"))).toBe(3);
+  });
+
+  it("is addDays's inverse", () => {
+    const start = accountingDate("2026-06-15");
+    expect(daysBetween(start, addDays(start, 47))).toBe(47);
   });
 });
 

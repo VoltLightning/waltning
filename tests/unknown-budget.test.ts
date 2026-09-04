@@ -238,6 +238,37 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "accountWriteRefusal and reconcileAccountRefusal each take whatever update_account/archive_account/reconcile_account's executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
   },
+  // E3 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
+  // `create-account.executor.ts` above, once per FX executor file — the
+  // driver's run-result, in a position nothing consumes.
+  "packages/ledger/src/currencies/add-currency.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/currencies/archive-currency.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/currencies/set-rate-source.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/currencies/set-pinned.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/currencies/change-pivot.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/currencies/set-manual-rate.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
+  "packages/ledger/src/currencies/clear-manual-rate.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
 };
 
 /**

@@ -13,6 +13,15 @@ import { createCategoryExecutor } from "./categories/create-category.executor.ts
 import { mergeCategoriesExecutor } from "./categories/merge-categories.executor.ts";
 import { renameCategoryExecutor } from "./categories/rename-category.executor.ts";
 import { reparentCategoryExecutor } from "./categories/reparent-category.executor.ts";
+// ── E3 · FX operations — the phone half ────────────────────────────────────
+import { addCurrencyExecutor } from "./currencies/add-currency.executor.ts";
+import { archiveCurrencyExecutor } from "./currencies/archive-currency.executor.ts";
+import { changePivotExecutor } from "./currencies/change-pivot.executor.ts";
+import { clearManualRateExecutor } from "./currencies/clear-manual-rate.executor.ts";
+import { setManualRateExecutor } from "./currencies/set-manual-rate.executor.ts";
+import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
+import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
+// ── end E3 block ─────────────────────────────────────────────────────────
 import { localRegistry } from "./executor.ts";
 // ── A2 · transaction operations — the phone half ──────────────────────────
 import { categorizeBatchExecutor } from "./transactions/categorize-batch.executor.ts";
@@ -50,4 +59,13 @@ export const ledgerRegistry = localRegistry([
   supersedeTransactionExecutor,
   categorizeBatchExecutor,
   // ── end A2 block ─────────────────────────────────────────────────────────
+  // ── E3 · FX operations — the phone half ───────────────────────────────────
+  addCurrencyExecutor,
+  archiveCurrencyExecutor,
+  setRateSourceExecutor,
+  setPinnedExecutor,
+  changePivotExecutor,
+  setManualRateExecutor,
+  clearManualRateExecutor,
+  // ── end E3 block ─────────────────────────────────────────────────────────
 ]);

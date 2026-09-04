@@ -120,6 +120,16 @@ function fakeController(search: FakeSearch) {
     archiveAccount: () => undefined,
     reconcileAccount: () => undefined,
     createGroup: () => undefined,
+    readRate: () => null,
+    readCoverage: () => [],
+    listFxRates: () => [],
+    addCurrency: () => undefined,
+    archiveCurrency: () => undefined,
+    setRateSource: () => undefined,
+    setPinned: () => undefined,
+    changePivot: () => undefined,
+    setManualRate: () => ({ written: 0, replacedManual: 0 }),
+    clearManualRate: () => ({ deleted: 0 }),
     reset: () => undefined,
   };
   return createPhoneLedger(port, {

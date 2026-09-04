@@ -92,6 +92,22 @@ export function addDays(date: AccountingDate, n: number): AccountingDate {
   return accountingDate(shifted.toISOString().slice(0, 10));
 }
 
+/**
+ * Whole calendar days from `a` to `b` — positive when `b` is later.
+ *
+ * §7.7's carry-forward cap (`readRate`) and §17's coverage percentage
+ * (`readCoverage`) both ask "how many days apart", never "how many
+ * milliseconds" — so this is the same `Date.UTC` day-count device `addDays`
+ * uses, not a subtraction of two instants that would need a timezone this
+ * file does not have.
+ */
+export function daysBetween(a: AccountingDate, b: AccountingDate): number {
+  const [ay, am, ad] = a.split("-").map(Number) as [number, number, number];
+  const [by, bm, bd] = b.split("-").map(Number) as [number, number, number];
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / msPerDay);
+}
+
 declare const YEAR_MONTH: unique symbol;
 
 /** A bare calendar month, `YYYY-MM`, in no timezone — `AccountingDate` minus the day. */

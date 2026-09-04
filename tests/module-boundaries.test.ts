@@ -120,6 +120,20 @@ const FOUNDATION = new Set([
    */
   "shell",
   "states",
+  /**
+   * **`device` is foundational for the same property as `shell`/`states`.**
+   * `createDevicePreference` knows nothing about what it stores — its own
+   * docstring says so — so *appearance*, *display currency*, a floating
+   * button's position all mean the same thing to it: a codec, a store, and
+   * `useSyncExternalStore`'s shape. E3's `currencies/display-currency.ts` is
+   * the first module to compose it rather than reimplement its hydration by
+   * hand (`appearance/create-appearance.ts` predates it and did exactly
+   * that), and hit this test unpromoted — the same gap `shell`/`states`
+   * closed for D4a. The direction still runs one way: `device/` imports
+   * nothing but itself and React, so a domain depending on it is a floor,
+   * not a tangle.
+   */
+  "device",
 ]);
 
 /** Which module a path belongs to, or undefined if it is outside them all. */

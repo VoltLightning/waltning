@@ -19,6 +19,15 @@ const moneyArb = fc
 
 const positiveMoneyArb = moneyArb.filter((m) => !money.isZero(m));
 
+/**
+ * A `UnitsPerPivot` rate at `numeric(24,12)` scale — `fx_rates`' own
+ * direction. `min: 1n` on the whole part keeps it strictly positive, so
+ * `convert`'s division never sees a zero divisor.
+ */
+const rateArb = fc
+  .tuple(fc.bigInt({ min: 1n, max: 999_999n }), fc.bigInt({ min: 0n, max: 999_999_999_999n }))
+  .map(([whole, frac]) => money.unitsPerPivot(`${whole}.${frac.toString().padStart(12, "0")}`));
+
 const txArb = fc.record({
   type: fc.constantFrom(
     "income",
@@ -110,5 +119,46 @@ describe("money, for every input", () => {
   it("rounds half away from zero at scale 8, in both signs", () => {
     expect(money.round(money.toMoney("1.000000005"), 8)).toBe("1.00000001");
     expect(money.round(money.toMoney("-1.000000005"), 8)).toBe("-1.00000001");
+  });
+
+  /**
+   * §4 — `convert(convert(x, a, b), b, a)` returns to `x`, within the
+   * rounding `toMoney`'s scale-8 storage introduces at each of the four
+   * divisions and multiplications the round trip performs. Not asserted as
+   * bit-exact: `toPivotByDivision`/`fromPivot` each round to 8 places, and a
+   * rate that does not divide evenly loses a fraction of the last place —
+   * `money.test.ts`'s "is the identity" case is the exact special case, this
+   * is the general, bounded one.
+   *
+   * **The bound scales with the rates, not a fixed epsilon.** Each of the
+   * four steps can round by up to half a unit at scale 8, and a
+   * multiplication by `a` or `b` carries an earlier step's rounding forward
+   * scaled by that rate — so the tolerance is `(a + b + 1) × 5e-8`, twice the
+   * per-step error, which is generous enough to hold for every generated
+   * pair and still tight enough that a reciprocal-flip bug (H21 — off by the
+   * *square* of the rate, not a multiple of it) fails it by orders of
+   * magnitude.
+   */
+  it("round-trips convert(x, a, b) then convert(·, b, a), within a rate-scaled bound", () => {
+    fc.assert(
+      fc.property(positiveMoneyArb, rateArb, rateArb, (x, a, b) => {
+        const there = money.convert(x, a, b);
+        const back = money.convert(there, b, a);
+        const drift = money.dec(back).minus(x).abs();
+        const tolerance = money.dec(a).plus(b).plus(1).times("0.00000005");
+        expect(drift.lte(tolerance)).toBe(true);
+      }),
+    );
+  });
+
+  it("convert(x, r, r) is the identity when the division loses nothing", () => {
+    // `r = 1` never rounds either step, for any x — the general-rate case
+    // above bounds the rest.
+    fc.assert(
+      fc.property(moneyArb, (x) => {
+        const one = money.unitsPerPivot("1");
+        expect(money.convert(x, one, one)).toBe(x);
+      }),
+    );
   });
 });

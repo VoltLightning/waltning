@@ -20,10 +20,15 @@ export const fxRatesColumns = () => ({
 });
 
 /**
- * A bare table, for the parity assertion to compare.
- *
- * The composite primary key `(base, quote, date)` — a rate's actual identity —
- * lives with the two checks in `packages/db`, because it is a constraint rather
- * than a column and §14.7 keeps those layered around the shared set.
+ * `fx_rates_pk` — `(base, quote, date)`, a rate's actual identity — **is**
+ * mirrored here, unlike the two `CHECK`s (`fx_rates_rate_positive`,
+ * `fx_rates_distinct`), which stay server-only in `packages/db`. The
+ * difference is not a guarantee this file cares about more: without a
+ * unique index the phone's own upsert (`set_manual_rate`'s one-row-per-day
+ * write) has no conflict target, and would insert a second row for a date
+ * already held rather than replacing it — a bug on this device alone, with
+ * or without a server ever agreeing.
  */
-export const fxRates = k.table("fx_rates", fxRatesColumns());
+export const fxRates = k.table("fx_rates", fxRatesColumns(), (t) => [
+  k.uniqueIndex("fx_rates_pk").on(t.base, t.quote, t.date),
+]);

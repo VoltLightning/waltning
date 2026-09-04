@@ -251,6 +251,75 @@ export const toPivot = (amount: Money, rate: PivotPerUnit): Money =>
 export const toPivotByDivision = (amount: Money, rate: UnitsPerPivot): Money =>
   toMoney(dec(amount).dividedBy(rate));
 
+/**
+ * §4 — the reverse of `toPivotByDivision`: `from_pivot(p, ccy, date) = p ×
+ * rate(pivot, ccy, date)`. `rate` is `fx_rates`' own direction, units of
+ * `ccy` per one pivot, so this multiplies rather than divides.
+ */
+export const fromPivot = (pivotAmount: Money, rate: UnitsPerPivot): Money =>
+  toMoney(dec(pivotAmount).times(rate));
+
+/**
+ * §4 — display conversion: `convert(x, from, to) = from_pivot(to_pivot(x,
+ * from), to)`. Both rates are `UnitsPerPivot` — `fx_rates`' own direction —
+ * because this is the display path, not a transaction's stamped `fx_rate`
+ * (§7.5's `PivotPerUnit`, which `margin` below uses instead).
+ *
+ * Full precision throughout; the caller rounds at the display boundary
+ * (`round`), the same division of labour `toPivot` already keeps.
+ */
+export const convert = (amount: Money, rateFrom: UnitsPerPivot, rateTo: UnitsPerPivot): Money =>
+  fromPivot(toPivotByDivision(amount, rateFrom), rateTo);
+
+/**
+ * §4a / §7.5 — the cost of a cross-currency transfer, as the reference rate
+ * would have valued it against what actually arrived.
+ *
+ * `fxRate` and `toFxRate` are both `PivotPerUnit` — a transaction's own
+ * stamped rates, never `fx_rates`' `UnitsPerPivot` (`convert`'s pair above).
+ * §7.5: `to_fx_rate` is the **reference** rate for `to_currency`, in the same
+ * pivot-per-unit direction as `fx_rate` — storing the *realized* rate there
+ * instead would value both legs to the same pivot amount and make the
+ * margin identically zero for every transfer ever recorded.
+ *
+ * `marginPct` is the plain ratio `margin_pivot ÷ amount_pivot` — §4a's
+ * formula, not pre-multiplied by 100. A screen renders it as a percentage;
+ * this returns the number the formula defines.
+ *
+ * **Never clamped.** A negative margin means the transfer beat the
+ * reference rate, and §7.5 is explicit that it "must render as such rather
+ * than being clamped" — so this returns whatever the arithmetic gives.
+ */
+export type MarginInput = {
+  amountOriginal: Money;
+  fxRate: PivotPerUnit;
+  toAmount: Money;
+  toFxRate: PivotPerUnit;
+};
+
+export type MarginResult = {
+  marginPivot: Money;
+  marginPct: Money;
+  /** `to_amount ÷ amount_original` — derived here, never stored (§7.5). */
+  realizedRate: Money;
+};
+
+export const margin = ({
+  amountOriginal,
+  fxRate,
+  toAmount,
+  toFxRate,
+}: MarginInput): MarginResult => {
+  const amountPivot = dec(amountOriginal).times(fxRate);
+  const toAmountPivot = dec(toAmount).times(toFxRate);
+  const marginPivot = amountPivot.minus(toAmountPivot);
+  return {
+    marginPivot: toMoney(marginPivot),
+    marginPct: toMoney(marginPivot.dividedBy(amountPivot)),
+    realizedRate: toMoney(dec(toAmount).dividedBy(amountOriginal)),
+  };
+};
+
 /** Round to a currency's presentation scale — display only, never storage. */
 export const round = (v: Money, decimals: number): Money => dec(v).toFixed(decimals) as Money;
 

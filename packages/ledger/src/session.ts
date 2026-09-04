@@ -8,14 +8,21 @@ import type {
   PeriodSpendRow,
 } from "@waltning/core/money";
 import type {
+  AddCurrencyInput,
   ArchiveAccountInput,
+  ArchiveCurrencyInput,
   CategorizeBatchInput,
+  ChangePivotInput,
+  ClearManualRateInput,
   CreateAccountInput,
   CreateCategoryInput,
   CreateGroupInput,
   CreateTransactionInput,
   DeleteTransactionInput,
   ReconcileAccountInput,
+  SetManualRateInput,
+  SetPinnedInput,
+  SetRateSourceInput,
   SetTransactionLinesInput,
   UpdateAccountInput,
   UpdateTransactionInput,
@@ -41,7 +48,30 @@ import {
   type LocalCounterparty,
   readCounterparties,
 } from "./counterparties/read-counterparties.ts";
+// ── E3 · FX operations — the phone half ────────────────────────────────────
+import { addCurrencyExecutor, type LocalCurrencyRow } from "./currencies/add-currency.executor.ts";
+import { archiveCurrencyExecutor } from "./currencies/archive-currency.executor.ts";
+import { changePivotExecutor } from "./currencies/change-pivot.executor.ts";
+import {
+  type ClearManualRateResult,
+  clearManualRateExecutor,
+} from "./currencies/clear-manual-rate.executor.ts";
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
+import {
+  type LocalCoverage,
+  type LocalRate,
+  type LocalRateRow,
+  listFxRates,
+  readCoverage,
+  readRate,
+} from "./currencies/read-rate.ts";
+import {
+  type SetManualRateResult,
+  setManualRateExecutor,
+} from "./currencies/set-manual-rate.executor.ts";
+import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
+import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
+// ── end E3 block ─────────────────────────────────────────────────────────
 import {
   describeLedgerError,
   emitLedgerDiagnostic,
@@ -143,6 +173,28 @@ export type LocalLedgerSession = {
   archiveAccount: (input: ArchiveAccountInput, capture: Capture) => LocalAccountRow;
   reconcileAccount: (input: ReconcileAccountInput, capture: Capture) => LocalTransactionRow;
   createGroup: (input: CreateGroupInput, capture: Capture) => LocalGroupRow;
+  /* ── E3 · FX ──────────────────────────────────────────────────────────── */
+  /** `null`, not `undefined`, matching every other absent-row read on this session. */
+  readRate: (pair: {
+    base: CurrencyCode;
+    quote: CurrencyCode;
+    date: AccountingDate;
+  }) => LocalRate | null;
+  readCoverage: (today: AccountingDate) => readonly LocalCoverage[];
+  listFxRates: (range: {
+    base: CurrencyCode;
+    quote: CurrencyCode;
+    from: AccountingDate;
+    to: AccountingDate;
+  }) => readonly LocalRateRow[];
+  addCurrency: (input: AddCurrencyInput, capture: Capture) => LocalCurrencyRow;
+  archiveCurrency: (input: ArchiveCurrencyInput, capture: Capture) => LocalCurrencyRow;
+  setRateSource: (input: SetRateSourceInput, capture: Capture) => LocalCurrencyRow;
+  setPinned: (input: SetPinnedInput, capture: Capture) => LocalCurrencyRow;
+  changePivot: (input: ChangePivotInput, capture: Capture) => LocalCurrencyRow;
+  setManualRate: (input: SetManualRateInput, capture: Capture) => SetManualRateResult;
+  clearManualRate: (input: ClearManualRateInput, capture: Capture) => ClearManualRateResult;
+  /* ── end E3 block ─────────────────────────────────────────────────────── */
   reset: () => void;
   close: () => void;
 };
@@ -365,6 +417,67 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
+    /* ── E3 · FX ────────────────────────────────────────────────────────── */
+    readRate: (pair) => readRate(requireOpen().replica.db, pair) ?? null,
+    readCoverage: (today) => readCoverage(requireOpen().replica.db, today),
+    listFxRates: (range) => listFxRates(requireOpen().replica.db, range),
+    addCurrency: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: addCurrencyExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    archiveCurrency: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: archiveCurrencyExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    setRateSource: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: setRateSourceExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    setPinned: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: setPinnedExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    changePivot: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: changePivotExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    setManualRate: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: setManualRateExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    clearManualRate: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: clearManualRateExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    /* ── end E3 block ───────────────────────────────────────────────────── */
     reset: () => {
       const current = requireOpen();
       closed = true;

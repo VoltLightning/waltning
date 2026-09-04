@@ -26,6 +26,7 @@ import {
   type Money,
   type PivotPerUnit,
   toMoney,
+  type UnitsPerPivot,
 } from "./money.ts";
 
 /**
@@ -41,11 +42,36 @@ export const zMoney = z
   .transform((v): Money => toMoney(v))
   .refine((v) => dec(v).abs().lt("1000000000000"), "amount exceeds numeric(20,8)");
 
-/** A rate you multiply by to reach the pivot (`computations.md` §4). */
+/**
+ * A rate you multiply by to reach the pivot (`computations.md` §4).
+ *
+ * **Refused at zero or below.** A rate is pivot per unit and must be
+ * positive: zero or negative makes `toPivotByDivision`'s reciprocal
+ * (`toPivot`/`fromPivot`) produce `Infinity` or a flipped sign, branded as
+ * `Money` — a bug the type system would otherwise wave through, because
+ * nothing about the brand says "positive".
+ */
 export const zPivotPerUnit = z
   .string()
   .regex(/^-?\d+(\.\d+)?$/, "expected a rate as a string")
+  .refine((v) => dec(v).gt(0), "a rate is pivot per unit and must be positive")
   .transform((v): PivotPerUnit => v as PivotPerUnit);
+
+/**
+ * A rate you divide by to reach the pivot — `fx_rates`' own direction
+ * (`computations.md` §4). The reciprocal brand of `zPivotPerUnit`; the two
+ * are separate schemas for the same reason `PivotPerUnit` and `UnitsPerPivot`
+ * are separate types — see `rate.type-test.ts`.
+ *
+ * **Refused at zero or below**, same reason as `zPivotPerUnit`: a zero rate
+ * makes `toPivotByDivision` divide by zero and return `Infinity` branded as
+ * `Money`.
+ */
+export const zUnitsPerPivot = z
+  .string()
+  .regex(/^-?\d+(\.\d+)?$/, "expected a rate as a string")
+  .refine((v) => dec(v).gt(0), "a rate is units per pivot and must be positive")
+  .transform((v): UnitsPerPivot => v as UnitsPerPivot);
 
 /**
  * A bare `YYYY-MM-DD`.
