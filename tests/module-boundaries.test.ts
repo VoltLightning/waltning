@@ -131,7 +131,8 @@ const FOUNDATION = new Set([
    * that), and hit this test unpromoted — the same gap `shell`/`states`
    * closed for D4a. The direction still runs one way: `device/` imports
    * nothing but itself and React, so a domain depending on it is a floor,
-   * not a tangle.
+   * not a tangle. D4b's last-captured account (`transactions/last-capture.ts`)
+   * is the first *domain* module to compose it.
    */
   "device",
 ]);
@@ -214,6 +215,7 @@ describe("mobile features", () => {
       "packages/ui/src/fx",
       "packages/client/src/transport",
       "packages/client/src/query",
+      "packages/client/src/device",
     ];
     const domains =
       /\/(accounts|transactions|currencies|connectivity|review|shell|dashboard|counterparties|recurring|calendar|reports|tax)\//;
