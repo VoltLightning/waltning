@@ -126,6 +126,75 @@ describe("a colliding pair aborts with both ids named, before the index ever fir
   });
 });
 
+/**
+ * R4 M2 — before this, `ADD CONSTRAINT counterparties_name_trimmed` ran
+ * ahead of the collision check above and with no pre-check of its own, so a
+ * pre-existing padded name (`'Bank A '`, written before this migration ever
+ * existed to refuse it) aborted with Postgres's own bare "column … of
+ * relation … contains values that violate the new constraint" — naming
+ * neither the row nor what "trimmed" even means here.
+ */
+describe("an untrimmed name aborts naming the id, before the CHECK ever fires", () => {
+  it("raises naming the offending id, not a bare constraint violation", async () => {
+    const [row] = await target`
+      INSERT INTO counterparties (name, kind) VALUES ('Bank A ', 'person') RETURNING id`;
+
+    let caught: unknown;
+    try {
+      await apply0010();
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = (caught as Error).message;
+    expect(message).toContain("counterparties_name_trimmed");
+    expect(message).toContain(String(row?.["id"]));
+    expect(message).toContain("trim these names first");
+
+    // Rolled back with the rest of the failed transaction, same as the
+    // collision case above.
+    const [column] = await target`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'counterparties' AND column_name = 'name_folded'`;
+    expect(column).toBeUndefined();
+  });
+
+  it("succeeds once the offending name is trimmed", async () => {
+    const [row] = await target`
+      INSERT INTO counterparties (name, kind) VALUES ('Bank A ', 'person') RETURNING id`;
+
+    await expect(apply0010()).rejects.toThrow();
+
+    await target`UPDATE counterparties SET name = 'Bank A' WHERE id = ${row?.["id"] as string}`;
+
+    // Only the column-add, this test's own DO block, and the CHECK it
+    // guards — not the rest of `apply0010()` (the collision DO block, the
+    // two `counterparty_merges` statements), which this file's other
+    // describe block already exercises to completion and undoes. Rolled
+    // back deliberately at the end via `ROLLBACK_AFTER_SUCCESS`, so this
+    // test needs no undo of its own and cannot collide with that one.
+    const nameTrimmedStatements = statementsOf(MIGRATION_0010).slice(0, 3);
+    class RolledBackAfterSuccess extends Error {}
+    let nameFolded: string | undefined;
+    try {
+      await target.begin(async (tx) => {
+        for (const statement of nameTrimmedStatements) {
+          await tx.unsafe(statement);
+        }
+        const [after] = await tx<{ name_folded: string }[]>`
+          SELECT name_folded FROM counterparties WHERE id = ${row?.["id"] as string}`;
+        nameFolded = after?.name_folded;
+        throw new RolledBackAfterSuccess();
+      });
+    } catch (e) {
+      if (!(e instanceof RolledBackAfterSuccess)) throw e;
+    }
+
+    expect(nameFolded).toBe("bank a");
+  });
+});
+
 describe("no collision — the migration runs clean", () => {
   it("adds the generated column and the index without raising", async () => {
     await target`INSERT INTO counterparties (name, kind) VALUES ('Marek', 'person')`;

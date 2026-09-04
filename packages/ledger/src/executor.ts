@@ -76,11 +76,23 @@ export class LocalRefusal extends Error {
  * rule it names does not change. A deferral is right on a later retry with
  * the *identical* input, because what is missing is local state — a pivot, a
  * rate row — that a later sync or a fresh launch can supply without the
- * caller doing anything differently. `write.ts` leaves the entry exactly as
- * the outbox commit left it (`pending`, no `blockedDisposition`) rather than
- * blocking it, and `recover.ts` skips it on replay without halting anything
- * behind it, so it is retried at every launch until the missing state
- * arrives.
+ * caller doing anything differently. `state` stays exactly `pending`, the
+ * outbox commit's own value, so the drain keeps trying to send it and local
+ * replay keeps retrying its `apply` — neither one is a "blocked" write.
+ *
+ * **R4 C2 — but it is not untraceable any more.** Through round 3 a
+ * deferral left nothing in the outbox at all, on the theory that
+ * `recover.ts` would find it again "at every launch" by the plain fact of
+ * its `seq` sitting above the watermark. That theory broke the moment a
+ * *later* entry applied first: `advanceAppliedSeq` is a monotonic max, so an
+ * ordinary write behind a deferred one pushed the watermark past it, and the
+ * old `outstanding` query's `seq > applied` filter then hid the deferred
+ * entry forever — a capture that was supposedly never dropped, silently
+ * unreachable. `write.ts` and `recover.ts` now both set `disposition:
+ * "deferred"` on this class (never touching `state`), and `recover.ts`'s
+ * `outstanding` query matches that mark *independently of `seq`*, so the
+ * entry is retried at every launch — genuinely, this time — until the
+ * missing state arrives, however far the watermark has since moved.
  */
 export class LocalDeferral extends Error {
   override readonly name = "LocalDeferral";

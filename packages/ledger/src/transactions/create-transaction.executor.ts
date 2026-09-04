@@ -268,9 +268,11 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
      * gap closes on its own the moment a rate arrives, whether from a fresh
      * sync or the server that eventually drains this entry. `write.ts` leaves
      * the entry `pending` rather than `blocked(refused)` for exactly that
-     * reason: a refusal never gets retried, and this case is retried at every
-     * launch (`recover.ts`) until it resolves. It is not the same as "the rate
-     * is stale", which is case 3 and is fine.
+     * reason: a refusal never gets retried. **R4 C2** — it also marks
+     * `disposition: "deferred"`, so `recover.ts`'s `outstanding` query keeps
+     * finding this entry at every launch even once a later write has pushed
+     * the watermark past it, until this branch stops throwing. It is not the
+     * same as "the rate is stale", which is case 3 and is fine.
      */
     throw new LocalDeferral(
       `create_transaction: no last-known rate for ${pivot}/${input.currency}, and a ` +

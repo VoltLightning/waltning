@@ -53,33 +53,45 @@ export const BLOCKED_KIND = ["terminal", "repairable"] as const;
 export type BlockedKind = (typeof BLOCKED_KIND)[number];
 
 /**
- * Why an entry became `blocked`, as it matters to the drain (R2 M4).
+ * Why an entry is the way it is, as it matters to the drain and to replay
+ * (R2 M4, R4 C2/H1).
  *
- * **A second axis, not a second name for `blockedKind`.** `blockedKind` asks
- * whether this clears itself; this asks whether it may ever leave the phone.
- * Both `write.ts`'s refusal and `recover.ts`'s replay halt used to write the
- * identical `blocked(terminal)`, and that conflated two different situations
- * a caller cannot tell apart from the row alone:
+ * **Not only a `blocked` thing any more, and that is the rename (R4 C2).**
+ * This column was `blockedDisposition`, null except while `state` was
+ * `blocked`. `deferred` breaks that: a deferral leaves `state = pending` —
+ * the drain must still try it — and needs to be found again on a later
+ * launch regardless of `state`, which is a fact about the *entry*, not about
+ * being blocked. `disposition` names what it now is.
  *
  * - **`refused`** — the local `apply` itself threw (a folded-name collision,
  *   a stale version, any executor's own check). The write never took effect
  *   here, and it would refuse identically on a retry or on a server for the
  *   same reason — sending it is not "not yet", it is never. `write.ts` sets
- *   this in the same catch that marks the entry `blocked`.
+ *   this, alongside `blocked(terminal)`, in the same catch.
  * - **`replay_halted`** — this device's own local replay could not apply an
  *   entry that *did* land in the outbox (`recover.ts`'s `haltAt`: no local
  *   executor for the operation, most often an older build against a payload
  *   a newer one wrote). The write itself is not invalid — the phone just
  *   cannot re-derive its local effect right now — so a server may still
- *   accept it; only *local* replay stops here, never the drain.
+ *   accept it; only *local* replay stops here, never the drain. Also set
+ *   alongside `blocked(terminal)`.
+ * - **`deferred`** (R4 C2/H1) — the replica cannot apply this entry *yet*
+ *   (`LocalDeferral`: no pivot, no last-known rate), or a later `LocalRefusal`
+ *   was met while an earlier entry was itself still deferred, which makes
+ *   the refusal untrustworthy — the replica that produced it is known
+ *   incomplete (R4 H1). `state` stays `pending`: the drain still sends it.
+ *   Cleared (`null`) the moment the entry finally applies.
  *
  * `recover.ts`'s `outstanding` query reads this to skip a `refused` entry on
  * every later launch (R2 M4) — replaying it would only repeat the identical
- * refusal — while a `replay_halted` entry keeps halting replay behind it,
- * exactly as before, since an app update may yet supply the missing executor.
+ * refusal — and to *always* include a `deferred` one regardless of `seq`
+ * versus the watermark (R4 C2: without that, a later entry's `applied_seq`
+ * advance permanently hides a deferral behind it). A `replay_halted` entry
+ * keeps halting replay behind it, exactly as before, since an app update may
+ * yet supply the missing executor.
  */
-export const BLOCKED_DISPOSITION = ["refused", "replay_halted"] as const;
-export type BlockedDisposition = (typeof BLOCKED_DISPOSITION)[number];
+export const DISPOSITION = ["refused", "replay_halted", "deferred"] as const;
+export type Disposition = (typeof DISPOSITION)[number];
 
 /**
  * A queued payload: the operation's validated input, as JSON and nothing more.
@@ -172,17 +184,22 @@ export const outbox = sqliteTable(
     blockedKind: text("blocked_kind", { enum: BLOCKED_KIND }),
 
     /**
-     * Whether this may ever be sent — see `BLOCKED_DISPOSITION` above.
-     * Null except while `state` is `blocked`, the same lifetime as
-     * `blockedKind`, and the same compile-time-only guarantee: nothing in
-     * this table's DDL stops a raw insert from writing a third string.
+     * Why the entry is the way it is — see `DISPOSITION` above.
+     *
+     * **R4 C2 — no longer `blockedDisposition`, and no longer lives only
+     * while `state` is `blocked`.** `deferred` is set with `state` still
+     * `pending`, precisely so the drain keeps trying it; `refused` and
+     * `replay_halted` keep the old lifetime, alongside `blockedKind`. Same
+     * compile-time-only guarantee as `blockedKind`: nothing in this table's
+     * DDL stops a raw insert from writing a fourth string.
      *
      * R2 L3 — S30 reads this, when it is set, to choose its wording: a
      * `refused` entry gets no retry (it would only refuse identically), a
-     * `replay_halted` one still offers to wait for an app update. Null — the
-     * ordinary `pending`/`sending`/`stalled` entry — surfaces neither.
+     * `replay_halted` one still offers to wait for an app update, a
+     * `deferred` one is already retrying on its own. Null — the ordinary
+     * entry with nothing outstanding — surfaces none of that.
      */
-    blockedDisposition: text("blocked_disposition", { enum: BLOCKED_DISPOSITION }),
+    disposition: text("disposition", { enum: DISPOSITION }),
 
     /**
      * What to tell the person, latched at the moment it blocked.
@@ -287,6 +304,15 @@ export const outbox = sqliteTable(
      * the migrator emits.
      */
     index("outbox_pending_by_seq").on(table.state, table.seq),
+    /**
+     * `recover.ts`'s `outstanding` query, R4 C2's other half: "every entry
+     * with `disposition = 'deferred'`, regardless of `seq` versus the
+     * watermark" is a scan with no `state`/`seq` prefix to lean on — this
+     * table's only other index is useless for it. Partial, on the one value
+     * that query actually looks for, so an outbox otherwise full of `null`
+     * dispositions costs this index nothing to maintain.
+     */
+    index("outbox_deferred").on(table.disposition).where(sql`${table.disposition} = 'deferred'`),
   ],
 );
 

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d8ab8de1-2558-49bf-b6c2-e2bc87b1b8b3",
+  "id": "88c1e3db-a1d2-4e7f-bef6-2759f701141d",
   "prevId": "c55310f7-77f2-45de-b7bc-3ed6f3632f66",
   "tables": {
     "outbox": {
@@ -64,8 +64,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "blocked_disposition": {
-          "name": "blocked_disposition",
+        "disposition": {
+          "name": "disposition",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -130,6 +130,14 @@
             "seq"
           ],
           "isUnique": false
+        },
+        "outbox_deferred": {
+          "name": "outbox_deferred",
+          "columns": [
+            "disposition"
+          ],
+          "isUnique": false,
+          "where": "\"outbox\".\"disposition\" = 'deferred'"
         }
       },
       "foreignKeys": {},

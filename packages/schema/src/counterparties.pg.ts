@@ -36,8 +36,18 @@ export const counterpartiesColumns = () => ({
    * the two tables' shapes to match; on Postgres nothing ever writes it
    * directly; see `counterparties.sqlite.ts` for the asymmetry this mirrors
    * and its own reasoning for why the fold cannot be generated on the phone.
+   *
+   * **`.default("")` for `$inferInsert` parity, not for any real insert
+   * (R4).** `counterparties.sqlite.ts`'s twin carries the same default —
+   * required there, since SQLite's `ADD COLUMN … NOT NULL` needs one on a
+   * table that already has rows. Without a matching default here,
+   * `parity.type-test.ts`'s `writesMatch` sees one engine's insert make
+   * `nameFolded` optional and the other require it, and fails on that
+   * asymmetry alone — for a column real Postgres inserts never reach,
+   * because `packages/db/src/schema.ts`'s `GENERATED ALWAYS AS` redeclares
+   * it first, per the comment above.
    */
-  nameFolded: k.text("name_folded").notNull(),
+  nameFolded: k.text("name_folded").notNull().default(""),
   kind: counterpartyKind("kind").notNull().default("person"),
   settlementCurrency: k.currency("settlement_currency").references(() => currencies.code),
   contact: k.text("contact"),

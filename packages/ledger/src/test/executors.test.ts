@@ -337,13 +337,15 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
 
     // R3 H1 — a `LocalDeferral`, not a `LocalRefusal`: the missing rate is
-    // local state a later sync can supply, so `write.ts` leaves the entry
-    // exactly as the outbox commit left it. `blocked(refused)` would tell
-    // `recover.ts` never to retry it — the bug this fixes.
+    // local state a later sync can supply, so `state` stays exactly what the
+    // outbox commit left it. `blocked(refused)` would tell `recover.ts`
+    // never to retry it — the bug this fixes. R4 C2 — `disposition:
+    // "deferred"` is the new mark that keeps it findable regardless of
+    // where the watermark later moves.
     const [entry] = entries();
     expect(entry?.state).toBe("pending");
     expect(entry?.blockedKind).toBeNull();
-    expect(entry?.blockedDisposition).toBeNull();
+    expect(entry?.disposition).toBe("deferred");
   });
 
   /**
@@ -381,10 +383,11 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     );
 
     // Same R3 H1 branch as the missing-rate case above: local state, not a
-    // business rule, so the entry stays retryable rather than blocked.
+    // business rule, so the entry stays retryable rather than blocked —
+    // marked `deferred` (R4 C2), not `blocked`.
     const [entry] = entries();
     expect(entry?.state).toBe("pending");
-    expect(entry?.blockedDisposition).toBeNull();
+    expect(entry?.disposition).toBe("deferred");
   });
 
   it("does not stamp the destination rate, which the column lets it leave open", () => {
@@ -541,11 +544,12 @@ describe("a deferred entry during launch replay (R3 H1/M2)", () => {
     const rows = txnRows();
     expect(rows.map((row) => row.id)).toEqual([TXN_B]);
 
-    // Skipped, not halted: still exactly as `write.ts` would have left it,
-    // never marked `blocked` on this entry's account.
+    // Skipped, not halted, and never `blocked` on this entry's account — but
+    // now marked `disposition: "deferred"` (R4 C2), so it stays findable by
+    // `recover.ts`'s `outstanding` query however far the watermark moves.
     const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
     expect(deferred?.state).toBe("pending");
-    expect(deferred?.blockedDisposition).toBeNull();
+    expect(deferred?.disposition).toBe("deferred");
   });
 
   it("applies once the missing rate exists, on a later launch", () => {
@@ -577,5 +581,10 @@ describe("a deferred entry during launch replay (R3 H1/M2)", () => {
     expect(recovery.replayed).toHaveLength(1);
     expect(txnRows().map((row) => row.id)).toEqual([TXN_A]);
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(1);
+
+    // R4 C2 — cleared once it actually applied; nothing left marking it as
+    // still outstanding.
+    const [resolved] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(resolved?.disposition).toBeNull();
   });
 });

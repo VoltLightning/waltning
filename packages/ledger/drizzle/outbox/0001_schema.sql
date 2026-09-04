@@ -1,1 +1,2 @@
-ALTER TABLE `outbox` ADD `blocked_disposition` text;
+ALTER TABLE `outbox` ADD `disposition` text;--> statement-breakpoint
+CREATE INDEX `outbox_deferred` ON `outbox` (`disposition`) WHERE "outbox"."disposition" = 'deferred';

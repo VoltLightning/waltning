@@ -47,8 +47,15 @@
     {
       "idx": 6,
       "version": "6",
-      "when": 1788540540609,
+      "when": 1788542832536,
       "tag": "0006_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788542849738,
+      "tag": "0007_schema",
       "breakpoints": true
     }
   ]

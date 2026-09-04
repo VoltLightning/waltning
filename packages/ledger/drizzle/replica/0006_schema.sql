@@ -1,6 +1,4 @@
-DROP INDEX `counterparties_name_uq`;--> statement-breakpoint
 ALTER TABLE `counterparties` ADD `name_folded` text DEFAULT '' NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX `counterparties_name_uq` ON `counterparties` (`name_folded`) WHERE not "counterparties"."archived";--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_counterparty_merges` (
 	`id` text PRIMARY KEY NOT NULL,

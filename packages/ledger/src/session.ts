@@ -137,7 +137,7 @@ import {
 } from "./diagnostics.ts";
 import { type LedgerFs, migrateOutbox, migrateReplica } from "./migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./open.ts";
-import { recoverOnLaunch } from "./recover.ts";
+import { type LaunchRecovery, recoverOnLaunch } from "./recover.ts";
 import { ledgerRegistry } from "./registry.ts";
 import type { ledgerSchema } from "./schema-map.ts";
 import { categorizeBatchExecutor } from "./transactions/categorize-batch.executor.ts";
@@ -314,6 +314,11 @@ export type LocalLedgerSession = {
   convertLeafGroup: (input: ConvertLeafGroupInput, capture: Capture) => LocalCategoryRow;
   mergeCategories: (input: MergeCategoriesInput, capture: Capture) => MergeCategoriesResult;
   archiveCategory: (input: ArchiveCategoryInput, capture: Capture) => LocalCategoryRow;
+  /**
+   * What the most recent launch (or `reset`) found — S30's eventual source
+   * for `halted` and the deferred count. R4 L2: read, not thrown away.
+   */
+  lastRecovery: () => LaunchRecovery;
   reset: () => void;
   close: () => void;
 };
@@ -343,7 +348,21 @@ export type LocalLedgerSessionOptions<TRun> = {
 
 type SessionLedger<TRun> = Ledger<TRun, typeof ledgerSchema>;
 
-function start<TRun>(options: LocalLedgerSessionOptions<TRun>): SessionLedger<TRun> {
+/**
+ * `start`'s two results, kept together rather than the recovery discarded.
+ *
+ * **R4 L2.** `recoverOnLaunch`'s return value used to be called and thrown
+ * away right here — `halted` (a replay stall) and the deferred count S30
+ * needs were computed and immediately lost. Carried out as a pair instead,
+ * so `createLocalLedgerSession` can keep the recovery on the session for a
+ * screen to read later; no screen reads it yet.
+ */
+type StartResult<TRun> = {
+  readonly ledger: SessionLedger<TRun>;
+  readonly recovery: LaunchRecovery;
+};
+
+function start<TRun>(options: LocalLedgerSessionOptions<TRun>): StartResult<TRun> {
   const { diagnostics } = options;
   let stage: LedgerStartupStage = "open";
   emitLedgerDiagnostic(diagnostics, { scope: "ledger_startup", phase: "start", stage });
@@ -385,7 +404,7 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): SessionLedger<TR
         .run();
     }
     stage = "recover";
-    recoverOnLaunch(ledger, ledgerRegistry);
+    const recovery = recoverOnLaunch(ledger, ledgerRegistry);
 
     stage = "initial_read";
     readAccounts(ledger.replica.db);
@@ -402,7 +421,7 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): SessionLedger<TR
       phase: "success",
       stage: "ready",
     });
-    return ledger;
+    return { ledger, recovery };
   } catch (error) {
     ledger.close();
     emitLedgerDiagnostic(diagnostics, {
@@ -418,7 +437,7 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): SessionLedger<TR
 export function createLocalLedgerSession<TRun>(
   options: LocalLedgerSessionOptions<TRun>,
 ): LocalLedgerSession {
-  let ledger = start(options);
+  let { ledger, recovery: lastRecovery } = start(options);
   let closed = false;
 
   const requireOpen = () => {
@@ -707,6 +726,7 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
+    lastRecovery: () => lastRecovery,
     reset: () => {
       const current = requireOpen();
       closed = true;
@@ -720,7 +740,7 @@ export function createLocalLedgerSession<TRun>(
         }
       }
 
-      ledger = start(options);
+      ({ ledger, recovery: lastRecovery } = start(options));
       closed = false;
     },
     close: () => {

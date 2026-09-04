@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c59b1a19-d8ea-483a-9ae5-a5b41ad053ae",
-  "prevId": "321a636d-c4d5-4105-b5cc-1fb4c67e0550",
+  "id": "394efc11-167e-4129-8a06-f6da4b9295be",
+  "prevId": "c59b1a19-d8ea-483a-9ae5-a5b41ad053ae",
   "tables": {
     "account_groups": {
       "name": "account_groups",
@@ -447,9 +447,10 @@
         "counterparties_name_uq": {
           "name": "counterparties_name_uq",
           "columns": [
-            "lower(trim(\"name\"))"
+            "name_folded"
           ],
-          "isUnique": true
+          "isUnique": true,
+          "where": "not \"counterparties\".\"archived\""
         }
       },
       "foreignKeys": {
@@ -1769,14 +1770,6 @@
     "columns": {}
   },
   "internal": {
-    "indexes": {
-      "counterparties_name_uq": {
-        "columns": {
-          "lower(trim(\"name\"))": {
-            "isExpression": true
-          }
-        }
-      }
-    }
+    "indexes": {}
   }
 }

@@ -1303,9 +1303,32 @@ function accountWriteRefusal(error: unknown): FieldError | null {
  * business" (that one is about the *account*, S16's editor; this one is about
  * the *row*, reached only if a caller somehow got past `ScopeSegments` and
  * the screen's own account-switch reset), so it carries its own `messageKey`.
+ *
+ * **R4 L2 — `LocalDeferral` is not a refusal, and is caught first.** Before
+ * this, `create-transaction.executor.ts`'s no-rate `LocalDeferral` fell
+ * through every branch below, returned `null`, and the caller's `if
+ * (!fieldError) throw refusal` rethrew it — the composer saw a bare
+ * exception for a write that had, in fact, already committed to the outbox
+ * (`write.ts` commits the entry before it ever calls `apply`). Matched on
+ * `error.name` rather than `instanceof LocalDeferral`: this file is
+ * deliberately structural against `@waltning/ledger` (see `PhoneCurrency`'s
+ * own comment above) so the port stays the only thread to the storage
+ * engine, and `LocalDeferral`'s `name` is fixed by its class field. Routed
+ * through the same `fieldErrors` channel as every other mapper here — there
+ * is no third outcome in `PhoneLedgerController.createTransaction`'s
+ * contract, and S30 (R4's `lastRecovery`) is the eventual place a *saved,
+ * not-yet-valued* capture gets its own treatment, not this screen, not yet.
  */
-function createTransactionRefusal(error: unknown): FieldError | null {
+function createTransactionRefusal(error: unknown, currency: CurrencyCode): FieldError | null {
   if (!(error instanceof Error)) return null;
+  if (error.name === "LocalDeferral") {
+    return {
+      path: "",
+      message: error.message,
+      messageKey: "transactions.deferredNoRate",
+      params: { currency },
+    };
+  }
   if (
     error.message.includes("cannot sit in a shared account") ||
     error.message.includes("cannot move into a shared account")
@@ -2480,7 +2503,7 @@ export function createPhoneLedger(
         try {
           port.createTransaction(parsed.data, capture);
         } catch (refusal) {
-          const fieldError = createTransactionRefusal(refusal);
+          const fieldError = createTransactionRefusal(refusal, account.currency);
           if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",

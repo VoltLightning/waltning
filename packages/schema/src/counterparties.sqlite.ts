@@ -50,9 +50,20 @@ export const counterpartiesColumns = () => ({
    * `update_counterparty`, never derived by a query. The `''` default exists
    * for one reason: SQLite refuses `ADD COLUMN … NOT NULL` without one on a
    * table that has rows, so the migration step that introduces this column
-   * could not run on a phone that already holds counterparties. The in-place
-   * step backfills every row through `fold()` in the same transaction
-   * (`packages/ledger/src/migrate.ts`, the step's backfill); no row keeps `''`.
+   * could not run on a phone that already holds counterparties.
+   *
+   * **R4 M3 — the column and the unique index on it are two separate
+   * migrations, deliberately, and a JS backfill runs between them.**
+   * `replica/0006_schema.sql` only adds this column, every existing row
+   * still holding `''`; `replica/0007_schema.sql` is the one that drops the
+   * old `lower(trim(name))` index and creates the new unique index on this
+   * column. Bundled into one file — as this used to be — a phone with two or
+   * more live counterparties would fail its own migration: every row reads
+   * `''` the instant the column exists, and a unique index created in that
+   * same breath collides with itself before anything has had a chance to
+   * backfill a real value. The backfill itself is a follow-up PR's, not this
+   * migration's — it runs as ordinary application code after 0006 applies
+   * and before 0007 does, writing `fold(name)` into every row.
    */
   nameFolded: k.text("name_folded").notNull().default(""),
   kind: k.text("kind", { enum: COUNTERPARTY_KIND }).notNull().default("person"),

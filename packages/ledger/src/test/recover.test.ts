@@ -253,7 +253,7 @@ describe("an entry that cannot be replayed stops replay, and says why", () => {
     expect(blocked?.blockedReason).toContain("an_operation_this_build_forgot");
     // R2 M4 — `replay_halted`, never `write.ts`'s `refused`: local replay is
     // what stalled, not the write itself. The drain may still send it.
-    expect(blocked?.blockedDisposition).toBe("replay_halted");
+    expect(blocked?.disposition).toBe("replay_halted");
   });
 
   it("leaves the watermark below it, so nothing claims the missing effect landed", () => {
@@ -314,7 +314,7 @@ describe("an entry that cannot be replayed stops replay, and says why", () => {
 /**
  * R2 M4 — `blocked(terminal)` used to mean two different things: `write.ts`'s
  * own refusal ("never send") and this file's own replay halt ("send later").
- * `blockedDisposition` names which, and `outstanding`'s query reads it.
+ * `disposition` names which, and `outstanding`'s query reads it.
  */
 describe("a `refused` entry is skipped on later launches", () => {
   it("does not re-attempt it, and lets entries behind it replay past it", () => {
@@ -328,7 +328,7 @@ describe("a `refused` entry is skipped on later launches", () => {
       .set({
         state: "blocked",
         blockedKind: "terminal",
-        blockedDisposition: "refused",
+        disposition: "refused",
         blockedReason: "refused before this launch",
       })
       .where(eq(outbox.seq, 2))
@@ -347,7 +347,7 @@ describe("a `refused` entry is skipped on later launches", () => {
 
     const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
     expect(entry2?.state).toBe("blocked");
-    expect(entry2?.blockedDisposition).toBe("refused");
+    expect(entry2?.disposition).toBe("refused");
   });
 
   it("still halts on a `replay_halted` entry, on every launch, never skipping it", () => {
@@ -390,7 +390,7 @@ describe("a refusal met during replay is blocked and skipped, not halted (R3 M2)
     const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
     expect(entry2?.state).toBe("blocked");
     expect(entry2?.blockedKind).toBe("terminal");
-    expect(entry2?.blockedDisposition).toBe("refused");
+    expect(entry2?.disposition).toBe("refused");
     expect(entry2?.blockedReason).toBe("refuses on every attempt");
   });
 
@@ -409,11 +409,12 @@ describe("a refusal met during replay is blocked and skipped, not halted (R3 M2)
 });
 
 /**
- * R3 H1/M2 — the counterpart for `LocalDeferral`: skipped without marking
- * anything, so — unlike a refusal — it is genuinely retried at every launch,
- * and succeeds the moment whatever local state it was missing arrives.
+ * R4 C2 — the counterpart for `LocalDeferral`: marked `disposition:
+ * "deferred"`, `state` left `pending`, so — unlike a refusal — it is
+ * genuinely retried at every launch, and succeeds the moment whatever local
+ * state it was missing arrives.
  */
-describe("a deferral met during replay is skipped without marking anything (R3 H1/M2)", () => {
+describe("a deferral met during replay is marked deferred, not blocked (R4 C2)", () => {
   it("does not halt, applies the entries behind it, and leaves the entry pending", () => {
     intentOnly(1, "txn-1");
     intentOnly(2, "txn-2", "defers");
@@ -427,7 +428,7 @@ describe("a deferral met during replay is skipped without marking anything (R3 H
     const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
     expect(entry2?.state).toBe("pending");
     expect(entry2?.blockedKind).toBeNull();
-    expect(entry2?.blockedDisposition).toBeNull();
+    expect(entry2?.disposition).toBe("deferred");
   });
 
   it("is retried on the next launch, unlike a refusal, and applies once resolved", () => {
@@ -437,6 +438,8 @@ describe("a deferral met during replay is skipped without marking anything (R3 H
     expect(first.halted).toBeNull();
     expect(first.replayed).toEqual([]);
     expect(rows()).toHaveLength(0);
+    const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(deferred?.disposition).toBe("deferred");
 
     // Whatever local state `apply` was missing has arrived by the next launch
     // — a fresh rate row, say. Nothing about the entry itself changed; only
@@ -448,5 +451,200 @@ describe("a deferral met during replay is skipped without marking anything (R3 H
     expect(second.replayed).toHaveLength(1);
     expect(rows().map((r) => r.id)).toEqual(["txn-1"]);
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(1);
+
+    // Cleared the moment it actually applied — nothing left marking it as
+    // still outstanding.
+    const [resolved] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(resolved?.disposition).toBeNull();
+  });
+});
+
+/**
+ * R4 C2 — the finding this whole rename exists to fix: before it, a deferred
+ * entry's `seq` sitting below a watermark a *later* entry advanced past it
+ * made `outstanding`'s plain `gt(seq, applied)` filter hide it forever. Both
+ * paths that can produce that shape are proven here: replay (this describe)
+ * and `write.ts` itself (`write.test.ts`'s own mirror of this).
+ */
+describe("a deferred entry is not lost once a later entry advances the watermark past it (R4 C2)", () => {
+  it("keeps finding it at every launch, and applies it once the missing state arrives", () => {
+    intentOnly(1, "txn-1", "defers");
+    intentOnly(2, "txn-2");
+
+    const first = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    // Entry 2 genuinely applied, so the watermark reads 2 — *above* the
+    // still-deferred entry 1's own seq. The old `gt(seq, applied)` filter
+    // would have hidden entry 1 on every launch from here on.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+    expect(first.replayed).toHaveLength(1);
+    expect(rows().map((r) => r.id)).toEqual(["txn-2"]);
+
+    const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(deferred?.disposition).toBe("deferred");
+
+    // A second launch, still deferred: still found, still retried, still not
+    // applied — proving it was never hidden by the watermark in between.
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(second.replayed).toEqual([]);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+
+    // The missing state arrives. A third launch finds entry 1 again — by
+    // `disposition`, not by `seq` versus a watermark that is already past
+    // it — and applies it.
+    deferGate = false;
+    const third = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(third.replayed).toHaveLength(1);
+    expect(
+      rows()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["txn-1", "txn-2"]);
+
+    const [resolved] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(resolved?.disposition).toBeNull();
+  });
+
+  it("holds with a deferral on both sides of an entry that applies in between", () => {
+    // seq 1 and 3 both defer while seq 2 applies normally, in one launch.
+    intentOnly(1, "txn-1", "defers");
+    intentOnly(2, "txn-2");
+    intentOnly(3, "txn-3", "defers");
+
+    const first = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(first.replayed).toHaveLength(1);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+
+    const stillDeferred = s.ledger.outbox.db
+      .select({ seq: outbox.seq, disposition: outbox.disposition })
+      .from(outbox)
+      .where(eq(outbox.disposition, "deferred"))
+      .all();
+    expect(stillDeferred.map((e) => e.seq).sort()).toEqual([1, 3]);
+
+    deferGate = false;
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+    // Both resolve in the same launch, in seq order.
+    expect(second.replayed).toHaveLength(2);
+    expect(
+      rows()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["txn-1", "txn-2", "txn-3"]);
+
+    const remaining = s.ledger.outbox.db
+      .select({ disposition: outbox.disposition })
+      .from(outbox)
+      .where(eq(outbox.disposition, "deferred"))
+      .all();
+    expect(remaining).toEqual([]);
+  });
+});
+
+/**
+ * R4 H1 — a `LocalRefusal` met while an earlier entry is itself still
+ * `deferred` is not trustworthy: the refusal was decided against a replica
+ * that is known incomplete (the deferred entry ahead of it has not written
+ * its row yet), so it must not be treated as terminal.
+ */
+describe("a refusal caused by a deferral ahead of it is deferred, not refused (R4 H1)", () => {
+  it("marks the refusal deferred rather than terminal while the entry ahead of it is still outstanding", () => {
+    // 1 = create_transaction txn-A (deferred); 2 = an update that only
+    // succeeds once txn-A exists, so it refuses — as long as 1 is still
+    // outstanding, that refusal is untrustworthy.
+    const updateInput = z.object({ id: z.string() });
+    let deferFirst = true;
+    const createsA = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+      operation: "creates_a",
+      opVersion: 1,
+      input: CREATE_TRANSACTION,
+      mints: (input) => [input.id],
+      apply: (input, tx) => {
+        if (deferFirst) throw new LocalDeferral("no rate yet");
+        const [row] = tx
+          .insert(transactions)
+          .values({
+            id: id<"transactions">(input.id) as Id<"transactions">,
+            date: accountingDate("2026-03-12"),
+            type: "expense",
+            accountId: id<"accounts">("acc-1"),
+            amountOriginal: money.toMoney(input.amount_original),
+            currency: currencyCode("PLN"),
+            fxRate: money.pivotPerUnit("1.000000000000"),
+          })
+          .returning({ id: transactions.id })
+          .all();
+        if (!row) throw new Error("no row returned");
+        return row;
+      },
+    });
+    const updatesA = defineLocalExecutor<typeof updateInput, { id: string }, Tx>({
+      operation: "updates_a",
+      opVersion: 1,
+      input: updateInput,
+      mints: () => [],
+      apply: (input, tx) => {
+        const [row] = tx
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(eq(transactions.id, id<"transactions">(input.id) as Id<"transactions">))
+          .all();
+        if (!row) throw new LocalRefusal(`no transaction ${input.id}`);
+        return row;
+      },
+    });
+    const registryH1 = localRegistry<Tx>([createsA, updatesA]);
+
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values({
+        seq: 1,
+        operation: "creates_a",
+        opVersion: 1,
+        payload: { id: "txn-A", amount_original: "18.00000000" },
+        deps: [],
+        capturedTz: "Europe/Warsaw",
+        capturedOffsetMinutes: 60,
+      })
+      .run();
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values({
+        seq: 2,
+        operation: "updates_a",
+        opVersion: 1,
+        payload: { id: "txn-A" },
+        deps: [],
+        capturedTz: "Europe/Warsaw",
+        capturedOffsetMinutes: 60,
+      })
+      .run();
+
+    const first = recoverOnLaunch(s.ledger, registryH1);
+    expect(first.halted).toBeNull();
+    expect(first.replayed).toEqual([]);
+
+    const [entry1, entry2] = s.ledger.outbox.db.select().from(outbox).orderBy(outbox.seq).all();
+    expect(entry1?.disposition).toBe("deferred");
+    expect(entry1?.state).toBe("pending");
+    // The refusal is recorded as `deferred`, never `refused` — `refused`
+    // would strand it forever once entry 1 does resolve.
+    expect(entry2?.disposition).toBe("deferred");
+    expect(entry2?.state).toBe("pending");
+
+    // The rate arrives. Both resolve, in order, on the same launch: entry 1
+    // applies first and creates the row, entry 2's refusal no longer fires.
+    deferFirst = false;
+    const second = recoverOnLaunch(s.ledger, registryH1);
+    expect(second.replayed).toHaveLength(2);
+    expect(rows().map((r) => r.id)).toEqual(["txn-A"]);
+
+    const [resolved1, resolved2] = s.ledger.outbox.db
+      .select()
+      .from(outbox)
+      .orderBy(outbox.seq)
+      .all();
+    expect(resolved1?.disposition).toBeNull();
+    expect(resolved2?.disposition).toBeNull();
   });
 });

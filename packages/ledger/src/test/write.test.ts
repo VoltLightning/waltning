@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
+import { recoverOnLaunch } from "../recover.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { type Capture, type LocalTx, writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
@@ -312,7 +313,7 @@ describe("a failure between the two commits keeps the intent", () => {
     expect(entry?.blockedReason).toBe("the replica half failed");
     // R2 M4 — `refused`, never `recover.ts`'s `replay_halted`: this write's
     // own `apply` rejected it, so it will refuse identically on any retry.
-    expect(entry?.blockedDisposition).toBe("refused");
+    expect(entry?.disposition).toBe("refused");
   });
 
   /**
@@ -333,19 +334,22 @@ describe("a failure between the two commits keeps the intent", () => {
     const [entry] = entries();
     expect(entry?.state).toBe("pending");
     expect(entry?.blockedKind).toBeNull();
-    expect(entry?.blockedDisposition).toBeNull();
+    expect(entry?.disposition).toBeNull();
   });
 
   /**
-   * R3 H1 — a `LocalDeferral` takes the same branch as a plain `Error` here
-   * (both fall through the `instanceof LocalRefusal` check), but for a
-   * different reason worth its own test: this one is a *named*, expected
-   * outcome — missing local state, not a driver failure — and it must stay
-   * retryable for exactly the same reason. Marking it `blocked` would tell
-   * `recover.ts` never to look at it again, which is the R2-era bug this
-   * class exists to avoid repeating.
+   * R4 C2 — a `LocalDeferral` never moves `state`, the same as a plain
+   * `Error` (both fall through the `instanceof LocalRefusal` half of the
+   * check), but for a different reason worth its own test: this one is a
+   * *named*, expected outcome — missing local state, not a driver failure —
+   * and it must stay retryable for exactly the same reason. `state: "blocked"`
+   * would tell `recover.ts` never to look at it again, which is the R2-era
+   * bug this class exists to avoid repeating. Unlike a plain `Error`, though,
+   * it now *does* leave a mark: `disposition: "deferred"`, so
+   * `recover.ts`'s `outstanding` query can find this entry again no matter
+   * how far the watermark moves past it (R4 C2's own finding).
    */
-  it("leaves the entry pending — not blocked — when apply defers", () => {
+  it("leaves the entry pending, marked deferred rather than blocked — R4 C2", () => {
     expect(() =>
       writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
     ).toThrow("missing local state, not yet supplied");
@@ -357,7 +361,45 @@ describe("a failure between the two commits keeps the intent", () => {
     const [entry] = entries();
     expect(entry?.state).toBe("pending");
     expect(entry?.blockedKind).toBeNull();
-    expect(entry?.blockedDisposition).toBeNull();
+    expect(entry?.disposition).toBe("deferred");
+  });
+
+  /**
+   * R4 C2 — the finding itself, reproduced on the write path: a deferral at
+   * seq 1 followed by an ordinary write at seq 2 advances the watermark to
+   * 2, *above* the still-deferred entry's own seq. Before this fix, that
+   * silently and permanently hid entry 1 from `recover.ts`'s `outstanding`
+   * query — `gt(seq, applied)` alone had nothing left to match. This proves
+   * `writeLocally` marks the deferral so it survives that.
+   */
+  it("is not hidden once a later write advances the watermark past it", () => {
+    expect(() =>
+      writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+    ).toThrow();
+
+    writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-2"),
+      capture,
+    });
+
+    // The watermark reflects entry 2's genuine success — above entry 1's own
+    // seq, exactly the shape that used to hide it.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+
+    const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(deferred?.disposition).toBe("deferred");
+    expect(deferred?.state).toBe("pending");
+
+    // `recover.ts`'s own tests prove the retry itself; this proves only that
+    // `write.ts` left the trail `recover.ts` depends on.
+    const recovery = recoverOnLaunch(s.ledger, registry);
+    // Still deferred — `defers` always throws — but found and re-attempted,
+    // which is the property the old code lost.
+    expect(recovery.replayed).toEqual([]);
+    const [stillDeferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(stillDeferred?.disposition).toBe("deferred");
   });
 
   /**

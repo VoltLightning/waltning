@@ -1,5 +1,5 @@
 {
-  "id": "e5629a1d-89e5-496c-a958-8c46c8bda4ca",
+  "id": "e5aa38e8-2800-47b9-a265-9bc83bec8ce9",
   "prevId": "8c8edfbe-9af6-470b-afa0-8b533ce5440b",
   "version": "7",
   "dialect": "postgresql",
@@ -1280,7 +1280,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "counterparties_name_trimmed": {
+          "name": "counterparties_name_trimmed",
+          "value": "\"counterparties\".\"name\" = btrim(\"counterparties\".\"name\", E' \\t\\n\\r\\x0B\\f' || U&'\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000\\FEFF')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.counterparty_distinct_pairs": {

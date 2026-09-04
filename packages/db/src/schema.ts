@@ -260,9 +260,21 @@ export const categoryMappings = pgTable(
  * whitespace — NBSP, the Unicode space separators, the line/paragraph
  * separators, and the BOM — is the `U&'…'` half, `\XXXX` being Postgres's
  * four-hex-digit Unicode string escape.
+ *
+ * **Vertical tab is `\x0B`, not `\v` (R4 C1).** Postgres's `E'…'` escapes
+ * recognise `\b \f \n \r \t` plus the numeric forms (`\xh`, `\ooo`, `\uxxxx`,
+ * `\Uxxxxxxxx`) — there is no `\v`. Under "any other character following a
+ * backslash is taken literally", `E'\v'` is just the letter `v`. Confirmed
+ * live: with the old text, `btrim('Ivanov', charset)` came back `'Ivano'`
+ * — the trailing `v` read as whitespace — so `counterparties_name_trimmed`
+ * refused `Ivanov`, `Lev`, `van der Berg`, any name touching the letter `v`
+ * at an edge. Meanwhile U+000B itself was absent from the charset, so a
+ * name genuinely padded with a vertical tab passed the CHECK and folded
+ * differently from `fold()`, which does treat U+000B as whitespace.
+ * `\x0B` is Postgres's hex-escape form and needs no `U&` half.
  */
-const JS_TRIM_CHARSET_SQL =
-  `E' \\t\\n\\r\\v\\f' || U&'\\00A0\\1680\\2000\\2001\\2002\\2003` +
+export const JS_TRIM_CHARSET_SQL =
+  `E' \\t\\n\\r\\x0B\\f' || U&'\\00A0\\1680\\2000\\2001\\2002\\2003` +
   `\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000\\FEFF'`;
 
 /**

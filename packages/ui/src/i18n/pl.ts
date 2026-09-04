@@ -106,6 +106,8 @@ export const pl: Messages = {
     amount: "Kwota",
     account: "Konto",
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",
+    deferredNoRate:
+      "Zapisano — zostanie wycenione, gdy tylko będzie znany kurs wymiany dla {{currency}}.",
     expense: "Wydatek",
     income: "Przychód",
     category: "Kategoria",

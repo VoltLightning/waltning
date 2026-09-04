@@ -150,6 +150,14 @@ export const en = {
      * currency, not the direction.
      */
     needsRate: "{{currency}} needs an exchange rate before a transaction can be recorded in it.",
+    /**
+     * R4 L2 — `create_transaction`'s `LocalDeferral`: unlike `needsRate`
+     * above (refused before the write, nothing saved), this fires *after*
+     * the outbox entry has already committed — a currency added while
+     * offline, with no last-known rate yet. The capture is not lost; it is
+     * simply not valued yet, so the wording says "saved", never "failed".
+     */
+    deferredNoRate: "Saved — it will be valued once an exchange rate for {{currency}} is known.",
     expense: "Expense",
     income: "Income",
     category: "Category",

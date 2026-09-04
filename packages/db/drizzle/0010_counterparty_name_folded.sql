@@ -33,6 +33,27 @@
 -- disagreeing again — the CHECK just below refuses an untrimmed "name"
 -- outright, so nothing reaches this expression already wrong.
 ALTER TABLE "counterparties" ADD COLUMN "name_folded" text GENERATED ALWAYS AS (lower(translate(normalize("name", NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))) STORED NOT NULL;--> statement-breakpoint
+-- R4 M2 — without this, a pre-existing padded name (`'Bank A '`, written
+-- before this migration existed to refuse it) aborts the ADD CONSTRAINT
+-- just below with Postgres's own bare "column … of relation … contains
+-- values that violate the new constraint", naming neither the row nor what
+-- "trimmed" means. This runs first and names the offending ids, the same
+-- shape as the fold-collision check below: trim them (a plain
+-- `UPDATE … SET name = btrim(name, …)` against the identical charset, or by
+-- hand), then simply retry this migration.
+DO $$
+DECLARE
+  msg text;
+BEGIN
+  SELECT string_agg("id"::text, ', ' ORDER BY "id")
+  INTO msg
+  FROM "counterparties"
+  WHERE "name" <> btrim("name", E' \t\n\r\x0B\f' || U&'\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF');
+
+  IF msg IS NOT NULL THEN
+    RAISE EXCEPTION 'counterparties_name_trimmed: not trimmed — %; trim these names first, then retry this migration', msg;
+  END IF;
+END $$;--> statement-breakpoint
 -- R3 M1 — the charset is exactly what JS `String.prototype.trim()` treats as
 -- whitespace: ASCII space/tab/LF/CR/VT/FF (the `E'…'` half) plus NBSP, the
 -- Unicode space separators, the line/paragraph separators and the BOM (the
@@ -41,7 +62,13 @@ ALTER TABLE "counterparties" ADD COLUMN "name_folded" text GENERATED ALWAYS AS (
 -- text must stay byte-identical to it. A name a phone would have `.trim()`ed
 -- before ever reaching `fold()` is refused here rather than silently folded
 -- under `btrim`'s narrower idea of trimmed.
-ALTER TABLE "counterparties" ADD CONSTRAINT "counterparties_name_trimmed" CHECK ("name" = btrim("name", E' \t\n\r\v\f' || U&'\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF'));--> statement-breakpoint
+--
+-- R4 C1 — vertical tab is `\x0B`, not `\v`: Postgres's `E'…'` escapes do not
+-- recognise `\v`, so it used to fall through to the literal letter `v` —
+-- refusing `Ivanov`/`Lev`/`van der Berg` outright while admitting a name
+-- padded with a real U+000B. See `schema.ts`'s own comment on
+-- `JS_TRIM_CHARSET_SQL` for the live-Postgres proof.
+ALTER TABLE "counterparties" ADD CONSTRAINT "counterparties_name_trimmed" CHECK ("counterparties"."name" = btrim("counterparties"."name", E' \t\n\r\x0B\f' || U&'\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF'));--> statement-breakpoint
 DROP INDEX "counterparties_name_uq";--> statement-breakpoint
 -- R2 M2 — without this, two counterparties that already fold to the same
 -- value abort the `CREATE UNIQUE INDEX` below with a bare "could not create

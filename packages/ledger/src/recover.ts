@@ -103,10 +103,19 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
   // entries could depend on. A `replay_halted` entry (`recover.ts`'s own
   // `haltAt`) is **not** skipped — it keeps halting replay behind it exactly
   // as before, since it may hold a row a later entry depends on, and an app
-  // update may yet supply the executor that was missing. A `LocalDeferral`
-  // leaves no trace in the outbox at all (R3 H1), so there is nothing here to
-  // filter for it — it is simply outstanding again, every launch, until it
-  // stops throwing.
+  // update may yet supply the executor that was missing.
+  //
+  // R4 C2 — a `deferred` entry is included **regardless of `seq` versus the
+  // watermark**, which is why this is no longer a single `gt(seq, applied)`
+  // filter. Before this fix, a `LocalDeferral` left no trace in the outbox at
+  // all: a deferred entry at seq 1 followed by an ordinary write at seq 2
+  // advanced `applied_seq` to 2 (entry 2 genuinely applied), and the plain
+  // `gt(seq, applied)` filter then hid entry 1 forever — its effect was never
+  // present, but the watermark said otherwise. Marking it `deferred`
+  // (`markDeferredAt` below) and matching on that mark *independently* of the
+  // watermark is what makes it outstanding again on every later launch, the
+  // same guarantee `write.ts`'s doc comment already claimed and did not keep.
+  const notRefused = or(isNull(outbox.disposition), ne(outbox.disposition, "refused"));
   const outstanding = ledger.outbox.db
     .select({
       id: outbox.id,
@@ -115,20 +124,21 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
       payload: outbox.payload,
     })
     .from(outbox)
-    .where(
-      and(
-        gt(outbox.seq, applied),
-        or(
-          ne(outbox.state, "blocked"),
-          isNull(outbox.blockedDisposition),
-          ne(outbox.blockedDisposition, "refused"),
-        ),
-      ),
-    )
+    .where(or(and(gt(outbox.seq, applied), notRefused), eq(outbox.disposition, "deferred")))
     .orderBy(asc(outbox.seq))
     .all();
 
   const replayed: string[] = [];
+
+  // R4 H1 — whether any entry already visited this pass is still `deferred`.
+  // `outstanding` is in ascending `seq` order, so by the time a later entry's
+  // `LocalRefusal` is caught below, every entry that could be "ahead of it"
+  // has already been through this loop — including one whose own `seq` sits
+  // below the watermark, since a `deferred` entry is fetched regardless of
+  // that. A refusal met while this is `true` is not trustworthy: the local
+  // state it read to decide "no such row" is exactly the state a still-
+  // outstanding deferral has not written yet.
+  let anyDeferredSoFar = false;
 
   for (const entry of outstanding) {
     const executor: AnyLocalExecutor<LocalTx<TRun, TSchema>> | undefined =
@@ -155,24 +165,34 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
       // apply.
       //
       // `LocalRefusal`: the entry's own payload is invalid on any retry —
-      // marked `blocked(refused)` here, same as `write.ts`, so a future
-      // launch's `outstanding` query (above) skips it rather than re-refusing
-      // it and re-halting everything behind it forever, which is what this
-      // finding fixes. Replay continues past it: it never applied, so it
-      // creates nothing later entries could depend on.
+      // marked `disposition: "refused"` here, same as `write.ts`, so a
+      // future launch's `outstanding` query (above) skips it rather than
+      // re-refusing it and re-halting everything behind it forever — unless
+      // (R4 H1) an earlier entry is itself still `deferred`, in which case
+      // this refusal is untrustworthy for the reason `anyDeferredSoFar`
+      // documents above, and is recorded as `deferred` instead of `refused`
+      // so it gets retried once the entry ahead of it resolves. Replay
+      // continues past it either way: it never applied, so it creates
+      // nothing later entries could depend on.
       //
       // `LocalDeferral`: the missing local state may exist by the *next*
-      // launch, so nothing is marked and nothing is recorded here — the entry
-      // is simply skipped this time, exactly as `write.ts` leaves it
-      // `pending`, and `recoverOnLaunch` retries it again next launch.
+      // launch (or later in *this* one — see the success branch below), so
+      // the entry is marked `deferred` (R4 C2) and skipped, retried again by
+      // every launch's `outstanding` query until it stops throwing.
       //
       // Anything else is the crash-window/impossible-state case `haltAt`
       // documents, unchanged from before.
       if (error instanceof LocalRefusal) {
-        blockRefusedAt(ledger, entry, error.message);
+        if (anyDeferredSoFar) {
+          markDeferredAt(ledger, entry.id);
+        } else {
+          blockRefusedAt(ledger, entry, error.message);
+        }
         continue;
       }
       if (error instanceof LocalDeferral) {
+        markDeferredAt(ledger, entry.id);
+        anyDeferredSoFar = true;
         continue;
       }
 
@@ -183,6 +203,13 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
       return haltAt(ledger, entry, replayed, requeued, asError.message, asError);
     }
 
+    // R4 C2 — an entry that just applied is no longer `deferred`, whether it
+    // held that mark from a previous launch or from earlier in this very
+    // pass (the seq-1-then-seq-2 case above, resolved in one launch once the
+    // rate arrives). A plain, unconditional clear: `disposition` is already
+    // `null` for the ordinary entry that never deferred, and setting `null`
+    // to `null` costs nothing.
+    clearDispositionAt(ledger, entry.id);
     replayed.push(entry.id);
   }
 
@@ -212,9 +239,9 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
  * Note this blocks *local replay*, which is not the same as blocking the drain:
  * the entry can still be sent, and the server does not need the phone to have
  * applied it. That asymmetry is why `blockedReason` exists separately from
- * `lastError`, and why `blockedDisposition` (R2 M4) is written `replay_halted`
- * here, never `refused` — `write.ts`'s catch is the one that means "never
- * send"; this one means "local replay stalled, the drain may still succeed."
+ * `lastError`, and why `disposition` (R2 M4) is written `replay_halted` here,
+ * never `refused` — `write.ts`'s catch is the one that means "never send";
+ * this one means "local replay stalled, the drain may still succeed."
  */
 function haltAt<TRun, TSchema extends LedgerSchema>(
   ledger: Ledger<TRun, TSchema>,
@@ -231,7 +258,7 @@ function haltAt<TRun, TSchema extends LedgerSchema>(
       .set({
         state: "blocked",
         blockedKind: "terminal",
-        blockedDisposition: "replay_halted",
+        disposition: "replay_halted",
         blockedReason: reason,
       })
       .where(eq(outbox.id, entry.id))
@@ -283,7 +310,7 @@ function blockRefusedAt<TRun, TSchema extends LedgerSchema>(
       .set({
         state: "blocked",
         blockedKind: "terminal",
-        blockedDisposition: "refused",
+        disposition: "refused",
         blockedReason: reason,
       })
       .where(eq(outbox.id, entry.id))
@@ -297,6 +324,73 @@ function blockRefusedAt<TRun, TSchema extends LedgerSchema>(
       `recoverOnLaunch: failed to mark ${entry.id} blocked after a replay refusal — ` +
         (blockError instanceof Error ? blockError.message : String(blockError)),
       { cause: new Error(reason) },
+    );
+  }
+}
+
+/**
+ * Mark an entry `deferred` — `state` untouched, still `pending` (R4 C2/H1).
+ *
+ * The counterpart to `blockRefusedAt` and `haltAt` above, and deliberately
+ * unlike both: those two move `state` to `blocked`, because a refusal is
+ * never retried and a replay halt stops everything behind it. A deferral is
+ * neither — the drain must keep trying to send it (§14.1's "the intent
+ * remains in the outbox for a later backend to value"), and local replay
+ * continues past it, so `state` stays exactly what the outbox commit left
+ * it. Only `disposition` moves, which is the one thing the `outstanding`
+ * query above reads to find this entry again regardless of the watermark.
+ *
+ * Called for two different throws — `write.ts`'s doc comment on
+ * `LocalDeferral` and this file's own `outstanding` loop above name both:
+ * the executor's own `LocalDeferral` (no rate yet), and a `LocalRefusal` met
+ * while an earlier entry is itself still deferred (R4 H1 — the refusal is
+ * not trustworthy against a replica known to be incomplete). Both cases mean
+ * the same thing here: try this entry again next launch, not "never."
+ */
+function markDeferredAt<TRun, TSchema extends LedgerSchema>(
+  ledger: Ledger<TRun, TSchema>,
+  entryId: string,
+): void {
+  try {
+    ledger.outbox.db
+      .update(outbox)
+      .set({ disposition: "deferred" })
+      .where(eq(outbox.id, entryId))
+      .run();
+  } catch (markError) {
+    // R2 L1's reasoning, applied a third time: without this, a deferral that
+    // fails to *record itself* looks like an ordinary outstanding entry with
+    // `seq` below the watermark once a later entry advances it — exactly the
+    // silent loss R4 C2 exists to close.
+    throw new Error(
+      `recoverOnLaunch: failed to mark ${entryId} deferred — ` +
+        (markError instanceof Error ? markError.message : String(markError)),
+    );
+  }
+}
+
+/**
+ * Clear `disposition` once a `deferred` (or, harmlessly, an already-`null`)
+ * entry finally applies (R4 C2).
+ *
+ * Called from the success branch of the replay loop, unconditionally — the
+ * ordinary entry that never deferred already reads `null`, and writing
+ * `null` over `null` is a no-op the `outstanding` query above does not even
+ * need to have run for. What matters is that a *previously* `deferred` entry
+ * stops matching `eq(outbox.disposition, "deferred")` the moment its effect
+ * is actually on the replica, or it would be replayed — impossibly, since
+ * SQLite has no second row for it to apply — on every later launch.
+ */
+function clearDispositionAt<TRun, TSchema extends LedgerSchema>(
+  ledger: Ledger<TRun, TSchema>,
+  entryId: string,
+): void {
+  try {
+    ledger.outbox.db.update(outbox).set({ disposition: null }).where(eq(outbox.id, entryId)).run();
+  } catch (clearError) {
+    throw new Error(
+      `recoverOnLaunch: failed to clear disposition on ${entryId} after it applied — ` +
+        (clearError instanceof Error ? clearError.message : String(clearError)),
     );
   }
 }

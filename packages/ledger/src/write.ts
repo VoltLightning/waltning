@@ -45,6 +45,7 @@ import {
 } from "./diagnostics.ts";
 import {
   type AnyLocalExecutor,
+  LocalDeferral,
   type LocalExecutor,
   LocalRefusal,
   type LocalRegistry,
@@ -283,37 +284,45 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
     // `pending`, real, unsent, and drainable — and `recover.ts` is what
     // replays it, never this catch.
     //
-    // R2 M4 — `blockedDisposition: "refused"`, never `"replay_halted"`
+    // R2 M4 — `disposition: "refused"`, never `"replay_halted"`
     // (`recover.ts`'s own halt): this write's own `apply` rejected it, so it
     // will refuse identically on any retry or on a server. `outbox.ts`
     // documents the distinction `recover.ts`'s `outstanding` query reads.
     //
-    // R3 H1 — `LocalDeferral` is deliberately **not** matched below and falls
-    // through to the plain rethrow at the bottom of this catch, same as any
-    // other non-`LocalRefusal` throw: the entry stays exactly as the outbox
-    // commit left it — `pending`, no `blockedDisposition` — because the
-    // missing local state a deferral names (no pivot, no last-known rate) is
-    // not a fact about this input that a retry would repeat. `recover.ts`
-    // retries it at every launch until that state arrives.
-    if (error instanceof LocalRefusal) {
+    // R4 C2 — `LocalDeferral` is now matched too, below, and no longer falls
+    // through untouched. It used to: the entry was left exactly as the
+    // outbox commit left it, `pending` with nothing recorded, on the theory
+    // that `recover.ts` would retry it "at every launch until that state
+    // arrives." That theory was false the moment a *later* entry applied
+    // first: `advanceAppliedSeq` is a monotonic max, so a normal write at
+    // seq 2 following this deferral at seq 1 pushed the watermark to 2, and
+    // `recover.ts`'s old `gt(seq, applied)` filter then hid seq 1 forever —
+    // its effect was never present, but nothing said so. `disposition:
+    // "deferred"` is what `recover.ts`'s `outstanding` query now matches on
+    // *regardless of seq*, so the entry stays findable no matter how far the
+    // watermark moves past it. `state` is deliberately untouched — it stays
+    // `pending`, exactly as the outbox commit left it, because the drain
+    // must still try to send it (§14.1) and local replay must still retry
+    // it, neither of which a `blocked` write.ts would ever attempt.
+    if (error instanceof LocalRefusal || error instanceof LocalDeferral) {
+      const disposition = error instanceof LocalRefusal ? "refused" : "deferred";
       const reason = error.message;
       try {
         ledger.outbox.db
           .update(outbox)
-          .set({
-            state: "blocked",
-            blockedKind: "terminal",
-            blockedDisposition: "refused",
-            blockedReason: reason,
-          })
+          .set(
+            disposition === "refused"
+              ? { state: "blocked", blockedKind: "terminal", disposition, blockedReason: reason }
+              : { disposition },
+          )
           .where(eq(outbox.id, enqueued.entryId))
           .run();
       } catch (blockError) {
-        // R2 L1 — the entry would otherwise be left `pending`, silently, if
-        // marking it `blocked` itself failed: the caller sees only this write's
-        // own error and never learns the entry it queued is still sitting there
-        // looking sendable. The original refusal travels as `cause` rather than
-        // being swallowed.
+        // R2 L1 — the entry would otherwise be left looking ordinary,
+        // silently, if recording the disposition itself failed: the caller
+        // sees only this write's own error and never learns the entry it
+        // queued still needs the mark it just failed to get. The original
+        // error travels as `cause` rather than being swallowed.
         const blockReason = blockError instanceof Error ? blockError.message : String(blockError);
         emitLedgerDiagnostic(diagnostics, {
           scope: "local_write",
@@ -324,7 +333,7 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
           error: describeLedgerError(blockError),
         });
         throw new Error(
-          `local_write: failed to mark ${enqueued.entryId} blocked after a refusal — ${blockReason}`,
+          `local_write: failed to mark ${enqueued.entryId} ${disposition} — ${blockReason}`,
           { cause: error },
         );
       }

@@ -244,9 +244,7 @@ export const REPLICA_DDL: readonly string[] = [
   `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (lower(trim("name")))`,
   `CREATE INDEX \`transaction_lines_category_idx\` ON \`transaction_lines\` (\`category_id\`)`,
   `CREATE INDEX \`transactions_category_idx\` ON \`transactions\` (\`category_id\`)`,
-  `DROP INDEX \`counterparties_name_uq\``,
   `ALTER TABLE \`counterparties\` ADD \`name_folded\` text DEFAULT '' NOT NULL`,
-  `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
   `PRAGMA foreign_keys=OFF`,
   `CREATE TABLE \`__new_counterparty_merges\` (
 	\`id\` text PRIMARY KEY NOT NULL,
@@ -265,6 +263,8 @@ export const REPLICA_DDL: readonly string[] = [
   `PRAGMA foreign_keys=ON`,
   `CREATE UNIQUE INDEX \`counterparty_merges_loser_open_uq\` ON \`counterparty_merges\` (\`loser_id\`) WHERE "counterparty_merges"."unmerged_at" is null`,
   `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
+  `DROP INDEX \`counterparties_name_uq\``,
+  `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
 ];
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */
@@ -291,5 +291,6 @@ export const OUTBOX_DDL: readonly string[] = [
 	\`id\` integer PRIMARY KEY NOT NULL,
 	\`issued\` integer NOT NULL
 )`,
-  `ALTER TABLE \`outbox\` ADD \`blocked_disposition\` text`,
+  `ALTER TABLE \`outbox\` ADD \`disposition\` text`,
+  `CREATE INDEX \`outbox_deferred\` ON \`outbox\` (\`disposition\`) WHERE "outbox"."disposition" = 'deferred'`,
 ];

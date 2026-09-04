@@ -689,7 +689,12 @@ describe("a constraint declared in the schema is present on the device", () => {
     expect(
       inspect(join(dir, "index-outbox.db"), (db) => objects(db, "index")),
       "`outbox.ts` declares it and the drain's only read is planned against it",
-    ).toEqual(["outbox_pending_by_seq"]);
+    ).toEqual(
+      // R4 C2 adds `outbox_deferred`, `recover.ts`'s `outstanding` query's
+      // own index — sqlite_master lists them alphabetically, ahead of the
+      // pre-existing `outbox_pending_by_seq`.
+      ["outbox_deferred", "outbox_pending_by_seq"],
+    );
   });
 
   /**
