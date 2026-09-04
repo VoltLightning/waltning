@@ -132,6 +132,26 @@ export type PhoneCurrency = {
 };
 
 /**
+ * S17's whole row — `readCurrencySettings`'s answer, structural like
+ * `PhoneCurrency` above for the same reason (no `@waltning/ledger` import).
+ * `PhoneCurrency` answers *can a capture be valued in this*; this answers
+ * *what does the settings screen show and write* — the two never converge
+ * because a picker has no use for `version`, `pinned` or `rateSource`, and a
+ * settings row has no use for `capturable`.
+ */
+export type PhoneCurrencySettings = {
+  code: CurrencyCode;
+  name: string;
+  symbol: string;
+  symbolPosition: string;
+  decimals: number;
+  rateSource: string | null;
+  pinned: boolean;
+  isPivot: boolean;
+  version: number;
+};
+
+/**
  * A group the replica holds, for the create-account form's group picker.
  *
  * Structural rather than imported from `@waltning/ledger`, matching
@@ -442,6 +462,10 @@ export type PhoneLedgerPort = {
   /** `includeArchived` — default `false`. S16's register loads them lazily, behind its own toggle. */
   listAccounts: (options?: { includeArchived?: boolean }) => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
+  /** S17, on demand — not carried in the snapshot, matching `readCoverage`/`listFxRates` below. */
+  listCurrencySettings: (options?: {
+    includeArchived?: boolean;
+  }) => readonly PhoneCurrencySettings[];
   listGroups: () => readonly PhoneGroup[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
@@ -1031,6 +1055,10 @@ export type PhoneLedgerController = {
     to: CurrencyCode;
     date: AccountingDate;
   }) => PhoneCrossRate | null;
+  /** S17, on demand — `readCurrencySettings`'s answer. */
+  listCurrencySettings: (options?: {
+    includeArchived?: boolean;
+  }) => readonly PhoneCurrencySettings[];
   readCoverage: (today: AccountingDate) => readonly PhoneCoverage[];
   listFxRates: (range: {
     base: CurrencyCode;
@@ -2496,6 +2524,7 @@ export function createPhoneLedger(
     /* ── E3 · FX ──────────────────────────────────────────────────────────── */
     readRate: (pair) => port.readRate(pair),
     readCrossRate: (pair) => port.readCrossRate(pair),
+    listCurrencySettings: (options) => port.listCurrencySettings(options),
     readCoverage: (today) => port.readCoverage(today),
     listFxRates: (range) => port.listFxRates(range),
     addCurrency: (draft) => {

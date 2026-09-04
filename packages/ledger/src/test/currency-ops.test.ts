@@ -20,6 +20,8 @@ import { archiveCurrencyExecutor } from "../currencies/archive-currency.executor
 import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
 import { clearManualRateExecutor } from "../currencies/clear-manual-rate.executor.ts";
 import { listFxRates, readCoverage, readCrossRate, readRate } from "../currencies/read-rate.ts";
+import { readCurrencySettings } from "../currencies/read-currency-settings.ts";
+import { listFxRates, readCoverage, readRate } from "../currencies/read-rate.ts";
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "../currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "../currencies/set-rate-source.executor.ts";
@@ -649,6 +651,34 @@ describe("listFxRates", () => {
     });
 
     expect(rows.map((r) => r.date)).toEqual(["2026-01-01", "2026-01-03"]);
+  });
+});
+
+describe("readCurrencySettings", () => {
+  it("lists every non-archived currency with the full row S17 needs", () => {
+    write(setPinnedExecutor, { code: "USD", version: 1, pinned: true });
+
+    const rows = readCurrencySettings(s.ledger.replica.db);
+    const usd = rows.find((row) => row.code === "USD");
+
+    expect(usd).toEqual(
+      expect.objectContaining({ code: "USD", pinned: true, isPivot: false, version: 2 }),
+    );
+    // PLN is this fixture's pivot (see `beforeEach`) — S17 shows it read-only.
+    expect(rows.find((row) => row.code === "PLN")).toEqual(
+      expect.objectContaining({ code: "PLN", isPivot: true }),
+    );
+  });
+
+  it("excludes an archived currency by default, and includes it with the option", () => {
+    write(archiveCurrencyExecutor, { code: "EUR", version: 1 });
+
+    expect(readCurrencySettings(s.ledger.replica.db).some((row) => row.code === "EUR")).toBe(false);
+    expect(
+      readCurrencySettings(s.ledger.replica.db, { includeArchived: true }).some(
+        (row) => row.code === "EUR",
+      ),
+    ).toBe(true);
   });
 });
 

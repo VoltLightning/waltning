@@ -1,0 +1,47 @@
+/** @vitest-environment jsdom */
+
+import { fireEvent, render, screen } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
+import { CurrencyChip } from "./currency-chip";
+
+function noop() {}
+
+it("renders nothing before the first pinned currency", () => {
+  const { container } = render(<CurrencyChip pinned={[]} active="PLN" onChange={noop} />);
+  expect(container.firstChild).toBeNull();
+});
+
+it("a tap cycles to the next pinned currency, wrapping past the last", () => {
+  const onChange = vi.fn();
+  render(
+    <CurrencyChip
+      pinned={[{ code: "PLN" }, { code: "USD" }, { code: "EUR" }]}
+      active="EUR"
+      onChange={onChange}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button"));
+  expect(onChange).toHaveBeenCalledWith("PLN");
+});
+
+it("past three pinned, a tap calls onExpand instead of cycling", () => {
+  const onChange = vi.fn();
+  const onExpand = vi.fn();
+  render(
+    <CurrencyChip
+      pinned={[{ code: "PLN" }, { code: "USD" }, { code: "EUR" }, { code: "GBP" }]}
+      active="PLN"
+      onChange={onChange}
+      onExpand={onExpand}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button"));
+  expect(onExpand).toHaveBeenCalledTimes(1);
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+it("marks every pinned currency, with the active one distinct", () => {
+  render(<CurrencyChip pinned={[{ code: "PLN" }, { code: "USD" }]} active="USD" onChange={noop} />);
+  expect(screen.getByText("PLN")).toBeDefined();
+  expect(screen.getByText("USD")).toBeDefined();
+});

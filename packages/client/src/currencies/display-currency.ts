@@ -12,6 +12,14 @@
  * default exactly once, the first time a screen learns which currencies are
  * pinned; until then, and whenever nothing has been chosen, the snapshot
  * falls back to the pivot outright.
+ *
+ * **`getSnapshot` returns a cached object, not a fresh one every call.**
+ * `useSyncExternalStore` compares what it returns by reference — a snapshot
+ * that is a new `{ currency, hydrated }` literal on every call reads as
+ * "changed" on every render, which re-renders, which calls `getSnapshot`
+ * again, without end. The cache below is keyed on `inner.getSnapshot()`'s own
+ * reference — stable except across a real `publish()` — so this only builds
+ * a new object when the device preference actually changed.
  */
 
 import { type CurrencyCode, currencyCode } from "@waltning/core/money";
@@ -56,10 +64,18 @@ export function createDisplayCurrencyPreference(
 ): DisplayCurrencyController {
   const inner = createDevicePreference<CurrencyCode>(store, codec, diagnostics);
 
+  // See the file doc: cached so `useSyncExternalStore` sees the same
+  // reference across renders where nothing actually changed.
+  let cachedInner: ReturnType<typeof inner.getSnapshot> | undefined;
+  let cached: DisplayCurrencySnapshot | undefined;
+
   return {
     getSnapshot: () => {
       const snapshot = inner.getSnapshot();
-      return { currency: snapshot.value ?? pivot, hydrated: snapshot.hydrated };
+      if (cached !== undefined && cachedInner === snapshot) return cached;
+      cachedInner = snapshot;
+      cached = { currency: snapshot.value ?? pivot, hydrated: snapshot.hydrated };
+      return cached;
     },
     subscribe: inner.subscribe,
     hydrate: inner.hydrate,

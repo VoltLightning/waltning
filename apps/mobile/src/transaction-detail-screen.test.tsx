@@ -151,6 +151,7 @@ function fakeController(
     balanceAsOf: () => toMoney("0"),
     readRate: () => null,
     readCrossRate: () => null,
+    listCurrencySettings: () => [],
     readCoverage: () => [],
     listFxRates: () => [],
     addCurrency: vi.fn(),

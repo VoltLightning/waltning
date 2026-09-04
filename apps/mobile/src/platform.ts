@@ -18,8 +18,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
+import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
+import { pivotCurrency } from "@waltning/core/currencies";
 import {
   type FloatPosition,
   parseFloatPosition,
@@ -62,6 +64,23 @@ export const lastCapture = createLastCapturePreference(
     get: () => AsyncStorage.getItem(LAST_CAPTURE_KEY),
     set: (value) => AsyncStorage.setItem(LAST_CAPTURE_KEY, value),
   },
+  mobileDiagnostics,
+);
+
+const DISPLAY_CURRENCY_KEY = "waltning.displayCurrency";
+
+/**
+ * `SPEC.md` §7.0's header toggle — a device preference, never a registry
+ * write. `pivotCurrency.code` (`@waltning/core/currencies` — USD) is the
+ * fallback until something is chosen or `initializeFromPinned` runs, exactly
+ * the way `createDisplayCurrencyPreference`'s own doc states it.
+ */
+export const displayCurrency = createDisplayCurrencyPreference(
+  {
+    get: () => AsyncStorage.getItem(DISPLAY_CURRENCY_KEY),
+    set: (value) => AsyncStorage.setItem(DISPLAY_CURRENCY_KEY, value),
+  },
+  pivotCurrency.code,
   mobileDiagnostics,
 );
 

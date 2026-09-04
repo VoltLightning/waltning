@@ -124,6 +124,7 @@ function fakeController(search: FakeSearch) {
     createGroup: () => undefined,
     readRate: () => null,
     readCrossRate: () => null,
+    listCurrencySettings: () => [],
     readCoverage: () => [],
     listFxRates: () => [],
     addCurrency: () => undefined,

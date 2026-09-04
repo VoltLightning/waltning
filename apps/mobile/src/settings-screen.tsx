@@ -15,6 +15,14 @@ function handleOpenCategories() {
   router.push("/settings/categories");
 }
 
+function handleOpenCurrencies() {
+  router.push("/settings/currencies");
+}
+
+function handleOpenRates() {
+  router.push("/settings/rates");
+}
+
 export default function Settings() {
   const t = useT();
 
@@ -22,6 +30,8 @@ export default function Settings() {
     <GroundPanel>
       <Card title={t("routes.settings")}>
         <Button label={t("routes.categories")} onPress={handleOpenCategories} variant="secondary" />
+        <Button label={t("routes.currencies")} onPress={handleOpenCurrencies} variant="secondary" />
+        <Button label={t("routes.rates")} onPress={handleOpenRates} variant="secondary" />
       </Card>
     </GroundPanel>
   );

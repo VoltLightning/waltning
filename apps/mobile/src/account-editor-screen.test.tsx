@@ -98,6 +98,7 @@ function fakeController(overrides: {
     setTransactionLines: () => undefined,
     readRate: () => null,
     readCrossRate: () => null,
+    listCurrencySettings: () => [],
     readCoverage: () => [],
     listFxRates: () => [],
     addCurrency: vi.fn(),

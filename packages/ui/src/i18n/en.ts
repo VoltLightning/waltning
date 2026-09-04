@@ -448,6 +448,68 @@ export const en = {
   settleDebt: {
     noCounterparty: "This counterparty no longer exists.",
     nothingToSettle: "There is nothing open in this currency to settle.",
+    currencies: "Currencies",
+    rates: "Exchange rates",
+  },
+  /** `packages/ui/src/fx/` and the two screens it feeds — S17, S18. */
+  fx: {
+    /** `CurrencyChip` — `04` §4.5's accessible name; the visible face is the codes themselves. */
+    currencyChipLabel: "Display currency: {{currency}}. Tap to change.",
+    /** `CoverageTag` — S17 §6/§8. */
+    coveragePct: "{{pct}}%",
+    coverageBelow: "{{pct}}% · last quote {{date}}",
+    coverageTitle: "Coverage",
+    /** `RateField` — `03` §3.7. */
+    rateFieldSynced: "Synced: {{rate}}",
+    /** `RateTable` — `04` §4.6. */
+    rateTableGap: "No rate held",
+    rateTableGapLabel: "{{date}} — no rate held",
+    rateTableEmptyRange: "The range must not end before it starts.",
+    /** `RateEditor` — `04` §4.7. */
+    rateEditorTitle: "Set {{quote}} → {{base}} for {{from}} … {{to}}",
+    rateEditorRateLabel: "Rate",
+    rateEditorTotalDays: "{{count}} days",
+    rateEditorAbsent: "{{count}} currently absent",
+    rateEditorCarried: "{{count}} currently carried forward",
+    rateEditorManual: "{{count}} currently manual",
+    rateEditorConfirmOverwrite: "This replaces {{count}} manual rate(s), set by hand.",
+    rateEditorSubmit: "Set rate",
+    rateEditorConfirmSubmit: "Overwrite and set",
+    /** S17. */
+    addCurrency: "Add currency",
+    currencyCode: "Code",
+    currencySymbol: "Symbol",
+    pinned: "Pinned",
+    rateSource: "Rate source",
+    rateSourceNone: "None",
+    /** §7.7's four provider names — proper nouns, identical in every language. */
+    sourceNbp: "NBP",
+    sourceEcb: "ECB",
+    sourceNbrb: "NBRB",
+    sourceNbg: "NBG",
+    archiveCurrency: "Archive",
+    currencyArchiveRefused: "Couldn't archive this currency.",
+    currencyWriteFailed: "That didn't save.",
+    pivotLabel: "Pivot: {{code}}",
+    changePivot: "Change pivot",
+    pivotConfirmTitle: "Change the pivot currency?",
+    pivotConfirmBody:
+      "The pivot is the technical hub every rate is stored against. Changing it is rare, audited, and never something moving abroad requires.",
+    pivotConfirmSubmit: "Yes, change it",
+    pivotChangeRefused: "The pivot can't change while a transaction exists.",
+    /** S18. */
+    pairLabel: "Quote, against {{base}}",
+    pairPlaceholder: "Choose a currency",
+    noQuoteCurrency: "No currency to compare against the pivot yet.",
+    range30d: "30 d",
+    range90d: "90 d",
+    rangeYear: "Year",
+    rangeFrom: "From",
+    rangeTo: "To",
+    setRange: "Set a range",
+    clearManual: "Clear manual",
+    rateWriteFailed: "That didn't save.",
+    rerateNotOffered: "Re-rate from the desk once a server exists.",
   },
   states: {
     /**

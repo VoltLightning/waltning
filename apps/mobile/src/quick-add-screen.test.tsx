@@ -115,6 +115,7 @@ function fakeController(
     setTransactionLines: () => undefined,
     readRate: vi.fn(() => null),
     readCrossRate: vi.fn(() => null),
+    listCurrencySettings: () => [],
     readCoverage: vi.fn(() => []),
     listFxRates: vi.fn(() => []),
     addCurrency: vi.fn(),
