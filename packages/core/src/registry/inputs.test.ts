@@ -338,6 +338,24 @@ describe("createTransactionInput", () => {
 
       expect(parsed.amountOriginal).toBe("-18.40000000");
     });
+
+    // H4 — `money.margin` divides by `amount_pivot = amount_original × fx_rate`;
+    // a zero amount on anything but an adjustment is refused at the contract,
+    // matching the CHECK's own `> 0 or type = 'adjustment'`.
+    it("refuses a zero expense", () => {
+      const result = createTransactionInput.safeParse({ ...expense, amountOriginal: "0.00" });
+      expect(result.success).toBe(false);
+      expect(paths(result)).toContain("amountOriginal");
+    });
+
+    it("allows a zero adjustment — reconciling to an unchanged balance", () => {
+      const parsed = createTransactionInput.parse({
+        ...expense,
+        type: "adjustment",
+        amountOriginal: "0.00",
+      });
+      expect(parsed.amountOriginal).toBe("0.00000000");
+    });
   });
 
   describe("the transfer's second leg", () => {
@@ -930,7 +948,13 @@ describe("changePivotInput", () => {
 });
 
 describe("setManualRateInput", () => {
-  const range = { base: "USD", quote: "PLN", from: "2026-01-01", to: "2026-01-03" };
+  const range = {
+    base: "USD",
+    quote: "PLN",
+    from: "2026-01-01",
+    to: "2026-01-03",
+    today: "2026-06-01",
+  };
 
   it("parses S18 §8's range write and defaults overwriteManual to false", () => {
     const parsed = setManualRateInput.parse({ ...range, rate: "3.8100" });
@@ -972,6 +996,7 @@ describe("setManualRateInput", () => {
       from: "2025-01-01",
       to: "2026-01-01", // 366 days inclusive, spanning a leap day.
       rate: "1",
+      today: "2026-06-01",
     });
     expect(result.success).toBe(true);
   });
@@ -983,9 +1008,33 @@ describe("setManualRateInput", () => {
       from: "2025-01-01",
       to: "2026-01-02", // 367 days inclusive.
       rate: "1",
+      today: "2026-06-01",
     });
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("to");
+  });
+
+  // H1 — a phone alone has no series to backfill against; a manual rate for
+  // a date that has not happened yet is a guess wearing a fact.
+  it("refuses a range ending after today", () => {
+    const result = setManualRateInput.safeParse({
+      ...range,
+      rate: "1",
+      to: "2026-06-02",
+      today: "2026-06-01",
+    });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("to");
+  });
+
+  it("accepts a range ending exactly today", () => {
+    const result = setManualRateInput.safeParse({
+      ...range,
+      rate: "1",
+      to: "2026-06-01",
+      today: "2026-06-01",
+    });
+    expect(result.success).toBe(true);
   });
 });
 

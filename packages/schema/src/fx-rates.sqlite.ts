@@ -17,6 +17,11 @@ export const fxRatesColumns = () => ({
   rate: k.unitsPerPivot("rate").notNull(),
   source: k.text("source", { enum: FX_SOURCE }).notNull(),
   fetchedAt: k.timestamp("fetched_at"),
+
+  /** See `fx-rates.pg.ts` — the row `set_manual_rate` displaced (C1). */
+  displacedRate: k.unitsPerPivot("displaced_rate"),
+  displacedSource: k.text("displaced_source", { enum: FX_SOURCE }),
+  displacedFetchedAt: k.timestamp("displaced_fetched_at"),
 });
 
 /**

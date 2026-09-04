@@ -384,17 +384,24 @@ export const createTransactionInput = z
     /**
      * `transactions_amount_positive`. Stated as *"negative only for
      * adjustment"* rather than as an absolute floor, because the CHECK reads
-     * `>= 0 or type = 'adjustment'` and a schema that refused every negative
+     * `> 0 or type = 'adjustment'` and a schema that refused every negative
      * would make reconciling an account downward impossible.
+     *
+     * **H4 — zero is refused too, adjustment excepted.** `money.margin`
+     * divides by `amount_pivot`, and a zero `amount_original` on any other
+     * type makes that division undefined — an income or expense of nothing
+     * is not a payment event (§6.10) and was never a value this column
+     * needed to hold.
      */
     // M4 — `safeDec`, not `dec`: `superRefine` still runs even when
     // `amountOriginal` already failed `zMoney`'s own regex, and `dec()`
     // throws on that (see `safeDec`'s own comment, above).
-    if (t.type !== "adjustment" && safeDec(t.amountOriginal)?.lt(0) === true) {
+    if (t.type !== "adjustment" && safeDec(t.amountOriginal)?.lte(0) === true) {
       ctx.addIssue({
         code: "custom",
         path: ["amountOriginal"],
-        message: "amounts are positive; `type` carries direction (§7.2) — only an adjustment signs",
+        message:
+          "amounts are positive and non-zero; `type` carries direction (§7.2) — only an adjustment signs",
       });
     }
 
@@ -970,6 +977,12 @@ const MANUAL_RATE_RANGE_ISSUE = {
  * `overwriteManual` carries the screen's second confirmation (S18 §8) as
  * data: the input is the answer to *"replace the existing manual entry?"*,
  * not a prompt this schema could ask on its own.
+ *
+ * **H1 — `today` is the caller's, same reason `createTransactionInput.date`
+ * is required rather than defaulted.** This schema has no zone of its own
+ * (`date.ts`), so it cannot compute "today" itself; the caller holds the
+ * device date and passes it, and `to <= today` is checked against exactly
+ * that value rather than a server clock a phone-only write has no access to.
  */
 export const setManualRateInput = z
   .object({
@@ -978,13 +991,18 @@ export const setManualRateInput = z
     ...rateRange,
     rate: zUnitsPerPivot,
     overwriteManual: z.boolean().default(false),
+    today: zAccountingDate,
   })
   .refine((v) => v.base !== v.quote, {
     message: "a rate needs two different currencies",
     path: ["quote"],
   })
   .refine(rateRangeOrdered, RATE_RANGE_ISSUE)
-  .refine(manualRateRangeWithinCap, MANUAL_RATE_RANGE_ISSUE);
+  .refine(manualRateRangeWithinCap, MANUAL_RATE_RANGE_ISSUE)
+  .refine((v) => v.to <= v.today, {
+    message: "a manual rate cannot be set for a date that has not happened yet",
+    path: ["to"],
+  });
 export type SetManualRateInput = z.output<typeof setManualRateInput>;
 
 /** `clear_manual_rate` — §7.6's undo: deletes `manual` rows only, never a synced one. */

@@ -718,6 +718,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-03",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     expect(result.row).toEqual({ written: 3, replacedManual: 0 });
@@ -733,6 +734,7 @@ describe("set_manual_rate", () => {
         from: "2026-01-01",
         to: "2026-01-01",
         rate: "0.9",
+        today: "2026-06-01",
       }),
     ).toThrow(/must be the pivot/);
   });
@@ -744,6 +746,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-01",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     expect(() =>
@@ -753,6 +756,7 @@ describe("set_manual_rate", () => {
         from: "2026-01-01",
         to: "2026-01-01",
         rate: "0.26",
+        today: "2026-06-01",
       }),
     ).toThrow(/already has a manual rate/);
   });
@@ -764,6 +768,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-01",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     const result = write(setManualRateExecutor, {
@@ -772,6 +777,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-01",
       rate: "0.26",
+      today: "2026-06-01",
       overwriteManual: true,
     });
 
@@ -788,6 +794,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-02",
       to: "2026-01-02",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     expect(() =>
@@ -797,6 +804,7 @@ describe("set_manual_rate", () => {
         from: "2026-01-01",
         to: "2026-01-03",
         rate: "0.30",
+        today: "2026-06-01",
       }),
     ).toThrow();
 
@@ -804,6 +812,81 @@ describe("set_manual_rate", () => {
     // second, refused write landed.
     expect(rateRows()).toHaveLength(1);
     expect(rateRows()[0]?.rate).toBe("0.25");
+  });
+
+  // H3 — a `carried_forward` row whose origin this write corrects holds a
+  // now-stale copy of the old rate; left in place it would keep answering
+  // reads with a figure no provider ever published.
+  it("H3 — deletes a carried_forward row whose origin is a date this write corrects", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "0.30",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+
+    const rows = rateRows();
+    expect(rows.find((r) => r.date === accountingDate("2026-01-05"))).toBeUndefined();
+    // The raw input string lands — `zUnitsPerPivot` does not normalize scale.
+    expect(rows.find((r) => r.date === accountingDate("2026-01-01"))?.rate).toBe("0.30");
+  });
+
+  // H3 — a carried row descending from a date *outside* the corrected range
+  // is untouched: its origin never changed.
+  it("H3 — leaves a carried_forward row alone when its origin is not among the corrected dates", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-10",
+      to: "2026-01-10",
+      rate: "0.30",
+      today: "2026-06-01",
+    });
+
+    expect(rateRows().find((r) => r.date === accountingDate("2026-01-05"))).toBeDefined();
   });
 });
 
@@ -839,6 +922,117 @@ describe("clear_manual_rate", () => {
     expect(result.row).toEqual({ deleted: 1 });
     expect(rateRows()).toHaveLength(1);
     expect(rateRows()[0]?.source).toBe("nbp");
+  });
+
+  // C1 — the worked example: NBP 3.81 → set 3.9 → clear → 3.81 with source
+  // `nbp` back. Before this fix, clearing deleted the row outright and left
+  // a hole exactly where the provider's own figure used to be.
+  it("C1 — restores the row a manual write displaced, source and all", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("3.81"),
+        source: "nbp",
+      })
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "3.9",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+    expect(rateRows()[0]?.source).toBe("manual");
+    expect(rateRows()[0]?.rate).toBe("3.9");
+
+    const result = write(clearManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+    });
+
+    expect(result.row).toEqual({ deleted: 1 });
+    const rows = rateRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.source).toBe("nbp");
+    expect(rows[0]?.rate).toBe(money.unitsPerPivot("3.81"));
+    expect(rows[0]?.displacedRate).toBeNull();
+  });
+
+  // C1 — a manual row with nothing displaced (the date held no prior row) is
+  // still deleted outright; there is nothing to restore it to.
+  it("C1 — deletes outright when the manual row displaced nothing", () => {
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "3.9",
+      today: "2026-06-01",
+    });
+
+    const result = write(clearManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+    });
+
+    expect(result.row).toEqual({ deleted: 1 });
+    expect(rateRows()).toHaveLength(0);
+  });
+
+  // C1 — a second manual write over an already-manual row must not clobber
+  // what the *first* one displaced.
+  it("C1 — a second manual write keeps the original displaced row, not the intermediate manual one", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("3.81"),
+        source: "nbp",
+      })
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "3.9",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "4.0",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+
+    const result = write(clearManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+    });
+
+    const rows = rateRows();
+    expect(result.row).toEqual({ deleted: 1 });
+    expect(rows[0]?.source).toBe("nbp");
+    expect(rows[0]?.rate).toBe(money.unitsPerPivot("3.81"));
   });
 });
 
@@ -903,6 +1097,45 @@ describe("readRate", () => {
       date: accountingDate("2026-01-10"),
     });
     expect(rate).toBeUndefined();
+  });
+
+  // H3 — a `carried_forward` row's own `rate` is a snapshot taken when it
+  // was written; if its origin is later corrected (`set_manual_rate`), the
+  // snapshot goes stale. `readRate` must answer with the origin's *current*
+  // rate, never the carried copy's own stored value.
+  it("H3 — returns the origin's current rate, not the carried copy's stale snapshot", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: EUR,
+        date: accountingDate("2026-02-01"),
+        rate: money.unitsPerPivot("0.20"),
+        source: "carried_forward",
+      })
+      .run();
+    // The origin the carried row above descends from — corrected *after*
+    // fillForward already copied the old rate into the carried row.
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: EUR,
+        date: accountingDate("2026-01-28"),
+        rate: money.unitsPerPivot("0.99"),
+        source: "manual",
+      })
+      .run();
+
+    const rate = readRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: EUR,
+      date: accountingDate("2026-02-01"),
+    });
+
+    expect(rate?.rate).toBe(money.unitsPerPivot("0.99"));
+    expect(rate?.source).toBe("manual");
+    expect(rate?.asOf).toBe(accountingDate("2026-01-28"));
   });
 
   // SHOULD-FIX — `fillForward` (`packages/db/src/fx/sources.ts`) stores up to
@@ -1404,6 +1637,7 @@ describe("capture in a currency that gained a rate through set_manual_rate", () 
       from: "2026-03-12",
       to: "2026-03-12",
       rate: "4.00",
+      today: "2026-06-01",
     });
 
     // A capture in USD now resolves through `lastKnownRate` — the same path

@@ -33,12 +33,22 @@ const live = sql`${transactions.deletedAt} is null`;
 const amountPivot = sql`(${transactions.amountOriginal} * ${transactions.fxRate})`;
 const toAmountPivot = sql`(${transactions.toAmount} * ${transactions.toFxRate})`;
 
+/**
+ * H4 — `transactions_amount_positive` already refuses `amount_original <= 0`
+ * for anything but an adjustment (and a transfer is never one), so
+ * `amountPivot` should never reach zero here. `NULLIF` is the defence
+ * anyway: a division by zero is a Postgres error for the *whole* query, and
+ * one bad row must not take every other row's margin down with it — it
+ * reads `null` on the row it cannot price, not a thrown query.
+ */
+const safeAmountPivot = sql`NULLIF(${amountPivot}, 0)`;
+
 export async function transactionMargins(db: DbHandle): Promise<MarginRow[]> {
   const rows = await db
     .select({
       id: transactions.id,
       marginPivot: sql<Money>`(${amountPivot} - ${toAmountPivot})::numeric(20,8)::text`,
-      marginPct: sql<Money>`((${amountPivot} - ${toAmountPivot}) / ${amountPivot})::numeric(20,8)::text`,
+      marginPct: sql<Money>`((${amountPivot} - ${toAmountPivot}) / ${safeAmountPivot})::numeric(20,8)::text`,
       realizedRate: sql<Money>`(${transactions.toAmount} / ${transactions.amountOriginal})::numeric(20,8)::text`,
     })
     .from(transactions)

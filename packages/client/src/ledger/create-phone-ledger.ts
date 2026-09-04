@@ -528,8 +528,8 @@ export type PhoneRate = {
 /**
  * E5 — a reference rate between two arbitrary currencies, as of a date —
  * `readCrossRate`'s answer. The pivot (§7.0) never reaches this type: `rate`
- * is already triangulated, pivot-per-unit for this specific pair, the same
- * direction `TransferAmount`'s own `referenceRate` prop and `margin`'s
+ * is already triangulated for this specific pair, the same direction
+ * `TransferAmount`'s own `referenceRate` prop and `margin`'s
  * `fxRate`/`toFxRate` take.
  *
  * H2 — `legs`, not a flattened `source`/`asOf`/`carriedDays`: those three
@@ -538,9 +538,15 @@ export type PhoneRate = {
  * leg's own provenance travels here whole; `crossRateProvenance`
  * (`ledger/cross-rate-provenance.ts`) is where a screen turns the two into
  * one honest display fact.
+ *
+ * **M1 — `CrossRate`, not `PivotPerUnit`.** The two share a shape but not a
+ * meaning (`money.ts`'s own note on the brand); a caller that needs a
+ * `PivotPerUnit` (`margin`'s `fxRate`/`toFxRate`, a stamped `toFxRate`) must
+ * cross at the boundary — `money.pivotPerUnit(money.dec(1).dividedBy(rate))`,
+ * the reciprocal, same as `transfer-composer.tsx` already does.
  */
 export type PhoneCrossRate = {
-  rate: money.PivotPerUnit;
+  rate: money.CrossRate;
   legs: { from: PhoneRate; to: PhoneRate };
 };
 
@@ -1041,6 +1047,8 @@ export type SetManualRateDraft = {
   to: string;
   rate: string;
   overwriteManual?: boolean;
+  /** H1 — the device's own date; the schema has no zone to compute one itself. */
+  today: string;
 };
 
 export type ClearManualRateDraft = { base: string; quote: string; from: string; to: string };
@@ -3543,6 +3551,7 @@ export function createPhoneLedger(
           to: draft.to,
           rate: draft.rate,
           overwriteManual: draft.overwriteManual,
+          today: draft.today,
         });
         if (!parsed.success) {
           return finish(

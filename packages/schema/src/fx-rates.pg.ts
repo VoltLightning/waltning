@@ -24,6 +24,20 @@ export const fxRatesColumns = () => ({
   rate: k.unitsPerPivot("rate").notNull(),
   source: fxSource("source").notNull(),
   fetchedAt: k.timestamp("fetched_at"),
+
+  /**
+   * C1 — the row `set_manual_rate` overwrote, preserved rather than lost.
+   *
+   * All three or none: a manual override on a date with no prior row leaves
+   * these `null`, and `clear_manual_rate` deletes rather than restoring
+   * nothing. A **second** manual write over an already-manual row must not
+   * clobber what the *first* one displaced — `setManualRate` only ever
+   * copies from a non-manual row into these columns, never from another
+   * `manual` one.
+   */
+  displacedRate: k.unitsPerPivot("displaced_rate"),
+  displacedSource: fxSource("displaced_source"),
+  displacedFetchedAt: k.timestamp("displaced_fetched_at"),
 });
 
 /**

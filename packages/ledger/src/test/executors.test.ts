@@ -119,7 +119,10 @@ function seed() {
       {
         base: USD,
         quote: PLN,
-        date: accountingDate("2026-03-01"),
+        // H1 — within `readRate`'s ten-day carry cap of `expenseInput`'s own
+        // date (2026-03-12): the point of this row is to be the *newest*
+        // real quote before the capture, not to test the cap itself.
+        date: accountingDate("2026-03-08"),
         rate: money.unitsPerPivot(PLN_PER_PIVOT),
         source: "nbp",
       },
@@ -324,6 +327,66 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     // unit. Storing 4.0231 here would value an 18 PLN coffee at 72 USD.
     expect(result.row.fxRate).toBe(PIVOT_PER_PLN);
     expect(result.row.fxRate).not.toBe("4.023100000000");
+    // H1 — the seeded row is 4 days before the capture's own date, so the
+    // rate is carried forward rather than exact.
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+
+  // H1 — `readRate` prices a capture from the rate *at its own date*, never
+  // "the newest row regardless of date". A row dated after the capture must
+  // not be used to value it.
+  it("H1 — a back-dated capture is priced from the rate at its own date, not a newer row", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: USD,
+          quote: PLN,
+          date: accountingDate("2026-02-20"),
+          rate: money.unitsPerPivot("3.5000"),
+          source: "nbp",
+        },
+        // A newer row exists too — must not win over the capture's own date.
+        {
+          base: USD,
+          quote: PLN,
+          date: accountingDate("2026-03-12"),
+          rate: money.unitsPerPivot("9.0000"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_PLN, "PLN"),
+      date: "2026-02-20",
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("3.5000")));
+    expect(result.row.fxRateEstimated).toBe(false);
+  });
+
+  // H1 — a rate exists for the pair, just not within ten days of the
+  // capture's own date; `readRate`'s cap refuses it exactly as it would a
+  // missing rate, rather than reaching for whatever is newest.
+  it("H1 — refuses a back-dated capture when the nearest rate is past the ten-day cap", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: PLN,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("3.5000"),
+        source: "nbp",
+      })
+      .run();
+
+    expect(() =>
+      write(createTransactionExecutor, {
+        ...expenseInput(TXN_A, ACCOUNT_PLN, "PLN"),
+        date: "2026-02-01", // nearest held row (2026-01-04) is 28 days back
+      }),
+    ).toThrow(/no last-known rate for USD\/PLN/);
   });
 
   it("prefers a rate the caller asserted over anything cached", () => {
@@ -378,6 +441,7 @@ describe("the rate the phone writes into a NOT NULL column", () => {
       from: "2026-03-12",
       to: "2026-03-12",
       rate: "0.90",
+      today: "2026-06-01",
     });
 
     const result = write(createTransactionExecutor, expenseInput(TXN_A, ACCOUNT_CHF, "CHF"));

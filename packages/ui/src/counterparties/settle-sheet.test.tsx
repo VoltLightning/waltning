@@ -8,7 +8,7 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { pivotPerUnit, toMoney } from "@waltning/core/money";
+import { crossRate, toMoney } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/provider";
 import { SettleSheet, type SettleSheetProps } from "./settle-sheet";
@@ -27,7 +27,7 @@ const BASE_PROPS: SettleSheetProps = {
   accountId: "acc-cash-pln",
   onOpenAccountPicker: vi.fn(),
   referenceRate: {
-    rate: pivotPerUnit("4.3120"),
+    rate: crossRate("4.3120"),
     source: "nbp",
     date: "2026-08-10",
     carriedDays: 0,

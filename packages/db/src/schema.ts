@@ -438,7 +438,11 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
 
   // Adjustments carry their own sign: reconciling an account DOWNWARD is the
   // ordinary use, and every other type takes direction from `type` (§7.2).
-  check("transactions_amount_positive", sql`${t.amountOriginal} >= 0 or ${t.type} = 'adjustment'`),
+  // H4 — strictly positive, zero included in the refusal: `money.margin`
+  // divides by `amount_pivot = amount_original × fx_rate`, and a zero
+  // income/expense/transfer amount is not a payment event to begin with
+  // (§6.10). An adjustment may still reconcile to an unchanged balance.
+  check("transactions_amount_positive", sql`${t.amountOriginal} > 0 or ${t.type} = 'adjustment'`),
   check(
     "transactions_transfer_shape",
     sql`(${t.type} = 'transfer') = (${t.toAccountId} is not null)`,

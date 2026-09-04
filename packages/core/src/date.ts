@@ -23,7 +23,14 @@ declare const DATE: unique symbol;
 /** A bare calendar date, `YYYY-MM-DD`, in no timezone. */
 export type AccountingDate = string & { readonly [DATE]: "AccountingDate" };
 
-/** Shape only. A real calendar check happens where a date is chosen, not here. */
+/**
+ * Shape only, deliberately — this parser is also used by callers that already
+ * know their own arithmetic is on a real day (`addDays`, `shiftMonth`), where
+ * a second calendar check would be redundant. **M3:** the calendar itself is
+ * checked at the contract edge instead, by `zod.ts#zAccountingDate` (month
+ * 1–12, day within the month, leap years) — the one place a hand-typed or
+ * wire-carried date is chosen and has not yet been shown to be real.
+ */
 const SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**

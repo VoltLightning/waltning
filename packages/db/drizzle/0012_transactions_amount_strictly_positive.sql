@@ -1,0 +1,2 @@
+ALTER TABLE "transactions" DROP CONSTRAINT "transactions_amount_positive";--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_amount_positive" CHECK ("transactions"."amount_original" > 0 or "transactions"."type" = 'adjustment');

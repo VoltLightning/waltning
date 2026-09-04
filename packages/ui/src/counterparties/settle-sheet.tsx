@@ -66,8 +66,13 @@ export type SettleSheetAccount = {
 };
 
 export type SettleSheetReferenceRate = {
-  /** Pivot-per-unit, discharges-currency → account-currency — multiply `dischargesAmount` by this to reach `amount` (§7.5's direction, `readCrossRate`'s answer). */
-  rate: money.PivotPerUnit;
+  /**
+   * A triangulated `CrossRate` (M1), discharges-currency → account-currency
+   * — multiply `dischargesAmount` by this to reach `amount` (§7.5's
+   * direction, `readCrossRate`'s own answer — never `PivotPerUnit`, which
+   * this is not: it does not go to the pivot).
+   */
+  rate: money.CrossRate;
   source: string;
   date: string;
   /** H2 — `crossRateProvenance`'s own carry, for the same leg `source`/`date` name. */

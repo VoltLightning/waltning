@@ -85,6 +85,20 @@
       "when": 1788589200000,
       "tag": "0011_transaction_scale_and_category_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788532704946,
+      "tag": "0011_fx_rates_displaced_and_derived",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788532732988,
+      "tag": "0012_transactions_amount_strictly_positive",
+      "breakpoints": true
     }
   ]
 }

@@ -104,15 +104,38 @@ export const zUnitsPerPivot = z
   .transform((v): UnitsPerPivot => v as UnitsPerPivot);
 
 /**
- * A bare `YYYY-MM-DD`.
+ * A real Gregorian day, not merely the `YYYY-MM-DD` shape — `Date.UTC` rolls
+ * `2026-02-30` forward into March rather than refusing it, so a value that
+ * survives the round trip unchanged was a real day; one that does not was
+ * never on a calendar. No clock is read — every number here comes from the
+ * string itself. The same check `packages/ui/src/primitives/date-field.tsx`'s
+ * `isRealCalendarDate` already runs at the UI's own edit boundary; M3 gives
+ * every *contract* boundary the same guarantee, not only the one screen.
+ */
+function isRealCalendarDate(value: string): boolean {
+  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const rolled = new Date(Date.UTC(year, month - 1, day));
+  return (
+    rolled.getUTCFullYear() === year &&
+    rolled.getUTCMonth() === month - 1 &&
+    rolled.getUTCDate() === day
+  );
+}
+
+/**
+ * A bare `YYYY-MM-DD`, on a real calendar.
  *
- * The regex and `accountingDate` say the same thing twice on purpose: the regex
- * is what produces a *field-level* error the form can render
- * (`architecture/12`), and the transform is what produces the type.
+ * **M3 — a calendar check, not shape alone.** The regex alone accepts
+ * `2026-02-31`; `accountingDate` (`date.ts`) is deliberately shape-only, so
+ * this schema — the edge every registry operation's date field parses
+ * through — is where month 1–12, the day within that month, and leap years
+ * are actually checked. `date.ts`'s own comment states why the line sits
+ * here and not there.
  */
 export const zAccountingDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "expected a date as YYYY-MM-DD, with no time and no zone")
+  .refine(isRealCalendarDate, "not a real calendar date")
   .transform((v): AccountingDate => accountingDate(v));
 
 /** An ISO 4217 code. Upper-cased first, so `pln` is accepted and `PLN` is stored. */

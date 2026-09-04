@@ -242,6 +242,25 @@ export const pivotPerUnit = (v: string | number | Decimal): PivotPerUnit =>
 export const unitsPerPivot = (v: string | number | Decimal): UnitsPerPivot =>
   dec(v).toFixed(12) as UnitsPerPivot;
 
+declare const CROSS: unique symbol;
+
+/**
+ * A triangulated rate between two arbitrary, non-pivot currencies —
+ * `readCrossRate`'s own answer (M1).
+ *
+ * **Not `PivotPerUnit`, on purpose, though the two share a shape.**
+ * `PivotPerUnit` multiplies a currency's own amount by its rate *against the
+ * pivot*; a `CrossRate` multiplies an amount in `from` by a rate that has
+ * already been triangulated through the pivot to land in `to` — a different
+ * pair, a different meaning, and a value `toPivot` must never accept as if it
+ * were the former (`rate.type-test.ts`).
+ */
+export type CrossRate = string & { readonly [CROSS]: "CrossRate" };
+
+/** Parse a triangulated cross rate — `readCrossRate`'s own constructor. */
+export const crossRate = (v: string | number | Decimal): CrossRate =>
+  dec(v).toFixed(12) as CrossRate;
+
 /**
  * Cross between the two directions.
  *
@@ -335,6 +354,13 @@ export const margin = ({
   toFxRate,
 }: MarginInput): MarginResult => {
   const amountPivot = dec(amountOriginal).times(fxRate);
+  // H4 — `marginPct` divides by this. `amountOriginal` is refused at zero by
+  // the contract now (`createTransactionInput`'s own refinement, adjustments
+  // excepted), but this function has no way to see that refusal was ever
+  // run, and a `NaN`/`Infinity` margin is a worse failure than a named throw.
+  if (amountPivot.isZero()) {
+    throw new Error("money.margin: amountPivot is zero — the margin ratio is undefined");
+  }
   const toAmountPivot = dec(toAmount).times(toFxRate);
   const marginPivot = amountPivot.minus(toAmountPivot);
   return {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
+import { zAccountingDate, zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
 
 describe("zMoney", () => {
   it("accepts the largest numeric(20,8) magnitude", () => {
@@ -95,4 +95,22 @@ describe("zPivotPerUnit", () => {
   it("accepts the smallest positive rate", () => {
     expect(zPivotPerUnit.parse("0.000000000001")).toBe("0.000000000001");
   });
+});
+
+describe("zAccountingDate — M3, a real calendar day, not only the shape", () => {
+  it("accepts an ordinary date and a leap day", () => {
+    expect(zAccountingDate.parse("2026-03-12")).toBe("2026-03-12");
+    expect(zAccountingDate.parse("2024-02-29")).toBe("2024-02-29");
+  });
+
+  it.each(["2026-02-31", "2026-02-30", "2026-04-31", "2026-13-01", "2026-00-01", "2023-02-29"])(
+    "refuses %s — the shape matches and the day is not real",
+    (value) => {
+      const result = zAccountingDate.safeParse(value);
+      expect(result.success).toBe(false);
+      expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+        "not a real calendar date",
+      );
+    },
+  );
 });

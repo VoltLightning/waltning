@@ -20,13 +20,14 @@ import {
   type CreateTransactionInput,
   createTransactionInput,
 } from "@waltning/core/registry/inputs";
-import { and, desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { readRate } from "../currencies/read-rate.ts";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
-const { accounts, currencies, fxRates, transactions } = schema;
+const { accounts, currencies, transactions } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalTransactionRow = typeof transactions.$inferSelect;
@@ -108,13 +109,18 @@ export function insertTransaction(
    * capture with an empty destination fails to validate in `writeLocally`
    * before either store is touched.
    */
+  const provisional = provisionalFxRate(input, tx);
   const fields = {
     date: input.date,
     type: input.type,
     accountId: input.accountId,
     amountOriginal: input.amountOriginal,
     currency: input.currency,
-    fxRate: provisionalFxRate(input, tx),
+    fxRate: provisional.rate,
+    // H1 — set whenever the resolved rate's own date is not the row's own
+    // date: a carried or walked-back rate is an estimate for this date, even
+    // though it is the honest answer the replica can give right now.
+    fxRateEstimated: provisional.estimated,
     payee: input.payee,
     note: input.note,
     isBusiness: input.isBusiness,
@@ -137,10 +143,10 @@ export function insertTransaction(
     ...(input.toFxRate !== undefined ? { toFxRate: input.toFxRate } : {}),
     ...(input.fee !== undefined ? { fee: input.fee } : {}),
     ...(input.externalId !== undefined ? { externalId: input.externalId } : {}),
-    // `fx_rate_estimated` is deliberately not set. §14.6: the server writes it
-    // at drain, iff no published rate existed for that date — "the only moment
-    // the question can be answered correctly". The column's own `false` default
-    // stands in the meantime and is replaced with the rest of the row.
+    // H1 — `fx_rate_estimated` is set above, from `provisionalFxRate`'s own
+    // answer, whenever the resolved rate is not exact for this date. §14.6
+    // still applies past that: a synced backend re-derives it at drain from
+    // the published series, replacing this guess with its own.
   };
 
   const [row] = tx
@@ -267,13 +273,18 @@ function isSharedAccount(tx: ReplicaTx, accountId: CreateTransactionInput["accou
  *    lookup, and it is the one rate the server has no better source for.
  * 2. **Same currency as the pivot: exactly `1`, and not an estimate.** There is
  *    no conversion to be wrong about.
- * 3. **Cross-currency: the last-known rate for the pair**, which is the one use
- *    `SPEC.md` §14.5 keeps those rows in the replica for — *"last-known rate
- *    per currency pair, for pricing a new capture"*.
- * 4. **No rate at all: defer.** Argued below.
+ * 3. **Cross-currency: the rate the replica holds for this row's own date**
+ *    (H1) — `readRate`, the same reader §7.7's carry-forward and ten-day cap
+ *    already govern, rather than "the newest row regardless of date". A
+ *    back-dated capture is priced against a rate near *its* date, never
+ *    today's, and `estimated` is true whenever the resolved rate's own date
+ *    is not this row's date.
+ * 4. **No rate within the cap: defer.** Argued below.
  */
-function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotPerUnit {
-  if (input.fxRate !== undefined) return input.fxRate;
+type ProvisionalFxRate = { rate: PivotPerUnit; estimated: boolean };
+
+function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): ProvisionalFxRate {
+  if (input.fxRate !== undefined) return { rate: input.fxRate, estimated: false };
 
   const pivot = pivotCurrency(tx);
 
@@ -291,11 +302,11 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
   // `1`, at storage scale rather than as the literal string. `pivotPerUnit`
   // produces the twelve places `numeric(24,12)` holds, so the same value read
   // back from either engine compares equal as a string.
-  if (input.currency === pivot) return money.pivotPerUnit("1");
+  if (input.currency === pivot) return { rate: money.pivotPerUnit("1"), estimated: false };
 
-  const rate = lastKnownRate(tx, pivot, input.currency);
+  const local = readRate(tx, { base: pivot, quote: input.currency, date: input.date });
 
-  if (rate === undefined) {
+  if (local === undefined) {
     /**
      * **Defer, rather than write `1`.**
      *
@@ -313,15 +324,17 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
      *
      * **`LocalDeferral`, not `LocalRefusal` (R3 H1).** The missing rate is
      * local state, not a business rule the input violates — a currency added
-     * to the ledger while the phone was offline has no rate row yet, and that
-     * gap closes on its own the moment a rate arrives, whether from a fresh
-     * sync or the server that eventually drains this entry. `write.ts` leaves
-     * the entry `pending` rather than `blocked(refused)` for exactly that
-     * reason: a refusal never gets retried. **R4 C2** — it also marks
-     * `disposition: "deferred"`, so `recover.ts`'s `outstanding` query keeps
-     * finding this entry at every launch even once a later write has pushed
-     * the watermark past it, until this branch stops throwing. It is not the
-     * same as "the rate is stale", which is case 3 and is fine.
+     * to the ledger while the phone was offline has no rate row yet (H1:
+     * including a back-dated capture whose own date has no rate within
+     * `readRate`'s ten-day cap, even if a *newer* row for the pair exists),
+     * and that gap closes on its own the moment a rate arrives, whether from
+     * a fresh sync or the server that eventually drains this entry.
+     * `write.ts` leaves the entry `pending` rather than `blocked(refused)`
+     * for exactly that reason: a refusal never gets retried. **R4 C2** — it
+     * also marks `disposition: "deferred"`, so `recover.ts`'s `outstanding`
+     * query keeps finding this entry at every launch even once a later write
+     * has pushed the watermark past it, until this branch stops throwing. It
+     * is not the same as "the rate is stale", which is case 3 and is fine.
      */
     throw new LocalDeferral(
       `create_transaction: no last-known rate for ${pivot}/${input.currency}, and a ` +
@@ -341,7 +354,7 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
    * the only sanctioned crossing, and it is called once: a rate lives at twelve
    * decimal places, so flipping back cannot recover what truncation removed.
    */
-  return money.reciprocal(rate);
+  return { rate: money.reciprocal(local.rate), estimated: local.asOf !== input.date };
 }
 
 /**
@@ -360,31 +373,4 @@ function pivotCurrency(tx: ReplicaTx): CurrencyCode | undefined {
     .limit(1)
     .all();
   return row?.code;
-}
-
-/**
- * The most recent rate the replica holds for one pair.
- *
- * **Deliberately not filtered to the transaction's own date.** §14.5 mirrors
- * *last-known* rates only — historical rates are not on the device at all,
- * because each row already carries its server-computed display amount — so a
- * `date <= input.date` filter would return nothing for any back-dated capture
- * and refuse a write that has a perfectly good provisional answer. The date
- * question is the server's, which has the published series; this one is *"what
- * is this currency worth, as far as this phone knows"*.
- *
- * Rates are stored one way only, `(base = pivot, quote = X)` (§4), and both
- * halves are stated in the `where` rather than trusting the invariant — a row
- * quoted the other way round would otherwise be read as if it were this one,
- * which is the 14.1× error again with no type to catch it.
- */
-function lastKnownRate(tx: ReplicaTx, pivot: CurrencyCode, quote: CurrencyCode) {
-  const [row] = tx
-    .select({ rate: fxRates.rate })
-    .from(fxRates)
-    .where(and(eq(fxRates.base, pivot), eq(fxRates.quote, quote)))
-    .orderBy(desc(fxRates.date))
-    .limit(1)
-    .all();
-  return row?.rate;
 }

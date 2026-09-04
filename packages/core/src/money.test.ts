@@ -285,6 +285,19 @@ describe("§4a / §7.5 — FX margin on a transfer", () => {
     expect(result.marginPivot).toBe("0.00000000");
     expect(result.realizedRate).toBe("1.00000000");
   });
+
+  // H4 — `marginPct` divides by `amountPivot`; zero must refuse, not `NaN`
+  // or `Infinity` reaching a screen that renders it as a percentage.
+  it("refuses a zero amountPivot by name, rather than dividing by it", () => {
+    expect(() =>
+      money.margin({
+        amountOriginal: money.toMoney("0.00"),
+        fxRate: money.pivotPerUnit("1"),
+        toAmount: money.toMoney("0.00"),
+        toFxRate: money.pivotPerUnit("1"),
+      }),
+    ).toThrow(/amountPivot is zero/);
+  });
 });
 
 /** H2 — a residual that rounds to zero at the currency's own scale reads as settled, never a direction. */

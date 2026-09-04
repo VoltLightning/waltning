@@ -1,26 +1,39 @@
 /**
  * `readRate` and `readCoverage` — §4/§7.7, against the replica.
  *
- * A rate is read the same way `create-transaction.executor.ts`'s
- * `lastKnownRate` reads one, generalised over an arbitrary `date` rather than
- * "the most recent held" and made to answer the carry-forward question §7.7
- * asks: how many days is this rate being carried forward from, and is that
- * still inside the ten-day cap?
+ * H1 — `readRate` answers the carry-forward question §7.7 asks (how many
+ * days is this rate being carried forward from, and is that still inside the
+ * ten-day cap?) for an arbitrary `date`, and `create-transaction.executor.ts`
+ * calls it directly for a capture's own provisional rate rather than keeping
+ * a second, date-blind "newest row" query that answers a different question.
  *
  * **`fx_rates` is stored one way only**, `(base = pivot, quote = X)`, in
- * units-per-pivot (§4) — both callers state `base` and `quote` explicitly
- * rather than trusting the invariant, the same defence `lastKnownRate`
- * argues for.
+ * units-per-pivot (§4) — every caller states `base` and `quote` explicitly
+ * rather than trusting the invariant.
  */
 
 import { type AccountingDate, daysBetween } from "@waltning/core/date";
-import type { CurrencyCode, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
-import { dec, pivotPerUnit, unitsPerPivot } from "@waltning/core/money";
+import type { CrossRate, CurrencyCode, UnitsPerPivot } from "@waltning/core/money";
+import { crossRate, dec, unitsPerPivot } from "@waltning/core/money";
 import { and, asc, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
-import type { ReplicaDb } from "../open.ts";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { ledgerSchema } from "../schema-map.ts";
 
 const { currencies, fxRates } = ledgerSchema;
+
+/**
+ * H1 — the replica or a transaction against it, whichever the caller holds.
+ * `ReplicaDb`'s own brand (`open.ts`) exists to keep the replica and outbox
+ * handles apart at the top level; a `LocalTx` running *inside* an executor's
+ * `apply` is already known to be a replica transaction; `open.ts`'s own
+ * cross-cutting helpers (`migrateReplica`) take the same unbranded type for
+ * the same reason.
+ */
+type Queryable<TRun, TSchema extends typeof ledgerSchema> = BaseSQLiteDatabase<
+  "sync",
+  TRun,
+  TSchema
+>;
 
 /**
  * The server's own carried-forward marker (`packages/db/src/fx/sources.ts`'s
@@ -50,11 +63,11 @@ export type LocalRate = {
  * not chain).
  */
 function findOrigin<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   { base, quote, asOf }: { base: CurrencyCode; quote: CurrencyCode; asOf: AccountingDate },
-): { date: AccountingDate; source: string } | undefined {
+): { date: AccountingDate; source: string; rate: UnitsPerPivot } | undefined {
   const [real] = db
-    .select({ date: fxRates.date, source: fxRates.source })
+    .select({ date: fxRates.date, source: fxRates.source, rate: fxRates.rate })
     .from(fxRates)
     .where(
       and(
@@ -92,7 +105,7 @@ function findOrigin<TRun, TSchema extends typeof ledgerSchema>(
  * and measures — and reports — from *that* row instead.
  */
 export function readRate<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   { base, quote, date }: { base: CurrencyCode; quote: CurrencyCode; date: AccountingDate },
 ): LocalRate | undefined {
   const [row] = db
@@ -105,7 +118,7 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
 
   if (!row) return undefined;
 
-  let origin: { date: AccountingDate; source: string } = row;
+  let origin: { date: AccountingDate; source: string; rate: UnitsPerPivot } = row;
   if (row.source === CARRIED_FORWARD) {
     const real = findOrigin(db, { base, quote, asOf: row.date });
     // No locatable origin (C2) — `change_pivot` can drop the bridge row a
@@ -118,7 +131,11 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
   const carriedDays = daysBetween(origin.date, date);
   if (carriedDays > MAX_CARRY_DAYS) return undefined;
 
-  return { rate: row.rate, source: origin.source, asOf: origin.date, carriedDays };
+  // H3 — the origin's own rate, never the carried copy's (`row.rate`). A
+  // `carried_forward` row's stored `rate` is a snapshot taken when it was
+  // written; if the origin was corrected afterwards (`set_manual_rate`), the
+  // snapshot is stale and the origin's current value is the true answer.
+  return { rate: origin.rate, source: origin.source, asOf: origin.date, carriedDays };
 }
 
 export type LocalCoverage = {
@@ -177,7 +194,7 @@ export type LocalCoverage = {
  * caller rather than computing one.
  */
 export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   today: AccountingDate,
 ): readonly LocalCoverage[] {
   const currencyRows = db
@@ -298,7 +315,7 @@ export type LocalRateRow = {
  * 90 d · a year) pays for once, on demand, not per frame.
  */
 export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   {
     base,
     quote,
@@ -340,13 +357,19 @@ export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
 
 export type LocalCrossRate = {
   /**
-   * **Pivot-per-unit, for this pair — multiply an amount in `from` by this to
+   * **Triangulated, for this pair — multiply an amount in `from` by this to
    * reach `to`.** Not `fx_rates`' own stored direction: the pivot (§7.0) is
    * invisible past this function, and a caller triangulating through it by
    * hand is exactly what `readCrossRate` exists to spare every screen from
    * writing once each.
+   *
+   * **M1 — `CrossRate`, not `PivotPerUnit`.** The two share a shape but not a
+   * meaning: `PivotPerUnit` multiplies a currency's own amount by its rate
+   * *against the pivot*, and this value does not go to the pivot at all — it
+   * lands in `to`. `money.toPivot` refuses a `CrossRate` at compile time
+   * (`rate.type-test.ts`) precisely so the two cannot be swapped.
    */
-  rate: PivotPerUnit;
+  rate: CrossRate;
   /**
    * H2 — both legs' own provenance, whole and unmixed. A flattened
    * `source`/`asOf`/`carriedDays` here used to borrow `source` from whichever
@@ -373,7 +396,7 @@ export type LocalCrossRate = {
  * destination amount stays empty and the person types it.
  */
 export function readCrossRate<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   { from, to, date }: { from: CurrencyCode; to: CurrencyCode; date: AccountingDate },
 ): LocalCrossRate | undefined {
   const [pivotRow] = db
@@ -401,7 +424,7 @@ export function readCrossRate<TRun, TSchema extends typeof ledgerSchema>(
   // 1 unit of `from` is `1 / fromLeg.rate` pivot, and that many pivots are
   // `toLeg.rate` times as many units of `to` — so the cross rate is the
   // ratio of the two, pivot cancelled.
-  const rate = pivotPerUnit(dec(toLeg.rate).dividedBy(fromLeg.rate));
+  const rate = crossRate(dec(toLeg.rate).dividedBy(fromLeg.rate));
 
   // H2 — both legs, whole and unmixed. Which one is "worse", whether either
   // is a fabricated pivot self-leg, and whether to say "manual" are all

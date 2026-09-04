@@ -158,26 +158,39 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
       // than left mis-quoted against a pivot that no longer holds (§4).
       if (bridgeRate === undefined) continue;
       const rebased: UnitsPerPivot = unitsPerPivot(dec(row.rate).dividedBy(bridgeRate));
+      // M4 — a real row (`nbp`, `manual`, …) is stamped `derived`, never its
+      // own source: claiming `nbp` published this exact new-pivot-relative
+      // figure would be false, and `derived` names what actually produced
+      // it, the triangulation above. A `carried_forward` row keeps that
+      // source — it is still a copy standing in for a missing real quote,
+      // not a fresh figure, and `findOrigin`'s own walk-back (`read-rate.ts`)
+      // relies on that source to know this row is not an origin. Either way
+      // `fetchedAt` carries forward — the original quote's own freshness,
+      // not "now", since no new fetch happened.
       tx.insert(fxRates)
         .values({
           base: newPivot.code,
           quote: row.quote,
           date: row.date,
           rate: rebased,
-          source: row.source,
+          source: row.source === CARRIED_FORWARD ? CARRIED_FORWARD : "derived",
+          fetchedAt: row.fetchedAt,
         })
         .run();
     }
 
     if (!bridge || !k) continue; // no bridge on this date — nothing to reciprocate for it.
     const reciprocal: UnitsPerPivot = unitsPerPivot(dec(1).dividedBy(k));
+    // M4 — same reasoning as the per-row rebase above, and the bridge
+    // quote's own `fetchedAt` carried forward rather than dropped.
     tx.insert(fxRates)
       .values({
         base: newPivot.code,
         quote: oldPivot.code,
         date: bridge.date,
         rate: reciprocal,
-        source: bridge.source,
+        source: bridge.source === CARRIED_FORWARD ? CARRIED_FORWARD : "derived",
+        fetchedAt: bridge.fetchedAt,
       })
       .run();
   }

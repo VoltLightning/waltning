@@ -8,7 +8,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
-import { pivotPerUnit } from "@waltning/core/money";
+import { crossRate } from "@waltning/core/money";
 import { GroundPanel } from "../shell/card";
 import { TransferComposer } from "./transfer-composer";
 
@@ -51,7 +51,7 @@ const meta = {
     activeField: "amount",
     onActiveFieldChange: noop,
     referenceRate: {
-      rate: pivotPerUnit("3.8100"),
+      rate: crossRate("3.8100"),
       source: "nbp",
       date: "2026-08-12",
       carriedDays: 0,

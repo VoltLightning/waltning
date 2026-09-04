@@ -1571,7 +1571,13 @@ describe("phone ledger controller — FX (E3)", () => {
     const { controller, port } = harness();
     const listener = vi.fn();
     controller.subscribe(listener);
-    const range = { base: "USD", quote: "PLN", from: "2026-01-01", to: "2026-01-03" };
+    const range = {
+      base: "USD",
+      quote: "PLN",
+      from: "2026-01-01",
+      to: "2026-01-03",
+      today: "2026-06-01",
+    };
 
     (port.setManualRate as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
       throw new Error("set_manual_rate: a manual rate already exists for 2026-01-01");

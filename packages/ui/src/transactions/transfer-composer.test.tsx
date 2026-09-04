@@ -8,7 +8,7 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { pivotPerUnit } from "@waltning/core/money";
+import { crossRate } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 import { TransferComposer, type TransferComposerProps } from "./transfer-composer";
 
@@ -27,7 +27,7 @@ const BASE_PROPS: TransferComposerProps = {
   activeField: "amount",
   onActiveFieldChange: vi.fn(),
   referenceRate: {
-    rate: pivotPerUnit("3.8100"),
+    rate: crossRate("3.8100"),
     source: "nbp",
     date: "2026-08-12",
     carriedDays: 0,
