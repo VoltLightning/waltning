@@ -23,7 +23,7 @@
  * would otherwise have to close over each id itself, and `architecture/11`
  * bans exactly that arrow-in-JSX. `CurriedRow` below is the named
  * component the id is curried through instead, the same shape
- * `quick-add-form.tsx`'s `AccountChoice` already uses for one row of a list.
+ * `account-picker.tsx`'s `AccountTile` already uses for one cell of a grid.
  */
 
 import { useCallback } from "react";

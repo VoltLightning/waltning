@@ -128,6 +128,14 @@ export const en = {
     nothingToReconcile: "The ledger already shows this balance.",
     /** S16 §5's last observation — `accounts.expected_balance`, no date column to pair it with yet. */
     lastObserved: "Last observed:",
+    /** `AccountPicker`'s own strings — the grid the owner asked for over the 20-account list. */
+    search: "Search {{count}} accounts",
+    noMatchTitle: "No matching account",
+    noMatchBody: 'Nothing here matches "{{query}}".',
+    /** The last-used tile's own section, above the grouped grid (S05 §9.2). */
+    recent: "Recent",
+    /** The ungrouped accounts' own section header — last, under every real group. */
+    otherGroup: "Other",
   },
   transactions: {
     amount: "Amount",

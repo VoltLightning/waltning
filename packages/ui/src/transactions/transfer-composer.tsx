@@ -27,11 +27,17 @@
  * full-width Save) below it. `onCancel` is this component's own header ✕,
  * `QuickAddComposer`'s own escape for the same reason — Save belongs to
  * `Dock`, Cancel does not.
+ *
+ * **`from`/`to` are opened, never rendered, here.** `AccountPicker`
+ * (`accounts/`) is a sibling domain, the same rule `QuickAddComposer` keeps
+ * for `CategorySheet` — this only ever calls `onOpenFromAccountPicker` /
+ * `onOpenToAccountPicker`, and the screen composes the sheet, wiring its own
+ * pick straight onto `fromAccountId` / `toAccountId` (`architecture/11`).
  */
 
 import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { AmountField } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
@@ -44,7 +50,7 @@ import { TextField } from "../primitives/text-field";
 import { BottomSheet } from "../shell/bottom-sheet";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { radius, space, touchTarget } from "../tokens.ts";
+import { radius, space } from "../tokens.ts";
 
 export type TransferComposerAccount = {
   id: string;
@@ -65,9 +71,11 @@ export type TransferComposerField = "amount" | "toAmount";
 export type TransferComposerProps = {
   accounts: readonly TransferComposerAccount[];
   fromAccountId: string | null;
-  onFromAccountChange: (accountId: string) => void;
+  /** Opens `AccountPicker` for the *from* leg — the screen composes it, this only ever asks. */
+  onOpenFromAccountPicker: () => void;
   toAccountId: string | null;
-  onToAccountChange: (accountId: string) => void;
+  /** Opens `AccountPicker` for the *to* leg — the screen composes it, this only ever asks. */
+  onOpenToAccountPicker: () => void;
   /** Swaps the two accounts with one control rather than re-picking both (S31 §7). */
   onSwap: () => void;
 
@@ -93,14 +101,14 @@ export type TransferComposerProps = {
   onCancel: () => void;
 };
 
-type OpenSheet = "from" | "to" | "date" | "note" | null;
+type OpenSheet = "date" | "note" | null;
 
 export function TransferComposer({
   accounts,
   fromAccountId,
-  onFromAccountChange,
+  onOpenFromAccountPicker,
   toAccountId,
-  onToAccountChange,
+  onOpenToAccountPicker,
   onSwap,
   amountRaw,
   toAmountRaw,
@@ -127,8 +135,6 @@ export function TransferComposer({
   const sameAccount = fromAccountId !== null && fromAccountId === toAccountId;
 
   const closeSheet = useCallback(() => setOpenSheet(null), []);
-  const handleOpenFromSheet = useCallback(() => setOpenSheet("from"), []);
-  const handleOpenToSheet = useCallback(() => setOpenSheet("to"), []);
   const handleOpenDateSheet = useCallback(() => setOpenSheet("date"), []);
   const handleOpenNoteSheet = useCallback(() => setOpenSheet("note"), []);
   const handleActivateAmount = useCallback(
@@ -138,20 +144,6 @@ export function TransferComposer({
   const handleActivateToAmount = useCallback(
     () => onActiveFieldChange("toAmount"),
     [onActiveFieldChange],
-  );
-  const handleFromPick = useCallback(
-    (id: string) => {
-      onFromAccountChange(id);
-      setOpenSheet(null);
-    },
-    [onFromAccountChange],
-  );
-  const handleToPick = useCallback(
-    (id: string) => {
-      onToAccountChange(id);
-      setOpenSheet(null);
-    },
-    [onToAccountChange],
   );
 
   const amount = money.toMoney(amountRaw === "" ? "0" : amountRaw.replace(",", "."));
@@ -205,7 +197,7 @@ export function TransferComposer({
         <Chip
           placeholder={t("transactions.from")}
           value={from?.name}
-          onPress={handleOpenFromSheet}
+          onPress={onOpenFromAccountPicker}
           machineFilled={false}
         />
         <IconButton label={t("transactions.swapDirection")} onPress={onSwap}>
@@ -214,7 +206,7 @@ export function TransferComposer({
         <Chip
           placeholder={t("transactions.to")}
           value={to?.name}
-          onPress={handleOpenToSheet}
+          onPress={onOpenToAccountPicker}
           machineFilled={false}
         />
       </View>
@@ -301,16 +293,6 @@ export function TransferComposer({
       </View>
 
       <BottomSheet
-        visible={openSheet === "from"}
-        title={t("transactions.from")}
-        onDismiss={closeSheet}
-      >
-        <AccountList accounts={accounts} selectedId={fromAccountId} onPick={handleFromPick} />
-      </BottomSheet>
-      <BottomSheet visible={openSheet === "to"} title={t("transactions.to")} onDismiss={closeSheet}>
-        <AccountList accounts={accounts} selectedId={toAccountId} onPick={handleToPick} />
-      </BottomSheet>
-      <BottomSheet
         visible={openSheet === "date"}
         title={t("transactions.date")}
         onDismiss={closeSheet}
@@ -346,50 +328,6 @@ function CrossMark() {
   );
 }
 
-type AccountListProps = {
-  accounts: readonly TransferComposerAccount[];
-  selectedId: string | null;
-  onPick: (accountId: string) => void;
-};
-
-function AccountList({ accounts, selectedId, onPick }: AccountListProps) {
-  const styles = useStyles();
-  return (
-    <ScrollView style={styles.accountScroll}>
-      <View style={styles.accountList}>
-        {accounts.map((account) => (
-          <AccountRow
-            key={account.id}
-            account={account}
-            selected={account.id === selectedId}
-            onPick={onPick}
-          />
-        ))}
-      </View>
-    </ScrollView>
-  );
-}
-
-type AccountRowProps = {
-  account: TransferComposerAccount;
-  selected: boolean;
-  onPick: (accountId: string) => void;
-};
-
-function AccountRow({ account, selected, onPick }: AccountRowProps) {
-  const t = useT();
-  const handlePick = useCallback(() => onPick(account.id), [account.id, onPick]);
-  return (
-    <Chip
-      placeholder={t("transactions.account")}
-      value={account.name}
-      selected={selected}
-      onPress={handlePick}
-      machineFilled={false}
-    />
-  );
-}
-
 /** The drawn swap glyph — two arrows, opposed. Matches `keypad.tsx`'s own rule: never a font glyph. */
 function SwapArrow() {
   const styles = useStyles();
@@ -420,8 +358,6 @@ const useStyles = makeStyles((theme) => ({
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   marginRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   marginLabel: { color: theme.textMuted, ...text.ui("body") },
-  accountScroll: { maxHeight: touchTarget.min * 6 },
-  accountList: { gap: space.md, paddingBottom: space.md },
   swap: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   swapBar: { position: "absolute", width: 14, height: 2, backgroundColor: theme.text },
   swapBarTop: { top: 5, borderRadius: radius.xs },

@@ -24,9 +24,9 @@ const meta = {
   args: {
     accounts: [USD_ACCOUNT, PLN_ACCOUNT, SAVINGS_ACCOUNT],
     fromAccountId: "acc-usd",
-    onFromAccountChange: noop,
+    onOpenFromAccountPicker: noop,
     toAccountId: "acc-pln",
-    onToAccountChange: noop,
+    onOpenToAccountPicker: noop,
     onSwap: noop,
     amountRaw: "150",
     toAmountRaw: "565,20",

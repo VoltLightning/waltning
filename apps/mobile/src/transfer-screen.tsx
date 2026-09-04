@@ -14,6 +14,7 @@
  */
 
 import { convertAmountRaw } from "@waltning/client/ledger/convert-amount";
+import type { PhoneCapturableAccount } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseTransferRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -21,6 +22,7 @@ import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
+import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
 import { useSafeArea } from "@waltning/ui/primitives/safe-area";
@@ -59,6 +61,32 @@ function toComposerAccount(account: {
   };
 }
 
+/** The replica's account onto `AccountPicker`'s own choice shape — grouped, kind-ordered, S16 §3. */
+function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
+  return {
+    id: account.id,
+    name: account.name,
+    currency: account.currency,
+    decimals: account.decimals,
+    kind: account.kind,
+    capturable: account.capturable,
+    ownership: account.ownership,
+    groupId: account.groupId,
+    archived: account.archived,
+  };
+}
+
+/**
+ * The escape to account creation — unlike `quick-add-screen.tsx`'s, this
+ * transfer draft has no restorable route shape yet (`parseNewAccountRoute`
+ * only carries `quick-add`'s own amount/account pair), so creating an account
+ * mid-transfer lands on the register rather than resuming this draft. A real
+ * `returnTo: "transfer"` is future work, not this PR's.
+ */
+function handleCreateAccountFromTransfer() {
+  router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
+}
+
 export default function Transfer() {
   const t = useT();
   const styles = useStyles();
@@ -71,6 +99,11 @@ export default function Transfer() {
   const today = capture.date;
 
   const accounts = useMemo(() => snapshot.accounts.map(toComposerAccount), [snapshot.accounts]);
+  const pickerAccounts = useMemo(() => snapshot.accounts.map(toPickerChoice), [snapshot.accounts]);
+  const pickerGroups = useMemo(
+    () => snapshot.groups.map((group) => ({ id: group.id, name: group.name })),
+    [snapshot.groups],
+  );
 
   const [fromAccountId, setFromAccountId] = useState<string | null>(
     accounts.some((account) => account.id === routeState.from) ? (routeState.from ?? null) : null,
@@ -158,6 +191,37 @@ export default function Transfer() {
     setToAccountId(id);
     setToAmountEdited(false);
   }, []);
+
+  /**
+   * `AccountPicker` (`accounts/`) is a sibling domain — the same rule
+   * `QuickAddComposer` already keeps for `CategorySheet`. One sheet, two legs:
+   * `accountPicker.field` says which leg is currently open.
+   */
+  const [accountPicker, setAccountPicker] = useState<{ open: boolean; field: "from" | "to" }>({
+    open: false,
+    field: "from",
+  });
+  const handleOpenFromAccountPicker = useCallback(
+    () => setAccountPicker({ open: true, field: "from" }),
+    [],
+  );
+  const handleOpenToAccountPicker = useCallback(
+    () => setAccountPicker({ open: true, field: "to" }),
+    [],
+  );
+  const handleDismissAccountPicker = useCallback(
+    () => setAccountPicker((current) => ({ ...current, open: false })),
+    [],
+  );
+  const handlePickAccount = useCallback(
+    (id: string) => {
+      if (accountPicker.field === "from") handleFromAccountChange(id);
+      else handleToAccountChange(id);
+      setAccountPicker((current) => ({ ...current, open: false }));
+    },
+    [accountPicker.field, handleFromAccountChange, handleToAccountChange],
+  );
+
   const handleSwap = useCallback(() => {
     setFromAccountId(toAccountId);
     setToAccountId(fromAccountId);
@@ -240,9 +304,9 @@ export default function Transfer() {
         <TransferComposer
           accounts={accounts}
           fromAccountId={fromAccountId}
-          onFromAccountChange={handleFromAccountChange}
+          onOpenFromAccountPicker={handleOpenFromAccountPicker}
           toAccountId={toAccountId}
-          onToAccountChange={handleToAccountChange}
+          onOpenToAccountPicker={handleOpenToAccountPicker}
           onSwap={handleSwap}
           amountRaw={amountRaw}
           toAmountRaw={toAmountRaw}
@@ -270,6 +334,15 @@ export default function Transfer() {
       >
         <Keypad onKey={handleKey} />
       </Dock>
+      <AccountPicker
+        visible={accountPicker.open}
+        accounts={pickerAccounts}
+        groups={pickerGroups}
+        accountId={accountPicker.field === "from" ? fromAccountId : toAccountId}
+        onPick={handlePickAccount}
+        onCreateAccount={handleCreateAccountFromTransfer}
+        onDismiss={handleDismissAccountPicker}
+      />
     </View>
   );
 }

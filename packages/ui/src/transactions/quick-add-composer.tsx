@@ -15,10 +15,12 @@
  * (`categoryId`). The screen is the one place `packages/client`'s
  * `QuickAddDraft` is assembled.
  *
- * **Category is opened, never rendered, here.** `CategorySheet` lives in
- * `categories/` — a sibling domain — so this only ever calls
- * `onOpenCategoryPicker`, the same escape `QuickAddForm` already uses
- * (`architecture/11`: a module never imports a sibling module).
+ * **Category and account are opened, never rendered, here.** `CategorySheet`
+ * (`categories/`) and `AccountPicker` (`accounts/`) are both sibling domains,
+ * so this only ever calls `onOpenCategoryPicker` and `onOpenAccountPicker` —
+ * the screen composes whichever sheet is open, the same escape `QuickAddForm`
+ * already uses for category (`architecture/11`: a module never imports a
+ * sibling module).
  *
  * **A proposal is shown, never applied, by this component (§14, P2).** The
  * category chip reads the proposed name, machine-filled, the moment
@@ -34,11 +36,10 @@ import {
 } from "@waltning/core/capture/payee-memory";
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { AmountField } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
-import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
@@ -80,11 +81,8 @@ export type QuickAddComposerProps = {
   accountId: string | null;
   /** The account chip fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
-  /** Epoch ms — the sheet's own "from your last capture, 14:20" line. Absent when nothing was ever captured. */
-  accountMachineFilledAt?: number;
-  onAccountChange: (accountId: string) => void;
-  /** J02 §4: the account chip's own escape when nothing fits — S16's editor, same as `QuickAddForm`'s. */
-  onCreateAccount: () => void;
+  /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
+  onOpenAccountPicker: () => void;
   categories: readonly QuickAddComposerCategory[];
   categoryId: string | null;
   /** D2's own proposal, already computed by the screen — this composer never proposes. */
@@ -112,7 +110,7 @@ export type QuickAddComposerProps = {
   onCancel: () => void;
 };
 
-type OpenSheet = "account" | "date" | "scope" | "payee" | "note" | "counterparty" | null;
+type OpenSheet = "date" | "scope" | "payee" | "note" | "counterparty" | null;
 
 export function QuickAddComposer({
   raw,
@@ -121,9 +119,7 @@ export function QuickAddComposer({
   accounts,
   accountId,
   accountMachineFilled,
-  accountMachineFilledAt,
-  onAccountChange,
-  onCreateAccount,
+  onOpenAccountPicker,
   categories,
   categoryId,
   categoryProposal,
@@ -151,20 +147,12 @@ export function QuickAddComposer({
 
   const selectedAccount = accounts.find((account) => account.id === accountId);
   const closeSheet = useCallback(() => setOpenSheet(null), []);
-  const handleOpenAccountSheet = useCallback(() => setOpenSheet("account"), []);
   const handleOpenDateSheet = useCallback(() => setOpenSheet("date"), []);
   const handleOpenScopeSheet = useCallback(() => setOpenSheet("scope"), []);
   const handleOpenPayeeSheet = useCallback(() => setOpenSheet("payee"), []);
   const handleOpenNoteSheet = useCallback(() => setOpenSheet("note"), []);
   const handleOpenCounterpartySheet = useCallback(() => setOpenSheet("counterparty"), []);
 
-  const handleAccountPick = useCallback(
-    (next: string) => {
-      onAccountChange(next);
-      setOpenSheet(null);
-    },
-    [onAccountChange],
-  );
   const handleScopePick = useCallback(
     (next: boolean) => {
       onBusinessChange(next);
@@ -253,7 +241,7 @@ export function QuickAddComposer({
         <Chip
           placeholder={t("transactions.account")}
           value={selectedAccount?.name}
-          onPress={handleOpenAccountSheet}
+          onPress={onOpenAccountPicker}
           machineFilled={accountMachineFilled && selectedAccount !== undefined}
         />
         <Chip
@@ -309,31 +297,6 @@ export function QuickAddComposer({
       {counterpartyRoleError === undefined ? null : (
         <Text style={styles.fieldError}>{counterpartyRoleError}</Text>
       )}
-
-      <BottomSheet
-        visible={openSheet === "account"}
-        title={t("transactions.account")}
-        onDismiss={closeSheet}
-      >
-        {accountMachineFilled && accountMachineFilledAt !== undefined ? (
-          <Text style={styles.hint}>
-            {t("transactions.lastCapture", { time: formatClockTime(accountMachineFilledAt) })}
-          </Text>
-        ) : null}
-        <ScrollView style={styles.accountScroll}>
-          <View style={styles.accountList}>
-            {accounts.map((account) => (
-              <AccountRow
-                key={account.id}
-                account={account}
-                selected={account.id === accountId}
-                onPick={handleAccountPick}
-              />
-            ))}
-          </View>
-        </ScrollView>
-        <Button label={t("accounts.create")} onPress={onCreateAccount} variant="secondary" />
-      </BottomSheet>
 
       <BottomSheet
         visible={openSheet === "date"}
@@ -410,13 +373,6 @@ function scopeLabel(
   return isBusiness ? t("shell.scopeBusiness") : t("shell.scopeMine");
 }
 
-/** `HH:mm`, the device's own locale — a system instant, not an accounting date (§7.0a is the other kind). */
-function formatClockTime(at: number): string {
-  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(
-    new Date(at),
-  );
-}
-
 type TypeToggleProps = {
   type: "expense" | "income";
   onChange: (type: "expense" | "income") => void;
@@ -469,26 +425,6 @@ function CrossMark() {
       <View style={[styles.crossMarkBar, styles.crossMarkBarA]} />
       <View style={[styles.crossMarkBar, styles.crossMarkBarB]} />
     </View>
-  );
-}
-
-type AccountRowProps = {
-  account: QuickAddComposerAccount;
-  selected: boolean;
-  onPick: (accountId: string) => void;
-};
-
-function AccountRow({ account, selected, onPick }: AccountRowProps) {
-  const t = useT();
-  const handlePick = useCallback(() => onPick(account.id), [account.id, onPick]);
-  return (
-    <Chip
-      placeholder={t("transactions.account")}
-      value={account.name}
-      selected={selected}
-      onPress={handlePick}
-      machineFilled={false}
-    />
   );
 }
 
@@ -620,9 +556,6 @@ const useStyles = makeStyles((theme) => ({
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   /** §14 — text, not tint alone (P5); `theme.textMuted`, the same colour `CategorySheet`'s own caption uses. */
   lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
-  hint: { color: theme.textMuted, ...text.ui("caption") },
-  accountScroll: { maxHeight: touchTarget.min * 6 },
-  accountList: { gap: space.md, paddingBottom: space.md },
   counterparty: { gap: space.x3 },
   typeToggle: {
     flexDirection: "row",

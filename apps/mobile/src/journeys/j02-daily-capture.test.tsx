@@ -208,7 +208,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
 
     tap("button", "Account");
-    tap("radio", "Account: Cash · PLN");
+    tap("radio", "Cash · PLN");
     tap("button", /^Category/);
     tap("radio", "Eating out");
     tap("button", "Save");
@@ -343,7 +343,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
       fireEvent.click(screen.getByRole("button", { name: glyph }));
     }
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Account: Bank A · EUR" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Bank A · EUR" }));
     fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Eating out" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));

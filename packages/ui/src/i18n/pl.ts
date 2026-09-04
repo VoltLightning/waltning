@@ -94,6 +94,11 @@ export const pl: Messages = {
     sharedNotBusiness: "Konto wspólne nigdy nie jest firmowe.",
     nothingToReconcile: "Księga już pokazuje to saldo.",
     lastObserved: "Ostatnio stwierdzono:",
+    search: "Szukaj wśród {{count}} kont",
+    noMatchTitle: "Brak pasującego konta",
+    noMatchBody: "Nic tu nie pasuje do „{{query}}”.",
+    recent: "Ostatnio użyte",
+    otherGroup: "Inne",
   },
   transactions: {
     amount: "Kwota",

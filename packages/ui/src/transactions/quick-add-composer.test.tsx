@@ -38,8 +38,7 @@ const BASE_PROPS: QuickAddComposerProps = {
   accounts: ACCOUNTS,
   accountId: null,
   accountMachineFilled: false,
-  onAccountChange: vi.fn(),
-  onCreateAccount: vi.fn(),
+  onOpenAccountPicker: vi.fn(),
   categories: CATEGORIES,
   categoryId: null,
   onOpenCategoryPicker: vi.fn(),
@@ -140,39 +139,23 @@ it("lets someone type a payee through its own sheet", () => {
   expect(onPayeeChange).toHaveBeenCalledWith("Corner shop");
 });
 
-it("opens the account sheet and picks an account, closing it", () => {
-  const onAccountChange = vi.fn();
-  render(<QuickAddComposer {...props({ onAccountChange })} />);
+/**
+ * `AccountPicker` (`accounts/`) is a sibling domain — the same rule
+ * `CategorySheet` already keeps. This composer only ever asks the screen to
+ * open it; `account-picker.test.tsx` covers the sheet itself.
+ */
+it("opens the account picker through a callback rather than a sheet of its own", () => {
+  const onOpenAccountPicker = vi.fn();
+  render(<QuickAddComposer {...props({ onOpenAccountPicker })} />);
   fireEvent.click(screen.getByRole("button", { name: "Account" }));
-  // Inside the sheet, `AccountRow` passes `selected` — the same chip
-  // becomes a radio (`chip.tsx`'s own contract) among an exclusive set.
-  fireEvent.click(screen.getByRole("radio", { name: "Account: Cash · PLN" }));
-  expect(onAccountChange).toHaveBeenCalledWith("account-a");
+  expect(onOpenAccountPicker).toHaveBeenCalledOnce();
 });
 
-it("offers J02 §4's escape to create an account, from the account sheet", () => {
-  const onCreateAccount = vi.fn();
-  render(<QuickAddComposer {...props({ onCreateAccount })} />);
-  fireEvent.click(screen.getByRole("button", { name: "Account" }));
-  fireEvent.click(screen.getByRole("button", { name: "Create account…" }));
-  expect(onCreateAccount).toHaveBeenCalledOnce();
-});
-
-it("shows the last-capture hint only when the account chip is machine-filled", () => {
-  const at = new Date("2026-09-03T14:20:00").getTime();
-  render(
-    <QuickAddComposer
-      {...props({ accountId: "account-a", accountMachineFilled: true, accountMachineFilledAt: at })}
-    />,
-  );
-  fireEvent.click(screen.getByText("Cash · PLN"));
-  expect(screen.getByText(/From your last capture/)).toBeDefined();
-});
-
-it("does not show the last-capture hint for a chosen-by-hand account", () => {
-  render(<QuickAddComposer {...props({ accountId: "account-a", accountMachineFilled: false })} />);
-  fireEvent.click(screen.getByText("Cash · PLN"));
-  expect(screen.queryByText(/From your last capture/)).toBeNull();
+it("shows the account chip machine-filled when the last-used pick still holds", () => {
+  render(<QuickAddComposer {...props({ accountId: "account-a", accountMachineFilled: true })} />);
+  expect(
+    screen.getByRole("button", { name: "Account: Cash · PLN, filled automatically" }),
+  ).toBeDefined();
 });
 
 it("offers a counterparty once the ledger holds one, and its role once it is picked (§6.6)", () => {

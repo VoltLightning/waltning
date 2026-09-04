@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { currencyCode } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
-import { type QuickAddDraft, QuickAddForm } from "./quick-add-form";
+import { type QuickAddDraft, QuickAddForm, type QuickAddFormProps } from "./quick-add-form";
 
 const accounts = [
   { id: "account-a", name: "Bank A · PLN", currency: currencyCode("PLN"), capturable: true },
@@ -28,9 +28,25 @@ const restingDraft: Omit<QuickAddDraft, "amount" | "accountId"> = {
   counterpartyRole: null,
 };
 
-function fillAndPickAccount() {
+const BASE_PROPS: QuickAddFormProps = {
+  accounts,
+  categories,
+  counterparties: [],
+  today: TODAY,
+  accountId: null,
+  onOpenAccountPicker: vi.fn(),
+  categoryId: null,
+  onOpenCategoryPicker: vi.fn(),
+  onCancel: vi.fn(),
+  onSave: vi.fn(),
+};
+
+function renderForm(overrides: Partial<QuickAddFormProps> = {}) {
+  return render(<QuickAddForm {...BASE_PROPS} {...overrides} />);
+}
+
+function fillAmount() {
   fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "10" } });
-  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank A · PLN/ }));
 }
 
 /**
@@ -41,22 +57,9 @@ function fillAndPickAccount() {
  * card never touches stay absent.
  */
 it("collapses to amount, account, type, category and More — nothing else", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm();
   expect(screen.getByLabelText("Amount")).toBeDefined();
-  expect(screen.getByText("Account")).toBeDefined();
-  expect(screen.getByRole("button", { name: "Create account…" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Account" })).toBeDefined();
   expect(screen.getByRole("tab", { name: "Expense" })).toBeDefined();
   expect(screen.getByRole("tab", { name: "Income" })).toBeDefined();
   expect(screen.getByText("Category")).toBeDefined();
@@ -79,19 +82,7 @@ it("collapses to amount, account, type, category and More — nothing else", () 
 });
 
 it("reveals date, note, business and counterparty only after More", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[{ id: "cp-a", name: "Counterparty A" }]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({ counterparties: [{ id: "cp-a", name: "Counterparty A" }] });
   fireEvent.click(screen.getByRole("button", { name: "More" }));
 
   expect(screen.getByLabelText("Date")).toBeDefined();
@@ -102,21 +93,14 @@ it("reveals date, note, business and counterparty only after More", () => {
 
 it("saves the resting draft — amount and account, everything else at its default", () => {
   const onSave = vi.fn();
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={onSave}
-    />,
-  );
+  renderForm({ onSave });
   expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
-  fillAndPickAccount();
+  cleanup();
+
+  // The account is a controlled prop now — the screen sets it once
+  // `AccountPicker`'s own pick lands, the same way `categoryId` already works.
+  renderForm({ onSave, accountId: "account-a" });
+  fillAmount();
   const save = screen.getByRole("button", { name: "Save" });
   expect(save.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(save);
@@ -124,26 +108,22 @@ it("saves the resting draft — amount and account, everything else at its defau
   expect(typeof onSave.mock.calls[0]?.[0].amount).toBe("string");
 });
 
-it("restores a draft and carries it through Create account", () => {
-  const onCreateAccount = vi.fn();
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      initialAmount="10"
-      initialAccountId="account-a"
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={onCreateAccount}
-      onSave={vi.fn()}
-    />,
-  );
-  expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("10");
-  screen.getByRole("button", { name: "Create account…" }).click();
-  expect(onCreateAccount).toHaveBeenCalledWith({ amount: "10", accountId: "account-a" });
+/**
+ * `AccountPicker` (`accounts/`) is a sibling domain — the same rule
+ * `QuickAddComposer` already keeps for `CategorySheet`. This form only ever
+ * asks the screen to open it, carrying the amount typed so far — the sheet's
+ * own footer needs it for the escape to account creation.
+ */
+it("opens the account picker carrying the amount typed so far", () => {
+  const onOpenAccountPicker = vi.fn();
+  renderForm({ initialAmount: "10", onOpenAccountPicker });
+  fireEvent.click(screen.getByRole("button", { name: "Account" }));
+  expect(onOpenAccountPicker).toHaveBeenCalledWith({ amount: "10" });
+});
+
+it("shows the picked account on the chip, from the controlled accountId", () => {
+  renderForm({ accountId: "account-a" });
+  expect(screen.getByRole("button", { name: "Account: Bank A · PLN" })).toBeDefined();
 });
 
 /**
@@ -153,25 +133,13 @@ it("restores a draft and carries it through Create account", () => {
  * złoty account was labelled in dollars, and the compiler called it correct.
  */
 it("labels the amount in the selected account's own currency", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  const { rerender } = renderForm();
   expect(screen.queryByText("PLN")).toBeNull();
 
-  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank A · PLN/ }));
+  rerender(<QuickAddForm {...BASE_PROPS} accountId="account-a" />);
   expect(screen.getByText("PLN")).toBeDefined();
 
-  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank B · BYN/ }));
+  rerender(<QuickAddForm {...BASE_PROPS} accountId="account-b" />);
   expect(screen.getByText("BYN")).toBeDefined();
   expect(screen.queryByText("PLN")).toBeNull();
 });
@@ -179,21 +147,9 @@ it("labels the amount in the selected account's own currency", () => {
 /** §7.2 — the keypad never signs, `type` alone carries direction. */
 it("reaches onSave with type: income once the Income tab is chosen", () => {
   const onSave = vi.fn();
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={onSave}
-    />,
-  );
+  renderForm({ onSave, accountId: "account-a" });
   fireEvent.click(screen.getByRole("tab", { name: "Income" }));
-  fillAndPickAccount();
+  fillAmount();
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(onSave.mock.calls[0]?.[0]).toMatchObject({ type: "income" });
@@ -208,19 +164,7 @@ it("reaches onSave with type: income once the Income tab is chosen", () => {
  */
 it("opens the category picker for the current type when the field is pressed", () => {
   const onOpenCategoryPicker = vi.fn();
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={onOpenCategoryPicker}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({ onOpenCategoryPicker });
   fireEvent.click(screen.getByRole("button", { name: "Category" }));
   expect(onOpenCategoryPicker).toHaveBeenCalledWith("expense");
 
@@ -232,22 +176,10 @@ it("opens the category picker for the current type when the field is pressed", (
 /** The picked leaf is a controlled prop — the field shows it, and Save carries it. */
 it("shows the picked category and carries it into onSave", () => {
   const onSave = vi.fn();
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId="cat-groceries"
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={onSave}
-    />,
-  );
+  renderForm({ categoryId: "cat-groceries", onSave, accountId: "account-a" });
   expect(screen.getByRole("button", { name: "Category: Groceries" })).toBeDefined();
 
-  fillAndPickAccount();
+  fillAmount();
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave.mock.calls[0]?.[0]).toMatchObject({ categoryId: "cat-groceries" });
 });
@@ -260,24 +192,12 @@ it("shows the picked category and carries it into onSave", () => {
  */
 it("masks a category that no longer matches the type, and restores it on switching back", () => {
   const onSave = vi.fn();
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId="cat-groceries"
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={onSave}
-    />,
-  );
+  renderForm({ categoryId: "cat-groceries", onSave, accountId: "account-a" });
   fireEvent.click(screen.getByRole("tab", { name: "Income" }));
   expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
   expect(screen.queryByRole("button", { name: "Category: Groceries" })).toBeNull();
 
-  fillAndPickAccount();
+  fillAmount();
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave.mock.calls[0]?.[0]).toMatchObject({ categoryId: null, type: "income" });
 
@@ -287,42 +207,19 @@ it("masks a category that no longer matches the type, and restores it on switchi
 
 /** The reason belongs to the field that caused it (`architecture/12`). */
 it("renders a categoryId field error under the field", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      fieldErrors={{ byField: { categoryId: ["that category was archived"] }, formLevel: [] }}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({
+    fieldErrors: { byField: { categoryId: ["that category was archived"] }, formLevel: [] },
+  });
   expect(screen.getByText("that category was archived")).toBeDefined();
 });
 
 /** The `capturedTz` card's editable-date half — an edited date reaches the write. */
 it("carries an edited date through to onSave", () => {
   const onSave = vi.fn();
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={onSave}
-    />,
-  );
+  renderForm({ onSave, accountId: "account-a" });
   fireEvent.click(screen.getByRole("button", { name: "More" }));
   fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-01-15" } });
-  fillAndPickAccount();
+  fillAmount();
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(onSave.mock.calls[0]?.[0]).toMatchObject({ date: "2026-01-15" });
@@ -330,59 +227,23 @@ it("carries an edited date through to onSave", () => {
 
 /** A date that is not `YYYY-MM-DD` blocks Save rather than reaching the write malformed. */
 it("blocks Save on a malformed date", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({ accountId: "account-a" });
   fireEvent.click(screen.getByRole("button", { name: "More" }));
   fireEvent.change(screen.getByLabelText("Date"), { target: { value: "15 Jan" } });
-  fillAndPickAccount();
+  fillAmount();
 
   expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
 });
 
 it("offers no counterparty field when the ledger holds none", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm();
   fireEvent.click(screen.getByRole("button", { name: "More" }));
   expect(screen.queryByText("Counterparty")).toBeNull();
 });
 
 /** §6.6 — a counterparty is offered, and its role stays hidden until one is chosen. */
 it("offers a counterparty once the ledger holds one, and its role once it is picked", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={categories}
-      counterparties={[{ id: "cp-a", name: "Counterparty A" }]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({ counterparties: [{ id: "cp-a", name: "Counterparty A" }] });
   fireEvent.click(screen.getByRole("button", { name: "More" }));
   expect(screen.getByText("Counterparty")).toBeDefined();
   expect(screen.queryByRole("radiogroup", { name: "Role" })).toBeNull();
@@ -407,22 +268,8 @@ it("declines a capture into a currency it holds no rate for, and says why", () =
   const unrated = [
     { id: "account-a", name: "Bank A · PLN", currency: currencyCode("PLN"), capturable: false },
   ];
-  render(
-    <QuickAddForm
-      accounts={unrated}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={onSave}
-    />,
-  );
-
-  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "10" } });
-  fireEvent.click(screen.getByRole("radio", { name: /Account: Bank A · PLN/ }));
+  renderForm({ accounts: unrated, onSave, accountId: "account-a" });
+  fillAmount();
 
   expect(screen.getByText(/PLN needs an exchange rate/)).toBeDefined();
   const save = screen.getByRole("button", { name: "Save" });
@@ -433,79 +280,39 @@ it("declines a capture into a currency it holds no rate for, and says why", () =
 
 /** The reason belongs to the choice, so it is absent until one is made. */
 it("says nothing about rates before an account is chosen", () => {
-  render(
-    <QuickAddForm
-      accounts={[
-        { id: "account-a", name: "Bank A · PLN", currency: currencyCode("PLN"), capturable: false },
-      ]}
-      categories={categories}
-      counterparties={[]}
-      today={TODAY}
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({
+    accounts: [
+      { id: "account-a", name: "Bank A · PLN", currency: currencyCode("PLN"), capturable: false },
+    ],
+  });
   expect(screen.queryByText(/needs an exchange rate/)).toBeNull();
 });
 
 it("renders two errors from one map on their own fields", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={[]}
-      counterparties={[]}
-      today="2026-08-24"
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      fieldErrors={{
-        byField: { amountOriginal: ["must be positive"], accountId: ["choose one"] },
-        formLevel: [],
-      }}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({
+    categories: [],
+    today: "2026-08-24",
+    fieldErrors: {
+      byField: { amountOriginal: ["must be positive"], accountId: ["choose one"] },
+      formLevel: [],
+    },
+  });
   expect(screen.getByText("must be positive")).toBeDefined();
   expect(screen.getByText("choose one")).toBeDefined();
 });
 
 it("renders an unknown path at form level, under an alert", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={[]}
-      counterparties={[]}
-      today="2026-08-24"
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      fieldErrors={{ byField: {}, formLevel: ["date: not accepted"] }}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({
+    categories: [],
+    today: "2026-08-24",
+    fieldErrors: { byField: {}, formLevel: ["date: not accepted"] },
+  });
   const alert = screen.getByRole("alert");
   expect(alert.textContent).toContain("Couldn't save");
   expect(alert.textContent).toContain("date: not accepted");
 });
 
 it("renders nothing extra with no fieldErrors prop", () => {
-  render(
-    <QuickAddForm
-      accounts={accounts}
-      categories={[]}
-      counterparties={[]}
-      today="2026-08-24"
-      categoryId={null}
-      onOpenCategoryPicker={vi.fn()}
-      onCancel={vi.fn()}
-      onCreateAccount={vi.fn()}
-      onSave={vi.fn()}
-    />,
-  );
+  renderForm({ categories: [], today: "2026-08-24" });
   expect(screen.queryByRole("alert")).toBeNull();
 });

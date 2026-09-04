@@ -165,14 +165,20 @@ function tapKeys(...glyphs: readonly string[]) {
   for (const glyph of glyphs) fireEvent.click(screen.getByRole("button", { name: glyph }));
 }
 
+/**
+ * `AccountPicker` (`accounts/`) — a tile's own accessible name is the
+ * account's name alone, matching every other call site's tiles
+ * (`account-picker.test.tsx`), not the `Chip`'s "Account: …" convention its
+ * own trigger button still carries before a pick.
+ */
 function pickCashAccount() {
   fireEvent.click(screen.getByRole("button", { name: "Account" }));
-  fireEvent.click(screen.getByRole("radio", { name: "Account: Cash · PLN" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
 }
 
 function pickSharedAccount() {
   fireEvent.click(screen.getByRole("button", { name: /^Account/ }));
-  fireEvent.click(screen.getByRole("radio", { name: "Account: Joint · PLN" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Joint · PLN" }));
 }
 
 beforeEach(() => {

@@ -25,7 +25,7 @@ const BASE_PROPS: SettleSheetProps = {
   activeField: "amount",
   onActiveFieldChange: vi.fn(),
   accountId: "acc-cash-pln",
-  onAccountChange: vi.fn(),
+  onOpenAccountPicker: vi.fn(),
   referenceRate: { rate: pivotPerUnit("4.3120"), source: "nbp", date: "2026-08-10" },
   note: "",
   onNoteChange: vi.fn(),
@@ -136,6 +136,18 @@ it("still appends the currency when the account name does not carry it", () => {
     accountId: "acc-other",
   });
   expect(screen.getByText("Household · USD")).toBeDefined();
+});
+
+/**
+ * `AccountPicker` (`accounts/`) is a sibling domain — `counterparties/` may
+ * not import it any more than `transactions/`. This sheet only ever asks the
+ * screen to open it; `account-picker.test.tsx` covers the sheet itself.
+ */
+it("opens the account picker through a callback rather than a select of its own", () => {
+  const onOpenAccountPicker = vi.fn();
+  renderSheet({ onOpenAccountPicker });
+  fireEvent.click(screen.getByRole("button", { name: "From: Cash · PLN" }));
+  expect(onOpenAccountPicker).toHaveBeenCalledOnce();
 });
 
 it("renders every figure through the locale's own decimal mark — Polish", () => {

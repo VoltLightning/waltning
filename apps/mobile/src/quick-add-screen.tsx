@@ -13,6 +13,7 @@ import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
 import { proposeCategory } from "@waltning/core/capture/payee-memory";
+import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
@@ -94,6 +95,21 @@ function toComposerChoice(account: PhoneCapturableAccount): QuickAddComposerAcco
   };
 }
 
+/** The replica's account onto `AccountPicker`'s own choice shape — grouped, kind-ordered, S16 §3. */
+function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
+  return {
+    id: account.id,
+    name: account.name,
+    currency: account.currency,
+    decimals: account.decimals,
+    kind: account.kind,
+    capturable: account.capturable,
+    ownership: account.ownership,
+    groupId: account.groupId,
+    archived: account.archived,
+  };
+}
+
 function handleDeskCreateAccount(next: CreateAccountEscapeDraft) {
   router.push({
     pathname: "/account/new",
@@ -119,6 +135,8 @@ export default function QuickAdd() {
   const snapshot = usePhoneLedger(ledger);
   const accounts = snapshot.accounts.map(toChoice);
   const composerAccounts = snapshot.accounts.map(toComposerChoice);
+  const pickerAccounts = snapshot.accounts.map(toPickerChoice);
+  const pickerGroups = snapshot.groups.map((group) => ({ id: group.id, name: group.name }));
   const [fieldErrors, setFieldErrors] = useState<ReturnType<typeof mapFieldErrors>>();
   // The device's own calendar (§7.0a) — the draft's default, editable from
   // there. `deviceRuntime` reads `Intl`/`Date` only, not a platform API, so it
@@ -162,6 +180,36 @@ export default function QuickAdd() {
     [ledger, t],
   );
 
+  /**
+   * `AccountPicker` (`accounts/`) is a sibling domain the same way
+   * `CategorySheet` is — composed here, not inside `QuickAddForm`. The form's
+   * own `amount` is uncontrolled, so its escape carries a snapshot of it at
+   * open time; that snapshot is what the picker's own *Create account…*
+   * footer forwards on, same shape `handleDeskCreateAccount` already takes.
+   */
+  const [deskAccountId, setDeskAccountId] = useState<string | null>(
+    accounts.some((account) => account.id === draft.accountId) ? (draft.accountId ?? null) : null,
+  );
+  const [deskAccountPicker, setDeskAccountPicker] = useState<{ open: boolean; amount: string }>({
+    open: false,
+    amount: draft.amount,
+  });
+  const handleOpenDeskAccountPicker = useCallback(
+    (current: { amount: string }) => setDeskAccountPicker({ open: true, amount: current.amount }),
+    [],
+  );
+  const handleDismissDeskAccountPicker = useCallback(
+    () => setDeskAccountPicker((current) => ({ ...current, open: false })),
+    [],
+  );
+  const handlePickDeskAccount = useCallback((next: string) => {
+    setDeskAccountId(next);
+    setDeskAccountPicker((current) => ({ ...current, open: false }));
+  }, []);
+  const handleDeskAccountPickerCreateAccount = useCallback(() => {
+    handleDeskCreateAccount({ amount: deskAccountPicker.amount, accountId: deskAccountId });
+  }, [deskAccountPicker.amount, deskAccountId]);
+
   /* ── D4b's own draft — the composer above the Dock ─────────────────── */
   const [composerAmountRaw, setComposerAmountRaw] = useState(
     () => draft.amount.replace(".", ",") || "",
@@ -186,6 +234,15 @@ export default function QuickAdd() {
     open: boolean;
     kind: "income" | "expense";
   }>({ open: false, kind: "expense" });
+  /**
+   * `AccountPicker` (`accounts/`) is a sibling domain — the same rule
+   * `CategorySheet` already keeps. `raw`/`accountId` are already this
+   * screen's own state, so — unlike the desk fallback's uncontrolled form —
+   * nothing needs capturing at open time.
+   */
+  const [composerAccountPicker, setComposerAccountPicker] = useState(false);
+  const handleOpenComposerAccountPicker = useCallback(() => setComposerAccountPicker(true), []);
+  const handleDismissComposerAccountPicker = useCallback(() => setComposerAccountPicker(false), []);
 
   const lastCaptureSnapshot = useDevicePreference(lastCapture);
   const lastUsedAccountId = useLastUsedAccount(lastCapture, capture.at.getTime(), composerAccounts);
@@ -233,6 +290,13 @@ export default function QuickAdd() {
       if (account?.ownership === "shared") setComposerIsBusiness(false);
     },
     [composerAccounts],
+  );
+  const handlePickComposerAccount = useCallback(
+    (next: string) => {
+      handleComposerAccountChange(next);
+      setComposerAccountPicker(false);
+    },
+    [handleComposerAccountChange],
   );
   const handleComposerCreateAccount = useCallback(() => {
     router.push({
@@ -379,12 +443,12 @@ export default function QuickAdd() {
             counterparties={snapshot.counterparties}
             today={today}
             initialAmount={draft.amount}
-            {...(draft.accountId ? { initialAccountId: draft.accountId } : {})}
+            accountId={deskAccountId}
+            onOpenAccountPicker={handleOpenDeskAccountPicker}
             categoryId={categoryId}
             onOpenCategoryPicker={handleOpenCategoryPicker}
             {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
             onCancel={handleDeskCancel}
-            onCreateAccount={handleDeskCreateAccount}
             onSave={handleDeskSave}
           />
         </Card>
@@ -395,6 +459,15 @@ export default function QuickAdd() {
           onPick={handlePickCategory}
           onCreate={handleCreateCategory}
           onDismiss={handleDismissCategorySheet}
+        />
+        <AccountPicker
+          visible={deskAccountPicker.open}
+          accounts={pickerAccounts}
+          groups={pickerGroups}
+          accountId={deskAccountId}
+          onPick={handlePickDeskAccount}
+          onCreateAccount={handleDeskAccountPickerCreateAccount}
+          onDismiss={handleDismissDeskAccountPicker}
         />
       </GroundPanel>
     );
@@ -418,11 +491,7 @@ export default function QuickAdd() {
           accounts={composerAccounts}
           accountId={effectiveAccountId}
           accountMachineFilled={accountMachineFilled}
-          {...(lastCaptureSnapshot.value
-            ? { accountMachineFilledAt: lastCaptureSnapshot.value.at }
-            : {})}
-          onAccountChange={handleComposerAccountChange}
-          onCreateAccount={handleComposerCreateAccount}
+          onOpenAccountPicker={handleOpenComposerAccountPicker}
           categories={snapshot.categories}
           categoryId={composerCategoryId}
           {...(categoryProposal === undefined ? {} : { categoryProposal })}
@@ -463,6 +532,17 @@ export default function QuickAdd() {
         onPick={handlePickComposerCategory}
         onCreate={handleCreateCategory}
         onDismiss={handleDismissComposerCategorySheet}
+      />
+      <AccountPicker
+        visible={composerAccountPicker}
+        accounts={pickerAccounts}
+        groups={pickerGroups}
+        accountId={effectiveAccountId}
+        {...(lastUsedAccountId === null ? {} : { lastUsedId: lastUsedAccountId })}
+        {...(lastCaptureSnapshot.value ? { lastUsedAt: lastCaptureSnapshot.value.at } : {})}
+        onPick={handlePickComposerAccount}
+        onCreateAccount={handleComposerCreateAccount}
+        onDismiss={handleDismissComposerAccountPicker}
       />
     </View>
   );

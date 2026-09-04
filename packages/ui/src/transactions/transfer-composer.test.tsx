@@ -18,9 +18,9 @@ const BASE_PROPS: TransferComposerProps = {
     { id: "acc-pln", name: "Cash · PLN", currency: "PLN", decimals: 2 },
   ],
   fromAccountId: "acc-usd",
-  onFromAccountChange: vi.fn(),
+  onOpenFromAccountPicker: vi.fn(),
   toAccountId: "acc-pln",
-  onToAccountChange: vi.fn(),
+  onOpenToAccountPicker: vi.fn(),
   onSwap: vi.fn(),
   amountRaw: "150",
   toAmountRaw: "565,20",
@@ -97,6 +97,21 @@ it("swaps the two accounts with one control", () => {
   renderComposer({ onSwap });
   fireEvent.click(screen.getByRole("button", { name: "Swap direction" }));
   expect(onSwap).toHaveBeenCalledOnce();
+});
+
+/**
+ * `AccountPicker` (`accounts/`) is a sibling domain — the same rule
+ * `QuickAddComposer` already keeps for `CategorySheet`. Each chip only ever
+ * asks the screen to open it; `account-picker.test.tsx` covers the sheet.
+ */
+it("opens the from/to account picker through a callback rather than a sheet of its own", () => {
+  const onOpenFromAccountPicker = vi.fn();
+  const onOpenToAccountPicker = vi.fn();
+  renderComposer({ onOpenFromAccountPicker, onOpenToAccountPicker });
+  fireEvent.click(screen.getByRole("button", { name: "From: Household · USD" }));
+  expect(onOpenFromAccountPicker).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: "To: Cash · PLN" }));
+  expect(onOpenToAccountPicker).toHaveBeenCalledOnce();
 });
 
 it("cancels through the header ✕", () => {
