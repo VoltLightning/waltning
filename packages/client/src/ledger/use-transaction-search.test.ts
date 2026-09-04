@@ -4,7 +4,7 @@ import { act, renderHook } from "@testing-library/react";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode } from "@waltning/core/money";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createPhoneLedger, type PhoneSearchTransaction } from "./create-phone-ledger.ts";
 import { useTransactionSearch } from "./use-transaction-search.ts";
 
@@ -50,6 +50,7 @@ function fakeController() {
       listNetWorth: () => [],
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
+      balanceAsOf: vi.fn(),
       searchTransactions: (filter, cursor) => {
         const start = cursor === undefined ? 0 : rows.findIndex((r) => r.id === cursor.id) + 1;
         const matched =
@@ -78,14 +79,10 @@ function fakeController() {
       updateTransaction: () => undefined,
       deleteTransaction: () => undefined,
       setTransactionLines: () => undefined,
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      renameCategory: () => undefined,
-      reparentCategory: () => undefined,
-      convertLeafGroup: () => undefined,
-      mergeCategories: () => undefined,
-      archiveCategory: () => undefined,
+      updateAccount: () => undefined,
+      archiveAccount: () => undefined,
+      reconcileAccount: () => undefined,
+      createGroup: () => undefined,
       reset: () => undefined,
     },
     {
@@ -175,6 +172,7 @@ describe("useTransactionSearch", () => {
         listNetWorth: () => [],
         readPeriodSpend: () => [],
         listUnsettledClearing: () => [],
+        balanceAsOf: vi.fn(),
         searchTransactions: () => {
           if (broken) throw new Error("replica is unreadable");
           return { rows: [], nextCursor: undefined, total: { count: 0, currencies: [] } };
@@ -187,14 +185,10 @@ describe("useTransactionSearch", () => {
         updateTransaction: () => undefined,
         deleteTransaction: () => undefined,
         setTransactionLines: () => undefined,
-        listFullCategoryTree: () => [],
-        listCategoryUsage: () => new Map(),
-        readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-        renameCategory: () => undefined,
-        reparentCategory: () => undefined,
-        convertLeafGroup: () => undefined,
-        mergeCategories: () => undefined,
-        archiveCategory: () => undefined,
+        updateAccount: () => undefined,
+        archiveAccount: () => undefined,
+        reconcileAccount: () => undefined,
+        createGroup: () => undefined,
         reset: () => undefined,
       },
       {

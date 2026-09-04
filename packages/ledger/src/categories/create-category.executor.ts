@@ -18,7 +18,6 @@ import { eq } from "drizzle-orm";
 import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
-import { refuseSiblingCollision } from "./sibling-collision.ts";
 
 const { categories } = schema;
 
@@ -56,14 +55,6 @@ function insertCategory(input: CreateCategoryInput, tx: ReplicaTx): LocalCategor
       );
     }
   }
-
-  refuseSiblingCollision(tx, {
-    operation: "create_category",
-    id: input.id,
-    parentId: input.parentId,
-    kind: input.kind,
-    name: input.name,
-  });
 
   const fields = {
     parentId: input.parentId,

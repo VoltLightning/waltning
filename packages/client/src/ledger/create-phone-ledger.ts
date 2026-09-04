@@ -1,34 +1,31 @@
 import { fold } from "@waltning/core/capture/names";
-import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
-import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
+import { type Id, type IdTable, id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
   type AccountKind,
-  type ArchiveCategoryInput,
-  archiveCategoryInput,
+  type ArchiveAccountInput,
+  archiveAccountInput,
   type CategorizeBatchInput,
-  type ConvertLeafGroupInput,
   type CreateAccountInput,
   type CreateCategoryInput,
+  type CreateGroupInput,
   type CreateTransactionInput,
   categorizeBatchInput,
-  convertLeafGroupInput,
   createAccountInput,
   createCategoryInput,
+  createGroupInput,
   createTransactionInput,
   type DeleteTransactionInput,
   deleteTransactionInput,
-  type MergeCategoriesInput,
-  mergeCategoriesInput,
-  type RenameCategoryInput,
-  type ReparentCategoryInput,
-  renameCategoryInput,
-  reparentCategoryInput,
+  type ReconcileAccountInput,
+  reconcileAccountInput,
   type SetTransactionLinesInput,
   setTransactionLinesInput,
+  type UpdateAccountInput,
   type UpdateTransactionInput,
+  updateAccountInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
@@ -48,6 +45,18 @@ export type PhoneAccount = {
   currency: CurrencyCode;
   decimals: number;
   balance: Money;
+  groupId: Id<"accountGroups"> | null;
+  ownership: CreateAccountInput["ownership"];
+  isBusiness: boolean;
+  archived: boolean;
+  /** The last balance a reconciliation recorded (S16 §5) — `null` before the first one. */
+  expectedBalance: Money | null;
+  /** `AccountEditor`'s own fields — shown and, `version` apart, edited. */
+  openingBalance: Money;
+  openingDate: AccountingDate | null;
+  memo: string;
+  /** `update_account`'s and `archive_account`'s compare-and-swap token (`architecture/14` §14.2). */
+  version: number;
 };
 
 /**
@@ -147,51 +156,6 @@ export type PhoneCategoryNode = {
   kind: "income" | "expense";
   isLeaf: boolean;
   sort: number;
-};
-
-/**
- * `PhoneCategoryNode`, plus what a picker never needs and S19's editor
- * always does — `archived` and the compare-and-swap `version` every
- * structural write below takes. `listCategoryTree`/`PhoneCategoryNode`
- * above stay archived-excluded and version-free, matching their one
- * consumer today (S06's picker, where an archived category must never
- * appear — `TAXONOMY.md` R2); this is the *other* read, for the one screen
- * where "offerable" is not the question.
- */
-export type PhoneFullCategoryNode = {
-  id: Id<"categories">;
-  parentId: Id<"categories"> | null;
-  name: string;
-  kind: "income" | "expense";
-  isLeaf: boolean;
-  archived: boolean;
-  sort: number;
-  depth: number;
-  version: number;
-};
-
-/**
- * A near-duplicate pair — S19's collision finder (§9.2: *"trigram
- * similarity, ranked"*). Leaf-versus-leaf only: `merge_categories` refuses a
- * group on either side, so every candidate here is one the screen can
- * actually act on by opening the merge sheet.
- */
-export type PhoneCategoryCollision = {
-  a: { id: Id<"categories">; name: string; usageCount: number };
-  b: { id: Id<"categories">; name: string; usageCount: number };
-  score: number;
-};
-
-/**
- * S19's merge preview, exact — see `readCategoryReferenceCounts`. Read on
- * demand, matching `readPeriodSpend`'s own precedent below: this is a query
- * against one category, not a value every subscriber needs recomputed on
- * every write.
- */
-export type PhoneCategoryReferenceCounts = {
-  transactions: number;
-  lines: number;
-  rules: number;
 };
 
 /**
@@ -314,22 +278,19 @@ export type PhoneTransactionDetail = {
 };
 
 export type PhoneLedgerPort = {
-  listAccounts: () => readonly PhoneAccount[];
+  /** `includeArchived` — default `false`. S16's register loads them lazily, behind its own toggle. */
+  listAccounts: (options?: { includeArchived?: boolean }) => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
   listGroups: () => readonly PhoneGroup[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
   listCategoryTree: () => readonly PhoneCategoryNode[];
-  /** The whole tree, archived rows included — S19's editor. See `PhoneFullCategoryNode`. */
-  listFullCategoryTree: () => readonly PhoneFullCategoryNode[];
-  /** How many live rows touch each category — see `readCategoryUsage`. */
-  listCategoryUsage: () => ReadonlyMap<Id<"categories">, number>;
-  /** The merge preview's exact pre-write counts — see `readCategoryReferenceCounts`. */
-  readCategoryReferenceCounts: (categoryId: Id<"categories">) => PhoneCategoryReferenceCounts;
   listCounterparties: () => readonly PhoneCounterparty[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
+  /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
+  balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
   /** C4 — S10's list. A query, not a snapshot field. */
   searchTransactions: (filter: PhoneSearchFilter, cursor?: PhoneSearchCursor) => PhoneSearchPage;
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
@@ -341,11 +302,10 @@ export type PhoneLedgerPort = {
   updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
   deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
-  renameCategory: (input: RenameCategoryInput, capture: PhoneCapture) => void;
-  reparentCategory: (input: ReparentCategoryInput, capture: PhoneCapture) => void;
-  convertLeafGroup: (input: ConvertLeafGroupInput, capture: PhoneCapture) => void;
-  mergeCategories: (input: MergeCategoriesInput, capture: PhoneCapture) => void;
-  archiveCategory: (input: ArchiveCategoryInput, capture: PhoneCapture) => void;
+  updateAccount: (input: UpdateAccountInput, capture: PhoneCapture) => void;
+  archiveAccount: (input: ArchiveAccountInput, capture: PhoneCapture) => void;
+  reconcileAccount: (input: ReconcileAccountInput, capture: PhoneCapture) => void;
+  createGroup: (input: CreateGroupInput, capture: PhoneCapture) => void;
   reset: () => void;
 };
 
@@ -394,15 +354,16 @@ export type PhoneClearingAccount = money.ClearingAccountRow;
 
 export type PhoneLedgerSnapshot = {
   accounts: readonly PhoneCapturableAccount[];
+  /**
+   * Empty until `loadArchived()` runs — S16's register loads them lazily,
+   * behind its own toggle, rather than on every refresh nobody asked for.
+   */
+  archivedAccounts: readonly PhoneAccount[];
   currencies: readonly PhoneCurrency[];
   groups: readonly PhoneGroup[];
   recent: readonly PhoneRecentTransaction[];
   categories: readonly PhoneCategory[];
   categoryTree: readonly PhoneCategoryNode[];
-  /** The whole tree, archived rows included — S19's editor. */
-  fullCategoryTree: readonly PhoneFullCategoryNode[];
-  categoryUsage: ReadonlyMap<Id<"categories">, number>;
-  categoryCollisions: readonly PhoneCategoryCollision[];
   counterparties: readonly PhoneCounterparty[];
   /**
    * Ordered by the account list, so the currency of your first account leads.
@@ -546,20 +507,52 @@ export type TransactionLineDraft = {
   amount: string;
   categoryId?: string | null;
 };
-/** What S19's rename sheet can save. */
-export type RenameCategoryDraft = { id: string; name: string };
 
-/** What S19's move sheet can save — `parentId: null` moves to the root. */
-export type MoveCategoryDraft = { id: string; parentId: string | null };
+/**
+ * Only the fields `AccountEditor` actually changed — the executor refuses an
+ * empty patch (`update-account.executor.ts`), and asking the screen to build
+ * this diff itself would be a second place that decides what "changed" means.
+ * `currency` is absent on purpose: S16 §7 has no in-place path for it.
+ */
+export type AccountPatch = Partial<{
+  name: string;
+  kind: AccountKind;
+  groupId: string | null;
+  ownership: CreateAccountInput["ownership"];
+  memo: string;
+  isBusiness: boolean;
+  openingBalance: string;
+  openingDate: string | null;
+}>;
 
-/** What S19's actions sheet can save for *Convert to group/leaf*. */
-export type ConvertCategoryDraft = { id: string; to: "leaf" | "group" };
+export type UpdateAccountDraft = {
+  id: string;
+  version: number;
+  patch: AccountPatch;
+};
 
-/** What S19's merge sheet can save, once the preview is confirmed. */
-export type MergeCategoryDraft = { loserId: string; winnerId: string };
+export type ArchiveAccountDraft = {
+  id: string;
+  version: number;
+};
 
-/** What S19's actions sheet can save for *Archive*. */
-export type ArchiveCategoryDraft = { id: string };
+/**
+ * *"I counted, and it says this"* — S16 §5. `categoryId` is optional: absent,
+ * the adjustment reads as uncategorised, same as any other transaction.
+ */
+export type ReconcileAccountDraft = {
+  accountId: string;
+  observedBalance: string;
+  /** `AccountingDate`'s shape (`YYYY-MM-DD`), defaulted by the sheet to today. */
+  asOf: string;
+  note: string;
+  categoryId: string | null;
+};
+
+export type CreateGroupDraft = {
+  name: string;
+  institution: string | null;
+};
 
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
@@ -576,21 +569,6 @@ export type PhoneLedgerController = {
   createCategory: (
     draft: CreateCategoryDraft,
   ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
-  renameCategory: (
-    draft: RenameCategoryDraft,
-  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
-  moveCategory: (
-    draft: MoveCategoryDraft,
-  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
-  convertCategory: (
-    draft: ConvertCategoryDraft,
-  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
-  mergeCategories: (
-    draft: MergeCategoryDraft,
-  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
-  archiveCategory: (
-    draft: ArchiveCategoryDraft,
-  ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
   /**
    * §5, on demand — not through the observable snapshot. `period` is the
    * screen's own state (S04 §7: only the lower row is period-scoped), so a
@@ -598,6 +576,12 @@ export type PhoneLedgerController = {
    * `refresh()` recomputes for every subscriber on every write.
    */
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /**
+   * S16 §5, on demand — `ReconcileSheet`'s "Computed" figure, refolded every
+   * time its own date field moves rather than fixed to the balance the sheet
+   * opened with.
+   */
+  balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
   /**
    * S10, on demand — like `readPeriodSpend` above, a query rather than a
    * snapshot field: a filtered, paged list is asked for, not held for every
@@ -624,8 +608,20 @@ export type PhoneLedgerController = {
     version: number,
     lines: readonly TransactionLineDraft[],
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
-  /** S19's merge sheet, on demand — the same "not through the snapshot" call. */
-  readCategoryReferenceCounts: (categoryId: string) => PhoneCategoryReferenceCounts;
+  updateAccount: (
+    draft: UpdateAccountDraft,
+  ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
+  archiveAccount: (
+    draft: ArchiveAccountDraft,
+  ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
+  reconcileAccount: (
+    draft: ReconcileAccountDraft,
+  ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
+  createGroup: (
+    draft: CreateGroupDraft,
+  ) => { id: Id<"accountGroups"> } | { fieldErrors: readonly FieldError[] };
+  /** S16's archived toggle — the one query nobody pays for until they ask. */
+  loadArchived: () => void;
   reset: () => void;
 };
 
@@ -675,115 +671,45 @@ function subtotalsOf(accounts: readonly PhoneAccount[]): readonly PhoneCurrencyS
 }
 
 /**
- * S19 §9.2's near-duplicate threshold — decided here rather than in the spec,
- * which names the mechanism (*"trigram similarity, ranked"*) but not a
- * number. `0.2` is D2's own threshold for a *loose* proposal (`Ania` should
- * surface `Nina`); a collision finder that flags a merge candidate wants to
- * be considerably more confident before naming two categories as possibly
- * the same thing, so this sits above it — but not so far above it that it
- * misses §9.2's own worked example: `jaccard(trigrams("groceries"),
- * trigrams("grocery"))` is `0.5` under this padding scheme, and a threshold
- * that let the spec's own motivating pair through unflagged would not be
- * doing its job.
+ * `update_account` and `archive_account`'s executor refusals, named onto a
+ * field — `architecture/12`'s contract, extended to a throw the executor
+ * makes rather than a `ZodError` the schema does. Neither refusal has a field
+ * of its own in `AccountEditor` to attach a raw message to (there is no
+ * `version` control on screen), so both carry a `messageKey` the screen
+ * resolves through `useT()` instead of the executor's own developer-facing
+ * text. `null` for anything else — an executor throw this controller does not
+ * recognise is a bug to surface loudly, not a refusal to swallow.
  */
-const COLLISION_THRESHOLD = 0.4;
-
-/**
- * The ratio alone is not enough. `Taxi`/`Tax` — real, seeded, unrelated
- * leaves — score `0.5` under `COLLISION_THRESHOLD` too: a short name has few
- * trigrams (`Tax` has four), so sharing its first two or three inflates the
- * *ratio* without the pair sharing much of anything structurally. `jaccard`
- * cannot tell "these overlap a lot, proportionally, because they are both
- * three letters" from "these overlap a lot because one is the other plus an
- * `s`" — a **count**, not a ratio, is what separates them: `Taxi`/`Tax` share
- * 3 trigrams; `Groceries`/`Grocery` (§9.2's own example) share 6.
- *
- * A minimum *folded length* was the other option this could have used —
- * `Taxi`/`Tax` are both under 5 characters, so a length floor would exclude
- * them too. Rejected: length is a proxy for "few trigrams", one step removed
- * from the actual mechanism, and a short *pair that genuinely overlaps a lot*
- * (there is no such pair in the seeded taxonomy today, but nothing rules one
- * out) would be excluded by a length floor for no reason connected to why it
- * scored high. Counting the overlap directly stays correct if that ever
- * happens; a length floor would still be guessing.
- */
-const MIN_SHARED_TRIGRAMS = 4;
-
-function sharedTrigramCount(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
-  let shared = 0;
-  for (const gram of a) {
-    if (b.has(gram)) shared++;
+function accountWriteRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  // `already archived` reaches here only from a race (a second tap before the
+  // screen re-rendered without an archived account's *Archive* button) — the
+  // account moved under the writer exactly the way a stale version did, so it
+  // reads as the same refusal rather than a second message to translate.
+  if (error.message.includes("stale version") || error.message.includes("already archived")) {
+    return { path: "version", message: error.message, messageKey: "accounts.staleVersion" };
   }
-  return shared;
+  if (error.message.includes("never business")) {
+    return {
+      path: "isBusiness",
+      message: error.message,
+      messageKey: "accounts.sharedNotBusiness",
+    };
+  }
+  return null;
 }
 
-/**
- * S19's collision finder. **Not scoped to one parent** — §9.2's own example
- * is `Groceries`/`Grocery`, "created months apart... under different
- * groups", which the sibling-uniqueness index cannot catch because it is
- * scoped to one parent (J12 §5). Scoped to **kind** and to **leaves**:
- * `merge_categories` refuses a group on either side, so a candidate outside
- * that scope is one the merge sheet could never act on.
- */
-function collisionsOf(
-  tree: readonly PhoneFullCategoryNode[],
-  usage: ReadonlyMap<Id<"categories">, number>,
-): readonly PhoneCategoryCollision[] {
-  const leaves = tree.filter((node) => node.isLeaf && !node.archived);
-  const grams = leaves.map((leaf) => trigrams(fold(leaf.name)));
-  const collisions: PhoneCategoryCollision[] = [];
-
-  for (let i = 0; i < leaves.length; i++) {
-    const a = leaves[i];
-    const aGrams = grams[i];
-    if (!a || !aGrams) continue;
-    for (let j = i + 1; j < leaves.length; j++) {
-      const b = leaves[j];
-      const bGrams = grams[j];
-      if (!b || !bGrams || b.kind !== a.kind) continue;
-      const score = jaccard(aGrams, bGrams);
-      if (score < COLLISION_THRESHOLD) continue;
-      if (sharedTrigramCount(aGrams, bGrams) < MIN_SHARED_TRIGRAMS) continue;
-      collisions.push({
-        a: { id: a.id, name: a.name, usageCount: usage.get(a.id) ?? 0 },
-        b: { id: b.id, name: b.name, usageCount: usage.get(b.id) ?? 0 },
-        score,
-      });
-    }
+/** `reconcile_account`'s one refusal — S16 §5: a zero difference lands on `observedBalance`. */
+function reconcileAccountRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("nothing to reconcile")) {
+    return {
+      path: "observedBalance",
+      message: error.message,
+      messageKey: "accounts.nothingToReconcile",
+    };
   }
-
-  return collisions.sort((x, y) => y.score - x.score);
-}
-
-/** The category a draft names, or `undefined` — every write below refuses on a miss. */
-function findCategory(
-  tree: readonly PhoneFullCategoryNode[],
-  id: string,
-): PhoneFullCategoryNode | undefined {
-  return tree.find((node) => node.id === id);
-}
-
-/**
- * Whether `targetParentId` is `categoryId` itself or one of its descendants —
- * `reparent_category`'s own `wouldCycle`, walked over the snapshot instead of
- * the replica so the refusal lands as a `fieldError` rather than a throw.
- */
-function wouldCycle(
-  tree: readonly PhoneFullCategoryNode[],
-  targetParentId: string,
-  categoryId: string,
-): boolean {
-  let cursor: string | null = targetParentId;
-  const seen = new Set<string>();
-
-  while (cursor !== null) {
-    if (cursor === categoryId) return true;
-    if (seen.has(cursor)) return false;
-    seen.add(cursor);
-    const node = findCategory(tree, cursor);
-    cursor = node?.parentId ?? null;
-  }
-  return false;
+  return null;
 }
 
 export function createPhoneLedger(
@@ -792,14 +718,12 @@ export function createPhoneLedger(
 ): PhoneLedgerController {
   let snapshot: PhoneLedgerSnapshot = {
     accounts: [],
+    archivedAccounts: [],
     currencies: [],
     groups: [],
     recent: [],
     categories: [],
     categoryTree: [],
-    fullCategoryTree: [],
-    categoryUsage: new Map(),
-    categoryCollisions: [],
     counterparties: [],
     subtotals: [],
     netWorth: [],
@@ -807,6 +731,10 @@ export function createPhoneLedger(
   };
   const listeners = new Set<() => void>();
   const { diagnostics } = runtime;
+  // Set once, by `loadArchived()` — S16's toggle. Kept across an ordinary
+  // `refresh()` so a write made with the section open does not collapse it;
+  // `reset()` below is the one place it goes back to `false`.
+  let archivedRequested = false;
 
   const refresh = () => {
     emitClientDiagnostic(diagnostics, {
@@ -815,26 +743,26 @@ export function createPhoneLedger(
       phase: "start",
     });
     try {
-      const accounts = port.listAccounts();
+      const rows = archivedRequested
+        ? port.listAccounts({ includeArchived: true })
+        : port.listAccounts();
+      const accounts = rows.filter((account) => !account.archived);
+      const archivedAccounts = archivedRequested ? rows.filter((account) => account.archived) : [];
       const currencies = port.listCurrencies();
       const capturable = new Set(
         currencies.filter((currency) => currency.capturable).map((currency) => currency.code),
       );
-      const fullCategoryTree = port.listFullCategoryTree();
-      const categoryUsage = port.listCategoryUsage();
       snapshot = {
         accounts: accounts.map((account) => ({
           ...account,
           capturable: capturable.has(account.currency),
         })),
+        archivedAccounts,
         currencies,
         groups: port.listGroups(),
         recent: port.listRecent(5),
         categories: port.listCategories(),
         categoryTree: port.listCategoryTree(),
-        fullCategoryTree,
-        categoryUsage,
-        categoryCollisions: collisionsOf(fullCategoryTree, categoryUsage),
         counterparties: port.listCounterparties(),
         subtotals: subtotalsOf(accounts),
         netWorth: port.listNetWorth(),
@@ -876,6 +804,7 @@ export function createPhoneLedger(
     },
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
+    balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     searchTransactions: (filter, cursor) =>
       port.searchTransactions(
         {
@@ -940,8 +869,6 @@ export function createPhoneLedger(
       }
     },
     getTransaction: (id) => port.getTransaction(id),
-    readCategoryReferenceCounts: (categoryId) =>
-      port.readCategoryReferenceCounts(brandId<"categories">(categoryId)),
     createAccount: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
@@ -981,6 +908,198 @@ export function createPhoneLedger(
         });
         throw error;
       }
+    },
+    updateAccount: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "update_account",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = updateAccountInput.safeParse({
+          id: draft.id,
+          version: draft.version,
+          patch: draft.patch,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_account",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.updateAccount(parsed.data, capture);
+        } catch (refusal) {
+          const fieldError = accountWriteRefusal(refusal);
+          if (!fieldError) throw refusal;
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_account",
+            phase: "success",
+          });
+          return { fieldErrors: [fieldError] };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_account",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    archiveAccount: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "archive_account",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = archiveAccountInput.safeParse({ id: draft.id, version: draft.version });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "archive_account",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.archiveAccount(parsed.data, capture);
+        } catch (refusal) {
+          const fieldError = accountWriteRefusal(refusal);
+          if (!fieldError) throw refusal;
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "archive_account",
+            phase: "success",
+          });
+          return { fieldErrors: [fieldError] };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "archive_account",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "archive_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    reconcileAccount: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "reconcile_account",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = reconcileAccountInput.safeParse({
+          accountId: draft.accountId,
+          adjustmentId: runtime.id<"transactions">(),
+          observedBalance: draft.observedBalance,
+          asOf: draft.asOf,
+          note: draft.note,
+          categoryId: draft.categoryId ?? undefined,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "reconcile_account",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.reconcileAccount(parsed.data, capture);
+        } catch (refusal) {
+          const fieldError = reconcileAccountRefusal(refusal);
+          if (!fieldError) throw refusal;
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "reconcile_account",
+            phase: "success",
+          });
+          return { fieldErrors: [fieldError] };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "reconcile_account",
+          phase: "success",
+        });
+        return { id: parsed.data.adjustmentId };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "reconcile_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    createGroup: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "create_group",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = createGroupInput.safeParse({
+          id: runtime.id<"accountGroups">(),
+          name: draft.name,
+          institution: draft.institution,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_group",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        port.createGroup(parsed.data, capture);
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_group",
+          phase: "success",
+        });
+        return { id: parsed.data.id };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "create_group",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    loadArchived: () => {
+      archivedRequested = true;
+      refresh();
     },
     createTransaction: (draft) => {
       emitClientDiagnostic(diagnostics, {
@@ -1315,351 +1434,6 @@ export function createPhoneLedger(
         throw error;
       }
     },
-    renameCategory: (draft) => {
-      emitClientDiagnostic(diagnostics, {
-        scope: "client_action",
-        action: "rename_category",
-        phase: "start",
-      });
-      try {
-        const current = findCategory(snapshot.fullCategoryTree, draft.id);
-        if (!current) {
-          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
-        }
-
-        /**
-         * **Refused here, before the write.** The executor has no
-         * field-scoped refusal channel — same pattern `createCategory` uses
-         * for the identical sibling-uniqueness index (J12 §5), scoped to
-         * parent and kind and excluding the node's own current name.
-         */
-        const target = fold(draft.name);
-        const collision = snapshot.fullCategoryTree.find(
-          (node) =>
-            node.id !== current.id &&
-            node.parentId === current.parentId &&
-            node.kind === current.kind &&
-            fold(node.name) === target,
-        );
-        if (collision) {
-          return {
-            fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
-          };
-        }
-
-        const capture = runtime.capture();
-        const parsed = renameCategoryInput.safeParse({
-          id: draft.id,
-          version: current.version,
-          name: draft.name,
-        });
-        if (!parsed.success) {
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
-        }
-        port.renameCategory(parsed.data, capture);
-        refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "rename_category",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
-      } catch (error) {
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "rename_category",
-          phase: "failure",
-          error: clientFailure(error),
-        });
-        throw error;
-      }
-    },
-    moveCategory: (draft) => {
-      emitClientDiagnostic(diagnostics, {
-        scope: "client_action",
-        action: "reparent_category",
-        phase: "start",
-      });
-      try {
-        const current = findCategory(snapshot.fullCategoryTree, draft.id);
-        if (!current) {
-          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
-        }
-
-        // TAXONOMY.md R2 — two levels only. A group may sit at the root and
-        // nowhere else; the actions sheet never offers Move for one, but the
-        // executor's own guarantee stays mirrored here too.
-        if (!current.isLeaf && draft.parentId !== null) {
-          return {
-            fieldErrors: [
-              {
-                path: "parentId",
-                message: `"${current.name}" is a group — a group may only sit at the root`,
-              },
-            ],
-          };
-        }
-
-        if (draft.parentId !== null) {
-          const parent = findCategory(snapshot.fullCategoryTree, draft.parentId);
-          if (!parent) {
-            return { fieldErrors: [{ path: "parentId", message: "Choose a group" }] };
-          }
-          if (parent.isLeaf) {
-            return {
-              fieldErrors: [{ path: "parentId", message: `"${parent.name}" is not a group` }],
-            };
-          }
-          if (parent.kind !== current.kind) {
-            return {
-              fieldErrors: [
-                {
-                  path: "parentId",
-                  message: `"${parent.name}" is a ${parent.kind} group — refused across kinds`,
-                },
-              ],
-            };
-          }
-          if (wouldCycle(snapshot.fullCategoryTree, draft.parentId, draft.id)) {
-            return {
-              fieldErrors: [
-                {
-                  path: "parentId",
-                  message: `"${parent.name}" is inside "${current.name}" — that would make the tree a cycle`,
-                },
-              ],
-            };
-          }
-        }
-
-        const capture = runtime.capture();
-        const parsed = reparentCategoryInput.safeParse({
-          id: draft.id,
-          version: current.version,
-          parentId: draft.parentId,
-        });
-        if (!parsed.success) {
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
-        }
-        port.reparentCategory(parsed.data, capture);
-        refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "reparent_category",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
-      } catch (error) {
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "reparent_category",
-          phase: "failure",
-          error: clientFailure(error),
-        });
-        throw error;
-      }
-    },
-    convertCategory: (draft) => {
-      emitClientDiagnostic(diagnostics, {
-        scope: "client_action",
-        action: "convert_leaf_group",
-        phase: "start",
-      });
-      try {
-        const current = findCategory(snapshot.fullCategoryTree, draft.id);
-        if (!current) {
-          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
-        }
-
-        if (draft.to === "group") {
-          /**
-           * **The same usage count the `Tag` already shows the person**, not
-           * a second, raw reference count — the number this refusal names is
-           * the one they have already seen, and the executor stays the final
-           * authority if a leftover reference this count does not see (a
-           * split transaction's now-unused top-level category, §6) still
-           * refuses the write.
-           */
-          const referenced = snapshot.categoryUsage.get(current.id) ?? 0;
-          if (referenced > 0) {
-            return {
-              fieldErrors: [
-                {
-                  path: "id",
-                  message: `${referenced} transaction(s) use "${current.name}" — recategorise or merge first`,
-                },
-              ],
-            };
-          }
-        } else {
-          const children = snapshot.fullCategoryTree.filter(
-            (node) => node.parentId === current.id,
-          ).length;
-          if (children > 0) {
-            return {
-              fieldErrors: [
-                {
-                  path: "id",
-                  message: `"${current.name}" has ${children} categor${children === 1 ? "y" : "ies"} inside it`,
-                },
-              ],
-            };
-          }
-        }
-
-        const capture = runtime.capture();
-        const parsed = convertLeafGroupInput.safeParse({
-          id: draft.id,
-          version: current.version,
-          to: draft.to,
-        });
-        if (!parsed.success) {
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
-        }
-        port.convertLeafGroup(parsed.data, capture);
-        refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "convert_leaf_group",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
-      } catch (error) {
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "convert_leaf_group",
-          phase: "failure",
-          error: clientFailure(error),
-        });
-        throw error;
-      }
-    },
-    mergeCategories: (draft) => {
-      emitClientDiagnostic(diagnostics, {
-        scope: "client_action",
-        action: "merge_categories",
-        phase: "start",
-      });
-      try {
-        const loser = findCategory(snapshot.fullCategoryTree, draft.loserId);
-        const winner = findCategory(snapshot.fullCategoryTree, draft.winnerId);
-        if (!loser || !winner) {
-          return {
-            fieldErrors: [{ path: "winnerId", message: "Choose a category to merge into" }],
-          };
-        }
-        if (loser.id === winner.id) {
-          return { fieldErrors: [{ path: "winnerId", message: "Choose a different category" }] };
-        }
-        if (loser.archived) {
-          return {
-            fieldErrors: [{ path: "loserId", message: `"${loser.name}" is already archived` }],
-          };
-        }
-        if (winner.archived) {
-          return {
-            fieldErrors: [{ path: "winnerId", message: `"${winner.name}" is archived` }],
-          };
-        }
-        if (!loser.isLeaf || !winner.isLeaf) {
-          return {
-            fieldErrors: [
-              { path: "winnerId", message: "Only leaves hold transactions — refused on a group" },
-            ],
-          };
-        }
-        if (loser.kind !== winner.kind) {
-          return {
-            fieldErrors: [
-              {
-                path: "winnerId",
-                message: `"${winner.name}" is ${winner.kind}, "${loser.name}" is ${loser.kind} — refused across kinds`,
-              },
-            ],
-          };
-        }
-
-        const capture = runtime.capture();
-        const parsed = mergeCategoriesInput.safeParse({
-          loserId: draft.loserId,
-          winnerId: draft.winnerId,
-        });
-        if (!parsed.success) {
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
-        }
-        port.mergeCategories(parsed.data, capture);
-        refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "merge_categories",
-          phase: "success",
-        });
-        return { id: parsed.data.winnerId };
-      } catch (error) {
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "merge_categories",
-          phase: "failure",
-          error: clientFailure(error),
-        });
-        throw error;
-      }
-    },
-    archiveCategory: (draft) => {
-      emitClientDiagnostic(diagnostics, {
-        scope: "client_action",
-        action: "archive_category",
-        phase: "start",
-      });
-      try {
-        const current = findCategory(snapshot.fullCategoryTree, draft.id);
-        if (!current) {
-          return { fieldErrors: [{ path: "id", message: "This category no longer exists" }] };
-        }
-        if (current.archived) {
-          return {
-            fieldErrors: [{ path: "id", message: `"${current.name}" is already archived` }],
-          };
-        }
-        if (!current.isLeaf) {
-          const unarchivedChildren = snapshot.fullCategoryTree.filter(
-            (node) => node.parentId === current.id && !node.archived,
-          ).length;
-          if (unarchivedChildren > 0) {
-            return {
-              fieldErrors: [
-                {
-                  path: "id",
-                  message: `"${current.name}" has ${unarchivedChildren} unarchived categor${unarchivedChildren === 1 ? "y" : "ies"} inside it`,
-                },
-              ],
-            };
-          }
-        }
-
-        const capture = runtime.capture();
-        const parsed = archiveCategoryInput.safeParse({ id: draft.id, version: current.version });
-        if (!parsed.success) {
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
-        }
-        port.archiveCategory(parsed.data, capture);
-        refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "archive_category",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
-      } catch (error) {
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "archive_category",
-          phase: "failure",
-          error: clientFailure(error),
-        });
-        throw error;
-      }
-    },
     reset: () => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
@@ -1668,6 +1442,9 @@ export function createPhoneLedger(
       });
       try {
         port.reset();
+        // A wiped ledger has nothing archived to show — the toggle starts
+        // collapsed again, the same as a fresh launch.
+        archivedRequested = false;
         refresh();
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",

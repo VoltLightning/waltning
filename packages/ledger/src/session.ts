@@ -1,49 +1,42 @@
+import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type {
   ClearingAccountRow,
   CurrencyCode,
+  Money,
   Period,
   PeriodSpendRow,
 } from "@waltning/core/money";
 import type {
-  ArchiveCategoryInput,
+  ArchiveAccountInput,
   CategorizeBatchInput,
-  ConvertLeafGroupInput,
   CreateAccountInput,
   CreateCategoryInput,
+  CreateGroupInput,
   CreateTransactionInput,
   DeleteTransactionInput,
-  MergeCategoriesInput,
-  RenameCategoryInput,
-  ReparentCategoryInput,
+  ReconcileAccountInput,
   SetTransactionLinesInput,
+  UpdateAccountInput,
   UpdateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
 import { currencies } from "@waltning/schema/sqlite/currencies";
+import { archiveAccountExecutor } from "./accounts/archive-account.executor.ts";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
+import { createGroupExecutor, type LocalGroupRow } from "./accounts/create-group.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
+import { readBalanceAsOf } from "./accounts/read-balance-as-of.ts";
 import { type LocalGroup, readGroups } from "./accounts/read-groups.ts";
 import { type LocalNetWorth, readNetWorth } from "./accounts/read-net-worth.ts";
 import { readUnsettledClearing } from "./accounts/read-unsettled-clearing.ts";
-import { archiveCategoryExecutor } from "./categories/archive-category.executor.ts";
-import { convertLeafGroupExecutor } from "./categories/convert-leaf-group.executor.ts";
+import { reconcileAccountExecutor } from "./accounts/reconcile-account.executor.ts";
+import { updateAccountExecutor } from "./accounts/update-account.executor.ts";
 import {
   createCategoryExecutor,
   type LocalCategoryRow,
 } from "./categories/create-category.executor.ts";
-import {
-  type MergeCategoriesResult,
-  mergeCategoriesExecutor,
-} from "./categories/merge-categories.executor.ts";
-import {
-  type CategoryReferenceCounts,
-  readCategoryReferenceCounts,
-} from "./categories/read-category-reference-counts.ts";
 import { type LocalCategory, readCategoryTree } from "./categories/read-category-tree.ts";
-import { readCategoryUsage } from "./categories/read-category-usage.ts";
-import { renameCategoryExecutor } from "./categories/rename-category.executor.ts";
-import { reparentCategoryExecutor } from "./categories/reparent-category.executor.ts";
 import {
   type LocalCounterparty,
   readCounterparties,
@@ -112,25 +105,13 @@ export type LocalCapturableCategory = {
 };
 
 export type LocalLedgerSession = {
-  listAccounts: () => readonly LocalAccountSummary[];
+  listAccounts: (options?: { includeArchived?: boolean }) => readonly LocalAccountSummary[];
   listCurrencies: () => readonly LocalCurrency[];
   listGroups: () => readonly LocalGroup[];
   listRecent: (limit: number) => readonly LocalRecentTransaction[];
   listCategories: () => readonly LocalCapturableCategory[];
-  /** The whole tree — groups and leaves both, archived excluded — for S06's sheet. See `readCategoryTree`. */
+  /** The whole tree — groups and leaves both — for S06's sheet. See `readCategoryTree`. */
   listCategoryTree: () => readonly LocalCategory[];
-  /**
-   * The whole tree **with archived rows** — S19's editor, which has its own
-   * archived toggle and is the one screen where "offerable" is not the
-   * question. `listCategoryTree` above stays archived-excluded because its
-   * only consumer today is a picker, where an archived category must never
-   * appear (`TAXONOMY.md` R2).
-   */
-  listFullCategoryTree: () => readonly LocalCategory[];
-  /** How many live rows touch each category — see `readCategoryUsage`. */
-  listCategoryUsage: () => ReadonlyMap<Id<"categories">, number>;
-  /** The merge preview's exact pre-write counts — see `readCategoryReferenceCounts`. */
-  readCategoryReferenceCounts: (categoryId: Id<"categories">) => CategoryReferenceCounts;
   listCounterparties: () => readonly LocalCounterparty[];
   /** §3, per currency — C2's hero (`DualTotal`), not the phone-preview's single subtotal. */
   listNetWorth: () => readonly LocalNetWorth[];
@@ -138,6 +119,8 @@ export type LocalLedgerSession = {
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
   /** §8, minus FIFO attribution — C2's unsettled banner. */
   listUnsettledClearing: () => readonly ClearingAccountRow[];
+  /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
+  balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
   /** C4 — S10's list. A query, not a snapshot field: a filtered page is asked for, not held. */
   searchTransactions: (
     filter: TransactionSearchFilter,
@@ -156,11 +139,10 @@ export type LocalLedgerSession = {
   updateTransaction: (input: UpdateTransactionInput, capture: Capture) => LocalTransactionRow;
   deleteTransaction: (input: DeleteTransactionInput, capture: Capture) => LocalTransactionRow;
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
-  renameCategory: (input: RenameCategoryInput, capture: Capture) => LocalCategoryRow;
-  reparentCategory: (input: ReparentCategoryInput, capture: Capture) => LocalCategoryRow;
-  convertLeafGroup: (input: ConvertLeafGroupInput, capture: Capture) => LocalCategoryRow;
-  mergeCategories: (input: MergeCategoriesInput, capture: Capture) => MergeCategoriesResult;
-  archiveCategory: (input: ArchiveCategoryInput, capture: Capture) => LocalCategoryRow;
+  updateAccount: (input: UpdateAccountInput, capture: Capture) => LocalAccountRow;
+  archiveAccount: (input: ArchiveAccountInput, capture: Capture) => LocalAccountRow;
+  reconcileAccount: (input: ReconcileAccountInput, capture: Capture) => LocalTransactionRow;
+  createGroup: (input: CreateGroupInput, capture: Capture) => LocalGroupRow;
   reset: () => void;
   close: () => void;
 };
@@ -274,7 +256,7 @@ export function createLocalLedgerSession<TRun>(
   };
 
   return {
-    listAccounts: () => readAccounts(requireOpen().replica.db),
+    listAccounts: (listOptions) => readAccounts(requireOpen().replica.db, listOptions),
     listCurrencies: () => readCurrencies(requireOpen().replica.db),
     listGroups: () => readGroups(requireOpen().replica.db),
     listRecent: (limit) => readRecent(requireOpen().replica.db, limit),
@@ -287,14 +269,11 @@ export function createLocalLedgerSession<TRun>(
     // is exactly where "offerable" matters.
     listCategoryTree: () =>
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
-    listFullCategoryTree: () => readCategoryTree(requireOpen().replica.db),
-    listCategoryUsage: () => readCategoryUsage(requireOpen().replica.db),
-    readCategoryReferenceCounts: (categoryId) =>
-      readCategoryReferenceCounts(requireOpen().replica.db, categoryId),
     listCounterparties: () => readCounterparties(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
+    balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
     searchTransactions: (filter, cursor) =>
       searchTransactions(requireOpen().replica.db, filter, cursor),
     getTransaction: (id) => readTransaction(requireOpen().replica.db, id),
@@ -330,14 +309,6 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
-    renameCategory: (input, capture) =>
-      writeLocally(requireOpen(), {
-        executor: renameCategoryExecutor,
-        registry: ledgerRegistry,
-        input,
-        capture,
-        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
-      }).row,
     updateTransaction: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: updateTransactionExecutor,
@@ -346,9 +317,9 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
-    reparentCategory: (input, capture) =>
+    updateAccount: (input, capture) =>
       writeLocally(requireOpen(), {
-        executor: reparentCategoryExecutor,
+        executor: updateAccountExecutor,
         registry: ledgerRegistry,
         input,
         capture,
@@ -362,9 +333,9 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
-    convertLeafGroup: (input, capture) =>
+    archiveAccount: (input, capture) =>
       writeLocally(requireOpen(), {
-        executor: convertLeafGroupExecutor,
+        executor: archiveAccountExecutor,
         registry: ledgerRegistry,
         input,
         capture,
@@ -378,17 +349,17 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
-    mergeCategories: (input, capture) =>
+    reconcileAccount: (input, capture) =>
       writeLocally(requireOpen(), {
-        executor: mergeCategoriesExecutor,
+        executor: reconcileAccountExecutor,
         registry: ledgerRegistry,
         input,
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
-    archiveCategory: (input, capture) =>
+    createGroup: (input, capture) =>
       writeLocally(requireOpen(), {
-        executor: archiveCategoryExecutor,
+        executor: createGroupExecutor,
         registry: ledgerRegistry,
         input,
         capture,

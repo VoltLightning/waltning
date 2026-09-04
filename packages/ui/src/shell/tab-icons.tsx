@@ -69,28 +69,6 @@ export function DebtTabIcon({ active = false }: TabIconProps) {
   );
 }
 
-/**
- * `Settings` — two slider tracks, offset knobs. The classic controls mark,
- * drawn the same way as every other glyph here: bars and soft squares, the
- * knob a `radius.xs` square rather than the round thumb a real slider draws.
- */
-export function SettingsTabIcon({ active = false }: TabIconProps) {
-  const styles = useStyles();
-  const fill = active ? styles.fillActive : styles.fillInactive;
-  return (
-    <View style={styles.sliders}>
-      <View style={styles.sliderTrack}>
-        <View style={[styles.sliderTrackLine, fill]} />
-        <View style={[styles.sliderKnob, fill, styles.sliderKnobNear]} />
-      </View>
-      <View style={styles.sliderTrack}>
-        <View style={[styles.sliderTrackLine, fill]} />
-        <View style={[styles.sliderKnob, fill, styles.sliderKnobFar]} />
-      </View>
-    </View>
-  );
-}
-
 const useStyles = makeStyles((theme) => ({
   fillActive: { backgroundColor: theme.accentText },
   fillInactive: { backgroundColor: theme.textMuted },
@@ -145,17 +123,4 @@ const useStyles = makeStyles((theme) => ({
     height: 8,
     transform: [{ translateX: 3 }, { rotate: "-45deg" }],
   },
-
-  /** `Settings` — two slider tracks, a square knob offset on each. */
-  sliders: {
-    width: SIZE,
-    height: SIZE,
-    justifyContent: "space-around",
-    paddingVertical: space.xxs,
-  },
-  sliderTrack: { height: 2, justifyContent: "center" },
-  sliderTrackLine: { height: 2, borderRadius: radius.xs },
-  sliderKnob: { position: "absolute", width: 4, height: 8, borderRadius: radius.xs },
-  sliderKnobNear: { left: 5 },
-  sliderKnobFar: { left: 13 },
 }));

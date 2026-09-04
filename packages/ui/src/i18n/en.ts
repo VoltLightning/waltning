@@ -92,6 +92,38 @@ export const en = {
     openingDateInvalid: "Enter a date as YYYY-MM-DD.",
     group: "Group",
     noGroup: "No group",
+    /** `BalanceRow`'s own tags — S16 §4: `BIZ` · clearing's amber marker. */
+    tagBiz: "BIZ",
+    tagUnsettled: "Unsettled",
+    /** `SharedGroup`'s heading — S16 §3, distinct but not diminished. */
+    shared: "Shared",
+    /**
+     * The archived toggle. `archivedShow` is the collapsed button, before
+     * `loadArchived()` has ever run — the count is not known yet, which is
+     * the whole point of loading lazily. `archivedCount` is the expanded
+     * heading once it has, and doubles as the tap target that collapses it
+     * again — no second query, the rows stay in the snapshot.
+     */
+    archivedShow: "Archived",
+    archivedCount: "Archived ({{count}})",
+    archive: "Archive",
+    archivedToast: "Account archived.",
+    reconcile: "Reconcile…",
+    reconcileTitle: "Reconcile",
+    computed: "Computed",
+    observed: "You observed",
+    difference: "Difference",
+    asOf: "As of",
+    newGroup: "+ New group",
+    addGroup: "Add group",
+    /** S16 §5 — shown above Save whenever the opening balance or date changed; not a dialog. */
+    openingConfirm: "Changing this moves every balance from this date forward.",
+    /** Field-error `messageKey`s the two write screens resolve — `architecture/12`. */
+    staleVersion: "This account changed elsewhere — reload and try again.",
+    sharedNotBusiness: "A shared account is never business.",
+    nothingToReconcile: "The ledger already shows this balance.",
+    /** S16 §5's last observation — `accounts.expected_balance`, no date column to pair it with yet. */
+    lastObserved: "Last observed:",
   },
   transactions: {
     amount: "Amount",
@@ -204,39 +236,6 @@ export const en = {
     noMatchBody: 'Nothing here matches "{{query}}".',
     /** The create row's group chooser, shown when no group chip narrowed the sheet first. */
     chooseGroup: "Choose a group",
-    /** S19's archived toggle. */
-    showArchived: "Show archived",
-    /** `Tag` variants over a leaf — usage count, archived, unused. */
-    archived: "Archived",
-    unused: "Unused",
-    usageOne: "{{count}} transaction",
-    usageMany: "{{count}} transactions",
-    /** The trailing `IconButton`'s accessible name — never a bare "more". */
-    actionsFor: "{{name}} actions",
-    /** The actions sheet's five verbs (S19 §3). */
-    rename: "Rename",
-    move: "Move",
-    convertToGroup: "Convert to group",
-    convertToLeaf: "Convert to leaf",
-    merge: "Merge",
-    archive: "Archive",
-    /** The move sheet's target picker. */
-    moveTargetLabel: "Group",
-    moveTargetPlaceholder: "Choose a group",
-    /** The merge sheet's winner picker and preview. */
-    mergeWinnerLabel: "Merge into",
-    mergeWinnerPlaceholder: "Choose a category",
-    mergeRowTransactions: "Transactions",
-    mergeRowLines: "Lines",
-    mergeRowRules: "Rules",
-    /** §7 — stated before commit, not after. */
-    mergeConfirmTitle: "This can't be undone in one step",
-    mergeConfirmBody:
-      "Every transaction, line and rule on “{{loser}}” moves to “{{winner}}”, and “{{loser}}” is archived. Correct a bad merge by running it again with the names swapped.",
-    mergeConfirmAction: "Merge",
-    /** §9.2 — the near-duplicate finder above the tree. */
-    collisionsTitle: "Possibly the same category",
-    collisionsReview: "Review",
   },
   shell: {
     today: "Today",
@@ -303,13 +302,13 @@ export const en = {
   routes: {
     expense: "Expense",
     createAccount: "Create account",
+    accounts: "Accounts",
+    editAccount: "Edit account",
     ledger: "Ledger",
     calendar: "Calendar",
     debt: "Debt",
     /** S09's nav title — no page heading repeats it (`TransactionHero` already states the amount). */
     transaction: "Transaction",
-    settings: "Settings",
-    categories: "Categories",
   },
   states: {
     /**

@@ -13,6 +13,7 @@ import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
+import { toMoney } from "@waltning/core/money";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
 import { Text } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,14 +48,11 @@ function fakeController() {
       listGroups: () => [],
       listRecent: () => [],
       listCategories: () => [],
-      listCategoryTree: () => [],
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
       listCounterparties: () => [],
       listNetWorth: () => [],
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
+      balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],
         nextCursor: undefined,
@@ -63,16 +61,16 @@ function fakeController() {
       categorizeBatch: () => undefined,
       createAccount: () => undefined,
       createTransaction: () => undefined,
+      listCategoryTree: () => [],
       createCategory: () => undefined,
       getTransaction: () => null,
       updateTransaction: () => undefined,
       deleteTransaction: () => undefined,
       setTransactionLines: () => undefined,
-      renameCategory: () => undefined,
-      reparentCategory: () => undefined,
-      convertLeafGroup: () => undefined,
-      mergeCategories: () => undefined,
-      archiveCategory: () => undefined,
+      updateAccount: () => undefined,
+      archiveAccount: () => undefined,
+      reconcileAccount: () => undefined,
+      createGroup: () => undefined,
       reset: () => undefined,
     },
     {

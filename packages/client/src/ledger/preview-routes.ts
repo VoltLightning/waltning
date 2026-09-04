@@ -2,6 +2,7 @@ export type RouteValue = string | string[] | undefined;
 
 export type NewAccountRoute =
   | { valid: true; returnTo: "today"; amount: undefined; accountId: undefined }
+  | { valid: true; returnTo: "accounts"; amount: undefined; accountId: undefined }
   | { valid: true; returnTo: "quick-add"; amount: string; accountId: string | undefined }
   | { valid: false; message: string };
 
@@ -22,6 +23,11 @@ export function parseNewAccountRoute(params: {
   const noDraft = params.amount === undefined && params.accountId === undefined;
   if ((params.returnTo === undefined || returnTo === "today") && noDraft) {
     return { valid: true, returnTo: "today", amount: undefined, accountId: undefined };
+  }
+  // S16's empty register — `+ Create account`, with nothing to restore
+  // afterward but the register itself.
+  if (returnTo === "accounts" && noDraft) {
+    return { valid: true, returnTo: "accounts", amount: undefined, accountId: undefined };
   }
   if (returnTo === "quick-add") {
     const amount = one(params.amount);

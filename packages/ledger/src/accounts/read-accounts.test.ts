@@ -121,4 +121,38 @@ describe("readAccounts", () => {
     expect(result.map((account) => account.id)).toEqual([ACCOUNT_B, SAME_A, SAME_B, ACCOUNT_A]);
     expect(result.map((account) => account.id)).not.toContain(ARCHIVED);
   });
+
+  it("carries groupId, ownership, archived and expectedBalance", () => {
+    const result = readAccounts(stores.ledger.replica.db);
+    const walletUsd = result.find((account) => account.id === ACCOUNT_A);
+
+    expect(walletUsd).toMatchObject({
+      groupId: null,
+      ownership: "own",
+      isBusiness: false,
+      archived: false,
+      expectedBalance: null,
+    });
+  });
+
+  it("carries openingBalance, openingDate, memo and version — AccountEditor's own fields", () => {
+    const result = readAccounts(stores.ledger.replica.db);
+    const walletUsd = result.find((account) => account.id === ACCOUNT_A);
+
+    expect(walletUsd).toMatchObject({
+      openingBalance: money.toMoney("100"),
+      openingDate: null,
+      memo: "",
+      version: 1,
+    });
+  });
+
+  it("includes archived accounts only when asked", () => {
+    const withoutArchived = readAccounts(stores.ledger.replica.db);
+    expect(withoutArchived.map((account) => account.id)).not.toContain(ARCHIVED);
+
+    const withArchived = readAccounts(stores.ledger.replica.db, { includeArchived: true });
+    const archived = withArchived.find((account) => account.id === ARCHIVED);
+    expect(archived).toMatchObject({ id: ARCHIVED, archived: true });
+  });
 });
