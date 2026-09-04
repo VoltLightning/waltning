@@ -146,6 +146,14 @@ canvas for fifteen seconds is indistinguishable from a hang.**
 | Tool running | Names the tool — `search_transactions · 1.2 s` |
 | Streaming | Text as it arrives |
 
+Thinking and tool running both carry a dot beside the label that steps one,
+two, three, drop — `.` → `..` → `...` → nothing — on a 250 ms beat and
+repeats, so the row reads as a live count rather than a fixed decoration. The
+dot's own box holds the width of three periods at every step, so the label
+beside it never shifts as the count changes. Streaming gets no dot: the text
+arriving is already the sign of life, and a stepping dot beside moving text
+would be two signals for one fact.
+
 After 20 s: an explicit *still working* with a **cancel**. Every phase needs a
 `motion-none` branch (§2.7).
 

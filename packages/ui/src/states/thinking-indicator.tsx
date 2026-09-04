@@ -8,43 +8,24 @@
  * 1.2 s`, pre-formatted by the caller, who knows the exact tool and its own
  * timing) and `streaming` (the text as it arrives, handed straight through).
  *
- * **The three dots — a messaging-app typing indicator, not a fade pulse.**
- * `thinking` and `tool` both get them, beside the label — `streaming` does
- * not, because text arriving is its own sign of life and a bouncing dot
- * beside moving text would be two signals for one fact.
+ * **The dots are text, not a set of components.** `thinking` and `tool` both
+ * get them, beside the label — `streaming` does not, because text arriving is
+ * its own sign of life and a stepping dot beside moving text would be two
+ * signals for one fact. One dot, two dots, three dots, drop: the count steps
+ * `.` → `..` → `...` → `` (empty) on a fixed 250 ms beat and repeats, a plain
+ * `setInterval` advancing a string, not an animated value — there is nothing
+ * here for Reanimated to own.
  *
- * The first cut had each dot own its own `withRepeat(withSequence(…))` chain
- * — three independent timers, all cutting to zero together every 900 ms and
- * restarting: jagged on the web (Reanimated's JS driver), and the owner's own
- * read of it was *"circulates three two one two one two three"*. This is
- * **one shared clock** — a single `withRepeat(withTiming(1, { duration: 900,
- * easing: Easing.linear }), -1)` — and each dot derives its own opacity and
- * lift from it in its own `useAnimatedStyle`, so nothing restarts and no two
- * dots ever move in the same direction at the same instant.
+ * **The row must not shift as the count changes.** A `Text` two characters
+ * wide sitting next to a three-character one moves whatever comes after it,
+ * and the thing after it is the label the reader is trying to read. So the
+ * dots sit in their own box, sized once by an invisible `...` — the widest
+ * step — laid out normally to claim the width, with the real, stepping text
+ * overlaid on top of it via `position: "absolute"`. The box's width never
+ * changes; only what is painted inside it does.
  *
- * **The motion, named: each dot lifts and settles**, `translateY` 0 → −3 →
- * 0 with opacity 0.45 → 1 → 0.45, `Easing.inOut(Easing.quad)`-shaped — the
- * classic Messenger/iMessage wave. Dot *i* sits at phase `i / 3` of the
- * cycle — equal thirds, a true circular 1 → 2 → 3 with no dot favoured — so
- * the wave always reads left to right, never backwards. Each dot's own
- * rise-and-fall window (half-width 0.4) is wider than the third-of-a-cycle
- * spacing between dots, so adjacent dots' windows overlap all the way around
- * the loop and at no instant are all three at rest together: the row never
- * goes flat, and nothing cuts.
- *
- * `envelope` is the shared shape, plain arithmetic with no Reanimated
- * `interpolate` in it (that call is a no-op in this package's test
- * environment, so a function the tests must exercise for real cannot depend
- * on it): a dot's own window is a triangle centred on `phase`, ±`HALF_WIDTH`,
- * mapped through `Easing.inOut(Easing.quad)`. It is evaluated at `t`, `t − 1`
- * and `t + 1` and the max taken, so a window that straddles the 0/1 loop
- * point (dot 1's own) reads continuously across it rather than jumping. §2.7
- * permits a loop only for *loading*, which this is; every other animation in
- * the package plays once. The dots are `radius.pill` — the fourth circular
- * exception `02-tokens.md` §2.4 now names, beside the radio, the switch and
- * the add button — and they are decorative: the row's own
- * `accessibilityLabel` already says *thinking*, so a screen reader is never
- * asked to parse three unlabelled dots.
+ * Reduced motion renders a static `…` and starts no interval at all — not a
+ * loop frozen on its first frame, an actual absence of one.
  *
  * **`elapsedMs` is a prop, not a clock this component owns**, so a test can
  * assert the 20 s cancel affordance without waiting 20 real seconds — the
@@ -52,23 +33,14 @@
  * anyway) is the one honest owner of "how long has this been running".
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import Animated, {
-  Easing,
-  interpolate,
-  type SharedValue,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useReducedMotion } from "../primitives/reduced-motion.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { radius, space } from "../tokens.ts";
+import { space } from "../tokens.ts";
 
 export type ThinkingPhase = "thinking" | "tool" | "streaming";
 
@@ -86,100 +58,49 @@ export type ThinkingIndicatorProps = {
 const TIMER_AFTER_MS = 2_000;
 const CANCEL_AFTER_MS = 20_000;
 
-/** The clock's own cycle. Runs 0→1 on a single `withRepeat`, shared by all three dots. */
-const CYCLE = 900;
-/** How far a lifted dot rises. Reserved as `marginTop` on the row so it never reflows the label. */
-const LIFT = 3;
-/** A resting dot's opacity — never fully dark, so the row always reads as three dots, not a gap. */
-const MIN_OPACITY = 0.45;
-/**
- * Dot *i*'s phase within the cycle, equal thirds apart — 0, 1/3, 2/3 — a true
- * circular 1 → 2 → 3 with no dot favoured over another.
- */
-const DOT_PHASES = [0, 1 / 3, 2 / 3] as const;
-/**
- * Half the width of one dot's own rise-and-fall window — wider than the
- * third-of-a-cycle stagger between dots, so consecutive dots' windows
- * overlap all the way around the loop and the row is never simultaneously
- * at rest.
- */
-const HALF_WIDTH = 0.4;
-
-const liftEasing = Easing.inOut(Easing.quad);
+/** One step of the beat. Widest last, which is also what sizes the box below. */
+const DOT_STEPS = [".", "..", "...", ""] as const;
+/** The beat itself — a 1 s cycle across the four steps above. */
+const STEP_MS = 250;
+/** What reduced motion shows instead: one static glyph, no interval running. */
+const REDUCED_MOTION_DOTS = "…";
 
 /**
- * A linear triangle centred on `phase`: 1 at `phase`, falling to 0 at
- * `phase ± HALF_WIDTH`, 0 beyond it. Plain arithmetic, deliberately not
- * Reanimated's `interpolate` — that call is a no-op in this package's test
- * stand-in, so a shape the tests must exercise for real cannot be built from
- * it.
- */
-function triangle(t: number, phase: number): number {
-  "worklet";
-  const distance = Math.abs(t - phase) / HALF_WIDTH;
-  return distance >= 1 ? 0 : 1 - distance;
-}
-
-/**
- * Dot at `phase`'s lift-and-settle envelope at clock position `t` (0..1) —
- * 0 at rest, 1 at the peak of its own rise, `Easing.inOut(Easing.quad)`-shaped
- * rather than a linear tent.
+ * Steps `DOT_STEPS` on a plain interval — no Reanimated involved, because
+ * nothing here is a continuous value, only a string that changes four times a
+ * second. Starts at index 0 (`.`) so the first paint already shows a dot
+ * rather than a beat of nothing.
  *
- * `triangle` is evaluated at `t`, `t − 1` and `t + 1` and the max taken,
- * which is what lets a window straddle the loop's 0/1 seam — dot 1's own,
- * whose window runs from before 0 to after it — without a discontinuity.
+ * The interval is cleared on unmount, and `ThinkingDots` is only ever mounted
+ * for `thinking`/`tool` — so a caller moving to `streaming` unmounts it and
+ * clears the interval by the same mechanism, not a second one.
  */
-export function envelope(t: number, phase: number): number {
-  "worklet";
-  const raw = Math.max(triangle(t, phase), triangle(t - 1, phase), triangle(t + 1, phase));
-  return liftEasing(raw);
-}
-
-/**
- * The one shared clock — a single `withRepeat`'d `withTiming`, read by all
- * three dots. `useEffect`, not a worklet: exactly how `Toggle`'s
- * `progress.value = withTiming(…)` assigns an animation builder's result to
- * a shared value from the JS thread.
- */
-function useDotClock(reduced: boolean): SharedValue<number> {
-  const clock = useSharedValue(0);
+function useThinkingDots(reduced: boolean): string {
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
-    if (reduced) return; // The `motion-none` branch (§2.7) — a loop nobody asked to keep running.
-    clock.value = withRepeat(withTiming(1, { duration: CYCLE, easing: Easing.linear }), -1, false);
-  }, [reduced, clock]);
+    if (reduced) return; // The `motion-none` branch (§2.7) — no interval to clear because none starts.
+    const id = setInterval(() => {
+      setStep((current) => (current + 1) % DOT_STEPS.length);
+    }, STEP_MS);
+    return () => clearInterval(id);
+  }, [reduced]);
 
-  return clock;
-}
-
-type DotProps = { clock: SharedValue<number>; reduced: boolean; phase: number };
-
-/**
- * Reads `clock` and `reduced` only inside the worklet — no React state is
- * touched by the animation, so this component never re-renders per frame.
- */
-function Dot({ clock, reduced, phase }: DotProps) {
-  const styles = useStyles();
-  const style = useAnimatedStyle(() => {
-    if (reduced) return { opacity: 1, transform: [{ translateY: 0 }] };
-    const lift = envelope(clock.value, phase);
-    return {
-      opacity: interpolate(lift, [0, 1], [MIN_OPACITY, 1]),
-      transform: [{ translateY: interpolate(lift, [0, 1], [0, -LIFT]) }],
-    };
-  }, [clock, reduced, phase]);
-  return <Animated.View testID="thinking-dot" style={[styles.dot, style]} />;
+  return reduced ? REDUCED_MOTION_DOTS : (DOT_STEPS[step] ?? DOT_STEPS[0]);
 }
 
 function ThinkingDots({ reduced }: { reduced: boolean }) {
   const styles = useStyles();
-  const clock = useDotClock(reduced);
+  const dots = useThinkingDots(reduced);
   return (
     // Decorative: the row's own "accessibilityLabel" already says "thinking".
-    <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no">
-      {DOT_PHASES.map((phase) => (
-        <Dot key={phase} clock={clock} reduced={reduced} phase={phase} />
-      ))}
+    <View accessibilityElementsHidden importantForAccessibility="no">
+      {/* Invisible, laid out normally: claims the row's width at its widest step
+      so the real text below can move inside that width without ever changing it. */}
+      <Text style={[styles.dotText, styles.dotsSizer]}>{DOT_STEPS[2]}</Text>
+      <Text style={[styles.dotText, styles.dotsVisible]} testID="thinking-dots">
+        {dots}
+      </Text>
     </View>
   );
 }
@@ -226,18 +147,12 @@ export function ThinkingIndicator({
   );
 }
 
-const DOT = 4;
-
 const useStyles = makeStyles((theme) => ({
   label: { color: theme.textMuted, ...text.ui("bodySm") },
   mono: { color: theme.textMuted, ...text.mono("bodySm") },
   phaseRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  // `marginTop: LIFT` reserves the room a lifted dot rises into — a
-  // `translateY` never reflows layout on its own, but the row's own bounds
-  // would otherwise sit flush against the dots' resting position.
-  dots: { flexDirection: "row", alignItems: "center", gap: space.xxs, marginTop: LIFT },
-  // Circles are legal here — §2.4's fourth exception, beside the radio, the
-  // switch and the add button.
-  dot: { width: DOT, height: DOT, borderRadius: radius.pill, backgroundColor: theme.textMuted },
+  dotText: { color: theme.textMuted, ...text.ui("bodySm") },
+  dotsSizer: { opacity: 0 },
+  dotsVisible: { position: "absolute", top: 0, left: 0 },
   stillWorking: { flexDirection: "row", alignItems: "center", gap: space.x3, marginTop: space.xl },
 }));
