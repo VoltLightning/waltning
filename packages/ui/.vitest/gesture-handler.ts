@@ -19,19 +19,31 @@ import { View } from "react-native";
 type Callback = (event: never) => void;
 
 class PanBuilder {
+  // Stored, not discarded: `threshold-slider.test.tsx`'s layout-mid-drag
+  // test calls these directly to simulate `onStart`/`onUpdate` without a
+  // real gesture-handler runtime — the same reason the callback is kept
+  // rather than invoked and dropped, since a real `Gesture.Pan` cannot fire
+  // here (see the file doc).
+  onStartCallback: Callback | null = null;
+  onUpdateCallback: Callback | null = null;
+  onEndCallback: (() => void) | null = null;
+
   minDistance(_distance: number): this {
     return this;
   }
   enabled(_enabled: boolean): this {
     return this;
   }
-  onStart(_callback: Callback): this {
+  onStart(callback: Callback): this {
+    this.onStartCallback = callback;
     return this;
   }
-  onUpdate(_callback: Callback): this {
+  onUpdate(callback: Callback): this {
+    this.onUpdateCallback = callback;
     return this;
   }
-  onEnd(_callback: Callback): this {
+  onEnd(callback: () => void): this {
+    this.onEndCallback = callback;
     return this;
   }
 }
