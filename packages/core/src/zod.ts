@@ -26,6 +26,7 @@ import {
   type Money,
   type PivotPerUnit,
   toMoney,
+  type UnitsPerPivot,
 } from "./money.ts";
 
 /**
@@ -46,6 +47,17 @@ export const zPivotPerUnit = z
   .string()
   .regex(/^-?\d+(\.\d+)?$/, "expected a rate as a string")
   .transform((v): PivotPerUnit => v as PivotPerUnit);
+
+/**
+ * A rate you divide by to reach the pivot — `fx_rates`' own direction
+ * (`computations.md` §4). The reciprocal brand of `zPivotPerUnit`; the two
+ * are separate schemas for the same reason `PivotPerUnit` and `UnitsPerPivot`
+ * are separate types — see `rate.type-test.ts`.
+ */
+export const zUnitsPerPivot = z
+  .string()
+  .regex(/^-?\d+(\.\d+)?$/, "expected a rate as a string")
+  .transform((v): UnitsPerPivot => v as UnitsPerPivot);
 
 /**
  * A bare `YYYY-MM-DD`.

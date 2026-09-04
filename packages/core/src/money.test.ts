@@ -183,3 +183,80 @@ describe("forDisplay — the reading form", () => {
     expect(() => money.toMoney(money.forDisplay(money.toMoney("48210.00"), 2))).toThrow();
   });
 });
+
+describe("§4 — display conversion", () => {
+  /**
+   * `computations.md` §4's own worked figure: 565.20 PLN at 3.8100 → 148.35
+   * USD, rounded at the display boundary. `convert` keeps full precision;
+   * `round` is the caller's step.
+   */
+  it("565.20 PLN at 3.8100 converts to 148.35 USD", () => {
+    const plnPerPivot = money.unitsPerPivot("3.8100"); // pivot is USD here
+    const usdPerPivot = money.unitsPerPivot("1"); // the pivot converts to itself at 1
+    const converted = money.convert(money.toMoney("565.20"), plnPerPivot, usdPerPivot);
+    expect(money.round(converted, 2)).toBe("148.35");
+  });
+
+  it("is the identity when both rates agree, and the division is exact", () => {
+    // A rate chosen so `x ÷ rate` loses nothing at scale 8 — the property
+    // holds exactly here; `money.property.test.ts` covers the general,
+    // rounding-bounded case for an arbitrary rate.
+    const rate = money.unitsPerPivot("4");
+    expect(money.convert(money.toMoney("18.00"), rate, rate)).toBe("18.00000000");
+  });
+
+  it("from_pivot is from_pivot: p × rate, not p ÷ rate", () => {
+    // 100 pivot units at 3 units-per-pivot is 300, never 33.33…
+    expect(money.fromPivot(money.toMoney("100.00"), money.unitsPerPivot("3"))).toBe(
+      "300.00000000",
+    );
+  });
+});
+
+describe("§4a / §7.5 — FX margin on a transfer", () => {
+  /**
+   * The exact worked example, both docs: 150.00 USD → 565.20 PLN, reference
+   * 3.8100 (PLN per pivot), pivot USD → margin 1.65 USD, 1.10%.
+   */
+  it("150.00 USD → 565.20 PLN at a 3.8100 reference rate costs 1.65 USD, 1.10%", () => {
+    const result = money.margin({
+      amountOriginal: money.toMoney("150.00"),
+      fxRate: money.pivotPerUnit("1"), // USD is the pivot: 1 pivot per unit
+      toAmount: money.toMoney("565.20"),
+      // The reference rate for PLN, in the same pivot-per-unit direction as
+      // `fxRate` — the reciprocal of §4's 3.8100 units-per-pivot.
+      toFxRate: money.reciprocal(money.unitsPerPivot("3.8100")),
+    });
+    // Full precision throughout (`toPivotByDivision`'s own rule); the
+    // worked figure is the *displayed* result, rounded at the boundary.
+    expect(money.round(result.marginPivot, 2)).toBe("1.65");
+    // marginPct is the plain ratio §4a defines — margin ÷ amount_pivot —
+    // not pre-multiplied by 100; a screen renders the percentage.
+    expect(money.round(money.mul(result.marginPct, 100), 2)).toBe("1.10");
+    expect(result.realizedRate).toBe(money.toMoney(money.dec("565.20").dividedBy("150.00")));
+  });
+
+  it("is negative, and unclamped, when the transfer beat the reference rate", () => {
+    // The reference values the destination *lower* than what actually
+    // arrived — beating the rate — so the margin must render negative.
+    const result = money.margin({
+      amountOriginal: money.toMoney("100.00"),
+      fxRate: money.pivotPerUnit("1"),
+      toAmount: money.toMoney("420.00"),
+      toFxRate: money.pivotPerUnit("0.25"), // reference: 420 × 0.25 = 105 pivot, more than 100
+    });
+    expect(money.dec(result.marginPivot).isNegative()).toBe(true);
+    expect(result.marginPivot).toBe("-5.00000000");
+  });
+
+  it("is exactly 1 for a same-currency transfer", () => {
+    const result = money.margin({
+      amountOriginal: money.toMoney("100.00"),
+      fxRate: money.pivotPerUnit("1"),
+      toAmount: money.toMoney("100.00"),
+      toFxRate: money.pivotPerUnit("1"),
+    });
+    expect(result.marginPivot).toBe("0.00000000");
+    expect(result.realizedRate).toBe("1.00000000");
+  });
+});

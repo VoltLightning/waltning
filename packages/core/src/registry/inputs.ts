@@ -29,7 +29,14 @@
 import { z } from "zod";
 import type { Id } from "../id.ts";
 import { type CurrencyCode, dec, type Money, type TxnType } from "../money.ts";
-import { zAccountingDate, zCurrencyCode, zId, zMoney, zPivotPerUnit } from "../zod.ts";
+import {
+  zAccountingDate,
+  zCurrencyCode,
+  zId,
+  zMoney,
+  zPivotPerUnit,
+  zUnitsPerPivot,
+} from "../zod.ts";
 
 /* ── the enumerations, restated ──────────────────────────────────────────── */
 
@@ -776,4 +783,135 @@ export type CategorizeBatchInput = z.output<typeof categorizeBatchInput>;
 
 /* ════════════════════════════════════════════════════════════════════════
  * end A2 block
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════════════════════════════════════════════
+ * E3 · FX — §4/§4a figures, rates on the replica, the seven local operations
+ *
+ * `add_currency` `archive_currency` `set_rate_source` `set_pinned`
+ * `change_pivot` `set_manual_rate` `clear_manual_rate`. `sync_fx_rates`,
+ * `force_sync` and `backfill_fx_rates` are not here — they fetch from a
+ * central bank, and arc 2's sync brings them to the phone
+ * (`2026-09-04-wave-4-shared.md`).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── FX ───────────────────────────────────────────────────────────────────── */
+
+/**
+ * Restated from `packages/schema/src/enums.ts` — core cannot import schema
+ * (see the note above `ACCOUNT_KIND`). `FX_SOURCE` has no core-side brand to
+ * pin it against, the same gap that note records for `ACCOUNT_KIND` itself.
+ */
+const FX_SOURCE = ["nbp", "ecb", "nbrb", "nbg", "manual", "carried_forward"] as const;
+
+/**
+ * `add_currency` — §7.0 *"Add a currency"*. `id`-less: a currency's identity
+ * is its ISO code, not a client-minted uuid, so the executor's `mints`
+ * returns the code itself rather than a fresh id.
+ *
+ * **Refuses an existing code, archived or not.** §7.0: archiving hides a
+ * currency from pickers without deleting its history — creating a second row
+ * for the same code would fork that history rather than restore it, so the
+ * executor's refusal for the archived case names un-archiving as the fix
+ * even though no `unarchive_currency` operation exists yet in this arc (a
+ * gap named rather than filled silently, matching the project's own rule for
+ * one).
+ */
+export const addCurrencyInput = z.object({
+  code: zCurrencyCode,
+  name: z.string().trim().min(1).max(120),
+  symbol: z.string().trim().max(8).default(""),
+  symbolPosition: z.enum(["P", "S"]).default("P"),
+  decimals: z.number().int().min(0).max(8).default(2),
+  rateSource: z.enum(FX_SOURCE).nullable().default(null),
+  pinned: z.boolean().default(false),
+});
+export type AddCurrencyInput = z.output<typeof addCurrencyInput>;
+
+/**
+ * `archive_currency` — S17 §6 *Gated*. Refused by the executor for the pivot
+ * and for any currency a live account or transaction still references; SQLite
+ * has no cross-table trigger in the replica's DDL, so that guarantee is the
+ * executor's alone here and the server-side trigger is its mirror, not its
+ * replacement.
+ */
+export const archiveCurrencyInput = z.object({
+  code: zCurrencyCode,
+  version: z.number().int().positive(),
+});
+export type ArchiveCurrencyInput = z.output<typeof archiveCurrencyInput>;
+
+/** `set_rate_source` — §7.7, per-currency provider selection. */
+export const setRateSourceInput = z.object({
+  code: zCurrencyCode,
+  version: z.number().int().positive(),
+  rateSource: z.enum(FX_SOURCE).nullable(),
+});
+export type SetRateSourceInput = z.output<typeof setRateSourceInput>;
+
+/** `set_pinned` — §7.0, which currencies appear in the header toggle. */
+export const setPinnedInput = z.object({
+  code: zCurrencyCode,
+  version: z.number().int().positive(),
+  pinned: z.boolean(),
+});
+export type SetPinnedInput = z.output<typeof setPinnedInput>;
+
+/**
+ * `change_pivot` — §7.0 *"genuinely rare, and the one heavy operation
+ * left"*. **Refused by the executor while any transaction exists**: a phone
+ * alone has no mechanism to re-rate history the way a backend's backfill
+ * would, so this is the first-run step (S29a) or nothing. No `version` —
+ * the refusal is on the ledger's *shape* (whether a transaction exists at
+ * all), not on this row's own conflict token.
+ */
+export const changePivotInput = z.object({ code: zCurrencyCode });
+export type ChangePivotInput = z.output<typeof changePivotInput>;
+
+/**
+ * The two rate-range operations share a range check: the destination is
+ * never before the source, matching `updated_at`-style ordering everywhere
+ * else in the registry.
+ */
+const rateRange = { from: zAccountingDate, to: zAccountingDate };
+const rateRangeOrdered = <T extends { from: string; to: string }>(v: T) => v.from <= v.to;
+const RATE_RANGE_ISSUE = {
+  message: "the range must not end before it starts",
+  path: ["to"],
+};
+
+/**
+ * `set_manual_rate` — §7.6 level 2, *"correct a bad or missing provider
+ * figure… a range writes one `manual` row per day across it"*. `base` must
+ * be the ledger's pivot currency — checked in the executor, which is the
+ * only place that knows which currency that is; every rate is quoted
+ * `(base = pivot, quote = X)` and there is no other shape to write.
+ *
+ * `overwriteManual` carries the screen's second confirmation (S18 §8) as
+ * data: the input is the answer to *"replace the existing manual entry?"*,
+ * not a prompt this schema could ask on its own.
+ */
+export const setManualRateInput = z
+  .object({
+    base: zCurrencyCode,
+    quote: zCurrencyCode,
+    ...rateRange,
+    rate: zUnitsPerPivot,
+    overwriteManual: z.boolean().default(false),
+  })
+  .refine((v) => v.base !== v.quote, {
+    message: "a rate needs two different currencies",
+    path: ["quote"],
+  })
+  .refine(rateRangeOrdered, RATE_RANGE_ISSUE);
+export type SetManualRateInput = z.output<typeof setManualRateInput>;
+
+/** `clear_manual_rate` — §7.6's undo: deletes `manual` rows only, never a synced one. */
+export const clearManualRateInput = z
+  .object({ base: zCurrencyCode, quote: zCurrencyCode, ...rateRange })
+  .refine(rateRangeOrdered, RATE_RANGE_ISSUE);
+export type ClearManualRateInput = z.output<typeof clearManualRateInput>;
+
+/* ════════════════════════════════════════════════════════════════════════
+ * end E3 block
  * ════════════════════════════════════════════════════════════════════════ */

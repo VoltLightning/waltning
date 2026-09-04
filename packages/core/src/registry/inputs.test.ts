@@ -48,6 +48,17 @@ import {
   updateGroupInput,
   updateTransactionInput,
 } from "./inputs.ts";
+// E3's own import — kept separate so a rebase against A2/A3's appends stays
+// a line-level merge.
+import {
+  addCurrencyInput,
+  archiveCurrencyInput,
+  changePivotInput,
+  clearManualRateInput,
+  setManualRateInput,
+  setPinnedInput,
+  setRateSourceInput,
+} from "./inputs.ts";
 
 /* ── compile-time assertions ─────────────────────────────────────────────────
  *
@@ -754,5 +765,101 @@ describe("categorize_batch", () => {
       categoryId: CATEGORY_ID,
     });
     expect(parsed.transactionIds).toEqual([TXN_ID, TXN_ID_2]);
+  });
+});
+
+/* ── E3 · FX ─────────────────────────────────────────────────────────────── */
+
+describe("addCurrencyInput", () => {
+  it("defaults symbolPosition, decimals, rateSource and pinned", () => {
+    const parsed = addCurrencyInput.parse({ code: "pln", name: "Polish Zloty" });
+
+    expect(parsed.code).toBe("PLN"); // upper-cased, matching zCurrencyCode
+    expect(parsed.symbolPosition).toBe("P");
+    expect(parsed.decimals).toBe(2);
+    expect(parsed.rateSource).toBeNull();
+    expect(parsed.pinned).toBe(false);
+  });
+
+  it("refuses more than eight decimal places", () => {
+    const result = addCurrencyInput.safeParse({ code: "BTC", name: "Bitcoin", decimals: 9 });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("decimals");
+  });
+
+  it("refuses a rate source outside the enumerated set", () => {
+    const result = addCurrencyInput.safeParse({
+      code: "PLN",
+      name: "Polish Zloty",
+      rateSource: "federal_reserve",
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("rateSource");
+  });
+});
+
+describe("archiveCurrencyInput / setRateSourceInput / setPinnedInput", () => {
+  it("all require a version", () => {
+    expect(archiveCurrencyInput.safeParse({ code: "PLN" }).success).toBe(false);
+    expect(setRateSourceInput.safeParse({ code: "PLN", rateSource: "nbp" }).success).toBe(false);
+    expect(setPinnedInput.safeParse({ code: "PLN", pinned: true }).success).toBe(false);
+  });
+
+  it("setRateSourceInput accepts null — clearing the override back to none chosen", () => {
+    const parsed = setRateSourceInput.parse({ code: "PLN", version: 1, rateSource: null });
+    expect(parsed.rateSource).toBeNull();
+  });
+});
+
+describe("changePivotInput", () => {
+  it("is the code alone — no version, S17 §6's refusal is on the ledger's shape", () => {
+    expect(changePivotInput.parse({ code: "eur" }).code).toBe("EUR");
+  });
+});
+
+describe("setManualRateInput", () => {
+  const range = { base: "USD", quote: "PLN", from: "2026-01-01", to: "2026-01-03" };
+
+  it("parses S18 §8's range write and defaults overwriteManual to false", () => {
+    const parsed = setManualRateInput.parse({ ...range, rate: "3.8100" });
+    expect(parsed.overwriteManual).toBe(false);
+    expect(String(parsed.rate)).toBe("3.8100");
+  });
+
+  it("refuses base and quote naming the same currency", () => {
+    const result = setManualRateInput.safeParse({ ...range, quote: "USD", rate: "1" });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("quote");
+  });
+
+  it("refuses a range that ends before it starts", () => {
+    const result = setManualRateInput.safeParse({ ...range, from: "2026-01-05", rate: "1" });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("to");
+  });
+});
+
+describe("clearManualRateInput", () => {
+  it("carries no rate — it only deletes", () => {
+    const parsed = clearManualRateInput.parse({
+      base: "USD",
+      quote: "PLN",
+      from: "2026-01-01",
+      to: "2026-01-03",
+    });
+    expect(parsed).not.toHaveProperty("rate");
+  });
+
+  it("refuses a range that ends before it starts", () => {
+    const result = clearManualRateInput.safeParse({
+      base: "USD",
+      quote: "PLN",
+      from: "2026-01-05",
+      to: "2026-01-01",
+    });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("to");
   });
 });
