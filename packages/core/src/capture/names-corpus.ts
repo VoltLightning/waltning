@@ -62,7 +62,7 @@ export const NAME_PAIRS: readonly NamePair[] = [
   },
   {
     a: "Anna Placeholder",
-    b: "Anna Placeholder ",
+    b: "Anna Placeholder\u00A0",
     collide: true,
     why: "a trailing no-break space (U+00A0) — whitespace to a person, not to every trim",
   },

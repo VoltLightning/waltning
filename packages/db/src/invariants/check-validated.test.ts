@@ -1,16 +1,19 @@
 /**
  * Proves: CLAUDE.md's "break it once to prove it fires", and SPEC.md §6.5
  * ("Integrity constraints" — "Enforced in the database, not merely the
- * application", naming eleven of these thirteen CHECKs by name and SQL).
+ * application", naming nine of these thirteen CHECKs by name and SQL).
  *
  * Two claims, both about every CHECK constraint Postgres actually holds
  * today, read live from `pg_constraint` rather than assumed from
- * `schema.ts` or from §6.5's own list — `transactions_debt_shape` and
- * `transactions_tax_fx_shape` postdate it: both live only in the hand-written
- * `0001_database_objects.sql` (from `0004_business_logic_columns.sql`, folded
- * in), not in a `check(...)` call in `schema.ts` and not in §6.5's SQL block,
- * so a list built by reading either alone would silently omit two of the
- * thirteen.
+ * `schema.ts` or from §6.5's own list. Four of the thirteen are absent from
+ * §6.5, for two different reasons: `transactions_counterparty_role_shape`
+ * and `transactions_occurrence_shape` are declared in `schema.ts`'s own
+ * `check(...)` calls but simply not named in §6.5's SQL block, while
+ * `transactions_debt_shape` and `transactions_tax_fx_shape` postdate both —
+ * they live only in the hand-written `0001_database_objects.sql` (from
+ * `0004_business_logic_columns.sql`, folded in), missing from `schema.ts`
+ * *and* §6.5. A list built by reading either alone would silently omit some
+ * of the thirteen.
  *
  * 1. No CHECK is `NOT VALID` — a constraint declared but never validated
  *    against existing rows would pass every test here and refuse nothing on

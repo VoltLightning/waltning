@@ -18,10 +18,12 @@
  * `it.fails` needing to move.
  *
  * Findings: R2 C1 (a Polish letter's case pair, and the full Polish-diacritic
- * pair, pass Postgres's `lower()` on this cluster's `en_US.utf8` collation —
- * see the per-pair comments below, this is narrower than R2's phone-side
- * claim), R2 H1-r3 (NFC/NFD), R2 M1-r4 (tab and NBSP are not `btrim`'s
- * default character), R2 C1-r4 (the `\v` escape, same cause as R2 M1-r4).
+ * pair, pass Postgres's `lower()` under this repo's pinned ICU collation
+ * (`docker-compose.yml`'s `--locale-provider=icu --icu-locale=und-x-icu`,
+ * not the host's locale) — see the per-pair comments below, this is narrower
+ * than R2's phone-side claim), R2 H1-r3 (NFC/NFD), R2 M1-r4 (tab and NBSP are
+ * not `btrim`'s default character), R2 C1-r4 (the `\v` escape, same cause as
+ * R2 M1-r4).
  */
 import { NAME_PAIRS } from "@waltning/core/capture/names-corpus";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -64,11 +66,14 @@ async function attemptCollision(a: string, b: string): Promise<boolean> {
  * agrees with the corpus.
  */
 const POSTGRES_FINDING: Partial<Record<number, string>> = {
-  // NAME_PAIRS[0] — Łukasz/łukasz — is *not* here: this cluster's en_US.utf8
-  // collation makes `lower()` fold that specific case pair correctly (a pure
-  // case change, no diacritic to strip), so Postgres refuses it and agrees
-  // with the corpus. Only the phone disagrees on this one — see R2 C1 in the
-  // ledger half of this pair.
+  // NAME_PAIRS[0] — Łukasz/łukasz — is *not* here: this repo's Postgres runs
+  // with ICU as its locale provider (`docker-compose.yml`'s
+  // `--locale-provider=icu --icu-locale=und-x-icu`, not the host's glibc/C
+  // locale — confirmed `lower('Łukasz' COLLATE "C") = lower('łukasz' COLLATE
+  // "C")` is false), and ICU's root-locale `lower()` folds that specific case
+  // pair correctly (a pure case change, no diacritic to strip), so Postgres
+  // refuses it and agrees with the corpus. Only the phone disagrees on this
+  // one — see R2 C1 in the ledger half of this pair.
   1: "R2 H1-r3", // NFC/NFD
   4: "R2 M1-r4", // tab
   5: "R2 M1-r4", // NBSP
