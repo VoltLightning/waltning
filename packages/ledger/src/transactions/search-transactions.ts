@@ -4,8 +4,8 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
-import type { TxnType } from "@waltning/schema/enums";
-import { and, desc, eq, gte, inArray, isNull, lte, or, type SQL } from "drizzle-orm";
+import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
@@ -24,6 +24,10 @@ export type TransactionSearchFilter = {
   scope?: TransactionSearchScope;
   from?: AccountingDate;
   to?: AccountingDate;
+  /** S13's whole history — every row naming this counterparty, any role. */
+  counterpartyId?: Id<"counterparties">;
+  /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
+  counterpartyRole?: CounterpartyRole;
 };
 
 export type TransactionSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
@@ -50,6 +54,8 @@ export type LocalSearchTransaction = {
   toDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
+  /** `null` off any row with no counterparty at all — the ordinary case. */
+  counterpartyRole: CounterpartyRole | null;
 };
 
 export type CurrencyTotal = {
@@ -134,6 +140,39 @@ function scopeCondition(scope: TransactionSearchScope) {
  * signed "from") into its own currency, `toAmount` (signed "to") into
  * `toCurrency`. Never summed into one figure across currencies (S10 §3: "per
  * currency, never summed across").
+ *
+ * **M2 — the page is bounded; the total is not, and cannot be made an SQL
+ * aggregate without breaking `money.ts`'s own rule.** A text-free search
+ * pushes its `LIMIT` into SQL (`(date, id)` keyset order plus the cursor
+ * decide which `SEARCH_PAGE_SIZE + 1` rows the page needs, and nothing more)
+ * — but the total beside it still runs its own query with no `LIMIT` at all,
+ * reading and folding *every* structurally-matching row, over a leaner column
+ * set with no `accounts`/`toAccounts`/`categories` join the page needs but a
+ * sum does not. This is not an oversight: `money.signed` per row (income vs.
+ * expense vs. a transfer's two legs, §7.2) is not expressible in SQL, and
+ * SQLite has no genuine decimal type — its `SUM()` coerces the `TEXT` this
+ * replica stores money as into a `REAL`, handing this file back a JS
+ * `number` holding an amount, which `architecture/11` calls a bug regardless
+ * of where it happens. Folding every matching row through `decimal.js` in
+ * JS is the one way to keep the exact 8dp sum the six-currency-total tests
+ * assert on, at arc-1 sizes (a personal ledger's few thousand rows, further
+ * cut by whichever structural filter is active) the same trade-off the
+ * `text`-search branch below makes for the same reason. A `text` filter
+ * still reads the whole structurally-filtered set into JS first regardless —
+ * the trade-off `matchesText`'s own doc names above, unavoidable without
+ * `pg_trgm`.
+ *
+ * **L — `total.count` is `totalRows.length`, not a second SQL `count(*)`.**
+ * A standalone aggregate looks cheaper — no `money.signed` fold, no decimal
+ * precision needed for a row count — but it buys nothing here: `totalRows`
+ * is read and folded in full regardless, for the currency sums beside it
+ * (M2's own doc above), so a second query over the same `structuralWhere`
+ * was a pure pessimization, one more round trip paying for an answer this
+ * function already had. It had also drifted from `totalRows`'s own join
+ * set (missing `innerJoin(currencies)`), which an inner join can turn from
+ * "redundant" into "silently disagrees with the totals beside it" the
+ * moment a row's currency is missing from `currencies`. One query, one join
+ * set, one honest count.
  */
 export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
@@ -147,7 +186,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   const categoryIds = filter.categoryIds ?? [];
   const scope = filter.scope ?? "all";
 
-  const conditions: (SQL | undefined)[] = [
+  const structuralConditions: (SQL | undefined)[] = [
     isNull(transactions.deletedAt),
     filter.from !== undefined ? gte(transactions.date, filter.from) : undefined,
     filter.to !== undefined ? lte(transactions.date, filter.to) : undefined,
@@ -159,54 +198,133 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
       : undefined,
     categoryIds.length > 0 ? inArray(transactions.categoryId, categoryIds) : undefined,
     scopeCondition(scope),
+    filter.counterpartyId !== undefined
+      ? eq(transactions.counterpartyId, filter.counterpartyId)
+      : undefined,
+    filter.counterpartyRole !== undefined
+      ? eq(transactions.counterpartyRole, filter.counterpartyRole)
+      : undefined,
   ];
-
-  const rows = db
-    .select({
-      id: transactions.id,
-      date: transactions.date,
-      type: transactions.type,
-      payee: transactions.payee,
-      note: transactions.note,
-      categoryName: categories.name,
-      accountId: transactions.accountId,
-      accountName: accounts.name,
-      toAccountId: transactions.toAccountId,
-      toAccountName: toAccounts.name,
-      amountOriginal: transactions.amountOriginal,
-      toAmountRaw: transactions.toAmount,
-      currency: transactions.currency,
-      decimals: currencies.decimals,
-      toCurrency: transactions.toCurrency,
-      toDecimals: toCurrencies.decimals,
-      isBusiness: transactions.isBusiness,
-      isCapital: transactions.isCapital,
-    })
-    .from(transactions)
-    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-    .innerJoin(currencies, eq(transactions.currency, currencies.code))
-    .leftJoin(toAccounts, eq(transactions.toAccountId, toAccounts.id))
-    .leftJoin(toCurrencies, eq(transactions.toCurrency, toCurrencies.code))
-    .leftJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(and(...conditions.filter((c): c is SQL => c !== undefined)))
-    .orderBy(desc(transactions.date), desc(transactions.id))
-    .all()
-    .map(({ amountOriginal, toAmountRaw, type, ...row }) => ({
-      ...row,
-      amount: money.signed({ type, amountOriginal, toAmount: toAmountRaw }, "from"),
-      toAmount:
-        type === "transfer"
-          ? money.signed({ type, amountOriginal, toAmount: toAmountRaw }, "to")
-          : null,
-      type,
-      amountOriginal,
-    }));
+  const structuralWhere = and(...structuralConditions.filter((c): c is SQL => c !== undefined));
 
   const needle = filter.text !== undefined ? fold(filter.text.trim()) : "";
   const needleAmount = filter.text === undefined ? null : (findAmount(filter.text)?.amount ?? null);
-  const filtered =
-    needle === "" ? rows : rows.filter((row) => matchesText(row, needle, needleAmount));
 
+  const rowsQuery = () =>
+    db
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        type: transactions.type,
+        payee: transactions.payee,
+        note: transactions.note,
+        categoryName: categories.name,
+        accountId: transactions.accountId,
+        accountName: accounts.name,
+        toAccountId: transactions.toAccountId,
+        toAccountName: toAccounts.name,
+        amountOriginal: transactions.amountOriginal,
+        toAmountRaw: transactions.toAmount,
+        currency: transactions.currency,
+        decimals: currencies.decimals,
+        toCurrency: transactions.toCurrency,
+        toDecimals: toCurrencies.decimals,
+        isBusiness: transactions.isBusiness,
+        isCapital: transactions.isCapital,
+        counterpartyRole: transactions.counterpartyRole,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .innerJoin(currencies, eq(transactions.currency, currencies.code))
+      .leftJoin(toAccounts, eq(transactions.toAccountId, toAccounts.id))
+      .leftJoin(toCurrencies, eq(transactions.toCurrency, toCurrencies.code))
+      .leftJoin(categories, eq(transactions.categoryId, categories.id));
+
+  const signRow = <
+    Row extends { amountOriginal: Money; toAmountRaw: Money | null; type: TxnType },
+  >({
+    amountOriginal,
+    toAmountRaw,
+    type,
+    ...row
+  }: Row) => ({
+    ...row,
+    amount: money.signed({ type, amountOriginal, toAmount: toAmountRaw }, "from"),
+    toAmount:
+      type === "transfer"
+        ? money.signed({ type, amountOriginal, toAmount: toAmountRaw }, "to")
+        : null,
+    type,
+    amountOriginal,
+  });
+
+  if (needle === "") {
+    const cursorCondition =
+      cursor !== undefined
+        ? or(
+            lt(transactions.date, cursor.date),
+            and(eq(transactions.date, cursor.date), lt(transactions.id, cursor.id)),
+          )
+        : undefined;
+
+    const pageRows = rowsQuery()
+      .where(
+        cursorCondition !== undefined ? and(structuralWhere, cursorCondition) : structuralWhere,
+      )
+      .orderBy(desc(transactions.date), desc(transactions.id))
+      .limit(SEARCH_PAGE_SIZE + 1)
+      .all()
+      .map(signRow);
+
+    const page = pageRows.slice(0, SEARCH_PAGE_SIZE);
+    const last = page[page.length - 1];
+    const nextCursor =
+      pageRows.length > SEARCH_PAGE_SIZE && last !== undefined
+        ? { date: last.date, id: last.id }
+        : undefined;
+
+    // A leaner query for the total — every matching row, but none of the
+    // display-only joins (`accounts.name`, `toAccounts.name`,
+    // `categories.name`) the page above needs and a sum does not. M2 —
+    // deliberately no `.limit()` here: unlike the page, the total is bounded
+    // only by how many rows the filter matches, never a fixed page size (see
+    // this function's own doc for why an SQL-side sum is not the fix).
+    const totalRows = db
+      .select({
+        currency: transactions.currency,
+        decimals: currencies.decimals,
+        amountOriginal: transactions.amountOriginal,
+        toAmountRaw: transactions.toAmount,
+        toCurrency: transactions.toCurrency,
+        toDecimals: toCurrencies.decimals,
+        type: transactions.type,
+        isCapital: transactions.isCapital,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .innerJoin(currencies, eq(transactions.currency, currencies.code))
+      .leftJoin(toCurrencies, eq(transactions.toCurrency, toCurrencies.code))
+      .where(structuralWhere)
+      .all()
+      .map(signRow);
+
+    return {
+      rows: page.map(({ amountOriginal, ...row }) => row),
+      nextCursor,
+      total: totalsOf(totalRows),
+    };
+  }
+
+  // A `text` filter cannot be decided in SQL (`matchesText`'s own doc above)
+  // — every structurally-matching row is read once, folded, filtered, then
+  // paged and totalled in JS, same as before this fix.
+  const rows = rowsQuery()
+    .where(structuralWhere)
+    .orderBy(desc(transactions.date), desc(transactions.id))
+    .all()
+    .map(signRow);
+
+  const filtered = rows.filter((row) => matchesText(row, needle, needleAmount));
   const total = totalsOf(filtered);
 
   const remaining =

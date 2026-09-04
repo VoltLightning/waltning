@@ -296,3 +296,17 @@ describe("allocateLargestRemainder — for every input", () => {
     );
   });
 });
+
+describe("debtDirection — for every input (H2)", () => {
+  it("is 'settled' whenever the balance rounds to zero at the given scale", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 8 }), moneyArb, (decimals, balance) => {
+        const rounded = money.round(balance, decimals);
+        const direction = money.debtDirection(balance, decimals);
+        expect(money.isZero(rounded) ? direction === "settled" : direction !== "settled").toBe(
+          true,
+        );
+      }),
+    );
+  });
+});

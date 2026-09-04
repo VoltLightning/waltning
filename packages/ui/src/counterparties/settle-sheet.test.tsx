@@ -17,7 +17,7 @@ const BASE_PROPS: SettleSheetProps = {
   visible: true,
   counterpartyName: "Nina",
   balances: [{ currency: "EUR", balance: toMoney("-120"), decimals: 2 }],
-  accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN" }],
+  accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN", capturable: true }],
   amountRaw: "214,05",
   dischargesCurrency: "EUR",
   onDischargesCurrencyChange: vi.fn(),
@@ -99,6 +99,39 @@ it("flips to over-settlement rather than clamping at zero, and says which way in
   expect(screen.getByText(/Becomes 30.00 EUR the other way\..*they owe you/)).toBeDefined();
 });
 
+/**
+ * M — every balance held is dust at its own currency's scale (M1's filter,
+ * empty): the Discharges section states that plainly, and Settle stays
+ * disabled rather than an empty section with a hidden currency armed.
+ */
+it("shows nothing to settle and disables Settle when every balance is dust", () => {
+  renderSheet({
+    balances: [{ currency: "PLN", balance: toMoney("0.004"), decimals: 2 }],
+    dischargesCurrency: null,
+  });
+  expect(screen.getByText("Nothing to settle.")).toBeDefined();
+  expect(screen.queryByRole("radiogroup")).toBeNull();
+  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+});
+
+/**
+ * L1 — `saveDisabled`'s guard must check whether the *picked* currency is
+ * itself still open, not merely whether `openBalances` is non-empty: a
+ * stale `dischargesCurrency` naming a since-settled (dust) balance must
+ * disable Settle even while a different currency (GBP) remains genuinely
+ * open — `openBalances.length === 0` alone missed exactly this case.
+ */
+it("disables Settle when the picked currency is dust, even with another balance still open (L1)", () => {
+  renderSheet({
+    balances: [
+      { currency: "PLN", balance: toMoney("0.004"), decimals: 2 },
+      { currency: "GBP", balance: toMoney("-45"), decimals: 2 },
+    ],
+    dischargesCurrency: "PLN",
+  });
+  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+});
+
 it("marks the result an estimate and stamps it once the snapshot is older than the session", () => {
   renderSheet({ stale: true, stampedAt: new Date("2026-08-12T14:20:00Z").getTime() });
   expect(screen.getByText("remaining (estimated)")).toBeDefined();
@@ -112,6 +145,23 @@ it("has no reference line when nothing is held (offline, no rate)", () => {
 
 it("disables Settle until an account and a discharge currency are both picked", () => {
   renderSheet({ accountId: null });
+  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+});
+
+/**
+ * C1 — the same guard `TransferComposer`'s own `fromNeedsRate` states
+ * (§14.6): the controller refuses `settle_debt` on `accountId` before the
+ * write once the picked account holds no rate, so this sheet declines
+ * proactively — muted caption, disabled Settle — rather than letting a tap
+ * reach the controller only to bounce.
+ */
+it("shows the needsRate caption under the account chip and disables Settle when it can't be captured (C1)", () => {
+  renderSheet({
+    accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN", capturable: false }],
+  });
+  expect(
+    screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
+  ).toBeDefined();
   expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
 });
 
@@ -139,7 +189,7 @@ it("does not double the currency when the account name already carries it", () =
 
 it("still appends the currency when the account name does not carry it", () => {
   renderSheet({
-    accounts: [{ id: "acc-other", name: "Household", currency: "USD" }],
+    accounts: [{ id: "acc-other", name: "Household", currency: "USD", capturable: true }],
     accountId: "acc-other",
   });
   expect(screen.getByText("Household · USD")).toBeDefined();
@@ -155,6 +205,75 @@ it("opens the account picker through a callback rather than a select of its own"
   renderSheet({ onOpenAccountPicker });
   fireEvent.click(screen.getByRole("button", { name: "From: Cash · PLN" }));
   expect(onOpenAccountPicker).toHaveBeenCalledOnce();
+});
+
+/**
+ * H1 — `settleDebtRefusal` never returns `null`: an unrecognised message
+ * still lands here, at `path: ""`, which `mapFieldErrors` routes to
+ * `formLevel`. A refusal a person cannot see is a refusal that never
+ * happened, so the sheet must render it — the same treatment
+ * `CounterpartyForm` and `QuickAddForm` give their own `formLevel`.
+ */
+it("shows an unrecognised settle refusal at form level", () => {
+  renderSheet({
+    fieldErrors: {
+      byField: {},
+      formLevel: ["settle_debt: the row changed between insert and the debt-fields update"],
+    },
+  });
+  expect(
+    screen.getByText("settle_debt: the row changed between insert and the debt-fields update"),
+  ).toBeDefined();
+});
+
+it("shows a counterpartyId refusal under the header", () => {
+  renderSheet({
+    fieldErrors: {
+      byField: { counterpartyId: ["No counterparty found"] },
+      formLevel: [],
+    },
+  });
+  expect(screen.getByText("No counterparty found")).toBeDefined();
+});
+
+/**
+ * M1 — `debtDirection` decides at the currency's own scale, not the raw 8dp
+ * value: a `+0.004 PLN` balance is `settled` at `decimals: 2`, so it is
+ * hidden from the Discharges picker entirely (it cannot be settled again —
+ * the executor itself refuses "nothing to settle").
+ */
+it("hides a balance that is settled at the currency's own scale from the Discharges picker", () => {
+  renderSheet({
+    balances: [
+      { currency: "EUR", balance: toMoney("-120"), decimals: 2 },
+      { currency: "PLN", balance: toMoney("0.004"), decimals: 2 },
+    ],
+    dischargesCurrency: "EUR",
+  });
+  // Only EUR is open — one balance reads as a plain fact, never a
+  // radio group, and PLN never appears at all.
+  expect(screen.queryByRole("radiogroup")).toBeNull();
+  expect(screen.getByText(/EUR · 120.00 · you owe them/)).toBeDefined();
+  // A balance row reads "{currency} · {amount} · {direction}" — the dust
+  // PLN row never renders as one, whether the picker offers a real choice
+  // or (as here) reads as a single plain fact.
+  expect(screen.queryByText(/PLN · /)).toBeNull();
+});
+
+it("computes the residual's direction at the currency's own scale, not raw 8dp precision", () => {
+  // The sole balance is dust at PLN's own scale (2dp) — discharging
+  // anything against it must read as settled, never as a real direction.
+  renderSheet({
+    balances: [{ currency: "PLN", balance: toMoney("0.004"), decimals: 2 }],
+    dischargesCurrency: "PLN",
+    dischargesRaw: "5",
+    amountRaw: "5",
+  });
+  expect(screen.getAllByText((_, element) => element?.textContent === "0.00 PLN")).not.toHaveLength(
+    0,
+  );
+  expect(screen.queryByText("they owe you")).toBeNull();
+  expect(screen.queryByText("you owe them")).toBeNull();
 });
 
 it("renders every figure through the locale's own decimal mark — Polish", () => {

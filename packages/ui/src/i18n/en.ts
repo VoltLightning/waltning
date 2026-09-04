@@ -69,6 +69,8 @@ export const en = {
     discard: "Discard",
     discardTitle: "Discard this transaction?",
     discardBody: "It carries an auto-filled account — discarding it is cheap to redo.",
+
+    edit: "Edit",
   },
   accounts: {
     currency: "Currency",
@@ -265,6 +267,9 @@ export const en = {
     fee: "Fee",
     /** S31 §6 — same account both sides. `transactions_transfer_distinct`'s own message already reaches the screen through the field error; this is the sheet's own inline caption when nothing has been typed wrong yet. */
     sameAccountRefused: "A transfer needs two different accounts.",
+
+    /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
+    newCounterparty: "+ New person or company",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {
@@ -290,6 +295,98 @@ export const en = {
     overSettled: "Becomes {{amount}} the other way.",
     /** Q11 — prompted, not required. */
     notePrompt: "A note here is what settles a dispute later.",
+
+    /** M — every held balance is dust at its own currency's scale (M1's own filter, empty): nothing for Settle to discharge. */
+    nothingToSettle: "Nothing to settle.",
+    /** `DebtDirectionTag` — text, never colour alone (P5). */
+    owesYou: "owes you",
+    youOwe: "you owe",
+    settled: "settled",
+    kindPerson: "person",
+    kindCompany: "company",
+    settlesIn: "settles in {{currency}}",
+    /** `CounterpartyForm`'s field label — distinct from `settlesIn`'s sentence fragment above. */
+    settlementLabel: "Settles in",
+    noSettlementCurrency: "No preference set",
+    /** `AgeingBar` — O15: *old*, never *overdue* (no `payment_terms_days` field exists). */
+    ageingDays: "{{days}} days · old",
+    /* ── S12 · the register ─────────────────────────────────────────────── */
+    segmentAll: "All",
+    segmentTheyOwe: "They owe",
+    segmentYouOwe: "You owe",
+    /** The two direction totals — §6.6, never summed across people. */
+    theyOweTotal: "they owe you",
+    youOweTotal: "you owe",
+    unallocated: "{{amount}} {{currency}} unallocated",
+    unallocatedNamed: "{{amount}} {{currency}} unallocated · {{payee}} · {{date}}",
+    allocate: "Allocate",
+    add: "+ Add",
+    emptyFirstRunTitle: "No one yet",
+    emptyFirstRunBody: "Add a person or company to track what you owe, or what they owe you.",
+    /** Distinct from `first-run` — a success, not a blank (S12 §6). */
+    emptySettledTitle: "All settled",
+    emptySettledBody: "Nobody owes anything right now.",
+    loadFailedTitle: "Couldn't load your counterparties",
+    loadFailedWhy: "Something went wrong reading the debt ledger.",
+    /** M1 — the loading state (S12 §6, S13 §6, S15), never the no-pivot error, while `snapshot.revision` is still `0` and the first `refresh()` has not landed. */
+    loadingDebts: "Loading debts",
+    loadingLedger: "Loading counterparty ledger",
+    loadingEditor: "Loading counterparty editor",
+    /**
+     * H — a pivot-less replica after a completed refresh (`snapshot.revision
+     * > 0`) is an invariant violation (`architecture/09`'s bootstrap
+     * guarantee), never a state to silently render past as "All settled" or
+     * a blank screen. M1 — this is distinct from the first `refresh()` still
+     * being in flight (loading, above), and covers an empty currency list
+     * after a successful refresh too — no currency held is still no
+     * reference currency held.
+     */
+    noPivotTitle: "Couldn't read your currencies",
+    noPivotWhy: "No currency in this ledger is marked as the reference one.",
+    /** M — `directionTotals` throwing on a genuine invariant violation (S12 debt-screen.tsx); the executor's own message is diagnostics-only. */
+    totalsInconsistentWhy: "Something went wrong totalling what's owed.",
+    /* ── S13 · one person's whole position ──────────────────────────────── */
+    netIn: "net in {{currency}}",
+    /** L (this round) — the ledger card (S13 §6, `BalanceLedger`) and the history section below it (`historySettled`) each own their key now, rather than the history section borrowing S12's `emptySettledTitle`/`Body` — two unrelated screens sharing a key meant an edit to one's copy silently changed the other's. */
+    ledgerSettled: "All settled",
+    ledgerSettledBody: "Nothing open with them right now.",
+    /** The history section's own empty state (S13 §3) — same words `emptySettledTitle`/`Body` (S12) carried before the two were split apart, kept unchanged. */
+    historySettled: "All settled",
+    historySettledBody: "No debt rows yet: {{name}}.",
+    /** P1 — the derived total's own rate and date, never shown without both. */
+    atRateDate: "@ {{rate}} · {{date}}",
+    /** S13 — after a successful settle: the residual, named in words, never a bare sign (P5). */
+    settledToast: "Settled. {{amount}} {{currency}} {{direction}}.",
+    addTransaction: "Add transaction",
+    history: "History",
+    /** S13 §3's own toggle — the count it is hiding is stated, never silent. */
+    debtsOnlyToggle: "debts only · {{count}} other rows",
+    allRowsToggle: "showing every row",
+    /** `TransactionRow`'s `roleTag` — the same three values `transactions."role.*"` names, kept short for a tag. */
+    "role.debt": "debt",
+    "role.contribution": "contribution",
+    "role.reference": "reference",
+    /** S13's overflow — one live merge into this record. */
+    mergedInto: "Merged {{name}} into this record · {{count}} rows",
+    unmerge: "Unmerge",
+    unmergeToast: "Merge undone — the record is restored.",
+    /* ── S15 · create and edit ───────────────────────────────────────────── */
+    contact: "Contact",
+    archive: "Archive",
+    archivedToast: "Counterparty archived.",
+    create: "Create",
+    pickerTitle: "Counterparty",
+    pickerSearchPlaceholder: "Search people and companies",
+    pickerRecent: "Recent",
+    pickerNew: "+ New",
+    pickerNoMatches: "No one matches.",
+    /** The six writes' refusal `messageKey`s (`create-phone-ledger.ts`) — `architecture/12`. */
+    nameCollision: "A counterparty with this name already exists.",
+    staleVersion: "This counterparty changed elsewhere — reload and try again.",
+    openBalance: "Archiving is for settled relationships — this still has an open balance.",
+    mergeNoCounterparty: "One of these counterparties could not be found.",
+    mergeArchived: "One of these counterparties is already archived.",
+    mergeNotFound: "That merge could not be found, or was already undone.",
   },
   categories: {
     /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
@@ -441,6 +538,11 @@ export const en = {
 
     currencies: "Currencies",
     rates: "Exchange rates",
+
+    /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
+    counterparty: "Counterparty",
+    newCounterparty: "New counterparty",
+    editCounterparty: "Edit counterparty",
   },
   /**
    * `settle_debt`'s refusals (H9), resolved through `useT()` the same way
@@ -453,6 +555,11 @@ export const en = {
     nothingToSettle: "There is nothing open in this currency to settle.",
     currencies: "Currencies",
     rates: "Exchange rates",
+
+    /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
+    counterparty: "Counterparty",
+    newCounterparty: "New counterparty",
+    editCounterparty: "Edit counterparty",
   },
   /** `packages/ui/src/fx/` and the two screens it feeds — S17, S18. */
   fx: {

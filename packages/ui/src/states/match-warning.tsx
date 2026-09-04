@@ -7,6 +7,11 @@
  * corrupts a balance (`SPEC.md` §6.6), and an abstract warning does not convey
  * that. The balance renders through `<Amount>`, never restated as a string.
  *
+ * **`balance` is `null` when the candidate's own cross-currency net could not
+ * be computed** (P1 — one of *their* held currencies has no rate) — the
+ * figure is omitted rather than showing a wrong or partial number; the
+ * warning still fires on the name alone.
+ *
  * **Two explicit actions, no default.** Both buttons are `secondary` — the
  * moment one of them is `primary` it reads as the recommended choice, and
  * §8.4 is explicit that there is not one: *"This is the same one"* merges,
@@ -25,7 +30,8 @@ import { space } from "../tokens.ts";
 
 export type MatchWarningCandidate = {
   name: string;
-  balance: money.Money;
+  /** `null` when the candidate's own net could not be computed (P1) — the figure is omitted. */
+  balance: money.Money | null;
   currency: string;
   decimals?: number;
   transactionCount: number;
@@ -45,12 +51,14 @@ export function MatchWarning({ candidate, onSame, onDifferent }: MatchWarningPro
     <View style={styles.root}>
       <View style={styles.candidate}>
         <Text style={styles.name}>{candidate.name}</Text>
-        <Amount
-          value={candidate.balance}
-          currency={candidate.currency}
-          decimals={candidate.decimals ?? 2}
-          size="body"
-        />
+        {candidate.balance === null ? null : (
+          <Amount
+            value={candidate.balance}
+            currency={candidate.currency}
+            decimals={candidate.decimals ?? 2}
+            size="body"
+          />
+        )}
         <Text style={styles.meta}>
           {t("states.matchWarning.transactionCount", { count: candidate.transactionCount })}
         </Text>

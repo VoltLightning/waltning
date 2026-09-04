@@ -64,7 +64,10 @@ const COUNTERPARTY = {
   name: "Costa",
   kind: "person" as const,
   settlementCurrency: null,
+  contact: null,
+  note: "",
   archived: false,
+  version: 1,
 };
 
 function fakeController(
@@ -84,6 +87,7 @@ function fakeController(
         symbol: "zł",
         decimals: 2,
         capturable: overrides.capturable ?? true,
+        isPivot: true,
       },
     ],
     listGroups: () => [],
@@ -141,6 +145,8 @@ function fakeController(
     convertLeafGroup: vi.fn(),
     mergeCategories: vi.fn(),
     archiveCategory: vi.fn(),
+    listCounterpartyMerges: vi.fn(() => []),
+    listDistinctCounterpartyPairs: vi.fn(() => []),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

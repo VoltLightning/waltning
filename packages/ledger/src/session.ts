@@ -85,6 +85,11 @@ import {
   readCounterpartyBalances,
 } from "./counterparties/read-counterparty-balances.ts";
 import {
+  type LocalCounterpartyMerge,
+  readCounterpartyMerges,
+} from "./counterparties/read-counterparty-merges.ts";
+import { readDistinctCounterpartyPairs } from "./counterparties/read-distinct-counterparty-pairs.ts";
+import {
   type LocalDistinctPairRow,
   recordDistinctCounterpartiesExecutor,
 } from "./counterparties/record-distinct-counterparties.executor.ts";
@@ -218,6 +223,15 @@ export type LocalLedgerSession = {
   listCategoryUsage: () => ReadonlyMap<Id<"categories">, number>;
   /** The merge preview's exact pre-write counts — see `readCategoryReferenceCounts`. */
   readCategoryReferenceCounts: (categoryId: Id<"categories">) => CategoryReferenceCounts;
+  /** S13's overflow — merges into one counterparty, still live. See `readCounterpartyMerges`. */
+  listCounterpartyMerges: (
+    counterpartyId: Id<"counterparties">,
+  ) => readonly LocalCounterpartyMerge[];
+  /** S15 §9.1 — every pair `record_distinct_counterparties` has recorded. See `readDistinctCounterpartyPairs`. */
+  listDistinctCounterpartyPairs: () => readonly (readonly [
+    Id<"counterparties">,
+    Id<"counterparties">,
+  ])[];
   /** §3, per currency — C2's hero (`DualTotal`), not the phone-preview's single subtotal. */
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
@@ -435,6 +449,9 @@ export function createLocalLedgerSession<TRun>(
     listCategoryUsage: () => readCategoryUsage(requireOpen().replica.db),
     readCategoryReferenceCounts: (categoryId) =>
       readCategoryReferenceCounts(requireOpen().replica.db, categoryId),
+    listCounterpartyMerges: (counterpartyId) =>
+      readCounterpartyMerges(requireOpen().replica.db, counterpartyId),
+    listDistinctCounterpartyPairs: () => readDistinctCounterpartyPairs(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),

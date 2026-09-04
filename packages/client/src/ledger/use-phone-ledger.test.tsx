@@ -27,6 +27,7 @@ describe("usePhoneLedger", () => {
             symbol: "zł",
             decimals: 2,
             capturable: true,
+            isPivot: true,
           },
         ],
         listGroups: () => [],
@@ -42,6 +43,8 @@ describe("usePhoneLedger", () => {
         readPeriodSpend: () => [],
         listUnsettledClearing: () => [],
         listCounterpartyBalances: () => [],
+        listCounterpartyMerges: () => [],
+        listDistinctCounterpartyPairs: () => [],
         balanceAsOf: vi.fn(),
         searchTransactions: () => ({
           rows: [],

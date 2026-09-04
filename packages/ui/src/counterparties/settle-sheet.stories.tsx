@@ -20,7 +20,7 @@ const meta = {
     visible: true,
     counterpartyName: "Nina",
     balances: [{ currency: "EUR", balance: toMoney("-120"), decimals: 2 }],
-    accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN" }],
+    accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN", capturable: true }],
     amountRaw: "",
     dischargesCurrency: "EUR",
     onDischargesCurrencyChange: noop,
@@ -83,5 +83,14 @@ export const MultipleBalances: Story = {
       { currency: "EUR", balance: toMoney("-120"), decimals: 2 },
       { currency: "GBP", balance: toMoney("60"), decimals: 2 },
     ],
+  },
+};
+
+/** L3 — every held balance is dust at its own currency's scale (M1's own filter, empty): nothing here for Settle to discharge, and Settle itself stays disabled. */
+export const NothingToSettle: Story = {
+  args: {
+    balances: [{ currency: "EUR", balance: toMoney("0.004"), decimals: 2 }],
+    dischargesCurrency: null,
+    referenceRate: undefined,
   },
 };

@@ -46,6 +46,15 @@ export type LocalCurrency = {
    * are separate capabilities (§14.6).
    */
   capturable: boolean;
+  /**
+   * §7.0 — the one currency `fx_rates` is quoted against. **The display
+   * currency, absent the header toggle §7.0 names and no wave has built
+   * yet** — S12/S13's `net in {display}` (`SPEC.md` §6.6) resolves against
+   * whichever currency this marks, the same fallback `computations.md` §4.6
+   * already gives a display figure that equals the pivot: "the join is
+   * skipped".
+   */
+  isPivot: boolean;
 };
 
 export function readCurrencies<TRun, TSchema extends typeof ledgerSchema>(
@@ -82,5 +91,6 @@ export function readCurrencies<TRun, TSchema extends typeof ledgerSchema>(
   return rows.map(({ isPivot, ...currency }) => ({
     ...currency,
     capturable: pivot !== undefined && (isPivot || quoted.has(currency.code)),
+    isPivot,
   }));
 }

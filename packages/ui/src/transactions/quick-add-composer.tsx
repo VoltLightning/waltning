@@ -40,6 +40,7 @@ import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { AmountField } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
+import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
@@ -105,6 +106,12 @@ export type QuickAddComposerProps = {
   onCounterpartyChange: (counterpartyId: string) => void;
   counterpartyRole: CounterpartyRole | null;
   onCounterpartyRoleChange: (role: CounterpartyRole) => void;
+  /**
+   * S15's *+ New* escape — the counterparty sheet's own footer, the same
+   * shape `onCreateAccount` already gives the account sheet. Optional: a
+   * screen that has not wired S15 yet (a story, an older test) still renders.
+   */
+  onCreateCounterparty?: () => void;
   /** `create_transaction`'s own field paths — same keys `QuickAddForm` resolves. */
   fieldErrors?: FieldErrorMap;
   onCancel: () => void;
@@ -138,6 +145,7 @@ export function QuickAddComposer({
   onCounterpartyChange,
   counterpartyRole,
   onCounterpartyRoleChange,
+  onCreateCounterparty,
   fieldErrors,
   onCancel,
 }: QuickAddComposerProps) {
@@ -368,6 +376,13 @@ export function QuickAddComposer({
           counterpartyRole={counterpartyRole}
           onCounterpartyRoleChange={onCounterpartyRoleChange}
         />
+        {onCreateCounterparty ? (
+          <Button
+            label={t("transactions.newCounterparty")}
+            onPress={onCreateCounterparty}
+            variant="secondary"
+          />
+        ) : null}
       </BottomSheet>
     </View>
   );

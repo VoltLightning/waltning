@@ -8,6 +8,7 @@
     "./accounts/*": "./src/accounts/*.ts",
     "./appearance/*": "./src/appearance/*.ts",
     "./connectivity/*": "./src/connectivity/*.ts",
+    "./counterparties/*": "./src/counterparties/*.ts",
     "./currencies/*": "./src/currencies/*.ts",
     "./device/*": "./src/device/*.ts",
     "./ledger/*": "./src/ledger/*.ts",

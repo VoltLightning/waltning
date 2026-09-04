@@ -47,7 +47,6 @@ vi.mock("expo-router", () => ({
 import NewAccount from "./account-creation-screen";
 import CalendarStub from "./calendar-screen";
 import CategoriesScreen from "./categories-screen";
-import DebtStub from "./debt-screen";
 import QuickAdd from "./quick-add-screen";
 import SettingsScreen from "./settings-screen";
 import Today from "./today-screen";
@@ -175,6 +174,7 @@ function fakeController(
         symbol: "zł",
         decimals: 2,
         capturable: true,
+        isPivot: true,
       },
     ],
     listGroups: () => [],
@@ -190,6 +190,8 @@ function fakeController(
     readPeriodSpend: () => periodSpendRows,
     listUnsettledClearing: () => unsettledOf(accounts),
     listCounterpartyBalances: () => [],
+    listCounterpartyMerges: () => [],
+    listDistinctCounterpartyPairs: () => [],
     balanceAsOf: () => toMoney("0"),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
     // does) — an empty page and a no-op are enough to satisfy the port.
@@ -449,6 +451,7 @@ describe("Today", () => {
           symbol: "zł",
           decimals: 2,
           capturable: true,
+          isPivot: true,
         },
       ],
       listGroups: () => [],
@@ -471,6 +474,8 @@ describe("Today", () => {
         },
       ],
       listCounterpartyBalances: () => [],
+      listCounterpartyMerges: () => [],
+      listDistinctCounterpartyPairs: () => [],
       balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],
@@ -598,6 +603,7 @@ describe("Today", () => {
           symbol: "zł",
           decimals: 2,
           capturable: true,
+          isPivot: true,
         },
       ],
       listGroups: () => [],
@@ -613,6 +619,8 @@ describe("Today", () => {
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
       listCounterpartyBalances: () => [],
+      listCounterpartyMerges: () => [],
+      listDistinctCounterpartyPairs: () => [],
       balanceAsOf: () => toMoney("0"),
       searchTransactions: () => ({
         rows: [],
@@ -720,16 +728,13 @@ describe("NewAccount", () => {
 });
 
 /**
- * The remaining tab stubs — S11/S12 until their own arcs build the real
- * screen. Each names itself and offers the one honest way out: Today.
- * `Ledger` graduated out of this list — C4 built S10 for real, its own
- * `ledger-screen.test.tsx`.
+ * The remaining tab stub — S11 until its own arc builds the real screen. It
+ * names itself and offers the one honest way out: Today. `Ledger` graduated
+ * out of this list at C4 (S10, `ledger-screen.test.tsx`); `Debt` graduated at
+ * E4 (S12, `debt-screen.test.tsx`).
  */
 describe("tab stubs", () => {
-  it.each([
-    ["Calendar", CalendarStub],
-    ["Debt", DebtStub],
-  ])("%s names itself and returns to Today", (title, Stub) => {
+  it.each([["Calendar", CalendarStub]])("%s names itself and returns to Today", (title, Stub) => {
     render(<Stub />);
     expect(screen.getByText(title)).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Go to Today" }));

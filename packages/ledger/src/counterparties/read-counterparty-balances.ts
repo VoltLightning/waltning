@@ -106,6 +106,12 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
     .from(transactions)
     .innerJoin(counterparties, eq(transactions.counterpartyId, counterparties.id))
     .where(and(isNull(transactions.deletedAt), eq(transactions.counterpartyRole, "debt")))
+    // M3 — deterministic input order. `fifoOldestOpen` re-sorts by
+    // `(date, id)` internally so this never changes ageing, but the fold
+    // below builds `byCounterparty` (and each bucket's own `balances`) by
+    // walking these rows in order, and nothing downstream should have to
+    // depend on whatever order SQLite happened to return them in.
+    .orderBy(transactions.counterpartyId, transactions.currency)
     .all();
 
   const decimalsByCurrency = new Map(

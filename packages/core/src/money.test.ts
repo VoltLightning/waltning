@@ -182,6 +182,18 @@ describe("forDisplay — the reading form", () => {
   it("is not round-trippable, deliberately", () => {
     expect(() => money.toMoney(money.forDisplay(money.toMoney("48210.00"), 2))).toThrow();
   });
+
+  /**
+   * L2 — a value that rounds to zero renders unsigned. `toFixed` alone keeps
+   * the minus from `-0.004`, reading as `-0,00` — a negative sign on a
+   * figure a reader sees as nothing.
+   */
+  it("renders dust that rounds to zero without a minus sign", () => {
+    expect(money.forDisplay(money.toMoney("-0.004"), 2)).toBe("0.00");
+    expect(money.forDisplay(money.toMoney("0.004"), 2)).toBe("0.00");
+    // Still signed once it is a real amount at this scale.
+    expect(money.forDisplay(money.toMoney("-0.006"), 2)).toBe("-0.01");
+  });
 });
 
 describe("§4 — display conversion", () => {
@@ -256,5 +268,76 @@ describe("§4a / §7.5 — FX margin on a transfer", () => {
     });
     expect(result.marginPivot).toBe("0.00000000");
     expect(result.realizedRate).toBe("1.00000000");
+  });
+});
+
+/** H2 — a residual that rounds to zero at the currency's own scale reads as settled, never a direction. */
+describe("debtDirection — rounded to the currency's own scale (H2)", () => {
+  it("reads sub-minor-unit dust as settled, not a direction", () => {
+    expect(money.debtDirection(money.toMoney("0.00000001"), 2)).toBe("settled");
+    expect(money.debtDirection(money.toMoney("-0.00000001"), 2)).toBe("settled");
+  });
+
+  it("still reads a real balance in either direction", () => {
+    expect(money.debtDirection(money.toMoney("120.50"), 2)).toBe("theyOwe");
+    expect(money.debtDirection(money.toMoney("-120.50"), 2)).toBe("youOwe");
+  });
+
+  it("rounds at the currency's own scale, not a fixed one — a JPY (0dp) residual under 0.5 is settled", () => {
+    expect(money.debtDirection(money.toMoney("0.4"), 0)).toBe("settled");
+    expect(money.debtDirection(money.toMoney("0.6"), 0)).toBe("theyOwe");
+  });
+});
+
+describe("directionTotals — dust at scale (H2, H4)", () => {
+  it("omits a currency whose totals both round to zero at its own scale", () => {
+    const rows = [
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("0.00000001"), decimals: 2 },
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("-0.00000001"), decimals: 2 },
+    ];
+    expect(money.directionTotals(rows)).toEqual([]);
+  });
+
+  it("carries decimals on every row it returns (H4)", () => {
+    const rows = [
+      { currency: money.currencyCode("JPY"), balance: money.toMoney("500"), decimals: 0 },
+    ];
+    expect(money.directionTotals(rows)).toEqual([
+      {
+        currency: "JPY",
+        theyOwe: money.toMoney("500"),
+        youOwe: money.toMoney("0"),
+        decimals: 0,
+      },
+    ]);
+  });
+
+  /**
+   * M1 — the total is the sum of what the rows show, never a full-precision
+   * sum rounded only at the end. Three counterparties at +0.004 PLN each
+   * round to 0,00 individually (settled) — summing the raw 8dp balances
+   * first gives 0.012, which rounds to a header of 0,01 while every row
+   * reads settled and the segment lists nobody.
+   */
+  it("rounds each balance to its own scale before summing (M1)", () => {
+    const rows = [
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("0.004"), decimals: 2 },
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("0.004"), decimals: 2 },
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("0.004"), decimals: 2 },
+    ];
+    expect(money.directionTotals(rows)).toEqual([]);
+  });
+
+  /**
+   * L4 — two rows of the same currency disagreeing on `decimals` is a wrong
+   * scale, never silently resolved by picking whichever row's own `decimals`
+   * happened to set the bucket first (H3's own lesson, applied here too).
+   */
+  it("throws when two rows of one currency disagree on decimals (L4)", () => {
+    const rows = [
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("10"), decimals: 2 },
+      { currency: money.currencyCode("PLN"), balance: money.toMoney("5"), decimals: 0 },
+    ];
+    expect(() => money.directionTotals(rows)).toThrow(/decimals/);
   });
 });

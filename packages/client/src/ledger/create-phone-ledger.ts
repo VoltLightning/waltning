@@ -131,6 +131,14 @@ export type PhoneCurrency = {
    * the ordinary state of a phone that has never synced (§14.6).
    */
   capturable: boolean;
+  /**
+   * §7.0 — the one currency `fx_rates` is quoted against. Stands in for the
+   * *display currency* until the header toggle §7.0 names exists: S12/S13's
+   * `net in {display}` (`SPEC.md` §6.6) resolves against whichever currency
+   * this marks, matching `computations.md` §4.6's own fallback ("when
+   * display equals pivot, that join is skipped").
+   */
+  isPivot: boolean;
 };
 
 /**
@@ -278,13 +286,32 @@ export type PhoneCounterparty = {
   name: string;
   kind: CounterpartyKind;
   settlementCurrency: CurrencyCode | null;
+  /** S15's editor — the two free-text fields `create_counterparty`/`update_counterparty` also carry. */
+  contact: string | null;
+  note: string;
   archived: boolean;
+  /** `update_counterparty`'s optimistic-concurrency check (`counterparties.staleVersion`). */
+  version: number;
 };
 
 /** What settling with someone actually did — H9, never supplied, only returned. */
 export type PhoneSettleDebtResult = {
   residual: Money;
   overSettled: boolean;
+};
+
+/**
+ * S13's overflow — one merge into a counterparty, still live. Structural,
+ * like `PhoneCounterparty` above: this package stays free of
+ * `@waltning/ledger`.
+ */
+export type PhoneCounterpartyMerge = {
+  mergeId: Id<"counterpartyMerges">;
+  /** The absorbed counterparty's own name — archived, not deleted (S15 §9.2). */
+  loserName: string;
+  mergedAt: Date;
+  /** How many transactions this merge repointed. */
+  movedCount: number;
 };
 
 /**
@@ -324,6 +351,10 @@ export type PhoneSearchFilter = {
   scope?: PhoneTransactionScope;
   from?: AccountingDate;
   to?: AccountingDate;
+  /** S13's whole history — every row naming this counterparty, any role. */
+  counterpartyId?: Id<"counterparties">;
+  /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
+  counterpartyRole?: "debt" | "contribution" | "reference";
 };
 
 export type PhoneSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
@@ -351,6 +382,8 @@ export type PhoneSearchTransaction = {
   toDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
+  /** `null` off any row with no counterparty at all — the ordinary case. */
+  counterpartyRole: "debt" | "contribution" | "reference" | null;
 };
 
 export type PhoneCurrencyTotal = {
@@ -496,6 +529,15 @@ export type PhoneLedgerPort = {
   listCategoryUsage: () => ReadonlyMap<Id<"categories">, number>;
   /** The merge preview's exact pre-write counts — see `readCategoryReferenceCounts`. */
   readCategoryReferenceCounts: (categoryId: Id<"categories">) => PhoneCategoryReferenceCounts;
+  /** S13's overflow, on demand — merges into one counterparty, still live. */
+  listCounterpartyMerges: (
+    counterpartyId: Id<"counterparties">,
+  ) => readonly PhoneCounterpartyMerge[];
+  /** S15 §9.1's own table — read whole, on every refresh (it is small). */
+  listDistinctCounterpartyPairs: () => readonly (readonly [
+    Id<"counterparties">,
+    Id<"counterparties">,
+  ])[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
@@ -635,6 +677,18 @@ export type PhoneDirectionTotal = money.DirectionTotalRow;
 export type PhonePayeeHistoryRow = PayeeHistoryRow;
 
 export type PhoneLedgerSnapshot = {
+  /**
+   * How many times `refresh()` has completed, success or failure — `0` until
+   * the very first one has (H1). A screen that derives state from another
+   * field of this snapshot (`currencies`, say, to find the pivot) cannot
+   * tell "the replica genuinely holds nothing" from "no `refresh()` has run
+   * yet" by looking at that field alone; `revision > 0` is that distinction,
+   * named once here rather than re-derived per screen. It also doubles as
+   * `useMemo`'s own invalidation key for a read outside the snapshot itself
+   * (`searchTransactions`, on demand) — a write bumps it exactly when a
+   * memoised read has gone stale (M2).
+   */
+  revision: number;
   accounts: readonly PhoneCapturableAccount[];
   /**
    * Empty until `loadArchived()` runs — S16's register loads them lazily,
@@ -669,6 +723,13 @@ export type PhoneLedgerSnapshot = {
   netWorth: readonly PhoneNetWorth[];
   /** §8's unsettled clearing accounts — non-empty only when the banner shows (C2). */
   unsettledClearing: readonly PhoneClearingAccount[];
+  /**
+   * S15 §9.1 — every pair `record_distinct_counterparties` has recorded,
+   * read whole on every `refresh()` (a small table). `nearMatches`' own
+   * `distinctPairs` option, so a pair told apart once is never asked about
+   * again, across sessions.
+   */
+  distinctCounterpartyPairs: readonly (readonly [Id<"counterparties">, Id<"counterparties">])[];
   /**
    * Set from a failed `refresh()`, cleared by the next successful one.
    *
@@ -782,6 +843,8 @@ export type TransactionFilterDraft = {
   scope?: PhoneTransactionScope;
   from?: string;
   to?: string;
+  counterpartyId?: string;
+  counterpartyRole?: "debt" | "contribution" | "reference";
 };
 
 export type TransactionSearchCursorDraft = { date: string; id: string };
@@ -1018,6 +1081,10 @@ export type PhoneLedgerController = {
    * this call's own result — a pure function, not a second round trip.
    */
   listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  /** S13's overflow, on demand — merges into one counterparty, still live. */
+  listCounterpartyMerges: (
+    counterpartyId: Id<"counterparties">,
+  ) => readonly PhoneCounterpartyMerge[];
   /**
    * S16 §5, on demand — `ReconcileSheet`'s "Computed" figure, refolded every
    * time its own date field moves rather than fixed to the balance the sheet
@@ -1344,24 +1411,27 @@ function unmergeCounterpartiesRefusal(error: unknown): FieldError | null {
  * `counterpartyId`; a zero balance in the chosen currency lands on
  * `discharges.currency`, the field that picked a currency with nothing open
  * rather than the amount typed against it.
+ *
+ * **C1 — never falls through to `refusalFromThrow`'s raw English.** Every
+ * other write in this file (`accountWriteRefusal` and friends) is allowed to
+ * return `null` for an unrecognised message, because their own screens print
+ * `refusalFromThrow`'s `path: ""` text as-is — a developer-facing string, but
+ * one nobody has flagged. `settle_debt`'s own screen resolves every
+ * `messageKey` through `useT()`, so an unrecognised executor message reaching
+ * it unkeyed would be the one place that text leaks to a person. This mapper
+ * therefore never returns `null`: an unrecognised message still lands
+ * form-level (`path: ""`), carrying the shared `common.couldNotSave` key
+ * instead.
  */
-function settleDebtRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
-  if (error.message.includes("no counterparty")) {
-    return {
-      path: "counterpartyId",
-      message: error.message,
-      messageKey: "settleDebt.noCounterparty",
-    };
+function settleDebtRefusal(error: unknown): FieldError {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("no counterparty")) {
+    return { path: "counterpartyId", message, messageKey: "settleDebt.noCounterparty" };
   }
-  if (error.message.includes("nothing to settle")) {
-    return {
-      path: "discharges.currency",
-      message: error.message,
-      messageKey: "settleDebt.nothingToSettle",
-    };
+  if (message.includes("nothing to settle")) {
+    return { path: "discharges.currency", message, messageKey: "settleDebt.nothingToSettle" };
   }
-  return null;
+  return { path: "", message, messageKey: "common.couldNotSave" };
 }
 
 /**
@@ -1496,6 +1566,7 @@ export function createPhoneLedger(
   runtime: PhoneLedgerRuntime,
 ): PhoneLedgerController {
   let snapshot: PhoneLedgerSnapshot = {
+    revision: 0,
     accounts: [],
     archivedAccounts: [],
     currencies: [],
@@ -1511,6 +1582,7 @@ export function createPhoneLedger(
     subtotals: [],
     netWorth: [],
     unsettledClearing: [],
+    distinctCounterpartyPairs: [],
   };
   const listeners = new Set<() => void>();
   const { diagnostics } = runtime;
@@ -1547,6 +1619,7 @@ export function createPhoneLedger(
       const fullCategoryTree = port.listFullCategoryTree();
       const categoryUsage = port.listCategoryUsage();
       snapshot = {
+        revision: snapshot.revision + 1,
         accounts: accounts.map((account) => ({
           ...account,
           capturable: capturable.has(account.currency),
@@ -1565,6 +1638,7 @@ export function createPhoneLedger(
         subtotals: subtotalsOf(accounts),
         netWorth: port.listNetWorth(),
         unsettledClearing: port.listUnsettledClearing(),
+        distinctCounterpartyPairs: port.listDistinctCounterpartyPairs(),
       };
       for (const listener of listeners) listener();
       emitClientDiagnostic(diagnostics, {
@@ -1580,11 +1654,18 @@ export function createPhoneLedger(
         error: clientFailure(error),
       });
       // S04 §6: the hero keeps its last known figure rather than blanking, so
-      // this spreads the prior snapshot instead of replacing it — only `error`
-      // is new. Listeners still fire: a screen already mounted needs to hear
-      // about this exactly as it hears about a success, or `ErrorState` never
-      // appears until something unrelated re-renders it.
-      snapshot = { ...snapshot, error: clientFailure(error).message };
+      // this spreads the prior snapshot instead of replacing it — only
+      // `error` and `revision` are new (H1 — a failed attempt still counts as
+      // one, or a screen gated on `revision > 0` would wait forever behind an
+      // error `refresh()` never recovers from). Listeners still fire: a
+      // screen already mounted needs to hear about this exactly as it hears
+      // about a success, or `ErrorState` never appears until something
+      // unrelated re-renders it.
+      snapshot = {
+        ...snapshot,
+        revision: snapshot.revision + 1,
+        error: clientFailure(error).message,
+      };
       for (const listener of listeners) listener();
       throw error;
     }
@@ -1603,6 +1684,7 @@ export function createPhoneLedger(
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
+    listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listPayeeHistory: () => port.listPayeeHistory(),
     searchTransactions: (filter, cursor) =>
@@ -1625,6 +1707,10 @@ export function createPhoneLedger(
           ...(filter.to !== undefined && isAccountingDate(filter.to)
             ? { to: accountingDate(filter.to) }
             : {}),
+          ...(filter.counterpartyId !== undefined
+            ? { counterpartyId: id<"counterparties">(filter.counterpartyId) }
+            : {}),
+          ...(filter.counterpartyRole ? { counterpartyRole: filter.counterpartyRole } : {}),
         },
         cursor
           ? { date: accountingDate(cursor.date), id: id<"transactions">(cursor.id) }
@@ -2162,6 +2248,36 @@ export function createPhoneLedger(
         phase: "start",
       });
       try {
+        /**
+         * **Refused here, so it cannot throw from inside the write.**
+         *
+         * The same guard `createTransaction` runs above (§14.6): `settle_debt`'s
+         * executor derives a pivot valuation the same way `create_transaction`'s
+         * does, and refuses mid-write once the outbox entry has already
+         * committed. Declining first is the difference between "not yet" and a
+         * silent loss. Only checked when the account is known locally — an
+         * unrecognised `accountId` is left to the schema/executor exactly as
+         * before, this guard adds nothing there.
+         */
+        const account = snapshot.accounts.find((candidate) => candidate.id === draft.accountId);
+        if (account && !account.capturable) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "accountId",
+                message: `${account.currency} needs an exchange rate before a transaction can be recorded in it`,
+                messageKey: "transactions.needsRate",
+                params: { currency: account.currency },
+              },
+            ],
+          };
+        }
+
         const capture = runtime.capture();
         const parsed = settleDebtInput.safeParse({
           id: runtime.id<"transactions">(),
@@ -2186,13 +2302,12 @@ export function createPhoneLedger(
         try {
           settled = port.settleDebt(parsed.data, capture);
         } catch (refusal) {
-          const fieldError = settleDebtRefusal(refusal);
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
             phase: "success",
           });
-          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
+          return { fieldErrors: [settleDebtRefusal(refusal)] };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {

@@ -2,7 +2,8 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
-import { beforeEach, describe, expect, it } from "vitest";
+import Database from "better-sqlite3";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ledgerSchema } from "../schema-map.ts";
 import { type ScratchStores, scratchStores } from "../test/stores.ts";
 import {
@@ -11,7 +12,7 @@ import {
   type TransactionSearchCursor,
 } from "./search-transactions.ts";
 
-const { accounts, categories, currencies, transactions } = ledgerSchema;
+const { accounts, categories, counterparties, currencies, transactions } = ledgerSchema;
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -163,6 +164,55 @@ describe("searchTransactions — structural filters, alone and combined", () => 
     expect(result.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
   });
 
+  it("filters by counterparty — E4's S13 history, any role", () => {
+    const nina = id<"counterparties">("00000000-0000-4000-8000-0000000000d1");
+    stores.ledger.replica.db
+      .insert(counterparties)
+      .values([{ id: nina, name: "Nina", kind: "person" }])
+      .run();
+    insertExpense({
+      id: "00000000-0000-4000-8000-000000000004",
+      payee: "Lent for tickets",
+      counterpartyId: nina,
+      counterpartyRole: "debt",
+      date: accountingDate("2026-08-20"),
+    });
+
+    const result = searchTransactions(stores.ledger.replica.db, { counterpartyId: nina });
+    expect(result.rows.map((r) => r.payee)).toEqual(["Lent for tickets"]);
+    expect(result.rows[0]?.counterpartyRole).toBe("debt");
+  });
+
+  it("filters by counterparty role — S13's debts-only default", () => {
+    const nina = id<"counterparties">("00000000-0000-4000-8000-0000000000d2");
+    stores.ledger.replica.db
+      .insert(counterparties)
+      .values([{ id: nina, name: "Nina", kind: "person" }])
+      .run();
+    insertExpense({
+      id: "00000000-0000-4000-8000-000000000005",
+      payee: "Dinner, split four ways",
+      counterpartyId: nina,
+      counterpartyRole: "debt",
+      date: accountingDate("2026-08-06"),
+    });
+    insertExpense({
+      id: "00000000-0000-4000-8000-000000000006",
+      payee: "Just involved",
+      counterpartyId: nina,
+      counterpartyRole: "reference",
+      date: accountingDate("2026-08-07"),
+    });
+
+    const debtOnly = searchTransactions(stores.ledger.replica.db, {
+      counterpartyId: nina,
+      counterpartyRole: "debt",
+    });
+    const every = searchTransactions(stores.ledger.replica.db, { counterpartyId: nina });
+    expect(debtOnly.rows.map((r) => r.payee)).toEqual(["Dinner, split four ways"]);
+    expect(every.rows.length).toBe(2);
+  });
+
   it("combines every filter with AND", () => {
     const result = searchTransactions(stores.ledger.replica.db, {
       text: "groceries",
@@ -200,6 +250,49 @@ describe("searchTransactions — paging", () => {
     expect(seen).toHaveLength(total);
     expect(new Set(seen).size).toBe(total);
     expect(pages).toBe(Math.ceil(total / SEARCH_PAGE_SIZE));
+  });
+
+  /**
+   * M2 — the page query pushes `LIMIT` into SQL rather than reading every
+   * matching row and slicing a page off in JS. 200 rows, page size 50:
+   * counting the rows the page returns would pass either way (both
+   * implementations answer 50), so this inspects the SQL SQLite actually
+   * executes instead, via `better-sqlite3`'s own `prepare` — the one call
+   * both paths must go through.
+   */
+  it("pushes a LIMIT into the page query, for a text-free filter", () => {
+    for (let i = 0; i < 200; i++) {
+      insertExpense({
+        id: `20000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        date: accountingDate(`2026-01-${String((i % 28) + 1).padStart(2, "0")}`),
+      });
+    }
+
+    const prepareSpy = vi.spyOn(Database.prototype, "prepare");
+    searchTransactions(stores.ledger.replica.db, {});
+    const statements = prepareSpy.mock.calls.map(([sql]) => String(sql));
+    prepareSpy.mockRestore();
+
+    expect(statements.some((sql) => /\blimit\b/i.test(sql))).toBe(true);
+  });
+
+  /**
+   * L — `total.count` is `totalRows.length`: `totalRows` is read in full
+   * regardless, to fold the currency sums beside it, so a second `count(*)`
+   * over the same filter would be a pure pessimization rather than a real
+   * saving — one query, no `LIMIT`, one honest count.
+   */
+  it("counts the total from the same rows the currency sums fold, for a text-free filter", () => {
+    for (let i = 0; i < 5; i++) {
+      insertExpense({
+        id: `40000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        date: accountingDate(`2026-01-${String((i % 28) + 1).padStart(2, "0")}`),
+      });
+    }
+
+    const result = searchTransactions(stores.ledger.replica.db, {});
+
+    expect(result.total.count).toBe(5);
   });
 });
 

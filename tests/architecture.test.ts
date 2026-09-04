@@ -440,6 +440,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "accounts",
       "appearance",
       "connectivity",
+      "counterparties",
       "currencies",
       "device",
       "ledger",
