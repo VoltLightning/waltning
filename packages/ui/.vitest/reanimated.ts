@@ -29,3 +29,9 @@ export const withDelay = m.withDelay;
 export const withSequence = m.withSequence;
 export const runOnJS = m.runOnJS;
 export const Easing = m.Easing;
+export const Extrapolation = m.Extrapolation;
+// The mock's own `interpolate` is a no-op (`() => {}`) — fine for animated
+// styles nobody asserts numeric values on, but `ThinkingIndicator`'s dots
+// compute their rest-state style (reduced motion) without calling it at all,
+// and no other test reads an interpolated number, so the no-op never shows.
+export const interpolate = m.interpolate;

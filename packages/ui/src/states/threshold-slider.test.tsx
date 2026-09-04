@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
+import { Gesture } from "react-native-gesture-handler";
 import { describe, expect, it, vi } from "vitest";
 import {
   BADGE_WIDTH,
@@ -69,6 +70,22 @@ describe("ThresholdSlider", () => {
     render(<ThresholdSlider value={THRESHOLD_MIN} onChange={onChange} />);
     fireEvent.keyDown(screen.getByRole("slider"), { key: "ArrowLeft" });
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps the pan gesture's identity stable across a value change", () => {
+    // A controlled `value` prop changes on every drag frame — `pan`'s own
+    // `onUpdate` calls `onChange`. If the gesture object were rebuilt on
+    // that change, `GestureDetector` would tear down and reattach the
+    // native handler mid-drag, which drops the pointer capture on web: the
+    // owner's *"can't move it"*. Rebuilding only for an actual layout or
+    // a11y-setting change is the fix; a `value`/`onChange` change alone must
+    // never touch the gesture's identity.
+    const panSpy = vi.spyOn(Gesture, "Pan");
+    const onChange = vi.fn();
+    const { rerender } = render(<ThresholdSlider value={0.8} onChange={onChange} />);
+    expect(panSpy).toHaveBeenCalledTimes(1);
+    rerender(<ThresholdSlider value={0.81} onChange={onChange} />);
+    expect(panSpy).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -34,7 +34,7 @@
  * literal JSX attribute the stricter type would refuse.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { type AccessibilityActionEvent, type LayoutChangeEvent, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle } from "react-native-reanimated";
@@ -135,13 +135,38 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
   const usable = Math.max(0, trackWidth - THUMB);
   const clamped = clamp(value);
 
-  const handleChange = useCallback(
-    (next: number) => {
-      const stepped = clamp(next);
-      if (stepped !== clamped) onChange(stepped);
-    },
-    [clamped, onChange],
-  );
+  /**
+   * `value`/`onChange`, and `press`'s own callbacks, read through refs —
+   * never `useCallback`/`useMemo` deps.
+   *
+   * `handleChange` fires from `pan`'s `onUpdate` on every drag frame, and
+   * each call changes the controlled `value` prop — which would change
+   * `clamped`, which would change a dep-tracked `handleChange`, which would
+   * change `pan` itself. `GestureDetector` tears down and reattaches the
+   * native handler whenever its `gesture` prop's identity changes, and on
+   * web that drops the pointer capture mid-drag: the first frame moves the
+   * thumb and every frame after is silently lost — the owner's *"can't move
+   * it"*. `press.onPressIn`/`onPressOut` get the same treatment for the same
+   * reason, rather than trusting `usePressScale`'s own memoization to hold:
+   * `pan`'s identity must depend only on what actually changing it should
+   * rebuild the gesture for — an actual layout change (`usable`) or a11y
+   * setting (`reduced`) — and nothing else.
+   */
+  const clampedRef = useRef(clamped);
+  clampedRef.current = clamped;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const pressInRef = useRef(press.onPressIn);
+  pressInRef.current = press.onPressIn;
+  const pressOutRef = useRef(press.onPressOut);
+  pressOutRef.current = press.onPressOut;
+
+  const handleChange = useCallback((next: number) => {
+    const stepped = clamp(next);
+    if (stepped !== clampedRef.current) onChangeRef.current(stepped);
+  }, []);
+  const handlePressIn = useCallback(() => pressInRef.current(), []);
+  const handlePressOut = useCallback(() => pressOutRef.current(), []);
 
   const pan = useMemo(() => {
     return (
@@ -153,7 +178,7 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
         .minDistance(0)
         .onStart((event) => {
           "worklet";
-          if (!reduced) runOnJS(press.onPressIn)();
+          if (!reduced) runOnJS(handlePressIn)();
           runOnJS(handleChange)(offsetToValue(event.x, usable));
         })
         .onUpdate((event) => {
@@ -162,10 +187,10 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
         })
         .onEnd(() => {
           "worklet";
-          if (!reduced) runOnJS(press.onPressOut)();
+          if (!reduced) runOnJS(handlePressOut)();
         })
     );
-  }, [usable, reduced, handleChange, press.onPressIn, press.onPressOut]);
+  }, [usable, reduced, handleChange, handlePressIn, handlePressOut]);
 
   const positionStyle = useAnimatedStyle(
     () => ({ left: fraction(value) * usable }),

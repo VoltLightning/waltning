@@ -8,17 +8,37 @@
  * 1.2 s`, pre-formatted by the caller, who knows the exact tool and its own
  * timing) and `streaming` (the text as it arrives, handed straight through).
  *
- * **The three dots — the owner's own request: *"dots that appear and
- * disappear"*.** `thinking` and `tool` both get them, beside the label —
- * `streaming` does not, because text arriving is its own sign of life and a
- * pulsing dot beside moving text would be two signals for one fact. One
- * 1.2 s cycle: dot 1 fades in at 0 ms, dot 2 at 200, dot 3 at 400, all three
- * fade out together from 900 to the 1200 ms loop point — `withRepeat` around
- * a `withSequence` of `withDelay` and `withTiming`, one shared value per dot.
- * §2.7 permits a loop only for *loading*, which this is; every other
- * animation in the package plays once. The dots are `radius.pill` — the
- * fourth circular exception `02-tokens.md` §2.4 now names, beside the radio,
- * the switch and the add button — and they are decorative: the row's own
+ * **The three dots — a messaging-app typing indicator, not a fade pulse.**
+ * `thinking` and `tool` both get them, beside the label — `streaming` does
+ * not, because text arriving is its own sign of life and a bouncing dot
+ * beside moving text would be two signals for one fact.
+ *
+ * The first cut had each dot own its own `withRepeat(withSequence(…))` chain
+ * — three independent timers, all cutting to zero together every 900 ms and
+ * restarting: jagged on the web (Reanimated's JS driver), and the owner's own
+ * read of it was *"circulates three two one two one two three"*. This is
+ * **one shared clock** — a single `withRepeat(withTiming(1, { duration: 900,
+ * easing: Easing.linear }), -1)` — and each dot derives its own opacity and
+ * lift from it in its own `useAnimatedStyle`, so nothing restarts and no two
+ * dots ever move in the same direction at the same instant.
+ *
+ * **The motion, named: each dot lifts and settles**, `translateY` 0 → −3 →
+ * 0 with opacity 0.45 → 1 → 0.45, `Easing.inOut(Easing.quad)`-shaped — the
+ * classic Messenger/iMessage wave. Dot 2 lags dot 1 by a sixth of the cycle,
+ * dot 3 by two sixths, so the wave always reads 1 → 2 → 3, left to right,
+ * never backwards. Each dot's own rise-and-fall window is *wider* than that
+ * sixth-of-a-cycle stagger — wide enough that adjacent dots' windows overlap
+ * all the way around the loop — so at no instant is every dot at rest
+ * together: the row never goes flat, and nothing cuts.
+ *
+ * `envelope` is the shared shape: a dot's own window is `[phase −
+ * HALF_WIDTH, phase, phase + HALF_WIDTH]`, evaluated at `t`, `t − 1` and
+ * `t + 1` and the max taken, so a window that straddles the 0/1 loop point
+ * (dot 1's own) reads continuously across it rather than jumping. §2.7
+ * permits a loop only for *loading*, which this is; every other animation in
+ * the package plays once. The dots are `radius.pill` — the fourth circular
+ * exception `02-tokens.md` §2.4 now names, beside the radio, the switch and
+ * the add button — and they are decorative: the row's own
  * `accessibilityLabel` already says *thinking*, so a screen reader is never
  * asked to parse three unlabelled dots.
  *
@@ -31,17 +51,17 @@
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, {
+  Easing,
+  Extrapolation,
+  interpolate,
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withRepeat,
-  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
-import { easing } from "../primitives/easing.ts";
 import { useReducedMotion } from "../primitives/reduced-motion.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -63,65 +83,93 @@ export type ThinkingIndicatorProps = {
 const TIMER_AFTER_MS = 2_000;
 const CANCEL_AFTER_MS = 20_000;
 
-/** One dot's appear time within the cycle — §8.5's 0 / 200 / 400 ms. */
-const DOT_DELAYS = [0, 200, 400] as const;
-const FADE_IN = 150;
-/** All three dots fade out together from 900 ms, finishing at the 1200 ms loop point. */
-const FADE_OUT_AT = 900;
-const CYCLE = 1_200;
+/** The clock's own cycle. Runs 0→1 on a single `withRepeat`, shared by all three dots. */
+const CYCLE = 900;
+/** How far a lifted dot rises. Reserved as `marginTop` on the row so it never reflows the label. */
+const LIFT = 3;
+/** A resting dot's opacity — never fully dark, so the row always reads as three dots, not a gap. */
+const MIN_OPACITY = 0.45;
+/**
+ * Dot *i*'s phase within the cycle, a sixth apart — 0, 1/6, 2/6 — so the
+ * wave always reads 1 → 2 → 3 and never two dots peak together.
+ */
+const DOT_PHASES = [0, 1 / 6, 2 / 6] as const;
+/**
+ * Half the width of one dot's own rise-and-fall window — wider than the
+ * sixth-of-a-cycle stagger between dots, so consecutive dots' windows
+ * overlap all the way around the loop and the row is never simultaneously
+ * at rest.
+ */
+const HALF_WIDTH = 1 / 3;
+
+const liftEasing = Easing.inOut(Easing.quad);
 
 /**
- * One dot's opacity across the 1.2 s cycle, as a `withRepeat`'d
- * `withSequence` — delay to its appear time, fade in, hold, fade out with its
- * siblings, then loop. Called from `useEffect`, not a worklet: exactly how
- * `Toggle`'s `progress.value = withTiming(…)` assigns an animation builder's
- * result to a shared value from the JS thread.
+ * Dot at `phase`'s lift-and-settle envelope at clock position `t` (0..1) —
+ * 0 at rest, 1 at the peak of its own rise, `Easing.inOut(Easing.quad)`-shaped
+ * rather than a linear tent.
+ *
+ * The three-point window `[phase − HALF_WIDTH, phase, phase + HALF_WIDTH]`
+ * maps to `[0, 1, 0]`; evaluating it at `t`, `t − 1` and `t + 1` and taking
+ * the max is what lets a window straddle the loop's 0/1 seam — dot 1's own,
+ * whose window runs from before 0 to after it — without a discontinuity.
  */
-function loopingOpacity(delayMs: number): number {
-  const holdMs = FADE_OUT_AT - delayMs - FADE_IN;
-  return withRepeat(
-    withSequence(
-      withDelay(delayMs, withTiming(1, { duration: FADE_IN, easing: easing.base })),
-      withTiming(1, { duration: holdMs }),
-      withTiming(0, { duration: CYCLE - FADE_OUT_AT, easing: easing.base }),
-    ),
-    -1,
-    false,
+function envelope(t: number, phase: number): number {
+  "worklet";
+  const points = [phase - HALF_WIDTH, phase, phase + HALF_WIDTH];
+  const output = [0, 1, 0];
+  const raw = Math.max(
+    interpolate(t, points, output, Extrapolation.CLAMP),
+    interpolate(t - 1, points, output, Extrapolation.CLAMP),
+    interpolate(t + 1, points, output, Extrapolation.CLAMP),
   );
+  return liftEasing(raw);
 }
 
-function useDotOpacity(reduced: boolean, delayMs: number): SharedValue<number> {
-  const opacity = useSharedValue(reduced ? 1 : 0);
+/**
+ * The one shared clock — a single `withRepeat`'d `withTiming`, read by all
+ * three dots. `useEffect`, not a worklet: exactly how `Toggle`'s
+ * `progress.value = withTiming(…)` assigns an animation builder's result to
+ * a shared value from the JS thread.
+ */
+function useDotClock(reduced: boolean): SharedValue<number> {
+  const clock = useSharedValue(0);
 
   useEffect(() => {
-    if (reduced) {
-      // The `motion-none` branch (§2.7): static, all three visible, rather
-      // than a loop nobody asked to keep running.
-      opacity.value = 1;
-      return;
-    }
-    opacity.value = loopingOpacity(delayMs);
-  }, [reduced, delayMs, opacity]);
+    if (reduced) return; // The `motion-none` branch (§2.7) — a loop nobody asked to keep running.
+    clock.value = withRepeat(withTiming(1, { duration: CYCLE, easing: Easing.linear }), -1, false);
+  }, [reduced, clock]);
 
-  return opacity;
+  return clock;
 }
 
-type DotProps = { reduced: boolean; delayMs: number };
+type DotProps = { clock: SharedValue<number>; reduced: boolean; phase: number };
 
-function Dot({ reduced, delayMs }: DotProps) {
+/**
+ * Reads `clock` and `reduced` only inside the worklet — no React state is
+ * touched by the animation, so this component never re-renders per frame.
+ */
+function Dot({ clock, reduced, phase }: DotProps) {
   const styles = useStyles();
-  const opacity = useDotOpacity(reduced, delayMs);
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }), [opacity]);
+  const style = useAnimatedStyle(() => {
+    if (reduced) return { opacity: 1, transform: [{ translateY: 0 }] };
+    const lift = envelope(clock.value, phase);
+    return {
+      opacity: interpolate(lift, [0, 1], [MIN_OPACITY, 1]),
+      transform: [{ translateY: interpolate(lift, [0, 1], [0, -LIFT]) }],
+    };
+  }, [clock, reduced, phase]);
   return <Animated.View testID="thinking-dot" style={[styles.dot, style]} />;
 }
 
 function ThinkingDots({ reduced }: { reduced: boolean }) {
   const styles = useStyles();
+  const clock = useDotClock(reduced);
   return (
-    // Decorative: the row's own `accessibilityLabel` already says "thinking".
+    // Decorative: the row's own "accessibilityLabel" already says "thinking".
     <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no">
-      {DOT_DELAYS.map((delayMs) => (
-        <Dot key={delayMs} reduced={reduced} delayMs={delayMs} />
+      {DOT_PHASES.map((phase) => (
+        <Dot key={phase} clock={clock} reduced={reduced} phase={phase} />
       ))}
     </View>
   );
@@ -175,7 +223,10 @@ const useStyles = makeStyles((theme) => ({
   label: { color: theme.textMuted, ...text.ui("bodySm") },
   mono: { color: theme.textMuted, ...text.mono("bodySm") },
   phaseRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  dots: { flexDirection: "row", alignItems: "center", gap: space.xxs },
+  // `marginTop: LIFT` reserves the room a lifted dot rises into — a
+  // `translateY` never reflows layout on its own, but the row's own bounds
+  // would otherwise sit flush against the dots' resting position.
+  dots: { flexDirection: "row", alignItems: "center", gap: space.xxs, marginTop: LIFT },
   // Circles are legal here — §2.4's fourth exception, beside the radio, the
   // switch and the add button.
   dot: { width: DOT, height: DOT, borderRadius: radius.pill, backgroundColor: theme.textMuted },
