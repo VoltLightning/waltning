@@ -298,11 +298,14 @@ function AccountTile({ account, selected, machineFilled, caption, onPick }: Acco
           machineFilled ? styles.cellMachine : null,
           hovered && !selected ? styles.cellHovered : null,
           focused ? styles.focused : null,
-          account.capturable ? null : styles.cellMuted,
         ]}
       >
         <Text
-          style={[styles.cellName, selected ? styles.cellNameSelected : null]}
+          style={[
+            styles.cellName,
+            selected ? styles.cellNameSelected : null,
+            account.capturable ? null : styles.cellNameMuted,
+          ]}
           numberOfLines={1}
         >
           {account.name}
@@ -355,26 +358,31 @@ const useStyles = makeStyles((theme) => ({
     borderWidth: 1,
     borderColor: theme.border,
     borderRadius: radius.sm,
-    backgroundColor: theme.subtleFill,
+    // `theme.surface` — the fill the money inks (`spend`/`income`) are tuned
+    // against (`02-tokens.md` §2.1). `subtleFill` cost the negative-balance
+    // pair its 4.5:1 margin; `axe`'s own `color-contrast` check caught it.
+    backgroundColor: theme.surface,
     paddingHorizontal: space.x2,
     paddingVertical: space.lg,
   },
   cellHovered: { backgroundColor: theme.hoverFill },
-  cellSelected: {
-    borderWidth: 2,
-    borderColor: theme.accentFillBorder,
-    backgroundColor: theme.accentFill,
-  },
+  cellSelected: { borderWidth: 2, borderColor: theme.accent },
   /** The *Recent* tile — `Chip`'s own machine tint (P2, "asserted, not chosen"). */
   cellMachine: { borderColor: theme.assertedBorder, backgroundColor: theme.assertedFill },
-  /** Fading the whole control stays legal (`02-tokens.md` §2.4) — the caption beneath states why in words. */
-  cellMuted: { opacity: 0.6 },
   cellName: { color: theme.text, ...text.ui("body") },
   cellNameSelected: { color: theme.accentText, ...text.ui("body", 600) },
+  /**
+   * An uncapturable tile's name — text, not tint (`account-register.tsx`'s
+   * own lesson: a whole-tile `opacity` fade failed `axe`'s `color-contrast`
+   * on both themes). `needsRate` below carries the reason in words.
+   */
+  cellNameMuted: { color: theme.textMuted },
   cellMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  cellCurrency: { color: theme.textMuted, ...text.ui("caption") },
+  // `bodySm` (14.5px), not `caption` (12px) — `theme.textMuted` has no
+  // contrast headroom at 12px anywhere in this palette.
+  cellCurrency: { color: theme.textMuted, ...text.ui("bodySm") },
   hint: { color: theme.assertedText, ...text.ui("caption") },
-  needsRate: { color: theme.textMuted, ...text.ui("caption") },
+  needsRate: { color: theme.textMuted, ...text.ui("bodySm") },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,
