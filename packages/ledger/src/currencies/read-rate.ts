@@ -14,7 +14,8 @@
  */
 
 import { type AccountingDate, daysBetween } from "@waltning/core/date";
-import type { CurrencyCode, UnitsPerPivot } from "@waltning/core/money";
+import type { CurrencyCode, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
+import { dec, pivotPerUnit, unitsPerPivot } from "@waltning/core/money";
 import { and, asc, desc, eq, gte, lte, ne } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
@@ -211,4 +212,68 @@ export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
     )
     .orderBy(asc(fxRates.date))
     .all();
+}
+
+export type LocalCrossRate = {
+  /**
+   * **Pivot-per-unit, for this pair — multiply an amount in `from` by this to
+   * reach `to`.** Not `fx_rates`' own stored direction: the pivot (§7.0) is
+   * invisible past this function, and a caller triangulating through it by
+   * hand is exactly what `readCrossRate` exists to spare every screen from
+   * writing once each.
+   */
+  rate: PivotPerUnit;
+  source: string;
+  /** The staler of the two legs' own dates — the honest answer for a figure built from two reads. */
+  asOf: AccountingDate;
+  /** The staler of the two legs' own carry — `readRate`'s cap already refused anything worse. */
+  carriedDays: number;
+};
+
+/**
+ * A reference rate between two arbitrary currencies, as of `date` — S14 and
+ * S31's own reference line, and the one place `fx_rates`' pivot-only storage
+ * (§7.0: *"It is invisible: it appears in no screen and no export"*) is
+ * triangulated so nothing above `packages/ledger` ever has to know which
+ * currency the pivot is.
+ *
+ * **Refused, not guessed**, the same rule `readRate` states for itself: no
+ * pivot row, or either leg past the ten-day carry cap, and this returns
+ * `undefined` rather than a number that looks like an answer. A screen reads
+ * that as "no reference" — S31 §6's offline-with-no-rate state, where the
+ * destination amount stays empty and the person types it.
+ */
+export function readCrossRate<TRun, TSchema extends typeof ledgerSchema>(
+  db: ReplicaDb<TRun, TSchema>,
+  { from, to, date }: { from: CurrencyCode; to: CurrencyCode; date: AccountingDate },
+): LocalCrossRate | undefined {
+  const [pivotRow] = db
+    .select({ code: currencies.code })
+    .from(currencies)
+    .where(eq(currencies.isPivot, true))
+    .all();
+  if (!pivotRow) return undefined;
+  const pivot = pivotRow.code;
+
+  // The pivot has no `fx_rates` row against itself (`readCoverage`'s own
+  // comment — "a currency is never its own quote"), so its own leg is
+  // trivial rather than a lookup: 1 pivot is 1 unit of itself, exactly, as of
+  // the date asked about.
+  const leg = (code: CurrencyCode): LocalRate | undefined =>
+    code === pivot
+      ? { rate: unitsPerPivot(1), source: "pivot", asOf: date, carriedDays: 0 }
+      : readRate(db, { base: pivot, quote: code, date });
+
+  const fromLeg = leg(from);
+  const toLeg = leg(to);
+  if (!fromLeg || !toLeg) return undefined;
+
+  // Both legs are `UnitsPerPivot` (§4: units of the currency per one pivot).
+  // 1 unit of `from` is `1 / fromLeg.rate` pivot, and that many pivots are
+  // `toLeg.rate` times as many units of `to` — so the cross rate is the
+  // ratio of the two, pivot cancelled.
+  const rate = pivotPerUnit(dec(toLeg.rate).dividedBy(fromLeg.rate));
+  const worse = fromLeg.carriedDays >= toLeg.carriedDays ? fromLeg : toLeg;
+
+  return { rate, source: worse.source, asOf: worse.asOf, carriedDays: worse.carriedDays };
 }

@@ -236,6 +236,52 @@ export const en = {
     total: "Total",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",
+    /* ── E5 · S14 settle sheet and S31 transfer ─────────────────────────── */
+    /** `FloatingAdd`'s long-press picker (S05 §9.1), S16's row action, and the transfer route's own title. */
+    transfer: "Transfer",
+    /** `RateField`'s label on both S14 and S31 — the figure two typed amounts imply. */
+    realized: "Realized",
+    /** `RateField`'s reference line, one sentence rather than three words joined — word order is not the same in every language. */
+    referenceRate: "reference {{rate}} · {{source}} · {{date}}",
+    /** The amber tag beside a rate a person typed directly (P4) — `RateField`'s own `manual` prop. */
+    manualRate: "Manual",
+    /** S31's account chips. */
+    from: "From",
+    to: "To",
+    /** S31's swap control — an accessible name, not a visible label (§9.1's icon-only control). */
+    swapDirection: "Swap direction",
+    /** The destination `AmountField(hero)`'s accessible label — S31 §3's second amount. */
+    destinationAmount: "Destination amount",
+    /** S31's rate panel — the bank's spread against the reference (§7.5), and its optional stated fee. */
+    margin: "Margin",
+    fee: "Fee",
+    /** S31 §6 — same account both sides. `transactions_transfer_distinct`'s own message already reaches the screen through the field error; this is the sheet's own inline caption when nothing has been typed wrong yet. */
+    sameAccountRefused: "A transfer needs two different accounts.",
+  },
+  /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
+  counterparties: {
+    /** `SettleSheet`'s title (S14 §3). */
+    settlingWith: "Settling with {{name}}",
+    /** The balance picker (S14 §9.1). */
+    discharges: "Discharges",
+    theyOweYou: "they owe you",
+    youOweThem: "you owe them",
+    /** A balance row's offline stamp (S14 §6) — the phone's own last write, never today's date. */
+    asOf: "as of {{date}}",
+    /** The account picker — label follows the balance's sign (S14 §3). */
+    into: "Into",
+    /** The primary action — full-width, S14 §7. */
+    settle: "Settle",
+    /** The result card, before commit, always (S14 §5). Lower case, matching `shell.spent`/`shell.net`. */
+    resultDischarges: "discharges",
+    resultRemaining: "remaining",
+    resultRemainingEstimated: "remaining (estimated)",
+    /** The amber line under a stale result (S14 §6) — the phone's own ledger, not the counterparty's. */
+    stampedFrom: "From this device's ledger as of {{time}}.",
+    /** Over-settlement, stated rather than clamped (S14 §9.2). */
+    overSettled: "Becomes {{amount}} the other way.",
+    /** Q11 — prompted, not required. */
+    notePrompt: "A note here is what settles a dispute later.",
   },
   categories: {
     /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
@@ -351,6 +397,14 @@ export const en = {
     /** S04 §6 — the balance query failed; the hero keeps its last known figure. */
     balanceQueryFailed: "Couldn't refresh",
     balanceQueryFailedBody: "Showing the numbers from the last successful load.",
+    /**
+     * `FloatingAdd`'s long-press sheet title (S05 §9.1) — the three choices
+     * themselves reuse `transactions.expense`/`income`/`transfer` rather than
+     * a second translation of the same three words.
+     */
+    addType: "Add",
+    /** S16's row action — opens S31 with `from` already picked. */
+    transferFromHere: "Transfer from here",
   },
   preview: {
     appearance: "Appearance",
@@ -374,6 +428,18 @@ export const en = {
     transaction: "Transaction",
     settings: "Settings",
     categories: "Categories",
+    /** S31's own nav title. */
+    transfer: "Transfer",
+  },
+  /**
+   * `settle_debt`'s refusals (H9), resolved through `useT()` the same way
+   * `transactions.needsRate` already is — the messageKey a screen's
+   * `resolveFieldErrorMessage` looks up, named to match
+   * `create-phone-ledger.ts`'s own `settleDebtRefusal` exactly.
+   */
+  settleDebt: {
+    noCounterparty: "This counterparty no longer exists.",
+    nothingToSettle: "There is nothing open in this currency to settle.",
   },
   states: {
     /**

@@ -77,4 +77,15 @@ describe("AmountField — hero variant", () => {
     render(<AmountField variant="hero" label="Amount" currency="PLN" value="48,90" />);
     expect(screen.queryByRole("textbox")).toBeNull();
   });
+
+  it("carries the accessibility label once, on the Pressable, when it is tappable", () => {
+    const { container } = render(
+      <AmountField variant="hero" label="Amount" currency="PLN" value="48,90" onPress={noop} />,
+    );
+    // One name for the control, not the button and its inner View both
+    // announcing "Amount: 48.90" — a screen reader would read it twice.
+    const labelled = container.querySelectorAll('[aria-label="Amount: 48.90"]');
+    expect(labelled).toHaveLength(1);
+    expect(labelled[0]?.getAttribute("role")).toBe("button");
+  });
 });

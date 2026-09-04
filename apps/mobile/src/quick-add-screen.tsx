@@ -110,6 +110,7 @@ export default function QuickAdd() {
   const raw = useLocalSearchParams<{
     amount?: string | string[];
     accountId?: string | string[];
+    type?: string | string[];
   }>();
   const draft = parseQuickAddRoute(raw);
   const ledger = useLedgerController();
@@ -165,7 +166,10 @@ export default function QuickAdd() {
   const [composerAmountRaw, setComposerAmountRaw] = useState(
     () => draft.amount.replace(".", ",") || "",
   );
-  const [composerType, setComposerType] = useState<"expense" | "income">("expense");
+  // `FloatingAdd`'s long-press picker (S05 §9.1) — `Income` names it explicitly
+  // in the route; every other entry point (a bare tap, S16's account row)
+  // leaves it unset and the ordinary default holds.
+  const [composerType, setComposerType] = useState<"expense" | "income">(draft.type ?? "expense");
   const [composerAccountId, setComposerAccountId] = useState<string | null>(
     accounts.some((account) => account.id === draft.accountId) ? (draft.accountId ?? null) : null,
   );

@@ -10,14 +10,14 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
 import { type SafeAreaInsets, SafeAreaProvider } from "../primitives/safe-area";
 import { makeStyles } from "../theme/styles.ts";
-import { FloatingAdd } from "./floating-add";
+import { FloatingAdd, TypePicker } from "./floating-add";
 
 function noop() {}
 
 const meta = {
   title: "Shell/FloatingAdd",
   component: FloatingAdd,
-  args: { onAdd: noop, onPositionChange: noop, position: null },
+  args: { onAdd: noop, onSelectType: noop, onPositionChange: noop, position: null },
   decorators: [withFrame],
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof FloatingAdd>;
@@ -40,6 +40,20 @@ export const NotchedPhone: Story = {
 };
 
 export const Disabled: Story = { args: { disabled: true } };
+
+/**
+ * The long-press picker (S05 §9.1) — a separate story, not a `FloatingAdd`
+ * story, because Storybook has no way to drive `Gesture.LongPress` on web.
+ * `Expense · Transfer · Income`, and the button itself already gives the
+ * ordinary tap.
+ */
+export const LongPressPicker: StoryObj<typeof TypePicker> = {
+  render: renderTypePicker,
+};
+
+function renderTypePicker() {
+  return <TypePicker visible onDismiss={noop} onSelectType={noop} />;
+}
 
 function withFrame(Story: React.ComponentType) {
   return (

@@ -175,3 +175,33 @@ it("filters by name across own, shared and archived, with a live result count", 
   expect(screen.queryByText("Cash")).toBeNull();
   expect(screen.getByText("1 result")).toBeDefined();
 });
+
+/** S16 §7 — S31's own entry point. */
+it("offers Transfer from here on an own account's row, only when asked", () => {
+  const onTransferFrom = vi.fn();
+  render(
+    <AccountRegister
+      accounts={[account({ id: "cash-1", name: "Cash" })]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onTransferFrom={onTransferFrom}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Transfer from here" }));
+  expect(onTransferFrom).toHaveBeenCalledWith("cash-1");
+});
+
+it("has no Transfer action when the screen does not offer one", () => {
+  render(
+    <AccountRegister
+      accounts={[account({ id: "cash-1", name: "Cash" })]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "Transfer from here" })).toBeNull();
+});

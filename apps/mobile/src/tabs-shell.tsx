@@ -48,6 +48,24 @@ function handleAdd() {
   router.push("/quick-add");
 }
 
+/**
+ * The long-press picker's own three choices (S05 §9.1) — `Transfer` opens
+ * S31; `Expense`/`Income` open Quick add, `Income` naming its type in the
+ * route so the composer opens on that side of the toggle rather than the
+ * ordinary default.
+ */
+export function handleSelectType(type: "expense" | "transfer" | "income") {
+  if (type === "transfer") {
+    router.push("/transfer");
+    return;
+  }
+  if (type === "income") {
+    router.push({ pathname: "/quick-add", params: { type: "income" } });
+    return;
+  }
+  router.push("/quick-add");
+}
+
 /** A drop is a device preference (§2.9): stored here, never a registry operation. */
 function handleFloatPosition(next: FloatPosition) {
   return floatPosition.set(next);
@@ -84,6 +102,7 @@ function FloatingAddLayer({ barHeight }: { barHeight: number }) {
     <SafeAreaProvider insets={clearedInsets}>
       <FloatingAdd
         onAdd={handleAdd}
+        onSelectType={handleSelectType}
         disabled={!hasAccounts}
         position={float.value}
         onPositionChange={handleFloatPosition}

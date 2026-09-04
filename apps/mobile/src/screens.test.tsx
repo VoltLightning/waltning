@@ -233,6 +233,7 @@ function fakeController(
     reconcileAccount: () => undefined,
     createGroup: () => undefined,
     readRate: () => null,
+    readCrossRate: () => null,
     readCoverage: () => [],
     listFxRates: () => [],
     addCurrency: () => undefined,
@@ -511,6 +512,7 @@ describe("Today", () => {
       convertLeafGroup: vi.fn(),
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
+      readCrossRate: vi.fn(() => null),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -626,6 +628,7 @@ describe("Today", () => {
       reconcileAccount: vi.fn(),
       createGroup: vi.fn(),
       readRate: vi.fn(() => null),
+      readCrossRate: vi.fn(() => null),
       readCoverage: vi.fn(() => []),
       listFxRates: vi.fn(() => []),
       addCurrency: vi.fn(),

@@ -82,6 +82,7 @@ describe("usePhoneLedger", () => {
         reconcileAccount: () => undefined,
         createGroup: () => undefined,
         readRate: () => null,
+        readCrossRate: () => null,
         readCoverage: () => [],
         listFxRates: () => [],
         addCurrency: () => undefined,

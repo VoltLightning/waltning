@@ -24,7 +24,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { decimalMark } from "../i18n/locales.ts";
 import { useLocale, useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
@@ -61,6 +61,16 @@ export type AmountFieldHeroProps = {
    * takes, and it happens once, in the screen, not here.
    */
   value: string;
+  /**
+   * S31 §7 / S14 §7 — a screen with **two** hero amounts (a transfer's source
+   * and destination, a settlement's amount and discharge) makes each tappable
+   * so the keypad below can be routed to whichever one was touched. A screen
+   * with one hero amount (Quick add) omits both and gets a plain, unpressable
+   * figure — the same "absent means not applicable" `currency` already uses.
+   */
+  onPress?: () => void;
+  /** Whether the keypad is currently routed here — drawn as a highlighted rule under the figure. */
+  active?: boolean;
 };
 
 export type AmountFieldProps = AmountFieldFieldProps | AmountFieldHeroProps;
@@ -93,22 +103,49 @@ export function AmountField(props: AmountFieldProps) {
   return <EditableAmountField {...props} />;
 }
 
-function HeroAmountField({ label, currency, value }: AmountFieldHeroProps) {
+function HeroAmountField({
+  label,
+  currency,
+  value,
+  onPress,
+  active = false,
+}: AmountFieldHeroProps) {
   const t = useT();
   const locale = useLocale();
   const styles = useStyles();
   const mark = decimalMark(locale);
   const display = value === "" ? "0" : value.replace(",", mark);
+  const accessibilityLabel = t("common.fieldValue", { field: label, value: display });
+
+  // Un-pressable: this `View` is the whole control, so it carries the label.
+  // Pressable: the `Pressable` below is the control instead, and a second
+  // `accessibilityLabel` here would have a screen reader announce "Amount:
+  // 48.90" twice for the one tap target.
+  if (onPress === undefined) {
+    return (
+      <View
+        accessibilityRole="text"
+        accessibilityLabel={accessibilityLabel}
+        style={[styles.heroField, active ? styles.heroFieldActive : null]}
+      >
+        <Text style={styles.heroValue}>{display}</Text>
+        {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
+      </View>
+    );
+  }
 
   return (
-    <View
-      accessibilityRole="text"
-      accessibilityLabel={t("common.fieldValue", { field: label, value: display })}
-      style={styles.heroField}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
     >
-      <Text style={styles.heroValue}>{display}</Text>
-      {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
-    </View>
+      <View style={[styles.heroField, active ? styles.heroFieldActive : null]}>
+        <Text style={styles.heroValue}>{display}</Text>
+        {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
+      </View>
+    </Pressable>
   );
 }
 
@@ -194,7 +231,11 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "baseline",
     justifyContent: "center",
     gap: space.sm,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
+  /** S31 §7 / S14 §7 — which of two hero amounts the keypad below edits. */
+  heroFieldActive: { borderBottomColor: theme.accent },
   heroValue: {
     color: theme.text,
     ...text.display("displayHero"),

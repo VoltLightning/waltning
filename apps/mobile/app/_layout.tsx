@@ -206,6 +206,7 @@ function AppStack() {
           stack routes pushed *over* the tabs. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
+      <Stack.Screen name="transfer" options={{ title: t("routes.transfer") }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
       <Stack.Screen name="transaction/[id]" options={{ title: t("routes.transaction") }} />
       <Stack.Screen name="accounts/index" options={{ title: t("routes.accounts") }} />

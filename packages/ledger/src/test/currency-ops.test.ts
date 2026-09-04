@@ -19,7 +19,7 @@ import { addCurrencyExecutor } from "../currencies/add-currency.executor.ts";
 import { archiveCurrencyExecutor } from "../currencies/archive-currency.executor.ts";
 import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
 import { clearManualRateExecutor } from "../currencies/clear-manual-rate.executor.ts";
-import { listFxRates, readCoverage, readRate } from "../currencies/read-rate.ts";
+import { listFxRates, readCoverage, readCrossRate, readRate } from "../currencies/read-rate.ts";
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "../currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "../currencies/set-rate-source.executor.ts";
@@ -679,5 +679,121 @@ describe("capture in a currency that gained a rate through set_manual_rate", () 
     // fx_rates is PLN→USD at 4.00 units-per-pivot; the transaction's own
     // fx_rate is pivot-per-unit — the reciprocal, 1/4.00 = 0.25.
     expect(result.row.fxRate).toBe(money.pivotPerUnit("0.25"));
+  });
+});
+
+/* ── readCrossRate ────────────────────────────────────────────────────────── */
+
+describe("readCrossRate", () => {
+  const DATE = accountingDate("2026-03-01");
+
+  beforeEach(() => {
+    // USD is the pivot for this block — the outer `beforeEach` seeded PLN as
+    // the pivot, which every other describe here relies on, so this block
+    // flips it rather than reaching for a second `scratchStores()`.
+    // `fx_rates.base = pivot` always (§4), so USD↔PLN and USD↔EUR are the
+    // only pairs the replica ever stores.
+    s.ledger.replica.db
+      .update(currencies)
+      .set({ isPivot: false })
+      .where(eq(currencies.code, PLN))
+      .run();
+    s.ledger.replica.db
+      .update(currencies)
+      .set({ isPivot: true })
+      .where(eq(currencies.code, USD))
+      .run();
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        { base: USD, quote: PLN, date: DATE, rate: money.unitsPerPivot("4.0"), source: "nbp" },
+        { base: USD, quote: EUR, date: DATE, rate: money.unitsPerPivot("0.92"), source: "nbp" },
+      ])
+      .run();
+  });
+
+  it("triangulates EUR→PLN — rate(to) ÷ rate(from), rounded once at PivotPerUnit's own scale", () => {
+    const cross = readCrossRate(s.ledger.replica.db, { from: EUR, to: PLN, date: DATE });
+    // 4.0 / 0.92 = 4.3478260869565217…, rounded half-up at `PivotPerUnit`'s
+    // twelve decimal places — not the ledger's usual eight, and not
+    // re-rounded a second time by this assertion.
+    expect(cross?.rate).toBe(money.pivotPerUnit("4.347826086957"));
+  });
+
+  it("triangulates PLN→EUR the other way", () => {
+    const cross = readCrossRate(s.ledger.replica.db, { from: PLN, to: EUR, date: DATE });
+    expect(cross?.rate).toBe(money.pivotPerUnit("0.23"));
+  });
+
+  it("is exactly 1 when the same currency is on both sides", () => {
+    const cross = readCrossRate(s.ledger.replica.db, { from: EUR, to: EUR, date: DATE });
+    expect(cross?.rate).toBe(money.pivotPerUnit("1"));
+  });
+
+  it("collapses to the plain readRate when the pivot is the destination", () => {
+    const direct = readRate(s.ledger.replica.db, { base: USD, quote: PLN, date: DATE });
+    if (direct === undefined) throw new Error("setup: expected a direct rate");
+    const cross = readCrossRate(s.ledger.replica.db, { from: PLN, to: USD, date: DATE });
+    // `readRate` holds PLN in units-per-pivot; the cross rate asked for is
+    // pivot-per-unit — its reciprocal.
+    expect(cross?.rate).toBe(money.reciprocal(direct.rate));
+  });
+
+  it("collapses to the plain readRate when the pivot is the source", () => {
+    const direct = readRate(s.ledger.replica.db, { base: USD, quote: PLN, date: DATE });
+    if (direct === undefined) throw new Error("setup: expected a direct rate");
+    const cross = readCrossRate(s.ledger.replica.db, { from: USD, to: PLN, date: DATE });
+    // Valuing 1 pivot unit in PLN is exactly what `readRate` already holds —
+    // rebranded pivot-per-unit, not recomputed.
+    expect(cross?.rate).toBe(direct.rate);
+  });
+
+  it("is undefined when either leg has no rate at all", () => {
+    const cross = readCrossRate(s.ledger.replica.db, {
+      from: EUR,
+      to: currencyCode("GBP"),
+      date: DATE,
+    });
+    expect(cross).toBeUndefined();
+  });
+
+  it("honours the carry-forward cap on the source leg", () => {
+    // PLN gets a fresh row at the query date; EUR's only row is the twelve
+    // days back seeded above — past `MAX_CARRY_DAYS` on its own, and the
+    // whole cross rate must refuse rather than triangulate through a stale
+    // leg silently.
+    const queryDate = accountingDate("2026-03-13");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: PLN,
+        date: queryDate,
+        rate: money.unitsPerPivot("4.1"),
+        source: "nbp",
+      })
+      .run();
+
+    expect(
+      readCrossRate(s.ledger.replica.db, { from: EUR, to: PLN, date: queryDate }),
+    ).toBeUndefined();
+  });
+
+  it("honours the carry-forward cap on the destination leg", () => {
+    const queryDate = accountingDate("2026-03-13");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: EUR,
+        date: queryDate,
+        rate: money.unitsPerPivot("0.93"),
+        source: "nbp",
+      })
+      .run();
+
+    expect(
+      readCrossRate(s.ledger.replica.db, { from: PLN, to: EUR, date: queryDate }),
+    ).toBeUndefined();
   });
 });

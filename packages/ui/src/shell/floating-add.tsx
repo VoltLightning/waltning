@@ -47,13 +47,15 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useT } from "../i18n/provider";
+import { Button } from "../primitives/button";
 import { easing } from "../primitives/easing.ts";
 import { useInteraction } from "../primitives/interaction.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { useReducedMotion } from "../primitives/reduced-motion.ts";
 import { useSafeArea } from "../primitives/safe-area";
 import { makeStyles } from "../theme/styles.ts";
-import { floating, focus, motion, radius, shadow, touchTarget } from "../tokens.ts";
+import { floating, focus, motion, radius, shadow, space, touchTarget } from "../tokens.ts";
+import { BottomSheet } from "./bottom-sheet";
 import {
   clampFloat,
   defaultFloat,
@@ -65,8 +67,13 @@ import {
   settleSpring,
 } from "./float-geometry.ts";
 
+/** S05 §9.1's third entry point — the long-press picker's own three choices. */
+export type FloatingAddType = "expense" | "transfer" | "income";
+
 export type FloatingAddProps = {
   onAdd: () => void;
+  /** The long-press picker (S05 §9.1) — `Expense` · `Transfer` · `Income`. */
+  onSelectType: (type: FloatingAddType) => void;
   disabled?: boolean;
   /** `null` is the default position — bottom-right, inset by the device. */
   position: FloatPosition | null;
@@ -75,11 +82,14 @@ export type FloatingAddProps = {
 
 /** Finger travel before a touch stops being a tap. */
 const DRAG_SLOP = 4;
+/** How long a hold has to last before it is a long-press rather than a slow tap. */
+const LONG_PRESS_DURATION = 450;
 
 const MOVE = { duration: motion.move.duration, easing: easing.move };
 
 export function FloatingAdd({
   onAdd,
+  onSelectType,
   disabled = false,
   position,
   onPositionChange,
@@ -90,6 +100,7 @@ export function FloatingAdd({
   const reduced = useReducedMotion();
   const [bounds, setBounds] = useState<FloatBounds | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -201,6 +212,29 @@ export function FloatingAdd({
     settling,
   ]);
 
+  const openTypePicker = useCallback(() => setTypePickerOpen(true), []);
+  const closeTypePicker = useCallback(() => setTypePickerOpen(false), []);
+
+  /**
+   * **Exclusive with the pan, not simultaneous.** A finger that moves past
+   * `DRAG_SLOP` before `LONG_PRESS_DURATION` is a drag, not a hold — pan's
+   * own `minDistance` already fails a hold with no movement, and `Exclusive`
+   * is what stops both from racing to activate on the same touch.
+   */
+  const longPress = useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(LONG_PRESS_DURATION)
+        .enabled(bounds !== null && shown !== null && !disabled)
+        .onStart(() => {
+          "worklet";
+          runOnJS(openTypePicker)();
+        }),
+    [bounds, shown, disabled, openTypePicker],
+  );
+
+  const composedGesture = useMemo(() => Gesture.Exclusive(pan, longPress), [pan, longPress]);
+
   const handleReturn = useCallback(() => {
     if (shown === null || shown.dock === null || bounds === null) return;
     const frame = dockFrame(shown.dock, bounds, insets);
@@ -233,7 +267,7 @@ export function FloatingAdd({
           label={t("shell.showAdd")}
         />
       ) : (
-        <GestureDetector gesture={pan}>
+        <GestureDetector gesture={composedGesture}>
           <Animated.View style={[styles.wrapper, wrapperMotion]}>
             <AddButton
               label={t("shell.add")}
@@ -244,7 +278,62 @@ export function FloatingAdd({
           </Animated.View>
         </GestureDetector>
       )}
+      <TypePicker
+        visible={typePickerOpen}
+        onDismiss={closeTypePicker}
+        onSelectType={onSelectType}
+      />
     </View>
+  );
+}
+
+export type TypePickerProps = {
+  visible: boolean;
+  onDismiss: () => void;
+  onSelectType: (type: FloatingAddType) => void;
+};
+
+/** S05 §9.1's third entry point — the long-press picker itself. */
+export function TypePicker({ visible, onDismiss, onSelectType }: TypePickerProps) {
+  const t = useT();
+  const styles = useStyles();
+
+  const handleExpense = useCallback(() => {
+    onDismiss();
+    onSelectType("expense");
+  }, [onDismiss, onSelectType]);
+  const handleTransfer = useCallback(() => {
+    onDismiss();
+    onSelectType("transfer");
+  }, [onDismiss, onSelectType]);
+  const handleIncome = useCallback(() => {
+    onDismiss();
+    onSelectType("income");
+  }, [onDismiss, onSelectType]);
+
+  return (
+    <BottomSheet visible={visible} title={t("shell.addType")} onDismiss={onDismiss}>
+      <View style={styles.typePicker}>
+        <Button
+          label={t("transactions.expense")}
+          onPress={handleExpense}
+          variant="secondary"
+          size="lg"
+        />
+        <Button
+          label={t("transactions.transfer")}
+          onPress={handleTransfer}
+          variant="secondary"
+          size="lg"
+        />
+        <Button
+          label={t("transactions.income")}
+          onPress={handleIncome}
+          variant="secondary"
+          size="lg"
+        />
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -376,4 +465,5 @@ const useStyles = makeStyles((theme) => ({
     borderColor: theme.textOnAccent,
     transform: [{ rotate: "225deg" }],
   },
+  typePicker: { gap: space.md },
 }));
