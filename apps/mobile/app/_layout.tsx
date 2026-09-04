@@ -29,7 +29,7 @@ import { DeviceInsets } from "../src/device-insets";
 import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
 import { requirePhoneLedger, usePhoneLedgerReady } from "../src/phone-ledger";
-import { appearance, DEVICE_LOCALES, floatPosition } from "../src/platform";
+import { appearance, DEVICE_LOCALES, displayCurrency, floatPosition } from "../src/platform";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -44,6 +44,7 @@ export default function RootLayout() {
     // Not awaited before first paint: the button renders at the default and
     // moves once the disk answers, which on a phone is before the fonts are.
     void floatPosition.hydrate();
+    void displayCurrency.hydrate();
   }, []);
 
   useEffect(() => {
@@ -213,6 +214,8 @@ function AppStack() {
       <Stack.Screen name="accounts/[id]" options={{ title: t("routes.editAccount") }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
       <Stack.Screen name="settings/categories" options={{ title: t("routes.categories") }} />
+      <Stack.Screen name="settings/currencies" options={{ title: t("routes.currencies") }} />
+      <Stack.Screen name="settings/rates" options={{ title: t("routes.rates") }} />
     </Stack>
   );
 }

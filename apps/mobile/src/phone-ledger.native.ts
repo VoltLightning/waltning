@@ -1,4 +1,5 @@
 import "./polyfills.ts";
+import { initializeDisplayCurrencyFromLedger } from "@waltning/client/currencies/initialize-display-currency";
 import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { currencies } from "@waltning/core/currencies";
@@ -9,6 +10,7 @@ import { drizzle } from "drizzle-orm/expo-sqlite";
 import { Directory, File, Paths } from "expo-file-system";
 import { deleteDatabaseSync, openDatabaseSync, type SQLiteRunResult } from "expo-sqlite";
 import { mobileDiagnostics } from "./diagnostics.ts";
+import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform.ts";
 
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
@@ -54,6 +56,19 @@ const session = createLocalLedgerSession({
 export const PHONE_LEDGER_AVAILABLE = true as const;
 
 export const phoneLedger = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
+
+// H1 — the header's live fallback, wired before anything reads it: every
+// `getSnapshot()` call resolves through this reader once nothing is chosen.
+setLivePivotReader(() => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null);
+// M2 — `phoneLedger.subscribe` fires after every successful write, `change_
+// pivot` included, so a mounted display-currency consumer follows live.
+setLivePivotSubscriber(phoneLedger.subscribe);
+
+// §7.0's default (first pinned, else the live pivot), read from this ledger
+// rather than `platform.ts`'s bootstrap constant — see
+// `initialize-display-currency.ts`. Guarded on hydration inside; never
+// awaited here, same as the fire-and-forget `hydrate()` in `_layout.tsx`.
+void initializeDisplayCurrencyFromLedger(displayCurrency, session.listCurrencySettings);
 
 export function requirePhoneLedger() {
   return phoneLedger;

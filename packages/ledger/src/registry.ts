@@ -29,6 +29,7 @@ import { clearManualRateExecutor } from "./currencies/clear-manual-rate.executor
 import { setManualRateExecutor } from "./currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
+import { updateCurrencyExecutor } from "./currencies/update-currency.executor.ts";
 // ── end E2 block ─────────────────────────────────────────────────────────
 import { localRegistry } from "./executor.ts";
 // ── A2 · transaction operations — the phone half ──────────────────────────
@@ -83,5 +84,6 @@ export const ledgerRegistry = localRegistry([
   changePivotExecutor,
   setManualRateExecutor,
   clearManualRateExecutor,
+  updateCurrencyExecutor,
   // ── end E3 block ─────────────────────────────────────────────────────────
 ]);

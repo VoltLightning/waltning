@@ -866,6 +866,31 @@ describe("setManualRateInput", () => {
     const parsed = setManualRateInput.parse({ ...range, rate: "0.000000000001" });
     expect(String(parsed.rate)).toBe("0.000000000001");
   });
+
+  // L11 — an unbounded manual range writes one `manual` row per day; capped
+  // at a year so a typo in `to` cannot silently queue thousands of rows.
+  it("accepts a range of exactly 366 days", () => {
+    const result = setManualRateInput.safeParse({
+      base: "USD",
+      quote: "PLN",
+      from: "2025-01-01",
+      to: "2026-01-01", // 366 days inclusive, spanning a leap day.
+      rate: "1",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("refuses a range past 366 days", () => {
+    const result = setManualRateInput.safeParse({
+      base: "USD",
+      quote: "PLN",
+      from: "2025-01-01",
+      to: "2026-01-02", // 367 days inclusive.
+      rate: "1",
+    });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("to");
+  });
 });
 
 describe("clearManualRateInput", () => {

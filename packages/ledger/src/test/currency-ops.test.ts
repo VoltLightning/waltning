@@ -8,21 +8,25 @@
  * two-file writes through `writeLocally` and the real `ledgerRegistry`.
  */
 
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, addDays } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
+import { updateCurrencyInput } from "@waltning/core/registry/inputs";
+import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { addCurrencyExecutor } from "../currencies/add-currency.executor.ts";
 import { archiveCurrencyExecutor } from "../currencies/archive-currency.executor.ts";
 import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
 import { clearManualRateExecutor } from "../currencies/clear-manual-rate.executor.ts";
+import { readCurrencySettings } from "../currencies/read-currency-settings.ts";
 import { listFxRates, readCoverage, readCrossRate, readRate } from "../currencies/read-rate.ts";
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "../currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "../currencies/set-rate-source.executor.ts";
+import { updateCurrencyExecutor } from "../currencies/update-currency.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -193,6 +197,110 @@ describe("archive_currency", () => {
   });
 });
 
+/* ── update_currency ──────────────────────────────────────────────────────── */
+
+describe("update_currency", () => {
+  it("patches symbol, symbolPosition and decimals, and bumps the version", () => {
+    const result = write(updateCurrencyExecutor, {
+      code: "USD",
+      version: 1,
+      patch: { symbol: "US$", symbolPosition: "P", decimals: 2 },
+    });
+    expect(result.row.symbol).toBe("US$");
+    expect(result.row.symbolPosition).toBe("P");
+    expect(result.row.decimals).toBe(2);
+    expect(result.row.version).toBe(2);
+  });
+
+  it("refuses a stale version", () => {
+    write(updateCurrencyExecutor, { code: "USD", version: 1, patch: { decimals: 0 } });
+    expect(() =>
+      write(updateCurrencyExecutor, { code: "USD", version: 1, patch: { decimals: 3 } }),
+    ).toThrow(/stale version/);
+  });
+
+  it("refuses an empty patch at the schema, before it ever reaches the executor", () => {
+    const parsed = updateCurrencyInput.safeParse({ code: "USD", version: 1, patch: {} });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("never touches the code, rateSource, pinned or isPivot — each has its own operation", () => {
+    const result = write(updateCurrencyExecutor, {
+      code: "USD",
+      version: 1,
+      patch: { symbol: "US$" },
+    });
+    expect(result.row.code).toBe("USD");
+    expect(result.row.pinned).toBe(false);
+    expect(result.row.isPivot).toBe(false);
+  });
+
+  // H5 — shrinking `decimals` truncates every existing figure in that
+  // currency (`4.20` at 2dp reads `4` at 0dp). Refused while a live account
+  // or transaction still holds the currency; allowed once nothing does.
+  describe("a decimals decrease (H5)", () => {
+    it("is refused, naming the count, while a live account holds the currency", () => {
+      s.ledger.replica.db
+        .insert(accounts)
+        .values({
+          id: id("33333333-3333-4333-8333-333333333333"),
+          name: "Bank B · EUR",
+          currency: EUR,
+        })
+        .run();
+
+      expect(() =>
+        write(updateCurrencyExecutor, { code: "EUR", version: 1, patch: { decimals: 0 } }),
+      ).toThrow(/1 live account/);
+    });
+
+    it("is refused while a live transaction holds the currency", () => {
+      write(createTransactionExecutor, {
+        id: TXN,
+        date: accountingDate("2026-03-12"),
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: money.toMoney("10.00"),
+        currency: PLN,
+      });
+
+      // PLN is the pivot, but `update_currency` has no pivot guard (unlike
+      // `archive_currency`) — the write itself only cares about references.
+      // `ACCOUNT` (`beforeEach`) plus this transaction is two live refs.
+      expect(() =>
+        write(updateCurrencyExecutor, { code: "PLN", version: 1, patch: { decimals: 0 } }),
+      ).toThrow(/2 live account\(s\)\/transaction\(s\)/);
+    });
+
+    it("is allowed on a currency nothing live holds", () => {
+      const result = write(updateCurrencyExecutor, {
+        code: "EUR",
+        version: 1,
+        patch: { decimals: 0 },
+      });
+      expect(result.row.decimals).toBe(0);
+    });
+
+    it("growing decimals is allowed even while a live account holds the currency", () => {
+      s.ledger.replica.db
+        .insert(accounts)
+        .values({
+          id: id("33333333-3333-4333-8333-333333333333"),
+          name: "Bank B · EUR",
+          currency: EUR,
+        })
+        .run();
+
+      const result = write(updateCurrencyExecutor, {
+        code: "EUR",
+        version: 1,
+        patch: { decimals: 4 },
+      });
+      expect(result.row.decimals).toBe(4);
+    });
+  });
+});
+
 /* ── set_rate_source / set_pinned ────────────────────────────────────────── */
 
 describe("set_rate_source", () => {
@@ -314,6 +422,196 @@ describe("change_pivot", () => {
     write(changePivotExecutor, { code: "USD" });
 
     expect(rateRows()).toHaveLength(0);
+  });
+
+  // C2 — a carried-forward row copies its rate from an earlier real quote;
+  // dropping that origin's date (no bridge) and keeping the carried child
+  // would leave a row whose rate traces to nothing. §7.6: never invented.
+  it("drops a carried_forward row along with an origin whose date had no bridge", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Day 1 — EUR's real quote, no bridge to USD this day: dropped.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "nbp",
+        },
+        // Day 2 — the bridge to USD, and EUR carried forward from day 1.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "USD" });
+
+    const rows = rateRows();
+    // EUR's carried row is gone with its dead origin, on a date that
+    // otherwise had a bridge and would have rebased it.
+    expect(rows.find((r) => r.quote === "EUR")).toBeUndefined();
+    // The bridge's own reciprocal still lands.
+    expect(rows.find((r) => r.base === "USD" && r.quote === "PLN")).toBeDefined();
+  });
+
+  // M6 — the orphan-drop test above only proves the drop. This is its
+  // inverse: a carried row whose origin's date *does* have a bridge must
+  // survive the rewrite and come out rebased, not dropped along with it.
+  it("M6 — keeps and rebases a carried_forward row whose origin's date has a bridge", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Day 1 — EUR's real quote, and the bridge to USD.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        // Day 2 — EUR carried forward from day 1, and its own bridge.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.20"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "USD" });
+
+    const rows = rateRows();
+    const eurRows = rows.filter((r) => r.base === "USD" && r.quote === "EUR");
+    expect(eurRows).toHaveLength(2);
+    const day2 = eurRows.find((r) => r.date === accountingDate("2026-01-02"));
+    expect(day2?.source).toBe("carried_forward");
+    expect(day2?.rate).toBeDefined();
+  });
+
+  // M8 — §7.6: a carried row is a copy of the nearest earlier real quote,
+  // and that must still hold after a pivot rewrite. Rebasing a carried row
+  // by *its own date's* bridge (0.20 on day 2) rather than its *origin's*
+  // bridge (0.25 on day 1) would make it 0.23/0.20 = 1.15 while its origin
+  // becomes 0.23/0.25 = 0.92 — the same stored rate, two different rebased
+  // answers, and no longer a copy of anything.
+  it("M8 — a kept carried row rebases by its origin's bridge, staying a copy", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.20"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "USD" });
+
+    const eurRows = rateRows().filter((r) => r.base === "USD" && r.quote === "EUR");
+    expect(eurRows).toHaveLength(2);
+    const rates = new Set(eurRows.map((r) => r.rate));
+    // Both rows — the origin and the kept carried copy — land on the same
+    // rebased value: 0.23 / 0.25 = 0.92, never the carried row's own-date
+    // bridge answer of 0.23 / 0.20 = 1.15.
+    expect(rates).toEqual(new Set([money.unitsPerPivot("0.92")]));
+  });
+
+  // L3 — the outer loop used to `continue` a whole date bucket with no
+  // bridge of its own, dropping every row on it including a carried row
+  // whose *origin* (an earlier date) does have a bridge. M8's own per-row
+  // rebase never even ran for that row. Day 2 here has no USD bridge at
+  // all, only EUR carried forward from day 1 — it must still survive.
+  it("L3 — keeps a carried row on a date with no bridge of its own, when its origin's date has one", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Day 1 — EUR's real quote, and the bridge to USD.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        // Day 2 — EUR carried forward from day 1, and no bridge at all.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.23"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "USD" });
+
+    const eurRows = rateRows().filter((r) => r.base === "USD" && r.quote === "EUR");
+    expect(eurRows).toHaveLength(2);
+    const day2 = eurRows.find((r) => r.date === accountingDate("2026-01-02"));
+    expect(day2?.source).toBe("carried_forward");
+    // Rebased by the origin's (day 1) bridge: 0.23 / 0.25 = 0.92.
+    expect(day2?.rate).toBe(money.unitsPerPivot("0.92"));
   });
 });
 
@@ -566,6 +864,29 @@ describe("readRate", () => {
       expect(rate).toBeUndefined();
     });
   });
+
+  // C2 — `change_pivot` can drop a carried row's origin while leaving the
+  // carried row itself (fixed by the orphan-drop test above, but the reader
+  // must refuse regardless of how such a row came to exist).
+  it("refuses a carried_forward row whose origin is unlocatable, rather than carriedDays: 0", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: EUR,
+        date: accountingDate("2026-03-05"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "carried_forward",
+      })
+      .run();
+
+    const rate = readRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: EUR,
+      date: accountingDate("2026-03-05"),
+    });
+    expect(rate).toBeUndefined();
+  });
 });
 
 describe("readCoverage", () => {
@@ -610,6 +931,250 @@ describe("readCoverage", () => {
       expect.objectContaining({ days: 3, coveragePct: 100 }),
     );
   });
+
+  // H3 — 9 rows over 2,080 calendar days floors to 0%, but 9 rows held is
+  // not "no rates yet"; the caller (`CoverageTag`) must decide on `days`
+  // against `calendarDays`, never on this rounded percentage.
+  it("returns calendarDays alongside days, and floors the percentage while incomplete", () => {
+    const first = accountingDate("2020-11-25");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values(
+        Array.from({ length: 9 }, (_, i) => ({
+          base: PLN,
+          quote: USD,
+          date: addDays(first, i),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp" as const,
+        })),
+      )
+      .run();
+
+    const today = addDays(first, 2079); // 2,080 calendar days, inclusive of `first`.
+    const coverage = readCoverage(s.ledger.replica.db, today);
+    expect(coverage.find((c) => c.code === "USD")).toEqual(
+      expect.objectContaining({ days: 9, calendarDays: 2080, coveragePct: 0 }),
+    );
+  });
+
+  // H4 — `lastDate` is the last *quote*, not the last row. A source dead
+  // for ten days leaves nine `carried_forward` rows behind it; the coverage
+  // figure must still point at the real day it went dark.
+  it("lastDate excludes carried_forward rows — the real last quote date", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-02-01"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        ...Array.from({ length: 9 }, (_, i) => ({
+          base: PLN,
+          quote: USD,
+          date: accountingDate(`2026-02-${String(2 + i).padStart(2, "0")}`),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward" as const,
+        })),
+      ])
+      .run();
+
+    const coverage = readCoverage(s.ledger.replica.db, accountingDate("2026-02-10"));
+    expect(coverage.find((c) => c.code === "USD")?.lastDate).toBe(accountingDate("2026-02-01"));
+  });
+
+  // H2 — a currency with no real quote at all (every held row `carried_
+  // forward`) has no "last quote" to state. `lastRealDate ?? firstDate` used
+  // to report the oldest carried row as though it were a real quote date.
+  it("H2 — lastDate is null for a currency with no real quote, never the oldest carried row", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values(
+        Array.from({ length: 5 }, (_, i) => ({
+          base: PLN,
+          quote: USD,
+          date: accountingDate(`2026-02-${String(1 + i).padStart(2, "0")}`),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward" as const,
+        })),
+      )
+      .run();
+
+    const coverage = readCoverage(s.ledger.replica.db, accountingDate("2026-02-05"));
+    const row = coverage.find((c) => c.code === "USD");
+    expect(row?.lastDate).toBeNull();
+    expect(row?.days).toBe(5);
+    expect(row?.realDays).toBe(0);
+  });
+
+  // M3 — a source dead for months but carried forward every day since reads
+  // `days === calendarDays` (100%, "complete") even though only one row is a
+  // real quote. `realDays` is the honest decision variable — and (M1)
+  // `coveragePct` must be derived from it too, not from `days`: 1 real quote
+  // over 10 calendar days is `10%`, never `100%`.
+  it("M3 — realDays stays low when a dead source is carried all the way to today", () => {
+    const first = accountingDate("2026-01-01");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        { base: PLN, quote: USD, date: first, rate: money.unitsPerPivot("4.00"), source: "nbp" },
+        ...Array.from({ length: 9 }, (_, i) => ({
+          base: PLN,
+          quote: USD,
+          date: addDays(first, i + 1),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward" as const,
+        })),
+      ])
+      .run();
+
+    const today = addDays(first, 9); // 10 calendar days, filled by count.
+    const coverage = readCoverage(s.ledger.replica.db, today);
+    expect(coverage.find((c) => c.code === "USD")).toEqual(
+      expect.objectContaining({
+        days: 10,
+        calendarDays: 10,
+        realDays: 1,
+        lastDate: first,
+        coveragePct: 10,
+      }),
+    );
+  });
+
+  // M4 — a manual rate set into the future must not inflate `days` (or the
+  // percentage) past what `calendarDays` — counted only through today —
+  // actually covers.
+  it("M4 — a future-dated row is excluded from days and calendarDays alike", () => {
+    const first = accountingDate("2026-01-01");
+    const today = accountingDate("2026-01-05");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        ...Array.from({ length: 5 }, (_, i) => ({
+          base: PLN,
+          quote: USD,
+          date: addDays(first, i),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp" as const,
+        })),
+        // Set past `today` — S18's "set a range" allows a future end date.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-10"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "manual" as const,
+        },
+      ])
+      .run();
+
+    const coverage = readCoverage(s.ledger.replica.db, today);
+    expect(coverage.find((c) => c.code === "USD")).toEqual(
+      expect.objectContaining({
+        days: 5,
+        realDays: 5,
+        calendarDays: 5,
+        coveragePct: 100,
+        futureRows: 1,
+      }),
+    );
+  });
+
+  // L7 — a currency whose only rows are future-dated has `days === 0`, the
+  // same shape as no rows at all — but it is not "no rates yet": someone set
+  // a rate, it just is not due yet. `futureRows` is how `CoverageTag` tells
+  // the two states apart.
+  it("L7 — a currency with only future-dated rows reports futureRows, not empty", () => {
+    const today = accountingDate("2026-01-05");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-10"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "manual",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-11"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "manual",
+        },
+      ])
+      .run();
+
+    const coverage = readCoverage(s.ledger.replica.db, today);
+    expect(coverage.find((c) => c.code === "USD")).toEqual(
+      expect.objectContaining({ days: 0, calendarDays: 0, coveragePct: 0, futureRows: 2 }),
+    );
+  });
+
+  // M7 — one aggregate per currency, never every row materialised.
+  it("issues one aggregate query per currency against a 5,000-row fixture", () => {
+    const first = accountingDate("2010-01-01");
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values(
+        Array.from({ length: 5000 }, (_, i) => ({
+          base: PLN,
+          quote: USD,
+          date: addDays(first, i),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp" as const,
+        })),
+      )
+      .run();
+
+    const today = addDays(first, 4999);
+
+    // L9 — the prior assertion here only pinned the *count* of prepared
+    // statements, which proves nothing about what each one fetches. This
+    // wraps every fx_rates statement's own `.all()` and bounds the rows the
+    // driver actually returns — an aggregate returns one row per currency;
+    // a row-per-rate `select` would have returned 5,000.
+    const originalPrepare = Database.prototype.prepare;
+    const rowCounts: number[] = [];
+    const prepareSpy = vi.spyOn(Database.prototype, "prepare").mockImplementation(function (
+      this: InstanceType<typeof Database>,
+      sqlText: string,
+    ) {
+      // biome-ignore lint/suspicious/noExplicitAny: forwarding better-sqlite3's own variadic `prepare` signature through a mock
+      const stmt = (originalPrepare as any).call(this, sqlText);
+      if (sqlText.includes("fx_rates")) {
+        const originalAll = stmt.all.bind(stmt);
+        stmt.all = (...args: unknown[]) => {
+          const rows = originalAll(...args);
+          rowCounts.push(Array.isArray(rows) ? rows.length : 1);
+          return rows;
+        };
+      }
+      return stmt;
+    });
+
+    const coverage = readCoverage(s.ledger.replica.db, today);
+    const fxRatesQueries = prepareSpy.mock.calls
+      .map(([sqlText]) => sqlText as string)
+      .filter((text) => text.includes("fx_rates"));
+    prepareSpy.mockRestore();
+
+    expect(coverage.find((c) => c.code === "USD")).toEqual(
+      expect.objectContaining({ days: 5000, calendarDays: 5000, coveragePct: 100 }),
+    );
+    // Aggregate SQL only — never a row fetch that returns anywhere near
+    // 5,000 rows to be counted in JavaScript.
+    for (const query of fxRatesQueries) {
+      expect(query).toMatch(/count\(/i);
+    }
+    expect(rowCounts.length).toBeGreaterThan(0);
+    for (const count of rowCounts) {
+      expect(count).toBeLessThanOrEqual(1);
+    }
+  });
 });
 
 describe("listFxRates", () => {
@@ -649,6 +1214,90 @@ describe("listFxRates", () => {
     });
 
     expect(rows.map((r) => r.date)).toEqual(["2026-01-01", "2026-01-03"]);
+  });
+
+  it("carries the origin's own age on a carried_forward row — never left for the caller to compute", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-04"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    const rows = listFxRates(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      from: accountingDate("2026-01-01"),
+      to: accountingDate("2026-01-04"),
+    });
+
+    expect(rows.find((r) => r.source === "nbp")?.carriedDays).toBeUndefined();
+    expect(rows.find((r) => r.source === "carried_forward")?.carriedDays).toBe(3);
+  });
+
+  // C2 — an unlocatable origin marks the row `carriedDays: null`, explicit
+  // and distinct from `0`, which would read as an exact quote.
+  it("marks carriedDays null on a carried_forward row with no locatable origin", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-05"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "carried_forward",
+      })
+      .run();
+
+    const rows = listFxRates(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      from: accountingDate("2026-01-05"),
+      to: accountingDate("2026-01-05"),
+    });
+
+    expect(rows[0]?.carriedDays).toBeNull();
+  });
+});
+
+describe("readCurrencySettings", () => {
+  it("lists every non-archived currency with the full row S17 needs", () => {
+    write(setPinnedExecutor, { code: "USD", version: 1, pinned: true });
+
+    const rows = readCurrencySettings(s.ledger.replica.db);
+    const usd = rows.find((row) => row.code === "USD");
+
+    expect(usd).toEqual(
+      expect.objectContaining({ code: "USD", pinned: true, isPivot: false, version: 2 }),
+    );
+    // PLN is this fixture's pivot (see `beforeEach`) — S17 shows it read-only.
+    expect(rows.find((row) => row.code === "PLN")).toEqual(
+      expect.objectContaining({ code: "PLN", isPivot: true }),
+    );
+  });
+
+  it("excludes an archived currency by default, and includes it with the option", () => {
+    write(archiveCurrencyExecutor, { code: "EUR", version: 1 });
+
+    expect(readCurrencySettings(s.ledger.replica.db).some((row) => row.code === "EUR")).toBe(false);
+    expect(
+      readCurrencySettings(s.ledger.replica.db, { includeArchived: true }).some(
+        (row) => row.code === "EUR",
+      ),
+    ).toBe(true);
   });
 });
 

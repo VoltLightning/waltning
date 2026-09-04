@@ -61,10 +61,12 @@ import {
   type UnmergeCounterpartiesInput,
   type UpdateAccountInput,
   type UpdateCounterpartyInput,
+  type UpdateCurrencyInput,
   type UpdateTransactionInput,
   unmergeCounterpartiesInput,
   updateAccountInput,
   updateCounterpartyInput,
+  updateCurrencyInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
@@ -129,6 +131,26 @@ export type PhoneCurrency = {
    * the ordinary state of a phone that has never synced (§14.6).
    */
   capturable: boolean;
+};
+
+/**
+ * S17's whole row — `readCurrencySettings`'s answer, structural like
+ * `PhoneCurrency` above for the same reason (no `@waltning/ledger` import).
+ * `PhoneCurrency` answers *can a capture be valued in this*; this answers
+ * *what does the settings screen show and write* — the two never converge
+ * because a picker has no use for `version`, `pinned` or `rateSource`, and a
+ * settings row has no use for `capturable`.
+ */
+export type PhoneCurrencySettings = {
+  code: CurrencyCode;
+  name: string;
+  symbol: string;
+  symbolPosition: string;
+  decimals: number;
+  rateSource: string | null;
+  pinned: boolean;
+  isPivot: boolean;
+  version: number;
 };
 
 /**
@@ -424,9 +446,16 @@ export type PhoneCoverage = {
   code: CurrencyCode;
   source: string | null;
   firstDate: AccountingDate;
-  lastDate: AccountingDate;
+  /** The last *real* quote's date — `null` when every held row is `carried_forward` (H2). */
+  lastDate: AccountingDate | null;
   days: number;
+  /** Real (non-`carried_forward`) rows held (M3) — `CoverageTag`'s decision variable for *complete*, with `calendarDays`, never `days`. */
+  realDays: number;
+  /** Calendar days from `firstDate` to today, inclusive (H3). */
+  calendarDays: number;
   coveragePct: number;
+  /** L7 — rows held past today, excluded from every figure above (M4). */
+  futureRows: number;
 };
 
 /** One row of S18's rate table — `listFxRates`'s answer. */
@@ -436,12 +465,21 @@ export type PhoneFxRateRow = {
   date: AccountingDate;
   rate: UnitsPerPivot;
   source: string;
+  /**
+   * Only present on a `carried_forward` row — `RateTable`'s own age marker.
+   * `null` (C2) means the origin is unlocatable; never `0`.
+   */
+  carriedDays?: number | null;
 };
 
 export type PhoneLedgerPort = {
   /** `includeArchived` — default `false`. S16's register loads them lazily, behind its own toggle. */
   listAccounts: (options?: { includeArchived?: boolean }) => readonly PhoneAccount[];
   listCurrencies: () => readonly PhoneCurrency[];
+  /** S17, on demand — not carried in the snapshot, matching `readCoverage`/`listFxRates` below. */
+  listCurrencySettings: (options?: {
+    includeArchived?: boolean;
+  }) => readonly PhoneCurrencySettings[];
   listGroups: () => readonly PhoneGroup[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
@@ -511,6 +549,8 @@ export type PhoneLedgerPort = {
     capture: PhoneCapture,
   ) => { written: number; replacedManual: number };
   clearManualRate: (input: ClearManualRateInput, capture: PhoneCapture) => { deleted: number };
+  /** S17 §9.2 — cosmetic patch only: symbol, symbol position, decimals. */
+  updateCurrency: (input: UpdateCurrencyInput, capture: PhoneCapture) => void;
   /* ── end E3 block ─────────────────────────────────────────────────────── */
   // ── E2 · counterparties and settlement ────────────────────────────────────
   createCounterparty: (input: CreateCounterpartyInput, capture: PhoneCapture) => void;
@@ -869,6 +909,15 @@ export type SetManualRateDraft = {
 };
 
 export type ClearManualRateDraft = { base: string; quote: string; from: string; to: string };
+
+/** S17 §9.2's own row — only the cosmetic fields, never `code` or `version`'s siblings. */
+export type CurrencyPatch = Partial<{
+  symbol: string;
+  symbolPosition: "P" | "S";
+  decimals: number;
+}>;
+
+export type UpdateCurrencyDraft = { code: string; version: number; patch: CurrencyPatch };
 /* ── E2 · counterparties and settlement ──────────────────────────────────── */
 
 export type CreateCounterpartyDraft = {
@@ -1031,6 +1080,10 @@ export type PhoneLedgerController = {
     to: CurrencyCode;
     date: AccountingDate;
   }) => PhoneCrossRate | null;
+  /** S17, on demand — `readCurrencySettings`'s answer. */
+  listCurrencySettings: (options?: {
+    includeArchived?: boolean;
+  }) => readonly PhoneCurrencySettings[];
   readCoverage: (today: AccountingDate) => readonly PhoneCoverage[];
   listFxRates: (range: {
     base: CurrencyCode;
@@ -1059,6 +1112,9 @@ export type PhoneLedgerController = {
   clearManualRate: (
     draft: ClearManualRateDraft,
   ) => { deleted: number } | { fieldErrors: readonly FieldError[] };
+  updateCurrency: (
+    draft: UpdateCurrencyDraft,
+  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
   /* ── end E3 block ─────────────────────────────────────────────────────── */
   // ── E2 · counterparties and settlement ────────────────────────────────────
   createCounterparty: (
@@ -1304,6 +1360,21 @@ function settleDebtRefusal(error: unknown): FieldError | null {
       message: error.message,
       messageKey: "settleDebt.nothingToSettle",
     };
+  }
+  return null;
+}
+
+/**
+ * `change_pivot`'s two refusals (C1) — already-the-pivot and the txn-count
+ * gate are different situations and get their own text, never one fallback.
+ */
+function changePivotRefusal(error: unknown): FieldError | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message.includes("is already the pivot")) {
+    return { path: "", message: error.message, messageKey: "fx.pivotAlreadyPivot" };
+  }
+  if (error.message.includes("refused — a phone alone cannot re-rate")) {
+    return { path: "", message: error.message, messageKey: "fx.pivotChangeRefused" };
   }
   return null;
 }
@@ -2496,6 +2567,7 @@ export function createPhoneLedger(
     /* ── E3 · FX ──────────────────────────────────────────────────────────── */
     readRate: (pair) => port.readRate(pair),
     readCrossRate: (pair) => port.readCrossRate(pair),
+    listCurrencySettings: (options) => port.listCurrencySettings(options),
     readCoverage: (today) => port.readCoverage(today),
     listFxRates: (range) => port.listFxRates(range),
     addCurrency: (draft) => {
@@ -2705,12 +2777,13 @@ export function createPhoneLedger(
         try {
           port.changePivot(parsed.data, runtime.capture());
         } catch (writeError) {
+          const fieldError = changePivotRefusal(writeError);
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "change_pivot",
             phase: "success",
           });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
         }
         refresh();
         emitClientDiagnostic(diagnostics, {
@@ -2823,6 +2896,53 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "clear_manual_rate",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    updateCurrency: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "update_currency",
+        phase: "start",
+      });
+      try {
+        const parsed = updateCurrencyInput.safeParse({
+          code: draft.code,
+          version: draft.version,
+          patch: draft.patch,
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_currency",
+            phase: "success",
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        try {
+          port.updateCurrency(parsed.data, runtime.capture());
+        } catch (writeError) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "update_currency",
+            phase: "success",
+          });
+          return { fieldErrors: refusalFromThrow(writeError) };
+        }
+        refresh();
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_currency",
+          phase: "success",
+        });
+        return { code: parsed.data.code };
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "update_currency",
           phase: "failure",
           error: clientFailure(error),
         });

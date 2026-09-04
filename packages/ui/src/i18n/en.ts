@@ -438,6 +438,9 @@ export const en = {
     categories: "Categories",
     /** S31's own nav title. */
     transfer: "Transfer",
+
+    currencies: "Currencies",
+    rates: "Exchange rates",
   },
   /**
    * `settle_debt`'s refusals (H9), resolved through `useT()` the same way
@@ -448,6 +451,121 @@ export const en = {
   settleDebt: {
     noCounterparty: "This counterparty no longer exists.",
     nothingToSettle: "There is nothing open in this currency to settle.",
+    currencies: "Currencies",
+    rates: "Exchange rates",
+  },
+  /** `packages/ui/src/fx/` and the two screens it feeds — S17, S18. */
+  fx: {
+    /** `CurrencyChip` — `04` §4.5's accessible name; the visible face is the codes themselves. */
+    currencyChipLabel: "Display currency: {{currency}}. Tap to change.",
+    /** `CoverageTag` — S17 §6/§8. */
+    coveragePct: "{{pct}}%",
+    coverageBelow: "{{pct}}% · last quote {{date}}",
+    coverageTitle: "Coverage",
+    /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
+    noRatesYet: "no rates yet · set one by hand",
+    /**
+     * L7 — the only rows held are future-dated (M4 excludes them from
+     * `days`): rates are set, just none due yet.
+     *
+     * i18next's real `count`-driven suffixes, not the `resultsOne`/`resultsMany`
+     * flat pair — English's two categories collapse onto one string here, but
+     * Polish's four (`i18n.test.tsx`) each say something different, and only
+     * `_one`/`_few`/`_many`/`_other` can hold four. `en.ts` still carries all
+     * four keys: `Messages` is the mapped type over *this* file's keys, so a
+     * language with more grammar than English needs the same key set here,
+     * even where English has nothing new to say for it.
+     */
+    noRatesYetFuture_one: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_few: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_many: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_other: "no rates yet · {{count}} set for later",
+    /** H2 — rows held, but none a real quote (every one `carried_forward`): no date exists to state. */
+    noQuoteYet: "no quote yet",
+    /** `RateField` — `03` §3.7. */
+    rateFieldSynced: "Synced: {{rate}}",
+    /** `parseRate`'s own refusal — 0, negative, or anything not a positive decimal. */
+    ratePositive: "A rate must be a positive number.",
+    /** `RateTable` — `04` §4.6. */
+    rateTableGap: "No rate held",
+    rateTableGapLabel: "{{date}} — no rate held",
+    rateTableEmptyRange: "The range must not end before it starts.",
+    /** The column header — states which way `rate` reads, same rule as `RateEditor`'s title. */
+    rateTableDateHeader: "Date",
+    rateTableRateHeader: "{{quote}} per {{base}}",
+    rateTableSourceHeader: "Source",
+    /** A `carried_forward` row's own tag — its age, never the raw enum. */
+    rateTableCarried: "Carried · {{count}} d",
+    /** C2 — the origin is unlocatable (`change_pivot` can drop it). Never `0 d`, which would read as exact. */
+    rateTableCarriedUnknown: "Carried · age not known",
+    /**
+     * `RateEditor` — `04` §4.7. `{{quote}} per {{base}}` states which way the
+     * figure reads (`SPEC.md` §4: `fx_rates.rate` is units of the quote per
+     * one pivot) — never a `→` arrow, which reads as a conversion direction
+     * and is exactly backwards for this figure.
+     */
+    rateEditorTitle: "Set {{quote}} per {{base}}, {{from}} … {{to}}",
+    rateEditorRateLabel: "Rate · {{quote}} per {{base}}",
+    rateEditorTotalDays: "{{count}} days",
+    rateEditorAbsent: "{{count}} currently absent",
+    rateEditorCarried: "{{count}} currently carried forward",
+    rateEditorManual: "{{count}} currently manual",
+    rateEditorConfirmOverwrite:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rate(s) set by hand.",
+    rateEditorSubmit: "Set rate",
+    rateEditorConfirmSubmit: "Overwrite and set",
+    /** L11 — `setManualRateInput`'s own cap, restated where the range is picked. */
+    rateEditorRangeTooLong: "A manual rate range cannot exceed {{max}} days.",
+    /** S17. */
+    addCurrency: "Add currency",
+    currencyCode: "Code",
+    currencySymbol: "Symbol",
+    pinned: "Pinned",
+    rateSource: "Rate source",
+    rateSourceNone: "None",
+    /** §7.7's four provider names — proper nouns, identical in every language. */
+    sourceNbp: "NBP",
+    sourceEcb: "ECB",
+    sourceNbrb: "NBRB",
+    sourceNbg: "NBG",
+    sourceManual: "Manual",
+    /** L8 — an unrecognised source, plainly, never the `manual` fallback it used to be. */
+    sourceUnknown: "Unknown",
+    archiveCurrency: "Archive",
+    currencyArchiveRefused: "Couldn't archive this currency.",
+    currencyWriteFailed: "That didn't save.",
+    /** S17 §9.2 — a row's own symbol and decimals, and the sheet that edits them. */
+    currencyDetail: "{{symbol}} · {{decimals}}dp",
+    editCurrency: "Edit {{code}}",
+    symbolPosition: "Symbol position",
+    symbolBefore: "Before the figure",
+    symbolAfter: "After the figure",
+    decimals: "Decimal places",
+    pivotLabel: "Pivot: {{code}}",
+    changePivot: "Change pivot",
+    pivotConfirmTitle: "Change the pivot currency?",
+    pivotConfirmBody:
+      "The pivot is the technical hub every rate is stored against. Refused once any transaction exists — a phone alone has no way to re-rate the history that would leave behind. Changing it is rare, audited, and never something moving abroad requires.",
+    pivotConfirmSubmit: "Yes, change it",
+    pivotChangeRefused: "The pivot can't change while a transaction exists.",
+    /** C1 — the executor's other refusal: the chosen code is already the pivot. */
+    pivotAlreadyPivot: "That currency is already the pivot.",
+    /** C1 — the target `Select` in the pivot-change flow, ahead of the confirm dialog. */
+    pivotTarget: "New pivot",
+    pivotTargetPlaceholder: "Choose a currency",
+    /** S18. */
+    pairLabel: "Quote, against {{base}}",
+    pairPlaceholder: "Choose a currency",
+    noQuoteCurrency: "No currency to compare against the pivot yet.",
+    range30d: "30 d",
+    range90d: "90 d",
+    rangeYear: "Year",
+    rangeFrom: "From",
+    rangeTo: "To",
+    setRange: "Set a range",
+    clearManual: "Clear manual",
+    rateWriteFailed: "That didn't save.",
+    rerateNotOffered: "Re-rate from the desk once a server exists.",
   },
   states: {
     /**

@@ -31,6 +31,7 @@ import type {
   UnmergeCounterpartiesInput,
   UpdateAccountInput,
   UpdateCounterpartyInput,
+  UpdateCurrencyInput,
   UpdateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
@@ -104,6 +105,8 @@ import {
   clearManualRateExecutor,
 } from "./currencies/clear-manual-rate.executor.ts";
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
+// ── end E2 block ─────────────────────────────────────────────────────────
+import { readCurrencySettings } from "./currencies/read-currency-settings.ts";
 import {
   type LocalCoverage,
   type LocalCrossRate,
@@ -120,6 +123,7 @@ import {
 } from "./currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
+import { updateCurrencyExecutor } from "./currencies/update-currency.executor.ts";
 import {
   describeLedgerError,
   emitLedgerDiagnostic,
@@ -186,6 +190,8 @@ export type LocalCapturableCategory = {
 export type LocalLedgerSession = {
   listAccounts: (options?: { includeArchived?: boolean }) => readonly LocalAccountSummary[];
   listCurrencies: () => readonly LocalCurrency[];
+  /** S17's whole list — every column a settings row needs, `readCurrencySettings`'s answer. */
+  listCurrencySettings: (options?: { includeArchived?: boolean }) => readonly LocalCurrencyRow[];
   listGroups: () => readonly LocalGroup[];
   listRecent: (limit: number) => readonly LocalRecentTransaction[];
   listCategories: () => readonly LocalCapturableCategory[];
@@ -269,6 +275,7 @@ export type LocalLedgerSession = {
   changePivot: (input: ChangePivotInput, capture: Capture) => LocalCurrencyRow;
   setManualRate: (input: SetManualRateInput, capture: Capture) => SetManualRateResult;
   clearManualRate: (input: ClearManualRateInput, capture: Capture) => ClearManualRateResult;
+  updateCurrency: (input: UpdateCurrencyInput, capture: Capture) => LocalCurrencyRow;
   /* ── end E3 block ─────────────────────────────────────────────────────── */
   // ── E2 · counterparties and settlement ────────────────────────────────────
   createCounterparty: (input: CreateCounterpartyInput, capture: Capture) => LocalCounterpartyRow;
@@ -408,6 +415,8 @@ export function createLocalLedgerSession<TRun>(
   return {
     listAccounts: (listOptions) => readAccounts(requireOpen().replica.db, listOptions),
     listCurrencies: () => readCurrencies(requireOpen().replica.db),
+    listCurrencySettings: (settingsOptions) =>
+      readCurrencySettings(requireOpen().replica.db, settingsOptions),
     listGroups: () => readGroups(requireOpen().replica.db),
     listRecent: (limit) => readRecent(requireOpen().replica.db, limit),
     listCategories: () =>
@@ -601,6 +610,14 @@ export function createLocalLedgerSession<TRun>(
     clearManualRate: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: clearManualRateExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    updateCurrency: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: updateCurrencyExecutor,
         registry: ledgerRegistry,
         input,
         capture,

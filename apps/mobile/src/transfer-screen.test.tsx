@@ -127,6 +127,7 @@ function fakeController(
     changePivot: vi.fn(),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
+    updateCurrency: vi.fn(),
     createCounterparty: vi.fn(),
     updateCounterparty: vi.fn(),
     mergeCounterparties: vi.fn(),
@@ -142,6 +143,7 @@ function fakeController(
     convertLeafGroup: vi.fn(),
     mergeCategories: vi.fn(),
     archiveCategory: vi.fn(),
+    listCurrencySettings: vi.fn(() => []),
     reset: vi.fn(),
   };
   return createPhoneLedger(port, {

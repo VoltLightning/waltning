@@ -11,7 +11,18 @@
  * *no* display currency while deciding. `initializeFromPinned` applies that
  * default exactly once, the first time a screen learns which currencies are
  * pinned; until then, and whenever nothing has been chosen, the snapshot
- * falls back to the pivot outright.
+ * falls back to the *live* pivot (`readPivot`), and only to the build-time
+ * `seed` when no live pivot is available yet (H1 — a fresh install whose
+ * ledger pivot differs from the seed must render its own pivot, not the
+ * seed frozen at build time).
+ *
+ * **`getSnapshot` returns a cached object, not a fresh one every call.**
+ * `useSyncExternalStore` compares what it returns by reference — a snapshot
+ * that is a new `{ currency, hydrated }` literal on every call reads as
+ * "changed" on every render, which re-renders, which calls `getSnapshot`
+ * again, without end. The cache below is keyed on `inner.getSnapshot()`'s own
+ * reference — stable except across a real `publish()` — so this only builds
+ * a new object when the device preference actually changed.
  */
 
 import { type CurrencyCode, currencyCode } from "@waltning/core/money";
@@ -49,19 +60,59 @@ const codec = {
   serialize: (value: CurrencyCode): string => value,
 };
 
+export type DisplayCurrencyPreferenceOptions = {
+  /**
+   * M2 — the ledger's own write notifications (e.g. `phoneLedger.subscribe`),
+   * composed into this preference's `subscribe` so `change_pivot` reaches a
+   * mounted `useSyncExternalStore` consumer live, with no device-store write
+   * to piggyback on. `undefined` before the ledger session exists — the same
+   * bootstrap ordering `readPivot` already lives with (H1).
+   */
+  subscribeToLedger?: (listener: () => void) => () => void;
+  diagnostics?: ClientDiagnostics;
+};
+
 export function createDisplayCurrencyPreference(
   store: DevicePreferenceStore,
-  pivot: CurrencyCode,
-  diagnostics?: ClientDiagnostics,
+  /** A live read of the ledger's current pivot — `currencies.find(isPivot)` over a session snapshot. `null` before the ledger is ready. */
+  readPivot: () => CurrencyCode | null,
+  /** The build-time fallback, used only when `readPivot` has nothing yet. */
+  seed: CurrencyCode,
+  options?: DisplayCurrencyPreferenceOptions,
 ): DisplayCurrencyController {
-  const inner = createDevicePreference<CurrencyCode>(store, codec, diagnostics);
+  const inner = createDevicePreference<CurrencyCode>(store, codec, options?.diagnostics);
+
+  // See the file doc: cached so `useSyncExternalStore` sees the same
+  // reference across renders where nothing actually changed. Rebuilt when
+  // either the stored snapshot changes, or — while nothing is stored — the
+  // live pivot's answer changes (H1: `change_pivot` must be visible on the
+  // next read with no store write at all).
+  let cachedInner: ReturnType<typeof inner.getSnapshot> | undefined;
+  let cached: DisplayCurrencySnapshot | undefined;
 
   return {
     getSnapshot: () => {
       const snapshot = inner.getSnapshot();
-      return { currency: snapshot.value ?? pivot, hydrated: snapshot.hydrated };
+      const currency = snapshot.value ?? readPivot() ?? seed;
+      if (cached !== undefined && cachedInner === snapshot && cached.currency === currency) {
+        return cached;
+      }
+      cachedInner = snapshot;
+      cached = { currency, hydrated: snapshot.hydrated };
+      return cached;
     },
-    subscribe: inner.subscribe,
+    // M2 — composed with the ledger's own notifications, not the device
+    // store's alone: `change_pivot` writes no device preference, so a
+    // subscriber that only heard the store would keep the old pivot until an
+    // unrelated re-render happened to call `getSnapshot()` again.
+    subscribe: (listener) => {
+      const unsubscribeStore = inner.subscribe(listener);
+      const unsubscribeLedger = options?.subscribeToLedger?.(listener);
+      return () => {
+        unsubscribeStore();
+        unsubscribeLedger?.();
+      };
+    },
     hydrate: inner.hydrate,
     set: inner.set,
     initializeFromPinned: (pinned) => {

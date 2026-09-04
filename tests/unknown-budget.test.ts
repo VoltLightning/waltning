@@ -198,10 +198,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "`invoke(raw)` takes unvalidated input on purpose (validating it is the method's job), and `AnyOperation` is a heterogeneous registry",
   },
-  "tools/migrate-mm/src/import.ts": {
-    max: 2,
-    why: "reads a foreign export whose shape is the thing being discovered",
-  },
   "apps/api/src/registry/define.ts": {
     max: 1,
     why: "passes unvalidated input through to the gate, which is where the runtime check lives",
@@ -222,10 +218,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "a route to C5's transaction detail screen (`/transaction/[id]`), which does not exist in this worktree's `app/` yet — expo-router's generated `Href` union has no literal for it, so the two types share no member and the cast has to go through `unknown` rather than straight across",
   },
-  "packages/db/src/fx/backfill.ts": {
-    max: 1,
-    why: "an unrecognised rate source, which is a string from the database and not a type",
-  },
   "packages/schema/src/dashboard-widgets.pg.ts": {
     max: 1,
     why: "a widget's config is per-kind, so the shape is open by design",
@@ -243,8 +235,8 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
   },
   "packages/client/src/ledger/create-phone-ledger.ts": {
-    max: 8,
-    why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal and settleDebtRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
+    max: 9,
+    why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal, settleDebtRefusal and changePivotRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast",
   },
   // E2 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per executor file — the driver's
@@ -308,17 +300,33 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
   },
+  "packages/ledger/src/currencies/update-currency.executor.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts (E6 review fix — update_currency)",
+  },
 };
 
 /**
- * Comments are stripped first.
+ * Comments and string literals are stripped first.
  *
  * Half the occurrences in this repository are prose *explaining why an
  * `unknown` was removed* — counting those would make the budget rise every time
  * someone documented a fix, which is the exact opposite of what it is for.
+ *
+ * **String literals too (L10/L11)** — `en.ts` once earned a budget entry for
+ * "age unknown", the English word in a carried-forward row's own age label,
+ * never a TypeScript `unknown`. That entry was a loosened guard: it let a
+ * real `unknown` type slip into `en.ts` uncounted, hidden behind the one the
+ * copy already spent. Stripping string content the same way comments are
+ * stripped means copy can never pay a budget's way again.
  */
 function usages(source: string): number {
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/`(?:[^`\\]|\\.)*`/g, "``");
   return code.match(/\bunknown\b/g)?.length ?? 0;
 }
 

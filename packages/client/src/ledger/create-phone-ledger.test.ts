@@ -327,6 +327,7 @@ function harness(
     createGroup,
     readRate: vi.fn(() => null),
     readCrossRate: vi.fn(() => null),
+    listCurrencySettings: () => [],
     readCoverage: vi.fn(() => []),
     listFxRates: vi.fn(() => []),
     addCurrency: vi.fn(),
@@ -336,6 +337,7 @@ function harness(
     changePivot: vi.fn(),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
+    updateCurrency: vi.fn(),
     createCounterparty: vi.fn(),
     updateCounterparty: vi.fn(),
     mergeCounterparties: vi.fn(),
@@ -475,6 +477,7 @@ describe("phone ledger controller", () => {
       createGroup: vi.fn(),
       readRate: vi.fn(() => null),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: () => [],
       readCoverage: vi.fn(() => []),
       listFxRates: vi.fn(() => []),
       addCurrency: vi.fn(),
@@ -484,6 +487,7 @@ describe("phone ledger controller", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      updateCurrency: vi.fn(),
       createCounterparty: vi.fn(),
       updateCounterparty: vi.fn(),
       mergeCounterparties: vi.fn(),
@@ -555,6 +559,7 @@ describe("phone ledger controller", () => {
       createGroup: vi.fn(),
       readRate: vi.fn(() => null),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: () => [],
       readCoverage: vi.fn(() => []),
       listFxRates: vi.fn(() => []),
       addCurrency: vi.fn(),
@@ -564,6 +569,7 @@ describe("phone ledger controller", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      updateCurrency: vi.fn(),
       createCounterparty: vi.fn(),
       updateCounterparty: vi.fn(),
       mergeCounterparties: vi.fn(),
@@ -727,6 +733,7 @@ describe("phone ledger controller", () => {
       createGroup: vi.fn(),
       readRate: vi.fn(() => null),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: () => [],
       readCoverage: vi.fn(() => []),
       listFxRates: vi.fn(() => []),
       addCurrency: vi.fn(),
@@ -736,6 +743,7 @@ describe("phone ledger controller", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      updateCurrency: vi.fn(),
       createCounterparty: vi.fn(),
       updateCounterparty: vi.fn(),
       mergeCounterparties: vi.fn(),
@@ -1076,14 +1084,36 @@ describe("phone ledger controller — FX (E3)", () => {
       throw new Error("change_pivot: refused — a phone alone cannot re-rate existing transactions");
     });
     const refused = controller.changePivot({ code: "USD" });
+    // C1 — mapped to its own `messageKey`, not the bare `refusalFromThrow` fallback.
     expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
-      { path: "", message: expect.stringContaining("cannot re-rate") },
+      {
+        path: "",
+        message: expect.stringContaining("cannot re-rate"),
+        messageKey: "fx.pivotChangeRefused",
+      },
     ]);
     expect(listener).not.toHaveBeenCalled();
 
     const result = controller.changePivot({ code: "USD" });
     expect(result).toEqual({ code: currencyCode("USD") });
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  // C1 — the executor's other refusal gets its own text too, never the
+  // same fallback as the transaction-count gate.
+  it("changePivot: 'already the pivot' maps to its own messageKey", () => {
+    const { controller, port } = harness();
+    (port.changePivot as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error("change_pivot: USD is already the pivot");
+    });
+    const refused = controller.changePivot({ code: "USD" });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      {
+        path: "",
+        message: expect.stringContaining("already the pivot"),
+        messageKey: "fx.pivotAlreadyPivot",
+      },
+    ]);
   });
 
   it("setManualRate: a throwing port maps to fieldErrors, a success calls refresh and returns written/replacedManual", () => {
@@ -1199,6 +1229,7 @@ describe("phone ledger controller — createCategory", () => {
       createGroup: vi.fn(),
       readRate: vi.fn(() => null),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: () => [],
       readCoverage: vi.fn(() => []),
       listFxRates: vi.fn(() => []),
       addCurrency: vi.fn(),
@@ -1208,6 +1239,7 @@ describe("phone ledger controller — createCategory", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      updateCurrency: vi.fn(),
       createCounterparty: vi.fn(),
       updateCounterparty: vi.fn(),
       mergeCounterparties: vi.fn(),
@@ -1397,6 +1429,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       balanceAsOf: () => money.toMoney("0"),
       readRate: vi.fn(() => null),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: () => [],
       readCoverage: vi.fn(() => []),
       listFxRates: vi.fn(() => []),
       addCurrency: vi.fn(),
@@ -1406,6 +1439,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      updateCurrency: vi.fn(),
       listCounterpartyBalances: vi.fn(() => []),
       listFullCategoryTree: () => [],
       listCategoryUsage: () => new Map(),
@@ -1646,6 +1680,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       settleDebt,
       readRate: vi.fn(() => null),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: () => [],
       readCoverage: vi.fn(() => []),
       listFxRates: vi.fn(() => []),
       addCurrency: vi.fn(),
@@ -1655,6 +1690,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      updateCurrency: vi.fn(),
       listPayeeHistory: vi.fn(() => []),
       listCounterpartyBalances: vi.fn(() => []),
       listFullCategoryTree: vi.fn(() => []),
@@ -2020,6 +2056,7 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       changePivot: vi.fn(),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
+      updateCurrency: vi.fn(),
       createCounterparty: vi.fn(),
       updateCounterparty: vi.fn(),
       mergeCounterparties: vi.fn(),
@@ -2036,6 +2073,7 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       mergeCategories: vi.fn(),
       archiveCategory: vi.fn(),
       readCrossRate: vi.fn(() => null),
+      listCurrencySettings: vi.fn(() => []),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {

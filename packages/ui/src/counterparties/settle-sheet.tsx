@@ -316,6 +316,18 @@ export function SettleSheet({
         <RateField
           label={t("transactions.realized")}
           value={realizedRate}
+          // L9 — a rate has no unit of its own (`RateField`'s own doc);
+          // `realizedRate` is `amount` (the account's currency) per one
+          // `dischargesAmount` (the picked balance's own), the same
+          // `{{quote}} per {{base}}` reading `RateTable`'s header states.
+          {...(account && dischargesCurrency
+            ? {
+                unit: t("fx.rateTableRateHeader", {
+                  quote: account.currency,
+                  base: dischargesCurrency,
+                }),
+              }
+            : {})}
           {...(referenceRate
             ? {
                 reference: {

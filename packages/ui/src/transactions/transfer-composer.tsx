@@ -260,6 +260,12 @@ export function TransferComposer({
           <RateField
             label={t("transactions.realized")}
             value={marginResult?.realizedRate ?? money.ZERO}
+            // L9 — a rate has no unit of its own (`RateField`'s own doc);
+            // the realized rate reads destination per source, the same
+            // `{{quote}} per {{base}}` `RateTable`'s header states.
+            {...(from && to
+              ? { unit: t("fx.rateTableRateHeader", { quote: to.currency, base: from.currency }) }
+              : {})}
             {...(referenceRate
               ? {
                   reference: {

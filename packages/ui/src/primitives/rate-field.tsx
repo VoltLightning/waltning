@@ -5,10 +5,9 @@
  * **Read-only by default, editable on request.** S14 and S31 both derive their
  * rate from two typed amounts (§7.5, §7.6: *"two amounts are observable from a
  * statement, a rate is not"*) and hand this component the result to *display*
- * — `editable` stays `false` there. A future caller that genuinely wants a
- * typed rate (`design-system/04` §4.7's `RateEditor`) sets it `true` and gets
- * a `TextInput` that accepts paste, because a rate copied off a bank statement
- * is the common case for that screen, not this one.
+ * — `editable` stays `false` there. `04` §4.7's `RateEditor` sets it `true`
+ * and gets a `TextInput` that accepts paste, because a rate copied off a bank
+ * statement is the common case for that screen, not this one.
  *
  * **`manual` is the caller's claim, never a comparison this component makes.**
  * A derived rate almost never equals its reference — that gap is the ordinary
@@ -16,11 +15,25 @@
  * would paint every settlement and every transfer amber. Only the caller knows
  * whether a person typed *this* figure directly; `manual` mirrors `FxAmount`'s
  * own `provenance` prop for the same reason.
+ *
+ * **Editable holds its own text, seeded once from `value`.** `RateEditor`'s
+ * own screen resets its committed rate to `""` the instant a keystroke fails
+ * to parse (a typed `"0"`, mid-way to `"0.5"`) — the same rule
+ * `AmountField`'s own `EditableAmountField` exists to protect against: if the
+ * input mirrored that prop back on every render, the character the parent
+ * rejected would visibly vanish before the next one could be typed. `value`
+ * seeds the buffer; after that, this component owns what is on screen, and
+ * `onChange` is the only way the parent hears about it.
+ *
+ * **The rate renders through `formatRate`** (`fx/format-rate.ts`) — the same
+ * locale-aware path `RateTable` renders its own column through — rather than
+ * a second `money.forDisplay` call kept here to drift from it.
  */
 
 import * as money from "@waltning/core/money";
+import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
-import { decimalMark } from "../i18n/locales.ts";
+import { formatRate } from "../fx/format-rate.ts";
 import { useLocale, useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -29,7 +42,7 @@ import { useInteraction } from "./interaction.ts";
 import { Tag } from "./tag";
 
 export type RateFieldReference = {
-  /** A rate for display — `Money` (a derived figure) or a branded `Rate` (a reference read straight off `readCrossRate`); `money.toMoney` accepts either. */
+  /** A rate for display — `Money` (a derived figure) or a branded `Rate` (a reference read straight off `readCrossRate`); `formatRate` accepts either. */
   rate: money.Money | money.Rate;
   source: string;
   /** `AccountingDate`'s shape — the reference row's own date, never today's. */
@@ -39,63 +52,137 @@ export type RateFieldReference = {
 export type RateFieldProps = {
   /** Visible above the field and announced as its name. */
   label: string;
-  /** The rate to show — always rendered at `decimals` (4dp, §4.6). */
-  value: money.Money | money.Rate;
+  /**
+   * The rate to show — always rendered at `decimals` (4dp, §4.6). A derived
+   * `Money`/`Rate` for the read-only path; a raw decimal `string` seeds the
+   * editable path's own typed buffer (see above).
+   */
+  value: money.Money | money.Rate | string;
   decimals?: number;
   editable?: boolean;
-  /** Required when `editable`; ignored otherwise. */
-  onChangeText?: (value: string) => void;
+  /** The typed rate, parsed by `parseRate` — `null` while what is typed is not a positive decimal. Required when `editable`; ignored otherwise. */
+  onChange?: (value: string | null) => void;
   /** The synced value, shown beside the override (§3.7). */
   reference?: RateFieldReference;
   /** Amber — this figure is a person's own assertion, not a derived one (P4). */
   manual?: boolean;
+  /** The caller's own refusal (a contract error, say) — always wins over the field's own, immediate objection to what is currently typed. */
   error?: string;
+  /** The direction stated beside the label, e.g. `"PLN per USD"` (`04` §4.6/§4.7) — a rate has no unit of its own otherwise. */
+  unit?: string;
 };
+
+/** How many digits follow the decimal mark in a stored decimal string — `0` for a whole number. */
+function decimalPlaces(raw: string): number {
+  const i = raw.indexOf(".");
+  return i === -1 ? 0 : raw.length - i - 1;
+}
+
+/**
+ * What was typed → a decimal string, or `null`. Accepts either separator, the
+ * same rule `AmountField`'s own `parseAmount` states — a Polish keyboard
+ * gives `,`, a numeric keypad often gives `.` — and rejects two of either,
+ * because `4,023.1` is not a rate anyone meant to type. Unlike an amount, a
+ * rate is never negative and never zero (`fx.ratePositive`'s own reasoning) —
+ * `RUB per USD` at `0` states nothing, and a negative rate has no reading at
+ * all.
+ */
+export function parseRate(input: string): string | null {
+  const trimmed = input.replace(/\s| /g, "");
+  if (trimmed === "") return null;
+
+  const separators = (trimmed.match(/[.,]/g) ?? []).length;
+  if (separators > 1) return null;
+
+  const normalized = trimmed.replace(",", ".");
+  if (!/^\d*\.?\d*$/.test(normalized)) return null;
+  if (!/\d/.test(normalized)) return null;
+
+  if (money.cmp(money.toMoney(normalized), money.ZERO) <= 0) return null;
+
+  return normalized;
+}
 
 export function RateField({
   label,
   value,
   decimals = 4,
   editable = false,
-  onChangeText,
+  onChange,
   reference,
   manual = false,
   error,
+  unit,
 }: RateFieldProps) {
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
-  const mark = decimalMark(useLocale());
-  // `money.forDisplay` — the same formatting `<Amount>` renders every figure
-  // through (`fx/amount.tsx`) — takes a `Money`, and `value` here is also
-  // legally a branded `Rate` (`PivotPerUnit` | `UnitsPerPivot`); `toMoney`
-  // is the same normalization step this component always ran, just no
-  // longer the last one.
-  const displayed = money.forDisplay(money.toMoney(value, decimals), decimals, mark);
+  const locale = useLocale();
+  // Seeded once, from whatever `value` held at mount — see the docstring for
+  // why this never re-syncs from `value` afterward. Through `formatRate`, so
+  // a Polish reader opening an existing rate to edit sees `4,0231`, not the
+  // storage form's `4.0231` echoed back unformatted.
+  //
+  // **At the value's own scale, never rounded down to `decimals` (L10).**
+  // `decimals` is this field's *display* default (4dp, §4.6) — `fx_rates` is
+  // stored to 8dp, and opening a synced rate to edit it, untouched, must not
+  // silently downgrade its precision before a person has pressed a key. A
+  // value with fewer than `decimals` digits still pads to `decimals`,
+  // matching the read-only path exactly.
+  const [text, setText] = useState(() => {
+    if (!editable || value === "") return "";
+    try {
+      const raw = String(value);
+      return formatRate(raw, locale, Math.max(decimals, decimalPlaces(raw)));
+    } catch {
+      // A caller can still seed a raw, unparsed string outside `parseRate`'s
+      // own contract (a stale draft, say) — falls back to it unformatted
+      // rather than crashing the mount over a value already headed for the
+      // field's own inline refusal.
+      return String(value);
+    }
+  });
+  const [invalid, setInvalid] = useState(false);
+
+  const handleChangeText = useCallback(
+    (next: string) => {
+      setText(next);
+      const parsed = parseRate(next);
+      setInvalid(next !== "" && parsed === null);
+      onChange?.(parsed);
+    },
+    [onChange],
+  );
+
+  // The caller's own `error` always wins — this is only the field's own,
+  // unprompted objection to what is currently typed.
+  const message = error ?? (invalid ? t("fx.ratePositive") : undefined);
+  const displayed = editable ? text : formatRate(value, locale, decimals);
 
   return (
     <View style={styles.block}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
+        {unit === undefined ? null : <Text style={styles.unit}>{unit}</Text>}
         {!manual ? null : <Tag variant="warn">{t("transactions.manualRate")}</Tag>}
       </View>
       {editable ? (
         <TextInput
           accessibilityLabel={label}
           value={displayed}
-          onChangeText={onChangeText}
+          onChangeText={handleChangeText}
           keyboardType="decimal-pad"
           {...handlers}
-          style={[styles.input, focused ? styles.focused : null, error ? styles.invalid : null]}
+          style={[styles.input, focused ? styles.focused : null, message ? styles.invalid : null]}
         />
       ) : (
         <Text style={styles.value}>{displayed}</Text>
       )}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {message ? <Text style={styles.error}>{message}</Text> : null}
       {reference === undefined ? null : (
         <Text style={styles.reference}>
           {t("transactions.referenceRate", {
-            rate: money.forDisplay(money.toMoney(reference.rate, decimals), decimals, mark),
+            rate: formatRate(reference.rate, locale, decimals),
             source: reference.source,
             date: reference.date,
           })}
@@ -113,6 +200,7 @@ const useStyles = makeStyles((theme) => ({
     ...text.ui("kicker"),
     textTransform: "uppercase",
   },
+  unit: { color: theme.textMuted, ...text.ui("caption") },
   value: {
     color: theme.text,
     ...text.display("displayThree"),

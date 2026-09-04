@@ -19,19 +19,17 @@
  * phone composition is exactly what it always was.
  */
 
+import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { currencyCode } from "@waltning/core/money";
+import { CurrencyChip } from "@waltning/ui/fx/currency-chip";
 import { useT } from "@waltning/ui/i18n/provider";
 import { SafeAreaProvider, useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
-import {
-  CommandBarPlaceholder,
-  CurrencyChip,
-  DeskBand,
-  DeskNavItem,
-} from "@waltning/ui/shell/desk-band";
+import { CommandBarPlaceholder, DeskBand, DeskNavItem } from "@waltning/ui/shell/desk-band";
 import { DualTotal } from "@waltning/ui/shell/dual-total";
 import type { FloatPosition } from "@waltning/ui/shell/float-geometry";
 import { FloatingAdd } from "@waltning/ui/shell/floating-add";
@@ -41,7 +39,7 @@ import { makeStyles } from "@waltning/ui/theme/styles";
 import { router } from "expo-router";
 import { useCallback, useState } from "react";
 import { type LayoutChangeEvent, Text, View } from "react-native";
-import { floatPosition } from "./platform";
+import { displayCurrency, floatPosition } from "./platform";
 import { useTabBarItems } from "./use-tab-bar-items";
 
 function handleAdd() {
@@ -134,9 +132,21 @@ function useLeadCurrency() {
   return lead ?? null;
 }
 
+/**
+ * `04` §4.5's real toggle, filling `DeskBand`'s own `currency` slot — DESK1
+ * left it empty for a component E3/E6 had not built yet. `listCurrencySettings`
+ * is an on-demand read (`create-phone-ledger.ts`'s own comment on the FX
+ * block), so this reads it every render rather than carrying `pinned` in the
+ * snapshot every subscriber pays for.
+ */
 function DeskCurrency() {
-  const lead = useLeadCurrency();
-  return <CurrencyChip currency={lead === null ? null : lead.currency} />;
+  const ledger = useLedgerController();
+  const pinned = ledger.listCurrencySettings().filter((currency) => currency.pinned);
+  const snapshot = useDisplayCurrency(displayCurrency);
+  const handleChange = useCallback((code: string) => {
+    void displayCurrency.set(currencyCode(code));
+  }, []);
+  return <CurrencyChip pinned={pinned} active={snapshot.currency} onChange={handleChange} />;
 }
 
 /**

@@ -18,8 +18,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
+import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
+import { pivotCurrency } from "@waltning/core/currencies";
+import type { CurrencyCode } from "@waltning/core/money";
 import {
   type FloatPosition,
   parseFloatPosition,
@@ -63,6 +66,57 @@ export const lastCapture = createLastCapturePreference(
     set: (value) => AsyncStorage.setItem(LAST_CAPTURE_KEY, value),
   },
   mobileDiagnostics,
+);
+
+const DISPLAY_CURRENCY_KEY = "waltning.displayCurrency";
+
+/**
+ * H1 — the live pivot, wired by `phone-ledger.native.ts` / `phone-ledger.web.ts`
+ * once their ledger session exists. This file loads first (both ledger files
+ * import `displayCurrency` from here), so the reader starts as "nothing yet"
+ * and is replaced exactly once `setLivePivotReader` runs — never re-imported
+ * the other way, which would cycle `platform.ts` through the ledger files.
+ */
+let livePivotReader: () => CurrencyCode | null = () => null;
+
+/** Called once by the phone's ledger session: `currencies.find(isPivot)` over its live snapshot. */
+export function setLivePivotReader(reader: () => CurrencyCode | null): void {
+  livePivotReader = reader;
+}
+
+/**
+ * M2 — the same indirection as `livePivotReader`, for the ledger's write
+ * notifications. `displayCurrency`'s own `subscribe` calls through this on
+ * every mount, so it always reaches whatever `setLivePivotSubscriber`
+ * currently holds — the real `phoneLedger.subscribe` once the ledger session
+ * has wired it, a no-op before that.
+ */
+let livePivotSubscribe: (listener: () => void) => () => void = () => () => {};
+
+/** Called once by the phone's ledger session: its own controller's `subscribe`, so `change_pivot` reaches a mounted display-currency consumer live. */
+export function setLivePivotSubscriber(subscribe: (listener: () => void) => () => void): void {
+  livePivotSubscribe = subscribe;
+}
+
+/**
+ * `SPEC.md` §7.0's header toggle — a device preference, never a registry
+ * write. The live pivot (`livePivotReader`) is the fallback until something
+ * is chosen or `initializeFromPinned` runs; `pivotCurrency.code`
+ * (`@waltning/core/currencies` — USD) is only the seed used before the
+ * ledger session is ready to answer at all (H1 — a fresh install whose
+ * ledger pivot is PLN must render PLN, not this build-time seed).
+ */
+export const displayCurrency = createDisplayCurrencyPreference(
+  {
+    get: () => AsyncStorage.getItem(DISPLAY_CURRENCY_KEY),
+    set: (value) => AsyncStorage.setItem(DISPLAY_CURRENCY_KEY, value),
+  },
+  () => livePivotReader(),
+  pivotCurrency.code,
+  {
+    subscribeToLedger: (listener) => livePivotSubscribe(listener),
+    diagnostics: mobileDiagnostics,
+  },
 );
 
 /**

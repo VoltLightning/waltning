@@ -49,6 +49,13 @@ it("derives the rate from the two typed amounts and shows the reference beside i
   ).toBeDefined();
 });
 
+// L9 — a rate has no unit of its own; the realized `RateField` states which
+// way it reads, the account's own currency per the discharged one.
+it("states the realized rate's own unit — the account's currency per the discharged one", () => {
+  renderSheet();
+  expect(screen.getByText("PLN per EUR")).toBeDefined();
+});
+
 it("states the residual before commit — the S14 worked example", () => {
   renderSheet();
   expect(screen.getByText((_, element) => element?.textContent === "50.00 EUR")).toBeDefined();
