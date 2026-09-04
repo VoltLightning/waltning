@@ -78,6 +78,7 @@ function netWorthOf(accounts: readonly FakeAccount[]): readonly PhoneNetWorth[] 
     currency,
     decimals,
     ...netWorth(rows),
+    hasShared: rows.some((row) => row.ownership === "shared"),
   }));
 }
 
@@ -192,6 +193,16 @@ const CLEARING_ACCOUNT: FakeAccount = {
   capturable: true,
 };
 
+const SECOND_CLEARING_ACCOUNT: FakeAccount = {
+  id: id<"accounts">("55555555-5555-4555-8555-555555555555"),
+  name: "Cash float",
+  kind: "clearing",
+  currency: currencyCode("PLN"),
+  decimals: 2,
+  balance: toMoney("12"),
+  capturable: true,
+};
+
 function withLedger(element: ReactElement, controller = fakeController()) {
   return render(<LedgerProvider controller={controller}>{element}</LedgerProvider>);
 }
@@ -233,12 +244,27 @@ describe("Today", () => {
     expect(rendered).toContain("150.00");
   });
 
-  it("shows the period row's spent and net tiles from periodSpend", () => {
+  /**
+   * `DualTotal`'s own contract: `ours: null`, not the same figure as `mine`,
+   * when no shared account exists — never a household total printed twice.
+   */
+  it("shows one figure, not ours repeated, when the ledger holds no shared account", () => {
+    withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+
+    expect(screen.getByText("mine")).toBeDefined();
+    expect(screen.queryByText("ours")).toBeNull();
+  });
+
+  /**
+   * §12: `spent` is §5's positive `spend` magnitude, not a signed delta — a
+   * 120.50 expense renders as `120.50`, never `-120.50`.
+   */
+  it("shows the period row's spent and net tiles from periodSpend, spend as a positive magnitude", () => {
     const rows: readonly PeriodSpendRow[] = [
       {
         currency: currencyCode("PLN"),
         decimals: 2,
-        spend: toMoney("-120.50"),
+        spend: toMoney("120.50"),
         net: toMoney("40.00"),
       },
     ];
@@ -247,7 +273,8 @@ describe("Today", () => {
     expect(screen.getByText("spent")).toBeDefined();
     expect(screen.getByText("net")).toBeDefined();
     const rendered = document.body.textContent ?? "";
-    expect(rendered).toContain("-120.50");
+    expect(rendered).toContain("120.50");
+    expect(rendered).not.toContain("-120.50");
     expect(rendered).toContain("40.00");
   });
 
@@ -255,6 +282,27 @@ describe("Today", () => {
     withLedger(<Today />, fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT]));
 
     expect(screen.getByRole("alert")).toBeDefined();
+    fireEvent.click(screen.getByText("Open"));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/ledger",
+      params: { account: CLEARING_ACCOUNT.id },
+    });
+  });
+
+  /**
+   * S04 §3 draws exactly one banner row and `Banner`'s own doc says
+   * "page-level, one tone, one action" — a second unsettled account does not
+   * stack a second alert. It folds into the same banner's text instead, and
+   * `Open` still lands on the first (the same one the message names).
+   */
+  it("names the count in one banner, never a second, when two clearing accounts are unsettled", () => {
+    withLedger(<Today />, fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT, SECOND_CLEARING_ACCOUNT]));
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).toContain("Shared clearing");
+    expect(rendered).toContain("and 1 more");
+
     fireEvent.click(screen.getByText("Open"));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/ledger",

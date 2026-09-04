@@ -94,10 +94,11 @@ is awaiting admission. On a phone-alone ledger, successful local
 materialisation is the final save: the row appears as ordinary ledger data with
 no sync-status marker.
 
-Under the disposable preview profile, S04 renders one combined USD total, five
-Recent rows, the Create account first-run action, the floating `+`, and the
-appearance action. That profile omits the tab bar, period figures, voice, scan,
-sync state, shared totals, and FX presentation.
+Under the disposable preview profile, S04 renders the mine/ours hero per
+currency, the period row (*spent*, *net*, stepped by month), the
+unsettled-clearing banner when one exists, five Recent rows, the Create
+account first-run action, the floating `+`, and the appearance action. That
+profile omits the tab bar, voice, scan, sync state, and FX presentation.
 
 ### Web — ≥1024px
 
@@ -142,7 +143,7 @@ keeps it fast and what makes it safe to render from cache offline.
 
 | State | Treatment |
 |---|---|
-| Loading | Skeleton in the hero's shape — a serif-height block, not a spinner. Recent shows five skeleton rows |
+| Loading | Not modelled — the replica read is synchronous SQLite, with no in-between moment to show a skeleton for (`09-state-matrix.md`) |
 | Populated | As drawn |
 | Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account* and *Import from Money Manager* |
 | Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the hero keeps its last known figure with its age** rather than blanking |
@@ -161,6 +162,11 @@ The appearance action in the header opens a bottom sheet containing exactly
 System, Light, and Dark. The choice persists across launch. System follows the
 device scheme; choosing Light or Dark overrides it. A change repaints S04 in
 place and does not remount the screen or discard navigation or form state.
+
+Until C4's ledger list merges, the unsettled banner's `Open` action lands on
+`/ledger?account=<id>` — the stub §3 names — rather than the Shared rule
+below; that needs a real, filterable transaction list this card does not
+build.
 
 ### Shared
 Tapping the unsettled banner goes **straight to the unallocated transaction**,

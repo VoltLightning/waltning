@@ -16,7 +16,7 @@ import { StatTile } from "./stat-tile";
 const meta = {
   title: "Shell/StatTile",
   component: StatTile,
-  args: { label: "spent", value: money.toMoney("-3210.40"), currency: "PLN" },
+  args: { label: "spent", value: money.toMoney("3210.40"), currency: "PLN", kind: "spend" },
   decorators: [
     (Story) => (
       <Shell
@@ -38,7 +38,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** An outflow — `periodSpend` hands this tile an already-negative figure. */
+/** An outflow — `periodSpend` hands this tile a positive magnitude (§12), never a signed delta. */
 export const Spent: Story = {};
 
 /** Net can land on either side of zero; this month it is positive. */
@@ -50,7 +50,7 @@ function Row() {
   const styles = useStyles();
   return (
     <View style={styles.row}>
-      <StatTile label="spent" value={money.toMoney("-3210.40")} currency="PLN" />
+      <StatTile label="spent" value={money.toMoney("3210.40")} currency="PLN" kind="spend" />
       <StatTile label="net" value={money.toMoney("840.20")} currency="PLN" />
     </View>
   );

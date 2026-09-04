@@ -127,6 +127,7 @@ export const pl: Messages = {
     net: "saldo",
     showAll: "Pokaż wszystkie →",
     unsettled: "{{amount}} {{currency}} nierozliczone · {{account}}",
+    unsettledMore: "{{amount}} {{currency}} nierozliczone · {{account}} · i {{count}} więcej",
     unsettledOpen: "Otwórz",
     balanceQueryFailed: "Nie udało się odświeżyć",
     balanceQueryFailedBody: "Pokazujemy dane z ostatniego udanego wczytania.",

@@ -171,12 +171,20 @@ export type PhoneCurrencySubtotal = {
   balance: Money;
 };
 
-/** §3, per currency — C2's `DualTotal` hero. See `money.netWorth`. */
+/**
+ * §3, per currency — C2's `DualTotal` hero. See `money.netWorth`.
+ *
+ * `hasShared` decides whether the screen hands `DualTotal` `ours` at all —
+ * that component's own contract wants `null`, not the same figure as `mine`,
+ * when no shared account exists (`LocalNetWorth`'s own comment says why it is
+ * a field rather than a `mine === ours` comparison).
+ */
 export type PhoneNetWorth = {
   currency: CurrencyCode;
   decimals: number;
   mine: Money;
   ours: Money;
+  hasShared: boolean;
 };
 
 /** §5's base figure, per currency — C2's *spent* and *net* `StatTile`s. See `money.periodSpend`. */

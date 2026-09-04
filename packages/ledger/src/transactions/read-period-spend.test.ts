@@ -103,7 +103,7 @@ describe("readPeriodSpend", () => {
   it("folds August's own income/expense rows through money.periodSpend", () => {
     const period = { start: accountingDate("2026-08-01"), end: accountingDate("2026-09-01") };
     expect(readPeriodSpend(stores.ledger.replica.db, period)).toEqual([
-      { currency: PLN, decimals: 2, spend: "-100.00000000", net: "-70.00000000" },
+      { currency: PLN, decimals: 2, spend: "100.00000000", net: "-70.00000000" },
     ]);
   });
 

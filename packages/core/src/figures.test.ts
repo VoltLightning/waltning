@@ -144,8 +144,30 @@ describe("periodSpend — §5 (base figure, C2)", () => {
       },
     ];
     expect(money.periodSpend(rows, period)).toEqual([
-      { currency: PLN, decimals: 2, spend: "-100.00000000", net: "-70.00000000" },
+      { currency: PLN, decimals: 2, spend: "100.00000000", net: "-70.00000000" },
     ]);
+  });
+
+  /**
+   * §5: `spend(p, s) = Σ amount_pivot over expense rows` — the stored,
+   * positive amount, not `signed()`'s negated one. §12 defines `spent` as
+   * exactly this figure. `net` is still `inflow − spend`, so a spend-only
+   * month is negative net without `spend` itself carrying the sign.
+   */
+  it("spend is the positive magnitude — §12's `spent`, not a signed delta", () => {
+    const rows: money.PeriodTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("100"),
+      },
+    ];
+    const [row] = money.periodSpend(rows, period);
+    expect(row?.spend).toBe("100.00000000");
+    expect(money.dec(row?.spend ?? "0").isNegative()).toBe(false);
   });
 
   it("never sums two currencies into one row — the H21 mistake netWorth already refuses", () => {
@@ -168,8 +190,8 @@ describe("periodSpend — §5 (base figure, C2)", () => {
       },
     ];
     expect(money.periodSpend(rows, period)).toEqual([
-      { currency: PLN, decimals: 2, spend: "-100.00000000", net: "-100.00000000" },
-      { currency: USD, decimals: 2, spend: "-40.00000000", net: "-40.00000000" },
+      { currency: PLN, decimals: 2, spend: "100.00000000", net: "-100.00000000" },
+      { currency: USD, decimals: 2, spend: "40.00000000", net: "-40.00000000" },
     ]);
   });
 

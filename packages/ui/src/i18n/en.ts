@@ -182,6 +182,13 @@ export const en = {
     showAll: "Show all →",
     /** The unsettled-clearing banner (§8) — C2. `Open` goes to the account, filtered. */
     unsettled: "{{amount}} {{currency}} unallocated · {{account}}",
+    /**
+     * S04 §3 draws one banner row; a second unsettled account folds into this
+     * one's text (`count` is every account past the first) rather than
+     * stacking a second alert — `Banner`'s own doc: "page-level, one tone,
+     * one action."
+     */
+    unsettledMore: "{{amount}} {{currency}} unallocated · {{account}} · and {{count}} more",
     unsettledOpen: "Open",
     /** S04 §6 — the balance query failed; the hero keeps its last known figure. */
     balanceQueryFailed: "Couldn't refresh",

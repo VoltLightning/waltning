@@ -424,10 +424,18 @@ export type PeriodTransactionRow = {
 export type PeriodSpendRow = { currency: CurrencyCode; decimals: number; spend: Money; net: Money };
 
 /**
- * §5's base figure — class **R** (`computations.md` §0): `signed()` summed
- * over income/expense rows, own accounts, dated within `period`. Business is
+ * §5's base figure — class **R** (`computations.md` §0): `spend` is the
+ * stored, positive sum of expense amounts, `inflow` the same over income,
+ * `net = inflow − spend`. Own accounts, dated within `period`. Business is
  * included — the scope partition (§6.7) is a filter of its own, not this
  * one's.
+ *
+ * **`spend` is a magnitude, never `signed()`'s negated delta.** §5 sums
+ * `amount_pivot` — the stored amount converted, never negated — and §12
+ * defines `spent` as exactly this figure, "capital included and broken out."
+ * A screen wanting the outflow's sign renders it through `<Amount
+ * kind="spend">`, which negates for display; the figure itself does not
+ * carry a sign `net`'s subtraction already accounts for.
  *
  * **Grouped by currency, one row each — never summed across them.** §5 sums
  * `amount_pivot`, a converted figure; the phone has no pivot column and no
@@ -448,7 +456,7 @@ export const periodSpend = (
   rows: readonly PeriodTransactionRow[],
   period: Period,
 ): readonly PeriodSpendRow[] => {
-  const byCurrency = new Map<CurrencyCode, { decimals: number; spend: Decimal; net: Decimal }>();
+  const byCurrency = new Map<CurrencyCode, { decimals: number; spend: Decimal; inflow: Decimal }>();
   for (const row of rows) {
     if (row.ownership !== "own") continue;
     if (row.type !== "income" && row.type !== "expense") continue;
@@ -456,20 +464,21 @@ export const periodSpend = (
     const bucket = byCurrency.get(row.currency) ?? {
       decimals: row.decimals,
       spend: dec(0),
-      net: dec(0),
+      inflow: dec(0),
     };
-    const value = dec(signed(row));
-    bucket.net = bucket.net.plus(value);
-    if (row.type === "expense") bucket.spend = bucket.spend.plus(value);
+    // Stored positive (§1) — the magnitude §12's `spent` names, not a signed delta.
+    const amount = dec(row.amountOriginal);
+    if (row.type === "expense") bucket.spend = bucket.spend.plus(amount);
+    else bucket.inflow = bucket.inflow.plus(amount);
     byCurrency.set(row.currency, bucket);
   }
   return [...byCurrency.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([currency, { decimals, spend, net }]) => ({
+    .map(([currency, { decimals, spend, inflow }]) => ({
       currency,
       decimals,
       spend: toMoney(spend),
-      net: toMoney(net),
+      net: toMoney(inflow.minus(spend)),
     }));
 };
 

@@ -156,7 +156,7 @@ export default function Today() {
         <DualTotal
           key={entry.currency}
           mine={entry.mine}
-          ours={entry.ours}
+          ours={entry.hasShared ? entry.ours : null}
           currency={entry.currency}
           decimals={entry.decimals}
           lead={index === 0}
@@ -183,6 +183,7 @@ export default function Today() {
           value={leadPeriodSpend?.spend ?? money.ZERO}
           currency={leadNetWorth.currency}
           decimals={leadNetWorth.decimals}
+          kind="spend"
         />
         <StatTile
           label={t("shell.net")}
@@ -194,13 +195,20 @@ export default function Today() {
     </View>
   ) : null;
 
+  // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —
+  // "page-level, one tone, one action." A second (or third) unsettled
+  // clearing account does not stack a second alert; it folds into this one's
+  // text as a count. `Open` still lands on the first (`unsettled` above),
+  // the same account the message names.
+  const unsettledMore = snapshot.unsettledClearing.length - 1;
   const unsettledBanner = unsettled ? (
     <Banner
       tone="warn"
-      message={t("shell.unsettled", {
+      message={t(unsettledMore > 0 ? "shell.unsettledMore" : "shell.unsettled", {
         amount: money.forDisplay(unsettled.balance, unsettled.decimals, decimalMark(locale)),
         currency: unsettled.currency,
         account: unsettled.name,
+        count: unsettledMore,
       })}
       action={{ label: t("shell.unsettledOpen"), onPress: handleOpenUnsettled }}
     />
