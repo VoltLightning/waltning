@@ -11,6 +11,7 @@ import { defineLocalExecutor } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
+import { refuseSiblingCollision } from "./sibling-collision.ts";
 
 const { categories } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
@@ -37,6 +38,14 @@ function renameCategory(input: RenameCategoryInput, tx: ReplicaTx): LocalCategor
       `rename_category: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
+
+  refuseSiblingCollision(tx, {
+    operation: "rename_category",
+    id: current.id,
+    parentId: current.parentId,
+    kind: current.kind,
+    name: input.name,
+  });
 
   const [updated] = tx
     .update(categories)

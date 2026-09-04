@@ -3,13 +3,20 @@ import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ThemeProvider } from "../theme/provider";
 import { light } from "../theme/roles.ts";
-import { CalendarTabIcon, DebtTabIcon, LedgerTabIcon, TodayTabIcon } from "./tab-icons";
+import {
+  CalendarTabIcon,
+  DebtTabIcon,
+  LedgerTabIcon,
+  SettingsTabIcon,
+  TodayTabIcon,
+} from "./tab-icons";
 
 const ICONS = [
   ["Today", TodayTabIcon],
   ["Ledger", LedgerTabIcon],
   ["Calendar", CalendarTabIcon],
   ["Debt", DebtTabIcon],
+  ["Settings", SettingsTabIcon],
 ] as const;
 
 describe("tab icons", () => {

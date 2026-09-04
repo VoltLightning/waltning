@@ -114,6 +114,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
   },
+  "packages/ledger/src/categories/sibling-collision.ts": {
+    max: 1,
+    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
+  },
   "packages/ledger/src/transactions/update-transaction.executor.ts": {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",

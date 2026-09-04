@@ -138,6 +138,14 @@ function fakeController(search: FakeSearch) {
     unmergeCounterparties: () => undefined,
     recordDistinctCounterparties: () => undefined,
     settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
+    listFullCategoryTree: () => [],
+    listCategoryUsage: () => new Map(),
+    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
+    renameCategory: () => undefined,
+    reparentCategory: () => undefined,
+    convertLeafGroup: () => undefined,
+    mergeCategories: () => undefined,
+    archiveCategory: () => undefined,
     reset: () => undefined,
   };
   return createPhoneLedger(port, {

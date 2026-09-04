@@ -1,5 +1,5 @@
 /**
- * The four tab glyphs, active and inactive side by side — the placeholder
+ * The five tab glyphs, active and inactive side by side — the placeholder
  * set until §2.8's Phosphor install lands. Soft rectangles only (§2.4); the
  * ink follows the label the way `TabBar`'s own text does.
  */
@@ -8,7 +8,13 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
-import { CalendarTabIcon, DebtTabIcon, LedgerTabIcon, TodayTabIcon } from "./tab-icons";
+import {
+  CalendarTabIcon,
+  DebtTabIcon,
+  LedgerTabIcon,
+  SettingsTabIcon,
+  TodayTabIcon,
+} from "./tab-icons";
 
 function Row() {
   const styles = useStyles();
@@ -18,6 +24,7 @@ function Row() {
       <LedgerTabIcon />
       <CalendarTabIcon />
       <DebtTabIcon />
+      <SettingsTabIcon />
     </View>
   );
 }
@@ -30,6 +37,7 @@ function ActiveRow() {
       <LedgerTabIcon active />
       <CalendarTabIcon active />
       <DebtTabIcon active />
+      <SettingsTabIcon active />
     </View>
   );
 }
@@ -46,8 +54,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Today · Ledger · Calendar · Debt, inactive. */
+/** Today · Ledger · Calendar · Debt · Settings, inactive. */
 export const Inactive: Story = {};
 
-/** The same four, active — `accentText`, matching the selected label. */
+/** The same five, active — `accentText`, matching the selected label. */
 export const Active: Story = { render: () => <ActiveRow /> };

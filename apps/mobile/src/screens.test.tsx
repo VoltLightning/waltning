@@ -20,7 +20,7 @@ import {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
-import { id } from "@waltning/core/id";
+import { type Id, id } from "@waltning/core/id";
 import {
   type BalanceRow,
   type CurrencyCode,
@@ -46,8 +46,10 @@ vi.mock("expo-router", () => ({
 
 import NewAccount from "./account-creation-screen";
 import CalendarStub from "./calendar-screen";
+import CategoriesScreen from "./categories-screen";
 import DebtStub from "./debt-screen";
 import QuickAdd from "./quick-add-screen";
+import SettingsScreen from "./settings-screen";
 import Today from "./today-screen";
 
 type FakeAccount = {
@@ -118,11 +120,52 @@ function unsettledOf(accounts: readonly FakeAccount[]): readonly PhoneClearingAc
  * ignored the period argument would test the wrong thing. Callers that care
  * about the *spent* and *net* tiles hand the figures they want asserted.
  */
+type FakeCategory = {
+  id: Id<"categories">;
+  parentId: Id<"categories"> | null;
+  name: string;
+  kind: "income" | "expense";
+  isLeaf: boolean;
+  archived: boolean;
+  sort: number;
+  depth: number;
+  version: number;
+};
+
+/** A category fixture, `version: 1` unless a test bumps it — plain string ids, branded here. */
+function fakeCategory(
+  overrides: Partial<Omit<FakeCategory, "id" | "parentId">> & {
+    id: string;
+    parentId?: string | null;
+    name: string;
+    kind: "income" | "expense";
+  },
+): FakeCategory {
+  return {
+    isLeaf: true,
+    archived: false,
+    sort: 0,
+    depth: 0,
+    version: 1,
+    ...overrides,
+    id: id<"categories">(overrides.id),
+    parentId: overrides.parentId ? id<"categories">(overrides.parentId) : null,
+  };
+}
+
 function fakeController(
   initialAccounts: readonly FakeAccount[] = [],
   periodSpendRows: readonly PeriodSpendRow[] = [],
+  initialCategories: readonly FakeCategory[] = [],
+  categoryUsage: ReadonlyMap<Id<"categories">, number> = new Map(),
 ) {
   let accounts = [...initialAccounts];
+  let categoryTree: FakeCategory[] = [...initialCategories];
+  const bumpCategory = (categoryId: Id<"categories">, patch: Partial<FakeCategory>) => {
+    categoryTree = categoryTree.map((node) =>
+      node.id === categoryId ? { ...node, ...patch, version: node.version + 1 } : node,
+    );
+  };
   const port: PhoneLedgerPort = {
     listAccounts: () => accounts,
     listCurrencies: () => [
@@ -138,6 +181,9 @@ function fakeController(
     listRecent: () => [],
     listCategories: () => [],
     listCategoryTree: () => [],
+    listFullCategoryTree: () => categoryTree,
+    listCategoryUsage: () => categoryUsage,
+    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
     listCounterparties: () => [],
     listPayeeHistory: () => [],
     listNetWorth: () => netWorthOf(accounts),
@@ -202,6 +248,11 @@ function fakeController(
     unmergeCounterparties: () => undefined,
     recordDistinctCounterparties: () => undefined,
     settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
+    renameCategory: (input) => bumpCategory(input.id, { name: input.name }),
+    reparentCategory: (input) => bumpCategory(input.id, { parentId: input.parentId }),
+    convertLeafGroup: (input) => bumpCategory(input.id, { isLeaf: input.to === "leaf" }),
+    mergeCategories: (input) => bumpCategory(input.loserId, { archived: true }),
+    archiveCategory: (input) => bumpCategory(input.id, { archived: true }),
     reset: () => {
       accounts = [];
     },
@@ -452,6 +503,14 @@ describe("Today", () => {
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
       listPayeeHistory: vi.fn(() => []),
+      listFullCategoryTree: vi.fn(() => []),
+      listCategoryUsage: vi.fn(() => new Map()),
+      readCategoryReferenceCounts: vi.fn(() => ({ transactions: 0, lines: 0, rules: 0 })),
+      renameCategory: vi.fn(),
+      reparentCategory: vi.fn(),
+      convertLeafGroup: vi.fn(),
+      mergeCategories: vi.fn(),
+      archiveCategory: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -541,6 +600,9 @@ describe("Today", () => {
       listCounterparties: () => [],
       listPayeeHistory: () => [],
       listCategoryTree: () => [],
+      listFullCategoryTree: () => [],
+      listCategoryUsage: () => new Map(),
+      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
       listNetWorth: () => netWorthOf([PLN_ACCOUNT]),
       readPeriodSpend: () => [],
       listUnsettledClearing: () => [],
@@ -579,6 +641,11 @@ describe("Today", () => {
       unmergeCounterparties: vi.fn(),
       recordDistinctCounterparties: vi.fn(),
       settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
+      renameCategory: vi.fn(),
+      reparentCategory: vi.fn(),
+      convertLeafGroup: vi.fn(),
+      mergeCategories: vi.fn(),
+      archiveCategory: vi.fn(),
       reset: vi.fn(),
     };
     const controller = createPhoneLedger(port, {
@@ -657,5 +724,153 @@ describe("tab stubs", () => {
     expect(screen.getByText(title)).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Go to Today" }));
     expect(router.push).toHaveBeenCalledWith("/");
+  });
+});
+
+describe("Settings", () => {
+  it("opens the categories editor", () => {
+    withLedger(<SettingsScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+    expect(router.push).toHaveBeenCalledWith("/settings/categories");
+  });
+});
+
+describe("CategoriesScreen", () => {
+  const FOOD_GROUP = "22222222-2222-4222-8222-222222222222";
+  const GROCERIES = "33333333-3333-4333-8333-333333333333";
+  const EATING_OUT = "44444444-4444-4444-8444-444444444444";
+  const UNCATEGORIZED = "99999999-9999-4999-8999-999999999999";
+
+  const tree = [
+    fakeCategory({ id: FOOD_GROUP, name: "Food", kind: "expense", isLeaf: false }),
+    fakeCategory({ id: GROCERIES, name: "Groceries", parentId: FOOD_GROUP, kind: "expense" }),
+    fakeCategory({ id: EATING_OUT, name: "Eating out", parentId: FOOD_GROUP, kind: "expense" }),
+    fakeCategory({ id: UNCATEGORIZED, name: "Uncategorized", kind: "expense" }),
+  ];
+  const usage = new Map([
+    [id<"categories">(GROCERIES), 214],
+    [id<"categories">(UNCATEGORIZED), 12],
+  ]);
+
+  it("shows the tree, an unused leaf tagged, and Uncategorized apart with its count", () => {
+    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+
+    expect(screen.getByText("Food")).toBeDefined();
+    expect(screen.getByText("214 transactions")).toBeDefined();
+    expect(screen.getByText("Unused")).toBeDefined(); // Eating out, zero usage
+    expect(screen.getByText("Uncategorized")).toBeDefined();
+    expect(screen.getByText("12 transactions")).toBeDefined();
+    // Uncategorized is shown apart — not a second time inside the tree body.
+    expect(screen.getAllByText("Uncategorized")).toHaveLength(1);
+  });
+
+  it("filters the tree by search, keeping a matched leaf's group visible", () => {
+    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+
+    fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "eating" } });
+
+    expect(screen.getByText("Food")).toBeDefined();
+    expect(screen.getByText("Eating out")).toBeDefined();
+    expect(screen.queryByText("Groceries")).toBeNull();
+  });
+
+  it("hides an archived leaf until the toggle is on", () => {
+    const archivedTree = [
+      ...tree,
+      fakeCategory({
+        id: "77777777-7777-4777-8777-777777777777",
+        name: "Old subscriptions",
+        parentId: FOOD_GROUP,
+        kind: "expense",
+        archived: true,
+      }),
+    ];
+    withLedger(<CategoriesScreen />, fakeController([], [], archivedTree, usage));
+
+    expect(screen.queryByText("Old subscriptions")).toBeNull();
+    fireEvent.click(screen.getByRole("switch", { name: "Show archived" }));
+    expect(screen.getByText("Old subscriptions")).toBeDefined();
+  });
+
+  it("renames a category end to end, through the actions sheet", () => {
+    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+
+    fireEvent.click(screen.getByRole("button", { name: "Groceries actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Groceries & household" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText("Groceries & household")).toBeDefined();
+  });
+
+  it("names the direction it just converted — group vs leaf are different Toasts", () => {
+    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+
+    fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Convert to group" }));
+    expect(screen.getByText("Convert to group")).toBeDefined(); // the Toast, not the button
+
+    fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Convert to leaf" }));
+    expect(screen.getByText("Convert to leaf")).toBeDefined();
+  });
+
+  it("shows the sibling-collision refusal inline, without closing the sheet", () => {
+    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+
+    fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "groceries" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText('"Groceries" already exists here')).toBeDefined();
+  });
+
+  it("archives a category — it drops off the default list, no Undo offered", () => {
+    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+
+    fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Archive" }));
+
+    expect(screen.queryByText("Eating out")).toBeNull();
+    // No `restore_category` operation exists — a plain Toast, never `UndoToast`.
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Show archived" }));
+    expect(screen.getByText("Eating out")).toBeDefined();
+    expect(screen.getByText("Archived")).toBeDefined();
+  });
+
+  it("opens the merge sheet pre-seeded from a collision, and confirms the merge", () => {
+    const collisionTree = [
+      fakeCategory({
+        id: "aaaaaaaa-0000-4000-8000-000000000001",
+        name: "Groceries",
+        kind: "expense",
+      }),
+      fakeCategory({
+        id: "aaaaaaaa-0000-4000-8000-000000000002",
+        name: "Grocery",
+        kind: "expense",
+      }),
+    ];
+    const collisionUsage = new Map([
+      [id<"categories">("aaaaaaaa-0000-4000-8000-000000000001"), 214],
+      [id<"categories">("aaaaaaaa-0000-4000-8000-000000000002"), 3],
+    ]);
+    withLedger(<CategoriesScreen />, fakeController([], [], collisionTree, collisionUsage));
+
+    expect(screen.getByText("Possibly the same category")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    // The lower-usage side ("Grocery") is the proposed loser.
+    expect(screen.getByText("Grocery → Groceries")).toBeDefined();
+    fireEvent.click(screen.getAllByRole("button", { name: "Merge" })[0] as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "Merge" }).slice(-1)[0] as HTMLElement);
+
+    expect(screen.queryByText("This can't be undone in one step")).toBeNull();
   });
 });
