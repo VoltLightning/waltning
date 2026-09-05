@@ -30,8 +30,9 @@ export const withSequence = m.withSequence;
 export const runOnJS = m.runOnJS;
 export const Easing = m.Easing;
 export const Extrapolation = m.Extrapolation;
-// The mock's own `interpolate` is a no-op (`() => {}`) — fine for animated
-// styles nobody asserts numeric values on, but `ThinkingIndicator`'s dots
-// compute their rest-state style (reduced motion) without calling it at all,
-// and no other test reads an interpolated number, so the no-op never shows.
+// The mock's own `interpolate` is a no-op (`() => {}`) — fine as long as no
+// test reads a number out of it. A component whose shape depends on
+// `interpolate`'s real arithmetic — not just its end-state style — needs
+// that arithmetic pulled into a plain `.ts` function and exercised directly,
+// where `vitest` runs it for real rather than through this mock.
 export const interpolate = m.interpolate;

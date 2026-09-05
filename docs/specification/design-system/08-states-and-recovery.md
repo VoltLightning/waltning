@@ -152,7 +152,8 @@ repeats, so the row reads as a live count rather than a fixed decoration. The
 dot's own box holds the width of three periods at every step, so the label
 beside it never shifts as the count changes. Streaming gets no dot: the text
 arriving is already the sign of life, and a stepping dot beside moving text
-would be two signals for one fact.
+would be two signals for one fact. `motion-none` (§2.7) shows the three dots,
+still — the same full step the beat also reaches, held rather than stepped.
 
 After 20 s: an explicit *still working* with a **cancel**. Every phase needs a
 `motion-none` branch (§2.7).

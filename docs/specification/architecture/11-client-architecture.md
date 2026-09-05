@@ -289,6 +289,13 @@ same code on its main thread, which is what it has.
 decorator's, for the same reason `ThemeProvider` is: a gesture outside it is
 silently nothing.
 
+Stepping discrete text on a beat is not motion — `ThinkingIndicator`'s dot
+advances a string on a plain `setInterval` rather than tweening a rendered
+value, and it is the one sanctioned `setInterval` in `packages/ui`;
+`tests/architecture.test.ts` allowlists it by path so a second one is a
+decision made in the open, not a precedent that spread because the first one
+compiled.
+
 ## 9 · What this is not
 
 It is **not** a rewrite. The moves are moves: the same files, in directories

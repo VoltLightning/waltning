@@ -397,6 +397,30 @@ describe("motion is Reanimated and gestures are gesture-handler", () => {
     }
     expect(offenders, "use react-native-reanimated / react-native-gesture-handler").toEqual([]);
   });
+
+  /**
+   * `architecture/11` §8b: `setInterval` is not motion — nothing tweens, no
+   * frame is interpolated, a string just steps to its next value on a beat.
+   * `ThinkingIndicator`'s dot is the one place this repository decided a
+   * timer earns its keep over a Reanimated clock, precisely because the thing
+   * being driven is discrete text, not a rendered position or opacity. An
+   * allowlist by path, not a ban, so a second `setInterval` is a decision
+   * made here — in the open — rather than a precedent that spread because the
+   * first one compiled.
+   */
+  it("setInterval appears in packages/ui/src only in thinking-indicator.tsx", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
+      if (file.endsWith(join("states", "thinking-indicator.tsx"))) continue;
+      if (/\bsetInterval\s*\(/.test(readFileSync(file, "utf8"))) {
+        offenders.push(rel(file));
+      }
+    }
+    expect(
+      offenders,
+      "setInterval is reserved for thinking-indicator.tsx — use Reanimated",
+    ).toEqual([]);
+  });
 });
 
 /* ── §3 · Structure: modules first, layers inside them ───────────────────── */

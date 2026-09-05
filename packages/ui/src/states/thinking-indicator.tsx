@@ -16,16 +16,20 @@
  * `setInterval` advancing a string, not an animated value — there is nothing
  * here for Reanimated to own.
  *
- * **The row must not shift as the count changes.** A `Text` two characters
- * wide sitting next to a three-character one moves whatever comes after it,
- * and the thing after it is the label the reader is trying to read. So the
- * dots sit in their own box, sized once by an invisible `...` — the widest
- * step — laid out normally to claim the width, with the real, stepping text
- * overlaid on top of it via `position: "absolute"`. The box's width never
- * changes; only what is painted inside it does.
+ * **The row must not shift as the count changes.** `phaseRow` shrink-wraps
+ * its content, so a `Text` that is two characters wide one moment and three
+ * the next resizes the row itself, not just the glyph — a visible jitter with
+ * nothing after it to blame it on. So the dots sit in their own box, sized
+ * once by an invisible `...` — the widest step — laid out normally to claim
+ * the width, with the real, stepping text overlaid on top of it via
+ * `position: "absolute"`. The box's width never changes; only what is
+ * painted inside it does.
  *
- * Reduced motion renders a static `…` and starts no interval at all — not a
- * loop frozen on its first frame, an actual absence of one.
+ * Reduced motion freezes on the full three dots — `DOT_STEPS`'s own widest
+ * step, the same string the sizer already measures, rather than a second
+ * glyph invented for the occasion — and starts no interval at all, the same
+ * house rule `useReducedMotion` documents: the reduced branch shows a state
+ * the animated path can also reach, not a different one.
  *
  * **`elapsedMs` is a prop, not a clock this component owns**, so a test can
  * assert the 20 s cancel affordance without waiting 20 real seconds — the
@@ -62,8 +66,8 @@ const CANCEL_AFTER_MS = 20_000;
 const DOT_STEPS = [".", "..", "...", ""] as const;
 /** The beat itself — a 1 s cycle across the four steps above. */
 const STEP_MS = 250;
-/** What reduced motion shows instead: one static glyph, no interval running. */
-const REDUCED_MOTION_DOTS = "…";
+/** The step reduced motion freezes on — the same full-width string the sizer measures. */
+const FULL_STEP = DOT_STEPS[2];
 
 /**
  * Steps `DOT_STEPS` on a plain interval — no Reanimated involved, because
@@ -86,7 +90,7 @@ function useThinkingDots(reduced: boolean): string {
     return () => clearInterval(id);
   }, [reduced]);
 
-  return reduced ? REDUCED_MOTION_DOTS : (DOT_STEPS[step] ?? DOT_STEPS[0]);
+  return reduced ? FULL_STEP : (DOT_STEPS[step] ?? DOT_STEPS[0]);
 }
 
 function ThinkingDots({ reduced }: { reduced: boolean }) {
@@ -97,7 +101,7 @@ function ThinkingDots({ reduced }: { reduced: boolean }) {
     <View accessibilityElementsHidden importantForAccessibility="no">
       {/* Invisible, laid out normally: claims the row's width at its widest step
       so the real text below can move inside that width without ever changing it. */}
-      <Text style={[styles.dotText, styles.dotsSizer]}>{DOT_STEPS[2]}</Text>
+      <Text style={[styles.dotText, styles.dotsSizer]}>{FULL_STEP}</Text>
       <Text style={[styles.dotText, styles.dotsVisible]} testID="thinking-dots">
         {dots}
       </Text>

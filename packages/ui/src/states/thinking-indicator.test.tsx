@@ -105,19 +105,23 @@ describe("ThinkingIndicator", () => {
     });
 
     it("clears the interval on unmount", () => {
+      const setSpy = vi.spyOn(globalThis, "setInterval");
       const clearSpy = vi.spyOn(globalThis, "clearInterval");
       const { unmount } = render(
         <ThinkingIndicator phase="thinking" elapsedMs={500} onCancel={vi.fn()} />,
       );
+      const id = setSpy.mock.results[0]?.value;
       unmount();
-      expect(clearSpy).toHaveBeenCalled();
+      expect(clearSpy).toHaveBeenCalledWith(id);
     });
 
     it("clears the interval when the phase becomes streaming", () => {
+      const setSpy = vi.spyOn(globalThis, "setInterval");
       const clearSpy = vi.spyOn(globalThis, "clearInterval");
       const { rerender } = render(
         <ThinkingIndicator phase="thinking" elapsedMs={500} onCancel={vi.fn()} />,
       );
+      const id = setSpy.mock.results[0]?.value;
       rerender(
         <ThinkingIndicator
           phase="streaming"
@@ -126,7 +130,7 @@ describe("ThinkingIndicator", () => {
           onCancel={vi.fn()}
         />,
       );
-      expect(clearSpy).toHaveBeenCalled();
+      expect(clearSpy).toHaveBeenCalledWith(id);
     });
   });
 });
