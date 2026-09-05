@@ -202,7 +202,7 @@ export const ACCOUNTS = [
    * account's balance, which the second open leg carries the rest of).
    */
   {
-    id: "00000000-0000-4000-8000-000000000013",
+    id: "00000000-0000-4000-8000-000000000015",
     name: "Split clearing · PLN",
     currency: "PLN",
     ownership: "own",
