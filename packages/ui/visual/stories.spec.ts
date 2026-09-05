@@ -108,11 +108,52 @@ async function open(page: Page, id: string, theme: string, { freeze = false } = 
 }
 
 /**
+ * The render phases `preview/runtime.js` emits `storyRenderPhaseChanged`
+ * for, from `"loading"` through to `"finished"`. Every one of these five is
+ * reached only *after* a `play` function (if the story has one) has been
+ * given its chance to run and either settle or throw — `"rendering"` and
+ * `"playing"` are not in this set for exactly that reason.
+ */
+const SETTLED_PHASES = new Set(["played", "errored", "completing", "completed", "finished"]);
+
+/**
+ * Polls (from Node, never a page-side timer) until the story has reached a
+ * settled render phase, or fails the test if it never does.
+ *
+ * **Node-side polling, not `storyRendered`/`storyFinished`, and not an
+ * in-page `setTimeout` loop.** `storyRendered` is skipped entirely when
+ * `play` throws (confirmed by reading `preview/runtime.js`), and
+ * `storyFinished`'s own `status` is unsafe for the reason
+ * `failIfStoryErrored`'s docstring gives. A loop that polls *inside* the
+ * page would also break for `ThinkingIndicator`'s frozen clock — `page.clock`
+ * mocks `setTimeout` there, so an in-page poll would never run a second time
+ * — which is exactly why this polls from the Node side, on Playwright's own
+ * unmocked timers, via `expect.poll`.
+ */
+async function waitForSettledRenderPhase(page: Page) {
+  await expect
+    .poll(
+      async () => {
+        const phase = await page.evaluate(
+          () => window.__STORYBOOK_ADDONS_CHANNEL__?.last("storyRenderPhaseChanged")?.[0]?.newPhase,
+        );
+        return phase !== undefined && SETTLED_PHASES.has(phase);
+      },
+      {
+        message: "stories.spec.ts: the story never reached a settled render phase",
+        timeout: 5_000,
+      },
+    )
+    .toBe(true);
+}
+
+/**
  * Fails the test if the story's own `play` function threw, or if the story
- * threw while rendering at all. A screenshot diff was never proof of either
- * on its own: `toHaveScreenshot` only compares pixels, and a story that
- * errored can still leave behind an ordinary-looking, wrong frame to
- * photograph (H1's own `TallContent` regression check exists for exactly
+ * threw while rendering at all, or if the channel this reads either from was
+ * never installed in the first place. A screenshot diff was never proof of
+ * any of that on its own: `toHaveScreenshot` only compares pixels, and a
+ * story that errored can still leave behind an ordinary-looking, wrong frame
+ * to photograph (H1's own `TallContent` regression check exists for exactly
  * this — a `play` throw with no gate watching it would go unnoticed here).
  *
  * **Read from the installed Storybook's own `preview/runtime.js`, not
@@ -126,26 +167,40 @@ async function open(page: Page, id: string, theme: string, { freeze = false } = 
  * throw during rendering itself, `play` or none) are each written once, only
  * on the failure they name, and neither is touched by that later re-render —
  * confirmed by inspecting the channel's own recorded events directly rather
- * than trusting the general-purpose one. `settle()` already waited long
- * enough for either to have landed by the time this reads them, since both
- * fire well before the fonts/animations work it waits on.
+ * than trusting the general-purpose one.
+ *
+ * **Waits for a settled render phase first** (`waitForSettledRenderPhase`)
+ * — reading these two events right after `settle()`, with no wait of its
+ * own, missed an asynchronous `play` throw that lands after `document.fonts.
+ * ready` already resolved (an `await canvas.findByText(...)` with its own
+ * ~1000ms timeout, say). A `play` function is not bounded by font loading.
  */
 async function failIfStoryErrored(page: Page) {
-  const [playError, renderError] = await page.evaluate(() => {
+  await waitForSettledRenderPhase(page);
+
+  const result = await page.evaluate(() => {
     const channel = window.__STORYBOOK_ADDONS_CHANNEL__;
-    const thrownInPlay = channel?.last("playFunctionThrewException") as
-      | [{ message?: string }]
-      | undefined;
-    const thrownInRender = channel?.last("storyThrewException") as
-      | [{ message?: string }]
-      | undefined;
-    return [thrownInPlay?.[0]?.message, thrownInRender?.[0]?.message] as const;
+    if (channel === undefined) {
+      return { channelMissing: true as const };
+    }
+    return {
+      channelMissing: false as const,
+      playError: channel.last("playFunctionThrewException")?.[0]?.message,
+      renderError: channel.last("storyThrewException")?.[0]?.message,
+    };
   });
-  if (playError !== undefined) {
-    throw new Error(`stories.spec.ts: the story's play function threw: ${playError}`);
+
+  if (result.channelMissing) {
+    throw new Error(
+      "stories.spec.ts: window.__STORYBOOK_ADDONS_CHANNEL__ is not installed — cannot " +
+        "confirm the story rendered without error",
+    );
   }
-  if (renderError !== undefined) {
-    throw new Error(`stories.spec.ts: the story threw while rendering: ${renderError}`);
+  if (result.playError !== undefined) {
+    throw new Error(`stories.spec.ts: the story's play function threw: ${result.playError}`);
+  }
+  if (result.renderError !== undefined) {
+    throw new Error(`stories.spec.ts: the story threw while rendering: ${result.renderError}`);
   }
 }
 

@@ -41,6 +41,7 @@ import * as errorState from "./states/error-state.stories";
 import * as matchWarning from "./states/match-warning.stories";
 import * as ruleHealthTag from "./states/rule-health-tag.stories";
 import * as skeleton from "./states/skeleton.stories";
+import * as startupFailed from "./states/startup-failed.stories";
 import * as thinkingIndicator from "./states/thinking-indicator.stories";
 import * as thresholdSlider from "./states/threshold-slider.stories";
 import * as toast from "./states/toast.stories";
@@ -66,6 +67,7 @@ const MODULES = {
   RuleHealthTag: ruleHealthTag,
   Shell: shell,
   Skeleton: skeleton,
+  StartupFailed: startupFailed,
   TabBar: tabBar,
   TabIcons: tabIcons,
   ThinkingIndicator: thinkingIndicator,

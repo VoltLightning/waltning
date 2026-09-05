@@ -623,8 +623,9 @@ export default function QuickAdd() {
 
   return (
     <View style={styles.root}>
-      {/* `clearBottom={false}` — `Dock`, below, owns the bottom inset; the
-          panel adding it too would double-pad the home indicator. */}
+      {/* `clearBottom={false}` — this panel is not the screen's own bottom
+          edge, `Dock` below it is, and `Dock` already clears the home
+          indicator itself. */}
       <GroundPanel clearBottom={false}>
         <QuickAddComposer
           raw={composerAmountRaw}

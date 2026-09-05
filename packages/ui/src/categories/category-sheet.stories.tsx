@@ -87,7 +87,11 @@ export const Searching: Story = {
     // step would fail silently against the pristine story.
     const canvas = within(canvasElement.ownerDocument.body);
     await userEvent.type(await canvas.findByLabelText("Search…"), "eat");
-    await expect(canvas.findByRole("radio", { name: "Eating out" })).resolves.toBeDefined();
+    // `USAGE`'s own count rides along in the accessible name (`common.fieldValue`,
+    // "Eating out: 56") — an exact-string match against the bare leaf name
+    // never matched it, and nothing was checking a `play` function's own
+    // result until the gate that now catches this.
+    await expect(canvas.findByRole("radio", { name: /^Eating out/ })).resolves.toBeDefined();
   },
 };
 
