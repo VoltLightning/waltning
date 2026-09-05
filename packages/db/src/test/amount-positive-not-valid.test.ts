@@ -1,5 +1,5 @@
 /**
- * M1 — `0014_transactions_amount_strictly_positive.sql` tightens
+ * M1 — `0011_transactions_amount_strictly_positive.sql` tightens
  * `transactions_amount_positive` from `>= 0` to `> 0` (H4, `schema.ts`).
  * `DROP CONSTRAINT IF EXISTS` plus `ADD CONSTRAINT … NOT VALID` is the whole
  * point: a database that already holds a zero-amount, non-adjustment row
@@ -42,7 +42,7 @@ async function isConvalidated(sql: postgres.Sql): Promise<boolean | undefined> {
   return rows[0]?.convalidated;
 }
 
-const TARGET_TAG = "0014_transactions_amount_strictly_positive";
+const TARGET_TAG = "0011_transactions_amount_strictly_positive";
 
 type Journal = { entries: { idx: number; tag: string; when: number }[] };
 
@@ -81,7 +81,7 @@ function urlFor(database: string): string {
  * expected here, not informative — see `scratch.ts`'s own copy. */
 const quiet = () => {};
 
-describe("M1 — 0014 on a database already holding a zero-amount transfer", () => {
+describe("M1 — 0011 on a database already holding a zero-amount transfer", () => {
   const name = `waltning_test_amt_${process.pid}`;
   let client: postgres.Sql;
 
@@ -107,8 +107,11 @@ describe("M1 — 0014 on a database already holding a zero-amount transfer", () 
         ('11111111-1111-1111-1111-111111111111', 'Household · USD', 'USD', 0),
         ('22222222-2222-2222-2222-222222222222', 'Cash · PLN', 'PLN', 0);
     `);
-    // Legal under the pre-0014 constraint (`>= 0`) — a zero-amount transfer,
-    // never an adjustment. This is the row 0014 must not choke on.
+    // Legal under the pre-0011 constraint (`>= 0`) — a zero-amount `From`
+    // leg, never an adjustment. `to_amount` stays non-zero: idx9's own
+    // `transactions_to_amount_positive` (`0009_transactions_to_amount_and_
+    // fee_positive.sql`) already runs ahead of 0011 here, and this fixture
+    // means to hold 0011's own CHECK, not collide with a different one.
     await client.unsafe(`
       INSERT INTO transactions
         (id, date, type, account_id, to_account_id, amount_original, to_amount,
@@ -116,7 +119,7 @@ describe("M1 — 0014 on a database already holding a zero-amount transfer", () 
       VALUES
         ('33333333-3333-3333-3333-333333333333', '2026-01-01', 'transfer',
          '11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222',
-         0.00, 0.00, 'USD', 'PLN', 1, 1)
+         0.00, 5.00, 'USD', 'PLN', 1, 1)
     `);
   }, 60_000);
 
@@ -155,13 +158,13 @@ describe("M1 — 0014 on a database already holding a zero-amount transfer", () 
         VALUES
           ('44444444-4444-4444-4444-444444444444', '2026-01-02', 'transfer',
            '11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222',
-           0.00, 0.00, 'USD', 'PLN', 1, 1)
+           0.00, 5.00, 'USD', 'PLN', 1, 1)
       `),
     ).rejects.toThrow(/transactions_amount_positive/);
   });
 });
 
-describe("L2 — 0014 on a fresh install", () => {
+describe("L2 — 0011 on a fresh install", () => {
   it("validates transactions_amount_positive immediately — no violating row exists", async () => {
     const scratch = await scratchDatabase("amt_fresh");
     try {

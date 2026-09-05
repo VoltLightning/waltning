@@ -104,7 +104,7 @@ import {
 import { updateCounterpartyExecutor } from "./counterparties/update-counterparty.executor.ts";
 import { addCurrencyExecutor, type LocalCurrencyRow } from "./currencies/add-currency.executor.ts";
 import { archiveCurrencyExecutor } from "./currencies/archive-currency.executor.ts";
-import { changePivotExecutor } from "./currencies/change-pivot.executor.ts";
+import { type ChangePivotResult, changePivotExecutor } from "./currencies/change-pivot.executor.ts";
 import {
   type ClearManualRateResult,
   clearManualRateExecutor,
@@ -286,7 +286,7 @@ export type LocalLedgerSession = {
   archiveCurrency: (input: ArchiveCurrencyInput, capture: Capture) => LocalCurrencyRow;
   setRateSource: (input: SetRateSourceInput, capture: Capture) => LocalCurrencyRow;
   setPinned: (input: SetPinnedInput, capture: Capture) => LocalCurrencyRow;
-  changePivot: (input: ChangePivotInput, capture: Capture) => LocalCurrencyRow;
+  changePivot: (input: ChangePivotInput, capture: Capture) => ChangePivotResult;
   setManualRate: (input: SetManualRateInput, capture: Capture) => SetManualRateResult;
   clearManualRate: (input: ClearManualRateInput, capture: Capture) => ClearManualRateResult;
   updateCurrency: (input: UpdateCurrencyInput, capture: Capture) => LocalCurrencyRow;

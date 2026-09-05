@@ -1,6 +1,7 @@
 /**
  * Proves: SPEC.md §7.6 (one rate per date, the one in effect), computations.md
- * §1 (a figure is computed once). Findings: R1 H1-r4, R1 L5-r5.
+ * §1 (a figure is computed once). Findings: R1 H1-r4 — fixed by #119,
+ * R1 L5-r5 — fixed by #119.
  *
  * **What "read equals write" means here.** `readRate` (`currencies/read-rate.ts`)
  * is the answer a screen would show for a date; `create_transaction`'s own
@@ -68,7 +69,7 @@ function setup(seed: number) {
 
 describe("read-equals-write — SPEC.md §7.6, computations.md §1", () => {
   for (const seed of SEEDS) {
-    it.fails(`R1 H1-r4 — seed ${seed}: create_transaction's stored rate must equal what readRate answers for the same date`, () => {
+    it(`R1 H1-r4 — seed ${seed}: create_transaction's stored rate must equal what readRate answers for the same date`, () => {
       const j = setup(seed);
       try {
         for (let i = 0; i < DAYS; i++) {

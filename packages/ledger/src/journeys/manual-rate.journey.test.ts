@@ -40,7 +40,7 @@ function captureUsd(j: ReturnType<typeof openJourney>, date: string) {
 }
 
 describe("set_manual_rate / clear_manual_rate — §7.6's three-level override", () => {
-  it.fails("R1 C1 — clearing a manual override restores the synced rate it replaced", () => {
+  it("R1 C1 — clearing a manual override restores the synced rate it replaced", () => {
     const j = setup();
     try {
       seedRate(j, PIVOT, USD, "2026-01-04", "0.2500", "nbp");
@@ -53,6 +53,7 @@ describe("set_manual_rate / clear_manual_rate — §7.6's three-level override",
           to: accountingDate("2026-01-04"),
           rate: money.unitsPerPivot("0.2600"),
           overwriteManual: false,
+          today: accountingDate("2026-01-04"),
         },
         j.capture,
       );
@@ -105,6 +106,7 @@ describe("set_manual_rate / clear_manual_rate — §7.6's three-level override",
             to: accountingDate("2026-01-04"),
             rate: money.unitsPerPivot("99999999999999999999"),
             overwriteManual: false,
+            today: accountingDate("2026-01-04"),
           },
           j.capture,
         );

@@ -848,6 +848,16 @@ describe("change_pivot", () => {
   // (itself stamped `carried_forward`, never dropped) and any other quote on
   // its date — and `readRate` on that reciprocal still walks to a real
   // origin, exactly as `readRate`'s own contract promises.
+  //
+  // H2-r5 — the *other* quote's own row is stamped `carried_forward` too,
+  // not `derived`. A real leg divided by a stale bridge is not "as fresh as
+  // its own date" the way a real leg over a real bridge is (the previous
+  // test): the bridge's own value is a copy from an earlier date, and
+  // dividing by it carries that staleness forward. Marking it `derived`
+  // here let a later `readRate` on this exact pair measure freshness from
+  // this row's own date rather than the bridge's true origin — invisible
+  // with a one-day carry (this fixture), the same clock reset
+  // `pivot-change.journey.test.ts`'s own ten-day fixture catches.
   it("M2 — a traceable carried bridge prices both the rows and a carried reciprocal that still resolves", () => {
     s.ledger.replica.db
       .insert(fxRates)
@@ -886,7 +896,10 @@ describe("change_pivot", () => {
     const eurToUsdDay2 = rows.find(
       (r) => r.base === "EUR" && r.quote === "USD" && r.date === accountingDate("2026-01-02"),
     );
-    expect(eurToUsdDay2?.source).toBe("derived"); // 0.25 / 0.90, priced off the traceable bridge
+    // H2-r5 — 0.25 / 0.90, priced off the traceable bridge, but the bridge
+    // itself is a one-day-old copy: `carried_forward`, not `derived`, so a
+    // later `readRate` on this pair measures from the bridge's true origin.
+    expect(eurToUsdDay2?.source).toBe("carried_forward");
     const eurToPlnDay2 = rows.find(
       (r) => r.base === "EUR" && r.quote === "PLN" && r.date === accountingDate("2026-01-02"),
     );

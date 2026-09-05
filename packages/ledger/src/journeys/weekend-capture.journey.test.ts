@@ -2,7 +2,8 @@
  * Proves: SPEC.md §7.6 table — "Weekend or holiday → carry forward the last published rate";
  * "Rates stale, offline → use the most recent held rate"; "No rate exists at all → nearest, marked estimated";
  * §7.7 (the preceding business day is what the jurisdiction values at).
- * Findings: R1 H1, R4 H3, R1 H1-r4 (Monday beat Friday), R1 H2-r4 (estimated set on every stale capture).
+ * Findings: R1 H1 — fixed by #119, R4 H3, R1 H1-r4 — fixed by #119 (Monday beat Friday),
+ * R1 H2-r4 — fixed by #119 (estimated set on every stale capture).
  */
 import { accountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
@@ -44,7 +45,7 @@ function captureUsd(j: ReturnType<typeof openJourney>, date: string) {
 }
 
 describe("weekend and holiday capture — SPEC.md §7.6/§7.7's carry-forward table", () => {
-  it.fails("R1 H1-r4 — a Sunday capture is valued at Monday's rate, not Friday's carried-forward one", () => {
+  it("R1 H1-r4 — a Sunday capture is valued at Monday's rate, not Friday's carried-forward one", () => {
     const j = setup();
     try {
       seedRate(j, PIVOT, USD, "2026-01-02", "0.2500", "nbp");
@@ -101,7 +102,7 @@ describe("weekend and holiday capture — SPEC.md §7.6/§7.7's carry-forward ta
     }
   });
 
-  it.fails("R1 H1 — past the ten-day carry cap the row still lands, at the nearest real rate, marked estimated", () => {
+  it("R1 H1 — past the ten-day carry cap the row still lands, at the nearest real rate, marked estimated", () => {
     const j = setup();
     try {
       seedRate(j, PIVOT, USD, "2026-01-02", "0.2500", "nbp");
@@ -133,7 +134,7 @@ describe("weekend and holiday capture — SPEC.md §7.6/§7.7's carry-forward ta
     }
   });
 
-  it.fails("R1 H1 — a capture dated before any rate row lands at the nearest quote, marked estimated", () => {
+  it("R1 H1 — a capture dated before any rate row lands at the nearest quote, marked estimated", () => {
     const j = setup();
     try {
       // Only a quote three days *after* the capture date exists — no row before it at all.

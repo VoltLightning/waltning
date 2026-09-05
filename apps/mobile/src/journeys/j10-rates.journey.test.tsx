@@ -8,8 +8,9 @@
  *
  * Proves: flows/J10-currency-and-rates.md, screens/S18-settings-exchange-
  * rates.md §3–§5.
- * Findings: R1 H1-r4 (a Sunday capture is priced at Monday's rate), R1 L5-r5
- * (the rates screen and a capture on that date disagree).
+ * Findings: R1 H1-r4 — fixed by #119 (a Sunday capture is priced at Monday's
+ * rate), R1 L5-r5 — fixed by #119 (the rates screen and a capture on that
+ * date disagree).
  *
  * **`USD` is this ledger's pivot** (`@waltning/core/currencies`), not a
  * quoted currency — it carries no `fx_rates` row and no Settings › Rates
@@ -115,6 +116,7 @@ function setupJourney() {
   // so Sunday's own row is real, held data — never a gap `RateTable` would
   // fill in — and it carries Friday's own rate, unchanged across the
   // weekend.
+  const today = deviceRuntime().capture().date;
   const fridayThroughSunday = controller.setManualRate({
     base: "USD",
     quote: "PLN",
@@ -122,6 +124,7 @@ function setupJourney() {
     to: SUNDAY,
     rate: FRIDAY_RATE,
     overwriteManual: true,
+    today,
   });
   if ("fieldErrors" in fridayThroughSunday) {
     throw new Error("journey: friday-through-sunday rate refused");
@@ -133,6 +136,7 @@ function setupJourney() {
     to: MONDAY,
     rate: MONDAY_RATE,
     overwriteManual: true,
+    today,
   });
   if ("fieldErrors" in monday) throw new Error("journey: monday's rate refused");
 
@@ -143,7 +147,6 @@ function setupJourney() {
   // Monday's rate" is literally what the replica holds as its latest row,
   // rather than an incidental fixture date winning the same race for a
   // different reason.
-  const today = deviceRuntime().capture().date;
   const pinnedToday = controller.setManualRate({
     base: "USD",
     quote: "PLN",
@@ -151,6 +154,7 @@ function setupJourney() {
     to: today,
     rate: MONDAY_RATE,
     overwriteManual: true,
+    today,
   });
   if ("fieldErrors" in pinnedToday) throw new Error("journey: today's rate refused");
 
@@ -171,7 +175,7 @@ afterEach(() => {
 });
 
 describe("J10 — currency and rates", () => {
-  it.fails("R1 H1-r4 — a Sunday capture is priced at Monday's rate, not the rate Settings › Rates shows for Sunday's own date", async () => {
+  it("R1 H1-r4 — a Sunday capture is priced at Monday's rate, not the rate Settings › Rates shows for Sunday's own date", async () => {
     const { ledger, fixture, stub } = setupJourney();
     await lastCapture.set({ accountId: fixture.cashAccountId, at: Date.now() });
     stub.pushWithParams("rates", {});

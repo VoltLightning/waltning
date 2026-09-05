@@ -1,19 +1,20 @@
 /**
  * Proves: CLAUDE.md's "break it once to prove it fires", and SPEC.md §6.5
  * ("Integrity constraints" — "Enforced in the database, not merely the
- * application", naming nine of these thirteen CHECKs by name and SQL).
+ * application", naming nine of these fourteen CHECKs by name and SQL).
  *
  * Two claims, both about every CHECK constraint Postgres actually holds
  * today, read live from `pg_constraint` rather than assumed from
- * `schema.ts` or from §6.5's own list. Four of the thirteen are absent from
- * §6.5, for two different reasons: `transactions_counterparty_role_shape`
- * and `transactions_occurrence_shape` are declared in `schema.ts`'s own
- * `check(...)` calls but simply not named in §6.5's SQL block, while
- * `transactions_debt_shape` and `transactions_tax_fx_shape` postdate both —
- * they live only in the hand-written `0001_database_objects.sql` (from
+ * `schema.ts` or from §6.5's own list. Five of the fourteen are absent from
+ * §6.5, for two different reasons: `transactions_counterparty_role_shape`,
+ * `transactions_occurrence_shape`, and `transactions_fx_rate_positive` are
+ * declared in `schema.ts`'s own `check(...)` calls but simply not named in
+ * §6.5's SQL block, while `transactions_debt_shape` and
+ * `transactions_tax_fx_shape` postdate both — they live only in the
+ * hand-written `0001_database_objects.sql` (from
  * `0004_business_logic_columns.sql`, folded in), missing from `schema.ts`
  * *and* §6.5. A list built by reading either alone would silently omit some
- * of the thirteen.
+ * of the fourteen.
  *
  * Findings: none — the rule is CLAUDE.md's, not a review finding.
  *
@@ -134,6 +135,8 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   transactions_fee_positive: () => insertRow({ fee: "0.00" }),
   // A tax FX rate with no tax FX date.
   transactions_tax_fx_shape: () => insertRow({ tax_fx_rate: "1" }),
+  // A zero FX rate — `amount_pivot = amount_original × fx_rate` refuses one.
+  transactions_fx_rate_positive: () => insertRow({ fx_rate: "0" }),
 };
 
 describe("every CHECK on transactions is VALID", () => {

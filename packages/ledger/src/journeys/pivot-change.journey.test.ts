@@ -5,8 +5,9 @@
  * and its "Change the pivot" bullet are where the operation is actually
  * specified, and §7.6 covers manual overrides instead), §7.7 (the ten-day
  * carry cap this rewrite must not let a stale bridge dodge).
- * Findings: R1 M4, R1 M1-r4, R1 H1-r5 (orphan reciprocal), R1 H2-r5 (carry
- * clock reset), R1 M1-r5 (drops rows silently).
+ * Findings: R1 M4, R1 M1-r4, R1 H1-r5 — fixed by #119 (orphan reciprocal),
+ * R1 H2-r5 — fixed by #119 (carry clock reset), R1 M1-r5 — fixed by #119
+ * (drops rows silently).
  */
 import { accountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
@@ -32,7 +33,7 @@ function fxRows(j: ReturnType<typeof openJourney>) {
 }
 
 describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
-  it.fails("R1 H1-r5 — a carried-forward row cannot stand in as the new pivot's own bridge", () => {
+  it("R1 H1-r5 — a carried-forward row cannot stand in as the new pivot's own bridge", () => {
     const j = setup();
     try {
       // The only "bridge" to EUR on 2026-01-01 is itself a carried-forward
@@ -73,7 +74,7 @@ describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
     }
   });
 
-  it.fails("R1 H2-r5 — a rebased row's freshness clock must not reset to the leg's own date", () => {
+  it("R1 H2-r5 — a rebased row's freshness clock must not reset to the leg's own date", () => {
     const j = setup();
     try {
       // The EUR bridge is 20 days stale by 2026-01-21 (real quote on
@@ -96,7 +97,7 @@ describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
     }
   });
 
-  it.fails("R1 M1-r5 — a dropped date is reported, not swallowed", () => {
+  it("R1 M1-r5 — a dropped date is reported, not swallowed", () => {
     const j = setup();
     try {
       // 28 daily USD quotes, none bridged to EUR except the last day —

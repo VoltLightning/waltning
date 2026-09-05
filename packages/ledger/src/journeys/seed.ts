@@ -9,11 +9,12 @@
  * test would make the fixture as slow, and as failure-prone, as the thing it
  * sets up.
  *
- * **`FxSource` here, not the brief's fourth option.** `@waltning/schema/enums`
- * lists `nbp | ecb | nbrb | nbg | manual | carried_forward` for `fx_rates.source`
- * — there is no `"derived"` member, and SQLite has no CHECK to catch one that
- * slipped through, so a wider literal here would let a caller write a source
- * no reader could ever have produced.
+ * **`FxSource`, unrestricted.** `@waltning/schema/enums` lists
+ * `nbp | ecb | nbrb | nbg | manual | carried_forward | derived` for
+ * `fx_rates.source` (R1 added `derived`), so `seedRate`'s own `source`
+ * parameter takes the type as-is rather than a narrower literal — SQLite has
+ * no CHECK to catch a wider one anyway, so the type is what keeps a caller
+ * from writing a source no reader could ever have produced.
  */
 
 import { fold } from "@waltning/core/capture/names";

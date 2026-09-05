@@ -29,7 +29,15 @@
 import { z } from "zod";
 import { type AccountingDate, daysBetween } from "../date.ts";
 import type { Id } from "../id.ts";
-import { type CurrencyCode, type Decimal, dec, type Money, type TxnType } from "../money.ts";
+import {
+  type CurrencyCode,
+  type Decimal,
+  dec,
+  type Money,
+  reciprocal,
+  type TxnType,
+  type UnitsPerPivot,
+} from "../money.ts";
 import {
   zAccountingDate,
   zCurrencyCode,
@@ -990,7 +998,25 @@ const MANUAL_RATE_RANGE_ISSUE = {
  * (`date.ts`), so it cannot compute "today" itself; the caller holds the
  * device date and passes it, and `to <= today` is checked against exactly
  * that value rather than a server clock a phone-only write has no access to.
+ *
+ * **H3-r5 — a rate too large to reciprocate is refused here, before the
+ * outbox entry exists.** `set-manual-rate.executor.ts`'s own `apply` runs
+ * *after* the intent is already enqueued (`write.ts`'s two-phase write), so
+ * a refusal inside it leaves the outbox entry standing — the write "failed"
+ * with a row already claiming it happened. `money.reciprocal` throws for
+ * exactly this rate (a hyperinflated units-per-pivot whose flip rounds to
+ * zero at twelve places); this schema calls it here, at parse time, so the
+ * whole write is refused before anything commits.
  */
+const rateReciprocates = (v: { rate: UnitsPerPivot }) => {
+  try {
+    reciprocal(v.rate);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const setManualRateInput = z
   .object({
     base: zCurrencyCode,
@@ -1009,6 +1035,10 @@ export const setManualRateInput = z
   .refine((v) => v.to <= v.today, {
     message: "a manual rate cannot be set for a date that has not happened yet",
     path: ["to"],
+  })
+  .refine(rateReciprocates, {
+    message: "this rate is too large to reciprocate — refused, not written",
+    path: ["rate"],
   });
 export type SetManualRateInput = z.output<typeof setManualRateInput>;
 

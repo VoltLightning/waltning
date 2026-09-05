@@ -114,6 +114,7 @@ function setupJourney() {
     to: "2026-09-04",
     rate: "0.9200",
     overwriteManual: true,
+    today: "2026-09-04",
   });
   if ("fieldErrors" in eurRate) throw new Error("journey: eur rate refused");
 
@@ -127,6 +128,7 @@ function setupJourney() {
     to: "2026-09-03",
     rate: "4.4000",
     overwriteManual: true,
+    today: "2026-09-04",
   });
   if ("fieldErrors" in yesterdayRate) throw new Error("journey: yesterday's rate refused");
 
