@@ -7,14 +7,28 @@
  * `audit_log.entity`. Drizzle gives two spellings of every table: the
  * camelCase TypeScript property (`accountGroups`) and the SQL identifier the
  * row is actually stored under (`account_groups`). They are equally easy to
- * type and only one of them can ever match — so a misspelling reads as an
- * audit trail with nothing in it rather than as a mistake.
+ * type and only one of them can ever match.
  *
  * Both sides of that hazard read this list: `registry.test.ts` holds every
  * declared `AuditSpec.entity` to it, and `get_audit_log` validates its input
- * against it, so the same misspelling is a validation error going in and a
- * test failure going out. Deriving it here rather than in either place is what
- * makes "the same set" a fact instead of a coincidence.
+ * against it. Deriving it here rather than in either place is what makes "the
+ * same set" a fact instead of a coincidence.
+ *
+ * **What the enum closes is the misspelling.** `accountGroups`, `transaction`,
+ * a table that never existed — each is a validation error going in and a test
+ * failure going out, rather than an empty history. It does **not** close the
+ * larger class it resembles: `currencies` is a real table this list carries and
+ * nothing audits it today, so `get_audit_log("currencies", …)` is accepted and
+ * answers empty, exactly as a row with nothing recorded against it does. Only
+ * the operations that declare an `AuditSpec` write rows at all, and this list
+ * knows nothing of them. Telling "no history" from "nothing is ever recorded
+ * here" needs a different answer shape, and no caller has asked for one.
+ *
+ * **The guarantee is a runtime one.** The set is built by walking the schema
+ * module's exports when this file is first imported, so its type is
+ * `readonly string[]` and `z.enum` over it carries no literal union: nothing
+ * here makes a mistyped `AuditSpec.entity` a compile error. `registry.test.ts`
+ * is what fails, at test time, and it is the only thing that does.
  *
  * A table added to the schema joins the set with no edit here; a table removed
  * leaves it. That is the point — the list is the database's, not a copy.

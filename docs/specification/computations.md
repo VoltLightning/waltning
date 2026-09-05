@@ -558,10 +558,22 @@ language-agnostic by construction, which is the property that matters here and
 the reason this choice survives the language mix changing again.
 
 An amount token matches `amount_original` exactly, in any currency. **A query
-is an amount token only when the whole of it is one** — digits, an optional
-decimal mark (comma or point, read alike), and spaces or no-break spaces as
-thousands grouping, which are dropped. `48,90`, `48.90`, `1 500,00` and
-`1500.00` are amount tokens. Anything else beside the digits is not: a currency
+is an amount token only when the whole of it is one**, by this grammar:
+
+- **Digits, then an optional decimal mark** — comma or point, read alike —
+  followed by one to eight digits. `48,90`, `48.90`, `1,5` and `0,05` are
+  amount tokens, and so is a bare `1500`.
+- **A space or no-break space is thousands grouping and is dropped, but only
+  where grouping belongs**: one to three digits, then groups of exactly three.
+  `1 500` and `1 500,00` are amount tokens. `1 5 0 0` is not — those spaces
+  sit where grouping cannot, so they are not grouping, and the query is text.
+- **A decimal part of exactly three digits, with no grouping space in the
+  query, is refused.** `1.500` and `1,500` each read as one-and-a-half in one
+  convention and fifteen hundred in the other, and a search box carries nothing
+  that says which was meant. `1 500,000` is an amount token: the space already
+  settled it.
+
+Anything else beside the digits is not an amount token either: a currency
 symbol or code (`48,90 zł`), a point standing for thousands (`1.500,00`), a
 year inside a phrase (`Shop A 2024`). Those stay text, matched by substring
 alone.
@@ -573,7 +585,9 @@ filtered to. A currency token cannot be told from an ordinary payee word
 without knowing every currency in the ledger, and a point cannot be told from a
 decimal mark without knowing what was meant — so a grammar loose enough to
 accept `48,90 zł` is loose enough to make `100 lat` match every row costing
-`100,00`. Both are refused, and the search box stays predictable.
+`100,00`, and one that guessed at `1.500` would fold every row at fifteen
+hundred into a total the reader took to be about one and a half. All of them
+are refused, and the search box stays predictable.
 
 A match inside a receipt names the line that matched. Offline search is
 substring-only over the cache, and says so.

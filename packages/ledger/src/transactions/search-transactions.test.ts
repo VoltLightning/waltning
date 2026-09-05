@@ -77,10 +77,12 @@ beforeEach(() => {
 
 describe("searchTransactions — text", () => {
   it("matches folded, diacritic-insensitive payee and note", () => {
-    insertExpense({ payee: "Żabka", note: "poranna kawa" });
+    // An invented name, and one carrying three of the diacritics `fold()` maps
+    // — Ż, ó and ł — so the fold is what the assertions below actually test.
+    insertExpense({ payee: "Sklep Żółty", note: "poranna kawa" });
 
-    expect(searchTransactions(stores.ledger.replica.db, { text: "zabka" }).rows).toHaveLength(1);
-    expect(searchTransactions(stores.ledger.replica.db, { text: "ŻABKA" }).rows).toHaveLength(1);
+    expect(searchTransactions(stores.ledger.replica.db, { text: "zolty" }).rows).toHaveLength(1);
+    expect(searchTransactions(stores.ledger.replica.db, { text: "ŻÓŁTY" }).rows).toHaveLength(1);
     expect(searchTransactions(stores.ledger.replica.db, { text: "kawa" }).rows).toHaveLength(1);
     expect(searchTransactions(stores.ledger.replica.db, { text: "nope" }).rows).toHaveLength(0);
   });
@@ -187,6 +189,39 @@ describe("searchTransactions — text", () => {
     // boundary rather than a broken parser.
     expect(payees("48,90")).toEqual(["Shop A"]);
     expect(payees("1 500,00")).toEqual(["Shop B"]);
+  });
+
+  /**
+   * M1 — the two rules that make a space and a decimal mark readable.
+   *
+   * A space is grouping only where grouping belongs. `"1 500"` is fifteen
+   * hundred; `"1 5 0 0"` is four digits a person spaced out for some other
+   * reason, and stripping every space would have made it the same amount. And
+   * `"1.500"` is refused rather than guessed: it is one-and-a-half under one
+   * convention and fifteen hundred under the other, and the query carries no
+   * grouping space to settle it. §13 states both.
+   */
+  it("groups only at grouping positions, and refuses the ambiguous tail (§13)", () => {
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("1500") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("1.5") });
+    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("0.05") });
+
+    const payees = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+
+    // Grouping at a grouping position is dropped.
+    expect(payees("1 500")).toEqual(["Shop A"]);
+    // Spaces anywhere else are not grouping, so the query is text and matches
+    // no payee — note it would be `1500` if every space were simply stripped.
+    expect(payees("1 5 0 0")).toEqual([]);
+    // Ambiguous between 1,5 and 1500, so neither row comes back.
+    expect(payees("1.500")).toEqual([]);
+    expect(payees("1,500")).toEqual([]);
+    // A decimal mark with one or two digits after it is unambiguous.
+    expect(payees("1,5")).toEqual(["Shop B"]);
+    expect(payees("0,05")).toEqual(["Shop C"]);
+    // And a grouping space settles the mark, so three decimals read fine.
+    expect(payees("1 500,000")).toEqual(["Shop A"]);
   });
 
   it("never lets a purely alphabetic query match on amount alone", () => {

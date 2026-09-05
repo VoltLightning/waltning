@@ -91,10 +91,28 @@ export type TransactionSearchPage = {
 export const SEARCH_PAGE_SIZE = 50;
 
 /**
- * Digits, optionally a decimal fraction to `numeric(20,8)`'s eight places,
- * and nothing else — whitespace already stripped as thousands grouping.
+ * Digits with no grouping at all, optionally a decimal fraction to
+ * `numeric(20,8)`'s eight places, and nothing else — `1500`, `48,90`, `0,05`.
  */
-const SEARCH_AMOUNT = /^\d+(?:[.,]\d{1,8})?$/;
+const UNGROUPED_AMOUNT = /^\d+(?:[.,]\d{1,8})?$/;
+
+/**
+ * The same, written with thousands grouping: one to three digits, then groups
+ * of **exactly** three separated by a space or no-break space. `1 500,00`
+ * matches; `1 5 0 0` does not, which is the whole reason this is a shape and
+ * not a `replace(/\s/g, "")` — a space that is not at a grouping position is
+ * not grouping, and a query holding one is text.
+ */
+const GROUPED_AMOUNT = /^\d{1,3}(?:[ \u00a0]\d{3})*(?:[.,]\d{1,8})?$/;
+
+/**
+ * A decimal mark followed by exactly three digits: the one spelling the two
+ * conventions read differently and neither can win. `1.500` and `1,500` are
+ * one-and-a-half to a reader who takes the mark as decimal and fifteen hundred
+ * to one who takes it as grouping. Refused unless the query grouped something
+ * with a space, which settles the question — `1 500,000` is fifteen hundred.
+ */
+const AMBIGUOUS_TAIL = /[.,]\d{3}$/;
 
 /**
  * The **whole** query read as an amount, or `null`.
@@ -112,22 +130,31 @@ const SEARCH_AMOUNT = /^\d+(?:[.,]\d{1,8})?$/;
  * a search box means.
  *
  * The grammar is `computations.md` §13's own, stated there so the two engines
- * cannot drift: space and no-break space are grouping and are dropped; a comma
- * or point is the decimal mark (`money.ts` takes a point), so `"1 500,00"` and
- * `"1500.00"` are the same amount. Nothing else — `"48,90 zł"` and `"1.500,00"`
- * are text, deliberately. §13 gives the reason: a trailing currency token
- * cannot be told from an ordinary payee word without the ledger's whole
- * currency list, so accepting it would make `"100 lat"` match every row at
- * `100,00` — M6 again, one spelling later.
+ * cannot drift. A comma or point is the decimal mark (`money.ts` takes a
+ * point), so `"1 500,00"` and `"1500.00"` are the same amount. Space and
+ * no-break space are grouping — but only where grouping belongs, which is why
+ * `"1 500"` is `1500` and `"1 5 0 0"` is text: stripping every space would
+ * have made the second an amount too, and a user who typed it meant no such
+ * thing. `"1.500"` and `"1,500"` are refused for the opposite reason — both
+ * conventions read them, differently, and no grouping space is present to say
+ * which. Nothing else either: `"48,90 zł"` and `"1.500,00"` are text,
+ * deliberately. §13 gives that reason: a trailing currency token cannot be
+ * told from an ordinary payee word without the ledger's whole currency list,
+ * so accepting it would make `"100 lat"` match every row at `100,00` — M6
+ * again, one spelling later.
  *
  * Compared as money downstream, never as digits: a substring match let `489`
  * find `1 489,00` and fold it into the running total. `489` is not `48,90`;
  * only `48,90` is.
  */
 function parseSearchAmount(text: string): Money | null {
-  const ungrouped = text.trim().replace(/[ \u00a0]/g, "");
-  if (!SEARCH_AMOUNT.test(ungrouped)) return null;
-  return money.toMoney(ungrouped.replace(",", "."));
+  const query = text.trim();
+  const spaced = /[ \u00a0]/.test(query);
+  if (spaced ? !GROUPED_AMOUNT.test(query) : !UNGROUPED_AMOUNT.test(query)) return null;
+  // A grouping space settles which convention the decimal mark belongs to;
+  // with no space, a three-digit tail is unreadable and the query stays text.
+  if (!spaced && AMBIGUOUS_TAIL.test(query)) return null;
+  return money.toMoney(query.replace(/[ \u00a0]/g, "").replace(",", "."));
 }
 
 /**
