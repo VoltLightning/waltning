@@ -22,6 +22,13 @@
  * produces a negative bucket. Renormalising every other segment against a
  * total that includes it would silently inflate all of them; the figure is
  * still stated in the legend, where it is a fact rather than a proportion.
+ *
+ * **And a zero segment draws nothing — there is no minimum width.** A one-
+ * percent floor was making a `0.00` category and a real but small one the
+ * same mark, which is the distinction a reader is scanning this bar for.
+ * `income-vs-expense-widget.tsx` states the identical rule; two charts in one
+ * widget grid disagreeing about what an empty bucket looks like is a reader
+ * learning the rule twice.
  */
 
 import * as money from "@waltning/core/money";
@@ -100,7 +107,7 @@ export function SpendByCategoryWidget({
                       ? 0
                       : money.dec(segment.amount).dividedBy(total).toNumber();
                   const fill = {
-                    flexGrow: share === 0 ? 0 : Math.max(share, 0.01),
+                    flexGrow: share,
                     minWidth: share === 0 ? 0 : space.xs,
                     backgroundColor: index < ramp.length ? ramp[index] : theme.chartOtherFill,
                   };

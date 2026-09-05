@@ -364,6 +364,7 @@ export const pl: Messages = {
     noAccounts: "Brak kont",
     noAccountsBody: "Utwórz jedno konto, aby rozpocząć swoją księgę.",
     heldSeparately: "Trzymane osobno — to nie jest suma.",
+    noBalanceIn: "brak salda w {{currency}}",
     accounts: "Konta",
     recent: "Ostatnie",
     ownCurrency: "Każde saldo jest w walucie swojego konta — to nie jest suma.",

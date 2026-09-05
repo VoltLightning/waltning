@@ -15,12 +15,19 @@
  * (`inArray`), not by a second join back through `transactions`. The replica
  * indexes neither `transactions.date` nor `transaction_lines.transaction_id`,
  * so the join shape re-scanned `transactions` to re-derive a set this function
- * is already holding. One period's expenses is a list of tens, so the `IN` is
- * small and the second scan is gone.
+ * is already holding.
+ *
+ * **And it is chunked**, through the same `chunkIds` the counterparty merge
+ * uses. `inArray` binds one SQLite variable per id and the default ceiling is
+ * 999 — a typical month's expenses is a list of tens, but the period is the
+ * caller's and a year, or an import's first month, is not. Unchunked, that
+ * case throws `too many SQL variables` where it should have returned a chart:
+ * a bound decided by how much you spend is not a bound.
  */
 
 import * as money from "@waltning/core/money";
 import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { chunkIds } from "../chunk-ids.ts";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
@@ -57,18 +64,17 @@ export function readSpendByCategory<TRun, TSchema extends typeof ledgerSchema>(
     .all();
 
   const ids = transactionRows.map((row) => row.id);
-  const lineRows =
-    ids.length === 0
-      ? []
-      : db
-          .select({
-            transactionId: transactionLines.transactionId,
-            categoryId: transactionLines.categoryId,
-            amount: transactionLines.amount,
-          })
-          .from(transactionLines)
-          .where(inArray(transactionLines.transactionId, ids))
-          .all();
+  const lineRows = chunkIds(ids).flatMap((batch) =>
+    db
+      .select({
+        transactionId: transactionLines.transactionId,
+        categoryId: transactionLines.categoryId,
+        amount: transactionLines.amount,
+      })
+      .from(transactionLines)
+      .where(inArray(transactionLines.transactionId, batch))
+      .all(),
+  );
 
   return money.spendByCategory(transactionRows, lineRows, period, scope);
 }

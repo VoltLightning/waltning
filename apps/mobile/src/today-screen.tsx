@@ -28,6 +28,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Text, useColorScheme, View } from "react-native";
+import { openUnsettled } from "./open-unsettled.ts";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
 
@@ -207,23 +208,17 @@ export default function Today() {
     : undefined;
 
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
-  const unsettled = snapshot.unsettledClearing[0];
   // S04 §3, Shared: "Tapping the unsettled banner goes straight to the
-  // unallocated transaction, not to a list." Falls back to the filtered
-  // ledger only when no oldest leg is on hand — never observed once §8's
-  // FIFO fold runs (a non-zero clearing balance always has one), but a
-  // fixture-fed port might still hand one back without it.
+  // unallocated transaction, not to a list." Which of the two the model's
+  // `openTarget` names — and the account fallback for an opening balance
+  // that has no transaction to open — is `use-unsettled-banner.ts`'s
+  // decision; `open-unsettled.ts` turns it into a route, for all three
+  // screens that render this banner.
+  const openTarget = unsettledModel?.openTarget ?? null;
   const handleOpenUnsettled = useCallback(() => {
-    if (!unsettled) return;
-    if (unsettled.oldestUnconsumedTransactionId) {
-      router.push({
-        pathname: "/transaction/[id]",
-        params: { id: unsettled.oldestUnconsumedTransactionId },
-      });
-      return;
-    }
-    router.push({ pathname: "/ledger", params: { account: unsettled.accountId } });
-  }, [unsettled]);
+    if (openTarget === null) return;
+    openUnsettled(openTarget);
+  }, [openTarget]);
 
   const hero = (
     <View style={styles.heroStack}>

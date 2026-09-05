@@ -39,3 +39,13 @@ export const Loading: Story = {
 export const Failed: Story = {
   args: { error: "That didn't load." },
 };
+
+/**
+ * `currency: null` — the header states period and scope and stops. This is
+ * what `balances`, `recent` and `debt` render: lists whose rows each carry
+ * their own code, where one code up here would be read as covering all of
+ * them.
+ */
+export const NoCurrency: Story = {
+  args: { currency: null, scope: "All" },
+};

@@ -56,9 +56,11 @@ export const Populated: Story = {};
 
 /**
  * H2 — the trailing range ends at the current month, which on the 2nd is a
- * two-day figure standing beside whole ones. The partial bucket takes the
- * assertion tone and says "to date", so the short bar reads as incomplete
- * rather than as a collapse.
+ * two-day figure standing beside whole ones. The partial bucket is hatched in
+ * the assertion tone and says "to date", so the short bar reads as incomplete
+ * rather than as a collapse — while keeping its series hue, so income and
+ * expense are still told apart in the one bucket where the reader is most
+ * likely to be looking.
  */
 export const PartialCurrentMonth: Story = {
   args: {
@@ -132,6 +134,40 @@ export const Localised: Story = {
         label: "grudzień 2026 · do dziś",
         income: money.toMoney("310"),
         expense: money.toMoney("520"),
+        currency: "PLN",
+        decimals: 2,
+        partial: true,
+      },
+    ],
+  },
+};
+
+/**
+ * A zero bucket draws **no** bar — not a stub. The August row has no income
+ * at all, and the gap beside its `0.00` is the honest picture; a minimum width
+ * made it indistinguishable from the small-but-real July figure above it.
+ */
+export const ZeroBucket: Story = {
+  args: {
+    bars: [
+      {
+        label: "July 2026",
+        income: money.toMoney("120"),
+        expense: money.toMoney("5100"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "August 2026",
+        income: money.toMoney("0"),
+        expense: money.toMoney("3900"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "September 2026 · to date",
+        income: money.toMoney("0"),
+        expense: money.toMoney("0"),
         currency: "PLN",
         decimals: 2,
         partial: true,

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `dashboard_layouts_one_active` ON `dashboard_layouts` (`is_active`) WHERE "dashboard_layouts"."is_active" = 1;

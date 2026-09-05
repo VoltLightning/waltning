@@ -17,13 +17,27 @@
  *   *which* row is which once the pair scrolls past the legend.
  * - **End labels.** Each bar's own figure, through `<Amount>`, at its end.
  *
- * **A partial bucket is drawn in the assertion tone and says so.** The trailing
- * range ends at the current month, which on the 2nd is a two-day figure
- * standing beside five whole ones — steady income reads as a collapse at the
- * start of every month. `partial` paints that bucket's bars `assertedFill`
- * (P4's *asserted or aged*, the one thing amber means system-wide) and its
- * label carries "to date", so the short bar is legible as incomplete rather
- * than as a fall.
+ * **A partial bucket is hatched and says so — it does not change hue.** The
+ * trailing range ends at the current month, which on the 2nd is a two-day
+ * figure standing beside five whole ones: steady income reads as a collapse
+ * at the start of every month. So that bucket is marked. But repainting both
+ * its bars `assertedFill` spent the one channel that says *which series this
+ * is* to say *how complete this bucket is* — the partial month became the one
+ * bucket where income and expense are the same colour, in a chart whose whole
+ * point is telling them apart. §7.1 asks for hue **plus** shape; incomplete is
+ * a third fact, and it gets the third channel.
+ *
+ * So `partial` keeps `theme.income`/`theme.spend` and lays `assertedFill`
+ * hatching over the fill (P4's *asserted or aged*, the one thing amber means
+ * system-wide) — the same tone, carried as texture rather than as the whole
+ * bar. Its label carries "to date" as well, and the two agree.
+ *
+ * **A zero figure draws no bar at all.** Not a two-percent stub, not a
+ * `minWidth` sliver: a month with no income and a month with a little income
+ * looked alike under a floor, which is the one distinction this chart exists
+ * to make. `spend-by-category-widget.tsx` follows the same rule for the same
+ * reason, and the two are worth stating identically — an empty bucket is
+ * empty, and the figure at the end of the row says how empty.
  */
 
 import * as money from "@waltning/core/money";
@@ -32,7 +46,7 @@ import { Amount } from "../fx/amount";
 import { text } from "../theme/fonts.ts";
 import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
-import { radius, space } from "../tokens.ts";
+import { hairline, radius, space } from "../tokens.ts";
 import { OtherCurrencies, type OtherCurrencyRow } from "./other-currencies";
 import { WidgetCard, type WidgetFrame } from "./widget-card";
 
@@ -58,6 +72,28 @@ export type IncomeVsExpenseWidgetProps = WidgetFrame & {
   loading?: boolean | undefined;
   error?: string | undefined;
 };
+
+/**
+ * The `assertedFill` hatching laid over a partial bucket's fill. Stripes are
+ * `View`s rather than a background image: RN has no CSS gradient and this
+ * module carries no drawing dependency, the same argument `Marker` makes for
+ * drawing its triangle out of borders. More stripes are rendered than a full
+ * bar needs and the fill clips the rest, because the fill's width is a
+ * `flexGrow` share that is not known here.
+ */
+function Hatch() {
+  const styles = useStyles();
+  return (
+    <View style={styles.hatch}>
+      {HATCH_STRIPES.map((key) => (
+        <View key={key} style={styles.hatchStripe} />
+      ))}
+    </View>
+  );
+}
+
+/** Enough stripes to cover the widest bar this widget draws; the fill clips the rest. */
+const HATCH_STRIPES = Array.from({ length: 40 }, (_, i) => `stripe-${i}`);
 
 /** The triangle both the legend and every bar row draw — up for income, down for expense. */
 function Marker({ direction, color }: { direction: "up" | "down"; color: string }) {
@@ -117,27 +153,29 @@ export function IncomeVsExpenseWidget({
                 </View>
               </View>
               {bars.map((bar) => {
-                const incomeShare = Math.max(
-                  max.isZero() ? 0 : money.dec(bar.income).dividedBy(max).toNumber(),
-                  0.02,
-                );
-                const expenseShare = Math.max(
-                  max.isZero() ? 0 : money.dec(bar.expense).dividedBy(max).toNumber(),
-                  0.02,
-                );
+                // A zero figure is zero width and renders no fill — see the
+                // file doc. Everything else is its share of the shared scale.
+                const incomeShare = max.isZero()
+                  ? 0
+                  : money.dec(bar.income).dividedBy(max).toNumber();
+                const expenseShare = max.isZero()
+                  ? 0
+                  : money.dec(bar.expense).dividedBy(max).toNumber();
                 const incomeFillGrow = { flexGrow: incomeShare };
                 const incomeTrackGrow = { flexGrow: 1 - incomeShare };
                 const expenseFillGrow = { flexGrow: expenseShare };
                 const expenseTrackGrow = { flexGrow: 1 - expenseShare };
-                const incomeFill = bar.partial ? styles.partialFill : styles.incomeFill;
-                const expenseFill = bar.partial ? styles.partialFill : styles.expenseFill;
                 return (
                   <View key={bar.label} style={styles.bucket}>
                     <Text style={styles.bucketLabel}>{bar.label}</Text>
                     <View style={styles.pair}>
                       <Marker direction="up" color={theme.income} />
                       <View style={styles.track}>
-                        <View style={[styles.fill, incomeFill, incomeFillGrow]} />
+                        {incomeShare === 0 ? null : (
+                          <View style={[styles.fill, styles.incomeFill, incomeFillGrow]}>
+                            {bar.partial ? <Hatch /> : null}
+                          </View>
+                        )}
                         <View style={incomeTrackGrow} />
                       </View>
                       <Amount
@@ -151,7 +189,11 @@ export function IncomeVsExpenseWidget({
                     <View style={styles.pair}>
                       <Marker direction="down" color={theme.spend} />
                       <View style={styles.track}>
-                        <View style={[styles.fill, expenseFill, expenseFillGrow]} />
+                        {expenseShare === 0 ? null : (
+                          <View style={[styles.fill, styles.expenseFill, expenseFillGrow]}>
+                            {bar.partial ? <Hatch /> : null}
+                          </View>
+                        )}
                         <View style={expenseTrackGrow} />
                       </View>
                       <Amount
@@ -211,10 +253,22 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: radius.xs,
     overflow: "hidden",
   },
-  fill: { minWidth: space.xs },
+  fill: { minWidth: space.xs, overflow: "hidden" },
   incomeFill: { backgroundColor: theme.income },
   expenseFill: { backgroundColor: theme.spend },
-  /** P4's *asserted or aged* — the one meaning amber carries system-wide. */
-  partialFill: { backgroundColor: theme.assertedFill },
+  /**
+   * P4's *asserted or aged* — the one meaning amber carries system-wide, laid
+   * over the series hue rather than replacing it.
+   */
+  hatch: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    flexDirection: "row",
+    gap: space.xs,
+  },
+  hatchStripe: { width: hairline.width * 2, backgroundColor: theme.assertedFill },
   empty: { color: theme.textMuted, ...text.ui("body") },
 }));

@@ -32,6 +32,29 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
+// L-A — the two `client_state` updates this screen emits are its only record
+// of a failure it renders around; asserting the rendered `ErrorState` proves
+// the person was told and says nothing about whether anyone else was.
+// `clientFailure` stays real, so the error each call carries is the one the
+// screen actually built.
+const emitClientDiagnosticSpy = vi.fn();
+vi.mock("@waltning/client/diagnostics", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@waltning/client/diagnostics")>();
+  return {
+    ...actual,
+    get emitClientDiagnostic() {
+      return emitClientDiagnosticSpy;
+    },
+  };
+});
+
+/** Every `client_state` update emitted for `update`, in call order. */
+function stateUpdates(update: string) {
+  return emitClientDiagnosticSpy.mock.calls
+    .map(([, event]) => event)
+    .filter((event) => event?.scope === "client_state" && event?.update === update);
+}
+
 import Dashboard from "./dashboard-screen";
 import { deskScope, displayCurrency } from "./platform";
 
@@ -246,6 +269,7 @@ function withLedger(controller: ReturnType<typeof fakeController>) {
 
 beforeEach(() => {
   router.push.mockClear();
+  emitClientDiagnosticSpy.mockClear();
   // §7.0's own toggle, set the way a real install's `initializeFromPinned`
   // sets it. Without this the screen would lead with the build-time pivot
   // seed, which is exactly the point: the lead currency is a preference now,
@@ -301,6 +325,28 @@ describe("Dashboard (S01)", () => {
     expect(screen.queryByText("Balances")).toBeNull();
     expect(screen.queryByText("Debt")).toBeNull();
     expect(screen.getByText("No dashboard layout")).toBeTruthy();
+  });
+
+  /** **L-A.** And reports it — the screen is not the only thing that needs to know. */
+  it("emits `dashboard_active_layout` when no layout is active", () => {
+    withLedger(fakeController({ layout: null }));
+
+    const emitted = stateUpdates("dashboard_active_layout");
+    expect(emitted, "one failure, not one per render").toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
+      scope: "client_state",
+      update: "dashboard_active_layout",
+      phase: "failure",
+    });
+    expect(emitted[0]?.error?.message).toContain("no active dashboard layout");
+  });
+
+  /** A layout that *is* active emits nothing — the report is a failure, not a heartbeat. */
+  it("emits no layout failure when a layout is active", () => {
+    withLedger(fakeController({}));
+
+    expect(stateUpdates("dashboard_active_layout")).toHaveLength(0);
+    expect(stateUpdates("dashboard_unknown_widget_kind")).toHaveLength(0);
   });
 
   it("shows the first-run empty state with no accounts, replacing the whole grid (S01 §6)", () => {
@@ -359,15 +405,45 @@ describe("Dashboard (S01)", () => {
    * scope; three of five stated neither, and one printed the application's
    * name where a period belongs. The three parts are required props now, so
    * this asserts the line each of the five actually renders.
+   *
+   * **M-A** is the other half: the three list widgets state period and scope
+   * and *no* currency, because their rows each carry their own.
    */
-  it("states currency, period and scope in every widget header", () => {
+  it("states period and scope in every widget header, and a currency only where one covers the figures", () => {
     withLedger(fakeController({}));
 
-    const asOf = "PLN · As of September 4, 2026 · All";
+    const asOf = "As of September 4, 2026 · All";
     expect(screen.getAllByText(asOf), "balances, recent and debt").toHaveLength(3);
     expect(screen.getByText("PLN · September 2026 · by leaf category · All")).toBeTruthy();
     expect(screen.getByText("PLN · 5 months + this month to date · All")).toBeTruthy();
     expect(screen.queryByText(/Waltning/)).toBeNull();
+  });
+
+  /**
+   * **M-A.** The three list widgets took §7.0's display currency and printed
+   * it over rows that are not all in it. A ledger holding PLN and CHF renders
+   * a balances list with a CHF row in it, under a header that used to read
+   * `PLN · As of …` — the device preference stated in the one place a reader
+   * takes it for the contents. The segment is gone, and every row still names
+   * its own currency through `<Amount>`.
+   */
+  it("omits the currency segment on a widget whose rows carry their own", () => {
+    withLedger(fakeController({ accounts: [ACCOUNT, DORMANT_CHF] }));
+
+    expect(
+      screen.getAllByText("As of September 4, 2026 · All"),
+      "balances, recent and debt state period and scope only",
+    ).toHaveLength(3);
+    expect(
+      screen.queryByText("PLN · As of September 4, 2026 · All"),
+      "no header claims PLN over a list holding CHF",
+    ).toBeNull();
+    // The rows still answer for themselves — both accounts, both codes.
+    expect(screen.getByText("Bank A · PLN")).toBeTruthy();
+    expect(screen.getByText("Savings · CHF")).toBeTruthy();
+    expect(screen.getAllByText("CHF").length).toBeGreaterThan(0);
+    // And the two fold widgets, which chart one scale, still name it.
+    expect(screen.getByText("PLN · September 2026 · by leaf category · All")).toBeTruthy();
   });
 
   /**
@@ -435,5 +511,45 @@ describe("Dashboard (S01)", () => {
     );
 
     expect(screen.getByText("Balances")).toBeTruthy();
+  });
+
+  /**
+   * **L-A.** The drop is the only thing this build can do with a kind it has
+   * no renderer for — but a widget vanishing from someone's dashboard with no
+   * record is indistinguishable from a layout that never named it.
+   */
+  it("emits `dashboard_unknown_widget_kind`, naming every kind it dropped", () => {
+    withLedger(
+      fakeController({
+        layout: {
+          id: "layout-1",
+          name: "Standing",
+          widgets: [
+            { id: "w1", kind: "balances", slot: "a1", size: "m", config: {}, sort: 0 },
+            { id: "w2", kind: "fx_status", slot: "a2", size: "s", config: {}, sort: 1 },
+            { id: "w3", kind: "budget_burn", slot: "a3", size: "s", config: {}, sort: 2 },
+          ],
+        },
+      }),
+    );
+
+    const emitted = stateUpdates("dashboard_unknown_widget_kind");
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({ phase: "failure" });
+    // Both, in the layout's own order — not just the first one found.
+    expect(emitted[0]?.error?.message).toContain("fx_status,budget_burn");
+  });
+
+  /**
+   * **L-C.** The renderable kinds are read off the record that renders them,
+   * so this asserts the property that derivation buys: every kind the seeded
+   * layout names draws, and none of them is reported as unrenderable.
+   */
+  it("treats every kind the seeded layout names as renderable", () => {
+    withLedger(fakeController({}));
+
+    expect(stateUpdates("dashboard_unknown_widget_kind")).toHaveLength(0);
+    expect(screen.getByText("Balances")).toBeTruthy();
+    expect(screen.getByText("Income vs expense")).toBeTruthy();
   });
 });

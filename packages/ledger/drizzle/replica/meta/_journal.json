@@ -85,6 +85,13 @@
       "when": 1788617400001,
       "tag": "0011_dashboard_layout_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788636757770,
+      "tag": "0012_schema",
+      "breakpoints": true
     }
   ]
 }

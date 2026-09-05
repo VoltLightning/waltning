@@ -143,24 +143,37 @@ function DeskNavLink({ item, onSelect }: { item: TabBarItem; onSelect: (name: st
 }
 
 /**
- * The band's hero currency — **§7.0's display currency**, the same one
- * `dashboard-screen.tsx` leads every widget with.
+ * The band's hero subtotal — **§7.0's display currency** where the ledger
+ * holds one, the same currency `dashboard-screen.tsx` leads its two fold
+ * widgets with.
  *
  * It used to be `subtotals[0]`, which `subtotalsOf` returns in account
  * *insertion* order: the band could show one currency while the widgets under
  * it showed another, on the same page, with neither naming itself. One
  * preference decides for both now.
  *
- * `null` when the ledger holds nothing in that currency — before the first
- * account, and after switching the toggle to a currency no account is held
- * in. A fabricated `0.00` would be true and useless; `CurrencyTotals` makes
- * the same call on the phone.
+ * **And where the preference names a currency the ledger does not hold, the
+ * hero does not vanish — it falls back and says so.** Returning `null` there
+ * removed the whole hero row, so a ledger entirely in EUR with the pivot left
+ * at PLN showed a band with no figure at all: indistinguishable from an empty
+ * ledger, on the one screen whose job is to state your position. `fallback`
+ * is `true` for exactly that case, and `DeskHero` turns it into
+ * `shell.noBalanceIn` beneath the figure.
+ *
+ * `null` survives for the one case where it is the truth: no subtotals at
+ * all, before the first account. There is no currency to fall back to, and a
+ * fabricated `0.00` in an invented currency would be true and useless —
+ * `CurrencyTotals` makes the same call on the phone.
  */
 function useLeadCurrency() {
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const display = useDisplayCurrency(displayCurrency);
-  return snapshot.subtotals.find((entry) => entry.currency === display.currency) ?? null;
+  const preferred = snapshot.subtotals.find((entry) => entry.currency === display.currency);
+  if (preferred) return { entry: preferred, fallback: false as const };
+  const held = snapshot.subtotals[0];
+  if (!held) return null;
+  return { entry: held, fallback: true as const, missing: display.currency };
 }
 
 /**
@@ -182,26 +195,30 @@ function DeskCurrency() {
 
 /**
  * `DualTotal`'s C2 caller has not merged (`wave-3-shared.md` task 2's named
- * fallback): *mine* is the snapshot's own leading subtotal, *ours* is `null`
- * rather than a second figure nobody has computed yet. `null` before the
- * first account, matching `CurrencyTotals` returning nothing rather than a
- * fabricated zero balance in an invented currency.
+ * fallback): *mine* is the subtotal `useLeadCurrency` picked, *ours* is `null`
+ * rather than a second figure nobody has computed yet. The whole hero is
+ * absent only before the first account, matching `CurrencyTotals` returning
+ * nothing rather than a fabricated zero balance in an invented currency — a
+ * ledger that holds *something* always draws a figure, captioned when that
+ * something is not the currency asked for.
  *
  * `collapsed` picks `DualTotal`'s shape, not just its size: `"band"` on the
  * landing route, `"compact"` everywhere else — only the hero row changes
  * shape when the band collapses, per the design correction on #95.
  */
 function DeskHero({ collapsed }: { collapsed: boolean }) {
+  const t = useT();
   const lead = useLeadCurrency();
   if (lead === null) return null;
 
   return (
     <DualTotal
-      mine={lead.balance}
+      mine={lead.entry.balance}
       ours={null}
-      currency={lead.currency}
-      decimals={lead.decimals}
+      currency={lead.entry.currency}
+      decimals={lead.entry.decimals}
       size={collapsed ? "compact" : "band"}
+      caption={lead.fallback ? t("shell.noBalanceIn", { currency: lead.missing }) : undefined}
     />
   );
 }

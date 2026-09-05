@@ -546,14 +546,6 @@ END`,
     ],
   },
   {
-    // `DESK4` (`SPEC.md` §14.5) — the same seed `packages/db/drizzle/0014_dashboard_layout_seed.sql`
-    // writes on the server, same ids, no schema change: a hand-written step,
-    // matching `0001_database_objects`'s own precedent above. `is_active` /
-    // `is_preset` are SQLite's `1` for the boolean column's `true`.
-    //
-    // The closing index is the replica's half of `dashboard_layouts_one_active`
-    // — see the `.sql` file's own header for why the phone had no bound at all
-    // until `S01` became the first reader that depends on one.
     tag: "0011_dashboard_layout_seed",
     statements: [
       `INSERT INTO \`dashboard_layouts\` (\`id\`, \`name\`, \`is_active\`, \`is_preset\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d000', 'Standing', 1, 1, 0)`,
@@ -562,7 +554,12 @@ END`,
       `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d003', '00000000-0000-4000-8000-00000000d000', 'debt', 'a3', 's', 2)`,
       `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d004', '00000000-0000-4000-8000-00000000d000', 'spend_by_category', 'b1', 'm', 3)`,
       `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d005', '00000000-0000-4000-8000-00000000d000', 'income_vs_expense', 'b2', 'l', 4)`,
-      `CREATE UNIQUE INDEX \`dashboard_layouts_one_active\` ON \`dashboard_layouts\` (\`is_active\`) WHERE \`is_active\` = 1`,
+    ],
+  },
+  {
+    tag: "0012_schema",
+    statements: [
+      `CREATE UNIQUE INDEX \`dashboard_layouts_one_active\` ON \`dashboard_layouts\` (\`is_active\`) WHERE "dashboard_layouts"."is_active" = 1`,
     ],
   },
 ];

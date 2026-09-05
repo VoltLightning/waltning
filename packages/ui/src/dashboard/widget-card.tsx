@@ -11,10 +11,22 @@
  * This component still derives none of the three, because it has no reader to
  * derive them from; it only refuses to render without them.
  *
- * **The currency comes first because it is the one a reader assumes.** §7.0's
- * display currency leads every widget, and figures in any other currency are
- * listed unconverted on their own rows — arc-phone has no rate table, so a
- * converted total here would be a number invented to look tidy.
+ * **The currency comes first because it is the one a reader assumes — and
+ * `null` is how a widget says it does not have one.** §7.0's display currency
+ * leads the two widgets that fold *into* a single scale (`spend_by_category`,
+ * `income_vs_expense`), because there a reader must know which currency the
+ * chart is drawn in and figures in any other are listed unconverted on their
+ * own rows; arc-phone has no rate table, so a converted total there would be
+ * a number invented to look tidy.
+ *
+ * The other three do not fold anything. `balances`, `recent` and `debt` are
+ * lists whose every row carries its own code through `<Amount>`, so a header
+ * announcing `PLN` over a list holding PLN, CHF and EUR states the *device
+ * preference* in the one place a reader will take it for the *contents*. That
+ * is a frame that lies, which is worse than an absent one: `null` omits the
+ * segment and the rows keep answering for themselves. Required and nullable,
+ * not optional — a widget must still decide, and a forgotten prop still does
+ * not compile.
  *
  * **Loading is a skeleton in the widget's own shape, never a page-level
  * spinner** (`S01` §6) — `loading` swaps `children` for a `Skeleton` sized
@@ -36,8 +48,12 @@ import { hairline, radius, space } from "../tokens.ts";
  * widget that forgets one does not compile.
  */
 export type WidgetFrame = {
-  /** The lead currency these figures are stated in — §7.0's display currency, as an ISO code. */
-  currency: string;
+  /**
+   * The lead currency these figures are stated in — §7.0's display currency,
+   * as an ISO code — or `null` where every row states its own and a single
+   * code over them would be read as covering all of them.
+   */
+  currency: string | null;
   /** What span the figures cover — "September 2026", "As of September 5, 2026", "5 months + this month to date". */
   period: string;
   /** The scope actually applied here, which is not always the band's — `S01` §3's "may or may not inherit". */
@@ -69,7 +85,9 @@ export function WidgetCard({
     <View style={styles.card} accessibilityRole="none">
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.meta}>{`${currency} · ${period} · ${scope}`}</Text>
+        <Text style={styles.meta}>
+          {[currency, period, scope].filter((part) => part !== null).join(" · ")}
+        </Text>
       </View>
       {loading ? (
         <Skeleton shape="block" label={title} />

@@ -653,6 +653,13 @@ export const en = {
      * it, which is the shape `DualTotal` uses to mean exactly that.
      */
     heldSeparately: "Held separately — not a total.",
+    /**
+     * `DeskBand`'s hero, when the ledger holds nothing in §7.0's display
+     * currency. The figure above it is a currency the ledger *does* hold, so
+     * this names the one it does not — the alternative was rendering no hero
+     * at all, which reads as an empty ledger rather than an empty currency.
+     */
+    noBalanceIn: "no balance in {{currency}}",
     accounts: "Accounts",
     recent: "Recent",
     ownCurrency: "Each balance is in its own account's currency — not a total.",

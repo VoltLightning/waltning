@@ -98,6 +98,40 @@ export const WithANegativeSegment: Story = {
   },
 };
 
+/**
+ * A zero segment draws **no** band — the same rule
+ * `income-vs-expense-widget.tsx` states for a zero bucket. `Transport` is a
+ * category with a `0.00` total, and the bar shows exactly nothing for it;
+ * a one-percent floor made it the same mark as a real small category.
+ */
+export const WithAZeroSegment: Story = {
+  args: {
+    segments: [
+      {
+        key: "groceries",
+        label: "Groceries",
+        amount: money.toMoney("620.00"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        key: "transport",
+        label: "Transport",
+        amount: money.toMoney("0.00"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        key: "dining",
+        label: "Dining",
+        amount: money.toMoney("18.00"),
+        currency: "PLN",
+        decimals: 2,
+      },
+    ],
+  },
+};
+
 /** H1 — a dormant foreign account no longer empties this widget; it gets a row. */
 export const WithOtherCurrencies: Story = {
   args: {

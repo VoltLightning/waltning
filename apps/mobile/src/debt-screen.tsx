@@ -47,6 +47,7 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
+import { openUnsettled } from "./open-unsettled.ts";
 
 type DirectionSegment = "all" | "theyOwe" | "youOwe";
 
@@ -192,18 +193,11 @@ export default function Debt() {
   }, [rows, segment]);
 
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
-  const unsettled = snapshot.unsettledClearing[0];
+  const openTarget = unsettledModel?.openTarget ?? null;
   const handleOpenUnsettled = useCallback(() => {
-    if (!unsettled) return;
-    if (unsettled.oldestUnconsumedTransactionId) {
-      router.push({
-        pathname: "/transaction/[id]",
-        params: { id: unsettled.oldestUnconsumedTransactionId },
-      });
-      return;
-    }
-    router.push({ pathname: "/ledger", params: { account: unsettled.accountId } });
-  }, [unsettled]);
+    if (openTarget === null) return;
+    openUnsettled(openTarget);
+  }, [openTarget]);
   // The derivation and the wording live in `packages/client` /
   // `packages/ui` since `S01`'s third use; S12's own verb is *Allocate*, not
   // *Open*, which is the one thing this screen still says for itself.

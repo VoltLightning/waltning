@@ -7,7 +7,7 @@ const meta = {
   component: BalancesWidget,
   args: {
     title: "Balances",
-    currency: "PLN",
+    currency: null,
     period: "As of September 5, 2026",
     scope: "Mine",
     emptyLabel: "No accounts yet",

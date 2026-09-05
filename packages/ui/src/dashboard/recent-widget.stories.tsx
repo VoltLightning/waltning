@@ -8,7 +8,7 @@ const meta = {
   component: RecentWidget,
   args: {
     title: "Recent",
-    currency: "PLN",
+    currency: null,
     period: "As of September 5, 2026",
     scope: "All",
     emptyLabel: "Nothing recorded yet",

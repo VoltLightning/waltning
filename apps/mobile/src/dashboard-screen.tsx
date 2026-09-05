@@ -71,6 +71,7 @@ import { router } from "expo-router";
 import { useEffect, useMemo } from "react";
 import { View } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
+import { openUnsettled } from "./open-unsettled.ts";
 import { deskScope, displayCurrency } from "./platform";
 
 /**
@@ -84,9 +85,6 @@ const COMPLETE_FLOW_MONTHS = 5;
 const FLOW_MONTHS = COMPLETE_FLOW_MONTHS + 1;
 /** §7.2 — five named segments, the sixth-and-on folded into "Other". */
 const TOP_CATEGORIES = 5;
-
-/** Every `kind` this build can draw. A layout naming anything else is reported, not silently shortened. */
-const WIDGET_KINDS = ["balances", "recent", "debt", "spend_by_category", "income_vs_expense"];
 
 const SCOPE_LABEL_KEY = {
   all: "shell.scopeAll",
@@ -163,98 +161,6 @@ export default function Dashboard() {
       error: debtFailureReason,
     });
   }, [debtFailureReason?.message]);
-
-  // M4 — both silent failures the grid could have, reported. A missing layout
-  // draws an `ErrorState` below rather than a blank page — the seed migration
-  // exists so that state cannot happen, which makes it a failure rather than
-  // an empty ledger. An unknown kind is dropped, which is the only thing this
-  // build can do with it, but never without saying so.
-  const layoutMissing = layout === null && snapshot.revision > 0;
-  useEffect(() => {
-    if (!layoutMissing) return;
-    emitClientDiagnostic(mobileDiagnostics, {
-      scope: "client_state",
-      update: "dashboard_active_layout",
-      phase: "failure",
-      error: clientFailure(
-        new Error("no active dashboard layout — SPEC.md §14.5's seed is absent"),
-      ),
-    });
-  }, [layoutMissing]);
-
-  const unknownKinds = (layout?.widgets ?? [])
-    .map((widget) => widget.kind)
-    .filter((kind) => !WIDGET_KINDS.includes(kind))
-    .join(",");
-  useEffect(() => {
-    if (unknownKinds === "") return;
-    emitClientDiagnostic(mobileDiagnostics, {
-      scope: "client_state",
-      update: "dashboard_unknown_widget_kind",
-      phase: "failure",
-      error: clientFailure(new Error(`no renderer for widget kinds: ${unknownKinds}`)),
-    });
-  }, [unknownKinds]);
-
-  const hasAccounts = snapshot.accounts.length > 0;
-  const handleRetry = () => {
-    try {
-      ledger.refresh();
-    } catch {
-      // The snapshot already carries the new failure — see `today-screen.tsx`'s identical comment.
-    }
-  };
-
-  const handleOpenUnsettled = () => {
-    if (!unsettledModel) return;
-    const target = unsettledModel.openTarget;
-    if (target.kind === "transaction") {
-      router.push({ pathname: "/transaction/[id]", params: { id: target.transactionId } });
-      return;
-    }
-    router.push({ pathname: "/ledger", params: { account: target.accountId } });
-  };
-  const unsettledBanner = <UnsettledBanner model={unsettledModel} onOpen={handleOpenUnsettled} />;
-
-  if (snapshot.error) {
-    return (
-      <GroundPanel>
-        <ErrorState
-          variant="recoverable"
-          what={t("shell.balanceQueryFailed")}
-          why={t("shell.balanceQueryFailedBody")}
-          action={{ label: t("common.retry"), onPress: handleRetry }}
-        />
-      </GroundPanel>
-    );
-  }
-
-  // Loading — `snapshot.revision === 0` until the first `refresh()` settles,
-  // the same signal `debt-screen.tsx` reads for the identical reason.
-  if (snapshot.revision === 0) {
-    return (
-      <GroundPanel>
-        <View style={styles.root}>
-          <Skeleton shape="block" label={t("dashboard.balances")} />
-          <Skeleton shape="block" label={t("shell.recent")} />
-        </View>
-      </GroundPanel>
-    );
-  }
-
-  // S01 §6 — `EmptyState(first-run)` replaces the whole grid, never a per-widget empty.
-  if (!hasAccounts) {
-    return (
-      <GroundPanel>
-        <EmptyState
-          variant="first-run"
-          title={t("shell.noAccounts")}
-          body={t("shell.noAccountsBody")}
-          primaryAction={{ label: t("routes.createAccount"), onPress: handleCreateAccount }}
-        />
-      </GroundPanel>
-    );
-  }
 
   const scopeLabel = t(SCOPE_LABEL_KEY[scope]);
   const allLabel = t("shell.scopeAll");
@@ -367,11 +273,20 @@ export default function Dashboard() {
     kind: "auto" as const,
   }));
 
+  // Built above the early returns, not below them, because `WIDGET_KINDS` is
+  // read off it and the diagnostic that needs the list is a `useEffect` — a
+  // hook, so it cannot sit after a `return`. On the loading and empty paths
+  // every source array is empty, so this folds nothing and allocates five
+  // elements nobody renders.
   const WIDGET_NODES: Record<string, React.ReactNode> = {
+    // `currency={null}`: a balances list holds one row per account, each in
+    // its own currency (`shell.ownCurrency` says exactly that on Today), so
+    // the display currency in this header would frame figures it does not
+    // cover. The two fold widgets below do carry it — they chart one scale.
     balances: (
       <BalancesWidget
         title={t("dashboard.balances")}
-        currency={leadCurrency}
+        currency={null}
         period={asOfLabel}
         scope={scopeLabel}
         rows={balancesRows}
@@ -380,10 +295,11 @@ export default function Dashboard() {
     ),
     // `All`, stated rather than inherited: `PhoneRecentTransaction` carries no
     // `ownership`, so this reader cannot answer *mine* or *shared* at all.
+    // `currency={null}` for the same honesty: every row prints its own code.
     recent: (
       <RecentWidget
         title={t("shell.recent")}
-        currency={leadCurrency}
+        currency={null}
         period={asOfLabel}
         scope={allLabel}
         rows={recentRows}
@@ -392,11 +308,13 @@ export default function Dashboard() {
       />
     ),
     // `All` for the same reason: a counterparty balance belongs to a person,
-    // not to an account whose ownership could be read.
+    // not to an account whose ownership could be read. `currency={null}`
+    // again — `directionTotals` returns a row *per currency*, so a single
+    // code in the header would name one of several.
     debt: (
       <DebtWidget
         title={t("dashboard.debt")}
-        currency={leadCurrency}
+        currency={null}
         period={asOfLabel}
         scope={allLabel}
         totals={debtTotalsResult.ok ? debtTotalsResult.rows : []}
@@ -433,6 +351,98 @@ export default function Dashboard() {
       />
     ),
   };
+
+  // M4 — both silent failures the grid could have, reported. A missing layout
+  // draws an `ErrorState` below rather than a blank page — the seed migration
+  // exists so that state cannot happen, which makes it a failure rather than
+  // an empty ledger. An unknown kind is dropped, which is the only thing this
+  // build can do with it, but never without saying so.
+  const layoutMissing = layout === null && snapshot.revision > 0;
+  useEffect(() => {
+    if (!layoutMissing) return;
+    emitClientDiagnostic(mobileDiagnostics, {
+      scope: "client_state",
+      update: "dashboard_active_layout",
+      phase: "failure",
+      error: clientFailure(
+        new Error("no active dashboard layout — SPEC.md §14.5's seed is absent"),
+      ),
+    });
+  }, [layoutMissing]);
+
+  // Every `kind` this build can draw, read off the record that draws them —
+  // never a second list beside it. A hand-kept array is a list that goes stale
+  // in exactly one direction: add a widget and forget the array, and the kind
+  // renders while `dashboard_unknown_widget_kind` reports it as unrenderable.
+  const widgetKinds = Object.keys(WIDGET_NODES);
+  const unknownKinds = (layout?.widgets ?? [])
+    .map((widget) => widget.kind)
+    .filter((kind) => !widgetKinds.includes(kind))
+    .join(",");
+  useEffect(() => {
+    if (unknownKinds === "") return;
+    emitClientDiagnostic(mobileDiagnostics, {
+      scope: "client_state",
+      update: "dashboard_unknown_widget_kind",
+      phase: "failure",
+      error: clientFailure(new Error(`no renderer for widget kinds: ${unknownKinds}`)),
+    });
+  }, [unknownKinds]);
+
+  const hasAccounts = snapshot.accounts.length > 0;
+  const handleRetry = () => {
+    try {
+      ledger.refresh();
+    } catch {
+      // The snapshot already carries the new failure — see `today-screen.tsx`'s identical comment.
+    }
+  };
+
+  const handleOpenUnsettled = () => {
+    if (!unsettledModel) return;
+    openUnsettled(unsettledModel.openTarget);
+  };
+  const unsettledBanner = <UnsettledBanner model={unsettledModel} onOpen={handleOpenUnsettled} />;
+
+  if (snapshot.error) {
+    return (
+      <GroundPanel>
+        <ErrorState
+          variant="recoverable"
+          what={t("shell.balanceQueryFailed")}
+          why={t("shell.balanceQueryFailedBody")}
+          action={{ label: t("common.retry"), onPress: handleRetry }}
+        />
+      </GroundPanel>
+    );
+  }
+
+  // Loading — `snapshot.revision === 0` until the first `refresh()` settles,
+  // the same signal `debt-screen.tsx` reads for the identical reason.
+  if (snapshot.revision === 0) {
+    return (
+      <GroundPanel>
+        <View style={styles.root}>
+          <Skeleton shape="block" label={t("dashboard.balances")} />
+          <Skeleton shape="block" label={t("shell.recent")} />
+        </View>
+      </GroundPanel>
+    );
+  }
+
+  // S01 §6 — `EmptyState(first-run)` replaces the whole grid, never a per-widget empty.
+  if (!hasAccounts) {
+    return (
+      <GroundPanel>
+        <EmptyState
+          variant="first-run"
+          title={t("shell.noAccounts")}
+          body={t("shell.noAccountsBody")}
+          primaryAction={{ label: t("routes.createAccount"), onPress: handleCreateAccount }}
+        />
+      </GroundPanel>
+    );
+  }
 
   const slots: DashboardGridSlot[] = (layout?.widgets ?? [])
     .filter((widget) => WIDGET_NODES[widget.kind] !== undefined)

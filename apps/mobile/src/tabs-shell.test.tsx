@@ -50,7 +50,32 @@ vi.mock("expo-router", () => ({
 }));
 
 const { TabsShell, handleSelectType } = await import("./tabs-shell");
+const { displayCurrency } = await import("./platform");
 const { router } = await import("expo-router");
+
+const EUR = currencyCode("EUR");
+const PLN = currencyCode("PLN");
+
+/** One EUR account and nothing else — the ledger M-B is about. */
+const EUR_ONLY: PhoneAccount[] = [
+  {
+    id: id<"accounts">("55555555-5555-4555-8555-555555555555"),
+    name: "Bank B · EUR",
+    kind: "bank",
+    currency: EUR,
+    decimals: 2,
+    balance: toMoney("2100.00"),
+    groupId: null,
+    ownership: "own",
+    isBusiness: false,
+    archived: false,
+    expectedBalance: null,
+    openingBalance: toMoney("0"),
+    openingDate: null,
+    memo: "",
+    version: 1,
+  },
+];
 
 function fakeController(
   overrides: {
@@ -212,6 +237,61 @@ describe("TabsShell", () => {
 
     expect(screen.getByText("Dashboard")).toBeDefined();
     expect(screen.queryByText("Today")).toBeNull();
+  });
+
+  /**
+   * **M-B.** The hero read §7.0's display currency and rendered *nothing* when
+   * the ledger held no subtotal in it — so a ledger entirely in EUR, with the
+   * pivot left at the seeded PLN, showed a desk band with no figure at all.
+   * That is indistinguishable from an empty ledger on the one screen whose
+   * job is to state your position.
+   *
+   * It falls back to a currency the ledger does hold, states that currency's
+   * code beside the figure, and captions what it is not.
+   */
+  it("falls back to a held currency when the display currency has no subtotal, and says so", async () => {
+    await displayCurrency.set(PLN);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController({ accounts: EUR_ONLY })}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("2 100.00"), "the held figure, not a vanished hero").toBeDefined();
+    expect(screen.getByText("EUR"), "and the code it is actually in").toBeDefined();
+    expect(screen.getByText("no balance in PLN"), "captioned as a fallback").toBeDefined();
+  });
+
+  /** The preference is honoured whenever the ledger can honour it — no caption then. */
+  it("leads with the display currency, uncaptioned, when the ledger holds it", async () => {
+    await displayCurrency.set(EUR);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController({ accounts: EUR_ONLY })}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("2 100.00")).toBeDefined();
+    expect(screen.queryByText(/no balance in/)).toBeNull();
+  });
+
+  /** No accounts at all is the one case with nothing to fall back to. */
+  it("renders no hero before the first account", async () => {
+    await displayCurrency.set(PLN);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.queryByText(/no balance in/)).toBeNull();
+    expect(screen.queryByText("mine")).toBeNull();
   });
 });
 
