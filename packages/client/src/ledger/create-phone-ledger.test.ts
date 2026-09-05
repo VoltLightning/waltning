@@ -1883,7 +1883,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
    * executors throw, so `refusalFromThrow`'s pattern match has something real
    * to match against.
    */
-  function detailHarness() {
+  function detailHarness(overrides: Partial<PhoneLedgerPort> = {}) {
     let row: PhoneTransactionDetail | null = {
       id: TXN,
       date: accountingDate("2026-08-06"),
@@ -2015,6 +2015,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       listCounterpartyMerges: vi.fn(() => []),
       listDistinctCounterpartyPairs: vi.fn(() => []),
       reset: vi.fn(),
+      ...overrides,
     };
     const controller = createPhoneLedger(port, {
       capture: () => ({
@@ -2039,6 +2040,35 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
     const result = controller.getTransaction(TXN);
     expect(result?.payee).toBe("Café A");
     expect(getTransaction).toHaveBeenCalledWith(TXN);
+  });
+
+  /**
+   * `audit_log` is not a replicated table (`architecture/14-local-first.md`),
+   * so every real `LocalLedgerSession` answers empty regardless of what the
+   * port is asked for — this pins the controller's own default for a port
+   * (a screen test's fake, most often) that omits `getAuditLog` altogether:
+   * the same empty answer, not a thrown "not a function".
+   */
+  it("getAuditLog defaults to empty when the port does not implement it", () => {
+    const { controller } = detailHarness();
+    expect(controller.getAuditLog("transactions", TXN)).toEqual([]);
+  });
+
+  it("getAuditLog reads through the port when one is supplied", () => {
+    const entry = {
+      id: "1",
+      entity: "transactions" as const,
+      entityId: TXN,
+      action: "created",
+      actor: "user" as const,
+      before: null,
+      after: null,
+      at: "2026-08-06T10:00:00Z",
+    };
+    const getAuditLog = vi.fn<NonNullable<PhoneLedgerPort["getAuditLog"]>>(() => [entry]);
+    const { controller } = detailHarness({ getAuditLog });
+    expect(controller.getAuditLog("transactions", TXN)).toEqual([entry]);
+    expect(getAuditLog).toHaveBeenCalledWith("transactions", TXN);
   });
 
   it("updateTransaction patches with the version it was given, and refreshes on success", () => {

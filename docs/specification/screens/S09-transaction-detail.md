@@ -132,7 +132,7 @@ gate — getting it wrong costs a trend line, not a filed figure.
 | Populated | View · editing (inline, per field) · saving |
 | Empty | n/a — this screen always has a subject |
 | Error | Save failed → the draft is **retained**, error stated on the field that rejected. Never left half-saved |
-| Offline | Readable from cache. Edits queue; the row shows `pending`. **Audit history states it may be incomplete offline** — it is the thing you consult precisely when you distrust a row |
+| Offline | Fields and lines are readable from cache. Edits queue; the row shows `pending`. **`get_audit_log` is server-only** (`audit_log` is not a replicated table, `architecture/14-local-first.md`) — `AuditHistory` renders empty and says so plainly until the device is back online, rather than a partial trail that could pass for a complete one. That is precisely the moment you consult it because you distrust a row |
 | Gated | Flipping to business is refused when the account is `shared`, with the reason (§6.7) — the one place this screen can say no |
 
 ## 7. Interaction

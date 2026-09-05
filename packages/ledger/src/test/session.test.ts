@@ -213,6 +213,20 @@ describe("the phone ledger session", () => {
     session.close();
   });
 
+  /**
+   * `get_audit_log` — `audit_log` is not a replicated table
+   * (`architecture/14-local-first.md`), so the session's own reader is
+   * always empty. This pins that exposure, not a query result.
+   */
+  it("exposes getAuditLog, always empty", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    session.createTransaction(expenseInput(), capture);
+
+    expect(session.getAuditLog("transactions", transactionId)).toEqual([]);
+    session.close();
+  });
+
   it("replays an intent whose replica half is missing before the first read", () => {
     createLocalLedgerSession(options()).close();
     const ledger = openLedger(open, paths);

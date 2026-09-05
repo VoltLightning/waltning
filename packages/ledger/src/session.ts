@@ -1,6 +1,6 @@
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import type { AccountingDate } from "@waltning/core/date";
-import type { Id } from "@waltning/core/id";
+import type { Id, IdTable } from "@waltning/core/id";
 import type {
   CurrencyCode,
   IncomeExpenseBucket,
@@ -162,6 +162,7 @@ import {
   type LocalTransactionRow,
 } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
+import { type LocalAuditEntry, readAuditLog } from "./transactions/read-audit-log.ts";
 import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
 import { readPayeeHistory } from "./transactions/read-payee-history.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
@@ -282,6 +283,8 @@ export type LocalLedgerSession = {
   ) => readonly LocalTransactionRow[];
   /** S09's whole subject, one query — `null` for a row that is gone or soft-deleted. */
   getTransaction: (id: Id<"transactions">) => LocalTransactionDetail | null;
+  /** S09's audit history — always empty on the phone. See `read-audit-log.ts`. */
+  getAuditLog: (entity: IdTable, entityId: string) => readonly LocalAuditEntry[];
   updateTransaction: (input: UpdateTransactionInput, capture: Capture) => LocalTransactionRow;
   deleteTransaction: (input: DeleteTransactionInput, capture: Capture) => LocalTransactionRow;
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
@@ -629,6 +632,7 @@ export function createLocalLedgerSession<TRun>(
     searchTransactions: (filter, cursor) =>
       searchTransactions(requireOpen().replica.db, filter, cursor),
     getTransaction: (id) => readTransaction(requireOpen().replica.db, id),
+    getAuditLog: (entity, entityId) => readAuditLog(entity, entityId),
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createAccountExecutor,
