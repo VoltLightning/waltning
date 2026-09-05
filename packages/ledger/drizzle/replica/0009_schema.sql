@@ -17,14 +17,14 @@
 -- `INSERT … SELECT` itself, roll the whole step back, and repeat that same
 -- unexplained failure on every later launch.
 --
--- This step carries no `fill` and no `objects` — only that `check`. The two
--- `transactions_category_kind_matches_type` triggers (DESK3 round 1 C2
--- layer 3) live on `0010_schema`'s `objects` hook, the last step that
--- rebuilds `transactions`: SQLite drops a table's triggers with the table,
--- and `0010_schema` rebuilds `transactions` copy-rename-drop, so a trigger
--- created here would be deleted one step later. They are SQL no generated
--- file can hold either way — drizzle-kit regenerates this file and cannot
--- emit a trigger, so one written here would vanish on the next `pnpm
+-- This step carries no `fill` and no `objects` — only that `check`, and no
+-- trigger. Every hand-written replica trigger lives in the head's `objects`
+-- hook (`migrate.ts`'s `REPLICA_BACKFILLS["0010_schema"].objects`), and a
+-- rebuild of `transactions` moves the hook: SQLite drops a table's triggers
+-- with the table, and `0010_schema` rebuilds `transactions` copy-rename-drop,
+-- so a trigger created here would be deleted one step later. It is SQL no
+-- generated file can hold either way — drizzle-kit regenerates this file and
+-- cannot emit a trigger, so one written here would vanish on the next `pnpm
 -- ledger:generate` without a single test going red.
 ALTER TABLE `fx_rates` ADD `displaced_rate` text;--> statement-breakpoint
 ALTER TABLE `fx_rates` ADD `displaced_source` text;--> statement-breakpoint

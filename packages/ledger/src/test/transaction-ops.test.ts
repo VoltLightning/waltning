@@ -1214,7 +1214,9 @@ describe("categorize_batch", () => {
      * guarantee. This writes straight to the replica through drizzle,
      * skipping `categorizeBatchExecutor`'s own `WHERE` entirely, so the only
      * thing that can refuse it is `transactions_category_kind_matches_type_
-     * update` (`drizzle/replica/0009_schema.sql`) — the backstop this
+     * update` — created, like every hand-written replica trigger, by
+     * `migrate.ts`'s `REPLICA_BACKFILLS["0010_schema"].objects` hook on the
+     * chain's head, never by a generated `.sql` — the backstop this
      * executor's own doc comment names.
      */
     it("the replica's own trigger refuses a raw UPDATE the executor never ran (C2 layer 3)", () => {

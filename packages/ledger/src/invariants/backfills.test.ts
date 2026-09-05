@@ -235,8 +235,9 @@ describe("every objects hook creates something the chain would not otherwise hav
    * (L5, round 3). An `objects` hook re-runs whenever its step does, and a
    * device can reach the step with the objects already present — the two
    * triggers spent one commit inside the generated `.sql` before moving into
-   * this hook. A bare `CREATE TRIGGER` would abort on the duplicate name,
-   * roll the step back, and fail identically on every launch after: a
+   * this hook, and H1a's four the same way out of the tail of
+   * `0010_schema.sql`. A bare `CREATE TRIGGER` would abort on the duplicate
+   * name, roll the step back, and fail identically on every launch after: a
    * migration with no way forward from the phone.
    */
   it.each(tagsWithObjects)("$tag's objects hook is idempotent", ({ tag }) => {
@@ -291,14 +292,29 @@ describe("every objects hook creates something the chain would not otherwise hav
    * would have caught it, but only because it happens to write a bad row —
    * nothing said the *object* had to survive.
    *
-   * So: run the real chain to the end, and ask for the two names. After the
+   * **All six, because there is one home for them.** H1a's four spent one
+   * commit at the tail of `0010_schema.sql`, a generated file, where the next
+   * `pnpm ledger:generate` or the next rebuild of `transactions` would have
+   * removed them just as quietly. Every hand-written replica trigger is
+   * created by the head's `objects` hook now, so this is the list of every
+   * trigger the replica has.
+   *
+   * Run the real chain to the end, and ask for the six names. After the
    * whole chain, never after the hook's own step, which is precisely the
    * distinction the defect lived in.
    */
-  it("the WA017 triggers exist after the whole chain, not merely after their own step", () => {
-    const names = objectsAfterChain("wa017-head", REPLICA_BACKFILLS);
-    expect(names.has("transactions_category_kind_matches_type_insert")).toBe(true);
-    expect(names.has("transactions_category_kind_matches_type_update")).toBe(true);
+  it("every hand-written trigger exists after the whole chain, not merely after its own step", () => {
+    const names = objectsAfterChain("triggers-head", REPLICA_BACKFILLS);
+    for (const trigger of [
+      "transactions_category_kind_matches_type_insert",
+      "transactions_category_kind_matches_type_update",
+      "transactions_category_not_archived_insert",
+      "transactions_category_not_archived_update",
+      "transaction_lines_category_not_archived_insert",
+      "transaction_lines_category_not_archived_update",
+    ]) {
+      expect(names.has(trigger), `${trigger} survived the chain`).toBe(true);
+    }
   });
 });
 

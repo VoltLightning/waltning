@@ -568,6 +568,75 @@ describe("LedgerTable", () => {
     });
 
     /**
+     * **`"Spacebar"` — the legacy key name — asked in both directions, and it
+     * behaves exactly as `" "` does, because by the time this file sees it
+     * that is what it is.**
+     *
+     * `react-native-web`'s `isValidKeyPress` accepts `"Spacebar"` beside
+     * `" "`, which reads as a value the delegate has to accept too. It is
+     * not: every handler here is a React one, and React DOM rewrites a
+     * synthetic keyboard event's `key` through `normalizeKey` — `Spacebar`
+     * to `" "` — before the responder's handler or this file's runs
+     * (`react-dom` 19.2.3). Both these tests were vacuous while
+     * `isDelegatedKey` and `handleTableKeyDown` carried a branch for the
+     * legacy name: they passed with the branch and passed without it. The
+     * branches are gone and the pair now asserts the normalisation itself —
+     * a `"Spacebar"` press still toggles the ringed row exactly once, on
+     * both elements, *only because* React folds the name.
+     *
+     * The two directions are the two elements, which is where the doubling
+     * the tests above exist for would show up: on the row body the responder
+     * swallows a `Space` and the delegate has to hand it over; on the
+     * checkbox nothing swallows it, so it reaches the scroller by itself and
+     * must not be handed over as well.
+     */
+    it("Spacebar on a focused row body toggles the ringed row exactly once", () => {
+      const selection = selectionOf();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selection}
+          onOpenRow={noop}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const body = screen.getByRole("button", { name: "Corner Bakery" });
+      body.focus();
+      fireEvent.keyDown(container, { key: "j" });
+
+      fireEvent.keyDown(body, { key: "Spacebar" });
+      expect(selection.toggleRow).toHaveBeenCalledTimes(1);
+      expect(selection.toggleRow).toHaveBeenCalledWith("1", false);
+    });
+
+    /** The other direction: nothing swallows it on a `<div role="checkbox">`, so it must arrive once by itself and be acted on once. */
+    it("Spacebar on a focused checkbox toggles the ringed row exactly once", () => {
+      const selection = selectionOf();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selection}
+          onOpenRow={noop}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const checkbox = screen.getByRole("checkbox", { name: "Select Corner Bakery" });
+      checkbox.focus();
+      fireEvent.keyDown(container, { key: "j" });
+      fireEvent.keyDown(container, { key: "j" });
+
+      fireEvent.keyDown(checkbox, { key: "Spacebar" });
+      expect(selection.toggleRow).toHaveBeenCalledTimes(1);
+      expect(selection.toggleRow).toHaveBeenCalledWith("2", false);
+    });
+
+    /**
      * The ring decides, not focus. A checkbox can still hold DOM focus —
      * `tabIndex={-1}` takes it out of the *tab* order, not out of the
      * document — and `Enter` must still open the row the ring is on.

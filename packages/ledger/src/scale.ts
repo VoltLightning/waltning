@@ -7,10 +7,11 @@
  * **No database object under it on this engine — and that is now a choice,
  * not a limitation.** A `CHECK` cannot state this rule (`ddl.ts` carries
  * every one the schema can enforce alone, and a cross-table lookup into
- * `currencies` is not among them), but the replica does carry triggers: the
- * two `transactions_category_kind_matches_type` ones, created by
- * `migrate.ts`'s `REPLICA_BACKFILLS` `objects` hook, are the replica's whole
- * answer to WA017. So a scale trigger is writable in the same slot, and the
+ * `currencies` is not among them), but the replica does carry triggers: six
+ * of them — H1a's four `*_category_not_archived_*` and WA017's two
+ * `transactions_category_kind_matches_type_*` — all created from one home,
+ * `migrate.ts`'s `REPLICA_BACKFILLS` `objects` hook on the chain's head. So a
+ * scale trigger is writable in the same slot, and the
  * reason there is none is what it would and would not buy. SQLite's
  * `RAISE(ABORT, …)` takes a string literal and nothing else — it cannot name
  * the offending currency, its declared scale, or the figure — so a trigger

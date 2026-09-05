@@ -276,15 +276,27 @@ type TableKeyProps = { onKeyDown: (event: TableKeyEvent) => void };
  *
  * `j`/`k`/`f` and `x` are swallowed by nothing and are delegated by nobody.
  *
- * **`"Spacebar"` is the legacy key name older engines send** — the same one
- * `isValidKeyPress` and `PressResponder.onKeyDown` both still accept, so it
- * is accepted identically here and by `handleTableKeyDown`'s own toggle
- * branch. A value the responder treats as a press and this file did not
- * would be swallowed and then acted on by nobody.
+ * **`"Spacebar"` — the legacy key name — is not matched here, because it
+ * cannot arrive.** `react-native-web`'s own `isValidKeyPress` still accepts it
+ * beside `" "`, which reads as a value this predicate has to accept too; but
+ * every handler in this file is a React one, and React DOM normalises a
+ * synthetic keyboard event's `key` through its own table before any handler
+ * sees it — `normalizeKey` maps `Spacebar` to `" "`, alongside `Esc`, `Left`
+ * and the rest of the legacy names (`react-dom` 19.2.3). So does the
+ * responder's own `onKeyDown`, which `Pressable` calls with that same
+ * synthetic event just before this one. The two predicates are handed the
+ * identical string and cannot disagree.
+ *
+ * The legacy name survives only on the raw `keyup` `PressResponder` listens
+ * for at the document, which is a native event and never reaches this file —
+ * `isKeyboardPress` refuses that press by event type, whatever its key says.
+ * A branch for `"Spacebar"` here would be unreachable code that looks like a
+ * guarantee; the two tests named for it assert what actually happens, so they
+ * go red if that ever stops being true.
  */
 function isDelegatedKey(key: string, buttonLike: boolean): boolean {
   if (key === "Enter") return true;
-  return buttonLike && (key === " " || key === "Spacebar");
+  return buttonLike && key === " ";
 }
 
 /**
@@ -416,7 +428,7 @@ export function LedgerTable({
       } else if (key === "k") {
         event.preventDefault();
         moveActive(-1);
-      } else if (key === " " || key === "spacebar" || key === "x") {
+      } else if (key === " " || key === "x") {
         // `preventDefault` before anything else — `Space` scrolls the
         // nearest scroller by default, and the nearest scroller is this
         // table, so the ring would leave the viewport as it was checked.

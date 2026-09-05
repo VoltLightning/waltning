@@ -67,10 +67,13 @@ Rows group by date. Foreign rows carry `FxAmount`; transfers render as
 ### Web — ≥1024px
 
 Table, not cards: date · brand mark · payee · category · account · scope ·
-amount, sortable, with the filter bar as a persistent left rail rather than a
-chip row. The rail
-buys simultaneous visibility of every filter dimension, which is what makes this
-the surface for a real reconciliation session.
+amount, with the filter bar as a persistent left rail rather than a chip row.
+Every column sorts except the brand mark, which carries no header word and no
+sort control — a mark is not a value to order rows by, and `Payee` already
+names the identity column it leads into, so its header cell is held open and
+left blank the way the selection checkbox's is. The rail buys simultaneous
+visibility of every filter dimension, which is what makes this the surface for
+a real reconciliation session.
 
 Density is the reason this exists separately from the mobile layout — around 40
 rows visible against 8, which is the difference between scanning a month and
