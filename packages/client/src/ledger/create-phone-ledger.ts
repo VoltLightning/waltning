@@ -522,19 +522,34 @@ export type PhoneTransactionDetail = {
 /**
  * S09's audit history — `LocalAuditEntry`'s own shape (`@waltning/ledger`'s
  * `read-audit-log.ts`), structural for the same reason `PhoneTransactionDetail`
- * above is. Always an empty array on the phone: `audit_log` is not a
- * replicated table, so there is nothing local to mirror it from.
+ * above is. `actor` restates `@waltning/schema`'s `Actor` by hand (`kind`
+ * above does the same for `CounterpartyKind`) rather than importing it — this
+ * package stays free of `@waltning/schema` too. **Known gap, not fixed
+ * here:** §15.1 writes `actor = 'system'` on an invariant violation, a value
+ * neither the schema's `Actor` nor this restatement carries.
  */
 export type PhoneAuditEntry = {
   id: string;
   entity: IdTable;
   entityId: string;
   action: string;
-  actor: "user" | "agent" | "import" | "migration" | "system";
+  actor: "user" | "agent" | "import" | "migration";
   before: JsonValue | null;
   after: JsonValue | null;
   at: string;
 };
+
+/**
+ * `get_audit_log`'s result — a status, never a bare empty array standing in
+ * for "no data yet" (H3, §11.0's "no nullish 'didn't work'"). The phone
+ * always answers `unavailable_on_device`: `audit_log` is not a replicated
+ * table (`architecture/14-local-first.md`), so there is nothing local to
+ * mirror it from. `ok` is carried so a real handler's answer slots into the
+ * same type once one exists.
+ */
+export type PhoneAuditLogResult =
+  | { status: "unavailable_on_device" }
+  | { status: "ok"; rows: readonly PhoneAuditEntry[] };
 
 /**
  * §4's rate for one pair, as of a date — `readRate`'s answer, structural for
@@ -663,14 +678,8 @@ export type PhoneLedgerPort = {
   /** C4 — S10's swipe-categorize. One category over N ids, refused as a whole or not at all. */
   categorizeBatch: (input: CategorizeBatchInput, capture: PhoneCapture) => void;
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
-  /**
-   * S09's audit history — optional because no screen calls it yet (D5).
-   * Every real `LocalLedgerSession` implements it (always empty; see
-   * `PhoneAuditEntry`'s own doc), so `createPhoneLedger` below defaults a
-   * port that omits it to the same empty answer rather than requiring every
-   * existing fake port in a screen test to grow a field it does not use.
-   */
-  getAuditLog?: (entity: IdTable, entityId: string) => readonly PhoneAuditEntry[];
+  /** S09's audit history — always `unavailable_on_device`; see `PhoneAuditLogResult`'s own doc. */
+  getAuditLog: (entity: IdTable, entityId: string) => PhoneAuditLogResult;
   updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
   deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
@@ -1207,8 +1216,8 @@ export type PhoneLedgerController = {
   refresh: () => void;
   /** S09's whole subject, read fresh — not carried in the snapshot. */
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
-  /** S09's audit history, read fresh — always empty until a port supplies one. */
-  getAuditLog: (entity: IdTable, entityId: string) => readonly PhoneAuditEntry[];
+  /** S09's audit history, read fresh — not carried in the snapshot. */
+  getAuditLog: (entity: IdTable, entityId: string) => PhoneAuditLogResult;
   createAccount: (
     draft: CreateAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
@@ -2028,7 +2037,7 @@ export function createPhoneLedger(
       }
     },
     getTransaction: (id) => port.getTransaction(id),
-    getAuditLog: (entity, entityId) => port.getAuditLog?.(entity, entityId) ?? [],
+    getAuditLog: (entity, entityId) => port.getAuditLog(entity, entityId),
     readCategoryReferenceCounts: (categoryId) =>
       port.readCategoryReferenceCounts(brandId<"categories">(categoryId)),
     createAccount: (draft) => {

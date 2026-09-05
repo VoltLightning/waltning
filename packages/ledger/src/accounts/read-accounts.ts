@@ -127,11 +127,24 @@ function withBalances<TRun, TSchema extends typeof ledgerSchema>(
   }));
 }
 
-/** Every active account with its ownership — what §3 needs, at the same shape `readAccounts` renders. */
+/**
+ * Every active account with its ownership — what §3 needs, at the same shape
+ * `readAccounts` renders.
+ *
+ * **`loan_receivable` is excluded.** §3: *"Receivables are excluded — lending
+ * is an expense and repayment an unearned inflow (§6.6). Net worth is money
+ * you hold."* The lent amount already left a real account as an ordinary
+ * expense; counting the `loan_receivable` balance too would hold the same
+ * money twice. `loan_payable` stays in — a debt you owe is a real liability,
+ * which is exactly what net worth (assets minus liabilities) means to net
+ * against.
+ */
 export function readAccountsForNetWorth<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
 ): readonly LocalAccountForNetWorth[] {
-  return withBalances(db, selectAccountRows(db, { includeArchived: false }));
+  return withBalances(db, selectAccountRows(db, { includeArchived: false })).filter(
+    (account) => account.kind !== "loan_receivable",
+  );
 }
 
 export function readAccounts<TRun, TSchema extends typeof ledgerSchema>(

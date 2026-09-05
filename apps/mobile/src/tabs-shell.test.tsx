@@ -16,6 +16,7 @@ import {
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
@@ -103,11 +104,14 @@ function fakeController(
     createTransaction?: PhoneLedgerPort["createTransaction"];
   } = {},
 ) {
+  const accounts = overrides.accounts ?? [];
   return createPhoneLedger(
-    {
-      listAccounts: () => overrides.accounts ?? [],
+    basePort({
+      listAccounts: () => accounts,
+      // A ledger with no account has no currency either — DESK2's command bar
+      // needs both before it can resolve a line.
       listCurrencies: () =>
-        (overrides.accounts ?? []).length === 0
+        accounts.length === 0
           ? []
           : [
               {
@@ -119,68 +123,9 @@ function fakeController(
                 isPivot: true,
               },
             ],
-      listGroups: () => [],
-      listRecent: () => [],
       listCategories: () => overrides.categories ?? [],
-      listCategoryTree: () => [],
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      listCounterparties: () => [],
-      listPayeeHistory: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      listCounterpartyBalances: () => [],
-      listCounterpartyMerges: () => [],
-      listDistinctCounterpartyPairs: () => [],
-      balanceAsOf: () => toMoney("0"),
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      createAccount: () => undefined,
       createTransaction: overrides.createTransaction ?? (() => undefined),
-      createCategory: () => undefined,
-      getTransaction: () => null,
-      updateTransaction: () => undefined,
-      deleteTransaction: () => undefined,
-      setTransactionLines: () => undefined,
-      updateAccount: () => undefined,
-      archiveAccount: () => undefined,
-      reconcileAccount: () => undefined,
-      createGroup: () => undefined,
-      readRate: () => null,
-      readCrossRate: () => null,
-      listCurrencySettings: () => [],
-      readCoverage: () => [],
-      listFxRates: () => [],
-      addCurrency: () => undefined,
-      archiveCurrency: () => undefined,
-      setRateSource: () => undefined,
-      setPinned: () => undefined,
-      changePivot: () => ({ droppedDates: 0 }),
-      setManualRate: () => ({ written: 0, replacedManual: 0 }),
-      clearManualRate: () => ({ deleted: 0 }),
-      updateCurrency: vi.fn(),
-      createCounterparty: () => undefined,
-      updateCounterparty: () => undefined,
-      mergeCounterparties: () => undefined,
-      unmergeCounterparties: () => undefined,
-      recordDistinctCounterparties: () => undefined,
-      settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
-      renameCategory: () => undefined,
-      reparentCategory: () => undefined,
-      convertLeafGroup: () => undefined,
-      mergeCategories: () => undefined,
-      archiveCategory: () => undefined,
-      reset: () => undefined,
-    },
+    }),
     {
       capture: () => ({
         date: accountingDate("2026-09-03"),

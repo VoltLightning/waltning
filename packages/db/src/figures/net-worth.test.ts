@@ -37,4 +37,43 @@ describe("net worth — §3, in SQL", () => {
     // mine = 65 + (−10) = 55. ours = 65 + (−10) + 55 = 110.
     expect(rows).toEqual([{ currency: "PLN", mine: "55.00000000", ours: "110.00000000" }]);
   });
+
+  /**
+   * Proves: computations.md §3 ("Receivables are excluded — lending is an
+   * expense and repayment an unearned inflow (§6.6). Net worth is money you
+   * hold."). H1 — break it once by dropping `ne(accounts.kind,
+   * "loan_receivable")` from the `where` clause: this goes from `100` to
+   * `160`, the receivable's opening balance counted as held money on top of
+   * the cash that actually left `Wallet` to lend it.
+   */
+  it("excludes a loan_receivable account from both mine and ours (§3)", async () => {
+    // `is_pivot` is false — the first test already claimed the one pivot
+    // slot (`currencies_one_pivot`) in this shared scratch database.
+    await scratch.sql.unsafe(`
+      INSERT INTO currencies (code, name, decimals, is_pivot) VALUES ('USD','US Dollar',2,false);
+      INSERT INTO accounts (id, name, currency, kind, ownership, opening_balance)
+        VALUES
+          ('77777777-7777-7777-7777-777777777777','Wallet · USD','USD','cash','own',100),
+          ('88888888-8888-8888-8888-888888888888','Loan to Nina','USD','loan_receivable','own',60);
+    `);
+    const rows = await netWorth(scratch.db);
+    expect(rows).toEqual(
+      expect.arrayContaining([{ currency: "USD", mine: "100.00000000", ours: "100.00000000" }]),
+    );
+  });
+
+  /** A `loan_payable` is a real liability, so it stays in — unlike a receivable, it is not excluded. */
+  it("keeps a loan_payable account — a debt owed is a real liability", async () => {
+    await scratch.sql.unsafe(`
+      INSERT INTO currencies (code, name, decimals, is_pivot) VALUES ('GBP','Pound Sterling',2,false);
+      INSERT INTO accounts (id, name, currency, kind, ownership, opening_balance)
+        VALUES
+          ('99999999-9999-9999-9999-999999999999','Wallet · GBP','GBP','cash','own',100),
+          ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Loan from Marek (my)','GBP','loan_payable','own',-40);
+    `);
+    const rows = await netWorth(scratch.db);
+    expect(rows).toEqual(
+      expect.arrayContaining([{ currency: "GBP", mine: "60.00000000", ours: "60.00000000" }]),
+    );
+  });
 });

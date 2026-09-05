@@ -264,11 +264,11 @@ describe("validation reaches a field", () => {
   });
 
   it("dots a nested path so a form can find the input", async () => {
-    // `list_transactions.cursor` is an object, so this is not hypothetical:
+    // `search_transactions.cursor` is an object, so this is not hypothetical:
     // Zod's path is `["cursor","date"]` and a form keyed on `date` alone would
     // put the error on the wrong field, or on none.
     const input = encodeURIComponent(JSON.stringify({ cursor: { date: "nope", id: "nope" } }));
-    const res = await app().request(`/trpc/op.list_transactions?input=${input}`);
+    const res = await app().request(`/trpc/op.search_transactions?input=${input}`);
     const paths = (await json<ErrorEnvelope>(res)).error.details?.fieldErrors?.map((f) => f.path);
 
     expect(paths).toContain("cursor.date");

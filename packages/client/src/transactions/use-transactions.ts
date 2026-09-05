@@ -14,14 +14,14 @@
 import { type Query, useQuery } from "../query/use-query.ts";
 import type { ApiClient } from "../transport/client.ts";
 
-type Page = Awaited<ReturnType<ApiClient["op"]["list_transactions"]["query"]>>;
+type Page = Awaited<ReturnType<ApiClient["op"]["search_transactions"]["query"]>>;
 export type Transaction = Page["rows"][number];
 
 export type TransactionFeed = { transactions: Transaction[]; hasMore: boolean };
 
 export function useTransactions(api: ApiClient, limit = 20): Query<TransactionFeed> {
   return useQuery(async () => {
-    const page = await api.op.list_transactions.query({ limit, cursor: null });
+    const page = await api.op.search_transactions.query({ limit, cursor: null });
     // Derived here rather than carried as a state field: `hasMore` is a fact
     // about the response, not a fourth thing the state machine has to know.
     return { transactions: page.rows, hasMore: page.nextCursor !== null };

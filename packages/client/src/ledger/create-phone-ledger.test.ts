@@ -19,6 +19,7 @@ import {
   type PhoneTransactionDetail,
   type QuickAddDraft,
 } from "./create-phone-ledger.ts";
+import { basePort } from "./test-port.ts";
 
 /** A full-tree category node fixture, `version: 1` unless a test bumps it. */
 function categoryNode(
@@ -333,6 +334,9 @@ function harness(
     createTransaction,
     createCategory: vi.fn(),
     getTransaction: vi.fn(() => null),
+    getAuditLog: vi.fn<PhoneLedgerPort["getAuditLog"]>(() => ({
+      status: "unavailable_on_device",
+    })),
     updateTransaction: vi.fn(),
     deleteTransaction: vi.fn(),
     setTransactionLines: vi.fn(),
@@ -502,75 +506,14 @@ describe("phone ledger controller", () => {
    * wrong number, so this asserts the shape that makes both unnecessary.
    */
   it("subtotals per currency, in ledger order, and never across two", () => {
-    const port: PhoneLedgerPort = {
+    const port = basePort({
       listAccounts: () => [
         account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "10"),
         account("33333333-3333-4333-8333-333333333333", "Bank B · BYN", BYN, "40"),
         account("44444444-4444-4444-8444-444444444444", "Cash · PLN", PLN, "2.50"),
       ],
       listCurrencies: () => CURRENCIES,
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
-      listCategoryTree: () => [],
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      listCounterparties: () => [],
-      listPayeeHistory: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      balanceAsOf: vi.fn(),
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      createAccount: vi.fn(),
-      createTransaction: vi.fn(),
-      createCategory: vi.fn(),
-      getTransaction: vi.fn(() => null),
-      updateTransaction: vi.fn(),
-      deleteTransaction: vi.fn(),
-      setTransactionLines: vi.fn(),
-      updateAccount: vi.fn(),
-      archiveAccount: vi.fn(),
-      reconcileAccount: vi.fn(),
-      createGroup: vi.fn(),
-      readRate: vi.fn(() => null),
-      readCrossRate: vi.fn(() => null),
-      listCurrencySettings: () => [],
-      readCoverage: vi.fn(() => []),
-      listFxRates: vi.fn(() => []),
-      addCurrency: vi.fn(),
-      archiveCurrency: vi.fn(),
-      setRateSource: vi.fn(),
-      setPinned: vi.fn(),
-      changePivot: vi.fn(() => ({ droppedDates: 0 })),
-      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-      clearManualRate: vi.fn(() => ({ deleted: 0 })),
-      updateCurrency: vi.fn(),
-      createCounterparty: vi.fn(),
-      updateCounterparty: vi.fn(),
-      mergeCounterparties: vi.fn(),
-      unmergeCounterparties: vi.fn(),
-      recordDistinctCounterparties: vi.fn(),
-      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
-      listCounterpartyBalances: vi.fn(() => []),
-      renameCategory: vi.fn(),
-      reparentCategory: vi.fn(),
-      convertLeafGroup: vi.fn(),
-      mergeCategories: vi.fn(),
-      archiveCategory: vi.fn(),
-      listCounterpartyMerges: vi.fn(() => []),
-      listDistinctCounterpartyPairs: vi.fn(() => []),
-      reset: vi.fn(),
-    };
+    });
 
     const controller = createPhoneLedger(port, {
       capture: vi.fn(),
@@ -590,74 +533,13 @@ describe("phone ledger controller", () => {
    * and it is why the fixture above puts the larger figure second.
    */
   it("orders subtotals by the accounts, never by size", () => {
-    const port: PhoneLedgerPort = {
+    const port = basePort({
       listAccounts: () => [
         account("33333333-3333-4333-8333-333333333333", "Bank B · BYN", BYN, "9000"),
         account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "1"),
       ],
       listCurrencies: () => CURRENCIES,
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
-      listCategoryTree: () => [],
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      listCounterparties: () => [],
-      listPayeeHistory: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      balanceAsOf: vi.fn(),
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      createAccount: vi.fn(),
-      createTransaction: vi.fn(),
-      createCategory: vi.fn(),
-      getTransaction: vi.fn(() => null),
-      updateTransaction: vi.fn(),
-      deleteTransaction: vi.fn(),
-      setTransactionLines: vi.fn(),
-      updateAccount: vi.fn(),
-      archiveAccount: vi.fn(),
-      reconcileAccount: vi.fn(),
-      createGroup: vi.fn(),
-      readRate: vi.fn(() => null),
-      readCrossRate: vi.fn(() => null),
-      listCurrencySettings: () => [],
-      readCoverage: vi.fn(() => []),
-      listFxRates: vi.fn(() => []),
-      addCurrency: vi.fn(),
-      archiveCurrency: vi.fn(),
-      setRateSource: vi.fn(),
-      setPinned: vi.fn(),
-      changePivot: vi.fn(() => ({ droppedDates: 0 })),
-      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-      clearManualRate: vi.fn(() => ({ deleted: 0 })),
-      updateCurrency: vi.fn(),
-      createCounterparty: vi.fn(),
-      updateCounterparty: vi.fn(),
-      mergeCounterparties: vi.fn(),
-      unmergeCounterparties: vi.fn(),
-      recordDistinctCounterparties: vi.fn(),
-      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
-      listCounterpartyBalances: vi.fn(() => []),
-      renameCategory: vi.fn(),
-      reparentCategory: vi.fn(),
-      convertLeafGroup: vi.fn(),
-      mergeCategories: vi.fn(),
-      archiveCategory: vi.fn(),
-      listCounterpartyMerges: vi.fn(() => []),
-      listDistinctCounterpartyPairs: vi.fn(() => []),
-      reset: vi.fn(),
-    };
+    });
 
     const controller = createPhoneLedger(port, {
       capture: vi.fn(),
@@ -1123,7 +1005,7 @@ describe("phone ledger controller", () => {
    * refusal someone can act on.
    */
   it("refuses an expense in a currency the ledger holds no rate for", () => {
-    const port: PhoneLedgerPort = {
+    const port = basePort({
       listAccounts: () => [
         account("11111111-1111-4111-8111-111111111111", "Bank A · PLN", PLN, "0"),
       ],
@@ -1137,68 +1019,8 @@ describe("phone ledger controller", () => {
           isPivot: false,
         },
       ],
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
-      listCategoryTree: () => [],
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      listCounterparties: () => [],
-      listPayeeHistory: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      balanceAsOf: vi.fn(),
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      createAccount: vi.fn(),
       createTransaction: vi.fn(),
-      createCategory: vi.fn(),
-      getTransaction: vi.fn(() => null),
-      updateTransaction: vi.fn(),
-      deleteTransaction: vi.fn(),
-      setTransactionLines: vi.fn(),
-      updateAccount: vi.fn(),
-      archiveAccount: vi.fn(),
-      reconcileAccount: vi.fn(),
-      createGroup: vi.fn(),
-      readRate: vi.fn(() => null),
-      readCrossRate: vi.fn(() => null),
-      listCurrencySettings: () => [],
-      readCoverage: vi.fn(() => []),
-      listFxRates: vi.fn(() => []),
-      addCurrency: vi.fn(),
-      archiveCurrency: vi.fn(),
-      setRateSource: vi.fn(),
-      setPinned: vi.fn(),
-      changePivot: vi.fn(() => ({ droppedDates: 0 })),
-      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-      clearManualRate: vi.fn(() => ({ deleted: 0 })),
-      updateCurrency: vi.fn(),
-      createCounterparty: vi.fn(),
-      updateCounterparty: vi.fn(),
-      mergeCounterparties: vi.fn(),
-      unmergeCounterparties: vi.fn(),
-      recordDistinctCounterparties: vi.fn(),
-      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
-      listCounterpartyBalances: vi.fn(() => []),
-      renameCategory: vi.fn(),
-      reparentCategory: vi.fn(),
-      convertLeafGroup: vi.fn(),
-      mergeCategories: vi.fn(),
-      archiveCategory: vi.fn(),
-      listCounterpartyMerges: vi.fn(() => []),
-      listDistinctCounterpartyPairs: vi.fn(() => []),
-      reset: vi.fn(),
-    };
+    });
     const controller = createPhoneLedger(port, {
       capture: vi.fn(),
       id: <Table extends IdTable>() => id<Table>("22222222-2222-4222-8222-222222222222"),
@@ -1748,71 +1570,11 @@ describe("phone ledger controller — createCategory", () => {
         },
       ];
     });
-    const port: PhoneLedgerPort = {
-      listAccounts: () => [],
+    const port = basePort({
       listCurrencies: () => CURRENCIES,
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
       listCategoryTree: () => tree,
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      listCounterparties: () => [],
-      listPayeeHistory: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      balanceAsOf: vi.fn(),
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      createAccount: vi.fn(),
-      createTransaction: vi.fn(),
       createCategory,
-      getTransaction: vi.fn(() => null),
-      updateTransaction: vi.fn(),
-      deleteTransaction: vi.fn(),
-      setTransactionLines: vi.fn(),
-      updateAccount: vi.fn(),
-      archiveAccount: vi.fn(),
-      reconcileAccount: vi.fn(),
-      createGroup: vi.fn(),
-      readRate: vi.fn(() => null),
-      readCrossRate: vi.fn(() => null),
-      listCurrencySettings: () => [],
-      readCoverage: vi.fn(() => []),
-      listFxRates: vi.fn(() => []),
-      addCurrency: vi.fn(),
-      archiveCurrency: vi.fn(),
-      setRateSource: vi.fn(),
-      setPinned: vi.fn(),
-      changePivot: vi.fn(() => ({ droppedDates: 0 })),
-      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-      clearManualRate: vi.fn(() => ({ deleted: 0 })),
-      updateCurrency: vi.fn(),
-      createCounterparty: vi.fn(),
-      updateCounterparty: vi.fn(),
-      mergeCounterparties: vi.fn(),
-      unmergeCounterparties: vi.fn(),
-      recordDistinctCounterparties: vi.fn(),
-      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
-      listCounterpartyBalances: vi.fn(() => []),
-      renameCategory: vi.fn(),
-      reparentCategory: vi.fn(),
-      convertLeafGroup: vi.fn(),
-      mergeCategories: vi.fn(),
-      archiveCategory: vi.fn(),
-      listCounterpartyMerges: vi.fn(() => []),
-      listDistinctCounterpartyPairs: vi.fn(() => []),
-      reset: vi.fn(),
-    };
+    });
     const controller = createPhoneLedger(port, {
       capture: () => ({
         date: accountingDate("2026-08-23"),
@@ -1951,72 +1713,14 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       };
     });
 
-    const port: PhoneLedgerPort = {
-      listAccounts: () => [],
+    const port = basePort({
       listCurrencies: () => CURRENCIES,
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
-      listCategoryTree: () => [],
-      listCounterparties: () => [],
-      listPayeeHistory: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
       getTransaction,
-      createAccount: vi.fn(),
-      createTransaction: vi.fn(),
-      createCategory: vi.fn(),
       updateTransaction,
       deleteTransaction,
       setTransactionLines,
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      updateAccount: () => undefined,
-      archiveAccount: () => undefined,
-      reconcileAccount: () => undefined,
-      createGroup: () => undefined,
-      createCounterparty: () => undefined,
-      updateCounterparty: () => undefined,
-      mergeCounterparties: () => undefined,
-      unmergeCounterparties: () => undefined,
-      recordDistinctCounterparties: () => undefined,
-      settleDebt: () => ({ residual: money.toMoney("0"), overSettled: false }),
-      balanceAsOf: () => money.toMoney("0"),
-      readRate: vi.fn(() => null),
-      readCrossRate: vi.fn(() => null),
-      listCurrencySettings: () => [],
-      readCoverage: vi.fn(() => []),
-      listFxRates: vi.fn(() => []),
-      addCurrency: vi.fn(),
-      archiveCurrency: vi.fn(),
-      setRateSource: vi.fn(),
-      setPinned: vi.fn(),
-      changePivot: vi.fn(() => ({ droppedDates: 0 })),
-      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-      clearManualRate: vi.fn(() => ({ deleted: 0 })),
-      updateCurrency: vi.fn(),
-      listCounterpartyBalances: vi.fn(() => []),
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      renameCategory: () => undefined,
-      reparentCategory: () => undefined,
-      convertLeafGroup: () => undefined,
-      mergeCategories: () => undefined,
-      archiveCategory: () => undefined,
-      listCounterpartyMerges: vi.fn(() => []),
-      listDistinctCounterpartyPairs: vi.fn(() => []),
-      reset: vi.fn(),
       ...overrides,
-    };
+    });
     const controller = createPhoneLedger(port, {
       capture: () => ({
         date: accountingDate("2026-08-06"),
@@ -2044,14 +1748,15 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
 
   /**
    * `audit_log` is not a replicated table (`architecture/14-local-first.md`),
-   * so every real `LocalLedgerSession` answers empty regardless of what the
-   * port is asked for — this pins the controller's own default for a port
-   * (a screen test's fake, most often) that omits `getAuditLog` altogether:
-   * the same empty answer, not a thrown "not a function".
+   * so `basePort`'s own default — every real `LocalLedgerSession` agrees —
+   * is `unavailable_on_device`. H3: a status, never a bare `[]` standing in
+   * for "no data".
    */
-  it("getAuditLog defaults to empty when the port does not implement it", () => {
+  it("getAuditLog answers unavailable_on_device by default", () => {
     const { controller } = detailHarness();
-    expect(controller.getAuditLog("transactions", TXN)).toEqual([]);
+    expect(controller.getAuditLog("transactions", TXN)).toEqual({
+      status: "unavailable_on_device",
+    });
   });
 
   it("getAuditLog reads through the port when one is supplied", () => {
@@ -2065,9 +1770,12 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       after: null,
       at: "2026-08-06T10:00:00Z",
     };
-    const getAuditLog = vi.fn<NonNullable<PhoneLedgerPort["getAuditLog"]>>(() => [entry]);
+    const getAuditLog = vi.fn<PhoneLedgerPort["getAuditLog"]>(() => ({
+      status: "ok",
+      rows: [entry],
+    }));
     const { controller } = detailHarness({ getAuditLog });
-    expect(controller.getAuditLog("transactions", TXN)).toEqual([entry]);
+    expect(controller.getAuditLog("transactions", TXN)).toEqual({ status: "ok", rows: [entry] });
     expect(getAuditLog).toHaveBeenCalledWith("transactions", TXN);
   });
 
@@ -2339,72 +2047,17 @@ describe("phone ledger controller — counterparties and settlement", () => {
       options?.includeArchived ? counterparties : counterparties.filter((c) => !c.archived),
     );
 
-    const port: PhoneLedgerPort = {
-      listAccounts: () => [],
-      listCurrencies: () => [],
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
-      listCategoryTree: () => [],
+    const port = basePort({
       listCounterparties,
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      balanceAsOf: vi.fn(),
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      createAccount: vi.fn(),
-      createTransaction: vi.fn(),
-      createCategory: vi.fn(),
-      getTransaction: vi.fn(() => null),
-      updateTransaction: vi.fn(),
-      deleteTransaction: vi.fn(),
-      setTransactionLines: vi.fn(),
-      updateAccount: vi.fn(),
-      archiveAccount: vi.fn(),
-      reconcileAccount: vi.fn(),
-      createGroup: vi.fn(),
       createCounterparty,
       updateCounterparty,
       mergeCounterparties,
       unmergeCounterparties,
       recordDistinctCounterparties,
       settleDebt,
-      readRate: vi.fn(() => null),
-      readCrossRate: vi.fn(() => null),
-      listCurrencySettings: () => [],
-      readCoverage: vi.fn(() => []),
-      listFxRates: vi.fn(() => []),
-      addCurrency: vi.fn(),
-      archiveCurrency: vi.fn(),
-      setRateSource: vi.fn(),
-      setPinned: vi.fn(),
-      changePivot: vi.fn(() => ({ droppedDates: 0 })),
-      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-      clearManualRate: vi.fn(() => ({ deleted: 0 })),
-      updateCurrency: vi.fn(),
-      listPayeeHistory: vi.fn(() => []),
-      listCounterpartyBalances: vi.fn(() => []),
-      listFullCategoryTree: vi.fn(() => []),
-      listCategoryUsage: vi.fn(() => new Map()),
-      readCategoryReferenceCounts: vi.fn(() => ({ transactions: 0, lines: 0, rules: 0 })),
-      renameCategory: vi.fn(),
-      reparentCategory: vi.fn(),
-      convertLeafGroup: vi.fn(),
-      mergeCategories: vi.fn(),
-      archiveCategory: vi.fn(),
       listCounterpartyMerges,
-      listDistinctCounterpartyPairs: vi.fn(() => []),
-      reset: vi.fn(),
       ...overrides,
-    };
+    });
 
     const controller = createPhoneLedger(port, {
       capture: () => ({
@@ -3148,71 +2801,7 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
 
   function balancesHarness() {
     const listCounterpartyBalances = vi.fn<PhoneLedgerPort["listCounterpartyBalances"]>();
-    const port: PhoneLedgerPort = {
-      listAccounts: () => [],
-      listCurrencies: () => [],
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
-      listCategoryTree: () => [],
-      listCounterparties: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      listCounterpartyBalances,
-      listCounterpartyMerges: vi.fn(() => []),
-      listDistinctCounterpartyPairs: vi.fn(() => []),
-      balanceAsOf: vi.fn(),
-      searchTransactions: () => ({
-        rows: [],
-        nextCursor: undefined,
-        total: { count: 0, currencies: [] },
-      }),
-      categorizeBatch: () => undefined,
-      createAccount: vi.fn(),
-      createTransaction: vi.fn(),
-      createCategory: vi.fn(),
-      getTransaction: vi.fn(() => null),
-      updateTransaction: vi.fn(),
-      deleteTransaction: vi.fn(),
-      setTransactionLines: vi.fn(),
-      updateAccount: vi.fn(),
-      archiveAccount: vi.fn(),
-      reconcileAccount: vi.fn(),
-      createGroup: vi.fn(),
-      readRate: vi.fn(() => null),
-      readCoverage: vi.fn(() => []),
-      listFxRates: vi.fn(() => []),
-      addCurrency: vi.fn(),
-      archiveCurrency: vi.fn(),
-      setRateSource: vi.fn(),
-      setPinned: vi.fn(),
-      changePivot: vi.fn(() => ({ droppedDates: 0 })),
-      setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-      clearManualRate: vi.fn(() => ({ deleted: 0 })),
-      updateCurrency: vi.fn(),
-      createCounterparty: vi.fn(),
-      updateCounterparty: vi.fn(),
-      mergeCounterparties: vi.fn(),
-      unmergeCounterparties: vi.fn(),
-      recordDistinctCounterparties: vi.fn(),
-      settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
-      listPayeeHistory: vi.fn(() => []),
-      listFullCategoryTree: vi.fn(() => []),
-      listCategoryUsage: vi.fn(() => new Map()),
-      readCategoryReferenceCounts: vi.fn(() => ({ transactions: 0, lines: 0, rules: 0 })),
-      renameCategory: vi.fn(),
-      reparentCategory: vi.fn(),
-      convertLeafGroup: vi.fn(),
-      mergeCategories: vi.fn(),
-      archiveCategory: vi.fn(),
-      readCrossRate: vi.fn(() => null),
-      listCurrencySettings: vi.fn(() => []),
-      reset: vi.fn(),
-    };
+    const port = basePort({ listCounterpartyBalances });
     const controller = createPhoneLedger(port, {
       capture: () => ({
         date: TODAY,

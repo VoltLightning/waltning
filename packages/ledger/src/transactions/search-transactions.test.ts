@@ -12,7 +12,8 @@ import {
   type TransactionSearchCursor,
 } from "./search-transactions.ts";
 
-const { accounts, categories, counterparties, currencies, transactions } = ledgerSchema;
+const { accounts, categories, counterparties, currencies, transactionLines, transactions } =
+  ledgerSchema;
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -99,12 +100,70 @@ describe("searchTransactions — text", () => {
     expect(payees("999")).toEqual([]);
   });
 
+  /**
+   * M6 — `findAmount` reads the first number anywhere in the text, which
+   * used to let a payee-and-year query also filter by whatever amount
+   * "2024" happened to equal. `parseAmount` requires the whole trimmed query
+   * to be the amount, so a query with any other word in it is text-only.
+   */
+  it("does not read an amount out of a query that also names a payee (§13, M6)", () => {
+    // `202` — not `2024` — deliberately: the capture grammar groups digits in
+    // threes (`findAmount`'s own doc), so a bare, ungrouped "2024" parses as
+    // "202" plus a stray "4". Seeding the row at exactly that truncated
+    // value is what makes this a real regression test rather than one that
+    // passes by coincidence either way: the pre-M6 `findAmount`-based read
+    // would have matched this row by amount even though neither its payee
+    // nor its note contains "rossmann 2024".
+    insertExpense({ payee: "Rossmann", amountOriginal: money.toMoney("202") });
+    insertExpense({ payee: "Other Shop", amountOriginal: money.toMoney("999") });
+
+    const result = searchTransactions(stores.ledger.replica.db, { text: "Rossmann 2024" });
+
+    expect(result.rows).toHaveLength(0);
+  });
+
   it("never lets a purely alphabetic query match on amount alone", () => {
     insertExpense({ payee: "Corner Café" });
 
     // No digit in the needle — the amount check must not fire on an empty
     // digit string, or every row would match every text search.
     expect(searchTransactions(stores.ledger.replica.db, { text: "zzz" }).rows).toHaveLength(0);
+  });
+
+  /**
+   * H2 — §13: trigram runs "over `payee`, `note`, `receipts.merchant` and
+   * `transaction_lines.description`". The phone's substring match had the
+   * first two and skipped the fourth entirely, so a line-only word like
+   * "toner" found nothing even though the row it belongs to was live on the
+   * replica the whole time.
+   */
+  it("matches a word that lives only in a line's own description", () => {
+    const txnId = insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    stores.ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e1"),
+        transactionId: txnId,
+        description: "Printer toner",
+        amount: money.toMoney("48.90"),
+      })
+      .run();
+
+    const result = searchTransactions(stores.ledger.replica.db, { text: "toner" });
+
+    expect(result.rows.map((row) => row.id)).toEqual([txnId]);
+    expect(result.total).toEqual({
+      count: 1,
+      currencies: [
+        {
+          currency: PLN,
+          decimals: 2,
+          sum: "-48.90000000",
+          sumExcludingCapital: "-48.90000000",
+          capitalCount: 0,
+        },
+      ],
+    });
   });
 });
 
@@ -375,5 +434,51 @@ describe("searchTransactions — transfers", () => {
     const row = all.rows[0];
     expect(row?.toAccountName).toBe("Wallet · USD");
     expect(row?.toAmount).toBe("31.25000000");
+  });
+});
+
+/**
+ * L — pins the tie-break `(date, id)` order both branches promise (this
+ * file's own doc on `searchTransactions`): newest date first, and id
+ * descending among rows sharing a date. Two ids on the same date sort
+ * lexicographically, never by insertion order, in both the plain listing
+ * (SQL `ORDER BY`) and a `text` search (the same rows, filtered in JS,
+ * order untouched by the filter).
+ */
+describe("searchTransactions — offline ordering (date desc, id desc)", () => {
+  beforeEach(() => {
+    insertExpense({
+      id: "00000000-0000-4000-8000-00000000d001",
+      payee: "Shop toner run",
+      date: accountingDate("2026-08-20"),
+    });
+    insertExpense({
+      id: "00000000-0000-4000-8000-00000000d002",
+      payee: "Shop toner run",
+      date: accountingDate("2026-08-20"),
+    });
+    insertExpense({
+      id: "00000000-0000-4000-8000-00000000d000",
+      payee: "Shop toner run",
+      date: accountingDate("2026-08-21"),
+    });
+  });
+
+  it("orders the plain listing by date desc, then id desc", () => {
+    const result = searchTransactions(stores.ledger.replica.db, {});
+    expect(result.rows.map((row) => row.id)).toEqual([
+      "00000000-0000-4000-8000-00000000d000",
+      "00000000-0000-4000-8000-00000000d002",
+      "00000000-0000-4000-8000-00000000d001",
+    ]);
+  });
+
+  it("keeps the same order once a text filter narrows the set in JS", () => {
+    const result = searchTransactions(stores.ledger.replica.db, { text: "toner" });
+    expect(result.rows.map((row) => row.id)).toEqual([
+      "00000000-0000-4000-8000-00000000d000",
+      "00000000-0000-4000-8000-00000000d002",
+      "00000000-0000-4000-8000-00000000d001",
+    ]);
   });
 });

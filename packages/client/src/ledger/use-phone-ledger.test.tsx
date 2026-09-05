@@ -3,10 +3,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import { createPhoneLedger } from "./create-phone-ledger.ts";
+import { basePort } from "./test-port.ts";
 import { usePhoneLedger } from "./use-phone-ledger.ts";
 
 describe("usePhoneLedger", () => {
@@ -18,7 +18,7 @@ describe("usePhoneLedger", () => {
     });
     let accounts: ReturnType<ReturnType<typeof createPhoneLedger>["getSnapshot"]>["accounts"] = [];
     const controller = createPhoneLedger(
-      {
+      basePort({
         listAccounts: () => accounts,
         listCurrencies: () => [
           {
@@ -30,32 +30,6 @@ describe("usePhoneLedger", () => {
             isPivot: true,
           },
         ],
-        listGroups: () => [],
-        listRecent: () => [],
-        listCategories: () => [],
-        listCategoryTree: () => [],
-        listFullCategoryTree: () => [],
-        listCategoryUsage: () => new Map(),
-        readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-        listCounterparties: () => [],
-        listPayeeHistory: () => [],
-        listNetWorth: () => [],
-        readPeriodSpend: () => [],
-        readSpendByCategory: () => [],
-        readIncomeVsExpense: () => [],
-        readActiveDashboardLayout: () => null,
-        listUnsettledClearing: () => [],
-        listCounterpartyBalances: () => [],
-        listCounterpartyMerges: () => [],
-        listDistinctCounterpartyPairs: () => [],
-        balanceAsOf: vi.fn(),
-        searchTransactions: () => ({
-          rows: [],
-          nextCursor: undefined,
-          total: { count: 0, currencies: [] },
-        }),
-        categorizeBatch: () => undefined,
-        getTransaction: () => null,
         createAccount: (input) => {
           accounts = [
             {
@@ -78,41 +52,7 @@ describe("usePhoneLedger", () => {
             },
           ];
         },
-        createTransaction: () => undefined,
-        createCategory: () => undefined,
-        updateTransaction: () => undefined,
-        deleteTransaction: () => undefined,
-        setTransactionLines: () => undefined,
-        updateAccount: () => undefined,
-        archiveAccount: () => undefined,
-        reconcileAccount: () => undefined,
-        createGroup: () => undefined,
-        readRate: () => null,
-        readCrossRate: () => null,
-        listCurrencySettings: () => [],
-        readCoverage: () => [],
-        listFxRates: () => [],
-        addCurrency: () => undefined,
-        archiveCurrency: () => undefined,
-        setRateSource: () => undefined,
-        setPinned: () => undefined,
-        changePivot: () => ({ droppedDates: 0 }),
-        setManualRate: () => ({ written: 0, replacedManual: 0 }),
-        clearManualRate: () => ({ deleted: 0 }),
-        updateCurrency: vi.fn(),
-        createCounterparty: () => undefined,
-        updateCounterparty: () => undefined,
-        mergeCounterparties: () => undefined,
-        unmergeCounterparties: () => undefined,
-        recordDistinctCounterparties: () => undefined,
-        settleDebt: () => ({ residual: money.toMoney("0"), overSettled: false }),
-        renameCategory: () => undefined,
-        reparentCategory: () => undefined,
-        convertLeafGroup: () => undefined,
-        mergeCategories: () => undefined,
-        archiveCategory: () => undefined,
-        reset: () => undefined,
-      },
+      }),
       {
         capture: () => ({
           date: accountingDate("2026-08-23"),

@@ -80,7 +80,7 @@ export type BalanceIsMoney = Expect<
 >;
 
 export type TransactionAmountIsMoney = Expect<
-  Equals<Out["op"]["list_transactions"]["rows"][number]["amount"], money.Money>
+  Equals<Out["op"]["search_transactions"]["rows"][number]["amount"], money.Money>
 >;
 
 /**
@@ -99,7 +99,7 @@ export type StringIsNotMoney = Expect<Not<Extends<string, money.Money>>>;
 
 /** The cursor survives to the client as a shape it can feed back, not `unknown`. */
 export type CursorIsTyped = Expect<
-  Equals<Out["op"]["list_transactions"]["nextCursor"], { date: string; id: string } | null>
+  Equals<Out["op"]["search_transactions"]["nextCursor"], { date: string; id: string } | null>
 >;
 
 /* ── 2 · every operation reaches the client ─────────────────────────────── */
@@ -107,7 +107,14 @@ export type CursorIsTyped = Expect<
 export type EveryOperationIsExposed = Expect<
   Equals<
     keyof Out["op"],
-    "get_currencies" | "get_accounts" | "list_transactions" | "create_counterparty"
+    | "get_currencies"
+    | "get_accounts"
+    | "get_balances"
+    | "get_category_tree"
+    | "get_transaction"
+    | "get_audit_log"
+    | "search_transactions"
+    | "create_counterparty"
   >
 >;
 

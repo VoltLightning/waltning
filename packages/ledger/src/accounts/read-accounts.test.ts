@@ -1,3 +1,8 @@
+/**
+ * `readAccounts` — `get_accounts` (`operations.md`), balance per
+ * computations.md §2 (account balance, class F).
+ */
+
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";

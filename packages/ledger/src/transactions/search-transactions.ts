@@ -1,7 +1,7 @@
-import { findAmount } from "@waltning/core/capture/amount";
+import { parseAmount } from "@waltning/core/capture/amount";
 import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
-import type { Id } from "@waltning/core/id";
+import { id as brandId, type Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
@@ -10,13 +10,13 @@ import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
-const { accounts, categories, currencies, transactions } = ledgerSchema;
+const { accounts, categories, currencies, transactionLines, transactions } = ledgerSchema;
 
 /** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
 export type TransactionSearchScope = "all" | "mine" | "shared" | "business";
 
 export type TransactionSearchFilter = {
-  /** Folded and matched against payee, note, and the amount's digits (§13). */
+  /** Folded and matched against payee, note, every line's description, and the amount, exactly (§13). */
   text?: string;
   /** Matches either leg — a transfer touching a filtered account still shows. */
   accountIds?: readonly Id<"accounts">[];
@@ -83,25 +83,35 @@ export type TransactionSearchPage = {
   total: TransactionSearchTotals;
 };
 
-/** 50 per page (S10 §5's "50 per page"). Exported so the paging test can size its fixture by it. */
+/**
+ * A page size, named rather than a bare literal in the query below —
+ * `operations.md`/S10 name paging (`search_transactions(filter, page)`) but
+ * not a number; 50 is this file's own choice, not a spec-stated figure.
+ * Exported so the paging test can size its fixture by it.
+ */
 export const SEARCH_PAGE_SIZE = 50;
 
 /**
- * Whether `row` matches the folded `needle` — payee, note, or the source
- * leg's amount **exactly** (§13: "an amount token matches `amount_original`
- * exactly, in any currency"). The token is read the way capture reads one
- * (`findAmount` — `48,90` and `48.90` are the same value), and compared as
- * money, never as digits: a substring match let `489` find `1 489,00` and
+ * Whether `row` matches the folded `needle` — payee, note, one of the
+ * transaction's own line descriptions, or the source leg's amount
+ * **exactly** (§13: "Trigram … over `payee`, `note`, `receipts.merchant` and
+ * `transaction_lines.description`" — the phone has no receipts table to
+ * search yet, but the lines it holds are exactly this list's fourth column,
+ * and H2 found them missing). The amount token is read the way capture reads
+ * one (`findAmount` — `48,90` and `48.90` are the same value), and compared
+ * as money, never as digits: a substring match let `489` find `1 489,00` and
  * put it in the running total. `489` is not `48,90`; only `48,90` is.
  */
 function matchesText(
   row: { payee: string; note: string; amountOriginal: Money },
   needle: string,
   needleAmount: Money | null,
+  lineDescriptions: readonly string[],
 ): boolean {
   if (fold(row.payee).includes(needle)) return true;
   if (fold(row.note).includes(needle)) return true;
   if (needleAmount !== null && money.eq(row.amountOriginal, needleAmount)) return true;
+  if (lineDescriptions.some((description) => fold(description).includes(needle))) return true;
   return false;
 }
 
@@ -210,7 +220,10 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   const structuralWhere = and(...structuralConditions.filter((c): c is SQL => c !== undefined));
 
   const needle = filter.text !== undefined ? fold(filter.text.trim()) : "";
-  const needleAmount = filter.text === undefined ? null : (findAmount(filter.text)?.amount ?? null);
+  // M6 — the whole trimmed query must parse as an amount, not merely contain
+  // one: `parseAmount("Rossmann 2024")` is `null`, where `findAmount` would
+  // have read `2024` out of the middle of a payee-and-year search.
+  const needleAmount = filter.text === undefined ? null : parseAmount(filter.text);
 
   const rowsQuery = () =>
     db
@@ -327,7 +340,42 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
     .all()
     .map(signRow);
 
-  const filtered = rows.filter((row) => matchesText(row, needle, needleAmount));
+  // H2 — one query for every matched row's own lines, grouped by transaction.
+  // A description lives on `transaction_lines`, not `transactions`, so
+  // `rowsQuery()`'s join set (built for display, not for search) never
+  // carries it — this is a second, narrow query rather than a wider join
+  // that would multiply every multi-line transaction's row.
+  const linesByTransaction = new Map<Id<"transactions">, string[]>();
+  if (rows.length > 0) {
+    const lineRows = db
+      .select({
+        transactionId: transactionLines.transactionId,
+        description: transactionLines.description,
+      })
+      .from(transactionLines)
+      .where(
+        inArray(
+          transactionLines.transactionId,
+          rows.map((row) => row.id),
+        ),
+      )
+      .all();
+    for (const line of lineRows) {
+      // `transactionLines.transactionId`'s own column type is `Id<IdTable>`
+      // — every branded table, not just this one — because the schema
+      // declares it `k.uuid("transaction_id")` with no `<Table>` given.
+      // Narrowed here, at the boundary, the same way `@waltning/core/id`'s
+      // own `id()` is meant to be used.
+      const transactionId = brandId<"transactions">(line.transactionId);
+      const descriptions = linesByTransaction.get(transactionId);
+      if (descriptions) descriptions.push(line.description);
+      else linesByTransaction.set(transactionId, [line.description]);
+    }
+  }
+
+  const filtered = rows.filter((row) =>
+    matchesText(row, needle, needleAmount, linesByTransaction.get(row.id) ?? []),
+  );
   const total = totalsOf(filtered);
 
   const remaining =
