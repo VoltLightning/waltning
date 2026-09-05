@@ -10,8 +10,8 @@
 // Named import, not default: under NodeNext the default export resolves to
 // decimal.js's namespace declaration rather than the constructable class.
 import { Decimal as GlobalDecimal } from "decimal.js";
-import type { AccountingDate } from "./date.ts";
-import { daysBetween } from "./date.ts";
+import type { AccountingDate, YearMonth } from "./date.ts";
+import { accountingDate, daysBetween, shiftMonth } from "./date.ts";
 
 /**
  * A **private** Decimal constructor, not the global one.
@@ -658,6 +658,252 @@ export const periodSpend = (
       spend: toMoney(spend),
       net: toMoney(inflow.minus(spend)),
     }));
+};
+
+/* ── §6 · Spend by category, and §12's `income_vs_expense` — DESK4 ────────
+ *
+ * Both are listed **S** in `computations.md` §0 — "a documented way to be
+ * subtly wrong" (the split-lines trap below) or "state the device holds
+ * staler than it knows" (a display-currency conversion arc-phone does not
+ * have) — the same reasoning that keeps every tax figure permanently S. The
+ * defect this pair guards against is neither of those: it is a fold correct
+ * enough to answer `S01`'s dashboard from the replica today, written the way
+ * `periodSpend` above was, so `E9`'s server SQL has a same-shaped differential
+ * fixture waiting for it rather than a blank page.
+ */
+
+export type SpendByCategoryTransactionRow = {
+  id: string;
+  type: TxnType;
+  date: AccountingDate;
+  ownership: "own" | "shared";
+  currency: CurrencyCode;
+  decimals: number;
+  /** The transaction's own category — read only for a row with no lines. */
+  categoryId: string | null;
+  amountOriginal: Money;
+};
+
+export type SpendByCategoryLineRow = {
+  transactionId: string;
+  categoryId: string | null;
+  amount: Money;
+};
+
+export type SpendByCategoryRow = {
+  currency: CurrencyCode;
+  decimals: number;
+  categoryId: string | null;
+  amount: Money;
+};
+
+/**
+ * §6's three forks. **Lines win where they exist** — a transaction present in
+ * `lines` is attributed entirely through its own lines, never also through
+ * its own `categoryId`, which is the exact shape of the defect §6 names:
+ * *"Never a `LEFT JOIN` with a coalesced amount — a transaction with four
+ * lines would contribute its own amount four times."* This folds the two
+ * branches SQL keeps as separate `UNION ALL` arms as two separate passes over
+ * the same two arrays instead, for the identical reason: nothing here ever
+ * joins a transaction to its lines and falls back on one row.
+ *
+ * **Expense only, own accounts, within `period`** — spend-by-category is a
+ * *spend* figure (§12); income has no category breakdown on this screen.
+ * Transfers carry no category by constraint (§6) and are excluded by the
+ * same `type` filter.
+ *
+ * **Grouped by currency, never summed across them** — the same reason
+ * `periodSpend` above does: arc-phone has no pivot column and no display
+ * currency to convert into.
+ */
+export const spendByCategory = (
+  transactions: readonly SpendByCategoryTransactionRow[],
+  lines: readonly SpendByCategoryLineRow[],
+  period: Period,
+): readonly SpendByCategoryRow[] => {
+  const eligible = new Map<string, SpendByCategoryTransactionRow>();
+  for (const row of transactions) {
+    if (row.ownership !== "own") continue;
+    if (row.type !== "expense") continue;
+    if (!inPeriod(row.date, period)) continue;
+    eligible.set(row.id, row);
+  }
+
+  type Bucket = {
+    currency: CurrencyCode;
+    decimals: number;
+    categoryId: string | null;
+    amount: Decimal;
+  };
+  const totals = new Map<string, Bucket>();
+  const bucketOf = (
+    currency: CurrencyCode,
+    decimals: number,
+    categoryId: string | null,
+  ): Bucket => {
+    const key = `${currency}::${categoryId ?? ""}`;
+    const existing = totals.get(key);
+    if (existing) return existing;
+    const created: Bucket = { currency, decimals, categoryId, amount: dec(0) };
+    totals.set(key, created);
+    return created;
+  };
+
+  // Branch A — a row WITH a breakdown: attribute to each line's own category.
+  const linedIds = new Set<string>();
+  for (const line of lines) {
+    const parent = eligible.get(line.transactionId);
+    if (!parent) continue;
+    linedIds.add(line.transactionId);
+    const bucket = bucketOf(parent.currency, parent.decimals, line.categoryId);
+    bucket.amount = bucket.amount.plus(dec(line.amount));
+  }
+
+  // Branch B — a row WITHOUT a breakdown: attribute to its own category.
+  for (const row of eligible.values()) {
+    if (linedIds.has(row.id)) continue;
+    const bucket = bucketOf(row.currency, row.decimals, row.categoryId);
+    bucket.amount = bucket.amount.plus(dec(row.amountOriginal));
+  }
+
+  return [...totals.values()]
+    .sort(
+      (a, b) =>
+        a.currency.localeCompare(b.currency) ||
+        (a.categoryId ?? "").localeCompare(b.categoryId ?? ""),
+    )
+    .map(({ currency, decimals, categoryId, amount }) => ({
+      currency,
+      decimals,
+      categoryId,
+      amount: toMoney(amount),
+    }));
+};
+
+export type Ranked<T> = { top: readonly T[]; restTotal: Money };
+
+/**
+ * The chart truncation every category/segment breakdown needs: the top `n`
+ * rows by `amount` descending, and the sum of everything past it — `S01`
+ * §7.2's "5 segments + other," written once so a screen never calls
+ * `money.cmp`/`money.sum` on its own rows (`architecture.test.ts`: "no
+ * component outside the design system formats money" — S01's dashboard is
+ * this rule's first caller outside `packages/ui` that needed a ranking, not
+ * just a fold).
+ */
+export const topByAmount = <T extends { amount: Money }>(
+  rows: readonly T[],
+  n: number,
+): Ranked<T> => {
+  const sorted = [...rows].sort((a, b) => cmp(b.amount, a.amount));
+  return { top: sorted.slice(0, n), restTotal: sum(sorted.slice(n).map((row) => row.amount)) };
+};
+
+export type IncomeExpenseTransactionRow = {
+  type: TxnType;
+  date: AccountingDate;
+  ownership: "own" | "shared";
+  currency: CurrencyCode;
+  decimals: number;
+  amountOriginal: Money;
+  isCapital: boolean;
+};
+
+/** One point on the line chart's x-axis — the caller's own granularity (a month, a week). */
+export type IncomeExpenseBucket = Period & { label: string };
+
+/**
+ * The trailing `months` calendar months ending at (and including) `endMonth`,
+ * oldest first — every caller of `incomeVsExpense` today wants exactly this
+ * partition, on both the phone (`readIncomeVsExpense`) and the desk screen
+ * that reads it. Pure date arithmetic, so it lives beside `IncomeExpenseBucket`
+ * in `packages/core` rather than in `packages/ledger` — a client screen may
+ * never import `@waltning/ledger` (`create-phone-ledger.ts`'s own repeated
+ * note), and a second, hand-copied version of this loop is the drift a shared
+ * function exists to refuse.
+ */
+export const trailingMonthBuckets = (
+  endMonth: YearMonth,
+  months: number,
+): readonly IncomeExpenseBucket[] => {
+  const buckets: IncomeExpenseBucket[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const month = shiftMonth(endMonth, -i);
+    buckets.push({
+      label: month,
+      start: accountingDate(`${month}-01`),
+      end: accountingDate(`${shiftMonth(month, 1)}-01`),
+    });
+  }
+  return buckets;
+};
+
+export type IncomeExpenseRow = {
+  label: string;
+  currency: CurrencyCode;
+  decimals: number;
+  income: Money;
+  expense: Money;
+};
+
+/**
+ * §12's `income_vs_expense`: per bucket, `Σ signed(t)` where `type='income'`
+ * and `Σ |signed(t)|` where `type='expense'` — both stored positive already
+ * (§1), so this sums the magnitude directly, the same as `periodSpend`'s own
+ * `spend`/`inflow`. **Capital excluded, transfers excluded entirely** — the
+ * `type` filter already drops a transfer, and `isCapital` is checked
+ * explicitly, unlike `periodSpend`, which keeps capital in by design (§5).
+ *
+ * A row is credited to at most one bucket — `buckets` is the caller's own
+ * partition of time (`readIncomeVsExpense`'s calendar months), never
+ * overlapping — so the search below stops at the first match.
+ */
+export const incomeVsExpense = (
+  rows: readonly IncomeExpenseTransactionRow[],
+  buckets: readonly IncomeExpenseBucket[],
+): readonly IncomeExpenseRow[] => {
+  type Bucket = {
+    label: string;
+    currency: CurrencyCode;
+    decimals: number;
+    income: Decimal;
+    expense: Decimal;
+  };
+  const totals = new Map<string, Bucket>();
+
+  for (const row of rows) {
+    if (row.ownership !== "own") continue;
+    if (row.type !== "income" && row.type !== "expense") continue;
+    if (row.isCapital) continue;
+    const bucketPeriod = buckets.find((candidate) => inPeriod(row.date, candidate));
+    if (!bucketPeriod) continue;
+
+    const key = `${bucketPeriod.label}::${row.currency}`;
+    const found = totals.get(key) ?? {
+      label: bucketPeriod.label,
+      currency: row.currency,
+      decimals: row.decimals,
+      income: dec(0),
+      expense: dec(0),
+    };
+    const amount = dec(row.amountOriginal);
+    if (row.type === "income") found.income = found.income.plus(amount);
+    else found.expense = found.expense.plus(amount);
+    totals.set(key, found);
+  }
+
+  return buckets.flatMap((bucketPeriod) =>
+    [...totals.values()]
+      .filter((entry) => entry.label === bucketPeriod.label)
+      .sort((a, b) => a.currency.localeCompare(b.currency))
+      .map(({ label, currency, decimals, income, expense }) => ({
+        label,
+        currency,
+        decimals,
+        income: toMoney(income),
+        expense: toMoney(expense),
+      })),
+  );
 };
 
 export type ClearingAccountRow = {

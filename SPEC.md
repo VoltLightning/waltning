@@ -4369,6 +4369,13 @@ presets prove insufficient. A layout engine is a lot of work to build before
 knowing which arrangements are actually wanted, and presets answer the question
 cheaply.
 
+**`DESK4` seeds the first of those rows** — one `Standing` layout, `is_active`
+and `is_preset`, with the five widgets the phone-alone ledger can feed
+(`balances`, `recent`, `debt`, `spend_by_category`, `income_vs_expense`) —
+identically on the server and the replica, by migration rather than by a
+runtime default. `S01` reads it and does not rearrange it; `S24` is what adds
+the other three presets, the picker between them, and `set_active_layout`.
+
 ### 14.6 The React Native Web caveat
 
 One codebase for iOS and web is the right default, and Expo makes it nearly

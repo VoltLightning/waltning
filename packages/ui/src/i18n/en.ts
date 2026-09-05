@@ -591,6 +591,24 @@ export const en = {
     collisionsTitle: "Possibly the same category",
     collisionsReview: "Review",
   },
+  /** `S01` — the desk dashboard, `DESK4`. */
+  dashboard: {
+    balances: "Balances",
+    debt: "Debt",
+    spendByCategory: "Spend by category",
+    incomeVsExpense: "Income vs expense",
+    /** The chart's own top-N fold — the sixth-and-on category, summed (§7.2). */
+    other: "Other",
+    /** A line or transaction carrying no category — the null-`categoryId` row §6's split-lines fold can produce. */
+    uncategorized: "Uncategorized",
+    noBalances: "No accounts yet",
+    noRecent: "Nothing recorded yet",
+    noDebt: "Nobody owes, and you owe nobody",
+    noSpend: "Nothing spent this period",
+    noActivity: "Nothing to show for this range",
+    /** The income-vs-expense chart's own header meta — the trailing N months it charts. */
+    flowRange: "Last {{count}} months",
+  },
   shell: {
     today: "Today",
     /**

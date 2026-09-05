@@ -358,13 +358,24 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
         const watermarkAfter = inspect(fixture.paths.replica, appliedSeqOf);
         const outboxAfter = inspect(fixture.paths.outbox, outboxRows);
 
-        // No table lost a row. `transactions` is the one exception, and by
-        // exactly the number of entries recovery replayed — everything Step 1
-        // wrote is still there, plus what recovery added on top.
+        // No table lost a row. `transactions` is one exception, by exactly the
+        // number of entries recovery replayed — everything Step 1 wrote is
+        // still there, plus what recovery added on top. `dashboard_layouts` /
+        // `dashboard_widgets` are the other exception: every fixture here
+        // predates `DESK4`'s `0010_dashboard_layout_seed` step, so every one
+        // of them gains exactly the default layout's one row and its five
+        // widgets on the way through it — the same seed a fresh install gets,
+        // never skipped for a database that is upgrading rather than new.
+        const DASHBOARD_SEED_ROWS: Record<string, number> = {
+          dashboard_layouts: 1,
+          dashboard_widgets: 5,
+        };
         for (const [table, before] of Object.entries(fixture.replicaCountsBefore)) {
           const after = replicaCountsAfter[table];
           const expected =
-            table === "transactions" ? before + fixture.pendingBefore.length : before;
+            table === "transactions"
+              ? before + fixture.pendingBefore.length
+              : before + (DASHBOARD_SEED_ROWS[table] ?? 0);
           expect(after, `${table}'s row count after the upgrade`).toBe(expected);
         }
         // `SPEC.md` §14.4b — `brand_aliases` is the first table the replica

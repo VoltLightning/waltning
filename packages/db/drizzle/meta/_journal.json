@@ -99,6 +99,13 @@
       "when": 1788617309509,
       "tag": "0013_transaction_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788617309510,
+      "tag": "0013_dashboard_layout_seed",
+      "breakpoints": true
     }
   ]
 }

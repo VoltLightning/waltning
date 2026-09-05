@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { accountingDate } from "./date.ts";
+import { accountingDate, yearMonth } from "./date.ts";
 import * as money from "./money.ts";
 
 const m = (s: string) => money.toMoney(s);
@@ -483,5 +483,403 @@ describe("allocateLargestRemainder — §8, J08 §5", () => {
     expect(() => money.allocateLargestRemainder(m("10.005"), [1, 1, 1], 2)).toThrow(
       /10.00500000.*2 decimals/,
     );
+  });
+});
+
+describe("spendByCategory — §6 (DESK4)", () => {
+  const PLN = money.currencyCode("PLN");
+  const USD = money.currencyCode("USD");
+  const period = { start: accountingDate("2026-08-01"), end: accountingDate("2026-09-01") };
+  const GROCERIES = "cat-groceries";
+  const DINING = "cat-dining";
+  const TRANSPORT = "cat-transport";
+
+  it("attributes a plain expense row to its own category", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t1",
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("100"),
+      },
+    ];
+    expect(money.spendByCategory(rows, [], period)).toEqual([
+      { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "100.00000000" },
+    ]);
+  });
+
+  /**
+   * The exact trap §6 names: "a `LEFT JOIN` with a coalesced amount — a
+   * transaction with four lines would contribute its own amount four times."
+   * A four-line dinner split three ways plus a home-supplies line, on a
+   * transaction whose own `categoryId` is `null` (a split carries no category
+   * of its own) — the total across every returned row must equal the
+   * transaction's own amount exactly once, not 4×, and the parent's own
+   * (absent) category must never also appear as a fifth row.
+   */
+  it("counts a four-line transaction once — never through the parent's own category too", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t-split",
+        type: "expense",
+        date: accountingDate("2026-08-12"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        categoryId: null,
+        amountOriginal: m("100"),
+      },
+    ];
+    const lines: money.SpendByCategoryLineRow[] = [
+      { transactionId: "t-split", categoryId: DINING, amount: m("25") },
+      { transactionId: "t-split", categoryId: DINING, amount: m("25") },
+      { transactionId: "t-split", categoryId: GROCERIES, amount: m("30") },
+      { transactionId: "t-split", categoryId: TRANSPORT, amount: m("20") },
+    ];
+    const result = money.spendByCategory(rows, lines, period);
+    const total = result.reduce((sum, row) => money.add(sum, row.amount), money.ZERO);
+    expect(total).toBe("100.00000000");
+    expect(result).toEqual([
+      { currency: PLN, decimals: 2, categoryId: DINING, amount: "50.00000000" },
+      { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "30.00000000" },
+      { currency: PLN, decimals: 2, categoryId: TRANSPORT, amount: "20.00000000" },
+    ]);
+  });
+
+  it("a transaction WITH lines never also credits its own categoryId — the LEFT JOIN defect, named directly", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t-mixed",
+        type: "expense",
+        date: accountingDate("2026-08-12"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        // A stale/leftover category on the parent row itself — must be
+        // ignored entirely once lines exist, or the LEFT JOIN defect
+        // reappears as a fifth, phantom row.
+        categoryId: GROCERIES,
+        amountOriginal: m("40"),
+      },
+    ];
+    const lines: money.SpendByCategoryLineRow[] = [
+      { transactionId: "t-mixed", categoryId: DINING, amount: m("40") },
+    ];
+    expect(money.spendByCategory(rows, lines, period)).toEqual([
+      { currency: PLN, decimals: 2, categoryId: DINING, amount: "40.00000000" },
+    ]);
+  });
+
+  it("a null-category line still forms its own row — an uncategorized split is not dropped", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t-uncat",
+        type: "expense",
+        date: accountingDate("2026-08-12"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        categoryId: null,
+        amountOriginal: m("15"),
+      },
+    ];
+    const lines: money.SpendByCategoryLineRow[] = [
+      { transactionId: "t-uncat", categoryId: null, amount: m("15") },
+    ];
+    expect(money.spendByCategory(rows, lines, period)).toEqual([
+      { currency: PLN, decimals: 2, categoryId: null, amount: "15.00000000" },
+    ]);
+  });
+
+  it("excludes income, transfers, shared accounts, and rows outside the period", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "income",
+        type: "income",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("500"),
+      },
+      {
+        id: "transfer",
+        type: "transfer",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        categoryId: null,
+        amountOriginal: m("500"),
+      },
+      {
+        id: "shared",
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "shared",
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("500"),
+      },
+      {
+        id: "out-of-period",
+        type: "expense",
+        date: accountingDate("2026-07-31"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("500"),
+      },
+    ];
+    expect(money.spendByCategory(rows, [], period)).toEqual([]);
+  });
+
+  it("never sums two currencies into one row", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t-pln",
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("100"),
+      },
+      {
+        id: "t-usd",
+        type: "expense",
+        date: accountingDate("2026-08-06"),
+        ownership: "own",
+        currency: USD,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("40"),
+      },
+    ];
+    expect(money.spendByCategory(rows, [], period)).toEqual([
+      { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "100.00000000" },
+      { currency: USD, decimals: 2, categoryId: GROCERIES, amount: "40.00000000" },
+    ]);
+  });
+
+  it("is empty over no rows", () => {
+    expect(money.spendByCategory([], [], period)).toEqual([]);
+  });
+});
+
+describe("incomeVsExpense — §12 (DESK4)", () => {
+  const PLN = money.currencyCode("PLN");
+  const USD = money.currencyCode("USD");
+  const buckets: money.IncomeExpenseBucket[] = [
+    { label: "2026-07", start: accountingDate("2026-07-01"), end: accountingDate("2026-08-01") },
+    { label: "2026-08", start: accountingDate("2026-08-01"), end: accountingDate("2026-09-01") },
+  ];
+
+  it("sums income and expense magnitudes per bucket", () => {
+    const rows: money.IncomeExpenseTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("100"),
+        isCapital: false,
+      },
+      {
+        type: "income",
+        date: accountingDate("2026-08-10"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("30"),
+        isCapital: false,
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-07-15"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("60"),
+        isCapital: false,
+      },
+    ];
+    expect(money.incomeVsExpense(rows, buckets)).toEqual([
+      {
+        label: "2026-07",
+        currency: PLN,
+        decimals: 2,
+        income: "0.00000000",
+        expense: "60.00000000",
+      },
+      {
+        label: "2026-08",
+        currency: PLN,
+        decimals: 2,
+        income: "30.00000000",
+        expense: "100.00000000",
+      },
+    ]);
+  });
+
+  it("excludes capital rows — §5's comparison rule, stated inline by omission here", () => {
+    const rows: money.IncomeExpenseTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("100000"),
+        isCapital: true,
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-08-06"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("50"),
+        isCapital: false,
+      },
+    ];
+    expect(money.incomeVsExpense(rows, buckets)).toEqual([
+      {
+        label: "2026-08",
+        currency: PLN,
+        decimals: 2,
+        income: "0.00000000",
+        expense: "50.00000000",
+      },
+    ]);
+  });
+
+  it("excludes transfers and shared accounts, and drops a row outside every bucket", () => {
+    const rows: money.IncomeExpenseTransactionRow[] = [
+      {
+        type: "transfer",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("500"),
+        isCapital: false,
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "shared",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("500"),
+        isCapital: false,
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-06-01"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("500"),
+        isCapital: false,
+      },
+    ];
+    expect(money.incomeVsExpense(rows, buckets)).toEqual([]);
+  });
+
+  it("never sums two currencies into one row, within a bucket", () => {
+    const rows: money.IncomeExpenseTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("100"),
+        isCapital: false,
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-08-06"),
+        ownership: "own",
+        currency: USD,
+        decimals: 2,
+        amountOriginal: m("40"),
+        isCapital: false,
+      },
+    ];
+    expect(money.incomeVsExpense(rows, buckets)).toEqual([
+      {
+        label: "2026-08",
+        currency: PLN,
+        decimals: 2,
+        income: "0.00000000",
+        expense: "100.00000000",
+      },
+      {
+        label: "2026-08",
+        currency: USD,
+        decimals: 2,
+        income: "0.00000000",
+        expense: "40.00000000",
+      },
+    ]);
+  });
+
+  it("is empty over no rows", () => {
+    expect(money.incomeVsExpense([], buckets)).toEqual([]);
+  });
+});
+
+describe("trailingMonthBuckets — DESK4", () => {
+  it("builds the trailing N calendar months ending at (and including) endMonth, oldest first", () => {
+    expect(money.trailingMonthBuckets(yearMonth("2026-08"), 3)).toEqual([
+      { label: "2026-06", start: accountingDate("2026-06-01"), end: accountingDate("2026-07-01") },
+      { label: "2026-07", start: accountingDate("2026-07-01"), end: accountingDate("2026-08-01") },
+      { label: "2026-08", start: accountingDate("2026-08-01"), end: accountingDate("2026-09-01") },
+    ]);
+  });
+
+  it("crosses a year boundary", () => {
+    expect(money.trailingMonthBuckets(yearMonth("2026-01"), 2)).toEqual([
+      { label: "2025-12", start: accountingDate("2025-12-01"), end: accountingDate("2026-01-01") },
+      { label: "2026-01", start: accountingDate("2026-01-01"), end: accountingDate("2026-02-01") },
+    ]);
+  });
+
+  it("is empty over zero months", () => {
+    expect(money.trailingMonthBuckets(yearMonth("2026-08"), 0)).toEqual([]);
+  });
+});
+
+describe("topByAmount — §7.2 (DESK4)", () => {
+  type Row = { key: string; amount: money.Money };
+  const row = (key: string, amount: string): Row => ({ key, amount: m(amount) });
+
+  it("keeps the top n by amount descending and sums the rest", () => {
+    const rows = [row("a", "10"), row("b", "50"), row("c", "30"), row("d", "5"), row("e", "20")];
+    const { top, restTotal } = money.topByAmount(rows, 3);
+    expect(top.map((r) => r.key)).toEqual(["b", "c", "e"]);
+    expect(restTotal).toBe("15.00000000"); // 10 + 5
+  });
+
+  it("restTotal is zero when there is nothing past the top n", () => {
+    const rows = [row("a", "10"), row("b", "20")];
+    const { top, restTotal } = money.topByAmount(rows, 5);
+    expect(top.map((r) => r.key)).toEqual(["b", "a"]);
+    expect(restTotal).toBe("0.00000000");
+  });
+
+  it("is empty over no rows", () => {
+    expect(money.topByAmount([], 5)).toEqual({ top: [], restTotal: "0.00000000" });
   });
 });

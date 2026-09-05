@@ -545,6 +545,21 @@ BEGIN
 END`,
     ],
   },
+  {
+    // `DESK4` (`SPEC.md` §14.5) — the same seed `packages/db/drizzle/0013_dashboard_layout_seed.sql`
+    // writes on the server, same ids, no schema change: a hand-written step,
+    // matching `0001_database_objects`'s own precedent above. `is_active` /
+    // `is_preset` are SQLite's `1` for the boolean column's `true`.
+    tag: "0010_dashboard_layout_seed",
+    statements: [
+      `INSERT INTO \`dashboard_layouts\` (\`id\`, \`name\`, \`is_active\`, \`is_preset\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d000', 'Standing', 1, 1, 0)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d001', '00000000-0000-4000-8000-00000000d000', 'balances', 'a1', 'm', 0)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d002', '00000000-0000-4000-8000-00000000d000', 'recent', 'a2', 'm', 1)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d003', '00000000-0000-4000-8000-00000000d000', 'debt', 'a3', 's', 2)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d004', '00000000-0000-4000-8000-00000000d000', 'spend_by_category', 'b1', 'm', 3)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d005', '00000000-0000-4000-8000-00000000d000', 'income_vs_expense', 'b2', 'l', 4)`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

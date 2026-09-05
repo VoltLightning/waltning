@@ -55,6 +55,25 @@ describe("migrations apply from empty", () => {
     }
   });
 
+  /** `DESK4` — `0013`'s seed, the row `get_active_layout` has on a fresh database. */
+  it("seeds one active default dashboard layout with its widgets", async () => {
+    const [layout] = await s.sql<{ id: string; name: string; is_active: boolean }[]>`
+      SELECT id, name, is_active FROM dashboard_layouts WHERE is_preset`;
+    if (!layout) throw new Error("the seeded preset layout is missing");
+    expect(layout.name).toBe("Standing");
+    expect(layout.is_active).toBe(true);
+
+    const widgets = await s.sql<{ kind: string }[]>`
+      SELECT kind FROM dashboard_widgets WHERE layout_id = ${layout.id} ORDER BY sort`;
+    expect(widgets.map((w) => w.kind)).toEqual([
+      "balances",
+      "recent",
+      "debt",
+      "spend_by_category",
+      "income_vs_expense",
+    ]);
+  });
+
   it("creates the tax_ledger view and the export role", async () => {
     const [view] = await s.sql<{ n: string }[]>`
       SELECT count(*)::text AS n FROM information_schema.views

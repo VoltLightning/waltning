@@ -291,6 +291,16 @@ inside any category.
 (R1), so a group's figure is always the sum of its children and never has an own
 amount.
 
+**`DESK4` folds this SQL's own two branches into `money.spendByCategory`,
+against the phone's replica** — a `packages/core` fold, tested against the
+same trap this section names (a four-line transaction, split across three
+categories, must sum to its own total exactly once), the same way A1's
+class-F figures are written. It answers `S01`'s donut at leaf granularity —
+`S01`'s "5 segments + other" reads leaf categories directly, so the rollup
+rule above is not yet exercised by that widget. This SQL stays the
+authoritative, server-side definition; `E9` differentials `readSpendByCategory`
+against it.
+
 ---
 
 ## 7 · Counterparty balances
@@ -443,6 +453,13 @@ Converted at each row's own date into `target.currency`. Over-target goes
 | `revenue_ytd` | `tax_ledger` filtered to `type = 'income' AND is_earnings` — the broad view includes business *expenses*, which are not reportable under ryczałt |
 | `income_vs_expense` | Per bucket of the chosen granularity: `Σ signed(t) where type='income'` and `Σ |signed(t)| where type='expense'`, both in display currency, **capital excluded** and transfers excluded entirely — a transfer is not income to one side and expense to the other |
 | `FX cost` | margin + fee, **as two lines** (§7.5) |
+
+**`DESK4` folds `income_vs_expense` as `money.incomeVsExpense`, against the
+phone's replica** — grouped by currency rather than converted to a display
+one (arc-phone excludes FX, the same reason `periodSpend`/§5's own phone
+reader does), bucketed by the caller's own `money.trailingMonthBuckets`. This
+table's own definition stays authoritative; `E9` differentials
+`readIncomeVsExpense` against it once the server SQL exists.
 
 ```
 reference_rate = fx_rate ÷ to_fx_rate                                -- dest-currency units per source-currency unit

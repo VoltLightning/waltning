@@ -72,11 +72,18 @@ local.
 | `Shell` | Nav, scope `SegmentControl`, `FxStatusChip`, `CurrencyChip`, `DualTotal` hero |
 | `WidgetGrid` / `WidgetCard` | Slots at S · M · L |
 | `Banner(warn)` | Unsettled clearing, only when non-zero, one action |
-| `DonutChart` | 5 segments + *other*, each directly labelled (§7.2) |
-| `LineChart` | Income vs expense — hue **plus** marker shape and end labels (§7.1) |
+| `DonutChart` | 5 segments + *other*, each directly labelled (§7.2). On the phone-alone ledger this renders as a labelled stacked bar — `tokens.ts`'s single-hue chart ramp has no second hue to draw an arc against, and a bar keeps every direct label §7.2 asks for without a new chart-library dependency |
+| `LineChart` | Income vs expense — hue **plus** marker shape and end labels (§7.1). On the phone-alone ledger this renders as paired bars, one per bucket — the two series stay distinguishable by hue (`theme.income`/`theme.spend`) and by shape (income above, expense below), each labelled with its own figure |
 | `BalanceRow` / `FxAmount` | Foreign accounts carry their basis |
 | `StatTile` | Deltas; increases in spend take `negative` ink |
 | `system_health` | S — **renders only when something is wrong**: stale backup, overdue drill, or a currency fallen behind. Absent while healthy → S30 |
+
+The phone-alone ledger feeds five widgets today — `balances` (A1), `recent`,
+`debt` (E3), `spend_by_category` and `income_vs_expense` (both computed as
+replica folds against the phone's own ledger, `computations.md` §6/§12) — laid
+out by one seeded `dashboard_layouts` row (below). `system_health`, `fx_status`,
+`revenue_ytd`, `completeness`, `tax_period_status`, `targets` and
+`subscriptions` all need a server this arc does not have yet.
 
 ## 5. Data
 
@@ -85,6 +92,13 @@ local.
 | `get_active_layout` + its widgets | `set_active_layout` (via S24) |
 | Per widget: `spend_by_category`, `get_balances`, `compare_periods`, `find_unsettled` | `update_widget_config` |
 | FX sync state and coverage | — |
+
+**`get_active_layout` is a migration-seeded row on the phone-alone ledger** —
+one default layout (`Standing`, `is_active`, `is_preset`) with its five
+widgets, seeded identically on both the server and the replica so a fresh
+install of either has one to read from its first launch. Read here, written
+only by S24 (`set_active_layout`/`update_widget_config` are out of this
+screen's own slice).
 
 ## 6. States
 
