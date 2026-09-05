@@ -55,6 +55,13 @@ import type { Ledger, LedgerSchema } from "./open.ts";
 import { claimSeq, deriveDeps, type OutboxPayload, outbox } from "./outbox.ts";
 
 /**
+ * Thrown, and caught immediately, to force `writeLocally`'s own `validate`
+ * transaction to roll back regardless of what `validate` did — see its own
+ * call site for why a normal return is not enough on its own.
+ */
+const VALIDATE_ROLLBACK = Symbol("write.validate-rollback");
+
+/**
  * The transaction handle for a database with a given run-result and schema.
  *
  * **Nothing here declares a `LocalDb` type, and that is the point.** A named
@@ -190,6 +197,15 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
   // this way matches `apply`'s own `Tx` exactly rather than the plain,
   // non-transactional handle `ledger.replica.db` otherwise is.
   //
+  // **"Read-only" is enforced here, not left to convention.** A synchronous
+  // SQLite transaction (`better-sqlite3`) commits whatever ran inside its
+  // callback the moment that callback returns — returning normally, with no
+  // error, is not "nothing happened", it is "commit". `VALIDATE_ROLLBACK`,
+  // thrown unconditionally right after `validate` returns and caught
+  // immediately below, is what makes every `validate` call roll back
+  // regardless of what it did, rather than trusting every implementation to
+  // never write.
+  //
   // **M3's ruling on what `validate` is allowed to break.** A `LocalRefusal`
   // stops the write here, with nothing queued — that is the whole point of
   // running this before the outbox commit. Anything else `validate` throws
@@ -205,9 +221,14 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
       operation: executor.operation,
     });
     try {
-      ledger.replica.db.transaction((tx) => {
-        executor.validate?.(input, tx);
-      });
+      try {
+        ledger.replica.db.transaction((tx) => {
+          executor.validate?.(input, tx);
+          throw VALIDATE_ROLLBACK;
+        });
+      } catch (error) {
+        if (error !== VALIDATE_ROLLBACK) throw error;
+      }
       emitLedgerDiagnostic(diagnostics, {
         scope: "local_write",
         phase: "success",

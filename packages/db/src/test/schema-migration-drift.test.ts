@@ -17,26 +17,33 @@
  * the real one, called directly instead of shelling out.
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { type DrizzleSnapshotJSON, generateDrizzleJson, generateMigration } from "drizzle-kit/api";
 import { describe, expect, it } from "vitest";
 import * as schema from "../schema.ts";
 
-const JOURNAL_URL = new URL("../../drizzle/meta/_journal.json", import.meta.url);
+const META_DIR = fileURLToPath(new URL("../../drizzle/meta", import.meta.url));
 
-/** The most recently generated snapshot — the one a real `generate` would diff against. */
+/**
+ * The most recently *generated* snapshot — the one a real `generate` would
+ * diff against.
+ *
+ * **Not necessarily the last journal entry's own.** A hand-written migration
+ * (`0001_database_objects.sql`, and now `0012_transaction_scale_and_category_kind.sql`
+ * — trigger-only, no `schema.ts` change) never gets a snapshot of its own, so
+ * the journal's last entry can land on one of those. Scanning `meta/` for the
+ * highest `NNNN_snapshot.json` on disk is what `invariants/migration-drift.test.ts`
+ * already does for the identical reason, and is the one answer that survives
+ * a hand-written migration landing last.
+ */
 function latestSnapshot(): DrizzleSnapshotJSON {
-  const journal = JSON.parse(readFileSync(JOURNAL_URL, "utf8")) as {
-    entries: readonly { idx: number }[];
-  };
-  const last = journal.entries.at(-1);
-  if (!last) throw new Error("the migration journal has no entries");
-
-  const snapshotUrl = new URL(
-    `../../drizzle/meta/${String(last.idx).padStart(4, "0")}_snapshot.json`,
-    import.meta.url,
-  );
-  return JSON.parse(readFileSync(snapshotUrl, "utf8")) as DrizzleSnapshotJSON;
+  const files = readdirSync(META_DIR)
+    .filter((f) => /^\d+_snapshot\.json$/.test(f))
+    .sort();
+  const name = files.at(-1);
+  if (!name) throw new Error(`no snapshot found in ${META_DIR}`);
+  return JSON.parse(readFileSync(`${META_DIR}/${name}`, "utf8")) as DrizzleSnapshotJSON;
 }
 
 describe("schema.ts matches the committed migrations exactly (R4 M1)", () => {

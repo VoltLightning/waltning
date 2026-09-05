@@ -81,15 +81,20 @@ export function insertTransaction(
   tx: ReplicaTx,
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
-  // L10 — `assertTransactionScale` is not called here. `create_transaction`'s
-  // own `validate` already runs it, pre-outbox, on this exact `input`, and
-  // `writeLocally` guarantees `validate` ran before `apply` reaches this
-  // function for that caller — a second call on the same value would check
-  // nothing new. `settle_debt` carries the identical guarantee for its own
-  // `amountOriginal`/`currency` pair in its own `validate`. `reconcile_account`
-  // is the one caller whose value here (`difference`) is genuinely derived
-  // rather than pre-validated, and it checks that value itself, right before
-  // calling this function.
+  // R4 re-review — restored. L10 had dropped this call on the theory that
+  // `create_transaction`'s own `validate` already ran it, pre-outbox, on this
+  // exact `input`, so a second call here would check nothing new — true only
+  // while `validate` actually runs. `write.ts`'s own M3 ruling swallows
+  // anything `validate` throws that is not a `LocalRefusal` (a driver fault,
+  // a bug in the check itself) and lets the write proceed regardless, so a
+  // `validate` that faults for a non-refusal reason must not leave the write
+  // itself unchecked — the same reason `create-account.executor.ts`'s own
+  // `insertAccount` and `set-transaction-lines.executor.ts`'s own
+  // `replaceLines` each keep their check in both places. `settle_debt` and
+  // `supersede_transaction` carry the identical duplication for their own
+  // inputs; `reconcile_account` checks `observedBalance` itself, which bounds
+  // the derived `difference` this function receives from it.
+  assertTransactionScale(input, tx);
 
   /**
    * **`to_amount` is copied from the input and is never derived.** §14.6:

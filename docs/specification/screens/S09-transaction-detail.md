@@ -42,7 +42,7 @@ Scrolling column, ordered by how often each region is the reason you came.
   │ Account       Cash · PLN              │
   │ Scope         Mine            [BIZ]   │
   │ Counterparty  Nina · they owe me      │
-  │ Payee         Costa                   │
+  │ Payee         Corner Café             │
   │ Note          —                       │
   └───────────────────────────────────────┘
 
@@ -63,7 +63,7 @@ Scrolling column, ordered by how often each region is the reason you came.
   │ 6 Aug 14:32  user    category changed │
   │              Uncategorized → Eating   │
   │ 6 Aug 14:06  import  created          │
-  │              rule "Costa" · 41 hits   │
+  │              rule "Corner Café" · 41h │
   │                                       │
   │ and 11 earlier changes            ∨   │
   └───────────────────────────────────────┘

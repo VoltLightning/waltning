@@ -194,7 +194,7 @@ export type LocalExecutor<Input extends z.ZodTypeAny, Row, Tx> = {
    * never one of those: the phone refuses at capture exactly what the server
    * would refuse right now, so queuing intent for a write nothing will ever
    * apply is a stuck entry with no fix (`update_currency`'s own
-   * `assertScaleSurvivesShrink` and every `assertMoneyScale` call in
+   * `assertDecimalsShrinkSafe` and every `assertMoneyScale` call in
    * `scale.ts` are exactly this — a currency lookup no Zod schema can make,
    * and a defect the schema-level refusals beside them already model
    * "refused before any outbox entry" for).

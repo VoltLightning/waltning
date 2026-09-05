@@ -28,6 +28,7 @@ import { setPinnedExecutor } from "../currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "../currencies/set-rate-source.executor.ts";
 import { updateCurrencyExecutor } from "../currencies/update-currency.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
+import { recoverOnLaunch } from "../recover.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { createTransactionExecutor } from "../transactions/create-transaction.executor.ts";
@@ -36,7 +37,7 @@ import type { Capture, LocalTx, LocalWriteResult } from "../write.ts";
 import { writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
 
-const { accounts, currencies, fxRates, recurringTransactions, transactions } = schema;
+const { accounts, currencies, fxRates, outbox, recurringTransactions, transactions } = schema;
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -72,6 +73,8 @@ function write<Input extends z.ZodTypeAny, Row>(
 ): LocalWriteResult<Row> {
   return writeLocally(s.ledger, { executor, registry: ledgerRegistry, input, capture });
 }
+
+const entries = () => s.ledger.outbox.db.select().from(outbox).all();
 
 const currencyRow = (code: string) =>
   s.ledger.replica.db
@@ -334,6 +337,41 @@ describe("update_currency", () => {
       expect(() =>
         write(updateCurrencyExecutor, { code: "EUR", version: 1, patch: { decimals: 1 } }),
       ).toThrow(/figure already stored/);
+    });
+
+    /**
+     * H — before `validate` existed on this executor, this exact refusal ran
+     * only inside `apply`, *after* the outbox entry had already committed
+     * (`write.ts`'s ordering) — leaving a stuck entry `recoverOnLaunch` would
+     * halt on terminally at every later launch, since a refused shrink is
+     * never recoverable by a replay of the identical input. `validate` (run
+     * before the outbox transaction even opens) is what keeps this refusal
+     * from ever reaching the outbox at all.
+     */
+    it("a refused shrink leaves no outbox entry, and a later launch replays nothing", () => {
+      s.ledger.replica.db
+        .insert(transactions)
+        .values({
+          id: TXN,
+          date: accountingDate("2026-03-12"),
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: money.toMoney("18.005"),
+          currency: EUR,
+          fxRate: money.pivotPerUnit("1"),
+          deletedAt: new Date(),
+        })
+        .run();
+
+      expect(() =>
+        write(updateCurrencyExecutor, { code: "EUR", version: 1, patch: { decimals: 1 } }),
+      ).toThrow(/figure already stored/);
+      expect(entries()).toHaveLength(0);
+
+      s.reopen();
+      const recovery = recoverOnLaunch(s.ledger, ledgerRegistry);
+      expect(recovery.halted).toBeNull();
+      expect(recovery.replayed).toHaveLength(0);
     });
 
     it("growing decimals is allowed even while a live account holds the currency", () => {

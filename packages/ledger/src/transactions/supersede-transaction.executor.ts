@@ -102,9 +102,11 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
 
   // `SPEC.md` §7.2 — `input.replacement` is a genuinely new row this
   // executor has no `validate` of its own for, unlike `create_transaction`
-  // and `settle_debt` (each checks its own input pre-outbox) — `insertTransaction`
-  // no longer carries this check itself (L10), so this is `replacement`'s
-  // only scale check.
+  // and `settle_debt` (each checks its own input pre-outbox). `insertTransaction`
+  // carries the identical call too, the same duplication every scale-checked
+  // executor keeps — named here as well so the refusal reads as
+  // `supersede_transaction`'s own, not a passthrough from a function two
+  // layers away.
   assertTransactionScale(input.replacement, tx);
 
   return insertTransaction(input.replacement, tx);

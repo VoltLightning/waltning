@@ -20,7 +20,7 @@ sequenceDiagram
     UI->>AG: start turn
     AG->>REG: search_transactions(payee~, recent)
     REG->>DB: trigram search
-    DB-->>AG: prior Costa rows
+    DB-->>AG: prior Corner Café rows
     AG-->>V: "the café near the office?"
     V-->>AG: yes
     AG->>REG: get_category_tree()

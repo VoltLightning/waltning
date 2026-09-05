@@ -36,7 +36,7 @@ Find the thing you remember.
 │  1 284 transactions · −18 940,20 zł             │  ← running total for filter
 ├─────────────────────────────────────────────────┤
 │  6 Aug                                          │
-│  Costa · Eating out              −48,90 zł      │
+│  Corner Café · Eating out        −48,90 zł      │
 │  Salary · Employment          +9 200,00 zł      │
 │  5 Aug                                          │
 │  Rewe · Groceries          62,40 € · 4,0231     │

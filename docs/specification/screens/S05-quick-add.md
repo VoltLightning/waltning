@@ -85,7 +85,7 @@ where a loop is the right shape:
       ⟳ searching recent payees …
       the café near the office?          [ yes ]  [ no, the other one ]
       → 48,90 zł · Cash · Eating out
-        ◉ from: "that place near the office" → Costa   Undo
+        ◉ from: "that place near the office" → Corner Café   Undo
 ```
 
 **It can ask a question, which a pipeline cannot.** One row, you are present,

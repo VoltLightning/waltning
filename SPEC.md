@@ -1269,11 +1269,15 @@ a second table's `decimals`), so both are triggers, in
 its own.** Every local executor's own write path checks `assertMoneyScale`
 (`packages/ledger/src/scale.ts`) against the replica's own `currencies`
 table before a figure lands; `update_currency`'s own executor scans every
-table `assert_currency_decimals_safe` covers before admitting a shrink. The
-phone additionally refuses a shrink while a live (non-archived, non-deleted)
-account or transaction still names the currency at all — stricter than
-Postgres, which admits a shrink that leaves nothing over-scale regardless of
-what still uses the currency.
+table the replica holds before admitting a shrink — accounts, transactions,
+transaction lines, and recurring transactions. `targets`, `receipts` and
+`debt_reassignments` are Postgres-only tables the replica does not carry, so
+the phone's mirror cannot scan them and does not claim to; a shrink that
+would only be caught by one of those three is a guarantee the server alone
+still holds. The phone additionally refuses a shrink while a live
+(non-archived, non-deleted) account or transaction still names the currency
+at all — stricter than Postgres, which admits a shrink that leaves nothing
+over-scale regardless of what still uses the currency.
 
 **Validation status:** `drizzle-kit` generates clean PostgreSQL 16 DDL for all
 of it — expression indexes, the `coalesce`-based sibling uniqueness index,

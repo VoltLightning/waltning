@@ -22,18 +22,25 @@
  * answers "does anything still transact in this currency", which is a
  * different question from "does anything already stored in it fit the
  * narrower scale" — an *archived* account's `opening_balance`, or a
- * *soft-deleted* transaction's own `transaction_lines` row, is neither live
- * nor gone: the figure is still sitting in the replica, still rendered the
- * day the account is unarchived or the row's own history is read, and a
- * shrink that ignores it produces exactly the silent truncation this whole
- * guard exists to refuse. `assertScaleSurvivesShrink` mirrors
- * `assert_currency_decimals_safe`
+ * *soft-deleted* transaction's own row, is neither live nor gone: the figure
+ * is still sitting in the replica, still rendered the day the account is
+ * unarchived or the row's own history is read, and a shrink that ignores it
+ * produces exactly the silent truncation this whole guard exists to refuse.
+ * `anyStoredFigureOverScale` mirrors `assert_currency_decimals_safe`
  * (`0012_transaction_scale_and_category_kind.sql`, C1) rather than the
  * narrower live-reference count above: every account regardless of
- * `archived`, every non-deleted transaction's four money columns, and every
- * transaction line regardless of its own parent's `deleted_at` — the same
- * asymmetry Postgres's own version states (a line survives its parent's
- * soft-delete; a transaction's own row does not count once deleted).
+ * `archived`, every transaction's four money columns regardless of
+ * `deleted_at` (M1 — a soft-deleted row can be restored later, so both
+ * engines count it), and every transaction line regardless of its own
+ * parent's `deleted_at` too.
+ *
+ * **Both checks run twice — in `validate`, before the outbox commits, and
+ * again in `apply`.** A refused shrink is never recoverable by a later
+ * replay of the identical input, so `validate` refuses it before any intent
+ * is queued (`LocalExecutor.validate`'s own doc); `apply`'s own call is the
+ * same duplication every other scale-checked executor carries, so a
+ * `validate` that faults for a non-refusal reason never leaves the write
+ * itself unchecked.
  */
 
 import * as money from "@waltning/core/money";
@@ -56,6 +63,13 @@ export const updateCurrencyExecutor = defineLocalExecutor<
   opVersion: 1,
   input: updateCurrencyInput,
   mints: () => [],
+  // H — read-only, run before the outbox commits (`LocalExecutor.validate`'s
+  // own doc): a decimals shrink that either the live-reference guard or
+  // `anyStoredFigureOverScale` refuses is refused here too, never queued as
+  // an intent nothing will ever apply — a shrink `apply` alone would refuse
+  // left a stuck outbox entry behind forever, since a refused shrink is
+  // never recoverable by a later replay of the identical input.
+  validate: (input, tx) => assertDecimalsShrinkSafe(input, tx),
   apply: (input, tx) => patchCurrency(input, tx),
 });
 
@@ -70,41 +84,14 @@ function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrency
     );
   }
 
-  if (input.patch.decimals !== undefined && input.patch.decimals < current.decimals) {
-    const [{ n: liveAccounts } = { n: 0 }] = tx
-      .select({ n: sql<number>`count(*)` })
-      .from(accounts)
-      .where(and(eq(accounts.currency, input.code), eq(accounts.archived, false)))
-      .all();
-    const [{ n: liveTransactions } = { n: 0 }] = tx
-      .select({ n: sql<number>`count(*)` })
-      .from(transactions)
-      .where(
-        and(
-          or(
-            eq(transactions.currency, input.code),
-            eq(transactions.toCurrency, input.code),
-            eq(transactions.debtCurrency, input.code),
-          ),
-          isNull(transactions.deletedAt),
-        ),
-      )
-      .all();
-    const live = liveAccounts + liveTransactions;
-    if (live > 0) {
-      throw new LocalRefusal(
-        `update_currency: refused — decimals cannot shrink from ${current.decimals} to ` +
-          `${input.patch.decimals} while ${input.code} still names ${live} live account(s)/transaction(s)`,
-      );
-    }
-
-    if (anyStoredFigureOverScale(tx, input.code, input.patch.decimals)) {
-      throw new Error(
-        `update_currency: refused — decimals cannot shrink from ${current.decimals} to ` +
-          `${input.patch.decimals} while a figure already stored in ${input.code} holds more`,
-      );
-    }
-  }
+  // Kept here too, alongside `validate` above — the same duplication
+  // `create-account.executor.ts`'s own `insertAccount` and every other
+  // scale-checked executor carries, so a validate that faults for a
+  // non-refusal reason (a driver fault, a bug) never leaves the write itself
+  // unchecked (`write.ts`'s own doc: a broken pre-check must never be the
+  // reason a capture is lost, but it also must never be the reason one gets
+  // through unchecked).
+  assertDecimalsShrinkSafe(input, tx);
 
   const [updated] = tx
     .update(currencies)
@@ -117,6 +104,59 @@ function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrency
     throw new Error("update_currency: the row changed between read and write");
   }
   return updated;
+}
+
+/**
+ * H — refuses a `decimals` shrink that either the live-reference guard or
+ * `anyStoredFigureOverScale` (H-r4, C1) would refuse. Silent when the
+ * currency itself is not in the replica or the patch does not shrink
+ * `decimals` — the "no such currency" and stale-version refusals stay
+ * `patchCurrency`'s own, since neither is a scale question `validate` should
+ * answer before the outbox commits.
+ */
+function assertDecimalsShrinkSafe(input: UpdateCurrencyInput, tx: ReplicaTx): void {
+  if (input.patch.decimals === undefined) return;
+
+  const [current] = tx
+    .select({ decimals: currencies.decimals })
+    .from(currencies)
+    .where(eq(currencies.code, input.code))
+    .all();
+  if (!current || input.patch.decimals >= current.decimals) return;
+
+  const [{ n: liveAccounts } = { n: 0 }] = tx
+    .select({ n: sql<number>`count(*)` })
+    .from(accounts)
+    .where(and(eq(accounts.currency, input.code), eq(accounts.archived, false)))
+    .all();
+  const [{ n: liveTransactions } = { n: 0 }] = tx
+    .select({ n: sql<number>`count(*)` })
+    .from(transactions)
+    .where(
+      and(
+        or(
+          eq(transactions.currency, input.code),
+          eq(transactions.toCurrency, input.code),
+          eq(transactions.debtCurrency, input.code),
+        ),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .all();
+  const live = liveAccounts + liveTransactions;
+  if (live > 0) {
+    throw new LocalRefusal(
+      `update_currency: refused — decimals cannot shrink from ${current.decimals} to ` +
+        `${input.patch.decimals} while ${input.code} still names ${live} live account(s)/transaction(s)`,
+    );
+  }
+
+  if (anyStoredFigureOverScale(tx, input.code, input.patch.decimals)) {
+    throw new LocalRefusal(
+      `update_currency: refused — decimals cannot shrink from ${current.decimals} to ` +
+        `${input.patch.decimals} while a figure already stored in ${input.code} holds more`,
+    );
+  }
 }
 
 /**

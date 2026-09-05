@@ -1417,6 +1417,17 @@ function createTransactionRefusal(error: unknown): FieldError | null {
  * `ErrorDetails.column`, `apps/api/src/common/pg-errors.ts`'s own M3 fix —
  * the SQLSTATE alone cannot tell `amount_original`/`to_amount`/`fee` apart
  * either, and the column rides the envelope for exactly this reason).
+ *
+ * **Gated on `error.name` for the direct read.** `LocalRefusal.name` is
+ * always the literal string `"LocalRefusal"` (`@waltning/ledger/executor.ts`'s
+ * own class field), and this is the one property that class shape and a raw
+ * driver error can share by coincidence — `pg`'s own `DatabaseError` carries
+ * a `.column` too, naming the table column a constraint violation touched,
+ * which is not this field's vocabulary (`amount_original`/`to_amount`/`fee`)
+ * and is not routed through an envelope at all. Reading `.column` off any
+ * object that happens to carry one would treat that raw error as if it were
+ * a classified scale refusal; checking `.name` first is what keeps this
+ * duck-typed read narrow to the one shape it is meant for.
  */
 const AMOUNT_SCALE_COLUMN_PATH: Readonly<Record<string, string>> = {
   amount_original: "amountOriginal",
@@ -1427,8 +1438,10 @@ const AMOUNT_SCALE_COLUMN_PATH: Readonly<Record<string, string>> = {
 /** The column a local `LocalRefusal` or a server envelope named, if either shape did. */
 function columnOf(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null) return undefined;
-  const direct = (error as { column?: unknown }).column;
-  if (typeof direct === "string") return direct;
+  if ((error as { name?: string }).name === "LocalRefusal") {
+    const direct = (error as { column?: unknown }).column;
+    if (typeof direct === "string") return direct;
+  }
   const details = (error as { details?: unknown }).details;
   if (typeof details !== "object" || details === null) return undefined;
   const nested = (details as { column?: unknown }).column;
@@ -2531,7 +2544,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("settleDebt.currencyMismatch")),
           });
           return {
             fieldErrors: [
@@ -3012,12 +3026,11 @@ export function createPhoneLedger(
            */
           if (refusal instanceof Error && refusal.name === "LocalDeferral") {
             refresh();
-            emitClientDiagnostic(diagnostics, {
-              scope: "client_action",
-              action: "create_transaction",
-              phase: "success",
-            });
-            return { id: parsed.data.id, deferred: true };
+            return finish(
+              diagnostics,
+              { scope: "client_action", action: "create_transaction" },
+              { id: parsed.data.id, deferred: true },
+            );
           }
           const fieldError = createTransactionRefusal(refusal);
           if (!fieldError) throw refusal;
