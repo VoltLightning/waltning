@@ -543,9 +543,30 @@ export const en = {
      * §8's third field — `find_unsettled`'s own reason for existing — is
      * what lets this name the transaction rather than the account, once
      * `fifoOldestOpen` has one on hand (`read-unsettled-clearing.ts`).
+     *
+     * **`{{remainder}}` is the oldest entry's own unconsumed magnitude, not
+     * the account's whole balance (H3)** — more than one entry can still be
+     * open at once, and the account balance is their sum, not this one leg's
+     * share of it. `unsettledNamedDiffers` adds the account balance back in,
+     * for the one case where showing only the remainder would look like it
+     * disagreed with the figure a tap on `Open` leads to.
      */
-    unsettledNamed: "{{amount}} {{currency}} unallocated · {{payee}}",
-    unsettledNamedMore: "{{amount}} {{currency}} unallocated · {{payee}} · and {{count}} more",
+    unsettledNamed: "{{remainder}} {{currency}} unallocated · {{payee}}",
+    unsettledNamedMore: "{{remainder}} {{currency}} unallocated · {{payee}} · and {{count}} more",
+    unsettledNamedDiffers:
+      "{{remainder}} {{currency}} unallocated · {{payee}} ({{amount}} {{currency}} account balance)",
+    unsettledNamedDiffersMore:
+      "{{remainder}} {{currency}} unallocated · {{payee}} ({{amount}} {{currency}} account balance) · and {{count}} more",
+    /**
+     * H2 — the oldest unconsumed entry is the account's own opening balance,
+     * not a transaction (`oldestUnconsumedTransactionId` is `null`): there is
+     * no payee to name, so this says so rather than falling back to a payee
+     * that does not exist. `Open` still falls back to the account's own
+     * filtered ledger, same as before this entry existed.
+     */
+    unsettledOpening: "{{remainder}} {{currency}} unallocated · opening balance",
+    unsettledOpeningMore:
+      "{{remainder}} {{currency}} unallocated · opening balance · and {{count}} more",
     unsettledOpen: "Open",
     /** S04 §6 — the balance query failed; the hero keeps its last known figure. */
     balanceQueryFailed: "Couldn't refresh",

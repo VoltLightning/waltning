@@ -1,4 +1,5 @@
-import { index } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, index } from "drizzle-orm/sqlite-core";
 import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
@@ -28,11 +29,32 @@ import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
  * person. A field the phone cannot hold is a field the phone cannot conflict
  * on, and it would be shown a row missing figures it is expected to check.
  *
- * Most indexes, all eight foreign-key behaviours and every check stay in
- * `packages/db`. **`category_id` is the one exception (M2)** — S19's merge
- * preview reads it straight off the replica, on every render the merge
- * sheet is open for, and an unindexed scan there is a phone-side cost this
- * file can remove even while the rest of the index set stays server-only.
+ * Most indexes, all eight foreign-key behaviours and every other check stay
+ * in `packages/db`. **`category_id` and `counterparty_id` are the exceptions
+ * (M2, R2 M4)** — S19's merge preview reads `category_id` straight off the
+ * replica, on every render the merge sheet is open for, and
+ * `readCounterpartyBalances`/`balancesForCounterparty`
+ * (`packages/ledger/src/counterparties/read-counterparty-balances.ts`) scan
+ * `transactions` by `counterparty_id` on every settlement, every archive
+ * gate, and every §7 read — the same predicate Postgres already indexes
+ * (`transactions_counterparty_idx`) — and the replica had nothing at all
+ * backing either one.
+ *
+ * **One check does not stay server-only (L), the same exception
+ * `counterparty_distinct_pairs` makes for its own ordering check** — the
+ * phone is where `settle_debt` writes `debt_amount`/`debt_currency` directly
+ * (S14), with no server yet to catch a caller that skipped the pairing, so
+ * §14.6's "refuse at capture time" needs it declared here rather than only in
+ * `packages/db`.
+ *
+ * **One-directional, not full symmetry: `debt_amount` requires
+ * `debt_currency`, not the other way round.** A `debt_amount` with no stated
+ * currency is genuinely ambiguous — nothing says what it is 214.05 *of* —
+ * while `debt_currency` alone (redirecting which currency a balance is
+ * discharged in, the amount left to default from the leg itself) is a state
+ * `counterparty-balance.ts`'s SQL and `read-counterparty-balances.ts`'s
+ * `coalesceDebtAmount` both already coalesce field-by-field rather than
+ * refuse.
  */
 export const transactionsColumns = () => ({
   id: k.id<"transactions">("id"),
@@ -88,16 +110,17 @@ export const transactionsColumns = () => ({
 });
 
 /**
- * Two indexes, the exceptions to "the nine indexes stay in `packages/db`".
- * `transactions_category_idx` backs the category reads on the phone.
- * **R2 M4** — `readCounterpartyBalances` and `balancesForCounterparty`
- * (`packages/ledger/src/counterparties/read-counterparty-balances.ts`) both
- * scan `transactions` by `counterparty_id` on every settlement, every archive
- * gate, and every §7 read — the same predicate Postgres already indexes
- * (`transactions_counterparty_idx`) — and the replica had nothing at all
- * backing it.
+ * Three exceptions to "most indexes and checks stay in `packages/db`":
+ * `transactions_category_idx` backs the category reads on the phone,
+ * `transactions_counterparty_idx` backs the counterparty-balance reads
+ * (R2 M4), and `transactions_debt_amount_requires_currency` is the one check
+ * that must refuse at capture time rather than only on the server (L).
  */
 export const transactions = k.table("transactions", transactionsColumns(), (t) => [
   index("transactions_category_idx").on(t.categoryId),
   index("transactions_counterparty_idx").on(t.counterpartyId),
+  check(
+    "transactions_debt_amount_requires_currency",
+    sql`${t.debtAmount} IS NULL OR ${t.debtCurrency} IS NOT NULL`,
+  ),
 ]);

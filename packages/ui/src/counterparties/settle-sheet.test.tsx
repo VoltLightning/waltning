@@ -250,6 +250,41 @@ it("shows a discharges.amount refusal under the discharges amount field (H)", ()
   expect(screen.getByText("EUR holds 0 decimal places — this amount has more")).toBeDefined();
 });
 
+/**
+ * L2 (#116)'s rendering, which had no test of its own until now.
+ *
+ * `settle_debt`'s `currency` is a real input path, so `mapFieldErrors` files
+ * a refusal about it under `byField` — but this sheet has no `currency`
+ * control to hang one on: the currency follows the balance being settled,
+ * through `discharges.currency`. A refusal filed there and rendered nowhere
+ * is a refusal that never happened, which is the same failure H1 names for
+ * `formLevel`. It renders with the form-level messages, which is where a
+ * refusal about the *pair* — this account, that currency — belongs anyway.
+ */
+it("shows a `currency` refusal with the form-level messages, having no currency control of its own", () => {
+  renderSheet({
+    fieldErrors: {
+      byField: { currency: ["This account only holds PLN — settle in that currency."] },
+      formLevel: [],
+    },
+  });
+  expect(screen.getByText("This account only holds PLN — settle in that currency.")).toBeDefined();
+});
+
+/** And beside a form-level message rather than instead of one — both are shown. */
+it("shows a `currency` refusal and a form-level one together", () => {
+  renderSheet({
+    fieldErrors: {
+      byField: { currency: ["This account only holds PLN — settle in that currency."] },
+      formLevel: ["settle_debt: the row changed between insert and the debt-fields update"],
+    },
+  });
+  expect(screen.getByText("This account only holds PLN — settle in that currency.")).toBeDefined();
+  expect(
+    screen.getByText("settle_debt: the row changed between insert and the debt-fields update"),
+  ).toBeDefined();
+});
+
 it("shows a counterpartyId refusal under the header", () => {
   renderSheet({
     fieldErrors: {

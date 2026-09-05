@@ -351,6 +351,20 @@ That third field is what lets the banner name a transaction (S01, S04, S12)
 rather than a number. A non-zero clearing balance is a **prompt**, never a
 defect (§6.4).
 
+**The rule is sign-symmetric, not literally "inflow" and "outflow."** Both
+engines classify a leg by whether it shares the RUNNING queue's own direction
+(open) or the opposite one (consume) — never by a fixed inflow/outflow label
+and never by the account's final balance's sign, which agrees with the
+running direction only while the balance never crosses zero. When the
+balance is negative, the roles invert symmetrically: outflows open it,
+inflows consume, same FIFO, same third field. A clearing account's own
+opening balance is seeded as one more entry of this kind, dated its opening
+date, carrying no transaction of its own — `oldest_unconsumed_transaction_id`
+is `null` exactly when that entry is the oldest still-open one. That opening
+entry sorts by its own date like any other — a leg dated before `openingDate`
+(an import backdated past the account's own recorded start) sorts ahead of
+it, not after, the same `(date, id)` order every other pair of entries uses.
+
 **Allocation is total-preserving by construction.** Largest-remainder: floor each
 share at the currency's scale, then distribute the remainder one minor unit at a
 time by descending fractional part. Never `amount × (1/n)` — three ways on 185,00

@@ -1,4 +1,4 @@
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 BEGIN;
 PRAGMA defer_foreign_keys = ON;
 INSERT OR REPLACE INTO "outbox" ("id", "seq", "operation", "payload", "deps", "op_version", "state", "blocked_kind", "blocked_reason", "attempts", "last_error", "sent_at", "captured_at", "captured_tz", "captured_offset_minutes", "disposition") VALUES ('00000000-0000-4000-8000-000000000001', 1, 'create_transaction', '{"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","date":"2026-01-08","type":"expense","accountId":"11111111-1111-4111-8111-111111111111","amountOriginal":"120.00000000","currency":"PLN","counterpartyId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","counterpartyRole":"reference","payee":"","note":"","isBusiness":false,"isCapital":false,"source":"manual"}', '[]', 1, 'pending', NULL, NULL, 0, NULL, NULL, 1768035600, 'Europe/Warsaw', 120, NULL);

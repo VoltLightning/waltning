@@ -1369,15 +1369,51 @@ balance cannot drift from its history:
 
 ```sql
 CREATE VIEW counterparty_balances AS
-  SELECT counterparty_id,
-         currency,
-         SUM(-signed_amount(type, amount_original)) AS balance
-  FROM   transactions
-  WHERE  counterparty_id IS NOT NULL
-    AND  counterparty_role = 'debt'
-    AND  deleted_at IS NULL
-  GROUP  BY counterparty_id, currency;
+  SELECT t.counterparty_id,
+         COALESCE(t.debt_currency, t.currency)                     AS currency,
+         -- `signed_amount(type, amount_original, to_amount, side)` — the
+         -- shape `packages/db/src/figures/signed.sql.ts` ships: `side`
+         -- picks the leg carrying the counterparty (the destination leg for
+         -- a transfer, since a repayment lands INTO an owned account; the
+         -- only leg otherwise), `type` decides the cash-flow sign on the
+         -- `from` leg the way `signedFromLeg` does, and the `to` leg passes
+         -- through unsigned — a transfer's destination is always a plain
+         -- positive inflow. `debt_amount`/`debt_currency` value the row
+         -- wherever set (S14) — coalesced independently per leg, so a
+         -- transfer's `to` amount never falls back to the `from` leg's own
+         -- figure, in a different currency, when `debt_amount` is absent.
+         SUM(-signed_amount(
+               t.type,
+               COALESCE(t.debt_amount, t.amount_original),
+               COALESCE(t.debt_amount, t.to_amount),
+               CASE t.type WHEN 'transfer' THEN 'to' ELSE 'from' END
+             ))                                                    AS balance
+  FROM   transactions t
+  JOIN   counterparties c ON c.id = t.counterparty_id
+  WHERE  t.counterparty_id IS NOT NULL
+    AND  t.counterparty_role = 'debt'
+    AND  t.deleted_at IS NULL
+  GROUP  BY t.counterparty_id, COALESCE(t.debt_currency, t.currency), c.archived
+  -- Archived is filtered here, in HAVING, after the fold — never in WHERE.
+  -- Archiving hides a counterparty from pickers, but history keeps working;
+  -- `update_counterparty`'s own gate (S15 §6) refuses archiving while a
+  -- balance is open, so an archived counterparty is normally settled, but
+  -- one archived before this coalesce fix landed can still carry a
+  -- non-zero balance that must still be seen — a blanket
+  -- `WHERE archived = false` can only see the raw row, never the sum this
+  -- view folds it into.
+  HAVING NOT (c.archived AND SUM(-signed_amount(
+               t.type,
+               COALESCE(t.debt_amount, t.amount_original),
+               COALESCE(t.debt_amount, t.to_amount),
+               CASE t.type WHEN 'transfer' THEN 'to' ELSE 'from' END
+             )) = 0);
 ```
+
+This view is documentation of the rule, not what runs it: the shipped
+implementation is `packages/db/src/figures/counterparty-balance.ts`, a query
+builder over the same fold, and no `counterparty_balances` view exists in the
+migrations.
 
 **The negation is the whole trick.** The ledger signs by *cash flow*; a debt
 balance signs by *obligation*, and they are exact opposites. All four cases fall

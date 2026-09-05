@@ -205,6 +205,16 @@ function resolveSettleFieldErrorMessage(t: ReturnType<typeof useT>, error: Field
       decimals: error.params?.["decimals"] ?? "",
     });
   }
+  // L2 (#116) — the controller's own pre-write refusal for an account that
+  // holds a different currency (`create-phone-ledger.ts`). Without this branch
+  // the English `message` it carries was printed verbatim in every language and
+  // `pl.ts`'s own `settleDebt.currencyMismatch` was a string nothing could
+  // reach. `settle-sheet.tsx` renders `currency` refusals at form level.
+  if (error.messageKey === "settleDebt.currencyMismatch") {
+    return t("settleDebt.currencyMismatch", {
+      accountCurrency: error.params?.["accountCurrency"] ?? "",
+    });
+  }
   // C1 — an executor refusal `settleDebtRefusal` does not recognise now
   // carries `common.couldNotSave` rather than `null`, so it never falls
   // through to the raw English `refusalFromThrow` would otherwise print.

@@ -57,6 +57,7 @@ describe("readUnsettledClearing", () => {
         balance: "340.00000000",
         oldestUnconsumedTransactionId: id<"transactions">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
         oldestDate: accountingDate("2026-08-05"),
+        oldestUnconsumedRemainder: "340.00000000",
         oldestUnconsumedPayee: "",
       },
     ]);
@@ -133,7 +134,153 @@ describe("readUnsettledClearing", () => {
       balance: "80.00000000",
       oldestUnconsumedTransactionId: id<"transactions">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
       oldestDate: accountingDate("2026-08-05"),
+      oldestUnconsumedRemainder: "80.00000000",
       oldestUnconsumedPayee: "Dinner",
     });
+  });
+
+  /**
+   * H2 — the opening balance is seeded as its own FIFO entry, `id: null`,
+   * dated `openingDate`. Opening 100, one 40 expense: balance 60, and the
+   * opening entry — never named — is what is still open, not the expense
+   * (a consuming row).
+   */
+  it("names the opening balance itself (id null) when it is the oldest still-open entry", () => {
+    const db = stores.ledger.replica.db;
+    const opened = id<"accounts">("55555555-5555-4555-8555-555555555555");
+    db.insert(accounts)
+      .values({
+        id: opened,
+        name: "Opened clearing",
+        currency: PLN,
+        kind: "clearing",
+        openingBalance: money.toMoney("100"),
+        openingDate: accountingDate("2026-08-01"),
+      })
+      .run();
+    db.insert(transactions)
+      .values({
+        id: id<"transactions">("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"),
+        date: accountingDate("2026-08-10"),
+        type: "expense",
+        accountId: opened,
+        amountOriginal: money.toMoney("40"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+
+    const row = readUnsettledClearing(db).find((candidate) => candidate.accountId === opened);
+    expect(row).toEqual({
+      accountId: opened,
+      name: "Opened clearing",
+      currency: PLN,
+      decimals: 2,
+      balance: "60.00000000",
+      oldestUnconsumedTransactionId: null,
+      oldestDate: accountingDate("2026-08-01"),
+      oldestUnconsumedRemainder: "60.00000000",
+      oldestUnconsumedPayee: null,
+    });
+  });
+
+  /**
+   * H3 — two open inflows with nothing consuming either: the oldest entry's
+   * own remainder (120) is less than the account's whole balance (200), so a
+   * banner reading the balance beside that entry's payee would overstate
+   * what it is actually naming.
+   */
+  it("names a remainder smaller than the account balance when more than one entry is open", () => {
+    const db = stores.ledger.replica.db;
+    const twoOpen = id<"accounts">("66666666-6666-4666-8666-666666666666");
+    db.insert(accounts)
+      .values({ id: twoOpen, name: "Two open", currency: PLN, kind: "clearing" })
+      .run();
+    db.insert(transactions)
+      .values([
+        {
+          id: id<"transactions">("ffffffff-ffff-4fff-8fff-ffffffffffff"),
+          date: accountingDate("2026-08-01"),
+          type: "income",
+          accountId: twoOpen,
+          payee: "First",
+          amountOriginal: money.toMoney("120"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+        },
+        {
+          id: id<"transactions">("11111111-2222-4333-8444-555555555555"),
+          date: accountingDate("2026-08-05"),
+          type: "income",
+          accountId: twoOpen,
+          payee: "Second",
+          amountOriginal: money.toMoney("80"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+        },
+      ])
+      .run();
+
+    const row = readUnsettledClearing(db).find((candidate) => candidate.accountId === twoOpen);
+    expect(row?.balance).toBe("200.00000000");
+    expect(row?.oldestUnconsumedRemainder).toBe("120.00000000");
+    expect(row?.oldestUnconsumedPayee).toBe("First");
+  });
+
+  /**
+   * H1 — a clearing account whose one leg is an outflow (a payment made on
+   * the group's behalf) carries a negative balance, and the remainder must
+   * keep that sign too: `abs()`ing it used to render "150,00 PLN unallocated"
+   * beside a "−150,00 account balance" that visibly disagreed with it.
+   */
+  it("keeps the remainder's sign negative when the clearing balance itself is negative", () => {
+    const db = stores.ledger.replica.db;
+    const negative = id<"accounts">("99999999-9999-4999-8999-999999999999");
+    db.insert(accounts)
+      .values({ id: negative, name: "Trip clearing", currency: PLN, kind: "clearing" })
+      .run();
+    db.insert(transactions)
+      .values({
+        id: id<"transactions">("99999999-1111-4222-8333-444444444444"),
+        date: accountingDate("2026-08-01"),
+        type: "expense",
+        accountId: negative,
+        payee: "Hotel",
+        amountOriginal: money.toMoney("150"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+
+    const row = readUnsettledClearing(db).find((candidate) => candidate.accountId === negative);
+    expect(row?.balance).toBe("-150.00000000");
+    expect(row?.oldestUnconsumedRemainder).toBe("-150.00000000");
+    expect(row?.oldestUnconsumedPayee).toBe("Hotel");
+  });
+
+  /**
+   * M1 — an archived clearing account still carrying a non-zero balance is
+   * still a prompt (§6.4), the same rule `read-counterparty-balances.ts`
+   * already applies to an archived counterparty.
+   */
+  it("includes an archived clearing account when its balance is non-zero", () => {
+    const db = stores.ledger.replica.db;
+    const archived = id<"accounts">("77777777-7777-4777-8777-777777777777");
+    db.insert(accounts)
+      .values({ id: archived, name: "Old trip", currency: PLN, kind: "clearing", archived: true })
+      .run();
+    db.insert(transactions)
+      .values({
+        id: id<"transactions">("88888888-8888-4888-8888-888888888888"),
+        date: accountingDate("2026-08-01"),
+        type: "income",
+        accountId: archived,
+        amountOriginal: money.toMoney("50"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+
+    expect(readUnsettledClearing(db).some((row) => row.accountId === archived)).toBe(true);
   });
 });

@@ -335,8 +335,15 @@ export const pl: Messages = {
     showAll: "Pokaż wszystkie →",
     unsettled: "{{amount}} {{currency}} nierozliczone · {{account}}",
     unsettledMore: "{{amount}} {{currency}} nierozliczone · {{account}} · i {{count}} więcej",
-    unsettledNamed: "{{amount}} {{currency}} nierozliczone · {{payee}}",
-    unsettledNamedMore: "{{amount}} {{currency}} nierozliczone · {{payee}} · i {{count}} więcej",
+    unsettledNamed: "{{remainder}} {{currency}} nierozliczone · {{payee}}",
+    unsettledNamedMore: "{{remainder}} {{currency}} nierozliczone · {{payee}} · i {{count}} więcej",
+    unsettledNamedDiffers:
+      "{{remainder}} {{currency}} nierozliczone · {{payee}} ({{amount}} {{currency}} saldo konta)",
+    unsettledNamedDiffersMore:
+      "{{remainder}} {{currency}} nierozliczone · {{payee}} ({{amount}} {{currency}} saldo konta) · i {{count}} więcej",
+    unsettledOpening: "{{remainder}} {{currency}} nierozliczone · saldo początkowe",
+    unsettledOpeningMore:
+      "{{remainder}} {{currency}} nierozliczone · saldo początkowe · i {{count}} więcej",
     unsettledOpen: "Otwórz",
     balanceQueryFailed: "Nie udało się odświeżyć",
     balanceQueryFailedBody: "Pokazujemy dane z ostatniego udanego wczytania.",

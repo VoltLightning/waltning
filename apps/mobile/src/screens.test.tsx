@@ -90,7 +90,16 @@ function netWorthOf(accounts: readonly FakeAccount[]): readonly PhoneNetWorth[] 
   }));
 }
 
-/** `money.unsettledClearing` (§8) over the clearing-kind fake accounts. */
+/**
+ * `money.unsettledClearing` (§8) over the clearing-kind fake accounts.
+ *
+ * **Fakes a non-null oldest id, no payee, on purpose.** This fixture never
+ * folds real legs through `fifoOldestOpen` — a `null` id would now read as
+ * "the oldest open entry is the account's opening balance" (H2), a specific
+ * claim this generic fake has no basis for. Naming a fake transaction id
+ * instead keeps it in the ordinary, unnamed-leg branch every test written
+ * against this helper already expects.
+ */
 function unsettledOf(accounts: readonly FakeAccount[]): readonly PhoneClearingAccount[] {
   return unsettledClearing(
     accounts
@@ -104,8 +113,9 @@ function unsettledOf(accounts: readonly FakeAccount[]): readonly PhoneClearingAc
       })),
   ).map((row) => ({
     ...row,
-    oldestUnconsumedTransactionId: null,
-    oldestDate: null,
+    oldestUnconsumedTransactionId: id<"transactions">(`unsettled-${row.accountId}`),
+    oldestDate: accountingDate("2026-08-01"),
+    oldestUnconsumedRemainder: row.balance,
     oldestUnconsumedPayee: null,
   }));
 }
@@ -159,6 +169,8 @@ function fakeController(
   periodSpendRows: readonly PeriodSpendRow[] = [],
   initialCategories: readonly FakeCategory[] = [],
   categoryUsage: ReadonlyMap<Id<"categories">, number> = new Map(),
+  /** H2 — a caller testing the opening-balance banner hands its own rows rather than `unsettledOf`'s generic ones. */
+  unsettledOverride?: readonly PhoneClearingAccount[],
 ) {
   let accounts = [...initialAccounts];
   let categoryTree: FakeCategory[] = [...initialCategories];
@@ -190,7 +202,7 @@ function fakeController(
     listPayeeHistory: () => [],
     listNetWorth: () => netWorthOf(accounts),
     readPeriodSpend: () => periodSpendRows,
-    listUnsettledClearing: () => unsettledOf(accounts),
+    listUnsettledClearing: () => unsettledOverride ?? unsettledOf(accounts),
     listCounterpartyBalances: () => [],
     listCounterpartyMerges: () => [],
     listDistinctCounterpartyPairs: () => [],
@@ -426,10 +438,41 @@ describe("Today", () => {
     expect(rendered).toContain("40.00");
   });
 
-  it("shows the unsettled banner and opens the ledger filtered to that account", () => {
+  it("shows the unsettled banner and opens the named transaction", () => {
     withLedger(<Today />, fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT]));
 
     expect(screen.getByRole("alert")).toBeDefined();
+    fireEvent.click(screen.getByText("Open"));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/transaction/[id]",
+      params: { id: id<"transactions">(`unsettled-${CLEARING_ACCOUNT.id}`) },
+    });
+  });
+
+  /**
+   * H2 — when the oldest unconsumed entry is the account's own opening
+   * balance rather than a transaction, `oldestUnconsumedTransactionId` is
+   * `null`: there is no transaction to name or to open, so the banner says
+   * so and `Open` falls back to the account's own filtered ledger.
+   */
+  it("shows the opening-balance banner and falls back to the filtered ledger", () => {
+    const controller = fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT], [], [], new Map(), [
+      {
+        accountId: CLEARING_ACCOUNT.id,
+        name: CLEARING_ACCOUNT.name,
+        currency: CLEARING_ACCOUNT.currency,
+        decimals: CLEARING_ACCOUNT.decimals,
+        balance: CLEARING_ACCOUNT.balance,
+        oldestUnconsumedTransactionId: null,
+        oldestDate: accountingDate("2026-08-01"),
+        oldestUnconsumedRemainder: CLEARING_ACCOUNT.balance,
+        oldestUnconsumedPayee: null,
+      },
+    ]);
+    withLedger(<Today />, controller);
+
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).toContain("opening balance");
     fireEvent.click(screen.getByText("Open"));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/ledger",
@@ -472,6 +515,7 @@ describe("Today", () => {
           balance: CLEARING_ACCOUNT.balance,
           oldestUnconsumedTransactionId: oldestId,
           oldestDate: accountingDate("2026-08-05"),
+          oldestUnconsumedRemainder: CLEARING_ACCOUNT.balance,
           oldestUnconsumedPayee: "Dinner",
         },
       ],
@@ -549,6 +593,33 @@ describe("Today", () => {
   });
 
   /**
+   * H1 — a negative clearing balance keeps its sign in the remainder, so a
+   * remainder equal to the balance (both `-150`) reads as the same figure
+   * through `money.eq`: the banner names the single unsettled leg without
+   * the "differs" parenthetical, and the figure it shows is signed.
+   */
+  it("shows a negative remainder signed, and does not claim it differs from an equal balance", () => {
+    const controller = fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT], [], [], new Map(), [
+      {
+        accountId: CLEARING_ACCOUNT.id,
+        name: CLEARING_ACCOUNT.name,
+        currency: CLEARING_ACCOUNT.currency,
+        decimals: CLEARING_ACCOUNT.decimals,
+        balance: toMoney("-150"),
+        oldestUnconsumedTransactionId: id<"transactions">("77777777-7777-4777-8777-777777777777"),
+        oldestDate: accountingDate("2026-08-01"),
+        oldestUnconsumedRemainder: toMoney("-150"),
+        oldestUnconsumedPayee: "Hotel",
+      },
+    ]);
+    withLedger(<Today />, controller);
+
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).toContain("-150.00 PLN unallocated · Hotel");
+    expect(rendered).not.toContain("account balance");
+  });
+
+  /**
    * S04 §3 draws exactly one banner row and `Banner`'s own doc says
    * "page-level, one tone, one action" — a second unsettled account does not
    * stack a second alert. It folds into the same banner's text instead, and
@@ -564,8 +635,8 @@ describe("Today", () => {
 
     fireEvent.click(screen.getByText("Open"));
     expect(router.push).toHaveBeenCalledWith({
-      pathname: "/ledger",
-      params: { account: CLEARING_ACCOUNT.id },
+      pathname: "/transaction/[id]",
+      params: { id: id<"transactions">(`unsettled-${CLEARING_ACCOUNT.id}`) },
     });
   });
 

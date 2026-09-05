@@ -15,6 +15,7 @@
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fold } from "@waltning/core/capture/names";
 import { accountingDate } from "@waltning/core/date";
 import { type Id, id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
@@ -23,10 +24,14 @@ import Database from "better-sqlite3";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stepsIn } from "../../tools/steps.ts";
+import { REPLICA_STEPS } from "../ddl.ts";
 import {
   advanceAppliedSeq,
   COPY_SUFFIX,
+  checksumOf,
   type LedgerFs,
+  MIGRATION_JOURNAL,
   type Migration,
   migrateOutbox,
   migrateReplica,
@@ -37,7 +42,15 @@ import {
 import { openLedger } from "../open.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 
-const { accounts, currencies, outbox, transactions } = schema;
+const {
+  accounts,
+  counterpartyMerges,
+  currencies,
+  fxRates,
+  outbox,
+  transactions,
+  transactionLines,
+} = schema;
 const outboxSchema = { outbox: schema.outbox, outboxSeq: schema.outboxSeq };
 const replicaSchema = {
   accountGroups: schema.accountGroups,
@@ -195,15 +208,79 @@ function seedEntry(ledger: Ledger, entryId: string) {
     .run();
 }
 
-/** A second version, which either creates a table or dies trying. */
-function chainOfTwo(base: readonly Migration[], second: "creates" | "throws"): Migration[] {
+/**
+ * An outbox entry at version 1, inserted as raw SQL rather than through the
+ * typed `outbox` table object — the typed insert names `blocked_disposition`,
+ * which does not exist until `0001_schema` (version 2) adds it.
+ */
+function insertOutboxEntryAtV1(ledger: Ledger, entryId: string) {
+  const now = Date.now();
+  ledger.outbox.db.run(
+    sql`insert into "outbox" ("id", "seq", "operation", "payload", "deps", "op_version", "captured_at", "captured_tz", "captured_offset_minutes") values (${entryId}, 1, 'create_transaction', '{}', '[]', 1, ${now}, 'Europe/Warsaw', 120)`,
+  );
+}
+
+/**
+ * A counterparty, inserted as raw SQL rather than through the typed
+ * `counterparties` table object.
+ *
+ * **Deliberately, not an oversight.** The drizzle schema object always
+ * includes `name_folded` — it is the *current* shape of the table — but a
+ * database sitting below version 7 (`0006_schema`, the step that adds the
+ * column) does not have it yet, and a typed `.insert()` would name it in the
+ * generated `INSERT` regardless of which version the file is actually at.
+ * Only the columns every version in this suite has are named here.
+ */
+function insertCounterparty(
+  ledger: Ledger,
+  counterpartyId: string,
+  name: string,
+  when = Date.now(),
+) {
+  ledger.replica.db.run(
+    sql`insert into "counterparties" ("id", "name", "created_at", "updated_at") values (${counterpartyId}, ${name}, ${when}, ${when})`,
+  );
+}
+
+/**
+ * The message a call refuses with, or a failure if it did not refuse at all.
+ *
+ * `toThrow(/…/)` proves one substring; several of the journal's refusals are
+ * judged on *what else* they do not say (the duplicate-key error they used to
+ * bury the cause under) and on being identical twice running, and neither is
+ * a matcher.
+ */
+function refusalMessage(attempt: () => unknown): string {
+  try {
+    attempt();
+  } catch (error) {
+    // `catch` bindings are `unknown` because the language gives no choice.
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("expected a refusal, and nothing was thrown");
+}
+
+/**
+ * One more version appended to `base`, which either creates a marker table or
+ * dies trying — for proving what a failed step does and does not leave
+ * behind, over the real chain sliced to wherever the test needs it rather
+ * than a hand-maintained parallel one.
+ */
+function withExtraStep(base: readonly Migration[], mode: "creates" | "throws"): Migration[] {
+  const nextVersion = (base.at(-1)?.version ?? 0) + 1;
+  // A tag whose own four-digit prefix names its version, because `checkChain`
+  // insists on that for every chain, hand-built ones included — a step the
+  // journal keys on has to be identified the same way a generated one is.
+  const tag = `${String(nextVersion - 1).padStart(4, "0")}_extra`;
   return [
     ...base,
     {
-      version: 2,
+      version: nextVersion,
+      tag,
+      checksum: checksumOf([`extra step that ${mode}`]),
       up: (tx) => {
-        if (second === "throws") throw new Error("killed mid-migration");
-        tx.run(sql.raw('create table "v2_marker" ("a" integer)'));
+        if (mode === "throws") throw new Error("killed mid-migration");
+        tx.run(sql.raw('create table "v_extra_marker" ("a" integer)'));
       },
     },
   ];
@@ -214,21 +291,30 @@ function chainOfTwo(base: readonly Migration[], second: "creates" | "throws"): M
 describe("a fresh database", () => {
   it("migrates the replica to current and says so in `user_version`", () => {
     const ledger = openAt("fresh");
-    const result = migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    const result = migrateReplica(ledger.replica, { fs: realFs });
     ledger.close();
 
     expect(result.from).toBe(0);
-    expect(result.to).toBe(1);
-    expect(result.applied).toEqual([1]);
-    expect(result.refetchRequired, "nothing was dropped — there was nothing there").toBe(false);
+    expect(result.to).toBe(REPLICA_MIGRATIONS.length);
+    expect(result.applied).toEqual(REPLICA_MIGRATIONS.map((m) => m.version));
+    expect(result.refetchRequired, "nothing is ever dropped, so nothing is ever refetched").toBe(
+      false,
+    );
 
     const names = inspect(join(dir, "fresh-replica.db"), tableNames);
-    expect(names, "the fifteen shared tables plus the replica's meta store").toHaveLength(16);
+    expect(
+      names,
+      "the fifteen shared tables, the replica's meta store, and the migrator's own journal",
+    ).toHaveLength(17);
     expect(names).toContain("transactions");
     expect(names).toContain("local_meta");
+    // Created by the migrator itself, not by any generated step — so it is on
+    // a fresh install too, and it is what every later launch reads to decide
+    // which steps have run (`MIGRATION_JOURNAL`).
+    expect(names).toContain(MIGRATION_JOURNAL);
     expect(names, "the outbox is the other file's table").not.toContain("outbox");
 
-    expect(inspect(join(dir, "fresh-replica.db"), userVersion)).toBe(1);
+    expect(inspect(join(dir, "fresh-replica.db"), userVersion)).toBe(REPLICA_MIGRATIONS.length);
   });
 
   it("migrates the outbox, and only the outbox, into the second file", () => {
@@ -236,35 +322,39 @@ describe("a fresh database", () => {
     const result = migrateOutbox(ledger.outbox, { fs: realFs });
     ledger.close();
 
-    expect(result.applied).toEqual([1]);
-    expect(inspect(join(dir, "fresh-outbox.db"), tableNames)).toEqual(["outbox", "outbox_seq"]);
-    expect(inspect(join(dir, "fresh-outbox.db"), userVersion)).toBe(1);
+    expect(result.applied).toEqual(OUTBOX_MIGRATIONS.map((m) => m.version));
+    expect(inspect(join(dir, "fresh-outbox.db"), tableNames)).toEqual([
+      MIGRATION_JOURNAL,
+      "outbox",
+      "outbox_seq",
+    ]);
+    expect(inspect(join(dir, "fresh-outbox.db"), userVersion)).toBe(OUTBOX_MIGRATIONS.length);
   });
 
   it("is a no-op the second time", () => {
     const ledger = openAt("twice");
 
-    const first = migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    const first = migrateReplica(ledger.replica, { fs: realFs });
     // Release it, so what the second run reports is about the second run.
     first.copy?.release();
 
-    const second = migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    const second = migrateReplica(ledger.replica, { fs: realFs });
     ledger.close();
 
-    expect(second.from).toBe(1);
-    expect(second.to).toBe(1);
+    expect(second.from).toBe(REPLICA_MIGRATIONS.length);
+    expect(second.to).toBe(REPLICA_MIGRATIONS.length);
     expect(second.applied, "no step ran again").toEqual([]);
     expect(second.copy, "and nothing was copied, because nothing was written").toBeNull();
   });
 
   it("hands back an unreleased copy even when there is nothing to migrate", () => {
     const ledger = openAt("outstanding");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    migrateReplica(ledger.replica, { fs: realFs });
 
     // The app migrated and then never opened cleanly. On the next launch there
     // is nothing to do — but the copy is still the record of that, and the
     // caller needs it back to release it once the app finally does open.
-    const second = migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    const second = migrateReplica(ledger.replica, { fs: realFs });
     ledger.close();
 
     expect(second.applied).toEqual([]);
@@ -286,20 +376,31 @@ describe("a migration that throws leaves nothing behind", () => {
     migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
     seedEntry(ledger, "e-1");
 
-    expect(() =>
-      migrateOutbox(ledger.outbox, {
-        fs: realFs,
-        migrations: chainOfTwo(OUTBOX_MIGRATIONS, "throws"),
-      }),
-    ).toThrow("killed mid-migration");
-    ledger.close();
+    const failing = withExtraStep(OUTBOX_MIGRATIONS, "throws");
+    expect(() => migrateOutbox(ledger.outbox, { fs: realFs, migrations: failing })).toThrow(
+      "killed mid-migration",
+    );
 
     const path = join(dir, "rollback-outbox.db");
-    expect(inspect(path, userVersion), "still at 1 — the bump is inside the transaction").toBe(1);
-    expect(inspect(path, tableNames), "v2 created nothing that survived").toEqual([
-      "outbox",
-      "outbox_seq",
-    ]);
+
+    // H2 — and the copy went with it. The rollback was clean, so the file on
+    // disk is byte-for-byte what the copy was taken from, and keeping the copy
+    // would make the *next* launch report `refuseStaleCopy` rather than the
+    // reason the migration failed.
+    expect(existsSync(path + COPY_SUFFIX), "no copy is left behind by a clean rollback").toBe(
+      false,
+    );
+    expect(
+      () => migrateOutbox(ledger.outbox, { fs: realFs, migrations: failing }),
+      "so the second launch gives the same cause, not a leftover copy",
+    ).toThrow("killed mid-migration");
+
+    ledger.close();
+
+    expect(
+      inspect(path, userVersion),
+      "still at the version before the failing step — the bump is inside the transaction",
+    ).toBe(OUTBOX_MIGRATIONS.length);
     expect(
       inspect(path, (db) => db.prepare("select count(*) as n from outbox").get()),
       "and the entries are untouched",
@@ -307,27 +408,39 @@ describe("a migration that throws leaves nothing behind", () => {
   });
 
   /**
-   * The same property over the destructive path, which is where it matters
-   * most: the drop and the recreate are steps in one transaction, so a failure
-   * anywhere in the chain leaves the ledger as it was rather than empty.
+   * The same property on the replica, over a real, populated table — the
+   * step that fails runs in the same one transaction as every step before it
+   * in this batch, so a failure anywhere in the run leaves the whole thing
+   * exactly where it started.
    */
-  it("does not leave the replica dropped when a later step fails", () => {
-    const ledger = openAt("rollback-drop");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+  it("leaves `user_version` and every row exactly as they were, on the replica", () => {
+    const ledger = openAt("rollback-replica");
+    const atV3 = REPLICA_MIGRATIONS.slice(0, 3);
+    migrateReplica(ledger.replica, { fs: realFs, migrations: atV3 }).copy?.release();
     seedTransaction(ledger, "txn-1");
 
-    expect(() =>
-      migrateReplica(ledger.replica, {
-        fs: realFs,
-        canRefetch: true,
-        migrations: chainOfTwo(REPLICA_MIGRATIONS, "throws"),
-      }),
-    ).toThrow("killed mid-migration");
+    const failing = withExtraStep(atV3, "throws");
+    expect(() => migrateReplica(ledger.replica, { fs: realFs, migrations: failing })).toThrow(
+      "killed mid-migration",
+    );
+
+    const path = join(dir, "rollback-replica-replica.db");
+
+    // H2, on the file where it costs the most: a replica that cannot migrate
+    // is the whole ledger, and a refusal naming a leftover copy tells its
+    // owner nothing about why.
+    expect(existsSync(path + COPY_SUFFIX)).toBe(false);
+    expect(() => migrateReplica(ledger.replica, { fs: realFs, migrations: failing })).toThrow(
+      "killed mid-migration",
+    );
+
     ledger.close();
 
-    const path = join(dir, "rollback-drop-replica.db");
-    expect(inspect(path, userVersion)).toBe(1);
-    expect(inspect(path, transactionCount), "the drop rolled back with everything else").toBe(1);
+    expect(inspect(path, userVersion)).toBe(3);
+    expect(
+      inspect(path, transactionCount),
+      "the failed step rolled back with everything else",
+    ).toBe(1);
   });
 });
 
@@ -344,13 +457,13 @@ describe("the outbox is never dropped", () => {
     migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
     seedEntry(ledger, "e-1");
     // A build from the future wrote this file and moved on.
-    ledger.outbox.db.run(sql.raw("pragma user_version = 9"));
+    ledger.outbox.db.run(sql.raw("pragma user_version = 999"));
 
     expect(() => migrateOutbox(ledger.outbox, { fs: realFs })).toThrow(/never dropped/);
     ledger.close();
 
     const path = join(dir, "ahead-outbox.db");
-    expect(inspect(path, userVersion), "untouched").toBe(9);
+    expect(inspect(path, userVersion), "untouched").toBe(999);
     expect(
       inspect(path, (db) => db.prepare("select id from outbox").all()),
       "the entry is still there — this is the file that has no second copy",
@@ -360,14 +473,23 @@ describe("the outbox is never dropped", () => {
 
   it("refuses a version that is not in this build's chain", () => {
     const ledger = openAt("gap");
-    migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
-    ledger.outbox.db.run(sql.raw("pragma user_version = 2"));
-
-    // Chain [1, 3]: version 2 was written by a build whose migration this one
-    // does not have, so "the steps after 2" is a guess.
+    // A totally synthetic chain and an arbitrary in-between version — this is
+    // a property of `checkChain`/`refuseUnknownVersion`, not of the real
+    // migration count, so it does not need the real chain at all.
+    ledger.outbox.db.run(sql.raw("pragma user_version = 500"));
     const chain: Migration[] = [
-      ...OUTBOX_MIGRATIONS,
-      { version: 3, up: (tx) => tx.run(sql.raw('create table "v3" ("a" integer)')) },
+      {
+        version: 1,
+        tag: "0000_v1",
+        checksum: checksumOf(['create table "v1" ("a" integer)']),
+        up: (tx) => tx.run(sql.raw('create table "v1" ("a" integer)')),
+      },
+      {
+        version: 501,
+        tag: "0500_v501",
+        checksum: checksumOf(['create table "v501" ("a" integer)']),
+        up: (tx) => tx.run(sql.raw('create table "v501" ("a" integer)')),
+      },
     ];
 
     expect(() => migrateOutbox(ledger.outbox, { fs: realFs, migrations: chain })).toThrow(
@@ -375,90 +497,607 @@ describe("the outbox is never dropped", () => {
     );
     ledger.close();
 
-    expect(inspect(join(dir, "gap-outbox.db"), tableNames)).toEqual(["outbox", "outbox_seq"]);
+    expect(inspect(join(dir, "gap-outbox.db"), userVersion)).toBe(500);
   });
 });
 
-/* ── With no backend, there is nothing to refetch from ──────────────────── */
+/* ── a version ahead of this build, on the replica too ───────────────────── */
 
-describe("the replica is not dropped when there is nowhere to refetch from", () => {
+describe("a replica version ahead of this build", () => {
   /**
-   * **The carve-out, and the sharpest edge in the module.** §08 says a replica
-   * version mismatch means drop and refetch. §14.1 says that with no backend
-   * there is no server — *"with no server the outbox never drains"* — so the
-   * replica is not a copy of anything, and §14.6 says a migration must not be
-   * able to destroy the ledger. Dropping here is not a refetch; it is the
-   * deletion of the record.
+   * There is no drop-and-refetch left in this module (see `migrate.ts`'s own
+   * header) — a schema version the build does not recognise is refused the
+   * same way `migrateOutbox` refuses one, never treated as a reason to guess.
    */
-  it("raises instead, and leaves every row where it was", () => {
-    const ledger = openAt("brick1");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+  it("raises and writes nothing", () => {
+    const ledger = openAt("replica-ahead");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
     seedTransaction(ledger, "txn-1");
-    seedTransaction(ledger, "txn-2");
+    ledger.replica.db.run(sql.raw("pragma user_version = 999"));
 
-    expect(() =>
-      migrateReplica(ledger.replica, {
-        fs: realFs,
-        canRefetch: false,
-        migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
-      }),
-    ).toThrow(/nothing to refetch from/);
+    expect(() => migrateReplica(ledger.replica, { fs: realFs })).toThrow(/newer app/);
     ledger.close();
 
-    const path = join(dir, "brick1-replica.db");
-    expect(inspect(path, transactionCount), "the ledger is still the ledger").toBe(2);
-    expect(inspect(path, userVersion), "and it was not migrated either").toBe(1);
+    const path = join(dir, "replica-ahead-replica.db");
+    expect(inspect(path, userVersion), "untouched").toBe(999);
+    expect(inspect(path, transactionCount), "the ledger is still the ledger").toBe(1);
     expect(
       existsSync(path + COPY_SUFFIX),
       "nothing was written at all — not even the copy that precedes writing",
     ).toBe(false);
   });
+});
 
-  /** The same mismatch, once a backend exists, is the ordinary drop-and-refetch. */
-  it("drops once a backend has been reached, and says a refetch is required", () => {
-    const ledger = openAt("brick2");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
-    seedTransaction(ledger, "txn-1");
+/* ── an upgraded phone has what a fresh install has ──────────────────────── */
 
-    const result = migrateReplica(ledger.replica, {
+type MasterRow = {
+  readonly type: string;
+  readonly name: string;
+  readonly tbl_name: string;
+  readonly sql: string;
+};
+
+/**
+ * `sqlite_master.sql`, normalised so a rebuild's own side effects don't read
+ * as drift: SQLite requotes a renamed table's outer `CREATE TABLE` in double
+ * quotes regardless of how the generated file quoted it, collapses nothing
+ * about the whitespace a hand-formatted multi-line `CREATE TABLE` carries,
+ * and a `CHECK`'s self-qualified column references are rewritten from
+ * `__new_<table>` to the table's real name on rename (proven by hand against
+ * `better-sqlite3` — the fixture this repo's own rebuild step exercises).
+ * None of that is a difference between a fresh install and an upgraded one;
+ * it is SQLite's rename behaviour, identical on both paths.
+ */
+function normalizeSql(text: string | null): string {
+  if (text === null) return "";
+  return text
+    .replace(/`([^`]*)`/g, '"$1"')
+    .replace(/__new_/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function masterRows(db: Database.Database): MasterRow[] {
+  return (
+    db
+      .prepare(
+        "select type, name, tbl_name, sql from sqlite_master where name not like 'sqlite_%' order by type, name",
+      )
+      .all() as { type: string; name: string; tbl_name: string; sql: string | null }[]
+  ).map((row) => ({ ...row, sql: normalizeSql(row.sql) }));
+}
+
+describe("an upgraded phone has what a fresh install has", () => {
+  /**
+   * **The drift test.** For every point a phone could have stopped at, run
+   * the chain up to there, then finish it — and compare the result against a
+   * database that ran the whole chain in one launch. If the two ever
+   * disagree, some step behaves differently depending on how much of the
+   * chain already ran before it, which is exactly the property an
+   * already-installed phone depends on and a fresh install can never
+   * exercise.
+   */
+  it("matches a fresh install's sqlite_master at every partial starting point — replica", () => {
+    const fresh = openAt("fresh-ref-r");
+    migrateReplica(fresh.replica, { fs: realFs }).copy?.release();
+    const freshMaster = inspect(join(dir, "fresh-ref-r-replica.db"), masterRows);
+    fresh.close();
+
+    const n = REPLICA_MIGRATIONS.length;
+    for (let k = 1; k < n; k++) {
+      const name = `upgrade-r-${k}`;
+      const ledger = openAt(name);
+      migrateReplica(ledger.replica, {
+        fs: realFs,
+        migrations: REPLICA_MIGRATIONS.slice(0, k),
+      }).copy?.release();
+      migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+      ledger.close();
+
+      const upgradedMaster = inspect(join(dir, `${name}-replica.db`), masterRows);
+      expect(upgradedMaster, `starting from version ${k}`).toEqual(freshMaster);
+    }
+  });
+
+  it("matches a fresh install's sqlite_master at every partial starting point — outbox", () => {
+    const fresh = openAt("fresh-ref-o");
+    migrateOutbox(fresh.outbox, { fs: realFs }).copy?.release();
+    const freshMaster = inspect(join(dir, "fresh-ref-o-outbox.db"), masterRows);
+    fresh.close();
+
+    const n = OUTBOX_MIGRATIONS.length;
+    for (let k = 1; k < n; k++) {
+      const name = `upgrade-o-${k}`;
+      const ledger = openAt(name);
+      migrateOutbox(ledger.outbox, {
+        fs: realFs,
+        migrations: OUTBOX_MIGRATIONS.slice(0, k),
+      }).copy?.release();
+      migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
+      ledger.close();
+
+      const upgradedMaster = inspect(join(dir, `${name}-outbox.db`), masterRows);
+      expect(upgradedMaster, `starting from version ${k}`).toEqual(freshMaster);
+    }
+  });
+});
+
+/* ── a populated replica upgrades cleanly ─────────────────────────────────── */
+
+describe("a populated replica upgrades to current without losing anything", () => {
+  it("keeps every row, backfills name_folded, and the new index is enforced", () => {
+    const ledger = openAt("populated");
+
+    // Version 5 — `counterparty_merges`, `counterparty_distinct_pairs` and the
+    // old ASCII-only unique index exist; `name_folded` does not yet.
+    const atV5 = REPLICA_MIGRATIONS.slice(0, 5);
+    migrateReplica(ledger.replica, { fs: realFs, migrations: atV5 }).copy?.release();
+    migrateOutbox(ledger.outbox, {
       fs: realFs,
-      canRefetch: true,
-      migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+      migrations: OUTBOX_MIGRATIONS.slice(0, 1),
+    }).copy?.release();
+
+    seedTransaction(ledger, "txn-1");
+    ledger.replica.db
+      .insert(currencies)
+      .values({ code: currencyCode("USD"), name: "Placeholder" })
+      .onConflictDoNothing()
+      .run();
+    ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: currencyCode("PLN"),
+        quote: currencyCode("USD"),
+        date: accountingDate("2026-03-01"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "manual",
+      })
+      .run();
+
+    // Three counterparties, each exercising a different way `fold()` has to
+    // normalise a name: plain ASCII, Polish diacritics in both letter cases
+    // in the one name, and an NFD (decomposed) spelling of an accented name.
+    insertCounterparty(ledger, "cp-ascii", "Anna Kowalska");
+    insertCounterparty(ledger, "cp-diacritics", "Łódź Śliwka");
+    insertCounterparty(ledger, "cp-nfd", "Józef".normalize("NFD"));
+
+    ledger.replica.db
+      .insert(counterpartyMerges)
+      .values({
+        id: id<"counterpartyMerges">("merge-1"),
+        winnerId: id<"counterparties">("cp-ascii") as Id<"counterparties">,
+        loserId: id<"counterparties">("cp-diacritics") as Id<"counterparties">,
+      })
+      .run();
+
+    insertOutboxEntryAtV1(ledger, "e-1");
+
+    const outboxResult = migrateOutbox(ledger.outbox, { fs: realFs });
+    const replicaResult = migrateReplica(ledger.replica, { fs: realFs });
+    ledger.close();
+
+    expect(outboxResult.to).toBe(OUTBOX_MIGRATIONS.length);
+    expect(replicaResult.to).toBe(REPLICA_MIGRATIONS.length);
+
+    const replicaPath = join(dir, "populated-replica.db");
+    const outboxPath = join(dir, "populated-outbox.db");
+
+    expect(inspect(replicaPath, transactionCount), "the transaction survived").toBe(1);
+    expect(
+      inspect(replicaPath, (db) =>
+        db.prepare("select count(*) as n from counterparty_merges").get(),
+      ),
+      "the merge record survived its own table's rebuild",
+    ).toEqual({ n: 1 });
+    expect(
+      inspect(replicaPath, (db) => db.prepare("select count(*) as n from fx_rates").get()),
+      "and so did the rate",
+    ).toEqual({ n: 1 });
+    expect(
+      inspect(outboxPath, (db) => db.prepare("select count(*) as n from outbox").get()),
+      "the outbox entry survived too",
+    ).toEqual({ n: 1 });
+
+    const rows = inspect(replicaPath, (db) =>
+      db.prepare('select "id", "name", "name_folded" from "counterparties"').all(),
+    ) as { id: string; name: string; name_folded: string }[];
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row.name_folded, `${row.id}: ${JSON.stringify(row.name)}`).toBe(fold(row.name));
+    }
+
+    expect(
+      inspect(replicaPath, (db) =>
+        db
+          .prepare("select name from sqlite_master where type = 'index' and name = ?")
+          .get("counterparties_name_uq"),
+      ),
+      "the partial unique index on name_folded exists",
+    ).toBeTruthy();
+
+    expect(() =>
+      inspect(replicaPath, (db) =>
+        db
+          .prepare(
+            'insert into "counterparties" ("id", "name", "name_folded", "created_at", "updated_at") values (?, ?, ?, ?, ?)',
+          )
+          .run("cp-dup", "ANNA KOWALSKA", fold("ANNA KOWALSKA"), Date.now(), Date.now()),
+      ),
+    ).toThrow(/UNIQUE constraint failed/i);
+  });
+});
+
+/* ── a version names a file, not a position ──────────────────────────────── */
+
+describe("`user_version` records which step ran, not how many", () => {
+  it("gives every generated file the version its own four-digit prefix names", () => {
+    for (const migration of [...REPLICA_MIGRATIONS, ...OUTBOX_MIGRATIONS]) {
+      const tag = migration.tag;
+      expect(tag, "a generated chain's step carries its own file's tag").toBeDefined();
+      expect(migration.version, `${tag}'s version`).toBe(Number(tag?.slice(0, 4)) + 1);
+    }
+  });
+
+  /**
+   * The property the number exists for: a database written by an older build
+   * opens under a longer chain and runs exactly the steps it has not run —
+   * never all of them, never none.
+   */
+  it("opens a database at an older version under a longer chain, running only what is missing", () => {
+    const ledger = openAt("older-version");
+    const short = REPLICA_MIGRATIONS.slice(0, -1);
+    const shortHead = short.at(-1)?.version;
+    const head = REPLICA_MIGRATIONS.at(-1)?.version;
+    migrateReplica(ledger.replica, { fs: realFs, migrations: short }).copy?.release();
+    expect(inspect(join(dir, "older-version-replica.db"), userVersion)).toBe(shortHead);
+
+    const result = migrateReplica(ledger.replica, { fs: realFs });
+    ledger.close();
+
+    expect(result.from).toBe(shortHead);
+    expect(result.to).toBe(head);
+    expect(result.applied, "only the one step it had not run").toEqual([head]);
+  });
+});
+
+/* ── the applied-steps journal ────────────────────────────── */
+
+/**
+ * **A number is not an identity, and neither is a filename.**
+ *
+ * `user_version` says how far a chain got. It does not say *which* chain, and
+ * this repository has already shipped one where the answer differs: the build
+ * on `main` before this branch had a single-version replica chain, so a
+ * database it wrote sits at `user_version = 1` with every table already
+ * present. Read against the chain here, `1` means "only `0000_schema` has
+ * run" — so the migrator ran `0001_database_objects` over a database that
+ * already had it, died on `local_meta`'s duplicate primary key, and left the
+ * pre-migration copy behind. Every launch after that reported the copy
+ * (`refuseStaleCopy`) instead of the cause.
+ *
+ * `__ledger_migrations` is what closes it: a row per step, keyed on the tag,
+ * carrying the checksum of the statements that ran. The three properties
+ * below are the three things it makes possible.
+ */
+describe("`__ledger_migrations`, the applied-steps journal", () => {
+  /**
+   * A database in the shape `main`'s build left: every table present, because
+   * every step's statements ran, but `user_version` stamped to that build's
+   * own single-version head and no journal, because that build had none.
+   *
+   * The steps are applied through `up` directly rather than through
+   * `migrateReplica`, which is exactly what makes this the pre-journal shape
+   * — the journal is `runInOneTransaction`'s to write, and nothing here goes
+   * near it.
+   */
+  function seedPreJournalReplica(ledger: Ledger, stampedVersion: number) {
+    for (const migration of REPLICA_MIGRATIONS) migration.up(ledger.replica.db);
+    ledger.replica.db.run(sql.raw(`pragma user_version = ${stampedVersion}`));
+  }
+
+  it("refuses a database written before the journal existed, and repeats the same cause", () => {
+    const ledger = openAt("pre-journal");
+    seedPreJournalReplica(ledger, 1);
+
+    const first = refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }));
+    expect(first).toMatch(new RegExp(MIGRATION_JOURNAL));
+    expect(first, "it names the file to delete, not only the problem").toContain(
+      join(dir, "pre-journal-replica.db"),
+    );
+    // And it is the migrator's own sentence, not the driver's. Without the
+    // journal this ran `0001_database_objects` over a database that already
+    // had every object it creates, and what reached the person holding the
+    // phone was `Failed to run the query 'CREATE TABLE …'` — a report of the
+    // symptom, from two layers below the decision that caused it.
+    expect(first).not.toMatch(/Failed to run the query/i);
+
+    // Nothing was written and no copy taken, so the next launch reaches the
+    // same refusal rather than reporting a leftover copy.
+    expect(existsSync(join(dir, "pre-journal-replica.db") + COPY_SUFFIX)).toBe(false);
+    expect(refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }))).toBe(first);
+
+    ledger.close();
+    expect(
+      inspect(join(dir, "pre-journal-replica.db"), userVersion),
+      "and the file is untouched, at the version it arrived at",
+    ).toBe(1);
+  });
+
+  /**
+   * The same refusal on the outbox, and it is the store where it matters
+   * most: its entries are the only copy of intent nobody has been told about
+   * (`architecture/08` §5), so a guess that runs a step twice is a guess made
+   * over unrecoverable rows.
+   */
+  it("refuses a pre-journal outbox too", () => {
+    const ledger = openAt("pre-journal-o");
+    for (const migration of OUTBOX_MIGRATIONS) migration.up(ledger.outbox.db);
+    ledger.outbox.db.run(sql.raw("pragma user_version = 1"));
+
+    expect(() => migrateOutbox(ledger.outbox, { fs: realFs })).toThrow(
+      new RegExp(`has no ${MIGRATION_JOURNAL} table`),
+    );
+    expect(existsSync(join(dir, "pre-journal-o-outbox.db") + COPY_SUFFIX)).toBe(false);
+    ledger.close();
+  });
+
+  /**
+   * The other half of identity. A generated file's statements are frozen once
+   * an installed database has run them — edit one and every device that ran
+   * the old version now disagrees with a fresh install about its own tables,
+   * silently, because the filename and the number both still match.
+   */
+  it("refuses a step whose statements changed after it was applied, naming the tag", () => {
+    const ledger = openAt("edited-step");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+
+    const edited = REPLICA_MIGRATIONS.map((migration) =>
+      migration.tag === "0007_schema"
+        ? { ...migration, checksum: checksumOf(["something else entirely"]) }
+        : migration,
+    );
+
+    const message = refusalMessage(() =>
+      migrateReplica(ledger.replica, { fs: realFs, migrations: edited }),
+    );
+    expect(message).toContain("0007_schema");
+    expect(message).toContain("is not the one that ran here");
+    expect(existsSync(join(dir, "edited-step-replica.db") + COPY_SUFFIX)).toBe(false);
+    ledger.close();
+  });
+
+  /**
+   * And the ordinary path: one row per step that ran, and a later launch
+   * under a longer chain adds only the rows for the steps it actually
+   * applied — never rewrites the ones already there.
+   */
+  it("records tag and checksum for each step, and only adds what a later launch runs", () => {
+    const ledger = openAt("journal-rows");
+    const short = REPLICA_MIGRATIONS.slice(0, -1);
+    migrateReplica(ledger.replica, { fs: realFs, migrations: short }).copy?.release();
+
+    const after = () =>
+      inspect(
+        join(dir, "journal-rows-replica.db"),
+        (db) =>
+          db.prepare(`select tag, checksum from "${MIGRATION_JOURNAL}" order by tag`).all() as {
+            tag: string;
+            checksum: string;
+          }[],
+      );
+
+    expect(after()).toEqual(short.map((m) => ({ tag: m.tag, checksum: m.checksum })));
+
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    ledger.close();
+
+    expect(after()).toEqual(REPLICA_MIGRATIONS.map((m) => ({ tag: m.tag, checksum: m.checksum })));
+  });
+
+  /**
+   * **The checksum has to survive `pnpm ledger:generate`**, or the guarantee
+   * above becomes a refusal every phone hits after any regeneration. The two
+   * committed representations of a step are the `.sql` files drizzle-kit
+   * writes and the `ddl.ts` embedded from them, and this reads both: the
+   * chain's checksums must equal the ones derived from the files on disk,
+   * through the same splitting rules the generator uses (`tools/steps.ts`,
+   * imported rather than reimplemented, so there is no second copy to drift).
+   *
+   * That makes both halves of L3 a red test rather than a convention: a
+   * `ddl.ts` edited by hand fails here, and so does a `.sql` changed without
+   * regenerating. Biome running over `ddl.ts` inside the generate script is
+   * what keeps the file byte-identical across runs, and it moves nothing
+   * inside the template literals this hashes.
+   */
+  it.each([
+    { store: "replica", dir: "../../drizzle/replica", chain: REPLICA_MIGRATIONS },
+    { store: "outbox", dir: "../../drizzle/outbox", chain: OUTBOX_MIGRATIONS },
+  ])("$store: every step's checksum is the one its own .sql file hashes to", (each) => {
+    const fromDisk = stepsIn(new URL(each.dir, import.meta.url));
+
+    expect(fromDisk.length, "vacuity guard").toBeGreaterThan(0);
+    expect(fromDisk.map((step) => step.tag)).toEqual(each.chain.map((m) => m.tag));
+    expect(fromDisk.map((step) => checksumOf(step.statements))).toEqual(
+      each.chain.map((m) => m.checksum),
+    );
+  });
+});
+
+/* ── the 0006_schema backfill, in isolation ──────────────────────────────── */
+
+describe("the `0006_schema` backfill", () => {
+  /** Where `0006_schema` sits in the generated chain — the step the fill belongs to. */
+  const stepIndex = REPLICA_STEPS.findIndex((step) => step.tag === "0006_schema");
+
+  /**
+   * The step's own `up`, run against a populated table: its statements, then
+   * its fill, which is the whole shape under test. The `ALTER TABLE` that adds
+   * `name_folded text DEFAULT ''` leaves every existing row at `''`, and
+   * nothing may still be at `''` once `up` returns.
+   */
+  it("fills every row's name_folded from '' via fold(name.trim())", () => {
+    const ledger = openAt("backfill-hook");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
+    }).copy?.release();
+
+    insertCounterparty(ledger, "cp-1", "Anna Kowalska");
+    insertCounterparty(ledger, "cp-2", "Łukasz");
+    insertCounterparty(ledger, "cp-3", "Józef".normalize("NFD"));
+
+    // The trim is the executors' own — `create-counterparty.executor.ts`
+    // folds `name.trim()` — so a migrated row has to land on the value a
+    // freshly captured one would.
+    insertCounterparty(ledger, "cp-4", "  Maria Nowak  ");
+
+    const step = REPLICA_MIGRATIONS[stepIndex];
+    expect(step?.tag).toBe("0006_schema");
+
+    ledger.replica.db.transaction((tx) => {
+      step?.up(tx);
     });
     ledger.close();
 
-    expect(result.refetchRequired).toBe(true);
-    expect(result.to).toBe(2);
+    const path = join(dir, "backfill-hook-replica.db");
+    const rows = inspect(path, (db) =>
+      db.prepare('select "id", "name", "name_folded" from "counterparties"').all(),
+    ) as { id: string; name: string; name_folded: string }[];
+    expect(rows).toHaveLength(4);
+    for (const row of rows) {
+      expect(row.name_folded).toBe(fold(row.name.trim()));
+      expect(row.name_folded, "no row keeps the default").not.toBe("");
+    }
+  });
 
-    const path = join(dir, "brick2-replica.db");
-    expect(inspect(path, transactionCount), "emptied — the server holds these rows").toBe(0);
-    expect(inspect(path, tableNames)).toContain("v2_marker");
+  /**
+   * The precondition, through the real migrator. Two live counterparties the
+   * fold unifies cannot both survive `0007_schema`'s partial unique index, and
+   * choosing between them is S15's decision, never a migration's.
+   *
+   * Two properties make that refusal usable, and neither is visible from the
+   * message alone: **nothing was written** — no copy taken, the version
+   * unmoved — and **the next launch says the same thing**, rather than the
+   * "a copy is still there" a refusal taken after the copy would report from
+   * then on, which names the wrong cause and buries this one.
+   */
+  it("refuses a fold collision between two live rows before the copy, and repeats the same cause", () => {
+    const ledger = openAt("fold-collision");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
+    }).copy?.release();
+
+    insertCounterparty(ledger, "cp-upper", "ŁUKASZ PLACEHOLDER");
+    insertCounterparty(ledger, "cp-lower", "łukasz placeholder");
+
+    const replicaPath = join(dir, "fold-collision-replica.db");
+    const versionBefore = inspect(replicaPath, userVersion);
+    const collision = /fold to one name/;
+
+    expect(() => migrateReplica(ledger.replica, { fs: realFs })).toThrow(collision);
+    expect(existsSync(`${replicaPath}${COPY_SUFFIX}`), "no copy was taken").toBe(false);
+    expect(inspect(replicaPath, userVersion), "the version did not move").toBe(versionBefore);
+
+    let second = "";
+    try {
+      migrateReplica(ledger.replica, { fs: realFs });
+    } catch (error) {
+      // `catch` bindings are `unknown` — the language gives no choice.
+      second = error instanceof Error ? error.message : String(error);
+    }
+    ledger.close();
+
+    expect(second).toMatch(collision);
+    expect(second, "both rows, by id").toContain("cp-upper");
+    expect(second).toContain("cp-lower");
+    expect(second, "not the copy — there isn't one").not.toMatch(/pre-migration copy from an/);
+  });
+
+  /**
+   * The same two spellings with one of them archived: legal before the upgrade
+   * and legal after it, because `counterparties_name_uq` is partial (`where
+   * not archived`). A check that refused this would turn a merge's own outcome
+   * — S15 archives the loser — into an unupgradeable database.
+   */
+  it("allows the collision when one of the two rows is archived", () => {
+    const ledger = openAt("fold-archived");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
+    }).copy?.release();
+
+    insertCounterparty(ledger, "cp-live", "Łukasz Placeholder");
+    insertCounterparty(ledger, "cp-archived", "łukasz placeholder");
+    ledger.replica.db.run(
+      sql`update "counterparties" set "archived" = 1 where "id" = 'cp-archived'`,
+    );
+
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    ledger.close();
+
+    const rows = inspect(join(dir, "fold-archived-replica.db"), (db) =>
+      db.prepare('select "id", "name_folded" from "counterparties" order by "id"').all(),
+    ) as { id: string; name_folded: string }[];
+    expect(rows.map((row) => row.name_folded)).toEqual([
+      "lukasz placeholder",
+      "lukasz placeholder",
+    ]);
   });
 });
 
 /* ── the pre-migration copy ──────────────────────────────────────────────── */
 
 describe("the pre-migration copy", () => {
-  it("fully consumes result-bearing pragmas before copying under Expo SQLite", () => {
+  /**
+   * **The rule is about pragmas that return rows, not about `run`.** Expo
+   * SQLite leaves a result row active when a statement that produces one is
+   * issued through anything but a full read, so every *result-bearing* pragma
+   * this module sends — `user_version`, `foreign_keys` read back before it is
+   * changed, and `wal_checkpoint(truncate)` — goes through `all`, which
+   * consumes the row. So do the journal's own two reads (does the table
+   * exist, and what does it hold), which are ordinary selects rather than
+   * pragmas and are counted here for the same reason: nothing on this
+   * connection may leave a row unread.
+   *
+   * A pragma *assignment* returns nothing at all, so `foreign_keys = OFF` and
+   * its restore are `run`'s to send and always were: `migrateReplica` has
+   * issued exactly those two the whole time. What changed is that
+   * `migrateOutbox` now does too (both stores migrate with foreign keys off),
+   * which is why the count below is two rather than none.
+   */
+  it("sends every result-bearing pragma through `all`, and only assignments through `run`", () => {
     const ledger = openAt("expo-pragmas");
     migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
 
     const get = vi.spyOn(ledger.outbox.db, "get").mockImplementation(() => {
       throw new Error("Expo SQLite would leave the first result row active");
     });
-    const run = vi.spyOn(ledger.outbox.db, "run").mockImplementation(() => {
-      throw new Error("Expo SQLite would leave the checkpoint result row active");
-    });
+    const run = vi.spyOn(ledger.outbox.db, "run");
     const all = vi.spyOn(ledger.outbox.db, "all");
 
     const result = migrateOutbox(ledger.outbox, {
       fs: realFs,
-      migrations: chainOfTwo(OUTBOX_MIGRATIONS, "creates"),
+      migrations: withExtraStep(OUTBOX_MIGRATIONS, "creates"),
     });
 
     expect(get).not.toHaveBeenCalled();
-    expect(run).not.toHaveBeenCalled();
-    expect(all).toHaveBeenCalledTimes(2);
+    expect(
+      all,
+      "`user_version`, the journal's existence and contents, the checkpoint, and `foreign_keys` read back before it is changed",
+    ).toHaveBeenCalledTimes(5);
+    expect(run, "the two `foreign_keys` assignments, which return no rows").toHaveBeenCalledTimes(
+      2,
+    );
+    // M2 — and the restore put back the value `open.ts` set for *this* store,
+    // not a constant `ON`. The outbox references nothing and is opened with
+    // foreign keys off deliberately; a migrator that ended with `= ON` handed
+    // every later statement on this connection a stricter database than the
+    // one that was configured.
+    expect(ledger.outbox.db.all<{ foreign_keys: number }>(sql.raw("pragma foreign_keys"))).toEqual([
+      { foreign_keys: 0 },
+    ]);
+
     result.copy?.release();
     ledger.close();
   });
@@ -472,7 +1111,8 @@ describe("the pre-migration copy", () => {
    */
   it("is taken before anything is written, and holds the state as it was", () => {
     const ledger = openAt("copy");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    const atV3 = REPLICA_MIGRATIONS.slice(0, 3);
+    migrateReplica(ledger.replica, { fs: realFs, migrations: atV3 }).copy?.release();
     seedTransaction(ledger, "txn-1");
 
     const path = join(dir, "copy-replica.db");
@@ -490,32 +1130,31 @@ describe("the pre-migration copy", () => {
 
     const result = migrateReplica(ledger.replica, {
       fs: watchingFs,
-      canRefetch: true,
-      migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+      migrations: withExtraStep(atV3, "creates"),
     });
     ledger.close();
 
     expect(atCopyTime, "copied exactly once").toHaveLength(1);
     expect(
       atCopyTime[0],
-      "the database was still at version 1 with its row when the copy was taken",
-    ).toEqual({ version: 1, rows: 1 });
+      "the database was still at version 3 with its row when the copy was taken",
+    ).toEqual({ version: 3, rows: 1 });
 
     // And the file on disk is that state, not a checkpoint-stale version of it:
     // WAL keeps recent commits in the `-wal` sibling until they are folded back,
     // so a copy taken without a checkpoint would be missing the seeded row.
     const copyPath = `${path}${COPY_SUFFIX}`;
     expect(result.copy?.path).toBe(copyPath);
-    expect(inspect(copyPath, userVersion)).toBe(1);
+    expect(inspect(copyPath, userVersion)).toBe(3);
     expect(inspect(copyPath, transactionCount), "the row that was there a moment ago").toBe(1);
 
     // The live database has moved on, which is what makes the copy worth having.
-    expect(inspect(path, transactionCount)).toBe(0);
+    expect(inspect(path, userVersion)).toBe(4);
   });
 
   it("is retained until it is explicitly released", () => {
     const ledger = openAt("retain");
-    const result = migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    const result = migrateReplica(ledger.replica, { fs: realFs });
     ledger.close();
 
     const copyPath = join(dir, "retain-replica.db") + COPY_SUFFIX;
@@ -533,13 +1172,13 @@ describe("the pre-migration copy", () => {
    */
   it("refuses to migrate over a copy nobody released", () => {
     const ledger = openAt("stale");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false });
+    const atV1 = REPLICA_MIGRATIONS.slice(0, 1);
+    migrateReplica(ledger.replica, { fs: realFs, migrations: atV1 });
 
     expect(() =>
       migrateReplica(ledger.replica, {
         fs: realFs,
-        canRefetch: true,
-        migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
+        migrations: withExtraStep(atV1, "creates"),
       }),
     ).toThrow(/has not opened cleanly/);
     ledger.close();
@@ -553,7 +1192,7 @@ describe("the pre-migration copy", () => {
 describe("`applied_seq`, the replica's watermark", () => {
   it("starts at zero and is one row, by constraint and not by convention", () => {
     const ledger = openAt("meta");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
 
     expect(readAppliedSeq(ledger.replica.db)).toBe(0);
 
@@ -583,7 +1222,7 @@ describe("`applied_seq`, the replica's watermark", () => {
    */
   it("advances inside the caller's transaction, and rolls back with it", () => {
     const ledger = openAt("watermark");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
 
     ledger.replica.db.transaction((tx) => {
       seedTransaction(ledger, "txn-1");
@@ -607,7 +1246,7 @@ describe("`applied_seq`, the replica's watermark", () => {
 
   it("never goes backwards", () => {
     const ledger = openAt("monotonic");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
 
     ledger.replica.db.transaction((tx) => advanceAppliedSeq(tx, 12));
     ledger.replica.db.transaction((tx) => advanceAppliedSeq(tx, 4));
@@ -617,23 +1256,20 @@ describe("`applied_seq`, the replica's watermark", () => {
   });
 
   /**
-   * A drop takes the watermark with it and the chain recreates it at zero,
-   * which is both correct and the safe direction: a refetched replica holds
-   * what the *server* admitted, so every entry still in the outbox is by
-   * definition not reflected in it and must be replayed.
+   * A schema migration is DDL (plus, sometimes, a data backfill of an
+   * existing column) — nothing about it changes what has already been
+   * applied from the outbox, so the watermark a step's transaction commits
+   * with is the same one it started with.
    */
-  it("resets to zero when the replica is dropped and refetched", () => {
-    const ledger = openAt("reset");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+  it("is untouched by a schema migration", () => {
+    const ledger = openAt("watermark-migrate");
+    const atV3 = REPLICA_MIGRATIONS.slice(0, 3);
+    migrateReplica(ledger.replica, { fs: realFs, migrations: atV3 }).copy?.release();
     ledger.replica.db.transaction((tx) => advanceAppliedSeq(tx, 31));
 
-    migrateReplica(ledger.replica, {
-      fs: realFs,
-      canRefetch: true,
-      migrations: chainOfTwo(REPLICA_MIGRATIONS, "creates"),
-    });
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
 
-    expect(readAppliedSeq(ledger.replica.db)).toBe(0);
+    expect(readAppliedSeq(ledger.replica.db)).toBe(31);
     ledger.close();
   });
 });
@@ -658,12 +1294,21 @@ describe("`applied_seq`, the replica's watermark", () => {
  * the old emitter's comment did.
  */
 describe("a constraint declared in the schema is present on the device", () => {
-  /** Every object of a kind, as the file itself reports them. */
+  /**
+   * Every object of a kind, as the file itself reports them — minus the
+   * migrator's own journal, which no schema module declares and none ever
+   * will: it is created by `migrate.ts` before the chain runs, so that the
+   * chain has somewhere to record itself. The census below is about drift
+   * between the schema modules and what ships; the journal belongs to neither
+   * side of that comparison, and the fresh-database tests above are where its
+   * presence is asserted instead.
+   */
   function objects(db: Database.Database, type: "index" | "table"): string[] {
     return db
       .prepare("select name from sqlite_master where type = ? and name not like 'sqlite_%'")
       .all(type)
       .map((row) => (row as { name: string }).name)
+      .filter((name) => name !== MIGRATION_JOURNAL)
       .sort();
   }
 
@@ -705,7 +1350,7 @@ describe("a constraint declared in the schema is present on the device", () => {
    */
   it("enforces a `CHECK` the schema declares, against a raw insert", () => {
     const ledger = openAt("check");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
 
     const cause = refusal(() =>
       ledger.replica.db.run(sql.raw(`insert into "local_meta" ("id") values (2)`)),
@@ -721,7 +1366,7 @@ describe("a constraint declared in the schema is present on the device", () => {
    */
   it("enforces a foreign key, so a capture naming a missing row is refused", () => {
     const ledger = openAt("fk");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
     seedReferences(ledger);
 
     const cause = refusal(() =>
@@ -743,9 +1388,6 @@ describe("a constraint declared in the schema is present on the device", () => {
   });
 
   /**
-   * **The staleness guard, and the one thing generated-and-committed DDL is
-   * exposed to that a runtime emitter was not.**
-   *
    * `ddl.ts` is output: it is only correct as long as somebody ran `pnpm
    * ledger:generate` after touching a table. A fourteenth shared table added to
    * `packages/schema` without regenerating would compile, query cleanly against
@@ -763,7 +1405,7 @@ describe("a constraint declared in the schema is present on the device", () => {
    */
   it("creates exactly the tables its schema module declares, in each database", () => {
     const ledger = openAt("drift");
-    migrateReplica(ledger.replica, { fs: realFs, canRefetch: false }).copy?.release();
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
     migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
     ledger.close();
 
@@ -810,6 +1452,64 @@ describe("a constraint declared in the schema is present on the device", () => {
     ).toEqual(declared(outboxSchema));
     expect(shipped(join(dir, "drift-outbox.db"))).toEqual(declaredColumns(outboxSchema));
   });
+
+  /**
+   * A child row too (`ON DELETE CASCADE` on `transaction_lines.transaction_id`)
+   * — the row a naive copy-rename-drop of `transactions`, run with foreign
+   * keys still enforced, would cascade away even though nothing asked it to.
+   * `runInOneTransaction`'s foreign-keys-off window is what this proves, over
+   * the real chain rather than a synthetic one: `0008_schema` is the rebuild
+   * that adds `transactions_debt_amount_requires_currency`.
+   */
+  it("keeps a child row through the transactions rebuild, and ships the new CHECK", () => {
+    const ledger = openAt("rebuild-fk");
+    // Everything up to, but not including, the rebuild that adds the CHECK —
+    // `transactions` exists in its pre-CHECK shape, ready to seed.
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, -1),
+    }).copy?.release();
+    seedTransaction(ledger, "txn-1");
+    ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: id<"transactionLines">("line-1"),
+        transactionId: id<"transactions">("txn-1") as Id<"transactions">,
+        description: "Room",
+        amount: money.toMoney("18.00"),
+      })
+      .run();
+
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+
+    const cause = refusal(() =>
+      ledger.replica.db
+        .insert(transactions)
+        .values({
+          id: id<"transactions">("txn-check") as Id<"transactions">,
+          date: accountingDate("2026-03-13"),
+          type: "expense",
+          accountId: id<"accounts">("acc-1"),
+          amountOriginal: money.toMoney("5.00"),
+          currency: currencyCode("PLN"),
+          fxRate: money.pivotPerUnit("1.000000000000"),
+          debtAmount: money.toMoney("5.00"),
+        })
+        .run(),
+    );
+    expect(cause, "the rebuilt table enforces the CHECK").toMatch(/CHECK constraint failed/i);
+    ledger.close();
+
+    const path = join(dir, "rebuild-fk-replica.db");
+    expect(
+      inspect(path, transactionCount),
+      "the transaction survived its own table's rebuild",
+    ).toBe(1);
+    expect(
+      inspect(path, (db) => db.prepare("select count(*) as n from transaction_lines").get()),
+      "and so did the child row `ON DELETE CASCADE` could otherwise have taken with it",
+    ).toEqual({ n: 1 });
+  });
 });
 
 /* ── opening ─────────────────────────────────────────────────────────────── */
@@ -849,6 +1549,23 @@ describe("opening the pair", () => {
     ).toEqual({ foreign_keys: 0 });
 
     expect(read(ledger.replica.db, "busy_timeout")).toEqual({ timeout: 5000 });
+
+    // M2 — and a migration on this connection leaves both exactly as they
+    // are. `runInOneTransaction` turns foreign keys off for the length of the
+    // transaction (a step may rebuild a table) and restores **the value it
+    // found**, not a constant `ON`: restoring `ON` unconditionally overrode
+    // `open.ts`'s deliberate `OFF` for the outbox, on every launch where a
+    // migration happened to run, and nothing said so.
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
+
+    expect(read(ledger.replica.db, "foreign_keys"), "the replica migrated, still ON").toEqual({
+      foreign_keys: 1,
+    });
+    expect(read(ledger.outbox.db, "foreign_keys"), "the outbox migrated, still OFF").toEqual({
+      foreign_keys: 0,
+    });
+
     ledger.close();
   });
 

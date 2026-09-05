@@ -2,9 +2,12 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
+import type Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
+import { scratchLedger } from "../test/scratch.ts";
 import { type ScratchStores, scratchStores } from "../test/stores.ts";
 import { readCounterpartyBalances } from "./read-counterparty-balances.ts";
 
@@ -416,5 +419,116 @@ describe("readCounterpartyBalances — a settlement's own currency and amount (S
         bucket: null,
       },
     ]);
+  });
+
+  /**
+   * L — `debt_currency` set, `debt_amount` absent: each field falls back to
+   * its OWN amount, the same independent coalesce `counterparty-balance.ts`'s
+   * SQL does (`coalesce(debt_amount, amount_original)` and
+   * `coalesce(debt_amount, to_amount)` separately). Folding both to
+   * `amountOriginal` read a transfer's `to` leg — the one `debtDelta` actually
+   * uses (side `'to'`) — as the `from` leg's amount in a different currency.
+   */
+  it("a transfer's debt_currency with no debt_amount falls back to its own to_amount, not amount_original", () => {
+    const db = stores.ledger.replica.db;
+    const bank2 = id<"accounts">("44444444-4444-4444-8444-444444444444");
+    db.insert(accounts)
+      .values({ id: bank2, name: "Bank B · PLN", currency: PLN, kind: "bank" })
+      .run();
+    db.insert(transactions)
+      .values({
+        id: id<"transactions">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+        date: accountingDate("2026-08-10"),
+        type: "transfer",
+        accountId: BANK,
+        toAccountId: bank2,
+        amountOriginal: money.toMoney("50"),
+        toAmount: money.toMoney("200"),
+        currency: EUR,
+        toCurrency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+        debtCurrency: PLN,
+        counterpartyId: NINA,
+        counterpartyRole: "debt",
+      })
+      .run();
+    // The `to` leg's own 200, never the `from` leg's 50 (a different
+    // currency entirely) — the bug this guards folded both to 50.
+    expect(readCounterpartyBalances(db, TODAY)[0]?.balance).toBe("-200.00000000");
+  });
+});
+
+/**
+ * L — a currency with no `currencies` row is a data-integrity gap, not a
+ * two-decimal guess. `decimalsByCurrency.get(...) ?? 2` silently rendered
+ * every such currency at the wrong scale.
+ *
+ * **`scratchLedger()`, foreign keys off, not `scratchStores()` (H2's own
+ * doc on that distinction).** The replica's own connection enforces
+ * `currency`/`debt_currency`'s FK into `currencies` (§14.6) — correctly, so
+ * this state cannot arise through an ordinary write. Reaching it at all
+ * needs the looser harness, on purpose: it is the one place this repository
+ * simulates a row that should be structurally impossible, to prove the read
+ * refuses to guess about it rather than silently defaulting.
+ */
+describe("readCounterpartyBalances — a currency missing its own scale (L)", () => {
+  it("throws by name rather than defaulting to two decimals", () => {
+    const scratch = scratchLedger();
+    // `scratchLedger()` is `scratch.ts`'s own merged, unbranded database —
+    // `ReplicaDb`'s `STORE` phantom only `openLedger` stamps. The reader's
+    // signature needs it; this harness is the whole point of the test (the
+    // FK it deliberately leaves off), so the brand is asserted rather than
+    // produced.
+    const db = scratch.db as unknown as ReplicaDb<Database.RunResult, typeof ledgerSchema>;
+    db.insert(currencies)
+      .values({ code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, isPivot: true })
+      .run();
+    db.insert(accounts)
+      .values({ id: BANK, name: "Bank A · PLN", currency: PLN, kind: "bank" })
+      .run();
+    db.insert(counterparties).values({ id: NINA, name: "Nina", kind: "person" }).run();
+    // JPY has no `currencies` row — the FK that would normally forbid this
+    // is exactly what this harness leaves off, on purpose (see above).
+    db.insert(transactions)
+      .values(
+        txn({
+          id: id<"transactions">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+          date: accountingDate("2026-08-01"),
+          type: "expense",
+          amountOriginal: money.toMoney("200"),
+          currency: currencyCode("JPY"),
+          counterpartyId: NINA,
+        }),
+      )
+      .run();
+    expect(() => readCounterpartyBalances(db, TODAY)).toThrow(/JPY/);
+    scratch.close();
+  });
+});
+
+/**
+ * L — `transactions_debt_amount_requires_currency` (`transactions.sqlite.ts`),
+ * broken once: `debt_amount` naming a figure with no stated currency is
+ * refused at capture time (§14.6), the same as every other `CHECK` this
+ * replica declares.
+ */
+describe("the transactions table — debt_amount requires debt_currency (L)", () => {
+  it("refuses debt_amount set with debt_currency null, a raw insert", () => {
+    const db = stores.ledger.replica.db;
+    expect(() =>
+      db
+        .insert(transactions)
+        .values(
+          txn({
+            id: id<"transactions">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+            date: accountingDate("2026-08-01"),
+            type: "expense",
+            amountOriginal: money.toMoney("200"),
+            debtAmount: money.toMoney("200"),
+            counterpartyId: NINA,
+          }),
+        )
+        .run(),
+    ).toThrow(/CHECK constraint failed/i);
   });
 });

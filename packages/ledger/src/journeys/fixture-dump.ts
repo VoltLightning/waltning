@@ -17,6 +17,7 @@
  */
 
 import type Database from "better-sqlite3";
+import { MIGRATION_JOURNAL } from "../migrate.ts";
 
 /**
  * `"` and `'`, built from a char code rather than written as a literal.
@@ -91,6 +92,14 @@ type NameRow = { name: string };
  * naming that same row's primary key is replacing a row the chain seeded,
  * not colliding with one. Every other table starts empty, where `REPLACE`
  * behaves exactly like `INSERT`.
+ *
+ * **`__ledger_migrations` is skipped, for the same reason the `CREATE TABLE`s
+ * are.** The journal is the chain's own record of itself — which steps ran,
+ * and what their statements hashed to — so it is written by the migrator that
+ * builds a fixture's tables, exactly as it is on a device, and a copy carried
+ * in the `INSERT`s would be a second statement of a fact the chain already
+ * makes. It would also be the one non-deterministic column in this file:
+ * `applied_at` is a clock reading.
  */
 export function dumpDatabase(sqlite: Database.Database): string {
   const [versionRow] = sqlite.prepare("pragma user_version").all() as {
@@ -111,6 +120,7 @@ export function dumpDatabase(sqlite: Database.Database): string {
   ];
 
   for (const { name } of tables) {
+    if (name === MIGRATION_JOURNAL) continue;
     const columns = (
       sqlite.prepare(`select name from pragma_table_info(?)`).all(name) as NameRow[]
     ).map((c) => c.name);

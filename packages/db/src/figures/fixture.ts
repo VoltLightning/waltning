@@ -52,6 +52,7 @@ export const ACCOUNTS = [
     // `…006` below, in `ZZZ`, precisely so an *opening balance* never has to
     // carry that precision.
     opening: "10.12",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -61,6 +62,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: true,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -70,6 +72,7 @@ export const ACCOUNTS = [
     ownership: "shared",
     isBusiness: false,
     opening: "-5.5",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -79,6 +82,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "3",
+    openingDate: null as string | null,
     kind: "other",
   },
   {
@@ -88,12 +92,20 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   /**
    * §8's own account, class **F** for the balance — a clearing account
    * whose two inflows and one allocation are what `find-unsettled.ts` and
    * `money.fifoOldestOpen` are each asked to name the oldest of.
+   *
+   * **A non-zero opening (C1, H2)** — 200 PLN, dated well before any of its
+   * legs — proves the balance CTE's `LEFT JOIN` (an account's opening
+   * balance counts even where its legs alone would not survive one) and the
+   * FIFO queue's own synthetic entry (H2): with the opening folded in, the
+   * oldest still-open row is the opening itself, not the 80 dated
+   * 2026-08-05 that answered this before the fix.
    */
   {
     id: "00000000-0000-4000-8000-00000000000f",
@@ -101,7 +113,8 @@ export const ACCOUNTS = [
     currency: "PLN",
     ownership: "own",
     isBusiness: false,
-    opening: "0",
+    opening: "200",
+    openingDate: "2026-07-15" as string | null,
     kind: "clearing",
   },
   /** The settlement's own currency (S14) — Counterparty A's EUR payment lands here. */
@@ -112,6 +125,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   /**
@@ -127,6 +141,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "clearing",
   },
   /**
@@ -141,6 +156,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
   },
   /** The `…004` transfer's destination — shared, matching what it tested before moving off PLN. */
@@ -151,7 +167,49 @@ export const ACCOUNTS = [
     ownership: "shared",
     isBusiness: false,
     opening: "0",
+    openingDate: null as string | null,
     kind: "other",
+  },
+  /**
+   * H1 — a clearing account whose one leg is an outflow (a payment made on
+   * the group's behalf, e.g. "Hotel"): the balance goes negative, and both
+   * engines' remainder must keep that sign — `abs()`ing it (the bug) had
+   * `money.fifoOldestOpen` report a positive remainder that disagreed with
+   * this exact negative balance.
+   */
+  {
+    id: "00000000-0000-4000-8000-000000000014",
+    name: "Negative clearing · PLN",
+    currency: "PLN",
+    ownership: "own",
+    isBusiness: false,
+    opening: "0",
+    openingDate: null as string | null,
+    kind: "clearing",
+  },
+  /**
+   * M4 — a clearing account with **two legs open at the same time**, where
+   * the oldest is a real transaction and is only *partly* unconsumed:
+   * `+100, +60, −40`. Both open legs survive `find-unsettled.ts`'s
+   * `running_open > total_consumed` filter, so the query's `opens` CTE
+   * produces two candidate rows for this one account — which is what makes
+   * `DISTINCT ON (o.account_id)` load-bearing rather than decoration, and
+   * what a fixture whose oldest open leg is the *only* open leg can never
+   * show.
+   *
+   * It also pins the remainder's definition. The answer is 60 — this leg's
+   * own unconsumed share — not 100 (the leg's whole amount) and not 120 (the
+   * account's balance, which the second open leg carries the rest of).
+   */
+  {
+    id: "00000000-0000-4000-8000-000000000015",
+    name: "Split clearing · PLN",
+    currency: "PLN",
+    ownership: "own",
+    isBusiness: false,
+    opening: "0",
+    openingDate: null as string | null,
+    kind: "clearing",
   },
 ] as const;
 
@@ -486,6 +544,44 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     counterpartyRole: "debt",
     debtCurrency: "PLN",
     debtAmount: "214.05",
+  },
+  // H1 — a single outflow on Negative clearing: balance −150, and the
+  // remainder of this one leg must read −150 too, not 150.
+  {
+    id: "20000000-0000-4000-8000-000000000023",
+    date: "2026-08-01",
+    type: "expense",
+    accountId: ACCOUNTS[10].id,
+    amountOriginal: "150",
+    currency: "PLN",
+  },
+  // M4 — Split clearing: `+100, +60, −40`. The 40 consumes part of the 100,
+  // so the 100 stays open with 60 of its own left and the 60 stays open
+  // whole. Two rows clear the query's threshold; one row is the answer, and
+  // its remainder is 60.
+  {
+    id: "20000000-0000-4000-8000-000000000024",
+    date: "2026-08-01",
+    type: "income",
+    accountId: ACCOUNTS[11].id,
+    amountOriginal: "100",
+    currency: "PLN",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000025",
+    date: "2026-08-02",
+    type: "income",
+    accountId: ACCOUNTS[11].id,
+    amountOriginal: "60",
+    currency: "PLN",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000026",
+    date: "2026-08-03",
+    type: "expense",
+    accountId: ACCOUNTS[11].id,
+    amountOriginal: "40",
+    currency: "PLN",
   },
 ];
 

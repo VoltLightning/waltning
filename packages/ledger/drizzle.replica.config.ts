@@ -3,10 +3,13 @@ import { defineConfig } from "drizzle-kit";
 /**
  * The replica database's DDL, generated rather than emitted at run time.
  *
- * **Two configs, because there are two SQLite files with opposite rules** —
- * `architecture/08` gives the replica *"drop and refetch"* and the outbox
- * *"never drop"*, so each has its own `user_version`, its own chain and its own
- * table list. See `drizzle.outbox.config.ts` for the other half.
+ * **Two configs, because there are two SQLite files.** Each has its own
+ * `user_version`, its own chain and its own table list — the replica
+ * migrates in place, one version per generated file
+ * (`architecture/08`, `tools/embed-ddl.ts`), and the outbox is *"never
+ * drop"*. Neither is ever dropped by this package; a refetch from a backend
+ * is sync's own operation (arc 2), triggered by sync, never by a schema
+ * version. See `drizzle.outbox.config.ts` for the other half.
  *
  * **No `dbCredentials`, and that is not an omission.** `generate` diffs the
  * schema against the snapshot in `drizzle/replica/meta` and never opens a

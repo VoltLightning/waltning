@@ -18,48 +18,45 @@
  * something older.
  *
  * Run through `pnpm --filter @waltning/ledger generate`, never on its own —
- * embedding without regenerating just re-writes yesterday's DDL.
- */
-
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
-/** drizzle-kit's separator. Statements, not lines: `CREATE TABLE` spans many. */
-const BREAKPOINT = "--> statement-breakpoint";
-
-/**
- * Every `.sql` in one migration directory, in filename order.
+ * embedding without regenerating just re-writes yesterday's DDL. That script
+ * finishes by running Biome over the file this writes, so the committed
+ * `ddl.ts` is byte-identical to what a regeneration produces: `migrate.ts`
+ * checksums each step's statements out of this file and journals the result
+ * on every device, so a formatting pass that moved those bytes would read as
+ * *"this build's `0007_schema` is not the one that ran here"* on every
+ * installed phone.
  *
- * Filename order rather than `meta/_journal.json` order, deliberately: the
- * journal describes what drizzle-kit generated, and the hand-written
- * `0001_database_objects.sql` is listed there only because this repo puts it
- * there for `packages/db`'s benefit. Sorting the directory means a companion
- * file cannot be silently left out of the chain by a journal edit.
+ * **Every generated file is its own step, in filename order — one `.sql` file,
+ * one entry, nothing derived from its contents.** `REPLICA_STEPS` and
+ * `OUTBOX_STEPS` are the whole output for each directory: no splitting a
+ * rebuild file away from a plain one, no classifying a step by whether it
+ * contains `__new_`, no synthesising the indexes a rebuild's `DROP TABLE`
+ * took with it. `migrate.ts` turns each step into the version its own
+ * filename names — `0006_schema` is version 7, from the prefix and never
+ * from the position — and runs its statements verbatim, then whatever
+ * hand-written backfill is registered for that tag. drizzle-kit already
+ * emits everything a rebuild needs, indexes included
+ * (`prepareSQLiteRecreateTable` ends with `prepareCreateIndexesJson`), so
+ * there is nothing left here to reconstruct. A round that tried to (H1's
+ * "fix") was reconstructing a premise that was never true.
+ *
+ * **A rebuild file's `PRAGMA foreign_keys=OFF/ON` bookends are stripped.**
+ * SQLite treats `PRAGMA foreign_keys` as a no-op once a transaction is
+ * already open, and `migrate.ts` runs every step's statements inside one —
+ * so shipping the bookends would ship two statements that do nothing where
+ * they land. What actually has to happen — the connection running with
+ * foreign keys off for the length of a migration transaction that might
+ * rebuild a table another populated table still references — is
+ * `migrate.ts`'s job, toggled with the pragma *before* the transaction
+ * opens, which is the one place it takes effect. `open.ts`'s `tune()` is
+ * what turns `foreign_keys` back on for the replica afterward, once per
+ * connection, at open time — the pragma is a connection property, not
+ * something a migration's rollback or commit restores on its own.
  */
-function statementsIn(dir: URL): string[] {
-  const files = readdirSync(dir)
-    .filter((name) => name.endsWith(".sql"))
-    .sort();
-  if (files.length === 0) throw new Error(`no .sql files in ${fileURLToPath(dir)} — run generate`);
 
-  const statements: string[] = [];
-  for (const file of files) {
-    const text = readFileSync(new URL(file, `${dir.href}/`), "utf8");
-    for (const chunk of text.split(BREAKPOINT)) {
-      // Comment-only lines are stripped: the hand-written file explains itself
-      // at length, and none of that belongs in a bundle. A trailing `;` goes
-      // too — SQLite's `run` takes one statement and drizzle passes it through.
-      const statement = chunk
-        .split("\n")
-        .filter((line) => !line.trimStart().startsWith("--"))
-        .join("\n")
-        .trim()
-        .replace(/;$/, "");
-      if (statement.length > 0) statements.push(statement);
-    }
-  }
-  return statements;
-}
+import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { type Step, stepsIn } from "./steps.ts";
 
 /**
  * One statement as a template literal.
@@ -73,9 +70,14 @@ function literal(statement: string): string {
   return `\`${statement.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${")}\``;
 }
 
-function block(name: string, doc: string, statements: readonly string[]): string {
-  const body = statements.map((s) => `  ${literal(s)},`).join("\n");
-  return `${doc}\nexport const ${name}: readonly string[] = [\n${body}\n];\n`;
+function stepsBlock(name: string, doc: string, steps: readonly Step[]): string {
+  const entries = steps
+    .map(({ tag, statements }) => {
+      const body = statements.map((s) => `      ${literal(s)},`).join("\n");
+      return `  {\n    tag: ${JSON.stringify(tag)},\n    statements: [\n${body}\n    ],\n  },`;
+    })
+    .join("\n");
+  return `${doc}\nexport const ${name}: readonly { readonly tag: string; readonly statements: readonly string[] }[] = [\n${entries}\n];\n`;
 }
 
 const HEADER = `/**
@@ -88,6 +90,13 @@ const HEADER = `/**
  * schema modules declare, so a stale copy is a red test rather than a phone
  * that is quietly a version behind.
  *
+ * **Editing a step that has already shipped is worse than a stale copy.**
+ * \`migrate.ts\` hashes each step's statements and journals that checksum in
+ * \`__ledger_migrations\` on every device, so a change to an old file's
+ * contents makes every installed database refuse to open —
+ * *"this build's \`0007_schema\` is not the one that ran here"*. A change to
+ * what a step does is a **new** step.
+ *
  * This is what replaced a runtime emitter that walked drizzle's table objects
  * and rebuilt columns, affinities, \`primary key\` and \`not null\` by hand.
  * Everything else a table declared — foreign keys, \`CHECK\`s, indexes, partial
@@ -96,6 +105,16 @@ const HEADER = `/**
  * refuse at capture time what the server would refuse, and every one of those
  * refusals is a constraint that emitter did not emit. \`outbox.ts\` declares
  * \`index("outbox_pending_by_seq")\` and the phone did not have it.
+ *
+ * **One step per generated file, in filename order, statements verbatim.**
+ * \`migrate.ts\` turns each step into \`REPLICA_MIGRATIONS\` /
+ * \`OUTBOX_MIGRATIONS\`' version — the file's own four-digit prefix plus one,
+ * so \`0006_schema\` is version 7 whatever else the chain holds — and runs
+ * its statements, then the hand-written backfill registered under the step's
+ * \`tag\`, if there is one (\`REPLICA_BACKFILLS\` / \`OUTBOX_BACKFILLS\`, both
+ * in \`migrate.ts\`): the SQL a schema step cannot itself express, such as
+ * filling a new column from the rows that already exist. This module does not
+ * know which tags have one.
  */
 `;
 
@@ -104,15 +123,15 @@ const out = new URL("../src/ddl.ts", here);
 
 const file = [
   HEADER,
-  block(
-    "REPLICA_DDL",
-    `/** The fifteen shared tables, plus \`local_meta\` and its one row. */`,
-    statementsIn(new URL("../drizzle/replica", here)),
+  stepsBlock(
+    "REPLICA_STEPS",
+    `/** One step per file in \`drizzle/replica\`, filename order — the fifteen shared tables, \`local_meta\` and its one row, and every schema change since. */`,
+    stepsIn(new URL("../drizzle/replica", here)),
   ),
-  block(
-    "OUTBOX_DDL",
-    `/** The queue, its index, and the counter \`claimSeq\` allocates from. */`,
-    statementsIn(new URL("../drizzle/outbox", here)),
+  stepsBlock(
+    "OUTBOX_STEPS",
+    `/** One step per file in \`drizzle/outbox\`, filename order — the queue, its index, and the counter \`claimSeq\` allocates from. */`,
+    stepsIn(new URL("../drizzle/outbox", here)),
   ),
 ].join("\n");
 

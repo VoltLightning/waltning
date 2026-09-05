@@ -605,8 +605,25 @@ export const unsettledClearing = (
 
 /* ── The FIFO fold — computations.md §7 ageing and §8 attribution, one algorithm ── */
 
-export type FifoDelta<TId extends string> = { id: TId; date: AccountingDate; delta: Money };
-export type FifoOldest<TId extends string> = { id: TId; date: AccountingDate };
+/**
+ * `id` is nullable so a caller can seed the queue with a delta that carries
+ * no transaction of its own — a clearing or counterparty balance's opening
+ * figure (H2), which must fold into FIFO the same as any leg but can never
+ * be "named" the way a real row can. It sorts as the OLDEST entry at its own
+ * date (`fifoOldestOpen`'s comparator places `null` before every real id),
+ * matching "this was already there before anything else was recorded."
+ */
+export type FifoDelta<TId extends string> = {
+  id: TId | null;
+  date: AccountingDate;
+  delta: Money;
+};
+export type FifoOldest<TId extends string> = {
+  id: TId | null;
+  date: AccountingDate;
+  /** The oldest row's own unconsumed amount, signed like the queue's own running direction (H1) — not always the whole account/counterparty balance (H3): later open rows can carry the rest. */
+  remainder: Money;
+};
 
 /**
  * The oldest row still carrying a positive, unconsumed remainder — FIFO,
@@ -650,10 +667,12 @@ export function fifoOldestOpen<TId extends string>(
   const sorted = [...deltas].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
     if (a.id === b.id) return 0;
+    if (a.id === null) return -1; // an opening delta sorts first among same-date rows
+    if (b.id === null) return 1;
     return a.id < b.id ? -1 : 1;
   });
 
-  type Entry = { id: TId; date: AccountingDate; remaining: Decimal; sign: 1 | -1 };
+  type Entry = { id: TId | null; date: AccountingDate; remaining: Decimal; sign: 1 | -1 };
   const queue: Entry[] = [];
 
   for (const row of sorted) {
@@ -695,7 +714,9 @@ export function fifoOldestOpen<TId extends string>(
   }
 
   const oldest = queue[0];
-  return oldest ? { id: oldest.id, date: oldest.date } : null;
+  return oldest
+    ? { id: oldest.id, date: oldest.date, remainder: toMoney(oldest.remaining.times(oldest.sign)) }
+    : null;
 }
 
 /**
@@ -717,9 +738,15 @@ export const ageBucket = (days: number): AgeBucket => {
  * §7's ageing figure: whole days from the oldest still-open `debt` row to
  * `today`. Bare-string day arithmetic through `date.ts`'s `daysBetween` —
  * never a `Date` diff in this module.
+ *
+ * **Floored at zero (L).** A future-dated leg (an import backdated oddly, or
+ * `today` supplied stale) makes `daysBetween` negative; "the debt is −3 days
+ * old" is not a bucket `ageBucket` has, and a negative day count is not a
+ * defect to surface here — it reads as `0-30`, the same as anything else this
+ * young.
  */
 export const ageInDays = (oldestDate: AccountingDate, today: AccountingDate): number =>
-  daysBetween(oldestDate, today);
+  Math.max(0, daysBetween(oldestDate, today));
 
 /**
  * §6.6's direction, in words — `DebtDirectionTag` and S12's own sort/filter
@@ -865,6 +892,16 @@ export const allocateLargestRemainder = (
 
   const scale = new Decimal(10).pow(decimals);
   const totalUnits = dec(total).times(scale);
+  // H4 — `total` is presumed to already sit at the currency's own scale (the
+  // comment below relied on this without checking it); off-scale input means
+  // "floor" silently discards sub-minor-unit precision nobody asked to
+  // round, rather than the caller having rounded it themselves at the right
+  // place first. Named: which total, and to how many decimals.
+  if (!totalUnits.isInteger()) {
+    throw new Error(
+      `allocateLargestRemainder: total ${total} is not integral at ${decimals} decimals`,
+    );
+  }
 
   // One record per weight, its own remainder carried alongside it rather
   // than in a second array indexed back into this one — nothing here reads

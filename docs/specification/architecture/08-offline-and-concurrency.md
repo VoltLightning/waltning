@@ -258,14 +258,60 @@ permanently blocked in one batch — correctly, by the rules as written.**
 The event-sourcing pattern is the right one, because the payload *is* a recorded
 intention:
 
-1. **Two independent version counters.** `PRAGMA user_version` for the replica —
-   mismatch means drop and refetch. The replica is now the whole ledger, not a
-   window (`14-local-first.md`), so this is a full resync — single-digit
-   megabytes, cheap but not instant, and it needs connectivity — rather than
-   the free operation it was when there was little to refetch. It is still
-   safe to drop for exactly the reason the outbox below is not: the replica is
-   a copy, and the outbox is the only place an unsent intention exists. A
-   separate, forward-only, never-destructive chain for the outbox.
+1. **A version is a tag plus a checksum, journaled in the store — and neither
+   chain drops the file it counts.** The replica migrates **in place**: one
+   version per generated migration file
+   (`packages/ledger/tools/embed-ddl.ts`), applied in filename order, each
+   version's statements run in one transaction after a pre-migration copy.
+
+   **A version names a file, not a position** — it is the file's own
+   four-digit prefix plus one — so a chain that later gains, renumbers or
+   drops a file does not silently redefine what an installed database's
+   number meant. But a filename is not an identity either, and a number is
+   less than that: `user_version = 1` means "one step ran" only relative to
+   the chain that wrote it, and two builds can carry the same filename with
+   different statements inside it. So **each store carries
+   `__ledger_migrations`** — one row per applied step, holding the step's tag
+   and a checksum of its statements, created by the migrator before the chain
+   and written inside the same transaction as the step it records. Which
+   steps run is then what the journal does not hold, in order, with
+   `user_version` a fast path that moves in that same transaction. Three
+   refusals fall out of it, each with nothing written and no copy taken:
+
+   - **A database above version 0 with no journal** was written before the
+     journal existed, and which of this build's steps it ran cannot be known.
+     Guessing re-runs a step over real rows.
+   - **A journaled tag whose checksum is not this build's** means a shipped
+     file was edited. A generated step's statements are frozen once an
+     installed database has run them; a change to what a step does is a new
+     step.
+   - **A version this chain never passed through**, as before.
+
+   A step that cannot be expressed in SQL alone carries a hand-written
+   **backfill**, registered under that same filename: a `fill` that runs
+   inside the migration transaction immediately after its own step's
+   statements, and optionally a `check` that runs **before the pre-migration
+   copy is taken**, so a migration that cannot succeed against a particular
+   database refuses while that file is still untouched and gives the same
+   reason on every launch after. A migration that fails and rolls back
+   cleanly releases the copy for the same reason: the file is unchanged, so a
+   kept copy would make the next launch report the copy rather than the
+   cause.
+
+   Because a step may rebuild a table, the whole migration runs with foreign
+   keys off — restored afterwards to the value the connection was opened
+   with, which is off for the outbox — and `PRAGMA foreign_key_check` inside
+   the same transaction, before the version moves, is what pays for the
+   enforcement given up: an orphan rolls the migration back rather than
+   committing. The replica is the whole ledger, not a window
+   (`14-local-first.md`), so it is never a database this module drops to
+   recover a version mismatch — the outbox below never was, for the same
+   reason, and neither is the replica. A **refetch from a backend** —
+   rebuilding the replica from what a server holds — is a *separate*
+   operation belonging to sync (arc 2), triggered by sync's own decisions (an
+   epoch mismatch, an explicit reset a person asked for), never by a schema
+   version. A separate, forward-only, never-destructive chain for the outbox,
+   same rule.
 2. **The outbox table's shape never changes with the domain.** The payload is
    opaque to it, so domain changes change *payloads*, not tables.
 3. **Upcasters, not migrations.** Pure functions `upcast(op, v, payload)` chained

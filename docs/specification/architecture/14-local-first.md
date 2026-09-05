@@ -343,11 +343,104 @@ the same way a `CHECK` violation is, even though nothing here is a trigger.
 
 **A migration must not be able to destroy the ledger.** With no backend the
 phone's database is the only copy, and unlike the server there is nothing to
-reset from — no seed, no second copy, no `db:reset`. So every schema migration
+reset from — no seed, no second copy, no `db:reset`. So the replica migrates
+**in place** — one version per generated migration file
+(`packages/ledger/tools/embed-ddl.ts`, `08`'s own account of the two version
+counters), never by dropping and recreating it — and every schema migration
 copies the file first, runs inside a transaction, and keeps the pre-migration
 copy until the app has opened cleanly once. A transaction alone covers an error;
 it does not cover a crash, a kill, or a corrupt write, which is the case that
-matters when there is no second copy.
+matters when there is no second copy. A **refetch** — discarding the replica
+and rebuilding it from a server — is sync's own operation (arc 2), never one a
+schema version triggers; this arc has no backend to refetch from, so the
+question does not arise here at all, and even once one exists a schema
+mismatch is answered by migrating forward, not by falling back to a resync.
+
+**The version records which step ran, not how many.** A `user_version` is the
+generated file's own four-digit prefix plus one, so it names one file for the
+life of the product. Deriving it from the step's position in the chain would
+mean a later file inserted, renumbered or removed quietly changes what an
+installed database's number claims to have run, and the migrator would then run
+the wrong steps against real rows with no way to notice.
+
+**A version is a tag plus a checksum, and both stores journal it.** A number
+alone is only meaningful against the chain that wrote it — `user_version = 1`
+under a one-step chain means "everything ran" and under a nine-step chain means
+"one step ran" — and a filename alone does not say what was inside the file.
+So each store carries `__ledger_migrations`: one row per applied step, its tag
+and a checksum of that step's statements, a table the migrator creates itself
+before the chain rather than one a generated step builds, written inside the
+same transaction as the step it records. What runs on a launch is what the
+journal does not hold, in order; `user_version` is the fast path, moving in
+that same transaction.
+
+Three things are then refusals rather than guesses, each with nothing written
+and no pre-migration copy taken:
+
+- **Above version 0 with no journal.** The file was written before the journal
+  existed and cannot say what it ran; the recovery is to delete both files and
+  let the app rebuild them, which the refusal spells out by name.
+- **A journaled tag whose checksum is not this build's.** A generated
+  migration file's statements are frozen the moment an installed database has
+  run them — every device that ran the old ones would otherwise disagree
+  silently with a fresh install about its own tables. A change to what a step
+  does is a **new** step.
+- **A version this chain never passed through**, as before.
+
+**A step whose SQL cannot say everything carries a backfill**, registered under
+that same filename. Two hooks, at opposite ends of the migration on purpose: a
+`fill` inside the migration transaction, immediately after its own step's
+statements, which rolls back with them; and a `check` **before the
+pre-migration copy is taken**, so a migration that cannot succeed against this
+particular database refuses while the file is still untouched. That ordering is
+what makes the reason durable — no copy was taken, so the next launch reaches
+the same check and gives the same reason, instead of reporting a leftover copy
+and burying the cause. The example that exists today is the folded counterparty
+name: two live rows whose names fold to one cannot both survive the partial
+unique index, and which of them survives is the owner's decision in S15, so the
+migration names both rows and stops.
+
+**A migration runs with foreign keys off, and proves it left none broken.**
+SQLite has no `ALTER TABLE … ADD CONSTRAINT`, so a new `CHECK` is a
+copy-rename-drop of the whole table, and enforcement must be off *before* the
+transaction opens for a rebuild of a table other populated tables reference to
+be possible at all. `PRAGMA foreign_key_check`, run inside the same transaction
+before the version moves, is what pays for that: a migration that did leave an
+orphan rolls back rather than committing, and the database is left at the
+version and the rows it started with. Afterwards the pragma goes back to **the
+value that connection was opened with**, which is on for the replica and off
+for the outbox — a store that references nothing, deliberately. Restoring a
+constant `ON` instead handed every later statement on the outbox's connection
+a stricter database than the one that was configured, on exactly the launches
+where a migration happened to run.
+
+**A migration that fails releases the copy, when it fails cleanly.** The copy's
+presence means one thing — the app has not opened cleanly since a migration —
+and a rollback that left the version unmoved and the file untouched does not
+satisfy it. Keeping the copy there made the next launch report the copy
+instead of the reason the migration failed, which is the sentence the person
+holding the phone needs and the only one that repeats identically until it is
+fixed. Where the rollback is *not* provably clean — the version moved, or the
+file can no longer be read — the copy stays, because that is the case it
+exists for, and the original cause is carried into the message rather than
+replaced by it.
+
+**A pre-migration copy that is still there blocks the next migration, and the
+way out is exactly two steps.** The copy's presence *is* the record that the app
+has not opened cleanly since that migration, so the file it was taken from is
+under suspicion and must not be copied over the only good version of itself.
+The refusal names both routes and the app migrates again on the next launch
+either way:
+
+- **Back** — with the app closed, delete the database and its `-wal` and `-shm`
+  siblings, then rename `<database>.pre-migration` onto the database's own path.
+- **Forward** — keep the database as it is and delete
+  `<database>.pre-migration`.
+
+That is the honest cost of the guarantee: an app that crashes on launch for an
+unrelated reason cannot migrate again until someone answers this. A stuck app
+that can be recovered from a file on disk is the trade against a smooth one that
+has already thrown that file away.
 
 ---
 

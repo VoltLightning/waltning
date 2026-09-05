@@ -244,7 +244,11 @@ describe("fifoOldestOpen — §7 ageing and §8 attribution", () => {
       { id: "lend300", date: d("2026-08-02"), delta: m("300") },
       { id: "repay200", date: d("2026-08-03"), delta: m("-200") },
     ];
-    expect(money.fifoOldestOpen(rows)).toEqual({ id: "lend300", date: d("2026-08-02") });
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "lend300",
+      date: d("2026-08-02"),
+      remainder: "300.00000000",
+    });
   });
 
   it("consumes the oldest open row first, in date order rather than list order", () => {
@@ -253,7 +257,11 @@ describe("fifoOldestOpen — §7 ageing and §8 attribution", () => {
       { id: "first", date: d("2026-08-01"), delta: m("100") },
       { id: "consume", date: d("2026-08-03"), delta: m("-100") },
     ];
-    expect(money.fifoOldestOpen(rows)).toEqual({ id: "second", date: d("2026-08-02") });
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "second",
+      date: d("2026-08-02"),
+      remainder: "100.00000000",
+    });
   });
 
   it("§8's own reading: inflows open, outflows consume, FIFO", () => {
@@ -264,11 +272,69 @@ describe("fifoOldestOpen — §7 ageing and §8 attribution", () => {
       { id: "inflow2", date: d("2026-08-05"), delta: m("80") },
       { id: "allocation", date: d("2026-08-06"), delta: m("-120") },
     ];
-    expect(money.fifoOldestOpen(rows)).toEqual({ id: "inflow2", date: d("2026-08-05") });
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "inflow2",
+      date: d("2026-08-05"),
+      remainder: "80.00000000",
+    });
   });
 
   it("is null over no rows", () => {
     expect(money.fifoOldestOpen([])).toBeNull();
+  });
+
+  /**
+   * H1 — the remainder is signed like the queue's own running direction, not
+   * always positive. A single −150 outflow (a clearing account whose one leg
+   * is a payment out, e.g. Hotel) opens a negative-sign entry — `abs()`ing it
+   * used to render "150,00 PLN unallocated" beside a "−150,00 account
+   * balance" that disagreed with it.
+   */
+  it("a lone negative leg keeps its sign in the remainder (H1)", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: "hotel", date: d("2026-08-01"), delta: m("-150") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "hotel",
+      date: d("2026-08-01"),
+      remainder: "-150.00000000",
+    });
+  });
+
+  /**
+   * H2 — a clearing/counterparty opening balance is seeded as a delta with
+   * `id: null` so it folds into FIFO like any other row but can never be
+   * "named" the way a real transaction can. Opening 100, one 40 expense:
+   * balance 60, and the opening entry — not the expense — is what is still
+   * open, since the expense is a consuming row, not an opening one.
+   */
+  it("names the opening entry (id null) when it is the oldest still-open row", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: null, date: d("2026-08-01"), delta: m("100") },
+      { id: "expense", date: d("2026-08-10"), delta: m("-40") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: null,
+      date: d("2026-08-01"),
+      remainder: "60.00000000",
+    });
+  });
+
+  /**
+   * L2 — the opening entry sorts by its own date like any other; it is not
+   * pinned to "always oldest." A leg dated before `openingDate` (an import
+   * backdated past the account's own recorded start) sorts ahead of it.
+   */
+  it("sorts a leg dated before openingDate ahead of the opening entry itself", () => {
+    const rows: money.FifoDelta<string>[] = [
+      { id: null, date: d("2026-08-10"), delta: m("100") },
+      { id: "backdated", date: d("2026-08-01"), delta: m("50") },
+    ];
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "backdated",
+      date: d("2026-08-01"),
+      remainder: "50.00000000",
+    });
   });
 
   it("tracks the RUNNING direction, not the final balance's sign — crosses zero twice", () => {
@@ -287,7 +353,11 @@ describe("fifoOldestOpen — §7 ageing and §8 attribution", () => {
       { id: "d4", date: d("2026-08-04"), delta: m("20") },
       { id: "d5", date: d("2026-08-05"), delta: m("-75") },
     ];
-    expect(money.fifoOldestOpen(rows)).toEqual({ id: "d4", date: d("2026-08-04") });
+    expect(money.fifoOldestOpen(rows)).toEqual({
+      id: "d4",
+      date: d("2026-08-04"),
+      remainder: "15.00000000",
+    });
 
     // The remainders left open sum to exactly the balance (15).
     const total = rows.reduce((acc, r) => acc.plus(money.dec(r.delta)), money.dec(0));
@@ -400,6 +470,18 @@ describe("allocateLargestRemainder — §8, J08 §5", () => {
     // −99.99. Refuse it outright and name the total in the error.
     expect(() => money.allocateLargestRemainder(m("-100.00"), [1, 1, 1], 2)).toThrow(
       /-100.00000000/,
+    );
+  });
+
+  /**
+   * H4 — a total carrying more precision than `decimals` (a caller that
+   * forgot to round first) silently floored away sub-minor-unit digits
+   * instead of raising: refuse it by name, naming both the total and the
+   * scale it disagrees with.
+   */
+  it("refuses a total that is not integral at the given scale", () => {
+    expect(() => money.allocateLargestRemainder(m("10.005"), [1, 1, 1], 2)).toThrow(
+      /10.00500000.*2 decimals/,
     );
   });
 });

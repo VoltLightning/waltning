@@ -132,9 +132,14 @@ function fifoDebtRowsFor(counterpartyId: string, currency: string): money.FifoDe
   });
 }
 
-/** §8's rows for one clearing account, `money.fifoOldestOpen`'s own shape. */
+/**
+ * §8's rows for one clearing account, `money.fifoOldestOpen`'s own shape —
+ * the opening balance included as its own `id: null` entry (H2), the same
+ * seed `read-unsettled-clearing.ts` pushes on the phone and `find-unsettled.ts`
+ * seeds via its `opening` CTE.
+ */
 function clearingLegRowsFor(accountId: string): money.FifoDelta<string>[] {
-  return TRANSACTIONS.filter((t) => !t.deleted)
+  const legRows: money.FifoDelta<string>[] = TRANSACTIONS.filter((t) => !t.deleted)
     .filter((t) => t.accountId === accountId || t.toAccountId === accountId)
     .map((t) => ({
       id: t.id,
@@ -148,6 +153,16 @@ function clearingLegRowsFor(accountId: string): money.FifoDelta<string>[] {
         t.accountId === accountId ? "from" : "to",
       ),
     }));
+  const account = ACCOUNTS.find((a) => a.id === accountId);
+  const opening = money.toMoney(account?.opening ?? "0");
+  if (account && !money.isZero(opening)) {
+    legRows.push({
+      id: null,
+      date: accountingDate(account.openingDate ?? "0001-01-01"),
+      delta: opening,
+    });
+  }
+  return legRows;
 }
 
 describe("class-F figures agree to eight decimals, SQL against money.ts", () => {
@@ -161,8 +176,8 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
         values (${c.code}, ${c.name}, ${c.decimals}, ${c.code === "PLN"})`;
     }
     for (const a of ACCOUNTS) {
-      await scratch.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance, kind)
-        values (${a.id}, ${a.name}, ${a.currency}, ${a.ownership}, ${a.isBusiness}, ${a.opening}, ${a.kind})`;
+      await scratch.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance, opening_date, kind)
+        values (${a.id}, ${a.name}, ${a.currency}, ${a.ownership}, ${a.isBusiness}, ${a.opening}, ${a.openingDate}, ${a.kind})`;
     }
     // R2 H2 — no name_folded column: it is GENERATED ALWAYS AS (…) STORED now.
     await scratch.sql`insert into counterparties (id, name, kind)
@@ -284,12 +299,15 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
 
   /**
    * §8's own reading, written into `computations.md` in this PR: inflows
-   * opened, outflows consume, FIFO. Two inflows to Trip clearing, one
-   * allocation that exhausts the older, so the still-unconsumed inflow —
-   * `find_unsettled`'s third field — is the 80 dated 2026-08-05, not the
-   * 120 dated 2026-08-01.
+   * opened, outflows consume, FIFO — **the account's opening balance opens
+   * first, before any leg** (C1, H2). Trip clearing opens 200 (2026-07-15),
+   * then two inflows and one allocation that exhausts the older inflow —
+   * without the opening balance folded in, the still-unconsumed entry would
+   * be the 80 dated 2026-08-05; with it, the opening itself is still open
+   * (remainder 80 of its own 200), so `find_unsettled`'s third field is
+   * `null` — no transaction names it — dated the account's own opening date.
    */
-  it("§8 find_unsettled — balance and the oldest unconsumed leg", async () => {
+  it("§8 find_unsettled — balance and the oldest unconsumed leg, opening balance included", async () => {
     const tripClearing = ACCOUNTS[5];
     const sqlRows = await findUnsettled(scratch.db);
     const sqlRow = sqlRows.find((r) => r.accountId === tripClearing.id);
@@ -306,12 +324,14 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       balance: tsBalance,
       oldestUnconsumedTransactionId: tsOldest?.id,
       oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
     });
     expect(sqlRow).toEqual({
       accountId: tripClearing.id,
-      balance: "80.00000000",
-      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000015",
-      oldestDate: "2026-08-05",
+      balance: "280.00000000",
+      oldestUnconsumedTransactionId: null,
+      oldestDate: "2026-07-15",
+      remainder: "80.00000000",
     });
   });
 
@@ -338,13 +358,120 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
       balance: tsBalance,
       oldestUnconsumedTransactionId: tsOldest?.id,
       oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
     });
     expect(sqlRow).toEqual({
       accountId: flipClearing.id,
       balance: "15.00000000",
       oldestUnconsumedTransactionId: "20000000-0000-4000-8000-00000000001b",
       oldestDate: "2026-08-04",
+      remainder: "15.00000000",
     });
+  });
+
+  /**
+   * H1 — a clearing account whose balance is itself negative (a single
+   * outflow, e.g. paid for the group at a hotel): the remainder must carry
+   * that sign too. `abs()`ing it (the bug) reported `150.00000000` beside a
+   * `-150.00000000` balance the banner then contradicted.
+   */
+  it("§8 find_unsettled — remainder keeps a negative balance's own sign", async () => {
+    const negativeClearing = ACCOUNTS[10];
+    const sqlRows = await findUnsettled(scratch.db);
+    const sqlRow = sqlRows.find((r) => r.accountId === negativeClearing.id);
+
+    const tsBalance = money.accountBalance(
+      money.toMoney(negativeClearing.opening),
+      negativeClearing.id,
+      legRows,
+    );
+    const tsOldest = money.fifoOldestOpen(clearingLegRowsFor(negativeClearing.id));
+
+    expect(sqlRow).toEqual({
+      accountId: negativeClearing.id,
+      balance: tsBalance,
+      oldestUnconsumedTransactionId: tsOldest?.id,
+      oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
+    });
+    expect(sqlRow).toEqual({
+      accountId: negativeClearing.id,
+      balance: "-150.00000000",
+      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000023",
+      oldestDate: "2026-08-01",
+      remainder: "-150.00000000",
+    });
+  });
+
+  /**
+   * M4 — **one row per account, never one per open leg.**
+   *
+   * `money.fifoOldestOpen` answers with one row or none; `find_unsettled` is
+   * its SQL twin and owes the same shape. Its `opens` CTE, though, produces a
+   * row for *every* leg whose running total has outrun what consumption has
+   * eaten — several, whenever more than one leg is still open — and only the
+   * first of them carries the remainder the contract means. "Split clearing"
+   * is the fixture with two: `+100, +60, −40`, so the 100 is open with 60 of
+   * its own left and the 60 is open whole.
+   *
+   * The two things this pins, which the single-open-leg fixtures cannot:
+   *
+   * - **Exactly one row per account** comes back, so the ordered
+   *   `DISTINCT ON (o.account_id)` is doing work rather than reading as
+   *   decoration. `sqlRows.find(…)` in the tests above would happily have
+   *   taken the first of several.
+   * - **The remainder is that leg's own share** — 60. Not 100, the leg's
+   *   whole amount; not 120, the account's balance, whose rest the second
+   *   open leg carries. `running_open − total_consumed` is what the query
+   *   computes, and on the *first* row past the threshold that is already
+   *   `least(running_open − consumed, abs(delta))`: every earlier open leg
+   *   was fully consumed (that is what "first past the threshold" means), so
+   *   the difference cannot exceed this leg's own magnitude. Writing the
+   *   `least(…)` would be a second, weaker statement of the same fact — and
+   *   one that would silently keep answering for rows `DISTINCT ON` is there
+   *   to discard.
+   */
+  it("§8 find_unsettled — one row per account, and its own share, with two legs open at once", async () => {
+    const splitClearing = ACCOUNTS[11];
+    const sqlRows = await findUnsettled(scratch.db);
+
+    const ids = sqlRows.map((row) => row.accountId);
+    expect(new Set(ids).size, "one row per clearing account, never one per open leg").toBe(
+      ids.length,
+    );
+
+    const sqlRow = sqlRows.find((row) => row.accountId === splitClearing.id);
+    const tsBalance = money.accountBalance(
+      money.toMoney(splitClearing.opening),
+      splitClearing.id,
+      legRows,
+    );
+    const tsOldest = money.fifoOldestOpen(clearingLegRowsFor(splitClearing.id));
+
+    expect(sqlRow).toEqual({
+      accountId: splitClearing.id,
+      balance: tsBalance,
+      oldestUnconsumedTransactionId: tsOldest?.id,
+      oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
+    });
+    expect(sqlRow).toEqual({
+      accountId: splitClearing.id,
+      balance: "120.00000000",
+      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000024",
+      oldestDate: "2026-08-01",
+      remainder: "60.00000000",
+    });
+
+    // The vacuity guard for "two legs open at once": if only one were, the
+    // remainder would *be* the balance. It is 60 against 120, so a later leg
+    // is carrying the other 60 — and it is not the row that came back.
+    expect(
+      money
+        .dec(sqlRow?.remainder ?? "0")
+        .abs()
+        .lt(money.dec(tsBalance).abs()),
+    ).toBe(true);
   });
 
   it("excludes soft-deleted rows on both sides", async () => {
