@@ -31,6 +31,7 @@ import {
   toMoney,
   unsettledClearing,
 } from "@waltning/core/money";
+import { I18nProvider } from "@waltning/ui/i18n/provider";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -1024,5 +1025,48 @@ describe("CategoriesScreen", () => {
     // shows in the tree body — two rows, not one collapsed into the other.
     expect(screen.getAllByText("Uncategorized")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Uncategorized actions" })).toBeDefined();
+  });
+
+  // M2 — `messageOf` read only `FieldError.message`, so a Polish reader saw
+  // the English fallback. `moveCategory`'s cross-kind refusal is unreachable
+  // through the picker itself (`moveGroups` filters to the leaf's own kind,
+  // and the controller's own guard is the same check), so this overrides the
+  // controller's `moveCategory` directly — the same shape as
+  // `account-editor-screen.test.tsx`'s overridden `updateAccount` — to prove
+  // `categories-screen.tsx`'s own `messageKey` resolution, independent of
+  // whether the refusal is reachable in practice.
+  it("resolves a moveAcrossKinds refusal to its Polish sentence, not the English message", () => {
+    const controller = fakeController([], [], tree, usage);
+    controller.moveCategory = vi.fn(() => ({
+      fieldErrors: [
+        {
+          path: "parentId",
+          message: "Food belongs to the expense side — a category cannot move across kinds",
+          messageKey: "categories.moveAcrossKindsExpense",
+          params: { name: "Food" },
+        },
+      ],
+    }));
+
+    render(
+      <I18nProvider locale="pl">
+        <LedgerProvider controller={controller}>
+          <CategoriesScreen />
+        </LedgerProvider>
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Działania dla Groceries" }));
+    fireEvent.click(screen.getByRole("button", { name: "Przenieś" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grupa · Groceries" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Food" }));
+    fireEvent.click(screen.getByRole("button", { name: "Zapisz" }));
+
+    expect(
+      screen.getByText("Food należy do strony wydatków — kategoria nie może zmienić strony"),
+    ).toBeDefined();
+    expect(
+      screen.queryByText("Food belongs to the expense side — a category cannot move across kinds"),
+    ).toBeNull();
   });
 });

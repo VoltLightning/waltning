@@ -170,9 +170,16 @@ const useStyles = makeStyles((theme) => ({
     ...text.ui("body"),
   },
   inputHovered: { borderColor: theme.borderStrong },
+  // This `TextInput` is the whole interactive element (unlike `search-field`'s
+  // wrapper), so it does receive real DOM focus — but that only gets it
+  // Chromium's own `outline-style: auto`, which renders the UA's own ring at
+  // the UA's own width and offset, ignoring an author `outlineWidth`/
+  // `outlineOffset` entirely. Naming `outlineStyle: "solid"` is what hands
+  // rendering to those author values instead of the browser's.
   inputFocused: {
     borderColor: theme.borderStrong,
     outlineWidth: focus.width,
+    outlineStyle: "solid",
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
@@ -180,6 +187,7 @@ const useStyles = makeStyles((theme) => ({
   inputErrorFocused: {
     borderColor: theme.dangerBorder,
     outlineWidth: focus.width,
+    outlineStyle: "solid",
     outlineColor: theme.dangerBorder,
     outlineOffset: focus.offset,
   },

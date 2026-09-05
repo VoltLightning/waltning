@@ -3780,13 +3780,18 @@ export function createPhoneLedger(
                   path: "parentId",
                   // "is an {{kind}} group" is a load-bearing "a/an" — English
                   // grammar hard-coded into a string every other language
-                  // reads too. `messageKey` + `params` carry the raw kind
-                  // (`transactions.income`/`transactions.expense`) so a
-                  // screen can translate it before interpolating; `message`
-                  // is the English fallback for a caller that cannot.
+                  // reads too. One `messageKey` per kind, not `{{kind}}`
+                  // interpolated into a shared sentence — each language's
+                  // catalogue writes its own full sentence for each kind
+                  // (Polish's genitive "strony wydatków"/"strony przychodów"
+                  // is not a noun substitution). `message` is the English
+                  // fallback for a caller that cannot call `useT()`.
                   message: `${parent.name} belongs to the ${parent.kind} side — a category cannot move across kinds`,
-                  messageKey: "categories.moveAcrossKinds",
-                  params: { name: parent.name, kind: parent.kind },
+                  messageKey:
+                    parent.kind === "expense"
+                      ? "categories.moveAcrossKindsExpense"
+                      : "categories.moveAcrossKindsIncome",
+                  params: { name: parent.name },
                 },
               ],
             };

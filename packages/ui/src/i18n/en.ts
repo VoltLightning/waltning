@@ -479,13 +479,17 @@ export const en = {
     moveTargetPlaceholder: "Choose a group",
     /**
      * J12 §4 — `create-phone-ledger.ts`'s `moveCategory` refusal, once a
-     * group of the other kind is chosen. `{{kind}}` arrives untranslated
-     * (`transactions.income`/`transactions.expense` translate it) — the
-     * controller that raises this is `packages/client`, which cannot call
-     * `useT()` itself. Phrased without an article so no language's grammar
-     * is hard-coded into the one string every reader sees.
+     * group of the other kind is chosen. One key per kind, not `{{kind}}`
+     * interpolated into a shared sentence — `categories-screen.tsx` picks
+     * the key by `parent.kind`, so no language has to graft a raw English
+     * noun (or its translation) into a prepositional phrase whose grammar
+     * it does not fit (Polish needs the genitive: "strony wydatków", not
+     * "strony {{kind}}").
      */
-    moveAcrossKinds: "{{name}} belongs to the {{kind}} side — a category cannot move across kinds",
+    moveAcrossKindsExpense:
+      "{{name}} belongs to the expense side — a category cannot move across kinds",
+    moveAcrossKindsIncome:
+      "{{name}} belongs to the income side — a category cannot move across kinds",
     /** The merge sheet's winner picker and preview. */
     mergeWinnerLabel: "Merge into",
     mergeWinnerPlaceholder: "Choose a category",

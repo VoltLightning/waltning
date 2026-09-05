@@ -3237,8 +3237,8 @@ describe("category writes", () => {
         {
           path: "parentId",
           message: "Food belongs to the expense side — a category cannot move across kinds",
-          messageKey: "categories.moveAcrossKinds",
-          params: { name: "Food", kind: "expense" },
+          messageKey: "categories.moveAcrossKindsExpense",
+          params: { name: "Food" },
         },
       ]);
     });
