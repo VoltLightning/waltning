@@ -28,10 +28,24 @@ fail() {
   exit 1
 }
 
-staged=$(git diff --cached --name-only --diff-filter=ACMR)
-if [ -z "$staged" ]; then
-  exit 0
-fi
+# `D` is in the filter on purpose: a commit that only deletes files (`git rm`
+# then commit) still needs Biome, typecheck, tests, and — if the deletion
+# touches the visual trigger set — Playwright, because a deleted story or
+# component changes what Storybook renders exactly as much as an edited one
+# does. Dropping `D` here once meant a delete-only commit computed an empty
+# `$staged` and skipped the entire hook (nothing below runs on `git diff
+# --cached` again, only on this list) — that bug is gone with `D` in the
+# filter, but nothing below may reintroduce it by short-circuiting on an
+# empty `$staged` the way this used to.
+#
+# `--no-renames` is also load-bearing: without it a moved file can collapse
+# to a single rename entry showing only the destination path, so a component
+# moved *out of* `packages/ui/` (its old, visual-relevant path) would never
+# appear in `$staged` at all. With `--no-renames` a move is a delete of the
+# old path plus an add of the new one, on two separate lines, so whichever
+# side matters — old or new — is always visible to every check below,
+# `.githooks/needs-visual.sh` included.
+staged=$(git diff --cached --name-only --diff-filter=ACMRD --no-renames)
 
 # ── 1 · Anything force-added past .gitignore ─────────────────────────────────
 #
@@ -127,64 +141,64 @@ else
   printf "${DIM}  pre-commit: no %s — personal-data sweep skipped${OFF}\n" "$terms"
 fi
 
-# ── 5 · Format and lint, staged files only ───────────────────────────────────
+# ── 5 · The gate itself: format, types, tests, and — when it can move a pixel
+#        — the visual suite ──────────────────────────────────────────────────
 #
-# Deliberately does not --write. A hook that silently rewrites files changes
-# what you are committing after you have read it; failing and naming the fix
-# keeps the commit yours.
-if ! pnpm exec biome check --staged --no-errors-on-unmatched; then
-  fail "formatting or lint failed." "run: pnpm fix"
-fi
+# One call to `pnpm verify` or `pnpm verify:fast`, never a second copy of what
+# either already does. The Makefile earns the same rule from `tests/
+# makefile.test.ts` — "Make orchestrates, pnpm implements" — for the same
+# reason: two places that both know how to run a check is two places that go
+# stale, and the one nobody is looking at is always the stale one. This hook
+# used to run Biome, typecheck, and tests as three separate steps ahead of the
+# visual decision; that was the second copy, quietly reimplementing
+# `verify:fast` one command at a time.
+#
+# jsdom has no layout and no rendered colour, so `pnpm test` alone would pass
+# a component that turned invisible. `pnpm verify`'s last step runs the built
+# Storybook in a real browser and diffs it against committed baselines — the
+# only check that can see a palette regression or a contrast failure axe
+# cannot answer without pixels — which is also the only step worth skipping:
+# a doc or migration commit cannot move a pixel, and paying several minutes
+# for Playwright on one anyway would train people to reach for --no-verify.
+#
+# `.githooks/needs-visual.sh` is the one place the trigger set is written —
+# everything under `packages/ui/`, `packages/core/src/`,
+# `packages/core/package.json`, and `pnpm-lock.yaml`. Its exit code is the
+# whole contract, and only one value means "skip":
+#
+#   1     not needed — run `pnpm verify:fast` (check, typecheck, test; no
+#         Playwright).
+#   else  needed (0), or undecidable (a bad regex, the script missing or
+#         unreadable, anything) — run `pnpm verify` (the same, plus the
+#         visual suite). An undecidable answer runs the suite; it never
+#         skips it, because the alternative is a hook that goes quiet
+#         exactly when something is wrong with the hook itself.
+#
+# This is also the whole decision `pnpm verify` needs: called bare, with no
+# staged context, it always runs everything — there is no environment
+# variable that reaches in and downgrades it. The hook is the only caller
+# that ever runs `verify:fast`, and it only does so once it has looked.
+#
+# `set +e`/`set -e` around the pipe is load-bearing: under `set -eu` (line 19)
+# a bare pipeline that exits 1 aborts the whole hook before `$?` can be read,
+# and exit 1 is this script's normal, meaningful "skip" — not a failure.
+set +e
+printf '%s\n' "$staged" | sh .githooks/needs-visual.sh
+decision=$?
+set -e
 
-# ── 6 · Types, whole program ─────────────────────────────────────────────────
-#
-# Not staged-file-scoped: types are a property of the program, and a staged
-# file can break a file that is not staged.
-if ! pnpm -r typecheck; then
-  fail "typecheck failed."
-fi
+remedy="pnpm fix (formatting), pnpm db:up (if a test cannot reach Postgres), pnpm --filter @waltning/ui build-storybook (if Storybook itself failed to build), or pnpm test:visual:update (if it was a screenshot diff)."
 
-# ── 7 · Tests ────────────────────────────────────────────────────────────────
-#
-# There is no CI, so a suite outside this hook is a suite nothing runs. It was
-# outside for two cards, which is exactly long enough for tests to start
-# rotting unnoticed.
-#
-# Database tests need Postgres, so a commit needs Docker up. That is a real
-# cost and it is the honest one: the alternative — skipping tests when the
-# database is unreachable — is a gate that disappears precisely when someone is
-# working in a hurry. The message says how to fix it rather than what failed.
-if ! pnpm test; then
-  fail "tests failed." "if Postgres is not running: pnpm db:up"
-fi
-
-# ── 8 · Visual checks ────────────────────────────────────────────────────────
-#
-# The same argument as step 7, one level up: jsdom has no layout and no rendered
-# colour, so `pnpm test` would pass a component that turned invisible. This runs
-# the built Storybook in a real browser and diffs it against committed
-# baselines, and it is the only check that can see a palette regression or the
-# contrast rule axe cannot answer without pixels.
-#
-# **Scoped to changes that can move a pixel**, which is not the same as skipping
-# when it is inconvenient. A doc or migration commit cannot alter a render, so
-# paying nine minutes for it would train people to reach for --no-verify — and a
-# gate that gets bypassed by habit protects nothing. `packages/core/src/` is in
-# the pattern because `Amount` renders through `money.ts`; `.githooks/needs-visual.sh`
-# is the one place that pattern is written, so this hook and a bare `pnpm verify`
-# can never see two different answers to "does this diff need Playwright".
-#
-# The decision becomes `VERIFY_VISUAL` for `pnpm verify` itself: `.githooks/
-# verify-visual-gate.sh` is what `verify:visual` checks, so setting the env var
-# here reaches the exact same gate a developer hits running `pnpm verify` by
-# hand — which runs everything, because that gate defaults to "needed" absent
-# this hook's staged-path finding.
-if printf '%s\n' "$staged" | sh .githooks/needs-visual.sh; then
-  export VERIFY_VISUAL=1
+if [ "$decision" -eq 1 ]; then
+  printf "${DIM}  pre-commit: nothing under packages/ui/, packages/core/src/, packages/core/package.json, or pnpm-lock.yaml staged — running pnpm verify:fast (no Playwright)${OFF}\n"
+  if ! pnpm verify:fast; then
+    fail "verify:fast failed." "$remedy"
+  fi
 else
-  export VERIFY_VISUAL=0
-  export VERIFY_VISUAL_REASON="no packages/ui or packages/core/src/ file staged"
-fi
-if ! pnpm run verify:visual; then
-  fail "visual checks failed." "review the diff, then: pnpm test:visual:update"
+  if [ "$decision" -ne 0 ]; then
+    printf "${DIM}  pre-commit: .githooks/needs-visual.sh exited %s (expected 0 or 1) — running the full suite to be safe${OFF}\n" "$decision"
+  fi
+  if ! pnpm verify; then
+    fail "verify failed." "$remedy"
+  fi
 fi

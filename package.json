@@ -11,7 +11,7 @@
   "scripts": {
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "dev:api": "pnpm --filter @waltning/api dev",
-    "dev:all": "pnpm --parallel --filter @waltning/api --filter @waltning/mobile dev",
+    "dev:all": "pnpm db:up && pnpm --parallel --filter @waltning/api --filter @waltning/mobile dev",
     "dev:android": "pnpm --filter @waltning/mobile dev:android",
     "dev:ios": "pnpm --filter @waltning/mobile dev:ios",
     "dev:web": "pnpm --filter @waltning/mobile dev:web",
@@ -26,7 +26,8 @@
     "check": "biome check .",
     "fix": "biome check --write .",
     "rules": "npx --yes ai-rulez@4.11.2 generate",
-    "verify": "pnpm check && pnpm typecheck && pnpm test && pnpm run verify:visual",
+    "verify": "pnpm check && pnpm typecheck && pnpm test && pnpm test:visual",
+    "verify:fast": "pnpm check && pnpm typecheck && pnpm test",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
@@ -53,8 +54,7 @@
     "storybook": "pnpm --filter @waltning/ui storybook",
     "storybook:build": "pnpm --filter @waltning/ui build-storybook",
     "test:visual": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual",
-    "test:visual:update": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual:update",
-    "verify:visual": "sh .githooks/verify-visual-gate.sh || pnpm test:visual"
+    "test:visual:update": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual:update"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

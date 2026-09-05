@@ -139,9 +139,12 @@ describe("package.json stays the implementation", () => {
   });
 
   it("has no `dev` script pretending to start everything", () => {
-    // It used to, and it started the API alone. `make dev` is the one command
-    // that genuinely runs both surfaces; a `pnpm dev` beside it would be a
-    // second answer to the same question.
+    // It used to, and it started the API alone. `make dev` (API + web) and
+    // `pnpm dev:all` (API + mobile) are the sanctioned answers to "run more
+    // than one surface" — both wait for Postgres first, then run their pair
+    // in parallel, Ctrl-C stops both. A bare `pnpm dev` would still be a
+    // second, different answer to the same question, so it stays out until
+    // an owner decides otherwise.
     expect(scripts).not.toHaveProperty("dev");
     expect(repoRoot).toBeTruthy();
   });

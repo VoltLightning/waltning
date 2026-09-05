@@ -71,6 +71,9 @@ doctor: ## Check that the things this repo assumes are actually here
 
 # ── Development ──────────────────────────────────────────────────────────────
 
+# `pnpm dev:all` is this target's pnpm-spelled sibling for the mobile surface:
+# same shape (Postgres first, then two processes together, Ctrl-C stops
+# both), API + Expo Go instead of API + web. Neither wraps the other.
 dev: db ## API + web together, from source (Ctrl-C stops both)
 	@echo "  api  $(API_URL)"
 	@echo "  web  $(WEB_URL)"

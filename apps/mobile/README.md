@@ -19,7 +19,11 @@ iOS, and web. To start and open one target directly, use `pnpm dev:android`,
 automatically.
 
 `pnpm dev:all`, from the repository root, starts this alongside the API
-(`tsx watch`) at once — see the root `README.md`'s dev section.
+(`tsx watch`) at once — the pnpm-spelled sibling of `make dev`, for API +
+mobile instead of API + web; see the root `README.md`'s dev section. Its
+piped output disables Expo's keyboard shortcuts (`a`/`i`/`w` do nothing under
+`pnpm --parallel`), so use `pnpm dev:android`, `pnpm dev:ios`, or
+`pnpm dev:web` when you need those interactively.
 
 The separate `dev:client` script starts Metro for an installed development
 client. The EAS `development` and `preview` profiles produce installable Android

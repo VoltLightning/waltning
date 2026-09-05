@@ -124,6 +124,14 @@ export default defineConfig({
    * `ThinkingIndicator` stories exactly as before. A visual suite that is
    * occasionally wrong is worse than a slower one that is not — this is the
    * evidence that it isn't, not an assumption that it can't be.
+   *
+   * **`4` is this machine's number, not a portable constant.** Playwright's
+   * own default is `cpus/2`; this machine has enough cores that `4` is
+   * conservative, and the same `4` would be aggressive on a small CI box or
+   * a 4-core laptop, where it would compete with the `vite preview` server
+   * for the same cores this measurement had spare. Re-measure before trusting
+   * this number on different hardware — the method above, not the result, is
+   * what travels.
    */
   fullyParallel: true,
   workers: 4,
