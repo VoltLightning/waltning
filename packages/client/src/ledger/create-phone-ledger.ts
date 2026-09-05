@@ -417,6 +417,8 @@ export type PhoneSearchFilter = {
   accountIds?: readonly Id<"accounts">[];
   categoryIds?: readonly Id<"categories">[];
   scope?: PhoneTransactionScope;
+  /** §4's own filter dimension — matches either leg, like `accountIds`. */
+  currency?: CurrencyCode;
   from?: AccountingDate;
   to?: AccountingDate;
   /** S13's whole history — every row naming this counterparty, any role. */
@@ -426,6 +428,22 @@ export type PhoneSearchFilter = {
 };
 
 export type PhoneSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
+
+/**
+ * How much of the answer the caller wants — `@waltning/ledger`'s own
+ * `TransactionSearchOptions`, restated structurally like every other shape
+ * across this seam.
+ *
+ * **`countOnly` is what makes S10 §4's exclusion counts affordable.** Each
+ * of those asks "how many rows match without this one clause" and reads
+ * nothing but `total.count` off the answer; asking through the full
+ * operation folded every matching row through `decimal.js` for currency
+ * sums nobody renders, over a set deliberately wider than the one on screen.
+ * The reader answers a count-only call with an SQL `COUNT(*)` instead — the
+ * same figure, since `total.count` was only ever the length of the rows it
+ * folded.
+ */
+export type PhoneSearchOptions = { countOnly?: boolean };
 
 /** One row of a search page — every field S10's mobile row (or `TransferRow`) needs. */
 export type PhoneSearchTransaction = {
@@ -677,7 +695,11 @@ export type PhoneLedgerPort = {
   /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
   balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
   /** C4 — S10's list. A query, not a snapshot field. */
-  searchTransactions: (filter: PhoneSearchFilter, cursor?: PhoneSearchCursor) => PhoneSearchPage;
+  searchTransactions: (
+    filter: PhoneSearchFilter,
+    cursor?: PhoneSearchCursor,
+    options?: PhoneSearchOptions,
+  ) => PhoneSearchPage;
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
   createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
@@ -874,6 +896,24 @@ export type PhoneLedgerSnapshot = {
    * behind its own toggle, rather than on every refresh nobody asked for.
    */
   archivedAccounts: readonly PhoneAccount[];
+  /**
+   * **Every** account's `ownership`, archived ones included — the one field
+   * here that does not wait for `loadArchived()` (DESK3 round 2, L6).
+   *
+   * S10 §3 web states each row's §6.7 scope, which means resolving the row's
+   * account to its ownership; `accounts` holds only the live ones, and
+   * archiving an account does not delete its transactions. A screen that
+   * asked for `archivedAccounts` in an effect painted a column of "—" and
+   * then corrected itself, and asking for them *during* render is a store
+   * mutation inside another component's render pass — React's own
+   * "Cannot update a component while rendering a different component".
+   *
+   * A map of ownership, always present, is neither: `listAccounts` reads the
+   * archived rows on every refresh regardless (one query either way), and
+   * what S16's toggle is actually lazy about — a *register* of archived
+   * accounts, with balances and names — is untouched above.
+   */
+  accountOwnership: ReadonlyMap<Id<"accounts">, PhoneAccount["ownership"]>;
   currencies: readonly PhoneCurrency[];
   groups: readonly PhoneGroup[];
   recent: readonly PhoneRecentTransaction[];
@@ -1020,6 +1060,8 @@ export type TransactionFilterDraft = {
   accountIds?: readonly string[];
   categoryIds?: readonly string[];
   scope?: PhoneTransactionScope;
+  /** A bare code — `""` is "every currency", the same "not yet a value" treatment `from`/`to` get. */
+  currency?: string;
   from?: string;
   to?: string;
   counterpartyId?: string;
@@ -1303,6 +1345,7 @@ export type PhoneLedgerController = {
   searchTransactions: (
     filter: TransactionFilterDraft,
     cursor?: TransactionSearchCursorDraft,
+    options?: PhoneSearchOptions,
   ) => PhoneSearchPage;
   categorizeBatch: (
     draft: CategorizeBatchDraft,
@@ -1860,6 +1903,7 @@ export function createPhoneLedger(
     revision: 0,
     accounts: [],
     archivedAccounts: [],
+    accountOwnership: new Map(),
     currencies: [],
     groups: [],
     recent: [],
@@ -1891,9 +1935,10 @@ export function createPhoneLedger(
       phase: "start",
     });
     try {
-      const rows = archivedRequested
-        ? port.listAccounts({ includeArchived: true })
-        : port.listAccounts();
+      // Archived rows are read every time — `accountOwnership` below needs
+      // them, and reading them costs one query either way. What
+      // `archivedRequested` still gates is the *register* S16 draws from.
+      const rows = port.listAccounts({ includeArchived: true });
       const accounts = rows.filter((account) => !account.archived);
       const archivedAccounts = archivedRequested ? rows.filter((account) => account.archived) : [];
       const currencies = port.listCurrencies();
@@ -1916,6 +1961,7 @@ export function createPhoneLedger(
           capturable: capturable.has(account.currency),
         })),
         archivedAccounts,
+        accountOwnership: new Map(rows.map((account) => [account.id, account.ownership])),
         currencies,
         groups: port.listGroups(),
         recent: port.listRecent(5),
@@ -1977,7 +2023,7 @@ export function createPhoneLedger(
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listPayeeHistory: () => port.listPayeeHistory(),
-    searchTransactions: (filter, cursor) =>
+    searchTransactions: (filter, cursor, options) =>
       port.searchTransactions(
         {
           ...(filter.text !== undefined ? { text: filter.text } : {}),
@@ -1988,6 +2034,7 @@ export function createPhoneLedger(
             ? { categoryIds: filter.categoryIds.map((categoryId) => id<"categories">(categoryId)) }
             : {}),
           ...(filter.scope ? { scope: filter.scope } : {}),
+          ...(filter.currency ? { currency: money.currencyCode(filter.currency) } : {}),
           // A `DateField` mid-edit is not yet a real date — dropped from the
           // filter rather than thrown, the same "not yet a value" treatment
           // `isRealCalendarDate` gives an in-progress typed date elsewhere.
@@ -2005,6 +2052,7 @@ export function createPhoneLedger(
         cursor
           ? { date: accountingDate(cursor.date), id: id<"transactions">(cursor.id) }
           : undefined,
+        options,
       ),
     categorizeBatch: (draft) => {
       emitClientDiagnostic(diagnostics, {

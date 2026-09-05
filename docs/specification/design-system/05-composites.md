@@ -164,6 +164,8 @@ parties agreed — not the rate a central bank published.
 | `SwipeAction` | Row gestures, mobile only. Short swipe → categorize; long swipe → edit. **Nothing destructive is ever on a swipe** — deletion requires the detail screen, because a gesture you can perform by accident should not be able to remove a financial record. Haptic on commit; the web equivalent is the keyboard map, not a hover control |
 | `AuditHistory` | Chronological `audit_log` entries for one entity: actor · action · before/after. Agent-originated changes are marked, as are `import` and `migration`. This is the component that answers *"why is this categorized this way?"* eighteen months later (`SPEC.md` §6.1), so it renders a **diff**, not a sentence |
 | `ComparisonTable` | Period × metric with deltas. Increases in spend take `negative` ink (§7). Rows excluded as capital state the exclusion inline — `34 200 · excludes 1 one-off` — never silently (§6.8) |
+| `LedgerTable` | S10's own desk-width ledger — date · payee · category · account · scope · amount, sortable by header, `J`/`K`/`Enter`/`F` keyboard-navigable. A plain `FlatList`, not a virtualisation library — S10's own risk note names the trade. Not `FilterBar`'s rail (a sibling, not a child) and not S33's own smaller `Table` — three data surfaces named separately because each answers a different density question, not one grid dressed three ways |
+| `LedgerSelectionBar` / `CategorizeSelectionConfirm` | The shift-click range's own toolbar and its batch-categorise confirm. Not `<DiffCard>` (§5.3) — a batch spans rows that each carried a different category before, so a single before/after pair would either lie or say nothing; this states the count and the target category instead |
 
 ### 5.7 Dashboard
 

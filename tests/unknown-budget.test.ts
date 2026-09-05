@@ -324,6 +324,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "raceWithChildError's rejection handler — Promise.prototype.then's own lib types the rejection reason as any, so this is written out as unknown by hand rather than left to that default, same reasoning as a catch binding even though the language does not force it here",
   },
+  "packages/ui/src/transactions/ledger-table.tsx": {
+    max: 1,
+    why: "the desk table's checkbox column reads shiftKey off Pressable's own onPress event to tell a shift-click range from an ordinary one — react-native-web genuinely puts it there on web (PressResponder.js's own comment: the event's nativeEvent is a MouseEvent), but GestureResponderEvent's type does not declare it, the same seam ledger-screen.tsx's own Href cast already crosses",
+  },
 };
 
 /**

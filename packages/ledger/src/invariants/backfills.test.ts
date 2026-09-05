@@ -39,7 +39,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fold } from "@waltning/core/capture/names";
 import Database from "better-sqlite3";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { OUTBOX_STEPS, REPLICA_STEPS } from "../ddl.ts";
@@ -138,18 +138,29 @@ describe("every backfill names a step that exists", () => {
 
   /**
    * `0009_schema` is exactly this shape: a `check` that refuses a rate its own
-   * new `CHECK` cannot accept, and nothing to derive, so no `fill`. Proven two
-   * ways — the type accepts it, and the real registry carries one — so a
-   * future `Backfill` edit that makes `fill` required again fails here first,
-   * at compile time, rather than as a mystery type error inside `migrate.ts`.
+   * new `CHECK` cannot accept, and nothing to *derive*, so no `fill`.
+   * `0010_schema` is the other shape — an `objects` hook alone, creating all
+   * **six** of the replica's hand-written triggers. The hook rather than a
+   * `.sql` file because a step's statements are frozen by its checksum once
+   * an installed database has run them, so nothing in the chain can
+   * re-create a trigger a later rebuild of `transactions` dropped; a hook
+   * keyed by step tag can move to whatever step rebuilds it next. Proven two
+   * ways — the type accepts a hook with no `fill`, and the real registry
+   * carries two — so a future `Backfill` edit that makes `fill` required
+   * again fails here first, at compile time, rather than as a mystery type
+   * error inside `migrate.ts`.
    */
   it("allows a hook with only a check and no fill", () => {
     const checkOnly: Backfill = { check: () => {} };
     expect(checkOnly.fill).toBeUndefined();
     expect(
       REPLICA_BACKFILLS["0009_schema"]?.fill,
-      "0009_schema itself is check-only",
+      "0009_schema derives no column value",
     ).toBeUndefined();
+    expect(
+      REPLICA_BACKFILLS["0010_schema"]?.objects,
+      "0010_schema creates all six triggers no migration step can hold",
+    ).toBeDefined();
   });
 });
 
@@ -164,11 +175,175 @@ describe("every backfill with a fill is proven by a FILLED_COLUMNS row", () => {
    * rather than silently expected to have one.
    */
   it("names every REPLICA_BACKFILLS key that has a fill, and none that doesn't", () => {
+    // `objects` is deliberately not covered by this table — a trigger leaves
+    // no column to read back, and what proves one is a test that breaks the
+    // guarantee (`src/test/transaction-ops.test.ts`). See `Backfill`'s doc.
     const filledTags = new Set<string>(FILLED_COLUMNS.map((c) => c.tag));
     for (const [tag, backfill] of Object.entries(REPLICA_BACKFILLS)) {
       if (backfill.fill === undefined) continue; // check-only — nothing to fill, nothing to prove here
       expect(filledTags.has(tag), `${tag} has a fill and needs a FILLED_COLUMNS entry`).toBe(true);
     }
+  });
+});
+
+/**
+ * The `objects` hook's own class of defect, and it is not the one
+ * `FILLED_COLUMNS` catches. A trigger leaves no column to read back, so
+ * "every filled column holds what the write path would have written" says
+ * nothing about it — and the failure it is exposed to is the same one this
+ * whole file exists for: a hook that is registered, exported, covered by a
+ * behavioural test somewhere else, and never actually reached by the chain.
+ *
+ * So the property is stated from the outside, structurally and generically:
+ * run the real chain twice on two fresh stores, once with the hook and once
+ * with that one hook removed, and compare `sqlite_master`. A hook that is
+ * reached leaves at least one object behind that the same chain without it
+ * does not have. It says nothing about *what* the object is — a trigger
+ * today, a view tomorrow — which is the point: the next `objects` hook
+ * inherits this without a line being added, the same way `FILLED_COLUMNS`
+ * was written as a table rather than an assertion about `name_folded`.
+ */
+describe("every objects hook creates something the chain would not otherwise have", () => {
+  /** Every schema object the full chain leaves behind, by name. */
+  function objectsAfterChain(label: string, backfills: Readonly<Record<string, Backfill>>) {
+    const paths = {
+      replica: join(dir, `${label}-replica.db`),
+      outbox: join(dir, `${label}-outbox.db`),
+    };
+    const ledger = openLedger((filename: string) => {
+      const sqlite = new Database(filename);
+      return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+    }, paths);
+    migrateReplica(ledger.replica, {
+      fs: noopFs,
+      migrations: migrationsFromSteps(REPLICA_STEPS, backfills, "replica"),
+    });
+    const rows = ledger.replica.db.all<{ name: string }>(
+      sql.raw(`select "name" from "sqlite_master" where "name" is not null`),
+    );
+    ledger.close();
+    return new Set(rows.map((row) => row.name));
+  }
+
+  const tagsWithObjects = Object.entries(REPLICA_BACKFILLS)
+    .filter(([, backfill]) => backfill.objects !== undefined)
+    .map(([tag]) => ({ tag }));
+
+  it("there is at least one to check", () => {
+    expect(tagsWithObjects.length, "vacuity guard").toBeGreaterThan(0);
+  });
+
+  /**
+   * And it can run against a database that already holds what it creates.
+   * This is the hook's own idempotence, owed to nobody's migration history:
+   * an `objects` hook is code rather than a hashed statement, so the journal
+   * promises nothing about how many times it runs against a given database —
+   * it runs whenever its step does. A bare `CREATE TRIGGER` meeting a name
+   * already there would abort on the duplicate, roll the step back, and fail
+   * identically on every launch after: a migration with no way forward from
+   * the phone. `IF NOT EXISTS` removes that mode outright, which is defence
+   * in depth and not a repair for any device known to be in that state.
+   */
+  it.each(tagsWithObjects)("$tag's objects hook is idempotent", ({ tag }) => {
+    const paths = {
+      replica: join(dir, `${tag}-twice-replica.db`),
+      outbox: join(dir, `${tag}-twice-outbox.db`),
+    };
+    const ledger = openLedger((filename: string) => {
+      const sqlite = new Database(filename);
+      return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+    }, paths);
+    migrateReplica(ledger.replica, { fs: noopFs });
+
+    const objects = REPLICA_BACKFILLS[tag]?.objects;
+    expect(objects, `${tag} has an objects hook`).toBeDefined();
+    // The same two capabilities `migrationsFromSteps` hands it, over a
+    // database the chain has already migrated once.
+    const runner = {
+      all: <T>(query: SQL) => ledger.replica.db.all<T>(query),
+      run: (query: SQL) => {
+        ledger.replica.db.run(query);
+      },
+    };
+    expect(() => objects?.(runner)).not.toThrow();
+    ledger.close();
+  });
+
+  it.each(tagsWithObjects)("$tag's objects hook reaches sqlite_master", ({ tag }) => {
+    const withHook = objectsAfterChain(`${tag}-with`, REPLICA_BACKFILLS);
+    // The same chain with this one hook's `objects` dropped and everything
+    // else — its `check`, its `fill` — left exactly as it is, so the
+    // difference can only be what the hook creates.
+    const { objects: _dropped, ...rest } = REPLICA_BACKFILLS[tag] ?? {};
+    const without = objectsAfterChain(`${tag}-without`, { ...REPLICA_BACKFILLS, [tag]: rest });
+
+    const created = [...withHook].filter((name) => !without.has(name));
+    expect(created.length, `${tag}'s objects hook created nothing`).toBeGreaterThan(0);
+  });
+
+  /**
+   * And the same question asked by name, because the generic diff above is
+   * a property and this is the guarantee (round 4, and the reason the hook
+   * moved off `0009_schema`).
+   *
+   * SQLite has no `ALTER TABLE … ALTER COLUMN`, so drizzle-kit expresses a
+   * column addition on a constrained table as copy-rename-drop — and
+   * `DROP TABLE` takes that table's triggers with it. `0010_schema` does
+   * exactly that to `transactions`, so an `objects` hook on `0009_schema`
+   * created two triggers the very next step deleted, leaving a fresh
+   * install at the head with WA017 unenforced on the replica and every test
+   * still green: `transaction-ops.test.ts` migrates the whole chain and
+   * would have caught it, but only because it happens to write a bad row —
+   * nothing said the *object* had to survive.
+   *
+   * **All six, because there is one home for them.** H1a's four spent one
+   * commit at the tail of `0010_schema.sql`, a generated file, where the next
+   * `pnpm ledger:generate` or the next rebuild of `transactions` would have
+   * removed them just as quietly. Every hand-written replica trigger is
+   * created by the `objects` hook on the last step that rebuilds
+   * `transactions` now — `0010_schema`, which is no longer the chain's head —
+   * so this is the list of every trigger the replica has.
+   *
+   * Run the real chain to the end, and ask for the six names. After the
+   * whole chain, never after the hook's own step, which is precisely the
+   * distinction the defect lived in.
+   */
+  it("every hand-written trigger exists after the whole chain, not merely after its own step", () => {
+    const names = objectsAfterChain("triggers-head", REPLICA_BACKFILLS);
+    for (const trigger of [
+      "transactions_category_kind_matches_type_insert",
+      "transactions_category_kind_matches_type_update",
+      "transactions_category_not_archived_insert",
+      "transactions_category_not_archived_update",
+      "transaction_lines_category_not_archived_insert",
+      "transaction_lines_category_not_archived_update",
+    ]) {
+      expect(names.has(trigger), `${trigger} survived the chain`).toBe(true);
+    }
+  });
+
+  /**
+   * And the converse, which is the half that keeps the rule from being
+   * re-broken: **no migration step may write a trigger at all** — not the
+   * generated `.sql` files, not the hand-written ones
+   * (`0001_database_objects.sql`, `0011_dashboard_layout_seed.sql`), which
+   * this test does not distinguish between on purpose.
+   *
+   * A step's statements are frozen by its checksum the moment an installed
+   * database has run them, so a trigger written into one can never be
+   * re-created from the chain after a later rebuild of its table drops it;
+   * and a generated file loses it on the next `pnpm ledger:generate` besides.
+   * The test above says the six triggers survive; this one says there is no
+   * seventh living somewhere that cannot move.
+   */
+  it("no migration step creates a trigger — every one of them lives in a hook", () => {
+    // Both chains: the checksum argument is the same for the outbox.
+    const offenders = [...REPLICA_STEPS, ...OUTBOX_STEPS].flatMap((step) =>
+      step.statements
+        .filter((statement) => /^\s*CREATE\s+TRIGGER/i.test(statement))
+        .map((statement) => `${step.tag}: ${statement.slice(0, 80)}`),
+    );
+    expect(offenders, "a trigger in a step cannot be moved when its table is rebuilt").toEqual([]);
   });
 });
 

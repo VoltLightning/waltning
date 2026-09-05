@@ -11,6 +11,7 @@
     "./diagnostics": "./src/diagnostics.ts",
     "./id": "./src/id.ts",
     "./json": "./src/json.ts",
+    "./ledger-table": "./src/ledger-table.ts",
     "./money": "./src/money.ts",
     "./protocol": "./src/protocol.ts",
     "./random": "./src/random.ts",

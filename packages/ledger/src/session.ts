@@ -173,6 +173,7 @@ import {
   searchTransactions,
   type TransactionSearchCursor,
   type TransactionSearchFilter,
+  type TransactionSearchOptions,
   type TransactionSearchPage,
 } from "./transactions/search-transactions.ts";
 import { setTransactionLinesExecutor } from "./transactions/set-transaction-lines.executor.ts";
@@ -272,6 +273,7 @@ export type LocalLedgerSession = {
   searchTransactions: (
     filter: TransactionSearchFilter,
     cursor?: TransactionSearchCursor,
+    options?: TransactionSearchOptions,
   ) => TransactionSearchPage;
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
@@ -634,8 +636,8 @@ export function createLocalLedgerSession<TRun>(
     readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
-    searchTransactions: (filter, cursor) =>
-      searchTransactions(requireOpen().replica.db, filter, cursor),
+    searchTransactions: (filter, cursor, options) =>
+      searchTransactions(requireOpen().replica.db, filter, cursor, options),
     getTransaction: (id) => readTransaction(requireOpen().replica.db, id),
     getAuditLog: (entity, entityId) => {
       requireOpen();

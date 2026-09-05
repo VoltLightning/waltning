@@ -66,10 +66,14 @@ Rows group by date. Foreign rows carry `FxAmount`; transfers render as
 
 ### Web — ≥1024px
 
-Table, not cards: date · payee · category · account · scope · amount, sortable,
-with the filter bar as a persistent left rail rather than a chip row. The rail
-buys simultaneous visibility of every filter dimension, which is what makes this
-the surface for a real reconciliation session.
+Table, not cards: date · brand mark · payee · category · account · scope ·
+amount, with the filter bar as a persistent left rail rather than a chip row.
+Every column sorts except the brand mark, which carries no header word and no
+sort control — a mark is not a value to order rows by, and `Payee` already
+names the identity column it leads into, so its header cell is held open and
+left blank the way the selection checkbox's is. The rail buys simultaneous
+visibility of every filter dimension, which is what makes this the surface for
+a real reconciliation session.
 
 Density is the reason this exists separately from the mobile layout — around 40
 rows visible against 8, which is the difference between scanning a month and
@@ -83,7 +87,7 @@ scrolling one.
 | `FilterBar` | Account · category · scope · currency · date range · counterparty. Reports the count each filter excludes (§5.6) |
 | `SearchField` | Payee, note, amount, **and receipt contents** — merchant plus line descriptions. A match inside a receipt states which line matched, so the result is explicable rather than surprising |
 | `TransactionRow` / `TransferRow` | `BIZ` where business; `FxAmount` where foreign |
-| `BrandIcon` | `TransactionRow`'s own leading mark — same component and catalogue as S04 (§14.4b) |
+| `BrandIcon` | The leading mark on both surfaces — `TransactionRow`'s on mobile, and the desk table's identity column, between the date and the payee. Same component and catalogue as S04 (§14.4b); an unrecognised payee falls back to its monogram rather than to nothing |
 | `SwipeAction` | Mobile — short swipe categorize, long swipe edit. **Never delete** |
 | `EmptyState(filtered)` | Names the excluding filter and its hidden count |
 | `EmptyState(first-run)` | Nothing has ever existed |
@@ -125,9 +129,14 @@ Virtualized infinite scroll. Short swipe → category sheet; long swipe → edit
 Nothing destructive on a swipe (`design-system/05` §5.6). Pull to refresh.
 
 ### Web
-`J`/`K` move, `Enter` opens, `/` focuses search, `F` opens the filter rail.
-Shift-click selects a range; multi-select enables `categorize_batch` behind one
-`DiffCard` stating the affected count. Sorting is by column header.
+`J`/`K` move, `Enter` opens. The rail is persistent (§3), so `/` and `F` both
+reach the same place — the rail's search field — rather than one opening it and
+the other only focusing what is already on screen. Shift-click selects a range;
+multi-select enables `categorize_batch` behind one confirm stating the affected
+count and the target category — not a `DiffCard` (`design-system/05` §5.3):
+that component's shape is a per-row before/after, and a batch spans rows that
+each carried a different category before, so a single before/after pair would
+either lie or say nothing. Sorting is by column header.
 
 ### Shared
 A filter arriving from another screen is **shown, not silently applied** —

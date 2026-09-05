@@ -1713,20 +1713,26 @@ describe("a constraint declared in the schema is present on the device", () => {
   });
 
   /**
-   * **H1a's four triggers, counted after the *whole* chain has run — because
-   * a rebuild deletes a trigger and says nothing.**
+   * **Every trigger the replica has, counted after the *whole* chain has run
+   * — because a rebuild deletes a trigger and says nothing.**
    *
    * `DROP TABLE` takes every trigger defined on that table with it, so a
    * copy-rename-drop step landing *after* a `CREATE TRIGGER` silently
    * un-enforces it: no error, no missing table, no failed migration, just a
-   * guarantee that has stopped firing. That is exactly what happened once —
-   * the pair on `transactions` was written into `0009_schema` and
-   * `0010_schema`'s brand rebuild removed both, while the `transaction_lines`
-   * pair (that table is not rebuilt) survived and made the loss look
-   * partial rather than systematic. All four live at the end of the head
-   * migration now.
+   * guarantee that has stopped firing. That has now happened twice — WA017's
+   * pair was written into `0009_schema` and `0010_schema`'s brand rebuild
+   * removed both, and H1a's four sat at the tail of `0010_schema.sql`, where
+   * the next rebuild of `transactions` would have taken two of them the same
+   * way while the `transaction_lines` pair survived and made the loss look
+   * partial rather than systematic.
    *
-   * The other H1a tests (`transaction-ops.test.ts`) provoke the refusal,
+   * So there is one home and this is the census of it: every hand-written
+   * replica trigger is created by `REPLICA_BACKFILLS["0010_schema"].objects`
+   * — the hook on the last step that *rebuilds* `transactions`, which is not
+   * the chain's head (`0011_dashboard_layout_seed` and `0012_schema` run
+   * after it) — and the hook moves when a later step rebuilds that table.
+   *
+   * The behavioural tests (`transaction-ops.test.ts`) provoke each refusal,
    * which is the better assertion — but each of them opens a store on a
    * chain that ends where the chain ends today, so an eighteenth migration
    * rebuilding `transactions` would break them in a way that reads as "the
@@ -1735,17 +1741,19 @@ describe("a constraint declared in the schema is present on the device", () => {
    * has run every step. `toEqual` rather than a `toContain` per name, so a
    * trigger that is added without being counted here is red too.
    */
-  it("keeps every archived-category trigger alive to the end of the chain", () => {
+  it("keeps every hand-written trigger alive to the end of the chain", () => {
     const ledger = openAt("triggers");
     migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
     ledger.close();
 
     expect(
       inspect(join(dir, "triggers-replica.db"), (db) => objects(db, "trigger")),
-      "a later rebuild of either table must re-create these below itself",
+      "a later rebuild of either table must take the `objects` hook with it",
     ).toEqual([
       "transaction_lines_category_not_archived_insert",
       "transaction_lines_category_not_archived_update",
+      "transactions_category_kind_matches_type_insert",
+      "transactions_category_kind_matches_type_update",
       "transactions_category_not_archived_insert",
       "transactions_category_not_archived_update",
     ]);

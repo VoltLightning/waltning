@@ -340,13 +340,30 @@ process holding a connection string it cannot change, and on a phone one app
 process owns the file and every credential in it. There is no adversary a role
 would exclude.
 
-**A cross-table trigger otherwise stays on the server — with one exception,
-mirrored in application code rather than in SQLite itself.** SQLite carries no
-trigger of its own that can join to a second table (`ddl.ts` states every
-`CHECK` this schema can enforce alone), so `assert_amount_scale` and
+**A cross-table rule the replica can mirror becomes a trigger, and every
+hand-written replica trigger lives in one home: the `objects` hook on the last
+step that rebuilds its table (`packages/ledger/src/migrate.ts`'s
+`REPLICA_BACKFILLS`), which moves when that step does.** Not the chain's head,
+and not for want of a hand-written `.sql` — `drizzle/replica` holds two of
+those. A migration step is the wrong home because its statements are frozen by
+its checksum once an installed database has run them, so the file cannot be
+edited afterwards to re-create a trigger a later rebuild dropped, and SQLite
+drops a table's triggers with the table. What re-creates it must be able to
+move, which a hook keyed by step tag is and a `.sql` file is not. A *generated*
+file is worse still: drizzle-kit rewrites it and cannot emit a trigger, so one
+written there vanishes on the next regeneration with nothing red. Six triggers
+today: H1a's four `*_category_not_archived_*` and WA017's two
+`transactions_category_kind_matches_type_*`, each joining to `categories`,
+which no `CHECK` can do (`ddl.ts` states every `CHECK` this schema can enforce
+alone).
+
+**What the replica cannot usefully mirror is stated rather than approximated,
+in application code.** SQLite's `RAISE(ABORT, …)` takes a string literal and
+nothing else, so a trigger for `assert_amount_scale` or
 `assert_currency_decimals_safe`'s own cross-table lookup against
 `currencies.decimals` (`0011_transaction_scale_and_category_kind.sql`, `SPEC.md`
-§6.5) has no SQLite trigger to mirror into. `packages/ledger/src/scale.ts`'s
+§6.5) could name neither the offending currency, nor its declared scale, nor
+the figure. `packages/ledger/src/scale.ts`'s
 `assertMoneyScale` is the device's version instead — run from inside each
 executor's own write path — and `update_currency`'s own executor carries the
 second half, scanning every table a decimals shrink could invalidate before

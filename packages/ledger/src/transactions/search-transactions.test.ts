@@ -457,6 +457,135 @@ describe("searchTransactions — paging", () => {
   });
 });
 
+/**
+ * M3 (DESK3 round 3) — the mode S10 §4's exclusion counts ask through.
+ *
+ * The class of defect is not a wrong number; it is the *cost* of a right
+ * one. Each of those counts reads `total.count` and nothing else, and asking
+ * through the full operation folded every matching row through `decimal.js`
+ * for currency sums that are then discarded — over a set deliberately wider
+ * than the one on screen, and for the date range's own note, over the whole
+ * ledger. So the two properties below are "the count is the same figure" and
+ * "the fold does not run", and the second one is stated against the SQL
+ * actually prepared rather than against a timing.
+ */
+describe("searchTransactions — countOnly", () => {
+  /**
+   * The count must be the figure the full path computes, over the same four
+   * §13 columns — including `transaction_lines.description`, which only the
+   * shared `lineDescriptionsBy` lookup reaches. A word that lives in a line
+   * alone counts one on both paths, or the count is an approximation.
+   */
+  it("counts a line-description-only match exactly as the full path does", () => {
+    const txnId = insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    stores.ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e2"),
+        transactionId: txnId,
+        description: "Printer toner",
+        amount: money.toMoney("48.90"),
+      })
+      .run();
+
+    const full = searchTransactions(stores.ledger.replica.db, { text: "toner" });
+    const counted = searchTransactions(stores.ledger.replica.db, { text: "toner" }, undefined, {
+      countOnly: true,
+    });
+
+    expect(full.total.count).toBe(1);
+    expect(counted.total.count).toBe(full.total.count);
+  });
+
+  it("counts the same rows the full operation counts, and returns nothing else", () => {
+    for (let i = 0; i < 7; i++) {
+      insertExpense({
+        id: `50000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        date: accountingDate(`2026-01-${String(i + 1).padStart(2, "0")}`),
+      });
+    }
+    // One row outside the filter, to prove the `WHERE` is the same `WHERE`.
+    insertExpense({
+      id: "50000000-0000-4000-8000-0000000000ff",
+      date: accountingDate("2026-03-01"),
+    });
+
+    const filter = { from: accountingDate("2026-01-01"), to: accountingDate("2026-01-31") };
+    const full = searchTransactions(stores.ledger.replica.db, filter);
+    const counted = searchTransactions(stores.ledger.replica.db, filter, undefined, {
+      countOnly: true,
+    });
+
+    expect(counted.total.count).toBe(full.total.count);
+    expect(counted.total.count).toBe(7);
+    // No page, no cursor, and no currency totals — a caller wanting any of
+    // those must not ask for a count.
+    expect(counted.rows).toEqual([]);
+    expect(counted.nextCursor).toBeUndefined();
+    expect(counted.total.currencies).toEqual([]);
+    expect(full.total.currencies.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The fold, from the outside: `signRow` and `totalsOf` read
+   * `amount_original` and nothing else can give them a number, so a query
+   * that does not select it cannot have folded one. `better-sqlite3`'s own
+   * `prepare` is the seam both paths go through — the same spy the `LIMIT`
+   * test above uses.
+   */
+  it("prepares one COUNT and never selects an amount to fold", () => {
+    for (let i = 0; i < 200; i++) {
+      insertExpense({
+        id: `60000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        date: accountingDate(`2026-01-${String((i % 28) + 1).padStart(2, "0")}`),
+      });
+    }
+
+    const prepareSpy = vi.spyOn(Database.prototype, "prepare");
+    searchTransactions(stores.ledger.replica.db, {}, undefined, { countOnly: true });
+    const statements = prepareSpy.mock.calls.map(([sql]) => String(sql));
+    prepareSpy.mockRestore();
+
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toMatch(/count\(\*\)/i);
+    expect(statements.some((sql) => /amount_original/i.test(sql))).toBe(false);
+  });
+
+  /**
+   * A `text` filter still cannot be decided in SQL, so its own query reads
+   * rows — but only the columns `matchesText` folds by *name*. The money
+   * fold is what count-only drops, everywhere.
+   *
+   * **Two statements, not one.** H2 put a transaction's own line
+   * descriptions among the four columns §13 searches, and they live on
+   * `transaction_lines`; the count reads them through the same correlated
+   * subquery the page does (`lineDescriptionsBy`), because a count that
+   * folded three of the four columns would silently disagree with the figure
+   * it is subtracted from. The structural count above is still one
+   * statement — it folds nothing.
+   */
+  it("a text filter counts by folding names, still without folding money", () => {
+    insertExpense({ payee: "Żabka", note: "poranna kawa" });
+    insertExpense({ payee: "Rewe", note: "" });
+
+    const prepareSpy = vi.spyOn(Database.prototype, "prepare");
+    const counted = searchTransactions(stores.ledger.replica.db, { text: "zabka" }, undefined, {
+      countOnly: true,
+    });
+    const statements = prepareSpy.mock.calls.map(([sql]) => String(sql));
+    prepareSpy.mockRestore();
+
+    expect(counted.total.count).toBe(1);
+    expect(counted.total.currencies).toEqual([]);
+    // The candidate rows, then their line descriptions — and nothing else.
+    expect(statements).toHaveLength(2);
+    expect(statements.some((sql) => /"transaction_lines"/i.test(sql))).toBe(true);
+    // `amount_original` *is* selected here — §13 matches an amount token
+    // exactly — but nothing sums it: no currency total comes back.
+    expect(statements.some((sql) => /"to_amount"/i.test(sql))).toBe(false);
+  });
+});
+
 describe("searchTransactions — totals", () => {
   it("sums per currency, splits out capital, and never mixes currencies", () => {
     insertExpense({

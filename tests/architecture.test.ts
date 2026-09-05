@@ -186,6 +186,27 @@ describe("packages/client is React, never React Native", () => {
   });
 });
 
+/**
+ * **Why a *table's* sort lives in `packages/core`** (DESK3 round 2, ruling on
+ * the core file). `packages/client` and `packages/ui` are siblings on the
+ * floor — neither may import the other, which the rule above enforces from
+ * `client`'s side and `design conformance` from `ui`'s — so a function both
+ * of them need has exactly one legal home, and it is the package they both
+ * already depend on. `packages/core/src/ledger-table.ts` is that case:
+ * `useLedgerTableSort`/`useLedgerTableSelection` (client) and
+ * `<LedgerTable>`'s own stories (ui) were otherwise two copies of one sort,
+ * and the copy in the stories was what two visual snapshots certified while
+ * looking like proof of the shipped one.
+ *
+ * The placement is only legal because the *vocabulary* was cut down to fit
+ * `core`'s charter: rows, a field key, a direction. A column — which has a
+ * header, a width and a label — stayed in `packages/ui`, and `ui` owns the
+ * one-line map from its columns to those keys. Had the column type moved
+ * down too, `core` would have grown an opinion about what a ledger table
+ * looks like, which is the shape "no abstraction before the third use" is
+ * actually warning about. The two tests below are what keep the file honest:
+ * no Node builtin, and nothing but decimal.js and zod.
+ */
 describe("packages/core runs on a phone", () => {
   /**
    * "No Node APIs" was prose, and provably unenforced: `packages/core` inherits

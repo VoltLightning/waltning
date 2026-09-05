@@ -4,7 +4,20 @@ import { id as brandId, type Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
-import { and, desc, eq, exists, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+  type SQL,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
@@ -21,6 +34,8 @@ export type TransactionSearchFilter = {
   accountIds?: readonly Id<"accounts">[];
   categoryIds?: readonly Id<"categories">[];
   scope?: TransactionSearchScope;
+  /** Matches either leg, the same reasoning `accountIds` already gives (§4 web rail — DESK3 round 1, M). */
+  currency?: CurrencyCode;
   from?: AccountingDate;
   to?: AccountingDate;
   /** S13's whole history — every row naming this counterparty, any role. */
@@ -89,6 +104,36 @@ export type TransactionSearchPage = {
  * Exported so the paging test can size its fixture by it.
  */
 export const SEARCH_PAGE_SIZE = 50;
+
+/**
+ * How the caller wants the operation answered — the filter says *what* to
+ * match, this says *how much of the answer is wanted*.
+ *
+ * **`countOnly` is the whole reason this type exists.** S10 §4's "each
+ * filter reports the count it excludes" asks one question per active control
+ * — "how many rows would match without this one clause" — and the only thing
+ * it reads off the answer is `total.count`. Answering that through the full
+ * operation made every one of those a *fold*: `signRow` per row through
+ * `decimal.js`, `totalsOf` accumulating currency sums nobody renders, over a
+ * set deliberately *wider* than the one on screen. The `dateRange` control is
+ * the worst of them by construction — the query that drops the date range is
+ * a query over the whole ledger, and on the desk branch that ran on every
+ * mount.
+ *
+ * In count-only mode the reader answers the same question with an SQL
+ * `COUNT(*)` over the same `WHERE` and the same join set, and hands back no
+ * rows and no currency totals at all. That is not a cheaper approximation of
+ * the same figure — it is the identical figure, because `total.count` was
+ * only ever `totalRows.length` and the joins that decide it are unchanged.
+ */
+export type TransactionSearchOptions = {
+  /**
+   * Answer with `total.count` and nothing else: no page, no cursor, no
+   * currency sums. `rows` comes back empty and `total.currencies` empty —
+   * a caller wanting either must not ask for a count.
+   */
+  countOnly?: boolean;
+};
 
 /**
  * Digits with no grouping at all, optionally a decimal fraction to
@@ -179,6 +224,65 @@ function matchesText(
   return false;
 }
 
+/**
+ * Every structurally-matching transaction's own line descriptions, grouped by
+ * transaction — H2: a description lives on `transaction_lines`, not
+ * `transactions`, so the display join set never carries it, and §13 names it
+ * as one of the four columns a text search reads.
+ *
+ * One narrow query rather than a wider join, which would multiply every
+ * multi-line transaction's row. And a **correlated subquery over the same
+ * `structuralWhere`**, not an `inArray` over the ids already read: the two
+ * return the same rows, and the difference is what happens when there are
+ * many of them — the structurally-filtered set is deliberately unbounded
+ * where a text filter is active (it cannot be pushed into SQL), so `inArray`
+ * binds one SQL parameter per row and SQLite refuses past
+ * `SQLITE_MAX_VARIABLE_NUMBER`, at exactly the ledger sizes this list is
+ * meant to grow into. Restating the predicate costs the planner one more
+ * pass over an index it has already used and binds nothing.
+ *
+ * Called by **both** answers a text filter has — the page and `countOnly`'s
+ * `COUNT` — because a count that read three of `matchesText`'s four columns
+ * would silently disagree with the figure beside it.
+ */
+function lineDescriptionsBy<TRun, TSchema extends typeof ledgerSchema>(
+  db: ReplicaDb<TRun, TSchema>,
+  structuralWhere: SQL | undefined,
+): Map<Id<"transactions">, string[]> {
+  const byTransaction = new Map<Id<"transactions">, string[]>();
+  const lineRows = db
+    .select({
+      transactionId: transactionLines.transactionId,
+      description: transactionLines.description,
+    })
+    .from(transactionLines)
+    .where(
+      exists(
+        // The projection is `transactions.id` rather than a raw `sql`1``:
+        // `EXISTS` ignores what a subquery selects, and a real column keeps
+        // the builder typed where a raw fragment would be `SQL<unknown>`.
+        db
+          .select({ matched: transactions.id })
+          .from(transactions)
+          .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+          .where(and(eq(transactions.id, transactionLines.transactionId), structuralWhere)),
+      ),
+    )
+    .all();
+  for (const line of lineRows) {
+    // `transactionLines.transactionId`'s own column type is `Id<IdTable>`
+    // — every branded table, not just this one — because the schema
+    // declares it `k.uuid("transaction_id")` with no `<Table>` given.
+    // Narrowed here, at the boundary, the same way `@waltning/core/id`'s
+    // own `id()` is meant to be used.
+    const transactionId = brandId<"transactions">(line.transactionId);
+    const descriptions = byTransaction.get(transactionId);
+    if (descriptions) descriptions.push(line.description);
+    else byTransaction.set(transactionId, [line.description]);
+  }
+  return byTransaction;
+}
+
 function scopeCondition(scope: TransactionSearchScope) {
   switch (scope) {
     case "all":
@@ -238,22 +342,26 @@ function scopeCondition(scope: TransactionSearchScope) {
  * the trade-off `matchesText`'s own doc names above, unavoidable without
  * `pg_trgm`.
  *
- * **L — `total.count` is `totalRows.length`, not a second SQL `count(*)`.**
- * A standalone aggregate looks cheaper — no `money.signed` fold, no decimal
- * precision needed for a row count — but it buys nothing here: `totalRows`
- * is read and folded in full regardless, for the currency sums beside it
- * (M2's own doc above), so a second query over the same `structuralWhere`
- * was a pure pessimization, one more round trip paying for an answer this
- * function already had. It had also drifted from `totalRows`'s own join
- * set (missing `innerJoin(currencies)`), which an inner join can turn from
- * "redundant" into "silently disagrees with the totals beside it" the
- * moment a row's currency is missing from `currencies`. One query, one join
- * set, one honest count.
+ * **L — `total.count` is `totalRows.length` whenever the currency sums are
+ * being asked for anyway, and an SQL `COUNT(*)` when they are not.** For a
+ * full answer a standalone aggregate buys nothing: `totalRows` is read and
+ * folded in full regardless, for the currency sums beside it (M2's own doc
+ * above), so a second query over the same `structuralWhere` would be one
+ * more round trip paying for an answer this function already had — and an
+ * earlier one had drifted from `totalRows`'s own join set (missing
+ * `innerJoin(currencies)`), which an inner join turns from "redundant" into
+ * "silently disagrees with the totals beside it" the moment a row's currency
+ * is missing from `currencies`. What changed that reasoning is a caller that
+ * wants *only* the count (`TransactionSearchOptions#countOnly`): there the
+ * fold has nothing to pay for, so the aggregate runs over the same
+ * `structuralWhere` and the same two inner joins — one query, one join set,
+ * one honest count, either way.
  */
 export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   filter: TransactionSearchFilter,
   cursor?: TransactionSearchCursor,
+  options?: TransactionSearchOptions,
 ): TransactionSearchPage {
   const toAccounts = alias(accounts, "to_accounts");
   const toCurrencies = alias(currencies, "to_currencies");
@@ -273,6 +381,9 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
         )
       : undefined,
     categoryIds.length > 0 ? inArray(transactions.categoryId, categoryIds) : undefined,
+    filter.currency !== undefined
+      ? or(eq(transactions.currency, filter.currency), eq(transactions.toCurrency, filter.currency))
+      : undefined,
     scopeCondition(scope),
     filter.counterpartyId !== undefined
       ? eq(transactions.counterpartyId, filter.counterpartyId)
@@ -288,6 +399,57 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   // `parseSearchAmount("Shop A 2024")` is `null`, where capture's `findAmount`
   // would have read `2024` out of the middle of a payee-and-year search.
   const needleAmount = filter.text === undefined ? null : parseSearchAmount(filter.text);
+
+  if (options?.countOnly === true) {
+    // The same two inner joins the totals use, and no others — the join set
+    // is what decides which rows exist to be counted, so a count taken over
+    // a different one would silently disagree with the figure it is
+    // subtracted from. The left joins the page needs (`to_accounts`,
+    // `to_currencies`, `categories`) cannot change a row count, and drawing
+    // them here would only make that harder to see.
+    const countable = db
+      .select({ matched: count() })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .innerJoin(currencies, eq(transactions.currency, currencies.code));
+
+    if (needle === "") {
+      const [row] = countable.where(structuralWhere).all();
+      return {
+        rows: [],
+        nextCursor: undefined,
+        total: { count: row?.matched ?? 0, currencies: [] },
+      };
+    }
+
+    // A `text` filter still cannot be decided in SQL (`matchesText`'s own
+    // doc) — every structurally-matching row is read and folded by *name*,
+    // its line descriptions included (H2), because a count that read three
+    // of the four columns would not be the figure it is subtracted from.
+    // What count-only drops even here is the money fold: the text columns
+    // instead of the whole row, `signRow` never called, `totalsOf` never
+    // called.
+    const candidates = db
+      .select({
+        id: transactions.id,
+        payee: transactions.payee,
+        note: transactions.note,
+        amountOriginal: transactions.amountOriginal,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .innerJoin(currencies, eq(transactions.currency, currencies.code))
+      .where(structuralWhere)
+      .all();
+    const countLines =
+      candidates.length > 0
+        ? lineDescriptionsBy(db, structuralWhere)
+        : new Map<Id<"transactions">, string[]>();
+    const matched = candidates.filter((row) =>
+      matchesText(row, needle, needleAmount, countLines.get(row.id) ?? []),
+    );
+    return { rows: [], nextCursor: undefined, total: { count: matched.length, currencies: [] } };
+  }
 
   const rowsQuery = () =>
     db
@@ -404,55 +566,13 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
     .all()
     .map(signRow);
 
-  // H2 — one query for every matched row's own lines, grouped by transaction.
-  // A description lives on `transaction_lines`, not `transactions`, so
-  // `rowsQuery()`'s join set (built for display, not for search) never
-  // carries it — this is a second, narrow query rather than a wider join
-  // that would multiply every multi-line transaction's row.
-  //
-  // L — the lines are selected by a **correlated subquery over the same
-  // `structuralWhere`**, not by `inArray` over the ids just read. The two
-  // return the same rows, and the difference is what happens when there are
-  // many of them: `rows` is deliberately unbounded here (the text filter
-  // cannot be pushed into SQL, so every structurally-matching row is read),
-  // so `inArray` binds one SQL parameter per row and SQLite refuses past
-  // `SQLITE_MAX_VARIABLE_NUMBER` — "too many SQL variables", thrown at
-  // exactly the ledger sizes this list is meant to grow into, and only when
-  // a text filter is active. Restating the predicate costs the planner one
-  // more pass over an index it has already used and binds nothing.
-  const linesByTransaction = new Map<Id<"transactions">, string[]>();
-  if (rows.length > 0) {
-    const lineRows = db
-      .select({
-        transactionId: transactionLines.transactionId,
-        description: transactionLines.description,
-      })
-      .from(transactionLines)
-      .where(
-        exists(
-          // The projection is `transactions.id` rather than a raw `sql`1``:
-          // `EXISTS` ignores what a subquery selects, and a real column keeps
-          // the builder typed where a raw fragment would be `SQL<unknown>`.
-          db
-            .select({ matched: transactions.id })
-            .from(transactions)
-            .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-            .where(and(eq(transactions.id, transactionLines.transactionId), structuralWhere)),
-        ),
-      )
-      .all();
-    for (const line of lineRows) {
-      // `transactionLines.transactionId`'s own column type is `Id<IdTable>`
-      // — every branded table, not just this one — because the schema
-      // declares it `k.uuid("transaction_id")` with no `<Table>` given.
-      // Narrowed here, at the boundary, the same way `@waltning/core/id`'s
-      // own `id()` is meant to be used.
-      const transactionId = brandId<"transactions">(line.transactionId);
-      const descriptions = linesByTransaction.get(transactionId);
-      if (descriptions) descriptions.push(line.description);
-      else linesByTransaction.set(transactionId, [line.description]);
-    }
-  }
+  // H2 — the line descriptions `matchesText` also reads, for the same
+  // structurally-filtered set (`lineDescriptionsBy` above). Skipped entirely
+  // when nothing matched structurally: there is no row to attach one to.
+  const linesByTransaction =
+    rows.length > 0
+      ? lineDescriptionsBy(db, structuralWhere)
+      : new Map<Id<"transactions">, string[]>();
 
   const filtered = rows.filter((row) =>
     matchesText(row, needle, needleAmount, linesByTransaction.get(row.id) ?? []),

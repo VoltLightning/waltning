@@ -416,6 +416,9 @@ describe("phone ledger controller", () => {
       revision: 1,
       accounts: [],
       archivedAccounts: [],
+      // Every account's ownership, archived included — present from the
+      // first snapshot, empty here because the port has no accounts (L6).
+      accountOwnership: new Map(),
       currencies: CURRENCIES,
       groups: [],
       recent: [],

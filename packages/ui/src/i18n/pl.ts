@@ -50,6 +50,8 @@ export const pl: Messages = {
     discardBody: "Zawiera automatycznie wypełnione konto — łatwo wprowadzić ją ponownie.",
 
     edit: "Edytuj",
+    approve: "Zatwierdź",
+    decline: "Odrzuć",
   },
   accounts: {
     currency: "Waluta",
@@ -145,6 +147,10 @@ export const pl: Messages = {
     filterScope: "Zakres",
     filterFrom: "Od",
     filterTo: "Do",
+    filterCurrency: "Waluta",
+    filterCounterparty: "Osoba lub firma",
+    filterEveryCurrency: "Każda waluta",
+    filterEveryCounterparty: "Wszyscy",
     totalCountOne: "{{count}} transakcja",
     totalCountMany: "{{count}} transakcji",
     totalExcludingCapitalOne: "{{amount}} bez {{count}} jednorazowej",
@@ -210,6 +216,39 @@ export const pl: Messages = {
     commandBarTooMuchUnmatched: "Zbyt wiele niezrozumiałych słów — spróbuj krótszej linii.",
     commandBarHint: "Spacje grupują tysiące; przecinek lub kropka to znak dziesiętny.",
     commandBarChipsLabel: "Rozpoznane pola",
+
+    ledgerTable: "Tabela transakcji",
+    selectRow: "Zaznacz {{payee}}",
+    selectedCount: "Zaznaczono: {{count}}",
+    confirmCategorizeBatchOne: "Skategoryzować {{count}} transakcję jako {{category}}?",
+    confirmCategorizeBatchMany: "Skategoryzować {{count}} transakcji jako {{category}}?",
+    categorizeBatchAppliedOne: "Skategoryzowano {{count}} transakcję",
+    categorizeBatchAppliedMany: "Skategoryzowano {{count}} transakcji",
+    categorizeBatchFailedWhy:
+      "Jeden z zaznaczonych wierszy nie kwalifikuje się już do zmiany — mógł zostać usunięty albo jest przelewem lub korektą.",
+    sortedByCurrency: "wg waluty, potem kwoty",
+    categorizeBatchFromTo: "z {{from}} → {{to}}",
+    categorizeBatchAlreadyOne: "{{count}} wiersz już ma {{category}}",
+    categorizeBatchAlreadyMany: "{{count}} wierszy już ma {{category}}",
+    uncategorised: "Bez kategorii",
+    mixedKindSelection:
+      "Zaznaczenie zawiera wiersze przychodów i wydatków. Kategoryzuj po jednym rodzaju — kategoria wydatku nie pasuje do przychodu.",
+    showingOfTotal: "widocznych {{shown}} z {{count}}",
+    narrowTheFilter:
+      "Wczytano tylko pierwsze {{count}} wierszy, więc sortowanie i suma obejmują tylko je. Zawęź filtr, aby zobaczyć cały okres.",
+    periodAllTime: "Cały okres",
+    periodCustomRange: "{{from}} → {{to}}",
+    uncategorisableSelection:
+      "Żaden z zaznaczonych wierszy nie przyjmuje kategorii — przelewy i korekty jej nie mają.",
+    // 1 → wiersz, 2–4 → wiersze, 5+ (and 0) → wierszy. A count of rows is
+    // always whole, so `_other` (fractional) never actually renders — it
+    // carries the `_many` form rather than invent an untested one.
+    filterExcludes_one: "Pomija {{count}} wiersz",
+    filterExcludes_few: "Pomija {{count}} wiersze",
+    filterExcludes_many: "Pomija {{count}} wierszy",
+    filterExcludes_other: "Pomija {{count}} wierszy",
+    searchIncomplete:
+      "Lista urwała się na {{count}} wierszach — jedna ze stron wyników wróciła pusta. Odśwież, aby spróbować ponownie.",
   },
   counterparties: {
     settlingWith: "Rozliczenie z {{name}}",
