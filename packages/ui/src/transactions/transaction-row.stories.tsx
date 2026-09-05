@@ -39,7 +39,26 @@ type Story = StoryObj<typeof meta>;
 
 export const Expense: Story = {};
 
-/** The column. This is the story that shows whether the figures line up. */
+/** `SPEC.md` §14.4b — recognised offline, never blank for an unmatched payee. */
+export const RecognisedBrand: Story = {
+  args: { payee: "ORLEN", brandKey: "orlen" },
+};
+
+export const UnrecognisedBrand: Story = {
+  args: { payee: "Corner Café", brandKey: null },
+};
+
+/**
+ * The column. This is the story that shows whether the figures line up —
+ * and whether the *identity* column does too: every
+ * shipped caller (`ledger-screen.tsx`, `today-screen.tsx` through
+ * `TransactionList`, `counterparty-detail-screen.tsx`) passes `brandKey` for
+ * every row it reads, `null` included — a read never omits the field, it
+ * only sometimes resolves to nothing. A `LEDGER` row that left `brandKey`
+ * absent pinned a column no screen produces: six rows starting flush left
+ * and one 24px further right, certified as correct by a baseline nothing in
+ * the app can reproduce.
+ */
 export const Ledger: Story = {
   render: renderLedger,
 };
@@ -53,6 +72,17 @@ const LEDGER: TransactionRowProps[] = [
     amount: money.toMoney("-48.90"),
     currency: "PLN",
     type: "expense",
+    brandKey: null,
+  },
+  {
+    date: "2026-08-24",
+    payee: "ORLEN",
+    category: "Transport",
+    account: "Cash",
+    amount: money.toMoney("-184.30"),
+    currency: "PLN",
+    type: "expense",
+    brandKey: "orlen",
   },
   {
     date: "2026-08-24",
@@ -63,6 +93,7 @@ const LEDGER: TransactionRowProps[] = [
     currency: "PLN",
     type: "income",
     isBusiness: true,
+    brandKey: null,
   },
   {
     date: "2026-08-23",
@@ -72,6 +103,7 @@ const LEDGER: TransactionRowProps[] = [
     amount: money.toMoney("-1200.00"),
     currency: "PLN",
     type: "transfer",
+    brandKey: null,
   },
   {
     date: "2026-08-23",
@@ -81,6 +113,7 @@ const LEDGER: TransactionRowProps[] = [
     amount: money.toMoney("1200.00"),
     currency: "PLN",
     type: "transfer",
+    brandKey: null,
   },
   {
     date: "2026-08-22",
@@ -90,6 +123,7 @@ const LEDGER: TransactionRowProps[] = [
     amount: money.toMoney("-7.25"),
     currency: "PLN",
     type: "expense",
+    brandKey: null,
   },
   {
     date: "2026-08-21",
@@ -99,6 +133,7 @@ const LEDGER: TransactionRowProps[] = [
     amount: money.toMoney("12480.20"),
     currency: "PLN",
     type: "adjustment",
+    brandKey: null,
   },
 ];
 

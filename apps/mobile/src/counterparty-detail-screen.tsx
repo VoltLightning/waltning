@@ -120,6 +120,7 @@ function HistoryRow({ row, onPress }: HistoryRowProps) {
       decimals={row.decimals}
       type={row.type}
       isBusiness={row.isBusiness}
+      brandKey={row.brandKey}
       {...(roleTag === undefined ? {} : { roleTag })}
       onPress={handlePress}
     />

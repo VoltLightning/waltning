@@ -119,6 +119,7 @@ happened*.
 | `StatTile` | Period spend and net. **Period-scoped**; `DualTotal` above it is not |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `TransactionRow` | Recent; `TransferRow` for transfers; `BIZ` tag where business |
+| `BrandIcon` | `TransactionRow`'s own leading mark for a recognised merchant — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `TabBar` | 5 tabs, all ≥44px. `+` is not one of them |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |

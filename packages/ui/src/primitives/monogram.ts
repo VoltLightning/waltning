@@ -3,6 +3,16 @@
  * deterministically from the name. No photo picker — it is a debt ledger,
  * not a contacts app" (`design-system/13` §Q10).
  *
+ * **In `primitives/`, not `counterparties/`.** `CounterpartyRow`'s own
+ * fallback was its first use; `BrandIcon` (`transactions/brand-icon.tsx`,
+ * `SPEC.md` §14.4b) needs the identical treatment for an unrecognised
+ * payee — "same treatment as CounterpartyRow's fallback" is that
+ * component's own spec line, not a coincidence — and a second domain
+ * needing it is what moves a symbol to the domain-free foundation
+ * (`CLAUDE.md`'s architecture rule; `tests/module-boundaries.test.ts`
+ * enforces the direction). Nothing about the function changed; only where
+ * it lives.
+ *
  * **The green ramp, not the theme.** `tokens.ts`'s `green100`…`green900` is
  * the chart palette (`design-system/02` §2.1) and carries no dark variant —
  * a single set of values reused as data ink regardless of theme, the same

@@ -6,7 +6,12 @@
  * **Every fixture under `fixtures/upgrade/` is loaded.** The scan is
  * `readdirSync`, so a fixture a future PR adds joins this suite with no edit
  * here. Today that is `v8` — the ledger as it stood before `0008_schema`
- * rebuilt `transactions` — and `v9`, the current head.
+ * rebuilt `transactions` — `v10`, the same shape one migration later
+ * (`0010_schema`, `SPEC.md` §14.4b's brand columns) — and `v11`, the current
+ * head. This line names the current set by hand and goes stale the moment a
+ * later PR adds a migration without updating it — it has gone stale before,
+ * still naming `v9` as head after `v10` replaced it; the suite itself needs
+ * no such edit, only this comment does.
  *
  * **Loading a fixture is two steps, deliberately not one.** `migrateReplica`
  * and `migrateOutbox` build the tables; the fixture's own SQL is only ever
@@ -23,15 +28,16 @@
  * outbox chain by the replica's number selected every outbox step there has
  * ever been, so no fixture could exercise an outbox migration at all.
  *
- * **What the "fresh equals upgraded" fingerprint proves, and where.** `v8` is
- * where it has teeth: that pair is loaded at a version below the chain's head,
- * so the session's own migrator runs a real step (`0008_schema`, a
- * copy-rename-drop rebuild of `transactions`) against real rows, and
- * `schemaFingerprint` then compares the result against a database built from
- * empty by the whole chain. `v9` sits at the head, so its upgrade is a no-op
- * and the comparison there is two identical builds — what that pair catches
- * instead is drift: a `fixture:dump` that no longer reproduces the committed
- * `INSERT` column lists.
+ * **What the "fresh equals upgraded" fingerprint proves, and where.** `v8`
+ * and `v10` are where it has teeth: each pair is loaded at a version below
+ * the chain's head, so the session's own migrator runs a real step
+ * (`0008_schema` and `0010_schema` respectively, each a copy-rename-drop
+ * rebuild) against real rows, and `schemaFingerprint` then compares the
+ * result against a database built from empty by the whole chain. `v11` sits
+ * at the head, so its upgrade is a no-op and the comparison there is two
+ * identical builds — what that pair catches instead is drift: a
+ * `fixture:dump` that no longer reproduces the committed `INSERT` column
+ * lists.
  */
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -361,8 +367,30 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
             table === "transactions" ? before + fixture.pendingBefore.length : before;
           expect(after, `${table}'s row count after the upgrade`).toBe(expected);
         }
+        // `SPEC.md` §14.4b — `brand_aliases` is the first table the replica
+        // has ever grown past `0000_schema`'s own shape (every table before
+        // it existed from the chain's very first step), so a fixture cut
+        // below `0010_schema` genuinely does not have it yet. Named rather
+        // than silently widened: any *other* new table would still fail this
+        // assertion, which is the property worth keeping.
+        //
+        // **Filtered against `replicaCountsBefore`, not assumed absent.**
+        // `v8`/`v9`/`v10` predate `0010_schema` and so predate this table;
+        // `v11` (dumped at head, after this migration exists) already has
+        // it in its own "before" set — appending it there too would assert
+        // the same key twice, which is a correct set with a misleading diff
+        // rather than a real duplicate-table bug.
+        const KNOWN_NEW_TABLES = ["brand_aliases"].filter(
+          (table) => !(table in fixture.replicaCountsBefore),
+        );
+        for (const table of KNOWN_NEW_TABLES) {
+          expect(
+            replicaCountsAfter[table],
+            `${table} is new since this fixture's own version and starts empty`,
+          ).toBe(0);
+        }
         expect(Object.keys(replicaCountsAfter).sort()).toEqual(
-          Object.keys(fixture.replicaCountsBefore).sort(),
+          [...Object.keys(fixture.replicaCountsBefore), ...KNOWN_NEW_TABLES].sort(),
         );
 
         // Recovery never adds or removes an outbox row — only a `sending`

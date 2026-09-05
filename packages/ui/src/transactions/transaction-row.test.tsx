@@ -64,6 +64,47 @@ describe("TransactionRow", () => {
     expect(screen.getByText("—")).toBeDefined();
   });
 
+  it("draws no BrandIcon at all when the caller has not passed brandKey", () => {
+    // `SPEC.md` §14.4b — absent is not the same as "recognised nothing"; a
+    // caller that has not read `brandKey` yet must not render a fallback
+    // monogram for every row.
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        payee="Grocer"
+        amount={money.toMoney("-1.00000000")}
+        currency="PLN"
+      />,
+    );
+    expect(screen.queryByText("G")).toBeNull();
+  });
+
+  it("shows the recognised brand's own mark", () => {
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        payee="ORLEN"
+        amount={money.toMoney("-184.30000000")}
+        currency="PLN"
+        brandKey="orlen"
+      />,
+    );
+    expect(screen.getByText("O")).toBeDefined();
+  });
+
+  it("falls back to the payee's monogram for an unrecognised payee — never blank", () => {
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        payee="Corner Café"
+        amount={money.toMoney("-1.00000000")}
+        currency="PLN"
+        brandKey={null}
+      />,
+    );
+    expect(screen.getByText("C")).toBeDefined();
+  });
+
   it("stays a plain row with no button role when onPress is absent", () => {
     render(
       <TransactionRow

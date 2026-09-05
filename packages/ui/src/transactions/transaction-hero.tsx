@@ -8,6 +8,14 @@
  * capture. `wave-3-shared.md` names that block unbuilt this wave (no rate
  * table until `#e3`), so the hero is exactly the row's own currency, never a
  * conversion this screen has no basis for.
+ *
+ * **`BrandIcon` sits here, not in `FieldsCard`'s Payee row (`SPEC.md`
+ * §14.4b).** `FieldsCard` draws every field through one generic labelled-row
+ * renderer; singling out Payee for an icon slot would be a special case in a
+ * component built specifically to avoid one field-row from another. This
+ * screen's one identity anchor already exists — the hero — so the mark
+ * lives beside it, the same "amount resolves first" reasoning this file
+ * already states, extended to "and here is what it was for".
  */
 
 import type * as money from "@waltning/core/money";
@@ -16,6 +24,7 @@ import { Amount } from "../fx/amount";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
+import { BrandIcon } from "./brand-icon";
 import { TRANSACTION_AMOUNT_KIND, type TransactionType } from "./transaction-row";
 
 export type TransactionHeroProps = {
@@ -25,6 +34,9 @@ export type TransactionHeroProps = {
   decimals?: number;
   type?: TransactionType;
   accountName: string;
+  /** Drives `BrandIcon`'s fallback monogram when nothing matched. Absent renders no icon at all — same "absent means unread, not unmatched" rule `TransactionRow` states for its own `brandKey`. */
+  payee?: string;
+  brandKey?: string | null;
 };
 
 export function TransactionHero({
@@ -33,6 +45,8 @@ export function TransactionHero({
   decimals = 2,
   type,
   accountName,
+  payee,
+  brandKey,
 }: TransactionHeroProps) {
   const styles = useStyles();
 
@@ -45,14 +59,20 @@ export function TransactionHero({
         size="hero"
         kind={type ? TRANSACTION_AMOUNT_KIND[type] : "auto"}
       />
-      <Text style={styles.subtitle}>
-        {accountName} · {currency}
-      </Text>
+      <View style={styles.subtitleRow}>
+        {payee === undefined ? null : (
+          <BrandIcon {...(brandKey !== undefined ? { brandKey } : {})} payee={payee} size={20} />
+        )}
+        <Text style={styles.subtitle}>
+          {accountName} · {currency}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.xs },
+  subtitleRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   subtitle: { color: theme.textMuted, ...text.ui("body") },
 }));

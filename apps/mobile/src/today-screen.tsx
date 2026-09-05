@@ -63,6 +63,7 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
     currency: transaction.currency,
     decimals: transaction.decimals,
     isBusiness: transaction.isBusiness,
+    brandKey: transaction.brandKey,
   };
 }
 

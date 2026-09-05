@@ -204,6 +204,7 @@ const DETAIL: NonNullable<FakeDetail> = {
   accountName: "Cash · PLN",
   categoryId: null,
   categoryName: null,
+  brandKey: null,
   amount: toMoney("-48.90"),
   currency: PLN,
   decimals: 2,

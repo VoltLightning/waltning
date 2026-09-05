@@ -714,7 +714,7 @@ describe("every src/ is organised by domain, not by layer", () => {
      * itself does not fold into any single `describe`.
      */
     "apps/mobile/src": ["journeys"],
-    "packages/core/src": ["capture", "registry"],
+    "packages/core/src": ["brands", "capture", "registry"],
     // Foundation (`transport`, `query`) plus one folder per domain.
     "packages/client/src": [
       "accounts",

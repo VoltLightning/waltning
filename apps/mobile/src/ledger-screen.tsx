@@ -594,6 +594,7 @@ function LedgerRowItem({ row, onPress, onShortSwipe, onLongSwipe }: LedgerRowIte
         decimals={row.decimals}
         type={row.type}
         isBusiness={row.isBusiness}
+        brandKey={row.brandKey}
       />
     );
 

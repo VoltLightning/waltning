@@ -4201,15 +4201,114 @@ price rise is the existing `amount drifted` health state surfacing beside the
 figure you pay, and the editor is the same rule editor — one entity, two views,
 no second write path.
 
-**Icons ship in the bundle, never from a logo CDN.** The catalog lives in
-`packages/core`: `slug → name, simple-icons slug, matching aliases`. A logo API
-(Clearbit, logo.dev) would broadcast the subscription list to a third party on
-every render — precisely the leak this system exists to avoid — and would break
-offline rendering, which S34 otherwise has for free since rules and catalog are
-both in the replica (`computations.md` §16 is class **R**). Unknown or missing
+**Icons ship in the bundle, never from a logo CDN.** §14.4b's catalogue is
+where this lives — S34 adds no second one, only its own `simple-icons` slug
+per entry once that wiring lands. A logo API (Clearbit, logo.dev) would
+broadcast the subscription list to a third party on every render —
+precisely the leak this system exists to avoid — and would break offline
+rendering, which S34 otherwise has for free since rules and catalog are both
+in the replica (`computations.md` §16 is class **R**). Unknown or missing
 slug → deterministic monogram avatar; never blank, never a fetch, never an
 error. Matching against payee/counterparty **proposes** — never sets — the
 service and flag, the same consent model as amount drift.
+
+### 14.4b Brand recognition
+
+*"A transaction for ORLEN, YouTube or another recognised merchant shows its
+real mark immediately — including when it was created with no internet —
+while an unknown payee is still never blank."*
+
+**Every transaction, not only subscriptions.** §14.4a's `service` slug names
+one recurring rule's own subscription; `brand_key`/`brand_source` name what
+*any* transaction — recurring or one-off — was paid to, so a single café
+visit shows the same recognition a monthly rule does. `recurring_transactions`
+carries the identical pair for the same reason `is_subscription`/`service`
+sit there: a rule's occurrences can inherit a recognised mark rather than
+each posted row re-matching its own payee.
+
+| Column | Meaning |
+|---|---|
+| `brand_key text` (nullable) | A **Waltning-owned** catalogue key — `orlen`, `youtube` — never an upstream `simple-icons` slug. A vendor renaming or removing an icon must never be a silent migration of every transaction that named it |
+| `brand_source enum('auto', 'manual', 'none')` (nullable) | `auto` — matched from the payee, offline, at write time. `manual` — asserted by the caller. `none` — a **deliberate** "no brand": someone cleared a match that was wrong. A key pairs only with `auto` or `manual`; no key pairs with `NULL` (never matched) or `none` (matched, then refused) — a `CHECK` on `transactions` and `recurring_transactions`, on **both engines** (`transactions_brand_shape`, `recurring_transactions_brand_shape`), the same "one shape or the other, never half of each" `transactions_to_amount_shape` already gives a transfer's two legs |
+
+**The payee remains evidence and is never normalised away.** `brand_key` is a
+derived, separate field; correcting a payee from "ORLEN Stacja 123" to
+"ORLEN" does not rewrite history, it only lets a *later* write re-resolve the
+brand.
+
+**A match is correctable, and the correction sticks.** `update_transaction`
+with `brandKey: null` is an explicit clear: it writes `brand_key NULL` with
+`brand_source 'none'`, and the payee is never consulted for that row again.
+That third value is what makes a wrong match correctable at all — without it
+a clear falls back to "let the payee decide", the payee still folds to the
+same alias, and the wrong mark returns on the next write, correctable only by
+editing evidence. So the re-match rule is: `update_transaction` re-runs the
+match when `payee` **changes** — compared against the value the row already
+holds, not merely present in the patch, so a full-object submit that re-sends
+an unchanged payee resolves nothing — **and only while `brand_source` is
+`NULL` or `auto`**. `manual` and `none` are both sticky: a person's own choice
+of mark, and a person's own choice of no mark, are never quietly re-derived
+out from under them, the same way a subscription's `service` is a proposal and
+never an override in §14.4a. A patch that sets `brandKey` to a key always wins
+and is sourced `manual`; `brandKey` absent — or present as `undefined`, which
+is what spreading an optional field produces — asserts nothing at all.
+
+**The key is Waltning-owned, versioned code — the same reasoning §14.4a
+gives `service` for skipping a `CHECK` against the catalogue.** A small
+bundled catalogue in `packages/core` (`brands/catalog.ts`) — key, display
+name, matching aliases, a wordmark for `BrandIcon`'s badge — backs an offline
+matcher (`brands/match.ts`): the incoming payee has any run of whitespace
+collapsed to one space, is folded (§14.4's own `fold` — case-insensitive, and
+diacritic-insensitive for the Polish set `ąćęłńóśźż` that function maps, *not*
+a general Unicode strip, so `Café` folds to `café` and not `cafe`) and looked
+up exactly against the catalogue's own folded aliases. That reach is a named
+limit rather than a general claim: it covers an ASCII-and-Polish catalogue and
+stops covering the day an alias needs a diacritic outside that set. No
+substring match, no network, no logo CDN — the identical reasoning §14.4a
+states for its own icons. A `brand_key` asserted by a caller is validated
+against this same catalogue at the contract boundary (`create_transaction`'s
+and `update_transaction`'s Zod schemas) — absent, or a member of it, is the
+whole of "a valid pair".
+
+**`brand_aliases` is the durable, shared record of the same catalogue** —
+one row per normalised alias, primary-keyed on the alias itself, which is
+what makes "one non-blank alias wins" a property of the key rather than a
+check layered on top. It is bootstrapped from the bundled catalogue under
+§14.6's rule for reference data — `ON CONFLICT DO NOTHING`, never restored
+over an edit, so a hand-pointed alias survives every later `db:seed`, the
+same insert `currencies` gets from the same seed. Nothing writes to it beyond
+that seed this arc, since no rule engine or admin surface exists yet to add
+an alias of its own; it exists so one does not have to invent a table the day
+it does.
+
+**Nothing reads it either, today.** The offline matcher
+(`brands/match.ts`) resolves a payee against `BRAND_CATALOG`'s own in-memory
+index — code, not a query — because `packages/core` cannot open a database
+connection at all (its floor is decimal.js and zod). `brand_aliases` is
+consequently a write-only mirror of the same data this arc: a hand-edited
+row there changes nothing a device or the server actually matches against.
+That is the honest state of a table with one seed writer and no reader yet,
+named here rather than left for the shared-table label (`architecture/14`
+§14.7) to imply otherwise.
+
+**`BrandIcon` (`packages/ui`) never renders blank.** A recognised `brand_key`
+shows the catalogue's own accent colour and short mark; anything else —
+`null`, or a key an older or newer catalogue does not carry — falls back to
+the deterministic monogram `CounterpartyRow` already gives an unmatched
+name. Today that mark is the catalogue's own accent/wordmark pair, not a
+bundled vector logo: wiring `simple-icons` — the bundle, the Metro-and-Vite
+asset pipeline, the contract test pinning every slug §14.4a itself names —
+is S34's job, and `BrandIcon`'s `brandKey` prop is exactly the seam that
+wiring lands on without another transaction-facing change. Renders on S04's
+Recent list, S09's hero (beside the account line — `FieldsCard` draws every
+field through one generic row and singling out Payee for an icon would be
+the special case that component exists to avoid), S10's ledger, and S13's
+counterparty history (the same `TransactionRow`); a screen that has not been
+updated to pass `brandKey` draws no icon at all rather than a fallback
+monogram on every row, which would read as "recognised nothing" on a screen
+that never asked. The badge is decorative on all three targets — hidden from
+the accessibility tree rather than labelled, because the payee text beside it
+already says who this is.
 
 ### 14.5 Dashboard layout
 

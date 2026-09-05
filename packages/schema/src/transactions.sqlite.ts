@@ -4,7 +4,7 @@ import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
-import { COUNTERPARTY_ROLE, TXN_SOURCE, TXN_TYPE } from "./enums.ts";
+import { BRAND_SOURCE, COUNTERPARTY_ROLE, TXN_SOURCE, TXN_TYPE } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
 
@@ -86,6 +86,17 @@ export const transactionsColumns = () => ({
   toFxRate: k.pivotPerUnit("to_fx_rate"),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
+  /**
+   * `SPEC.md` §14.4b — see `transactions.pg.ts`'s identical field for the
+   * full argument. `transactions_brand_shape` (below) is one of the
+   * exceptions this file already carries alongside
+   * `transactions_debt_amount_requires_currency`: the phone is a writer of
+   * this table this arc with no server yet to catch a caller that skipped
+   * the pairing, so §14.6 requires it refused at capture time, not only on a
+   * server that does not exist yet.
+   */
+  brandKey: k.text("brand_key"),
+  brandSource: k.text("brand_source", { enum: BRAND_SOURCE }),
   isBusiness: k.boolean("is_business").notNull().default(false),
   isCapital: k.boolean("is_capital").notNull().default(false),
   recurringId: k
@@ -110,11 +121,13 @@ export const transactionsColumns = () => ({
 });
 
 /**
- * Three exceptions to "most indexes and checks stay in `packages/db`":
+ * Four exceptions to "most indexes and checks stay in `packages/db`":
  * `transactions_category_idx` backs the category reads on the phone,
  * `transactions_counterparty_idx` backs the counterparty-balance reads
- * (R2 M4), and `transactions_debt_amount_requires_currency` is the one check
- * that must refuse at capture time rather than only on the server (L).
+ * (R2 M4), `transactions_debt_amount_requires_currency` and
+ * `transactions_brand_shape` are each a check that must refuse at capture
+ * time rather than only on a server that does not exist yet this arc (L,
+ * §14.4b).
  */
 export const transactions = k.table("transactions", transactionsColumns(), (t) => [
   index("transactions_category_idx").on(t.categoryId),
@@ -122,5 +135,25 @@ export const transactions = k.table("transactions", transactionsColumns(), (t) =
   check(
     "transactions_debt_amount_requires_currency",
     sql`${t.debtAmount} IS NULL OR ${t.debtCurrency} IS NOT NULL`,
+  ),
+  // `brand_source` carries a third value, `'none'`, for a *deliberate* "no
+  // brand" (a cleared catalogue match) — distinct from `NULL`/`NULL`, which
+  // means "never matched at all". So "a valid pair" is not the simpler
+  // `(key IS NULL) = (source IS NULL)`: a `NULL` key pairs with either a
+  // `NULL` or a `'none'` source, and a non-`NULL` key pairs only with
+  // `'auto'` or `'manual'` — never `'none'`, which by definition names a row
+  // with no key.
+  //
+  // **`brand_source IS NOT NULL AND` is load-bearing, not decoration.**
+  // SQL's three-valued logic means `x IN (...)` on a `NULL` `x` evaluates to
+  // `NULL`, not `FALSE` — and a CHECK only fails on an explicit `FALSE`, so
+  // `brand_key IS NOT NULL AND brand_source IN ('auto', 'manual')` alone
+  // would evaluate the whole expression to `NULL` (never `FALSE`) for
+  // exactly the row this CHECK exists to refuse — `brand_key` set,
+  // `brand_source` left `NULL` — and SQLite would silently admit it. Broken
+  // once, live, without this clause (`transaction-ops.test.ts`).
+  check(
+    "transactions_brand_shape",
+    sql`(${t.brandKey} IS NULL AND (${t.brandSource} IS NULL OR ${t.brandSource} = 'none')) OR (${t.brandKey} IS NOT NULL AND ${t.brandSource} IS NOT NULL AND ${t.brandSource} IN ('auto', 'manual'))`,
   ),
 ]);

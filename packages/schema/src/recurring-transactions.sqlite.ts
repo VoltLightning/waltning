@@ -1,8 +1,10 @@
+import { sql } from "drizzle-orm";
+import { check } from "drizzle-orm/sqlite-core";
 import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
-import { TXN_TYPE } from "./enums.ts";
+import { BRAND_SOURCE, TXN_TYPE } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 
 /**
@@ -27,6 +29,9 @@ export const recurringTransactionsColumns = () => ({
     .references(() => currencies.code),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
+  /** `SPEC.md` §14.4b — see `recurring-transactions.pg.ts`'s identical field. */
+  brandKey: k.text("brand_key"),
+  brandSource: k.text("brand_source", { enum: BRAND_SOURCE }),
   rrule: k.text("rrule").notNull(),
   nextDate: k.date("next_date"),
   endDate: k.date("end_date"),
@@ -37,7 +42,25 @@ export const recurringTransactionsColumns = () => ({
   version: k.version("version").notNull().default(1),
 });
 
+/**
+ * `recurring_transactions_brand_shape` — the same pairing
+ * `packages/db/src/schema.ts` enforces on Postgres. SQLite has no `ALTER
+ * TABLE … ADD CONSTRAINT`, so it is `0010_schema.sql`'s copy-rename-drop
+ * rebuild that ships it rather than two bare columns. §14.4b names no
+ * engine exception, and `architecture/14` §14.6 requires the phone to refuse
+ * at capture time what the server would refuse — even though no executor
+ * writes this table yet this arc, the guarantee is stated where the columns
+ * are, not deferred until a write path exists to expose the gap. Same
+ * formula as `transactions_brand_shape` (`transactions.sqlite.ts`) — see its
+ * own comment for the three-value `brand_source` shape.
+ */
 export const recurringTransactions = k.table(
   "recurring_transactions",
   recurringTransactionsColumns(),
+  (t) => [
+    check(
+      "recurring_transactions_brand_shape",
+      sql`(${t.brandKey} IS NULL AND (${t.brandSource} IS NULL OR ${t.brandSource} = 'none')) OR (${t.brandKey} IS NOT NULL AND ${t.brandSource} IS NOT NULL AND ${t.brandSource} IN ('auto', 'manual'))`,
+    ),
+  ],
 );

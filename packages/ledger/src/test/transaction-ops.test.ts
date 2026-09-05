@@ -6,7 +6,9 @@
  * per op because a new executor is a new chance to break it.
  */
 
+import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -207,6 +209,352 @@ describe("update_transaction", () => {
       .get();
     expect(after?.categoryId).toBeNull();
     expect(after?.version).toBe(before?.version);
+  });
+});
+
+/** `SPEC.md` §14.4b — resolved offline, at write time, by every path that produces a row. */
+describe("brand recognition (§14.4b)", () => {
+  const ORLEN = id<"transactions">("00000000-0000-4000-8000-000000000b01");
+
+  it("matches a recognised payee and sources it 'auto', with no caller input", () => {
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: ORLEN,
+        date: "2026-09-01",
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: "184.30",
+        currency: PLN,
+        payee: "ORLEN",
+      },
+    });
+    const row = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, ORLEN))
+      .get();
+    expect(row?.brandKey).toBe("orlen");
+    expect(row?.brandSource).toBe("auto");
+  });
+
+  it("leaves both fields null for an unrecognised payee — never one alone", () => {
+    // `TXN` (beforeEach) is payee "Coffee", which matches nothing.
+    const row = readTxn();
+    expect(row?.brandKey).toBeNull();
+    expect(row?.brandSource).toBeNull();
+  });
+
+  it("an asserted brandKey wins over the payee and is sourced 'manual'", () => {
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: ORLEN,
+        date: "2026-09-01",
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: "10",
+        currency: PLN,
+        payee: "Corner Café",
+        brandKey: "youtube",
+      },
+    });
+    const row = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, ORLEN))
+      .get();
+    expect(row?.brandKey).toBe("youtube");
+    expect(row?.brandSource).toBe("manual");
+  });
+
+  it("refuses a brandKey the bundled catalogue does not carry — never an upstream slug", () => {
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: createTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          id: ORLEN,
+          date: "2026-09-01",
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: "10",
+          currency: PLN,
+          // Invented — never a real merchant not already in the catalogue
+          // (CLAUDE.md: placeholders only).
+          payee: "Waltco",
+          brandKey: "waltco",
+        },
+      }),
+    ).toThrow(/brand catalogue/);
+  });
+
+  it("re-matches a patched payee when the row carries no manual assignment (source null)", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { payee: "ORLEN" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("orlen");
+    expect(after?.brandSource).toBe("auto");
+  });
+
+  /**
+   * §14.4b re-runs the match *"when `payee` changes"* — a patch that re-sends
+   * the payee it already read, which is what a form doing a full-object
+   * submit does, is not a change and must resolve nothing.
+   *
+   * The row is set up in the one state where the two readings differ: a
+   * payee that folds to a catalogue alias with both brand columns `NULL` —
+   * what a row synced from a build whose catalogue was narrower looks like.
+   * A presence-based gate re-matches it into `orlen`/`auto` on an unrelated
+   * edit; a value-based one leaves it exactly as the writer left it.
+   */
+  it("a patch re-sending the same payee does not re-match — the gate is a change, not presence", () => {
+    const created = readTxn();
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({ payee: "ORLEN", brandKey: null, brandSource: null })
+      .where(eq(transactions.id, TXN))
+      .run();
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: created?.version ?? 0,
+        patch: { payee: "ORLEN", note: "an unrelated edit" },
+      },
+    });
+    const after = readTxn();
+    expect(after?.note).toBe("an unrelated edit");
+    expect(after?.brandKey, "the payee did not change, so nothing was resolved").toBeNull();
+    expect(after?.brandSource).toBeNull();
+  });
+
+  /**
+   * `{ brandKey: undefined }` is what a caller spreading an optional field
+   * builds. It asserts nothing — reading it as "the patch touches brandKey"
+   * would make an unrelated edit re-resolve a column the writer never named.
+   */
+  it("an undefined brandKey is not a touch — the same row is left alone", () => {
+    const created = readTxn();
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({ payee: "ORLEN", brandKey: null, brandSource: null })
+      .where(eq(transactions.id, TXN))
+      .run();
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: created?.version ?? 0,
+        patch: { brandKey: undefined, note: "still unrelated" },
+      },
+    });
+    const after = readTxn();
+    expect(after?.note).toBe("still unrelated");
+    expect(after?.brandKey).toBeNull();
+    expect(after?.brandSource).toBeNull();
+  });
+
+  it("re-matches a patched payee when the row carries an 'auto' match already", () => {
+    const before = readTxn();
+    // Land on an "auto" match first.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { payee: "ORLEN" } },
+    });
+    const auto = readTxn();
+    expect(auto?.brandSource).toBe("auto");
+
+    // A further payee edit re-matches again — "auto" is not sticky.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: auto?.version ?? 0, patch: { payee: "YouTube" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("youtube");
+    expect(after?.brandSource).toBe("auto");
+  });
+
+  it("a manual assignment is sticky against a later payee edit", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { brandKey: "youtube" } },
+    });
+    const manual = readTxn();
+    expect(manual?.brandSource).toBe("manual");
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: manual?.version ?? 0,
+        patch: { payee: "Some other payee entirely" },
+      },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("youtube");
+    expect(after?.brandSource).toBe("manual");
+  });
+
+  /**
+   * §14.4b's clear. `brandKey: null` writes `brand_source 'none'` rather
+   * than falling back through the match, because the payee still folds to a
+   * catalogue alias and the whole point of clearing a wrong match is that it
+   * does not come straight back on the next write.
+   */
+  it("clearing brandKey with null is a deliberate, sticky 'no brand' — it does not re-match", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: before?.version ?? 0,
+        patch: { payee: "ORLEN", brandKey: "youtube" },
+      },
+    });
+    const manual = readTxn();
+    expect(manual?.brandKey).toBe("youtube");
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: manual?.version ?? 0, patch: { brandKey: null } },
+    });
+    const cleared = readTxn();
+    expect(cleared?.brandKey).toBeNull();
+    expect(cleared?.brandSource).toBe("none");
+
+    // The payee ("ORLEN") still folds to a catalogue alias — a further,
+    // unrelated payee edit must not bring the match back.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: cleared?.version ?? 0, patch: { note: "unrelated" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBeNull();
+    expect(after?.brandSource).toBe("none");
+  });
+
+  it("'none' stays sticky across a payee edit too", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { brandKey: null } },
+    });
+    const cleared = readTxn();
+    expect(cleared?.brandSource).toBe("none");
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: cleared?.version ?? 0, patch: { payee: "ORLEN" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBeNull();
+    expect(after?.brandSource).toBe("none");
+  });
+
+  it("an explicit brandKey still overrides a sticky 'none'", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { brandKey: null } },
+    });
+    const cleared = readTxn();
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: cleared?.version ?? 0, patch: { brandKey: "orlen" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("orlen");
+    expect(after?.brandSource).toBe("manual");
+  });
+
+  it("supersede_transaction resolves the brand of its replacement, the same as create", () => {
+    const REPLACEMENT = id<"transactions">("00000000-0000-4000-8000-000000000b02");
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: supersedeTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        supersedesId: TXN,
+        supersedesVersion: before?.version ?? 0,
+        replacement: {
+          id: REPLACEMENT,
+          date: "2026-09-01",
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: "184.30",
+          currency: PLN,
+          payee: "ORLEN",
+          source: "import",
+        },
+      },
+    });
+    const replaced = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, REPLACEMENT))
+      .get();
+    expect(replaced?.brandKey).toBe("orlen");
+    expect(replaced?.brandSource).toBe("auto");
+  });
+
+  it("the transactions_brand_shape CHECK refuses a raw insert with only one field set (L)", () => {
+    expect(() =>
+      stores.ledger.replica.db
+        .insert(transactions)
+        .values({
+          id: id<"transactions">("00000000-0000-4000-8000-000000000b03"),
+          date: accountingDate("2026-09-01"),
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: money.toMoney("10"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+          brandKey: "orlen",
+        })
+        .run(),
+    ).toThrow(/CHECK constraint failed/i);
   });
 });
 

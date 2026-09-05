@@ -40,6 +40,7 @@ import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, space, tabularNums, touchTarget } from "../tokens.ts";
+import { BrandIcon } from "./brand-icon";
 
 /** The ledger's own vocabulary — `schema/enums`. */
 export type TransactionType = "expense" | "income" | "transfer" | "adjustment";
@@ -68,6 +69,14 @@ export type TransactionRowProps = {
    * severity.
    */
   roleTag?: string;
+  /**
+   * `SPEC.md` §14.4b. Absent from a caller that has not read it yet — the
+   * row then draws no `BrandIcon` at all rather than a fallback monogram for
+   * every row a screen has not been updated to pass this through, which
+   * would read as "we tried to recognise this and found nothing" on a
+   * screen that never asked.
+   */
+  brandKey?: string | null;
   /** S09: tap the row, see everything the ledger knows about it. Omit to keep the row inert. */
   onPress?: () => void;
 };
@@ -96,6 +105,7 @@ export function TransactionRow({
   type: transactionType,
   isBusiness = false,
   roleTag,
+  brandKey,
   onPress,
 }: TransactionRowProps) {
   const meta = [account, category].filter(Boolean).join(" · ");
@@ -113,6 +123,9 @@ export function TransactionRow({
         when the phone is still on the previous timezone (C28).
       */}
       <Text style={styles.date}>{date.slice(5)}</Text>
+      {/* `SPEC.md` §14.4b — absent entirely, not a fallback monogram, for a
+          caller that has not passed `brandKey` yet (see the prop's own doc). */}
+      {brandKey === undefined ? null : <BrandIcon brandKey={brandKey} payee={payee} size={24} />}
       <View style={styles.identity}>
         <View style={styles.payeeLine}>
           {/* A blank row reads as missing data; imported rows often have no

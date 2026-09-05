@@ -48,6 +48,7 @@ const outboxSchema = { outbox: schema.outbox, outboxSeq: schema.outboxSeq };
 const replicaSchema = {
   accountGroups: schema.accountGroups,
   accounts: schema.accounts,
+  brandAliases: schema.brandAliases,
   categories: schema.categories,
   counterparties: schema.counterparties,
   counterpartyDistinctPairs: schema.counterpartyDistinctPairs,
@@ -155,21 +156,30 @@ function seedReferences(ledger: Ledger) {
     .run();
 }
 
-/** A row, so "the tables are untouched" can be about contents and not only names. */
+/**
+ * A row, so "the tables are untouched" can be about contents and not only
+ * names.
+ *
+ * **Raw SQL, not the query builder bound to `transactions`.** Drizzle's
+ * insert builder names *every* column the schema module declares — `null`
+ * literal and all — regardless of which ones `.values()` actually sets
+ * (proved against this exact table while diagnosing §14.4b's own `brand_key`/
+ * `brand_source`, the first columns `transactions` has ever grown past its
+ * `0000_schema` shape). That is fine against a fully migrated table and
+ * wrong here on purpose: several call sites seed a row after running only a
+ * *prefix* of `REPLICA_MIGRATIONS`, deliberately before a later column
+ * exists, to prove a mid-chain failure leaves that row untouched. A
+ * schema-aware insert would reference a column the real table does not have
+ * yet and fail with a SQLite error that has nothing to do with what the test
+ * is proving.
+ */
 function seedTransaction(ledger: Ledger, txnId: string) {
   seedReferences(ledger);
-  ledger.replica.db
-    .insert(transactions)
-    .values({
-      id: id<"transactions">(txnId) as Id<"transactions">,
-      date: accountingDate("2026-03-12"),
-      type: "expense",
-      accountId: id<"accounts">("acc-1"),
-      amountOriginal: money.toMoney("18.00"),
-      currency: currencyCode("PLN"),
-      fxRate: money.pivotPerUnit("1.000000000000"),
-    })
-    .run();
+  ledger.replica.db.run(sql`
+    insert into transactions
+      (id, date, type, account_id, amount_original, currency, fx_rate, created_at, updated_at)
+    values (${txnId}, '2026-03-12', 'expense', 'acc-1', '18.00', 'PLN', '1.000000000000', 0, 0)
+  `);
 }
 
 function transactionCount(db: Database.Database): number {
@@ -338,8 +348,8 @@ describe("a fresh database", () => {
     const names = inspect(join(dir, "fresh-replica.db"), tableNames);
     expect(
       names,
-      "the fifteen shared tables, the replica's meta store, and the migrator's own journal",
-    ).toHaveLength(17);
+      "the sixteen shared tables (§14.4b adds brand_aliases), the replica's meta store, and the migrator's own journal",
+    ).toHaveLength(18);
     expect(names).toContain("transactions");
     expect(names).toContain("local_meta");
     // Created by the migrator itself, not by any generated step — so it is on
@@ -1507,11 +1517,63 @@ describe("a constraint declared in the schema is present on the device", () => {
   });
 
   /**
+   * `recurring_transactions_brand_shape` on the device. `SPEC.md` §14.4b
+   * names no engine exception and `architecture/14` §14.6 requires the phone
+   * to refuse at capture time what the server would refuse — but SQLite has
+   * no `ALTER TABLE … ADD CONSTRAINT`, so the pairing is only enforced
+   * because `0010_schema` rebuilds the table copy-rename-drop rather than
+   * adding two bare columns. This is the break that proves the rebuild
+   * shipped, against the real chain and the real file.
+   *
+   * Raw SQL rather than the query builder, for `seedTransaction`'s own
+   * reason: drizzle's insert names every column the module declares, and
+   * what is being proved here is what the *table* enforces.
+   */
+  it("enforces the recurring-rule brand shape too, on the device, not only on the server", () => {
+    const ledger = openAt("recurring-brand");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    seedReferences(ledger);
+
+    const insert = (columns: string, values: string) =>
+      ledger.replica.db.run(
+        sql.raw(`insert into recurring_transactions (${columns}) values (${values})`),
+      );
+    const COMMON = "type, account_id, amount_original, currency, rrule, created_at, updated_at";
+    const COMMON_VALUES = "'expense', 'acc-1', '18.00', 'PLN', 'FREQ=MONTHLY', 0, 0";
+
+    expect(
+      refusal(() => insert(`id, ${COMMON}, brand_key`, `'rr-1', ${COMMON_VALUES}, 'orlen'`)),
+      "a key with no source — the row a three-valued CHECK admits when it forgets `is not null`",
+    ).toMatch(/CHECK constraint failed/i);
+    expect(
+      refusal(() => insert(`id, ${COMMON}, brand_source`, `'rr-2', ${COMMON_VALUES}, 'auto'`)),
+      "and a source with no key",
+    ).toMatch(/CHECK constraint failed/i);
+    expect(
+      refusal(() =>
+        insert(
+          `id, ${COMMON}, brand_key, brand_source`,
+          `'rr-3', ${COMMON_VALUES}, 'orlen', 'none'`,
+        ),
+      ),
+      "and a key paired with 'none', which by definition names a row with no key",
+    ).toMatch(/CHECK constraint failed/i);
+
+    // The two shapes it must admit: a resolved pair, and a deliberate "no
+    // brand" (§14.4b's third `brand_source` value).
+    insert(`id, ${COMMON}, brand_key, brand_source`, `'rr-4', ${COMMON_VALUES}, 'orlen', 'manual'`);
+    insert(`id, ${COMMON}, brand_source`, `'rr-5', ${COMMON_VALUES}, 'none'`);
+    insert(`id, ${COMMON}`, `'rr-6', ${COMMON_VALUES}`);
+
+    ledger.close();
+  });
+
+  /**
    * `ddl.ts` is output: it is only correct as long as somebody ran `pnpm
-   * ledger:generate` after touching a table. A fourteenth shared table added to
-   * `packages/schema` without regenerating would compile, query cleanly against
-   * a scratch database drizzle built from the same objects, and be missing from
-   * the phone. Comparing the migrated file against the schema modules the
+   * ledger:generate` after touching a table. A seventeenth shared table added
+   * to `packages/schema` without regenerating would compile, query cleanly
+   * against a scratch database drizzle built from the same objects, and be
+   * missing from the phone. Comparing the migrated file against the schema modules the
    * generator reads is what turns that from silent into red.
    *
    * It compares **against the schema, not against the `.sql` on disk**. The
@@ -1556,7 +1618,7 @@ describe("a constraint declared in the schema is present on the device", () => {
           .sort(),
       );
 
-    expect(declared(replicaSchema), "vacuity guard").toHaveLength(16);
+    expect(declared(replicaSchema), "vacuity guard").toHaveLength(17);
     expect(declaredColumns(replicaSchema).length, "vacuity guard").toBeGreaterThan(100);
 
     expect(
@@ -1577,8 +1639,15 @@ describe("a constraint declared in the schema is present on the device", () => {
    * — the row a naive copy-rename-drop of `transactions`, run with foreign
    * keys still enforced, would cascade away even though nothing asked it to.
    * `runInOneTransaction`'s foreign-keys-off window is what this proves, over
-   * the real chain rather than a synthetic one: `0008_schema` is the rebuild
-   * that adds `transactions_debt_amount_requires_currency`.
+   * the real chain rather than a synthetic one: `REPLICA_MIGRATIONS.slice(0,
+   * -1)` stops one short of whichever migration is currently last, and the
+   * chain's last step has been a `transactions` rebuild since `0008_schema`
+   * (which added `transactions_debt_amount_requires_currency`, the CHECK this
+   * test still asserts by name below) — most recently `0010_schema`. The
+   * `slice` deliberately carries no migration number: pinning one is how this
+   * test would silently retarget the day a later rebuild lands, which is
+   * exactly what happened to the sentence above when `0010_schema` replaced
+   * `0008_schema` as the last step.
    */
   it("keeps a child row through the transactions rebuild, and ships the new CHECK", () => {
     const ledger = openAt("rebuild-fk");

@@ -1,49 +1,32 @@
 /**
- * Idempotent seed. Safe to re-run: everything keys on a stable `seed:` external
- * id, so a second run updates rather than duplicating.
+ * Idempotent seed. Safe to re-run, in two different ways depending on what is
+ * being seeded:
+ *
+ * - **Reference data** — `currencies` (`./currencies.ts`) and `brand_aliases`
+ *   (`./brand-aliases.ts`) insert `ON CONFLICT DO NOTHING`, `architecture/14`
+ *   §14.6's rule: *"reference data is bootstrapped, never restored"*, so a
+ *   second run never reverts a row someone has edited.
+ * - **The category tree** — keyed on a stable `seed:<key>` external id and
+ *   upserted, because `TAXONOMY.md` is the definition of that tree rather
+ *   than a starting point for it: a renamed or re-parented leaf in the
+ *   taxonomy is a change this seed is expected to carry through.
  */
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { currencies as currencySeed } from "@waltning/core/currencies";
 import type { Id } from "@waltning/core/id";
 import { eq } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { requireRow } from "../rows.ts";
-import { categories, currencies as currenciesTable } from "../schema.ts";
+import { categories } from "../schema.ts";
+import { seedBrandAliases } from "./brand-aliases.ts";
+import { seedCurrencies } from "./currencies.ts";
 import { expenseTree, incomeTree, type SeedGroup, topLevelLeaves } from "./data.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 const db = createDb();
-
-async function seedCurrencies() {
-  for (const c of currencySeed) {
-    await db
-      .insert(currenciesTable)
-      .values({
-        code: c.code,
-        name: c.name,
-        symbol: c.symbol,
-        symbolPosition: c.symbolPosition,
-        decimals: c.decimals,
-        isPivot: c.isPivot ?? false,
-        pinned: c.pinned ?? false,
-        rateSource: c.rateSource,
-      })
-      .onConflictDoUpdate({
-        target: currenciesTable.code,
-        set: {
-          name: c.name,
-          symbol: c.symbol,
-          pinned: c.pinned ?? false,
-          rateSource: c.rateSource,
-        },
-      });
-  }
-  return currencySeed.length;
-}
 
 /** Upsert one category by its stable seed key, returning its id. */
 async function upsertCategory(v: {
@@ -130,8 +113,11 @@ async function seedTree(tree: SeedGroup[], startSort: number) {
 async function main() {
   console.log("seeding…\n");
 
-  const ccy = await seedCurrencies();
+  const ccy = await seedCurrencies(db);
   console.log(`  currencies      ${ccy}`);
+
+  const brandAliasCount = await seedBrandAliases(db);
+  console.log(`  brand aliases   ${brandAliasCount}`);
 
   const inc = await seedTree(incomeTree, 0);
   console.log(`  income          ${inc.groups} groups · ${inc.leaves} leaves`);

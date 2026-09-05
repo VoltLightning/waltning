@@ -38,6 +38,8 @@ export type LocalSearchTransaction = {
   type: TxnType;
   payee: string;
   note: string;
+  /** `SPEC.md` §14.4b — see `readRecent`'s identical field (S10). */
+  brandKey: string | null;
   categoryName: string | null;
   accountId: Id<"accounts">;
   accountName: string;
@@ -218,6 +220,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
         type: transactions.type,
         payee: transactions.payee,
         note: transactions.note,
+        brandKey: transactions.brandKey,
         categoryName: categories.name,
         accountId: transactions.accountId,
         accountName: accounts.name,

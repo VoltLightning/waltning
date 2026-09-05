@@ -22,6 +22,7 @@
  * read-side callers, not to this write.
  */
 
+import { resolveBrand } from "@waltning/core/brands/match";
 import type { CurrencyCode, PivotPerUnit } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
@@ -118,6 +119,12 @@ export function insertTransaction(
    * before either store is touched.
    */
   const provisional = provisionalFxRate(input, tx);
+  // `SPEC.md` §14.4b — resolved offline, from the bundled catalogue
+  // (`@waltning/core/brands/match`), the same way `provisionalFxRate` above
+  // resolves a rate the caller did not supply: an asserted `brandKey` wins
+  // (already catalogue-validated at the Zod boundary); otherwise the payee
+  // is matched, or the row carries neither field, never one alone.
+  const brand = resolveBrand(input.payee, input.brandKey);
   const fields = {
     date: input.date,
     type: input.type,
@@ -132,6 +139,8 @@ export function insertTransaction(
     fxRateEstimated: provisional.estimated,
     payee: input.payee,
     note: input.note,
+    brandKey: brand.brandKey,
+    brandSource: brand.brandSource,
     isBusiness: input.isBusiness,
     isCapital: input.isCapital,
     source: input.source,

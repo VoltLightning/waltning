@@ -10,6 +10,7 @@
 export type SharedTable =
   | "accountGroups"
   | "accounts"
+  | "brandAliases"
   | "categories"
   | "counterparties"
   | "counterpartyDistinctPairs"

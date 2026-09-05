@@ -20,6 +20,7 @@ function row(n: number): PhoneSearchTransaction {
     payee: `Row ${n}`,
     note: "",
     categoryName: null,
+    brandKey: null,
     accountId: ACCOUNT,
     accountName: "Bank A · PLN",
     toAccountId: null,

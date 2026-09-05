@@ -50,6 +50,8 @@ export type LocalTransactionDetail = {
   accountName: string;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  /** `SPEC.md` §14.4b — see `readRecent`'s identical field. */
+  brandKey: string | null;
   /** Already signed, `money.signed` on the `"from"` leg — same rule as `readRecent`. */
   amount: Money;
   currency: CurrencyCode;
@@ -80,6 +82,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       accountName: accounts.name,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
+      brandKey: transactions.brandKey,
       amountOriginal: transactions.amountOriginal,
       toAmount: transactions.toAmount,
       currency: transactions.currency,

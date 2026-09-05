@@ -15,6 +15,7 @@ import { pgEnum } from "drizzle-orm/pg-core";
 import {
   ACCOUNT_KIND,
   ACTOR,
+  BRAND_SOURCE,
   CATEGORY_KIND,
   COUNTERPARTY_KIND,
   COUNTERPARTY_ROLE,
@@ -39,3 +40,4 @@ export const fxSource = pgEnum("fx_source", FX_SOURCE);
 export const importRowStatus = pgEnum("import_row_status", IMPORT_ROW_STATUS);
 export const taxLineKind = pgEnum("tax_line_kind", TAX_LINE_KIND);
 export const widgetSize = pgEnum("widget_size", WIDGET_SIZE);
+export const brandSource = pgEnum("brand_source", BRAND_SOURCE);

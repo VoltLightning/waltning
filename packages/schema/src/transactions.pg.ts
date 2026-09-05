@@ -2,7 +2,7 @@ import { accounts } from "./accounts.pg.ts";
 import { categories } from "./categories.pg.ts";
 import { counterparties } from "./counterparties.pg.ts";
 import { currencies } from "./currencies.pg.ts";
-import { counterpartyRole, txnSource, txnType } from "./enums.pg.ts";
+import { brandSource, counterpartyRole, txnSource, txnType } from "./enums.pg.ts";
 import { pgKit as k } from "./kit.ts";
 import { recurringTransactions } from "./recurring-transactions.pg.ts";
 
@@ -60,6 +60,14 @@ export const transactionsColumns = () => ({
   toFxRate: k.pivotPerUnit("to_fx_rate"),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
+  /**
+   * `SPEC.md` §14.4b — Waltning-owned, never an upstream slug. Nullable:
+   * absent means no brand was recognised, not an empty string standing in
+   * for one. `brandSource` travels with it under `transactions_brand_shape`
+   * (`packages/db/src/schema.ts`) — both null, or both set.
+   */
+  brandKey: k.text("brand_key"),
+  brandSource: brandSource("brand_source"),
   isBusiness: k.boolean("is_business").notNull().default(false),
   isCapital: k.boolean("is_capital").notNull().default(false),
   recurringId: k

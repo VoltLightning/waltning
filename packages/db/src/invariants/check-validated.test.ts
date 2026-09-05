@@ -137,6 +137,10 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   transactions_tax_fx_shape: () => insertRow({ tax_fx_rate: "1" }),
   // A zero FX rate — `amount_pivot = amount_original × fx_rate` refuses one.
   transactions_fx_rate_positive: () => insertRow({ fx_rate: "0" }),
+  // `SPEC.md` §14.4b — a brand_key with no brand_source (or the reverse) is
+  // not "a valid pair", the same shape `transactions_to_amount_shape` gives
+  // a transfer's two legs.
+  transactions_brand_shape: () => insertRow({ brand_key: "orlen" }),
 };
 
 describe("every CHECK on transactions is VALID", () => {

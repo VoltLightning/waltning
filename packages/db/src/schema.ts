@@ -102,6 +102,7 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull(
 import {
   accountKind,
   actor,
+  brandSource,
   categoryKind,
   counterpartyKind,
   counterpartyRole,
@@ -115,6 +116,7 @@ import {
 } from "@waltning/schema/enums-pg";
 import { accountGroupsColumns } from "@waltning/schema/pg/account-groups";
 import { accountsColumns } from "@waltning/schema/pg/accounts";
+import { brandAliasesColumns } from "@waltning/schema/pg/brand-aliases";
 import { categoriesColumns } from "@waltning/schema/pg/categories";
 import { counterpartiesColumns } from "@waltning/schema/pg/counterparties";
 import { counterpartyDistinctPairsColumns } from "@waltning/schema/pg/counterparty-distinct-pairs";
@@ -134,6 +136,7 @@ import { transactionsColumns } from "@waltning/schema/pg/transactions";
 export {
   accountKind,
   actor,
+  brandSource,
   categoryKind,
   counterpartyKind,
   counterpartyRole,
@@ -526,6 +529,27 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   // either — a typed `0` fee is "no fee", and the app drops it to `null`
   // before the write ever reaches here.
   check("transactions_fee_positive", sql`${t.fee} is null or ${t.fee} > 0`),
+  // `SPEC.md` §14.4b. Catalogue membership of `brand_key` is a
+  // contract/service concern (`registry/inputs.ts`), not a CHECK: the
+  // catalogue is versioned code, the same reason `service`
+  // (`recurring_transactions`, §14.4a) carries no CHECK against it either.
+  //
+  // A `NULL` key pairs with `brand_source` `NULL` (never matched) or
+  // `'none'` (a deliberate, sticky "no brand" — a cleared
+  // catalogue match); a non-`NULL` key pairs only with `'auto'` or
+  // `'manual'`, never `'none'`, which by definition names a row with no key.
+  //
+  // **`brand_source is not null and` is load-bearing.** Postgres, like
+  // SQLite, admits a CHECK whenever it evaluates to `NULL` — only an
+  // explicit `false` is a violation — and `x in (...)` on a `NULL` `x` is
+  // itself `NULL`, not `false`. Without this clause, `brand_key` set with
+  // `brand_source` left `NULL` — exactly the row this CHECK exists to
+  // refuse — makes the whole expression `NULL` and is silently admitted.
+  // Broken once, live, without it (`brand-shape.test.ts`).
+  check(
+    "transactions_brand_shape",
+    sql`(${t.brandKey} is null and (${t.brandSource} is null or ${t.brandSource} = 'none')) or (${t.brandKey} is not null and ${t.brandSource} is not null and ${t.brandSource} in ('auto', 'manual'))`,
+  ),
 ]);
 
 export const tags = pgTable("tags", tagsColumns(), (t) => [
@@ -541,7 +565,27 @@ export const transactionTags = pgTable(
 export const recurringTransactions = pgTable(
   "recurring_transactions",
   recurringTransactionsColumns(),
+  (t) => [
+    // `SPEC.md` §14.4b — the same guarantee as `transactions_brand_shape`
+    // (see its own comment for the three-value shape), ahead of the write
+    // path that will eventually set these two columns.
+    check(
+      "recurring_transactions_brand_shape",
+      sql`(${t.brandKey} is null and (${t.brandSource} is null or ${t.brandSource} = 'none')) or (${t.brandKey} is not null and ${t.brandSource} is not null and ${t.brandSource} in ('auto', 'manual'))`,
+    ),
+  ],
 );
+
+/**
+ * `SPEC.md` §14.4b — the durable record `@waltning/core/brands/catalog`
+ * bootstraps into (`packages/db/src/seed/brand-aliases.ts`), the same shape
+ * `currencies` already gives reference data (`architecture/14` §14.6: `ON
+ * CONFLICT DO NOTHING`, so a re-seed never restores an edited row).
+ */
+export const brandAliases = pgTable("brand_aliases", brandAliasesColumns(), (t) => [
+  check("brand_aliases_alias_not_blank", sql`length(btrim(${t.alias})) > 0`),
+  check("brand_aliases_key_not_blank", sql`length(btrim(${t.brandKey})) > 0`),
+]);
 
 /* ------------------------------------------------------------------ *
  * Receipts

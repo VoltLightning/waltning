@@ -68,6 +68,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 | `BalanceLedger` | One row per currency. **Direction in words**, sign never alone |
 | `AgeingBar` | Companies only |
 | `TransactionRow` | History, with role markers |
+| `BrandIcon` | `TransactionRow`'s own leading mark — same component and catalogue as S04/S10 (§14.4b) |
 | `EmptyState` | All settled — a success state, not a blank |
 
 ## 5. Data

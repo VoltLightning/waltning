@@ -92,6 +92,13 @@
       "when": 1788589200001,
       "tag": "0012_fx_rates_derived_and_amount_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788617309509,
+      "tag": "0013_transaction_brand",
+      "breakpoints": true
     }
   ]
 }

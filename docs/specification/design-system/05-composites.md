@@ -21,7 +21,8 @@
 | Component | Notes |
 |---|---|
 | `TransactionList` | **The column.** Owns the separators and the keys; rows are given as data, not as children |
-| `TransactionRow` | Date · payee · category · `Amount`. `BIZ` tag when business. Payee at weight 500, so the identity reads before its metadata |
+| `TransactionRow` | Date · payee · category · `Amount`. `BIZ` tag when business. Payee at weight 500, so the identity reads before its metadata. Leads with `BrandIcon` once a screen passes `brandKey` (§14.4b) |
+| `BrandIcon` | A transaction's own recognised-merchant mark — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b), resolved offline at write time, never from a network fetch. Unknown or absent key → the same deterministic monogram `CounterpartyRow`'s own fallback gives an unmatched name, never blank. Sizes: row (24) and widget (20) — the same two `ServiceIcon` below already uses, and the seam S34 reuses to add a real vector mark without another transaction-facing change |
 | `TransferRow` | Variant showing both accounts — one row, never two |
 | `BalanceRow` | Account · kind · `FxAmount` for foreign accounts |
 | `SharedGroup` | Balances group for shared accounts — own subtotal, visually distinct but **not diminished**. A negative balance here is an ordinary fact and gets no warning treatment |

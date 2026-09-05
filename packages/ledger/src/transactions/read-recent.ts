@@ -18,6 +18,8 @@ export type LocalRecentTransaction = {
   currency: CurrencyCode;
   decimals: number;
   isBusiness: boolean;
+  /** `SPEC.md` §14.4b — `null` when nothing was recognised; `BrandIcon` falls back to a monogram either way (S04). */
+  brandKey: string | null;
 };
 
 export function readRecent<TRun, TSchema extends typeof ledgerSchema>(
@@ -41,6 +43,7 @@ export function readRecent<TRun, TSchema extends typeof ledgerSchema>(
       currency: transactions.currency,
       decimals: currencies.decimals,
       isBusiness: transactions.isBusiness,
+      brandKey: transactions.brandKey,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))

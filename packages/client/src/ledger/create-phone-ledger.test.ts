@@ -214,6 +214,7 @@ function harness(
         currency: input.currency,
         decimals: 2,
         isBusiness: input.isBusiness,
+        brandKey: null,
       },
       ...recent,
     ];
@@ -1809,6 +1810,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       accountName: "Cash · PLN",
       categoryId: null,
       categoryName: null,
+      brandKey: null,
       amount: money.toMoney("-48.90"),
       currency: PLN,
       decimals: 2,
