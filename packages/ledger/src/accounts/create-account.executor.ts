@@ -78,6 +78,13 @@ export const createAccountExecutor = defineLocalExecutor<
    */
   mints: (input) => [input.id],
 
+  // H2 — read-only, run before the outbox commits (`LocalExecutor.validate`'s
+  // own doc): an opening balance past its own currency's scale is refused
+  // the same way `insertAccount`'s own check already does, never queued as
+  // an intent nothing will ever apply.
+  validate: (input, tx) =>
+    assertMoneyScale(tx, input.openingBalance, input.currency, "create_account: opening_balance"),
+
   apply: (input, tx) => insertAccount(input, tx),
 });
 

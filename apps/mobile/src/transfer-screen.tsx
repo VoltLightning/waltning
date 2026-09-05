@@ -205,7 +205,17 @@ export default function Transfer() {
    */
   useEffect(() => {
     if (toAmountEdited) return;
-    if (!crossCurrency || referenceRate === undefined) return;
+    if (!crossCurrency) return;
+    // H1 — mirrors `deriveToAmountRaw`'s own "no rate" branch: a date with
+    // nothing cached for this pair clears the destination rather than
+    // leaving it standing at whatever the previous date's rate produced.
+    // Returning early here (the original shape) left a stale `to_amount`
+    // on screen with the provenance block gone — a figure with no rate
+    // behind it any more, silently saveable.
+    if (referenceRate === undefined) {
+      setToAmountRaw("");
+      return;
+    }
     const parsed = parseAmount(amountRaw);
     if (parsed === null) return;
     setToAmountRaw(convertAmountRaw(parsed, referenceRate.rate, toAccount?.decimals ?? 2));
@@ -298,6 +308,20 @@ export default function Transfer() {
         setFieldErrors(mapFieldErrors([{ path: "accountId", message }], KNOWN_PATHS));
         return;
       }
+      // L6 — `fee` carries no currency of its own; it is always the *From*
+      // leg's own currency (S31 §9.1, the same convention
+      // `assert_amount_scale` states server-side), so a switch here can push
+      // an already-typed fee past the new account's own scale exactly the
+      // way it can the amount above. Guarded the same way, not only the
+      // amount.
+      if (nextFromAccount !== undefined && decimalsExceed(feeRaw, nextFromAccount.decimals)) {
+        const message = t("transactions.tooManyDecimals", {
+          currency: nextFromAccount.currency,
+          decimals: String(nextFromAccount.decimals),
+        });
+        setFieldErrors(mapFieldErrors([{ path: "accountId", message }], KNOWN_PATHS));
+        return;
+      }
       setFieldErrors(undefined);
       setFromAccountId(id);
       if (nextFromAccount?.currency === fromAccount?.currency) return;
@@ -306,7 +330,7 @@ export default function Transfer() {
         setToAmountRaw(deriveToAmountRaw(nextFromAccount, toAccount));
       }
     },
-    [accounts, amountRaw, fromAccount, toAccount, deriveToAmountRaw, t],
+    [accounts, amountRaw, feeRaw, fromAccount, toAccount, deriveToAmountRaw, t],
   );
   const handleToAccountChange = useCallback(
     (id: string) => {
@@ -411,7 +435,13 @@ export default function Transfer() {
     amountIsZero ||
     toAmountIsZero ||
     feeInvalid ||
-    fromAccount?.capturable === false;
+    fromAccount?.capturable === false ||
+    // H1 — belt and suspenders alongside the date-reprice effect above,
+    // which already clears `toAmountRaw` (and so `parsedToAmount`) in this
+    // exact state: a cross-currency transfer with no reference rate for the
+    // chosen date and an un-edited destination must never be saveable,
+    // regardless of what `toAmountRaw` currently holds.
+    (crossCurrency && referenceRate === undefined && !toAmountEdited);
 
   const handleSave = useCallback(() => {
     if (parsedAmount === null || fromAccountId === null || toAccountId === null) return;
@@ -428,9 +458,10 @@ export default function Transfer() {
       );
       return;
     }
-    // H3 — a typed `0`/`0,00` fee is the same as no fee at all: dropped here
-    // rather than sent as a zero the contract's `> 0` refine would then
-    // refuse.
+    // M2 — a typed `0`/`0,00` fee is the same as no fee at all: dropped here
+    // and omitted from the write, rather than sent as a zero `zFee`'s own
+    // `> 0` refine now refuses outright (`transactions_fee_positive` is the
+    // same guarantee in Postgres — "no fee" is `NULL`, never a stored zero).
     const feeIsZero = parsedFee !== null && money.dec(parsedFee).isZero();
 
     const result = ledger.createTransaction({

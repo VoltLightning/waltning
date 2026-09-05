@@ -1010,9 +1010,20 @@ describe("a refusal is never reported as a success", () => {
       finishStart,
     );
 
+    // L5 — matched anywhere in the line, not against the line's entire
+    // trimmed content: an exact-line check misses the identical literal
+    // sharing a line with other content (`{ phase: "success", operation }`,
+    // one object per line) or spaced differently (`phase:"success"`,
+    // `phase :  "success"`) — none of which is a different rule, only a
+    // different formatting of the same reintroduced bug. A comment line
+    // (`* …`, `// …` — this file's own JSDoc and line-comment style
+    // throughout) is excluded: this section's own prose *names* the literal
+    // it replaced, which is not a call site to flag.
+    const PHASE_SUCCESS_LITERAL = /phase\s*:\s*"success"/;
     const offenders = lines
       .map((line, i) => ({ trimmed: line.trim(), index: i }))
-      .filter(({ trimmed }) => trimmed === 'phase: "success",' || trimmed === 'phase: "success"')
+      .filter(({ trimmed }) => !trimmed.startsWith("*") && !trimmed.startsWith("//"))
+      .filter(({ trimmed }) => PHASE_SUCCESS_LITERAL.test(trimmed))
       .filter(({ index }) => index < finishStart || index >= finishEnd)
       .map((o) => o.index + 1);
 

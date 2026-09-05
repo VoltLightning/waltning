@@ -1252,6 +1252,29 @@ The schema carries four further checks this section does not list individually:
 `categories_earnings_income_only`, `currencies_decimals_sane`, and
 `fx_rates_distinct`.
 
+**`currencies_decimals_sane` bounds the number; two more guarantees hold it
+against the rows it governs.** `assert_amount_scale` and its per-table
+siblings (`transactions`, `transaction_lines`, `debt_reassignments`,
+`accounts`, `recurring_transactions`, `targets`, `receipts`) refuse any money
+column past its own currency's declared `decimals` — a figure never carries
+more precision than its currency claims to hold. `assert_currency_decimals_safe`
+is the other direction: a currency's `decimals` cannot be *lowered* while a
+row already stores a figure past the narrower scale, including a
+soft-deleted transaction — a restore must never walk a row past a guarantee
+that held when it left. Both are cross-table (the row's own `currency` names
+a second table's `decimals`), so both are triggers, in
+`0012_transaction_scale_and_category_kind.sql`.
+
+**The phone mirrors both, because SQLite carries no cross-table trigger of
+its own.** Every local executor's own write path checks `assertMoneyScale`
+(`packages/ledger/src/scale.ts`) against the replica's own `currencies`
+table before a figure lands; `update_currency`'s own executor scans every
+table `assert_currency_decimals_safe` covers before admitting a shrink. The
+phone additionally refuses a shrink while a live (non-archived, non-deleted)
+account or transaction still names the currency at all — stricter than
+Postgres, which admits a shrink that leaves nothing over-scale regardless of
+what still uses the currency.
+
 **Validation status:** `drizzle-kit` generates clean PostgreSQL 16 DDL for all
 of it — expression indexes, the `coalesce`-based sibling uniqueness index,
 partial unique indexes, the generated `amount_pivot` column, and every check

@@ -189,10 +189,44 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
   // writes, so nothing needs a real one to roll back against, and the type
   // this way matches `apply`'s own `Tx` exactly rather than the plain,
   // non-transactional handle `ledger.replica.db` otherwise is.
+  //
+  // **M3's ruling on what `validate` is allowed to break.** A `LocalRefusal`
+  // stops the write here, with nothing queued — that is the whole point of
+  // running this before the outbox commit. Anything else `validate` throws
+  // (a driver fault, a bug in the check itself) is a different failure: it is
+  // logged and swallowed, and the write proceeds to the outbox as normal.
+  // A broken pre-check must never be the reason a capture is lost — `apply`
+  // still gets to refuse the write itself, or a later replay will.
   if (executor.validate) {
-    ledger.replica.db.transaction((tx) => {
-      executor.validate?.(input, tx);
+    emitLedgerDiagnostic(diagnostics, {
+      scope: "local_write",
+      phase: "start",
+      boundary: "validate",
+      operation: executor.operation,
     });
+    try {
+      ledger.replica.db.transaction((tx) => {
+        executor.validate?.(input, tx);
+      });
+      emitLedgerDiagnostic(diagnostics, {
+        scope: "local_write",
+        phase: "success",
+        boundary: "validate",
+        operation: executor.operation,
+      });
+    } catch (error) {
+      emitLedgerDiagnostic(diagnostics, {
+        scope: "local_write",
+        phase: "failure",
+        boundary: "validate",
+        operation: executor.operation,
+        error: describeLedgerError(error),
+      });
+      if (error instanceof LocalRefusal) {
+        throw error;
+      }
+      // Not a refusal — fall through and let the outbox commit as normal.
+    }
   }
 
   // ─── 1. Intent, alone, in outbox.db ──────────────────────────────────────

@@ -49,6 +49,30 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
    */
   mints: (input) => input.lines.map((line) => line.id),
 
+  // H2 — read-only, run before the outbox commits (`LocalExecutor.validate`'s
+  // own doc): a line past its parent transaction's own currency scale is
+  // refused the same way `replaceLines`' own check already does, never
+  // queued as an intent nothing will ever apply. Business refusals that a
+  // future server might still resolve differently — a stale version, a
+  // lines sum that does not match — stay inside `apply`, where they always
+  // were; only the scale refusal moves.
+  validate: (input, tx) => {
+    const current = tx
+      .select({ currency: transactions.currency, deletedAt: transactions.deletedAt })
+      .from(transactions)
+      .where(eq(transactions.id, input.transactionId))
+      .get();
+    if (!current || current.deletedAt !== null) return;
+    for (const line of input.lines) {
+      assertMoneyScale(
+        tx,
+        line.amount,
+        current.currency,
+        `set_transaction_lines: transaction_lines[${line.id}].amount`,
+      );
+    }
+  },
+
   apply: (input, tx) => replaceLines(input, tx),
 });
 

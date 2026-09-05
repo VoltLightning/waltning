@@ -207,9 +207,9 @@ describe("a transaction's amount fits its currency's own scale", () => {
 /**
  * M2 — `fee` (S31 §9.1, `computations.md` §12.2) has no sign of its own to
  * carry; a negative value is a rebate wearing the wrong sign, never a fee.
- * `transactions_fee_positive` (`schema.ts`, hand-added to this migration
- * ahead of `0000_schema.sql`'s own regeneration) is a plain CHECK, so
- * Postgres refuses it with its own `23514` rather than one of ours.
+ * `transactions_fee_positive` (`0009_transactions_to_amount_and_fee_positive.sql`)
+ * is a plain CHECK, so Postgres refuses it with its own `23514` rather than
+ * one of ours.
  */
 describe("fee carries no sign of its own (M2)", () => {
   it("refuses a negative fee", async () => {
@@ -310,6 +310,43 @@ describe("the same guarantee, reached by UPDATE (L3)", () => {
       s.sql.unsafe(`UPDATE transactions SET currency = 'JPY' WHERE id = '${plnId}'`),
     );
     expect(refused, "10.50 does not fit JPY's zero decimal places").toBe("WA016");
+  });
+
+  /**
+   * M1 — `deleted_at` is now in `transactions_amount_scale_matches_currency`'s
+   * own `UPDATE OF` list, so a restore (an `UPDATE` that only flips
+   * `deleted_at` back to `NULL`) re-fires the check rather than silently
+   * admitting a row the currency's *current* decimals no longer fit.
+   * `ALTER TABLE … DISABLE TRIGGER` stands in for the otherwise-unreachable
+   * state C1's own fix (above) now prevents outright — a currency shrink
+   * admitted while the row was over-scale and soft-deleted.
+   */
+  it("refuses restoring a soft-deleted row that no longer fits its currency's scale (WA016, M1)", async () => {
+    await s.sql.unsafe(
+      `INSERT INTO currencies (code, name, decimals) VALUES ('XAH', 'Placeholder', 8)`,
+    );
+    const id = nextId();
+    await s.sql.unsafe(`
+      INSERT INTO accounts (id, name, kind, currency, ownership) VALUES ('${id}', 'Placeholder ${id}', 'bank', 'XAH', 'own')`);
+    const txnId = nextId();
+    await s.sql.unsafe(`
+      INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate)
+      VALUES ('${txnId}', '${id}', '2026-01-01', 'expense', 48.90512340, 'XAH', 1)`);
+    await s.sql.unsafe(`UPDATE transactions SET deleted_at = now() WHERE id = '${txnId}'`);
+
+    // Standing in for the state C1 no longer lets a normal shrink reach —
+    // disabling the guard, narrowing the currency, then re-enabling it.
+    await s.sql.unsafe(`ALTER TABLE currencies DISABLE TRIGGER currencies_decimals_safe`);
+    try {
+      await s.sql.unsafe(`UPDATE currencies SET decimals = 2 WHERE code = 'XAH'`);
+    } finally {
+      await s.sql.unsafe(`ALTER TABLE currencies ENABLE TRIGGER currencies_decimals_safe`);
+    }
+
+    const code = await refusal(() =>
+      s.sql.unsafe(`UPDATE transactions SET deleted_at = NULL WHERE id = '${txnId}'`),
+    );
+    expect(code, "the restored row holds 8 decimal places, XAH now allows 2").toBe("WA016");
   });
 
   it("refuses UPDATE debt_reassignments … SET currency = 'JPY' over a two-decimal amount (WA016)", async () => {
@@ -522,6 +559,70 @@ describe("a currency's own decimals cannot be lowered under an existing row (C1,
     expect(code, "a row still holds 8 decimal places — lowering to 2 must be refused").toBe(
       "WA018",
     );
+  });
+
+  it("refuses lowering decimals under a target's own amount (C1)", async () => {
+    await s.sql.unsafe(
+      `INSERT INTO currencies (code, name, decimals) VALUES ('XAD', 'Placeholder', 8)`,
+    );
+    const id = nextId();
+    await s.sql.unsafe(`
+      INSERT INTO targets (id, amount, currency, active_from)
+      VALUES ('${id}', 48.90512340, 'XAD', '2026-01-01')`);
+
+    const code = await refusal(() =>
+      s.sql.unsafe(`UPDATE currencies SET decimals = 2 WHERE code = 'XAD'`),
+    );
+    expect(code, "a target still holds 8 decimal places — lowering to 2 must be refused").toBe(
+      "WA018",
+    );
+  });
+
+  it("refuses lowering decimals under a receipt's own total (C1)", async () => {
+    await s.sql.unsafe(
+      `INSERT INTO currencies (code, name, decimals) VALUES ('XAE', 'Placeholder', 8)`,
+    );
+    const id = nextId();
+    await s.sql.unsafe(`
+      INSERT INTO receipts (id, image_key, total, currency)
+      VALUES ('${id}', 'placeholder-key', 48.90512340, 'XAE')`);
+
+    const code = await refusal(() =>
+      s.sql.unsafe(`UPDATE currencies SET decimals = 2 WHERE code = 'XAE'`),
+    );
+    expect(code, "a receipt still holds 8 decimal places — lowering to 2 must be refused").toBe(
+      "WA018",
+    );
+  });
+
+  /**
+   * M1 — soft-deleting a row used to make it invisible to this scan
+   * (`deleted_at IS NULL`), so a shrink under it was wrongly admitted; a
+   * later restore then walked the row past the guarantee with nothing left
+   * to catch it, because `assert_amount_scale` only re-fires on a column its
+   * own trigger names. `deleted_at` is now in that list, and this scan no
+   * longer filters soft-deleted rows out.
+   */
+  it("still refuses the shrink once the only over-scale row is soft-deleted", async () => {
+    await s.sql.unsafe(
+      `INSERT INTO currencies (code, name, decimals) VALUES ('XAF', 'Placeholder', 8)`,
+    );
+    const id = nextId();
+    await s.sql.unsafe(`
+      INSERT INTO accounts (id, name, kind, currency, ownership) VALUES ('${id}', 'Placeholder ${id}', 'bank', 'XAF', 'own')`);
+    const txnId = nextId();
+    await s.sql.unsafe(`
+      INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate)
+      VALUES ('${txnId}', '${id}', '2026-01-01', 'expense', 48.90512340, 'XAF', 1)`);
+    await s.sql.unsafe(`UPDATE transactions SET deleted_at = now() WHERE id = '${txnId}'`);
+
+    const code = await refusal(() =>
+      s.sql.unsafe(`UPDATE currencies SET decimals = 2 WHERE code = 'XAF'`),
+    );
+    expect(
+      code,
+      "the soft-deleted row still holds 8 decimal places, and could be restored later",
+    ).toBe("WA018");
   });
 
   it("admits raising decimals while the same row still holds it", async () => {

@@ -67,6 +67,21 @@ import type { z } from "zod";
  * executors. Everything else — a business rule the write itself violates —
  * defaults to `dependency: false` and refuses on every retry, unconditionally,
  * because nothing else outstanding can ever change its answer.
+ *
+ * **R4 review — `column`/`params` are `validate`'s own contribution (H2/M3).**
+ * A `LocalRefusal` thrown from `validate` is refused **before** the outbox
+ * entry ever commits, so no orphan entry is ever queued for a write nothing
+ * will ever apply. `column` carries the offending column, when the refusal is
+ * about one — `scale.ts`'s own throw sets it — so a caller can route the
+ * refusal to the field a person is looking at without parsing the message
+ * text (L4: the message is prefixed with the operation's own name, which a
+ * `^`-anchored regex against it can never account for on every caller's
+ * behalf). `params` carries the same interpolation values a
+ * `FieldError.params` expects, for the identical reason — structured, not
+ * re-derived from prose. Both are independent of `dependency`: a refusal
+ * thrown from `validate` is never a missing-dependency case (nothing has
+ * committed yet for a later entry to satisfy), so it always leaves
+ * `dependency` at its default `false`.
  */
 export class LocalRefusal extends Error {
   override readonly name = "LocalRefusal";
@@ -79,10 +94,23 @@ export class LocalRefusal extends Error {
    * `refused`, regardless of what else is outstanding.
    */
   readonly dependency: boolean;
+  /** The offending column, when the refusal is about one — see the class doc. */
+  readonly column?: string;
+  /** `FieldError.params`-shaped interpolation values — see the class doc. */
+  readonly params?: Readonly<Record<string, string>>;
 
-  constructor(message: string, options?: { dependency?: boolean }) {
+  constructor(
+    message: string,
+    options?: {
+      dependency?: boolean;
+      column?: string;
+      params?: Readonly<Record<string, string>>;
+    },
+  ) {
     super(message);
     this.dependency = options?.dependency ?? false;
+    if (options?.column !== undefined) this.column = options.column;
+    if (options?.params !== undefined) this.params = options.params;
   }
 }
 
@@ -163,12 +191,20 @@ export type LocalExecutor<Input extends z.ZodTypeAny, Row, Tx> = {
    * `writeLocally` commits the outbox entry" (`executors.test.ts`'s own
    * documented shape for a business rule a *future* server might still
    * resolve differently). A figure past its own currency's declared scale is
-   * never one of those: no replay, local or server-side, ever admits it, so
-   * queuing intent for a write nothing will ever apply is a stuck entry with
-   * no fix (`update_currency`'s own `assertScaleSurvivesShrink` and every
-   * `assertMoneyScale` call in `scale.ts` are exactly this — a currency
-   * lookup no Zod schema can make, and a defect the schema-level refusals
-   * beside them already model "refused before any outbox entry" for).
+   * never one of those: the phone refuses at capture exactly what the server
+   * would refuse right now, so queuing intent for a write nothing will ever
+   * apply is a stuck entry with no fix (`update_currency`'s own
+   * `assertScaleSurvivesShrink` and every `assertMoneyScale` call in
+   * `scale.ts` are exactly this — a currency lookup no Zod schema can make,
+   * and a defect the schema-level refusals beside them already model
+   * "refused before any outbox entry" for).
+   *
+   * **May throw only `LocalRefusal` (M3).** `writeLocally` tells the two
+   * failure modes apart by that class: a `LocalRefusal` stops the write
+   * before the outbox commits, with no entry left behind. Anything else —
+   * a driver fault, a bug in this function — is logged and swallowed, and
+   * the write proceeds to the outbox as normal; a broken pre-check must
+   * never be the reason a capture is lost.
    *
    * Read-only by convention — nothing here should write, and `writeLocally`
    * runs it inside its own throwaway transaction on the *replica*, before
@@ -262,7 +298,17 @@ export function defineLocalExecutor<Input extends z.ZodTypeAny, Row, Tx>(
     // Parsing here rather than trusting the caller is what makes the widened
     // type safe: the reconciler holds an executor it cannot apply without a
     // schema check running first.
-    invoke: (raw, tx) => executor.apply(executor.input.parse(raw), tx),
+    //
+    // **`validate` runs here too, before `apply`.** A replayed entry
+    // (`recover.ts`) reaches the local tables through this one door, and a
+    // scale refusal recorded at capture must refuse the same way on replay —
+    // never silently admit on the second attempt what the first refused
+    // before the outbox even committed.
+    invoke: (raw, tx) => {
+      const input = executor.input.parse(raw);
+      executor.validate?.(input, tx);
+      return executor.apply(input, tx);
+    },
     mintedIds: (raw) => executor.mints(executor.input.parse(raw)),
   };
 }
@@ -274,10 +320,17 @@ export function defineLocalExecutor<Input extends z.ZodTypeAny, Row, Tx>(
  * TypeScript has no existential type for "returns *something*". Written once,
  * here, in a constraint position where it cannot widen a value: every concrete
  * declaration keeps its real row type through `defineLocalExecutor`.
+ *
+ * **`validate` is not omitted, unlike `apply` and `mints`.** Those two are
+ * hidden so a generic caller cannot reach past validation even by accident —
+ * `invoke` is the one door. `validate` carries no such risk: it is read-only
+ * by convention, and `invoke` already runs it before `apply` for every
+ * caller, concrete or widened. Leaving it visible here says so, rather than
+ * hiding a field a widened executor genuinely has.
  */
 export type AnyLocalExecutor<Tx> = Omit<
   LocalExecutor<z.ZodTypeAny, unknown, Tx>,
-  "apply" | "mints" | "validate"
+  "apply" | "mints"
 >;
 
 /**

@@ -1394,18 +1394,29 @@ function createTransactionRefusal(error: unknown): FieldError | null {
 }
 
 /**
- * M3 — a server-side WA016 refusal, routed to the field it actually named.
+ * L4 — a scale refusal, local or server-side, routed to the field it
+ * actually named.
  *
- * `assert_amount_scale` (`0012_transaction_scale_and_category_kind.sql`)
- * raises the same SQLSTATE for `amount_original`, `to_amount` and `fee`
- * alike — the guarantee this controller's own H2 checks (above) already
- * refuse client-side before a write ever leaves the phone. A row reaching
- * Postgres by any other path (a future backend write, a race, a bug in one
- * of those client checks) surfaces here instead, and the message names its
- * own column first (`'amount_original % holds more decimal places …'`),
- * because the SQLSTATE alone cannot tell three columns apart. Reused
- * `transactions.tooManyDecimals` — this is the identical refusal the client
- * checks already carry that key for.
+ * **Structured, not parsed.** This used to read `error.message` against a
+ * `^`-anchored regex shaped for Postgres's own `assert_amount_scale` text
+ * (`'amount_original % holds more decimal places …'`) — which never matched
+ * the phone's own `scale.ts` refusal, because that one is prefixed with the
+ * operation's own name (`'create_transaction: amount_original % holds …'`)
+ * for a person reading the raw message. A caller-specific prefix is not
+ * something a shared regex can skip on every caller's behalf, so every
+ * *local* scale refusal silently fell through as an unrouted, form-level
+ * message instead of landing on the field it named.
+ *
+ * `columnOf`/`paramsOf` below read the column and the interpolation values
+ * structurally instead — `error.column` for a local `LocalRefusal`
+ * (`@waltning/ledger/scale.ts`'s own thrown shape, matched **without**
+ * importing it: `create-phone-ledger.ts` never depends on `@waltning/ledger`,
+ * by design, so this stays a duck-typed read the same way every other
+ * refusal mapper in this file already narrows "whatever was thrown"), or
+ * `error.details.column` for the server's own envelope (`DomainError`'s
+ * `ErrorDetails.column`, `apps/api/src/common/pg-errors.ts`'s own M3 fix —
+ * the SQLSTATE alone cannot tell `amount_original`/`to_amount`/`fee` apart
+ * either, and the column rides the envelope for exactly this reason).
  */
 const AMOUNT_SCALE_COLUMN_PATH: Readonly<Record<string, string>> = {
   amount_original: "amountOriginal",
@@ -1413,21 +1424,44 @@ const AMOUNT_SCALE_COLUMN_PATH: Readonly<Record<string, string>> = {
   fee: "fee",
 };
 
-const AMOUNT_SCALE_MESSAGE =
-  /^(amount_original|to_amount|fee) \S+ holds more decimal places than (\S+) allows \((\d+)\)/;
+/** The column a local `LocalRefusal` or a server envelope named, if either shape did. */
+function columnOf(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const direct = (error as { column?: unknown }).column;
+  if (typeof direct === "string") return direct;
+  const details = (error as { details?: unknown }).details;
+  if (typeof details !== "object" || details === null) return undefined;
+  const nested = (details as { column?: unknown }).column;
+  return typeof nested === "string" ? nested : undefined;
+}
 
-function amountScaleRefusal(error: Error): FieldError | null {
-  const match = AMOUNT_SCALE_MESSAGE.exec(error.message);
-  if (!match) return null;
-  const [, column, currency, decimals] = match;
-  const path = column === undefined ? undefined : AMOUNT_SCALE_COLUMN_PATH[column];
+/** `LocalRefusal.params`, when the thrown value carries one — the same shape `FieldError.params` takes. */
+function paramsOf(error: unknown): Readonly<Record<string, string>> | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const params = (error as { params?: unknown }).params;
+  if (typeof params !== "object" || params === null) return undefined;
+  const entries = Object.entries(params).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function amountScaleRefusal(error: unknown): FieldError | null {
+  const column = columnOf(error);
+  if (column === undefined) return null;
+  const path = AMOUNT_SCALE_COLUMN_PATH[column];
   if (path === undefined) return null;
-  return {
-    path,
-    message: error.message,
-    messageKey: "transactions.tooManyDecimals",
-    params: { currency: currency ?? "", decimals: decimals ?? "" },
-  };
+  const message = error instanceof Error ? error.message : String(error);
+  const params = paramsOf(error);
+  // `messageKey` is set only once real `params` are in hand — a `LocalRefusal`
+  // carries its own currency/decimals, the values `transactions.tooManyDecimals`
+  // needs to interpolate. A server envelope's `details.column` carries no
+  // such pair, and templating with blanks would read worse than the
+  // server's own message, which is already a complete English sentence
+  // naming both — so that case is routed onto the field verbatim instead.
+  return params
+    ? { path, message, messageKey: "transactions.tooManyDecimals", params }
+    : { path, message };
 }
 
 /** `reconcile_account`'s one refusal — S16 §5: a zero difference lands on `observedBalance`. */

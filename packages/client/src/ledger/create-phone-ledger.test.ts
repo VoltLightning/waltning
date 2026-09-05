@@ -739,23 +739,29 @@ describe("phone ledger controller", () => {
   });
 
   /**
-   * M3 — a server-side WA016 refusal (`assert_amount_scale`,
-   * `0012_transaction_scale_and_category_kind.sql`) is shared by three
-   * columns on this table alone; the message names its own column first
-   * (`'to_amount % holds more decimal places …'`), and this is what routes
-   * that back onto the field a person is looking at rather than a form-level
-   * message. The client's own H2 checks refuse this before a write ever
-   * reaches a port — this pins the path for a row that got past them.
+   * L4 — a local `LocalRefusal` (`@waltning/ledger/scale.ts`'s own thrown
+   * shape — `column`/`params` fields directly on the error, matched
+   * structurally rather than by importing the class: this controller never
+   * depends on `@waltning/ledger`, by design) routes to the field its own
+   * `column` names, not by parsing `error.message` — the message here
+   * carries the operation's own prefix (`"create_transaction: …"`), exactly
+   * the shape a `^`-anchored regex against Postgres's own text could never
+   * have matched, which was the actual bug this replaces.
    */
   it.each([
     ["amount_original", "amountOriginal"],
     ["to_amount", "toAmount"],
     ["fee", "fee"],
-  ] as const)("routes a server-side WA016 on %s to the %s field", (column, path) => {
+  ] as const)("routes a local scale refusal on %s to the %s field", (column, path) => {
     const { controller, createTransaction } = harness();
     const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
     createTransaction.mockImplementationOnce(() => {
-      throw new Error(`${column} 10.125 holds more decimal places than PLN allows (2) (H2)`);
+      throw Object.assign(
+        new Error(
+          `create_transaction: ${column} 10.125 holds more decimal places than PLN allows (2)`,
+        ),
+        { name: "LocalRefusal", column, params: { currency: "PLN", decimals: "2" } },
+      );
     });
 
     const result = controller.createTransaction(expenseDraft(accountId));
@@ -766,6 +772,36 @@ describe("phone ledger controller", () => {
         message: expect.stringContaining(column),
         messageKey: "transactions.tooManyDecimals",
         params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+  });
+
+  /**
+   * L4 — the other path: a server envelope (`DomainError`'s own
+   * `ErrorDetails.column`, `apps/api/src/common/pg-errors.ts`'s M3 fix)
+   * reaching this same controller shaped as `{ details: { column } }`,
+   * carrying no `params` of its own (the server envelope has none to give) —
+   * routed by the same `columnOf` read, falling back to the bare message
+   * with no interpolation.
+   */
+  it("routes a server envelope's own column to the same field, with no params to interpolate", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    createTransaction.mockImplementationOnce(() => {
+      throw Object.assign(
+        new Error("amount_original 10.125 holds more decimal places than PLN allows (2)"),
+        {
+          details: { column: "amount_original" },
+        },
+      );
+    });
+
+    const result = controller.createTransaction(expenseDraft(accountId));
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "amountOriginal",
+        message: expect.stringContaining("amount_original"),
       },
     ]);
   });

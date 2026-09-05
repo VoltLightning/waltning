@@ -393,6 +393,45 @@ describe("set_transaction_lines", () => {
       }),
     ).toThrow(/stale/);
   });
+
+  /**
+   * H2 — `validate` refuses this before the outbox entry commits, not only
+   * inside `apply`: a line past its parent's own currency scale (PLN, 2dp)
+   * used to queue an entry `apply` would then refuse — a stuck entry with no
+   * fix, since nothing will ever apply it. No entry means no orphan.
+   */
+  it("refuses a line past its parent's own currency scale before queuing an entry (H2)", () => {
+    const v = () => readTxn()?.version ?? 0;
+    const entries = () => stores.ledger.outbox.db.select().from(outbox).all();
+    const before = entries().length;
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          transactionId: TXN,
+          version: v(),
+          lines: [
+            {
+              id: id<"transactionLines">("00000000-0000-4000-8000-0000000000c1"),
+              description: "Espresso",
+              amount: "10.005",
+            },
+            {
+              id: id<"transactionLines">("00000000-0000-4000-8000-0000000000c2"),
+              description: "Croissant",
+              amount: "7.995",
+            },
+          ],
+        },
+      }),
+    ).toThrow(/holds more decimal places/);
+
+    expect(entries()).toHaveLength(before);
+    expect(readLines()).toHaveLength(0);
+  });
 });
 
 describe("supersede_transaction", () => {
@@ -509,6 +548,43 @@ describe("supersede_transaction", () => {
       .where(eq(transactions.id, OTHER))
       .get();
     expect(otherAfter).toEqual(otherBefore);
+  });
+
+  /**
+   * L10 — `insertTransaction` stopped checking scale itself (create_transaction's
+   * own `validate` and `apply` were checking the identical value twice); this
+   * proves `supersede_transaction` — the one caller with no `validate` of its
+   * own and a genuinely new `replacement` — still gets that guarantee, from
+   * its own explicit call to `assertTransactionScale`.
+   */
+  it("refuses a replacement past its own currency's scale, and leaves the superseded row untouched", () => {
+    const NEW = id<"transactions">("00000000-0000-4000-8000-000000000007");
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: supersedeTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          supersedesId: TXN,
+          supersedesVersion: readTxn()?.version ?? 0,
+          replacement: {
+            id: NEW,
+            date: "2026-09-01",
+            type: "expense",
+            accountId: ACCOUNT,
+            amountOriginal: "18.505",
+            currency: PLN,
+            payee: "Coffee",
+            source: "import",
+          },
+        },
+      }),
+    ).toThrow(/holds more decimal places/);
+
+    expect(readTxn()?.deletedAt).toBeNull();
+    expect(
+      stores.ledger.replica.db.select().from(transactions).where(eq(transactions.id, NEW)).get(),
+    ).toBeUndefined();
   });
 
   it("refuses a replacement id that names a soft-deleted row — it must not resurrect it", () => {

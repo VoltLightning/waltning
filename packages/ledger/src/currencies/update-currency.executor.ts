@@ -44,7 +44,7 @@ import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
 
-const { accounts, currencies, transactionLines, transactions } = schema;
+const { accounts, currencies, recurringTransactions, transactionLines, transactions } = schema;
 type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const updateCurrencyExecutor = defineLocalExecutor<
@@ -144,6 +144,12 @@ function anyStoredFigureOverScale(
     return true;
   }
 
+  // M1 — no `isNull(transactions.deletedAt)` filter: a soft-deleted row can
+  // be restored later, and a scan that only sees live rows would let that
+  // restore walk a figure past the guarantee with nothing left to catch it
+  // (the mirror of `assert_currency_decimals_safe`'s own C1 fix). The
+  // currency predicate is pushed into the `where` (L8) rather than filtered
+  // in JS afterwards — the same three columns Postgres's own scan checks.
   const transactionRows = tx
     .select({
       currency: transactions.currency,
@@ -155,7 +161,13 @@ function anyStoredFigureOverScale(
       debtAmount: transactions.debtAmount,
     })
     .from(transactions)
-    .where(isNull(transactions.deletedAt))
+    .where(
+      or(
+        eq(transactions.currency, code),
+        eq(transactions.toCurrency, code),
+        eq(transactions.debtCurrency, code),
+      ),
+    )
     .all();
   for (const row of transactionRows) {
     if (row.currency === code && (over(row.amountOriginal) || over(row.fee))) return true;
@@ -169,5 +181,15 @@ function anyStoredFigureOverScale(
     .innerJoin(transactions, eq(transactions.id, transactionLines.transactionId))
     .where(eq(transactions.currency, code))
     .all();
-  return lineRows.some((row) => over(row.amount));
+  if (lineRows.some((row) => over(row.amount))) return true;
+
+  // H3 — `recurring_transactions.amount_original` (its own `currency`) was
+  // missing from this scan entirely: the phone admitted a shrink Postgres's
+  // own `assert_currency_decimals_safe` already refuses for this table.
+  const recurringRows = tx
+    .select({ amountOriginal: recurringTransactions.amountOriginal })
+    .from(recurringTransactions)
+    .where(eq(recurringTransactions.currency, code))
+    .all();
+  return recurringRows.some((row) => over(row.amountOriginal));
 }

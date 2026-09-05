@@ -34,6 +34,25 @@ export type LedgerDiagnosticEvent =
   | {
       scope: "local_write";
       phase: "start";
+      boundary: "validate";
+      operation: string;
+    }
+  | {
+      scope: "local_write";
+      phase: "success";
+      boundary: "validate";
+      operation: string;
+    }
+  | {
+      scope: "local_write";
+      phase: "failure";
+      boundary: "validate";
+      operation: string;
+      error: LedgerDiagnosticError;
+    }
+  | {
+      scope: "local_write";
+      phase: "start";
       boundary: "outbox" | "replica";
       operation: string;
       seq?: number;

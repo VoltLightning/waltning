@@ -15,14 +15,14 @@
  * converted at the previous currency's rate" — a stale conversion left
  * behind by a currency switch. `referenceRate` itself is a `useMemo` keyed
  * on `date`/`fromAccount`/`toAccount` (`transfer-screen.tsx`), so it always
- * answers correctly — but the *destination amount string* only ever
- * recomputes from `handleKey` (a keypress) or the two account-change
- * handlers, never from an effect on `date`. Picking `To: EUR` after typing
- * the source amount reprices the figure correctly and the stale `25.00`
- * figure is gone (`#114` landed the reset — a plain `it`, below, credits
- * both R5 H1 and R4 H2-r4 on that one assertion); picking a different
- * *date* after typing it does not — the figure stays priced at the old
- * date's rate, silently (`it.fails("R4 H-r4")`, its own scenario below).
+ * answers correctly, and an effect on `date` now recomputes the
+ * *destination amount string* from it too, alongside `handleKey` (a
+ * keypress) and the two account-change handlers. Picking `To: EUR` after
+ * typing the source amount reprices the figure correctly and the stale
+ * `25.00` figure is gone (`#114` landed the reset — a plain `it`, below,
+ * credits both R5 H1 and R4 H2-r4 on that one assertion); picking a
+ * different *date* after typing it now reprices too — R4 H-r4, fixed by
+ * #118 (`it`, its own scenario below, no longer `it.fails`).
  *
  * **R4 H1-r4 and R4 M-r4, as this file actually found them.** The brief's
  * own scripted fee value, `1,234.56`, carries two separators (a comma *and*

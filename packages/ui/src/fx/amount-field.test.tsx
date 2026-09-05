@@ -61,6 +61,20 @@ describe("parseAmount — comma decimal", () => {
     expect(parseAmount("48.")).toBeNull();
   });
 
+  /**
+   * M4 — a leading separator (",5") normalized to ".5", a shape `zMoney`
+   * refuses (its regex requires a digit *before* the mark, `^-?\d+(\.\d+)?$`).
+   * Unlike a trailing separator, this is a complete, real number as typed —
+   * it belongs on the accepted side of the refusal, in the shape the
+   * contract already takes.
+   */
+  it("accepts a leading separator, filling in the whole part (M4)", () => {
+    expect(parseAmount(",5")).toBe("0.5");
+    expect(parseAmount(".5")).toBe("0.5");
+    expect(parseAmount("-,5")).toBe("-0.5");
+    expect(parseAmount("-.5")).toBe("-0.5");
+  });
+
   it("refuses more than twelve integer digits, matching zMoney's own refine (M1)", () => {
     expect(parseAmount("999999999999")).toBe("999999999999"); // twelve nines — the boundary itself
     expect(parseAmount("1000000000000")).toBeNull(); // thirteen digits

@@ -182,12 +182,12 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
   );
 
   // `SPEC.md` §7.2 — `debt_amount` fits `debt_currency`'s own declared
-  // decimals, the same guarantee `insertTransaction`'s own
-  // `assertTransactionScale` already gave `amount_original` above; that
-  // check never sees these two columns (`createTransactionInput` does not
-  // carry them — see the comment below), so this executor is their only
-  // scale check. `decimals`, not another lookup: already read above, for the
-  // same currency, to round the balance sign.
+  // decimals, the same guarantee this executor's own `validate` already gave
+  // `amount`/`currency` above (L10 — `insertTransaction` no longer repeats
+  // that check; see its own comment). `createTransactionInput` does not
+  // carry `debt_amount`/`debt_currency` at all — see the comment below — so
+  // this executor is their only scale check. `decimals`, not another lookup:
+  // already read above, for the same currency, to round the balance sign.
   if (money.dec(input.discharges.amount).decimalPlaces() > decimals) {
     throw new Error(
       `settle_debt: debt_amount ${input.discharges.amount} holds more decimal places than ` +

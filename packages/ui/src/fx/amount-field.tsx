@@ -91,9 +91,20 @@ export function parseAmount(input: string): string | null {
   const separators = (trimmed.match(/[.,]/g) ?? []).length;
   if (separators > 1) return null;
 
-  const normalized = trimmed.replace(",", ".");
-  if (!/^-?\d*\.?\d*$/.test(normalized)) return null;
-  if (!/\d/.test(normalized)) return null;
+  const commaNormalized = trimmed.replace(",", ".");
+  if (!/^-?\d*\.?\d*$/.test(commaNormalized)) return null;
+  if (!/\d/.test(commaNormalized)) return null;
+  // M4 — a leading separator (",5" → ".5") is a real, complete number as
+  // typed — the same way "5," is still mid-entry is not the same shape as
+  // this one — but `.5` is not: `zMoney`'s regex requires a digit before the
+  // mark once one is written at all (`^-?\d+(\.\d+)?$`), so this was
+  // returned as a value and refused downstream instead of accepted here.
+  // `"0" + "."` is the same number, in the shape the contract already takes.
+  const normalized = commaNormalized.startsWith(".")
+    ? `0${commaNormalized}`
+    : commaNormalized.startsWith("-.")
+      ? `-0${commaNormalized.slice(1)}`
+      : commaNormalized;
   // M3/M1 — "5," normalizes to "5.", a shape `zMoney` refuses (its regex
   // requires a digit after the mark once one is typed). A trailing
   // separator is still mid-entry, the same "not yet a number" state as "."

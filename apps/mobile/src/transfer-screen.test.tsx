@@ -13,7 +13,7 @@ import {
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, addDays, todayIn } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, pivotPerUnit, toMoney, unitsPerPivot } from "@waltning/core/money";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,6 +100,8 @@ function fakeController(
     createTransaction?: PhoneLedgerPort["createTransaction"];
     accounts?: readonly PhoneAccount[];
     capturableUsd?: boolean;
+    /** H1 — a date-aware fixture, for the "no rate on this date" scenario. */
+    readCrossRate?: PhoneLedgerPort["readCrossRate"];
   } = {},
 ) {
   const port: PhoneLedgerPort = {
@@ -167,27 +169,29 @@ function fakeController(
     // shape post-fix. Both sides carry the same source/asOf/carriedDays
     // here, so `crossRateProvenance` reports exactly what the flattened
     // fixture used to before H2's split.
-    readCrossRate: vi.fn(({ from, to }) => {
-      if (from === USD && to === PLN) {
-        const leg = {
-          rate: unitsPerPivot("1"),
-          source: "nbp",
-          asOf: accountingDate("2026-08-12"),
-          carriedDays: 0,
-        };
-        return { rate: pivotPerUnit("3.8100"), legs: { from: leg, to: leg } };
-      }
-      if (from === USD && to === EUR) {
-        const leg = {
-          rate: unitsPerPivot("1"),
-          source: "nbp",
-          asOf: accountingDate("2026-08-12"),
-          carriedDays: 0,
-        };
-        return { rate: pivotPerUnit("0.9200"), legs: { from: leg, to: leg } };
-      }
-      return null;
-    }),
+    readCrossRate:
+      overrides.readCrossRate ??
+      vi.fn(({ from, to }) => {
+        if (from === USD && to === PLN) {
+          const leg = {
+            rate: unitsPerPivot("1"),
+            source: "nbp",
+            asOf: accountingDate("2026-08-12"),
+            carriedDays: 0,
+          };
+          return { rate: pivotPerUnit("3.8100"), legs: { from: leg, to: leg } };
+        }
+        if (from === USD && to === EUR) {
+          const leg = {
+            rate: unitsPerPivot("1"),
+            source: "nbp",
+            asOf: accountingDate("2026-08-12"),
+            carriedDays: 0,
+          };
+          return { rate: pivotPerUnit("0.9200"), legs: { from: leg, to: leg } };
+        }
+        return null;
+      }),
     readCoverage: vi.fn(() => []),
     listFxRates: vi.fn(() => []),
     addCurrency: vi.fn(),
@@ -321,6 +325,60 @@ describe("Transfer — the phone path", () => {
     });
     expect(draft?.toFxRate).toBeUndefined();
     expect(router.dismissTo).toHaveBeenCalledWith("/");
+  });
+
+  /**
+   * H1 — the date-reprice effect used to return early with no rate for the
+   * newly-chosen date, leaving the destination standing at whatever the
+   * *previous* date's rate produced — a stale `to_amount` with no
+   * provenance behind it any more, still saveable. Today holds a rate for
+   * this pair; Yesterday, in this fixture, holds none.
+   */
+  it("clears the destination and disables Save when the chosen date has no rate (H1)", () => {
+    // `transfer-screen.tsx`'s own `today` comes from `deviceRuntime()`'s real
+    // clock, not from this fixture's `capture` (that one only stamps an
+    // outbox entry at save time) — so "today" and "yesterday" here must be
+    // computed the same way the screen computes them, not hard-coded.
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    const today = todayIn(timeZone);
+    const yesterday = addDays(today, -1);
+    const readCrossRate = vi.fn(
+      ({ from, to, date }: { from: string; to: string; date: string }) => {
+        if (from === USD && to === PLN && date === today) {
+          const leg = {
+            rate: unitsPerPivot("1"),
+            source: "nbp",
+            asOf: today,
+            carriedDays: 0,
+          };
+          return { rate: pivotPerUnit("3.8100"), legs: { from: leg, to: leg } };
+        }
+        return null;
+      },
+    );
+    withLedger({ readCrossRate });
+
+    pickFrom("Household · USD");
+    pickTo("Cash · PLN");
+
+    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
+    tapKeys("1", "5", "0");
+
+    // Pre-filled from Today's own reference: 150 × 3.8100 = 571.50.
+    expect(screen.getByText("571.50")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Date: Today" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
+
+    expect(readCrossRate).toHaveBeenCalledWith(
+      expect.objectContaining({ from: USD, to: PLN, date: yesterday }),
+    );
+    // Yesterday has no rate for this pair — the stale prefill must not
+    // survive the date change, and Save must refuse a cross-currency write
+    // with nothing behind its destination figure.
+    expect(screen.queryByText("571.50")).toBeNull();
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
   });
 
   /**
@@ -678,6 +736,32 @@ describe("Transfer — the phone path", () => {
     expect(screen.getByRole("button", { name: /^From: Household/ })).toBeDefined();
   });
 
+  /**
+   * L6 — the same rule, for `feeRaw`: `fee` carries no currency of its own,
+   * it is always the *From* leg's own currency, so `handleFromAccountChange`
+   * must guard it exactly the way it already guards `amountRaw`. It used to
+   * guard only the amount, silently carrying an over-scale fee onto a
+   * narrower account.
+   */
+  it("refuses a From switch that would carry the typed fee past the new account's scale (L6)", () => {
+    const secondPln: PhoneAccount = {
+      ...CASH,
+      id: id<"accounts">("77777777-7777-4777-8777-777777777777"),
+      name: "Zero-dp · PLN",
+      decimals: 0,
+    };
+    withLedger({ accounts: [HOUSEHOLD, secondPln] });
+
+    pickFrom("Household · USD");
+    fireEvent.change(screen.getByLabelText("Fee"), { target: { value: "1.50" } });
+
+    pickFrom("Zero-dp · PLN");
+
+    expect(screen.getByText("PLN holds 0 decimal places — this amount has more.")).toBeDefined();
+    // The switch was refused outright — the From account stays as it was.
+    expect(screen.getByRole("button", { name: /^From: Household/ })).toBeDefined();
+  });
+
   it("refuses a To switch that would carry a typed destination past the new account's scale (L5)", () => {
     const zeroDpEur: PhoneAccount = {
       ...SAVINGS_EUR,
@@ -704,14 +788,25 @@ describe("Transfer — the phone path", () => {
   });
 
   /**
-   * M3 — a server-side WA016 refusal (`assert_amount_scale`) is routed to
-   * the field its message names, through `createTransactionRefusal`
-   * (`create-phone-ledger.ts`) — this pins the routing end to end, through
-   * the same translation the client's own H2 checks already use.
+   * L4 — a server-side WA016 refusal (`assert_amount_scale`) is routed to
+   * the field it actually named through `columnOf`'s structural read of the
+   * envelope's own `details.column` (`DomainError.details`,
+   * `apps/api/src/common/pg-errors.ts`'s own M3 fix) — never by parsing
+   * `error.message`, which `create-phone-ledger.ts`'s own header now
+   * explains was the actual bug: a `^`-anchored regex shaped for this exact
+   * (unprefixed) Postgres text could never also match the phone's own
+   * `scale.ts` refusals, which carry an operation-name prefix. A server
+   * envelope carries no `currency`/`decimals` pair to interpolate a
+   * templated sentence with (unlike a local `LocalRefusal`, which does), so
+   * this lands on the field with the server's own message shown verbatim
+   * rather than a blank-filled template.
    */
-  it("routes a server-side scale refusal on toAmount to the destination field (M3)", () => {
+  it("routes a server-side scale refusal on toAmount to the destination field (L4)", () => {
     const createTransaction = vi.fn(() => {
-      throw new Error("to_amount 381.125 holds more decimal places than PLN allows (2) (H2)");
+      throw Object.assign(
+        new Error("to_amount 381.125 holds more decimal places than PLN allows (2) (H2)"),
+        { details: { column: "to_amount" } },
+      );
     });
     withLedger({ createTransaction });
 
@@ -722,6 +817,8 @@ describe("Transfer — the phone path", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.getByText("PLN holds 2 decimal places — this amount has more.")).toBeDefined();
+    expect(
+      screen.getByText("to_amount 381.125 holds more decimal places than PLN allows (2) (H2)"),
+    ).toBeDefined();
   });
 });

@@ -117,9 +117,15 @@ BEGIN
   RETURN NEW;
 END $$;
 --> statement-breakpoint
+-- M1 — `deleted_at` is in this list so a restore (an `UPDATE` that only
+-- flips `deleted_at` back to `NULL`) re-fires the check. Without it, a row
+-- soft-deleted while over-scale for the currency's *current* decimals (a
+-- shrink admitted while the row was invisible to `assert_currency_decimals_safe`'s
+-- own scan below) could be restored with no trigger ever re-examining it —
+-- walking a row past the guarantee with nothing to catch it.
 CREATE TRIGGER transactions_amount_scale_matches_currency
   BEFORE INSERT OR UPDATE OF
-    amount_original, currency, to_amount, to_currency, debt_amount, debt_currency, fee
+    amount_original, currency, to_amount, to_currency, debt_amount, debt_currency, fee, deleted_at
   ON transactions
   FOR EACH ROW EXECUTE FUNCTION assert_amount_scale();
 --> statement-breakpoint
@@ -383,13 +389,17 @@ DECLARE
 BEGIN
   IF NEW.decimals >= OLD.decimals THEN RETURN NEW; END IF;
 
+  -- M1 — no `deleted_at IS NULL` filter: a soft-deleted row can be restored
+  -- later (`deleted_at` back to `NULL`), and a shrink that only checked live
+  -- rows would let that restore walk a figure past the guarantee with
+  -- nothing left to catch it, because `assert_amount_scale` only re-fires on
+  -- a change this trigger's own `UPDATE OF` list names — see its comment.
   SELECT count(*) INTO n FROM transactions
-  WHERE deleted_at IS NULL AND (
+  WHERE
     (currency = NEW.code AND scale(trim_scale(amount_original)) > NEW.decimals)
     OR (currency = NEW.code AND fee IS NOT NULL AND scale(trim_scale(fee)) > NEW.decimals)
     OR (to_currency = NEW.code AND scale(trim_scale(to_amount)) > NEW.decimals)
-    OR (debt_currency = NEW.code AND scale(trim_scale(debt_amount)) > NEW.decimals)
-  );
+    OR (debt_currency = NEW.code AND scale(trim_scale(debt_amount)) > NEW.decimals);
   IF n > 0 THEN
     RAISE EXCEPTION
       'cannot lower % to % decimal places — % transaction row(s) hold a figure with more (C1)',
@@ -433,6 +443,31 @@ BEGIN
   IF n > 0 THEN
     RAISE EXCEPTION
       'cannot lower % to % decimal places — % recurring transaction(s) hold a figure with more (C1)',
+      NEW.code, NEW.decimals, n
+      USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
+  END IF;
+
+  -- C1 — `targets_amount_scale_matches_currency` guards this table on write;
+  -- this scan is what makes a *currency* shrink refuse a `targets.amount`
+  -- already stored past the narrower scale, the same way every table above
+  -- is covered.
+  SELECT count(*) INTO n FROM targets
+  WHERE currency = NEW.code AND scale(trim_scale(amount)) > NEW.decimals;
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      'cannot lower % to % decimal places — % target(s) hold a figure with more (C1)',
+      NEW.code, NEW.decimals, n
+      USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
+  END IF;
+
+  -- C1 — `receipts_total_scale_matches_currency`'s own table. `total` is
+  -- nullable (a receipt can exist before OCR reads it), the same shape that
+  -- trigger already checks for.
+  SELECT count(*) INTO n FROM receipts
+  WHERE currency = NEW.code AND total IS NOT NULL AND scale(trim_scale(total)) > NEW.decimals;
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      'cannot lower % to % decimal places — % receipt(s) hold a total with more (C1)',
       NEW.code, NEW.decimals, n
       USING ERRCODE = 'WA018', CONSTRAINT = 'currencies_decimals_safe', COLUMN = 'decimals';
   END IF;

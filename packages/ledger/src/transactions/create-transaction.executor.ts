@@ -81,7 +81,15 @@ export function insertTransaction(
   tx: ReplicaTx,
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
-  assertTransactionScale(input, tx);
+  // L10 — `assertTransactionScale` is not called here. `create_transaction`'s
+  // own `validate` already runs it, pre-outbox, on this exact `input`, and
+  // `writeLocally` guarantees `validate` ran before `apply` reaches this
+  // function for that caller — a second call on the same value would check
+  // nothing new. `settle_debt` carries the identical guarantee for its own
+  // `amountOriginal`/`currency` pair in its own `validate`. `reconcile_account`
+  // is the one caller whose value here (`difference`) is genuinely derived
+  // rather than pre-validated, and it checks that value itself, right before
+  // calling this function.
 
   /**
    * **`to_amount` is copied from the input and is never derived.** §14.6:
@@ -184,8 +192,18 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
  * `debt_amount`/`debt_currency` are not this executor's — `settle_debt`
  * (`counterparties/settle-debt.executor.ts`) is the only writer of those two
  * columns, and carries the identical check for them.
+ *
+ * **Exported.** `insertTransaction` no longer runs this itself (L10 — it
+ * used to, which made `create_transaction`'s own `validate` and `apply`
+ * check the identical `input` twice); each caller now runs it on the value
+ * that is actually theirs to check. `create_transaction`'s own `validate`
+ * (below) covers its call; `settle_debt`'s own `validate` covers its;
+ * `reconcile_account` checks its *derived* `difference` explicitly, right
+ * before calling `insertTransaction`; `supersede_transaction` — the one
+ * caller with no `validate` of its own and a genuinely new, unvalidated
+ * `replacement` — calls this directly for the same reason.
  */
-function assertTransactionScale(input: CreateTransactionInput, tx: ReplicaTx): void {
+export function assertTransactionScale(input: CreateTransactionInput, tx: ReplicaTx): void {
   assertMoneyScale(tx, input.amountOriginal, input.currency, "create_transaction: amount_original");
   if (input.toAmount !== undefined && input.toCurrency !== undefined) {
     assertMoneyScale(tx, input.toAmount, input.toCurrency, "create_transaction: to_amount");

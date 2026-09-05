@@ -48,10 +48,29 @@ export const zMoney = z
  * because `amountOriginal` legitimately carries a negative sign for an
  * `adjustment` row (`transactions_amount_positive`); a fee has no such case
  * — a negative one is never a fee, it is a rebate wearing the wrong sign
- * (M2). `transactions_fee_positive` (`schema.ts`) is the same guarantee in
- * Postgres.
+ * (M2). **`transactions_fee_positive` (`0009_transactions_to_amount_and_fee_positive.sql`)
+ * is `fee > 0`, strictly — "no fee" is `NULL`, never a typed `0`.** A caller
+ * that means "no fee" must omit the field (or drop a typed `0` before this
+ * schema ever sees it, the way `transfer-screen.tsx` does); this schema has
+ * no way to turn a value into `NULL` itself.
+ *
+ * **Refused on the ORIGINAL string, before `zMoney`'s own rounding, and
+ * again after.** `-0.0000000001` is strictly negative before `toMoney`
+ * rounds it to `numeric(20,8)` — and rounds to `"-0.00000000"` after, which
+ * `dec(v).gte(0)` used to read as non-negative, admitting a fee that was
+ * genuinely typed negative. Checking the pre-round string catches that
+ * direction; checking again after catches the opposite one — a tiny
+ * *positive* fee (`"0.000000001"`) that rounds down to exactly zero, which
+ * is "no fee" wearing a fee's own field.
  */
-export const zFee = zMoney.refine((v) => dec(v).gte(0), "a fee cannot be negative");
+export const zFee = z
+  .string()
+  .refine((v) => !/^-?\d+(\.\d+)?$/.test(v) || dec(v).gt(0), "a fee must be greater than zero")
+  .pipe(zMoney)
+  .refine(
+    (v) => dec(v).gt(0),
+    "a fee must be greater than zero — a value that rounds to zero at storage scale is not a fee",
+  );
 
 /**
  * A rate you multiply by to reach the pivot (`computations.md` §4).

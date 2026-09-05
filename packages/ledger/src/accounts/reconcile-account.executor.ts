@@ -49,6 +49,35 @@ export const reconcileAccountExecutor = defineLocalExecutor<
   input: reconcileAccountInput,
   /** The adjustment is the one row this write brings into existence. */
   mints: (input) => [input.adjustmentId],
+  // H2 — read-only, run before the outbox commits (`LocalExecutor.validate`'s
+  // own doc): both `observedBalance` and the `difference` it derives are
+  // refused past `account.currency`'s own scale the same way `reconcileAccount`
+  // itself already does, never queued as an intent nothing will ever apply.
+  // An unknown or archived account, and "nothing to reconcile", stay inside
+  // `apply` — business refusals a future server might still resolve
+  // differently, not the scale guarantee this checks.
+  validate: (input, tx) => {
+    const [account] = tx
+      .select({
+        currency: accounts.currency,
+        openingBalance: accounts.openingBalance,
+        archived: accounts.archived,
+      })
+      .from(accounts)
+      .where(eq(accounts.id, input.accountId))
+      .all();
+    if (!account || account.archived) return;
+    assertMoneyScale(
+      tx,
+      input.observedBalance,
+      account.currency,
+      "reconcile_account: expected_balance",
+    );
+    const computed = computedBalance(input.accountId, account.openingBalance, input.asOf, tx);
+    const difference = money.sub(input.observedBalance, computed);
+    if (money.isZero(difference)) return;
+    assertMoneyScale(tx, difference, account.currency, "reconcile_account: adjustment amount");
+  },
   apply: (input, tx) => reconcileAccount(input, tx),
 });
 
@@ -84,6 +113,14 @@ function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTra
       `reconcile_account: nothing to reconcile — the ledger already says ${input.observedBalance}`,
     );
   }
+
+  // `SPEC.md` §7.2 — `difference` is *derived*, never the validated
+  // `observedBalance` above, so `insertTransaction` no longer checks its
+  // scale for us (L10: that check now runs once, in `create_transaction`'s
+  // own `validate`, not a second time inside every caller of
+  // `insertTransaction`). This is that check, for the one value here that is
+  // actually new.
+  assertMoneyScale(tx, difference, account.currency, "reconcile_account: adjustment amount");
 
   const adjustment = createTransactionInput.parse({
     id: input.adjustmentId,

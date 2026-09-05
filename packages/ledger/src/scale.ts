@@ -19,6 +19,7 @@
 import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import { eq } from "drizzle-orm";
+import { LocalRefusal } from "./executor.ts";
 import { ledgerSchema } from "./schema-map.ts";
 import type { LocalTx } from "./write.ts";
 
@@ -31,9 +32,16 @@ const { currencies } = ledgerSchema;
  * is about to violate refuses an unknown code separately, and this function
  * has nothing further to add (the same shape `assert_amount_scale`'s own
  * `SELECT ... INTO allowed` gives that case in Postgres).
+ *
+ * **Generic over `TRun`, like every executor's own `ReplicaTx`** — this file
+ * has no more an opinion about the driver's run-result than they do, and
+ * writing `unknown` here directly (rather than leaving it to be inferred at
+ * each call site) would be a second, unbudgeted place naming the same fact
+ * `create-account.executor.ts`'s own budget entry already covers once per
+ * executor (`tests/unknown-budget.test.ts`).
  */
-export function assertMoneyScale(
-  tx: LocalTx<unknown, typeof ledgerSchema>,
+export function assertMoneyScale<TRun>(
+  tx: LocalTx<TRun, typeof ledgerSchema>,
   value: string,
   currency: CurrencyCode,
   where: string,
@@ -46,8 +54,32 @@ export function assertMoneyScale(
     .all();
   if (row === undefined) return;
   if (money.dec(value).decimalPlaces() > row.decimals) {
-    throw new Error(
+    const column = columnOf(where);
+    throw new LocalRefusal(
       `${where} ${value} holds more decimal places than ${currency} allows (${row.decimals})`,
+      {
+        ...(column !== undefined ? { column } : {}),
+        params: { currency, decimals: String(row.decimals) },
+      },
     );
   }
+}
+
+/**
+ * The db column a `where` label names, for `LocalRefusal.column` (L4).
+ *
+ * `where` is always `"<op>: <column-ish path>"` — every call site here
+ * follows that shape (`"create_transaction: amount_original"`,
+ * `"set_transaction_lines: transaction_lines[id].amount"`). The column is
+ * the last dotted segment after the operation's own name, which is also
+ * exactly the part a caller like `create-phone-ledger.ts` needs to route a
+ * refusal onto the right form field — it was never the part a message-text
+ * regex could find, because that part comes *after* the op-name prefix a
+ * `^`-anchored pattern already failed to skip.
+ */
+function columnOf(where: string): string | undefined {
+  const afterOp = where.includes(": ") ? where.split(": ").slice(1).join(": ") : where;
+  const segments = afterOp.split(".");
+  const last = segments[segments.length - 1];
+  return last && last.length > 0 ? last : undefined;
 }
