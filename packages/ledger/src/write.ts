@@ -35,7 +35,7 @@
  * database, and the whole guarantee here is about what survives a crash.
  */
 
-import { type AccountingDate, todayIn } from "@waltning/core/date";
+import { type AccountingDate, todayAtOffset } from "@waltning/core/date";
 import { type ExtractTablesWithRelations, eq } from "drizzle-orm";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
 import type { z } from "zod";
@@ -104,19 +104,29 @@ export type Capture = {
 };
 
 /**
- * The accounting day a capture happened on — `at`, read in `timeZone`.
+ * The accounting day a capture happened on — `at`, shifted by `offsetMinutes`
+ * and read in UTC.
  *
  * **M1 — the one derivation of "today" an executor is allowed.** An operation
  * whose rule mentions today (`set_manual_rate`: *a rate cannot be set for a
  * date that has not happened yet*) used to demand the day as a required input
  * field, which makes every entry captured by an older build unreplayable. The
  * day is not really an input at all: it is a fact about where and when the
- * capture happened, and that is what a `Capture` is. `todayIn` is the same
- * function `deviceRuntime` uses, so the phone and a replay of the phone's own
- * entry compute the identical date from the identical two fields.
+ * capture happened, and that is what a `Capture` is.
+ *
+ * **L1 — the offset, never the zone.** This used to read `todayIn(timeZone,
+ * at)`, a *current* tz-database lookup for a named zone — exactly the
+ * derivation `outbox.ts`'s own `capturedOffsetMinutes` doc says does not
+ * survive a rule revision, since the database that answers "what did
+ * `Europe/Warsaw` mean at that instant" is the one thing that can change
+ * after the fact. `offsetMinutes` is what the clock actually read, recorded
+ * once at capture, so `todayAtOffset` needs no database at all — the same
+ * reason `deviceRuntime`'s live capture and `recover.ts`'s replay of the same
+ * entry, weeks or years later, still compute the identical date from the
+ * identical two fields.
  */
 export const captureDate = (capture: Capture): AccountingDate =>
-  todayIn(capture.timeZone, capture.at);
+  todayAtOffset(capture.at ?? new Date(), capture.offsetMinutes);
 
 /** What a caller declares about the write it is making. */
 export type LocalWrite<Input extends z.ZodTypeAny, Row, Tx> = {

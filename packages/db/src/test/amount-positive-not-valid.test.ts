@@ -1,5 +1,5 @@
 /**
- * M1 — `0011_transactions_amount_strictly_positive.sql` tightens
+ * M1 — `0011_fx_rates_derived_and_amount_guards.sql` tightens
  * `transactions_amount_positive` from `>= 0` to `> 0` (H4, `schema.ts`).
  * `DROP CONSTRAINT IF EXISTS` plus `ADD CONSTRAINT … NOT VALID` is the whole
  * point: a database that already holds a zero-amount, non-adjustment row
@@ -42,7 +42,7 @@ async function isConvalidated(sql: postgres.Sql): Promise<boolean | undefined> {
   return rows[0]?.convalidated;
 }
 
-const TARGET_TAG = "0011_transactions_amount_strictly_positive";
+const TARGET_TAG = "0011_fx_rates_derived_and_amount_guards";
 
 type Journal = { entries: { idx: number; tag: string; when: number }[] };
 

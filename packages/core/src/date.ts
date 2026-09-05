@@ -82,6 +82,29 @@ export function todayIn(timeZone: string, now = new Date()): AccountingDate {
 }
 
 /**
+ * The local calendar date `at` fell on, given the UTC offset in force at that
+ * instant — a fixed shift, never a tz-database lookup.
+ *
+ * **L1 — `todayIn`'s hazard, reconstructed for replay.** `todayIn` asks the
+ * *current* tz database what a *named zone* meant at `now`; that answer can
+ * change after the fact, because the database is revised when a jurisdiction
+ * changes its own DST rule. A capture recorded today and replayed after such a
+ * revision would then compute a different day than the one the person actually
+ * saw, from the very same `(timeZone, at)` pair. `capturedOffsetMinutes`
+ * (`outbox.ts`) exists exactly because it is the one fact that never needs
+ * re-deriving: it *is* what the clock read, recorded once, at capture. Adding
+ * it to `at` and reading the day in UTC reproduces the local wall-clock date
+ * with no database in the loop to be revised out from under it.
+ */
+export function todayAtOffset(at: Date, offsetMinutes: number): AccountingDate {
+  const shifted = new Date(at.getTime() + offsetMinutes * 60_000);
+  const year = shifted.getUTCFullYear();
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(shifted.getUTCDate()).padStart(2, "0");
+  return accountingDate(`${year}-${month}-${day}`);
+}
+
+/**
  * Add (or, for a negative `n`, subtract) whole days to a bare accounting
  * date. Used by the capture grammar (`capture/dates.ts`) to turn "yesterday"
  * and a weekday name into a date, without touching a clock.

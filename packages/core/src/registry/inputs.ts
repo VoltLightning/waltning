@@ -1015,8 +1015,19 @@ const MANUAL_RATE_RANGE_ISSUE = {
  * a refusal inside it leaves the outbox entry standing — the write "failed"
  * with a row already claiming it happened. `money.reciprocal` throws for
  * exactly this rate (a hyperinflated units-per-pivot whose flip rounds to
- * zero at twelve places); this schema calls it here, at parse time, so the
- * whole write is refused before anything commits.
+ * zero at twelve places); this schema refuses it at parse time instead, and
+ * that parse genuinely gates every write, not merely the screen that first
+ * typed it: `writeLocally` (`write.ts`) parses via `executor.input.parse`
+ * before either commit, and replay (`recover.ts`'s `executor.invoke`) parses
+ * the same payload through the same schema before re-applying it.
+ *
+ * **Belt and suspenders with `zUnitsPerPivot`'s own bounds.** Once
+ * `RATE_MIN_EXCLUSIVE`/`RATE_MAX_EXCLUSIVE` (`zod.ts`, `money.ts`) refuse a
+ * rate outside `(1e-12, 1e12)` at the field itself, no *in-bounds* rate can
+ * reach `money.reciprocal`'s own throw — its flip only rounds to zero at or
+ * past the same `1e12` those bounds already exclude. This refine still runs,
+ * named for what it once caught alone before those bounds existed, so a
+ * future loosening of them does not quietly reopen this exact throw.
  */
 const rateReciprocates = (v: { rate: UnitsPerPivot }) => {
   try {

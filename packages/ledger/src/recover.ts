@@ -45,6 +45,15 @@ import type { Capture, LocalTx } from "./write.ts";
  * since flown two zones east. `captured_tz`, `captured_offset_minutes` and
  * `captured_at` are exactly those three facts, recorded beside the intent at
  * enqueue for this reason; nothing here reads `new Date()`.
+ *
+ * **L1 — `captured_offset_minutes` is what makes that date reconstruction
+ * correct, not merely deterministic.** `write.ts`'s `captureDate` derives the
+ * day from `at` shifted by `offsetMinutes`, read in UTC, never from a
+ * tz-database lookup against `capturedTz` — a lookup would ask *today's*
+ * rules what the zone meant back then, and the database that answers that is
+ * revised. `capturedTz` still travels here (and to every executor `Capture`
+ * reaches) for what only the zone can answer — S30's *"you changed
+ * timezone"* drift check — never for the date itself.
  */
 function captureOf(entry: {
   capturedTz: string;

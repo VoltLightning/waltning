@@ -14,12 +14,16 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { updateCurrencyInput } from "@waltning/core/registry/inputs";
 import Database from "better-sqlite3";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { addCurrencyExecutor } from "../currencies/add-currency.executor.ts";
 import { archiveCurrencyExecutor } from "../currencies/archive-currency.executor.ts";
-import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
+import {
+  assertEveryDerivedRowTraces,
+  changePivotExecutor,
+  type PendingRow,
+} from "../currencies/change-pivot.executor.ts";
 import { clearManualRateExecutor } from "../currencies/clear-manual-rate.executor.ts";
 import { readCurrencies } from "../currencies/read-currencies.ts";
 import { readCurrencySettings } from "../currencies/read-currency-settings.ts";
@@ -49,6 +53,7 @@ const { accounts, currencies, fxRates, outbox, recurringTransactions, transactio
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
 const EUR = currencyCode("EUR");
+const GBP = currencyCode("GBP");
 const ACCOUNT = id<"accounts">("11111111-1111-4111-8111-111111111111");
 const TXN = id<"transactions">("22222222-2222-4222-8222-222222222222");
 
@@ -1106,6 +1111,199 @@ describe("change_pivot", () => {
       });
       expect(table.map((r) => r.rate)).toEqual([REBASED_ON_01]);
     });
+  });
+
+  /**
+   * M1 — `assertEveryDerivedRowTraces` used to seed itself from `written` and
+   * check `written` against that same seed, so a `derived` row always
+   * "traced" to itself and the throw was unreachable — CLAUDE.md's "break it
+   * once", against the helper directly rather than through `changePivot`
+   * (a hand-built `written` reaching this shape can never come out of the
+   * executor itself, since rule 1 already drops any date whose bridge is
+   * missing before a leg like this could be minted).
+   */
+  describe("assertEveryDerivedRowTraces (M1 — unfalsifiable before the fix)", () => {
+    it("throws on a derived row with no same-date reciprocal", () => {
+      const written: PendingRow[] = [
+        {
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "derived",
+          fetchedAt: null,
+        },
+      ];
+
+      expect(() => assertEveryDerivedRowTraces(PLN, written)).toThrow(/no reciprocal/);
+    });
+
+    it("does not throw once the same date's reciprocal is present", () => {
+      const written: PendingRow[] = [
+        {
+          quote: PLN,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("4"),
+          source: "nbp",
+          fetchedAt: null,
+        },
+        {
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "derived",
+          fetchedAt: null,
+        },
+      ];
+
+      expect(() => assertEveryDerivedRowTraces(PLN, written)).not.toThrow();
+    });
+  });
+
+  /**
+   * M2 — a second pivot change must re-base off a `derived` bridge, not
+   * refuse every date. After PLN→EUR every EUR cross is `derived` (no real
+   * `EUR/x` row was ever published), so a rule that only accepted a
+   * real-source bridge made EUR→GBP drop every date whole
+   * (`droppedDates` 5, 0 rows) — an entire currency's history erased by a
+   * second pivot change nobody would expect to be destructive.
+   *
+   * Chosen so every quotient terminates within twelve places: PLN/USD,
+   * PLN/EUR and PLN/GBP divide evenly at every step of both rewrites, so
+   * this proves the *rule*, not decimal.js's own rounding.
+   */
+  describe("M2 — a pivot change re-bases off a real-source or derived bridge", () => {
+    const DAILY_RATES = [
+      { date: "2026-01-01", usd: "0.20", eur: "0.80", gbp: "0.16" },
+      { date: "2026-01-02", usd: "0.25", eur: "0.50", gbp: "0.10" },
+      { date: "2026-01-03", usd: "0.40", eur: "0.80", gbp: "0.20" },
+      { date: "2026-01-04", usd: "0.20", eur: "0.40", gbp: "0.08" },
+      { date: "2026-01-05", usd: "0.50", eur: "1.00", gbp: "0.25" },
+    ] as const;
+
+    beforeEach(() => {
+      s.ledger.replica.db.insert(currencies).values({ code: GBP, name: "Placeholder" }).run();
+      s.ledger.replica.db
+        .insert(fxRates)
+        .values(
+          DAILY_RATES.flatMap(({ date, usd, eur, gbp }) => [
+            {
+              base: PLN,
+              quote: USD,
+              date: accountingDate(date),
+              rate: money.unitsPerPivot(usd),
+              source: "nbp" as const,
+            },
+            {
+              base: PLN,
+              quote: EUR,
+              date: accountingDate(date),
+              rate: money.unitsPerPivot(eur),
+              source: "nbp" as const,
+            },
+            {
+              base: PLN,
+              quote: GBP,
+              date: accountingDate(date),
+              rate: money.unitsPerPivot(gbp),
+              source: "nbp" as const,
+            },
+          ]),
+        )
+        .run();
+    });
+
+    it("PLN → EUR → GBP: every date survives both rewrites", () => {
+      const first = write(changePivotExecutor, { code: "EUR" });
+      expect(first.row.droppedDates).toBe(0);
+
+      const second = write(changePivotExecutor, { code: "GBP" });
+      expect(second.row.droppedDates).toBe(0);
+
+      // Three quotes × five dates, plus the reciprocal for each — nothing
+      // dropped, nothing orphaned.
+      expect(rateRows()).toHaveLength(15);
+    });
+
+    it("USD, EUR and PLN all read capturable off the derived-bridge pivot", () => {
+      write(changePivotExecutor, { code: "EUR" });
+      write(changePivotExecutor, { code: "GBP" });
+
+      const byCode = new Map(readCurrencies(s.ledger.replica.db).map((c) => [c.code, c]));
+      expect(byCode.get(USD)?.capturable).toBe(true);
+      expect(byCode.get(EUR)?.capturable).toBe(true);
+      expect(byCode.get(PLN)?.capturable).toBe(true);
+    });
+
+    it("readRate(GBP/USD, day3) equals the cross computed from the original PLN quotes", () => {
+      write(changePivotExecutor, { code: "EUR" });
+      write(changePivotExecutor, { code: "GBP" });
+
+      const day3 = accountingDate("2026-01-03");
+      const resolved = readRate(s.ledger.replica.db, { base: GBP, quote: USD, date: day3 });
+
+      // By hand, from the original PLN-pivot quotes on 01-03 (USD 0.40, GBP
+      // 0.20), the same two divisions `change_pivot` performs, each rounded
+      // to twelve places exactly as `unitsPerPivot` does:
+      //   EUR bridge  = PLN/EUR = 0.80        ⇒ EUR/USD = 0.40 / 0.80 = 0.5
+      //   GBP bridge  = EUR/GBP = 0.20 / 0.80 = 0.25 ⇒ GBP/USD = 0.5 / 0.25 = 2
+      expect(resolved?.rate).toBe(money.unitsPerPivot("2"));
+      expect(resolved?.source).toBe("derived");
+    });
+  });
+});
+
+/**
+ * M3 — `fx_rates_rate_bounds`'s SQLite twin (`ddl.ts`'s `__new_fx_rates`
+ * rebuild), break it once. A raw insert, not `s.ledger.replica.db.insert`:
+ * `fxRates.rate`'s branded `UnitsPerPivot` type refuses an out-of-bounds
+ * literal at compile time, which is `zUnitsPerPivot`'s job (`zod.ts`) — this
+ * proves the CHECK holds when that layer is bypassed, the same way a bug in
+ * the code could.
+ */
+/** better-sqlite3's own message, under drizzle's wrapping `DrizzleError`. */
+function rootCauseMessage(error: unknown): string {
+  let current = error;
+  while (current instanceof Error && current.cause) current = current.cause;
+  return current instanceof Error ? current.message : String(current);
+}
+
+describe("fx_rates_rate_bounds (SQLite twin)", () => {
+  it("refuses a rate at the floor, 0.000000000001", () => {
+    let caught: unknown;
+    try {
+      s.ledger.replica.db.run(
+        sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-01', '0.000000000001', 'nbp')`,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(rootCauseMessage(caught)).toMatch(/CHECK constraint failed/);
+  });
+
+  it("refuses a rate at the ceiling, 1000000000000", () => {
+    let caught: unknown;
+    try {
+      s.ledger.replica.db.run(
+        sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-02', '1000000000000', 'nbp')`,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(rootCauseMessage(caught)).toMatch(/CHECK constraint failed/);
+  });
+
+  it("accepts a rate one step inside the floor, 0.000000000002", () => {
+    s.ledger.replica.db.run(
+      sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-03', '0.000000000002', 'nbp')`,
+    );
+    expect(rateRows().find((r) => r.date === "2026-01-03")?.rate).toBe("0.000000000002");
+  });
+
+  it("accepts a rate one step inside the ceiling, 999999999999", () => {
+    s.ledger.replica.db.run(
+      sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-04', '999999999999', 'nbp')`,
+    );
+    expect(rateRows().find((r) => r.date === "2026-01-04")?.rate).toBe("999999999999");
   });
 });
 

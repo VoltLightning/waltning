@@ -2117,14 +2117,18 @@ derived.
 Re-basing the whole rate table onto a new pivot (§7.0) is a rewrite, one date
 at a time, and it obeys the same separation:
 
-- **A date is re-based only when the bridge — the old pivot's own rate against
-  the new one, for that date — is a real published quote.** A bridge that is
-  itself `carried_forward` holds no rate of its own, only a copy of an earlier
+- **A date is re-based when the bridge — the old pivot's own rate against the
+  new one, for that date — is a real published quote or `derived`.** A
+  `derived` bridge was itself triangulated from two quotes published on that
+  same date by an earlier pivot change, so it is exactly as fresh for that
+  date as a provider's own quote — a second pivot change may re-base off it
+  the same way the first re-based off a real one. A bridge that is
+  `carried_forward` holds no rate of its own, only a copy of an earlier
   day's, and dividing every other quote on the date by that copy produces
-  figures nobody can date. A carried or missing bridge drops the whole date,
-  counted and reported rather than swallowed. Carry-forward then answers for
-  that date at read time, from whichever earlier date did re-base, with the
-  true age.
+  figures nobody can date. Only a carried or missing bridge drops the whole
+  date, counted and reported rather than swallowed. Carry-forward then
+  answers for that date at read time, from whichever earlier date did
+  re-base, with the true age.
 - **A cross re-based onto the new pivot is `derived`.** Both quotes were
   published on that date, so the figure is fresh for it, and `derived` names
   what actually produced it — a triangulation, not a provider who never quoted
@@ -2137,10 +2141,11 @@ at a time, and it obeys the same separation:
   source.** `manual` stays `manual`: the reciprocal of an assertion is the
   same assertion read the other way round, not a computation. A provider's
   source stays that provider's, for the same reason.
-- **Every row the rewrite leaves must trace to a real-source row for its own
-  pair, at or before its own date.** That is what makes the result readable at
-  all, and the operation asserts it before committing rather than trusting the
-  rules above to have held.
+- **Every cross the rewrite leaves must share its date with the reciprocal
+  that date's bridge produced.** A cross with no same-date reciprocal names a
+  date the bridge rule above should have dropped whole but did not — the
+  operation asserts this before committing rather than trusting the rules
+  above to have held.
 
 #### When no rate exists at all
 
