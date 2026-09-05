@@ -284,9 +284,33 @@ export const COPY_SUFFIX = ".pre-migration";
  * carry forward. There is no value to derive and nothing to write, so
  * forcing a no-op `fill` on it would be a lie about what runs.
  */
+/**
+ * The hand-written half of one migration step — what a *generated* file
+ * cannot say. Three hooks, three different things:
+ *
+ * - `check` runs **before** the step, against the database as it stands, and
+ *   throws to refuse the whole migration by name.
+ * - `fill` runs **after** the step and writes *values* into columns the step
+ *   added — `src/invariants/backfills.test.ts` requires every one of these
+ *   to be proven by a `FILLED_COLUMNS` row, since the class of defect there
+ *   is a column silently left at its default.
+ * - `objects` runs **last** and creates *database objects* — triggers today,
+ *   a view tomorrow. This is the replica's answer to `packages/db`'s
+ *   `0001_database_objects.sql`, and it is a separate hook from `fill` for
+ *   the same reason that file is separate from `0000_schema.sql`: what it
+ *   creates has no column to inspect afterwards, so "every filled column
+ *   holds what the write path would have written" is not the property that
+ *   proves it. What proves an object is a test that breaks the guarantee it
+ *   enforces and watches it refuse.
+ *
+ * `objects` runs after `fill` so a fill is not judged by a trigger written
+ * for the *write path*: a backfill derives values the database already
+ * implies, and it is not a capture.
+ */
 export type Backfill = {
   readonly check?: (db: SqlReader) => void;
   readonly fill?: (tx: SqlRunner) => void;
+  readonly objects?: (tx: SqlRunner) => void;
 };
 
 /**
@@ -338,7 +362,47 @@ export type Backfill = {
  * to do about it. `check` runs first and says both: every offending row, by
  * `base`/`quote`/`date`/`rate`, and that the fix is to delete or re-set the
  * rate in S18 and relaunch.
+ *
+ * **`0009_schema`'s `objects` creates the two category-kind triggers** (L8,
+ * round 2). This is the replica's *only* hand-written-SQL slot — there is no
+ * `0001_database_objects.sql` beside the generated chain the way `packages/db`
+ * has one, because `tools/steps.ts` reads every `.sql` in `drizzle/replica`
+ * as a step and drizzle-kit owns the filenames in there. A trigger written
+ * into a generated file survives exactly until the next `pnpm
+ * ledger:generate` rewrites that file — drizzle-kit cannot emit a trigger at
+ * all, so it cannot re-emit one it never knew about, and the loss would be
+ * silent: the phone would migrate cleanly to the same version with the
+ * guarantee gone. Here it is code, in the file the migrator reads, and
+ * `backfills.test.ts` refuses a key that names no step.
  */
+/**
+ * WA017 on the replica: a row whose `category_id` names a category of the
+ * other kind is refused before it is written. `RAISE(ABORT, ...)` carries the
+ * Postgres error code in its message because that is the only field SQLite
+ * gives a trigger to speak through, and the two engines' refusals should be
+ * greppable as one thing.
+ */
+const CATEGORY_KIND_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER \`transactions_category_kind_matches_type_insert\`
+BEFORE INSERT ON \`transactions\`
+WHEN NEW.category_id IS NOT NULL
+  AND NEW.type IN ('income', 'expense')
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) IS NOT NULL
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) <> NEW.type
+BEGIN
+  SELECT RAISE(ABORT, 'category kind does not match transaction type (WA017)');
+END`,
+  `CREATE TRIGGER \`transactions_category_kind_matches_type_update\`
+BEFORE UPDATE OF category_id, type ON \`transactions\`
+WHEN NEW.category_id IS NOT NULL
+  AND NEW.type IN ('income', 'expense')
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) IS NOT NULL
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) <> NEW.type
+BEGIN
+  SELECT RAISE(ABORT, 'category kind does not match transaction type (WA017)');
+END`,
+];
+
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0006_schema": {
     check: (db) => {
@@ -376,6 +440,27 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
     },
   },
   "0009_schema": {
+    /**
+     * DESK3 review round 1, C2 layer 3 — the same guarantee Postgres's WA017
+     * (`assert_category_kind_matches_type`,
+     * `packages/db/drizzle/0011_transaction_scale_and_category_kind.sql`)
+     * already enforces. `categorize-batch.executor.ts`'s own `WHERE` clause
+     * refuses a kind mismatch with a real message; this is the backstop
+     * `CLAUDE.md` asks for beside it — "holds when code is wrong", not the
+     * caller's own good-error path. `create-transaction.executor.ts` and
+     * `update-transaction.executor.ts` write a single row each and take the
+     * same trigger for free.
+     *
+     * **Two triggers, not one.** SQLite's `UPDATE OF <columns>` restricts
+     * which column changes fire a trigger, but that clause does not exist
+     * for `INSERT` — an inserted row has no "before" to name columns against
+     * — so an insert-time check needs its own trigger, the only way SQLite's
+     * grammar lets one mirror Postgres's single `BEFORE INSERT OR UPDATE OF
+     * category_id, type`.
+     */
+    objects: (tx) => {
+      for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
+    },
     check: (db) => {
       const rows = db.all<{ base: string; quote: string; date: string; rate: string }>(
         sql.raw(`select "base", "quote", "date", "rate" from "fx_rates"`),
@@ -500,6 +585,7 @@ export function migrationsFromSteps(
       up: (tx: SqlRunner) => {
         for (const statement of step.statements) tx.run(sql.raw(statement));
         backfill?.fill?.(tx);
+        backfill?.objects?.(tx);
       },
     };
     // Spread rather than `check: backfill?.check`: under

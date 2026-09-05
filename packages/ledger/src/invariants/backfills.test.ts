@@ -138,18 +138,25 @@ describe("every backfill names a step that exists", () => {
 
   /**
    * `0009_schema` is exactly this shape: a `check` that refuses a rate its own
-   * new `CHECK` cannot accept, and nothing to derive, so no `fill`. Proven two
-   * ways — the type accepts it, and the real registry carries one — so a
-   * future `Backfill` edit that makes `fill` required again fails here first,
-   * at compile time, rather than as a mystery type error inside `migrate.ts`.
+   * new `CHECK` cannot accept, and nothing to *derive*, so no `fill` — but an
+   * `objects` hook that creates the two category-kind triggers, which is the
+   * replica's own `0001_database_objects.sql` (L8, round 2). Proven two ways
+   * — the type accepts a hook with no `fill`, and the real registry carries
+   * one — so a future `Backfill` edit that makes `fill` required again fails
+   * here first, at compile time, rather than as a mystery type error inside
+   * `migrate.ts`.
    */
   it("allows a hook with only a check and no fill", () => {
     const checkOnly: Backfill = { check: () => {} };
     expect(checkOnly.fill).toBeUndefined();
     expect(
       REPLICA_BACKFILLS["0009_schema"]?.fill,
-      "0009_schema itself is check-only",
+      "0009_schema derives no column value",
     ).toBeUndefined();
+    expect(
+      REPLICA_BACKFILLS["0009_schema"]?.objects,
+      "0009_schema creates the WA017 triggers a generated file cannot hold",
+    ).toBeDefined();
   });
 });
 
@@ -164,6 +171,9 @@ describe("every backfill with a fill is proven by a FILLED_COLUMNS row", () => {
    * rather than silently expected to have one.
    */
   it("names every REPLICA_BACKFILLS key that has a fill, and none that doesn't", () => {
+    // `objects` is deliberately not covered by this table — a trigger leaves
+    // no column to read back, and what proves one is a test that breaks the
+    // guarantee (`src/test/transaction-ops.test.ts`). See `Backfill`'s doc.
     const filledTags = new Set<string>(FILLED_COLUMNS.map((c) => c.tag));
     for (const [tag, backfill] of Object.entries(REPLICA_BACKFILLS)) {
       if (backfill.fill === undefined) continue; // check-only — nothing to fill, nothing to prove here

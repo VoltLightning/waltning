@@ -442,6 +442,27 @@ export const en = {
     periodAllTime: "All time",
     /** …and when the range is not one whole calendar month. */
     periodCustomRange: "{{from}} → {{to}}",
+    /**
+     * A selection of rows that can take no category at all — transfers and
+     * adjustments only (`transactions_category_shape`). Pressing *Categorise*
+     * used to do nothing at all, which reads as a broken button (L10).
+     */
+    uncategorisableSelection:
+      "Nothing in the selection can take a category — transfers and adjustments never carry one.",
+    /**
+     * §4's per-control exclusion count. "Excludes" rather than "hides": the
+     * rows are still in the ledger, and this control is the reason they are
+     * not on screen.
+     */
+    filterExcludesOne: "Excludes {{count}} row",
+    filterExcludesMany: "Excludes {{count}} rows",
+    /**
+     * L2 (round 2) — the drain stopped because a page came back empty while
+     * still handing over a cursor. Distinct from `narrowTheFilter`: nothing
+     * about the filter would fix this one, so the advice is different.
+     */
+    searchIncomplete:
+      "The list stopped short at {{count}} rows — a page of results came back empty. Reload to try again.",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {

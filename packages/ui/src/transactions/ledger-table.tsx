@@ -3,18 +3,20 @@
  * category · account · scope · amount, sortable by header, dense enough that
  * a month is scanned rather than scrolled.
  *
- * **A plain `FlatList`, on purpose.** `apps/mobile/src/ledger-screen.tsx`'s
- * own doc names this exactly: the phone list was the first honest data point
- * for a virtualised table's own risk, and this is the second, not the risk's
- * answer. `initialNumToRender` is set from `rows.length` (capped) so a
+ * **A plain `FlatList`, on purpose.** The phone list next door is the first
+ * data point for what a virtualised list of these rows costs, and this is
+ * the second — neither is the answer to a thousand-row table's own risk, and
+ * `packages/core/src/ledger-table.perf.test.ts` measures the comparator
+ * rather than the mount, which is the honest limit of what is proven.
+ * `initialNumToRender` is set from `rows.length` (capped) so a
  * populated story and a modest real ledger page both mount in full; a
  * thousand-row page still virtualises the ordinary `FlatList` way — windowed,
  * growing as the list scrolls — which is a real, load-bearing trade rather
  * than a limitation of the stories that exercise it.
  *
  * **Sorting and selection are owned by the caller.** `rows` arrives already
- * sorted and filtered (`@waltning/core/ledger-table`'s `sortLedgerRows`,
- * `useTransactionSearch`) and
+ * sorted and filtered (this file's own `sortLedgerTableRows`, over
+ * `@waltning/core/ledger-table`'s `sortRows`, and `useTransactionSearch`) and
  * `selection` is `useLedgerTableSelection`'s own result — this component
  * reads both and writes to neither on its own initiative; it only ever
  * calls back (`onSortColumn`, `selection.toggleRow`). That split is what
@@ -32,17 +34,36 @@
  * above all work with no mouse" asks for, not a global page-level listener
  * this component has no business installing.
  *
- * **The container is the table's *only* tab stop, so `activeId` and DOM
- * focus are one thing** (DESK3 review round 1, M). Row bodies were
- * `accessibilityRole="button"` and therefore tab-focusable, and
- * `react-native-web`'s own `PressResponder` fires a press for `Enter` and
- * then calls `stopPropagation()` — so Tab into row 1, press `j` twice to
- * ring row 3, press `Enter`, and row **1** opened: two "current rows", and
- * the ring named the wrong one. `focusable={false}` takes the rows out of
- * the tab order (RNW writes `tabIndex="-1"`), leaving the ring the single
- * answer to "which row is current" and the container the single holder of
- * focus. The rows stay clickable and stay named for a screen reader; only
- * the tab stop moves.
+ * **One tab stop inside the table, plus the header cells.** Every
+ * `Pressable` `react-native-web` renders is tab-focusable by default, and
+ * its `PressResponder` fires a press for `Enter` and then calls
+ * `stopPropagation()` — so with row bodies and checkboxes in the tab order
+ * there were three separate answers to "which row is current": the ring,
+ * whichever row body held focus, and whichever checkbox did. Tab into row 1,
+ * press `j` twice to ring row 3, press `Enter`, and row **1** opened.
+ *
+ * The row body and the checkbox both take `tabIndex={-1}`, leaving the
+ * scroller as the single tab stop *inside the table body* — the ring is then
+ * the only answer to "which row is current", and `Enter` can only ever open
+ * the ringed row however the keyboard arrived. Both stay clickable and stay
+ * named for a screen reader; only the tab stop moves. `tabIndex`, not
+ * `focusable={false}`: `react-native-web`'s `Pressable` writes `tabIndex`
+ * itself from its own `disabled` prop unless one is passed, which overrides
+ * `focusable` outright (`Pressable/index.js`'s `_tabIndex`), and `focusable`
+ * warns as deprecated besides.
+ *
+ * **The header cells stay in the tab order, and that is deliberate.** They
+ * are the sort controls; reaching them with the keyboard is the whole
+ * behaviour §7 asks for. `Enter` on a focused header cell sorts that column
+ * and nothing else — the cells sit outside the scroller that carries
+ * `onKeyDown`, so the event has no path to the row handler even before
+ * `PressResponder` stops it.
+ *
+ * **`Space` (or `x`) selects the ringed row**, which is what makes
+ * `categorize_batch` reachable without a mouse at all: `j`/`k` to walk,
+ * `Space` to check, `Enter` to open. A row that carries no checkbox (a
+ * transfer, an adjustment — `transactions_category_shape`) is skipped by
+ * the key exactly as it is by the pointer.
  *
  * **The keys are matched case-insensitively.** `event.key` is `"J"` with
  * Shift held or Caps Lock on, and S10 §7 and the design card both *write*
@@ -58,15 +79,22 @@
  * same seam `ledger-screen.tsx`'s own `Href` cast crosses, an external type
  * that does not carry a member TypeScript can see.
  *
- * **`LedgerTableColumn`, `SortState` and the selection shape are restated,
- * not imported from `@waltning/client`.** `packages/client` and `packages/ui`
- * are siblings on the architecture floor — neither depends on the other — so
- * `TransactionType`'s own precedent (independently declared here and in
- * `create-phone-ledger.ts`) is the pattern: the two packages agree on a
- * structural shape, and TypeScript's structural typing makes the boundary
- * invisible to the screen that hands a client hook's result to this prop.
+ * **The sort types come from `@waltning/core/ledger-table`; only the
+ * selection shape is restated.** `packages/client` and `packages/ui` are
+ * siblings on the architecture floor — neither depends on the other — so a
+ * type both need lives in `core`, and `SortState`/`SortDirection` now do
+ * (L3, round 2: they used to be declared twice, in two packages, with
+ * nothing checking they agreed). `LedgerTableColumn` stays here because a
+ * column is a rendered thing and `core` has no business naming one.
+ * `LedgerTableSelection` is still restated: it is a bundle of callbacks, not
+ * a value, and `TransactionType`'s own precedent (independently declared
+ * here and in `create-phone-ledger.ts`) is the pattern — the two packages
+ * agree on a structural shape, and TypeScript's structural typing makes the
+ * boundary invisible to the screen that hands a client hook's result to this
+ * prop.
  */
 
+import { type SortKey, type SortState, sortRows } from "@waltning/core/ledger-table";
 import type * as money from "@waltning/core/money";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -84,13 +112,15 @@ import { makeStyles } from "../theme/styles.ts";
 import { focus, hairline, radius, space, tabularNums, touchTarget } from "../tokens.ts";
 import { TRANSACTION_AMOUNT_KIND, type TransactionType } from "./transaction-row";
 
+/**
+ * The six columns this table draws. **Owned here, not in `core`** — a column
+ * is a rendered thing with a header, a width and a label, and `core` deals
+ * in row fields (`SortKey`) rather than in columns. `SORT_KEY` below is the
+ * one-line map between the two vocabularies.
+ */
 export type LedgerTableColumn = "date" | "payee" | "category" | "account" | "scope" | "amount";
-export type LedgerTableSortDirection = "asc" | "desc";
 /** `null` — the caller's own order, untouched (`@waltning/core/ledger-table`'s own doc). */
-export type LedgerTableSortState = {
-  column: LedgerTableColumn;
-  direction: LedgerTableSortDirection;
-} | null;
+export type LedgerTableSortState = SortState<LedgerTableColumn>;
 
 export type LedgerTableRow = {
   id: string;
@@ -99,7 +129,7 @@ export type LedgerTableRow = {
   category: string;
   account: string;
   scope: string;
-  /** A decimal `Money` string — the same field name `sortLedgerRows` sorts on. */
+  /** A decimal `Money` string — the field `sortLedgerTableRows` orders the amount column on. */
   amountValue: money.Money;
   currency: string;
   decimals: number;
@@ -126,6 +156,39 @@ const COLUMNS: readonly LedgerTableColumn[] = [
   "scope",
   "amount",
 ];
+
+/**
+ * One column, one row field. Five of the six are the same word twice; the
+ * sixth is the whole reason this map exists — the `amount` *column* draws a
+ * figure with its currency, and the `"amount"` *key* tells
+ * `@waltning/core/ledger-table` to compare the pair through
+ * `compareByCurrencyThenAmount` rather than a lone decimal string.
+ */
+const SORT_KEY: Record<LedgerTableColumn, SortKey<LedgerTableRow>> = {
+  date: "date",
+  payee: "payee",
+  category: "category",
+  account: "account",
+  scope: "scope",
+  amount: "amount",
+};
+
+/**
+ * `rows` in the order `sort` names, or `rows` itself when nothing is sorted.
+ *
+ * The one place a `LedgerTableColumn` becomes a `SortKey`. Exported because
+ * both callers of this component sort before they render — the screen
+ * (`apps/mobile/src/ledger-screen.tsx`) and the stories — and a second
+ * hand-written copy of the ordering is exactly what moving the algorithm
+ * into `core` set out to delete.
+ */
+export function sortLedgerTableRows(
+  rows: readonly LedgerTableRow[],
+  sort: LedgerTableSortState,
+): readonly LedgerTableRow[] {
+  if (sort === null) return rows;
+  return sortRows(rows, SORT_KEY[sort.column], sort.direction);
+}
 
 export type LedgerTableProps = {
   rows: readonly LedgerTableRow[];
@@ -190,6 +253,18 @@ export function LedgerTable({
   }, [activeId, onOpenRow]);
 
   /**
+   * `Space` / `x` — the keyboard's own checkbox. `rangeExtend` is false
+   * unconditionally: a range needs an anchor and a target, and one key press
+   * on one ringed row is a plain toggle in every list that has this gesture.
+   */
+  const handleToggleActive = useCallback(() => {
+    if (activeId === null) return;
+    const row = rowsRef.current.find((candidate) => candidate.id === activeId);
+    if (row === undefined || !row.selectable) return;
+    selection.toggleRow(activeId, false);
+  }, [activeId, selection]);
+
+  /**
    * `View`'s React Native type has no `onKeyDown` — the file doc explains
    * why this stays a separately-typed prop bag rather than a literal JSX
    * attribute the stricter type would refuse.
@@ -211,6 +286,12 @@ export function LedgerTable({
       } else if (key === "k") {
         event.preventDefault();
         moveActive(-1);
+      } else if (key === " " || key === "x") {
+        // `preventDefault` before anything else — `Space` scrolls the
+        // nearest scroller by default, and the nearest scroller is this
+        // table, so the ring would leave the viewport as it was checked.
+        event.preventDefault();
+        handleToggleActive();
       } else if (key === "f" || key === "/") {
         // S10 §7 web — `/` and `F` both reach the rail's search field. The
         // spec's own two verbs ("focuses search" / "opens the filter rail")
@@ -341,7 +422,8 @@ function LedgerTableHeaderCell({ column, sort, onSortColumn }: LedgerTableHeader
   const indicator = active ? (sort?.direction === "asc" ? " ↑" : " ↓") : "";
   /**
    * The amount column groups by currency before it compares amounts
-   * (`@waltning/core/ledger-table`'s own `compareRows` — H3, round 1),
+   * (`@waltning/core/ledger-table`'s own `compareByCurrencyThenAmount` —
+   * H3, round 1),
    * because 200 EUR and 200 PLN are not two figures on one axis. That is a
    * surprising order to meet undeclared, so while the column is sorted the
    * header says which order it is in. `accessibilityLabel` stays the bare
@@ -468,6 +550,10 @@ function LedgerRowCheckbox({ checked, label, onPress }: LedgerRowCheckboxProps) 
       accessibilityLabel={t("transactions.selectRow", { payee: label || t("transactions.payee") })}
       accessibilityState={{ checked }}
       aria-checked={checked}
+      // Out of the tab order with the row body — see the file doc's "one tab
+      // stop" paragraph. `Space` on the ringed row is what replaces tabbing
+      // to this control, and it does not move focus off the scroller.
+      tabIndex={-1}
       onPress={onPress}
       style={styles.checkboxBox}
     >

@@ -876,6 +876,24 @@ export type PhoneLedgerSnapshot = {
    * behind its own toggle, rather than on every refresh nobody asked for.
    */
   archivedAccounts: readonly PhoneAccount[];
+  /**
+   * **Every** account's `ownership`, archived ones included — the one field
+   * here that does not wait for `loadArchived()` (DESK3 round 2, L6).
+   *
+   * S10 §3 web states each row's §6.7 scope, which means resolving the row's
+   * account to its ownership; `accounts` holds only the live ones, and
+   * archiving an account does not delete its transactions. A screen that
+   * asked for `archivedAccounts` in an effect painted a column of "—" and
+   * then corrected itself, and asking for them *during* render is a store
+   * mutation inside another component's render pass — React's own
+   * "Cannot update a component while rendering a different component".
+   *
+   * A map of ownership, always present, is neither: `listAccounts` reads the
+   * archived rows on every refresh regardless (one query either way), and
+   * what S16's toggle is actually lazy about — a *register* of archived
+   * accounts, with balances and names — is untouched above.
+   */
+  accountOwnership: ReadonlyMap<Id<"accounts">, PhoneAccount["ownership"]>;
   currencies: readonly PhoneCurrency[];
   groups: readonly PhoneGroup[];
   recent: readonly PhoneRecentTransaction[];
@@ -1864,6 +1882,7 @@ export function createPhoneLedger(
     revision: 0,
     accounts: [],
     archivedAccounts: [],
+    accountOwnership: new Map(),
     currencies: [],
     groups: [],
     recent: [],
@@ -1895,9 +1914,10 @@ export function createPhoneLedger(
       phase: "start",
     });
     try {
-      const rows = archivedRequested
-        ? port.listAccounts({ includeArchived: true })
-        : port.listAccounts();
+      // Archived rows are read every time — `accountOwnership` below needs
+      // them, and reading them costs one query either way. What
+      // `archivedRequested` still gates is the *register* S16 draws from.
+      const rows = port.listAccounts({ includeArchived: true });
       const accounts = rows.filter((account) => !account.archived);
       const archivedAccounts = archivedRequested ? rows.filter((account) => account.archived) : [];
       const currencies = port.listCurrencies();
@@ -1920,6 +1940,7 @@ export function createPhoneLedger(
           capturable: capturable.has(account.currency),
         })),
         archivedAccounts,
+        accountOwnership: new Map(rows.map((account) => [account.id, account.ownership])),
         currencies,
         groups: port.listGroups(),
         recent: port.listRecent(5),

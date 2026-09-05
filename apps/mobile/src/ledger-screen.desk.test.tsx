@@ -401,6 +401,19 @@ describe("Ledger at desk width", () => {
     expect(screen.getByText("Peak payee")).toBeDefined();
     // Twenty pages of fifty — the whole period, not the first page.
     expect(searchTransactions.mock.calls.length).toBeGreaterThanOrEqual(20);
+    /**
+     * And **one** drain, not two (M1, round 2). The month used to be applied
+     * by an effect after the first query had already gone out unbounded, so
+     * mounting drained the whole ledger and then drained the month — twice
+     * the work, and a window in which the header and the rows disagreed.
+     * A drain is a first page: `cursor` undefined. §4's exclusion counts are
+     * first pages too, so they are told apart by the date filter they are
+     * asked *without*.
+     */
+    const drains = searchTransactions.mock.calls.filter(
+      ([filter, cursor]) => cursor === undefined && filter.from !== undefined,
+    );
+    expect(drains).toHaveLength(1);
     // Generous on purpose: this asserts "no accidental O(n²) and no per-row
     // re-query", not real-device latency. `packages/core`'s own
     // `ledger-table.perf.test.ts` budgets the comparator itself.
@@ -414,6 +427,54 @@ describe("Ledger at desk width", () => {
 
     expect(screen.getByText(/showing/)).toBeDefined();
     expect(screen.getByRole("alert").textContent).toMatch(/Narrow the filter/);
+  });
+
+  /**
+   * L2 (round 2) — a drain that stopped because a page came back empty is
+   * not a drain that hit the cap. Both leave a cursor set; only one of them
+   * is something narrowing the filter would fix, so telling the reader to
+   * narrow a filter here would be advice that cannot work.
+   */
+  it("a page that comes back empty is reported as incomplete, not as capped", () => {
+    const rows = Array.from({ length: 50 }, (_, i) =>
+      expenseRow({
+        id: id<"transactions">(`00000000-0000-4000-8000-${String(i).padStart(12, "0")}`),
+        payee: `Row ${i}`,
+      }),
+    );
+    // First page: fifty rows and a cursor. Second page: a cursor still, and
+    // no rows at all — a port disagreeing with itself.
+    const searchTransactions = vi.fn<FakeSearch>((_filter, cursor) => ({
+      rows: cursor === undefined ? rows : [],
+      nextCursor: { date: TODAY, id: rows[49]?.id ?? ("x" as never) },
+      total: { count: 900, currencies: [] },
+    }));
+    withLedger(<Ledger />, fakeController(searchTransactions));
+
+    const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
+    expect(alerts.some((message) => /came back empty/.test(message))).toBe(true);
+    expect(alerts.some((message) => /Narrow the filter/.test(message))).toBe(false);
+  });
+
+  /**
+   * §4, both surfaces (M3, round 2) — an active control says how many rows
+   * it is keeping off screen. One control is enough to prove the wiring: the
+   * count is a subtraction of two `search_transactions` totals, and the
+   * dimension a control belongs to is the only thing that varies.
+   */
+  it("an active filter says how many rows it excludes", () => {
+    const rows = [expenseRow()];
+    const searchTransactions = vi.fn<FakeSearch>((filter) => ({
+      rows,
+      nextCursor: undefined,
+      // Without the date range there are ten more rows; with it, one.
+      total: { count: filter.from === undefined ? 11 : 1, currencies: [] },
+    }));
+    withLedger(<Ledger />, fakeController(searchTransactions));
+
+    // The desk branch opens on the current month, so `dateRange` is the one
+    // active control on first paint.
+    expect(screen.getByText("Excludes 10 rows")).toBeDefined();
   });
 
   /* ── C2 layer 1 · a mixed batch never reaches a category tree ────────── */
@@ -444,6 +505,44 @@ describe("Ledger at desk width", () => {
     // No tree, no confirm, no write — the refusal is the first layer of three.
     expect(screen.queryByRole("radio")).toBeNull();
     expect(categorizeBatch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * L10 (round 2) — the other dead end. `selectionKind` is `null` for a
+   * selection nothing in it can take a category, and *Categorise* then did
+   * nothing at all, which reads as a broken button rather than as a refusal.
+   *
+   * Reaching that state takes a row that *becomes* uncategorisable while it
+   * is selected — the checkbox and the range both refuse to select a
+   * transfer in the first place. One id, two shapes across a filter change,
+   * which is exactly what a reclassification arriving from another surface
+   * would look like here.
+   */
+  it("a selection whose rows can no longer take a category refuses out loud", () => {
+    const ROW = id<"transactions">("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+    let reclassified = false;
+    const controller = fakeController(() => ({
+      rows: [
+        reclassified
+          ? expenseRow({ id: ROW, payee: "Row A", type: "transfer", toAccountName: "Cash" })
+          : expenseRow({ id: ROW, payee: "Row A" }),
+      ],
+      nextCursor: undefined,
+      total: { count: 1, currencies: [] },
+    }));
+    withLedger(<Ledger />, controller);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Row A" }));
+    expect(screen.getByText("1 selected")).toBeDefined();
+
+    reclassified = true;
+    // Any filter change re-runs the query; the stepper is the one that needs
+    // no debounce to land.
+    fireEvent.click(screen.getByRole("button", { name: "Next period" }));
+
+    expect(
+      screen.getAllByRole("alert").some((node) => /never carry one/.test(node.textContent ?? "")),
+    ).toBe(true);
   });
 
   it("an all-income selection is offered the income tree, not the expense one", () => {
@@ -515,31 +614,38 @@ describe("Ledger at desk width", () => {
 
   /* ── H5 · the period label is the filter ─────────────────────────────── */
 
-  it("first paint applies the current month, and Clear all returns the label to All time", () => {
-    const seen: { from: string | undefined; to: string | undefined }[] = [];
+  it("the very first query carries the current month, and Clear all returns the label to All time", () => {
     // One row, not none: the empty state asks `searchTransactions({})` for an
-    // unfiltered count of its own, which would land in `seen` as a phantom
-    // "no date filter" call.
+    // unfiltered count of its own, which would be a phantom "no date filter"
+    // call among these.
     const rows = [expenseRow()];
-    const controller = fakeController((filter) => {
-      seen.push({ from: filter.from, to: filter.to });
-      return { rows, nextCursor: undefined, total: { count: 1, currencies: [] } };
-    });
-    withLedger(<Ledger />, controller);
+    const searchTransactions = vi.fn<FakeSearch>(() => ({
+      rows,
+      nextCursor: undefined,
+      total: { count: 1, currencies: [] },
+    }));
+    withLedger(<Ledger />, fakeController(searchTransactions));
 
-    // An unparseable or absent date is dropped on the way to the port
-    // (`create-phone-ledger.ts`'s own `isAccountingDate` guard), so a real
-    // month filter arrives as two real dates and no filter arrives as none.
-    const applied = seen[seen.length - 1];
-    expect(applied?.from).toBe(`${TODAY.slice(0, 7)}-01`);
-    expect(applied?.to).toBeDefined();
+    /**
+     * `calls[0]`, not the last call (M1, round 2). The month is seeded
+     * through `useLedgerFilters`' own `initial`, so it is in the state the
+     * *first* query is built from — there is no earlier, unbounded query and
+     * no second render correcting one. An unparseable or absent date is
+     * dropped on the way to the port (`create-phone-ledger.ts`'s own
+     * `isAccountingDate` guard), so a real month filter arrives as two real
+     * dates and no filter arrives as none.
+     */
+    const first = searchTransactions.mock.calls[0]?.[0];
+    expect(first?.from).toBe(`${TODAY.slice(0, 7)}-01`);
+    expect(first?.to).toBeDefined();
     // The stepper names the month it is actually filtering.
     expect(screen.getByText(/2026/)).toBeDefined();
 
+    searchTransactions.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
 
     expect(screen.getByText("All time")).toBeDefined();
-    const cleared = seen[seen.length - 1];
+    const cleared = searchTransactions.mock.calls[0]?.[0];
     expect(cleared?.from).toBeUndefined();
     expect(cleared?.to).toBeUndefined();
   });
@@ -608,9 +714,10 @@ describe("Ledger at desk width", () => {
     fireEvent.click(screen.getByText("Categorise"));
     fireEvent.click(screen.getByRole("radio", { name: /Eating out/ }));
 
-    expect(
-      screen.getByText("from Groceries, Uncategorised, Eating out → Eating out"),
-    ).toBeDefined();
+    // L4 (round 2) — `Eating out` is the *destination*, so it is not listed
+    // as a category the batch is leaving. "from … Eating out → Eating out"
+    // named the target as an origin and read as a no-op.
+    expect(screen.getByText("from Groceries, Uncategorised → Eating out")).toBeDefined();
     expect(screen.getByText("1 row already Eating out")).toBeDefined();
   });
 

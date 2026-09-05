@@ -26,10 +26,21 @@
  * `categorize_batch` runs `WHERE id IN (…)`, so a stale id costs nothing
  * there — but the visible "n selected" count must equal the rows a person
  * can actually see are selected, not a phantom row a filter just hid.
+ *
+ * **The prune triggers on the ids' own identity, not on a string of them**
+ * (L, round 2). The first version joined every id into one comma-separated
+ * key on *every* render — a 37 KB string per render at a thousand UUID rows,
+ * built before the effect had even decided there was nothing to prune. The
+ * id array is memoised on `rows` instead, so a caller that memoises its rows
+ * (every caller does — the sort result is itself a `useMemo`) hands back the
+ * same array identity and the effect simply does not re-run. The returned
+ * object is memoised for the same reason: `<LedgerTable>`'s `renderItem`
+ * names it in a dependency array, and a fresh literal per render invalidated
+ * every windowed cell.
  */
 
 import { type LedgerSelectableRow, selectableRange } from "@waltning/core/ledger-table";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type LedgerTableSelection = {
   selectedIds: ReadonlySet<string>;
@@ -77,11 +88,11 @@ export function useLedgerTableSelection<Row extends LedgerSelectableRow>(
 
   const isSelected = useCallback((id: string) => selectedIds.has(id), [selectedIds]);
 
-  // `rowIdsKey` stands in for the row set's own identity — see the file doc.
-  const rowIdsKey = rows.map((row) => row.id).join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rowIdsKey triggers the prune; rowsRef carries the live rows.
+  // The row set's own identity, derived once per `rows` change — see the
+  // file doc for why this is not a joined string.
+  const rowIds = useMemo(() => rows.map((row) => row.id), [rows]);
   useEffect(() => {
-    const live = new Set(rowsRef.current.map((row) => row.id));
+    const live = new Set(rowIds);
     setSelectedIds((current) => {
       let changed = false;
       const next = new Set<string>();
@@ -91,7 +102,10 @@ export function useLedgerTableSelection<Row extends LedgerSelectableRow>(
       }
       return changed ? next : current;
     });
-  }, [rowIdsKey]);
+  }, [rowIds]);
 
-  return { selectedIds, isSelected, toggleRow, clear, count: selectedIds.size };
+  return useMemo(
+    () => ({ selectedIds, isSelected, toggleRow, clear, count: selectedIds.size }),
+    [selectedIds, isSelected, toggleRow, clear],
+  );
 }

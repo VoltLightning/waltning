@@ -1,11 +1,11 @@
 /**
  * The gate task's own performance claim, its automated half: "1,000 rows
- * sort ... without a visible stall." `sortLedgerRows` is the whole
+ * sort ... without a visible stall." `sortRows` is the whole
  * client-side cost a header click pays — the filter itself runs in SQLite,
  * behind `searchTransactions`, so it is not this file's to benchmark; this
- * is `apps/mobile/src/ledger-screen.tsx`'s "first honest data point... not
- * its answer" made concrete and repeatable, for the one piece that is pure
- * JS regardless of platform.
+ * is the one piece that is pure JS regardless of platform, made concrete
+ * and repeatable. It does **not** measure the mount cost of a thousand-row
+ * `FlatList`, which nothing here does.
  *
  * **DESK3 review round 1, C1 — proves the sort runs over all 1,000 rows,
  * not just a first page.** The largest amount is seeded into the *last*
@@ -19,8 +19,26 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { type SortableLedgerRow, sortLedgerRows } from "./ledger-table.ts";
+import { type SortableRow, type SortKey, sortRows } from "./ledger-table.ts";
 import { toMoney } from "./money.ts";
+
+/** The six sortable fields `packages/ui`'s table maps its columns onto. */
+type PerfRow = SortableRow & {
+  date: string;
+  payee: string;
+  category: string;
+  account: string;
+  scope: string;
+};
+
+const KEYS: readonly SortKey<PerfRow>[] = [
+  "date",
+  "payee",
+  "category",
+  "account",
+  "scope",
+  "amount",
+];
 
 const PAYEES = ["Corner Bakery", "Rewe", "Cash withdrawal", "Bank A · PLN", "Electric co-op"];
 
@@ -32,8 +50,8 @@ const LARGEST_ID = "the-largest";
  * bans. The last row carries the largest amount on purpose (see the file
  * doc): a sort that only ever saw a first page would never promote it.
  */
-function generateRows(count: number): SortableLedgerRow[] {
-  const rows: SortableLedgerRow[] = [];
+function generateRows(count: number): PerfRow[] {
+  const rows: PerfRow[] = [];
   for (let i = 0; i < count; i++) {
     const day = String((i % 28) + 1).padStart(2, "0");
     const last = i === count - 1;
@@ -55,28 +73,25 @@ function generateRows(count: number): SortableLedgerRow[] {
 const ROWS = generateRows(1000);
 const BUDGET_MS = 100;
 
-describe("sortLedgerRows — 1,000 rows", () => {
-  it.each(["date", "payee", "category", "account", "scope", "amount"] as const)(
-    "sorts by %s under budget",
-    (column) => {
-      const start = performance.now();
-      const sorted = sortLedgerRows(ROWS, { column, direction: "asc" });
-      const elapsed = performance.now() - start;
+describe("sortRows — 1,000 rows", () => {
+  it.each(KEYS)("sorts by %s under budget", (key) => {
+    const start = performance.now();
+    const sorted = sortRows(ROWS, key, "asc");
+    const elapsed = performance.now() - start;
 
-      expect(sorted).toHaveLength(1000);
-      expect(elapsed).toBeLessThan(BUDGET_MS);
-    },
-  );
+    expect(sorted).toHaveLength(1000);
+    expect(elapsed).toBeLessThan(BUDGET_MS);
+  });
 
   it("sorting by amount descending puts the true largest row first, over all 1,000", () => {
-    const sorted = sortLedgerRows(ROWS, { column: "amount", direction: "desc" });
+    const sorted = sortRows(ROWS, "amount", "desc");
     expect(sorted[0]?.id).toBe("the-largest");
   });
 
   it("re-sorting repeatedly (every header click) stays fast", () => {
     const start = performance.now();
     for (let i = 0; i < 20; i++) {
-      sortLedgerRows(ROWS, { column: "amount", direction: i % 2 === 0 ? "asc" : "desc" });
+      sortRows(ROWS, "amount", i % 2 === 0 ? "asc" : "desc");
     }
     const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(BUDGET_MS * 5);

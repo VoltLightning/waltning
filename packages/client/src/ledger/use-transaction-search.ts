@@ -52,6 +52,31 @@
  * truncating it would put C1 straight back. The drain stops at the cap with
  * its cursor still set, `capped` goes true, and the screen owes the reader
  * both halves of the truth — how many rows are loaded and how many match.
+ *
+ * **`capped` and `incomplete` are two different endings, and the reader is
+ * owed the difference** (L2, round 2). The drain also stops when a page
+ * comes back with zero rows while still advancing the cursor — a port
+ * misbehaving, not a filter selecting a decade. Both leave a cursor set;
+ * only one of them is something narrowing the filter would fix. Reporting
+ * the second as "capped" would tell a reader to narrow a filter that is
+ * already narrow, and hide a broken read behind advice.
+ *
+ * **Pages are pushed into one array, not spread into a new one per page**
+ * (M4, round 2). `rows = [...rows, ...page.rows]` inside the drain copies
+ * every row loaded so far on every page — quadratic in the number of pages,
+ * which is precisely the loop the cap exists to bound. The array is local to
+ * one `runFromStart` call and is never handed out until the drain is done,
+ * so mutating it is not a shared-state trade; it is the same array arriving
+ * in `setState` either way.
+ *
+ * **`subscribe` re-runs the whole query, even when the screen is not on
+ * screen.** A focused/visible gate belongs here in principle — a background
+ * tab re-draining five thousand rows on every write is waste — but there is
+ * nothing to gate on: this package may not name a platform, and neither
+ * `apps/mobile/src/platform.ts` (the forced file) nor anything else in the
+ * repo exposes a focus or visibility signal today. Adding one is a platform
+ * read with an owner and a file, not something to smuggle in through a
+ * `document.visibilityState` here. Stated rather than silently skipped.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -75,8 +100,15 @@ export type TransactionSearchState = {
   /**
    * `loadAll` only: the drain stopped at `cap` with pages still unread, so
    * `rows` is a prefix of the filtered set rather than the whole of it.
+   * Narrowing the filter is the fix, and the screen says so.
    */
   capped: boolean;
+  /**
+   * `loadAll` only: the drain stopped because a page returned no rows while
+   * still handing back a cursor — the port disagreeing with itself. `rows`
+   * is a prefix too, but narrowing the filter would not help (L2, round 2).
+   */
+  incomplete: boolean;
 };
 
 export type TransactionSearchResult = TransactionSearchState & {
@@ -92,6 +124,8 @@ type Internal = {
   cursor: TransactionSearchCursorDraft | undefined;
   loaded: boolean;
   error: string | undefined;
+  /** The drain stopped on an empty page rather than at the cap — see `TransactionSearchState`. */
+  incomplete: boolean;
 };
 
 const INITIAL: Internal = {
@@ -100,6 +134,7 @@ const INITIAL: Internal = {
   cursor: undefined,
   loaded: false,
   error: undefined,
+  incomplete: false,
 };
 
 function readError(caught: unknown): string {
@@ -138,19 +173,24 @@ export function useTransactionSearch(
   const runFromStart = useCallback(() => {
     try {
       const first = controller.searchTransactions(filterRef.current);
-      let rows = first.rows;
+      const rows: PhoneSearchTransaction[] = [...first.rows];
       let cursor = first.nextCursor;
       let total = first.total;
+      let incomplete = false;
       while (loadAll && cursor !== undefined && rows.length < cap) {
         const page = controller.searchTransactions(filterRef.current, cursor);
         // A page that advances the cursor without returning a row would spin
-        // here forever — the loop stops on the port rather than trusting it.
-        if (page.rows.length === 0) break;
-        rows = [...rows, ...page.rows];
+        // here forever — the loop stops on the port rather than trusting it,
+        // and says which of the two endings this was.
+        if (page.rows.length === 0) {
+          incomplete = true;
+          break;
+        }
+        rows.push(...page.rows);
         cursor = page.nextCursor;
         total = page.total;
       }
-      setState({ rows, total, cursor, loaded: true, error: undefined });
+      setState({ rows, total, cursor, loaded: true, error: undefined, incomplete });
     } catch (caught) {
       setState((current) => ({ ...current, loaded: true, error: readError(caught) }));
     }
@@ -176,6 +216,7 @@ export function useTransactionSearch(
           cursor: page.nextCursor,
           loaded: true,
           error: undefined,
+          incomplete: current.incomplete,
         };
       } catch (caught) {
         return { ...current, error: readError(caught) };
@@ -189,7 +230,8 @@ export function useTransactionSearch(
     loaded: state.loaded,
     error: state.error,
     hasMore: state.cursor !== undefined,
-    capped: loadAll && state.cursor !== undefined,
+    capped: loadAll && state.cursor !== undefined && !state.incomplete,
+    incomplete: loadAll && state.incomplete,
     loadMore,
     retry: runFromStart,
   };

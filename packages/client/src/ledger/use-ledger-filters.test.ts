@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
 
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { TEXT_FILTER_DEBOUNCE_MS } from "../query/use-debounced-value.ts";
 import { EMPTY_LEDGER_FILTER, useLedgerFilters } from "./use-ledger-filters.ts";
 
 describe("useLedgerFilters", () => {
@@ -62,18 +63,34 @@ describe("useLedgerFilters", () => {
     expect(result.current.filter).toEqual(EMPTY_LEDGER_FILTER);
   });
 
-  it("draft mirrors the filter's own fields, for useTransactionSearch", () => {
-    const { result } = renderHook(() => useLedgerFilters());
-    act(() => result.current.setText("coffee"));
-    expect(result.current.draft).toEqual({
-      text: "coffee",
-      accountIds: [],
-      categoryIds: [],
-      scope: "all",
-      currency: "",
-      from: "",
-      to: "",
-    });
+  /**
+   * M4 (round 2) — the field is immediate, the query is not. Fake timers
+   * rather than a wait: the delay is a fact about the hook, and a test that
+   * slept for it would be 250 ms slower for no extra proof.
+   */
+  it("draft mirrors the filter's own fields, with text debounced", () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useLedgerFilters());
+      act(() => result.current.setText("coffee"));
+
+      // The field already reads "coffee"; the query still reads nothing.
+      expect(result.current.filter.text).toBe("coffee");
+      expect(result.current.draft.text).toBe("");
+
+      act(() => vi.advanceTimersByTime(TEXT_FILTER_DEBOUNCE_MS));
+      expect(result.current.draft).toEqual({
+        text: "coffee",
+        accountIds: [],
+        categoryIds: [],
+        scope: "all",
+        currency: "",
+        from: "",
+        to: "",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   /**

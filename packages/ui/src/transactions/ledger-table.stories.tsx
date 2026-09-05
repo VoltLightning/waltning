@@ -5,14 +5,16 @@
  * review round 1, M). They used to restate the sort cycle, the comparator
  * and the shift-click range by hand — which made `SortedByAmount` and
  * `RangeSelected` two screenshots certifying *the story file's* logic while
- * looking exactly like proof of the component's. `sortLedgerRows`,
+ * looking exactly like proof of the component's. `sortRows`,
  * `cycleSortState` and `selectableRange` live in `@waltning/core/ledger-
  * table` — the one package both `packages/client` and `packages/ui` already
  * depend on, since the two are siblings on the architecture floor and
  * neither may import the other — so the stories below call the identical
- * functions `useLedgerTableSort` and `useLedgerTableSelection` wrap. What is
- * left restated is only the `useState` those two hooks hold, which is what a
- * screen supplies and a story must therefore stand in for.
+ * functions `useLedgerTableSort` and `useLedgerTableSelection` wrap, through
+ * `ledger-table.tsx`'s own `sortLedgerTableRows` (the one place a column
+ * becomes a sort key). What is left restated is only the `useState` those
+ * two hooks hold, which is what a screen supplies and a story must therefore
+ * stand in for.
  *
  * **No thousand-row story.** The gate task's own performance claim is
  * `packages/core/src/ledger-table.perf.test.ts`'s and the desk screen's own
@@ -26,12 +28,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
-import {
-  cycleSortState,
-  type SortState,
-  selectableRange,
-  sortLedgerRows,
-} from "@waltning/core/ledger-table";
+import { cycleSortState, selectableRange } from "@waltning/core/ledger-table";
 import * as money from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
@@ -45,6 +42,8 @@ import {
   type LedgerTableColumn,
   type LedgerTableRow,
   type LedgerTableSelection,
+  type LedgerTableSortState,
+  sortLedgerTableRows,
 } from "./ledger-table";
 
 const PAYEES = [
@@ -85,7 +84,7 @@ function generateRows(count: number): LedgerTableRow[] {
       account: ACCOUNTS[i % ACCOUNTS.length] ?? "",
       scope: SCOPES[i % SCOPES.length] ?? "",
       amountValue: money.toMoney(isExpense ? `-${amount}` : amount),
-      // Two currencies, on purpose — `sortLedgerRows` groups by currency
+      // Two currencies, on purpose — the amount sort groups by currency
       // before it compares amounts (H3), so a single-currency fixture would
       // screenshot a sort whose defining property never showed.
       currency: i % 4 === 3 ? "EUR" : "PLN",
@@ -113,11 +112,11 @@ type DemoTableProps = { rows: readonly LedgerTableRow[]; initialSelected?: reado
 
 function DemoTable({ rows, initialSelected = [] }: DemoTableProps) {
   const styles = useStyles();
-  const [sort, setSort] = useState<SortState>(null);
+  const [sort, setSort] = useState<LedgerTableSortState>(null);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set(initialSelected));
   const [anchorId, setAnchorId] = useState<string | null>(null);
 
-  const sorted = useMemo(() => sortLedgerRows(rows, sort), [rows, sort]);
+  const sorted = useMemo(() => sortLedgerTableRows(rows, sort), [rows, sort]);
 
   const onSortColumn = useCallback((column: LedgerTableColumn) => {
     setSort((current) => cycleSortState(current, column));
@@ -207,14 +206,14 @@ export const Populated: Story = {
 
 /**
  * Sorted by amount, ascending — the header click cycle from a clean start,
- * over the shipped `sortLedgerRows`. The fixture holds two currencies, so
+ * over the shipped `sortLedgerTableRows`. The fixture holds two currencies, so
  * this screenshots the real grouping (EUR block, then PLN) and the header's
  * own "by currency" caption that states it (H3).
  */
 export const SortedByAmount: Story = {
   render: () => {
-    const [sort, setSort] = useState<SortState>({ column: "amount", direction: "asc" });
-    const sorted = useMemo(() => sortLedgerRows(FORTY_ROWS, sort), [sort]);
+    const [sort, setSort] = useState<LedgerTableSortState>({ column: "amount", direction: "asc" });
+    const sorted = useMemo(() => sortLedgerTableRows(FORTY_ROWS, sort), [sort]);
     const onSortColumn = useCallback((column: LedgerTableColumn) => {
       setSort((current) => cycleSortState(current, column));
     }, []);

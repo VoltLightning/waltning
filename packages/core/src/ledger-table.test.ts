@@ -1,48 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareByCurrencyThenAmount,
   cycleSortState,
   type LedgerSelectableRow,
-  type SortableLedgerRow,
+  type SortableRow,
+  type SortState,
   selectableRange,
-  sortLedgerRows,
+  sortRows,
 } from "./ledger-table.ts";
 import { toMoney } from "./money.ts";
 
-function row(overrides: Partial<SortableLedgerRow> & { id: string }): SortableLedgerRow {
+/** The row `packages/ui`'s table sorts — declared here so the keys under test are real field names. */
+type TestRow = SortableRow & { date: string; payee: string };
+
+function row(overrides: Partial<TestRow> & { id: string }): TestRow {
   return {
     date: "2026-01-01",
     payee: "",
-    category: "",
-    account: "",
-    scope: "",
     amountValue: toMoney("0"),
     currency: "PLN",
     ...overrides,
   };
 }
 
-describe("sortLedgerRows", () => {
-  it("passes rows through untouched when sort is null — the caller's own order", () => {
-    const rows = [row({ id: "b", payee: "Zed" }), row({ id: "a", payee: "Abe" })];
-    expect(sortLedgerRows(rows, null)).toBe(rows);
-  });
-
-  it("sorts a string column ascending and descending", () => {
+describe("sortRows", () => {
+  it("sorts a string field ascending and descending", () => {
     const rows = [
       row({ id: "1", payee: "Zed" }),
       row({ id: "2", payee: "Abe" }),
       row({ id: "3", payee: "Mid" }),
     ];
 
-    expect(sortLedgerRows(rows, { column: "payee", direction: "asc" }).map((r) => r.payee)).toEqual(
-      ["Abe", "Mid", "Zed"],
-    );
-    expect(
-      sortLedgerRows(rows, { column: "payee", direction: "desc" }).map((r) => r.payee),
-    ).toEqual(["Zed", "Mid", "Abe"]);
+    expect(sortRows(rows, "payee", "asc").map((r) => r.payee)).toEqual(["Abe", "Mid", "Zed"]);
+    expect(sortRows(rows, "payee", "desc").map((r) => r.payee)).toEqual(["Zed", "Mid", "Abe"]);
   });
 
-  it("sorts amount by decimal value, never by string or float comparison", () => {
+  it("sorts the amount key by decimal value, never by string or float comparison", () => {
     const rows = [
       row({ id: "1", amountValue: toMoney("9") }),
       row({ id: "2", amountValue: toMoney("10") }),
@@ -51,15 +44,11 @@ describe("sortLedgerRows", () => {
 
     // A lexical or float-unsafe compare would put "10" before "9"; the
     // decimal comparator does not.
-    expect(sortLedgerRows(rows, { column: "amount", direction: "asc" }).map((r) => r.id)).toEqual([
-      "3",
-      "1",
-      "2",
-    ]);
+    expect(sortRows(rows, "amount", "asc").map((r) => r.id)).toEqual(["3", "1", "2"]);
   });
 
   /** H3 (DESK3 review round 1) — currency groups first, amount only breaks ties within one. */
-  it("sorts amount by currency first, then by amount within it", () => {
+  it("sorts the amount key by currency first, then by amount within it", () => {
     const rows = [
       row({ id: "eur-high", currency: "EUR", amountValue: toMoney("500") }),
       row({ id: "pln-low", currency: "PLN", amountValue: toMoney("10") }),
@@ -68,7 +57,7 @@ describe("sortLedgerRows", () => {
     ];
 
     // EUR sorts before PLN lexically; within each currency, ascending by amount.
-    expect(sortLedgerRows(rows, { column: "amount", direction: "asc" }).map((r) => r.id)).toEqual([
+    expect(sortRows(rows, "amount", "asc").map((r) => r.id)).toEqual([
       "eur-low",
       "eur-high",
       "pln-low",
@@ -83,23 +72,36 @@ describe("sortLedgerRows", () => {
       row({ id: "b", amountValue: toMoney("5") }),
     ];
 
-    expect(sortLedgerRows(rows, { column: "amount", direction: "asc" }).map((r) => r.id)).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
-    expect(sortLedgerRows(rows, { column: "amount", direction: "desc" }).map((r) => r.id)).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
+    expect(sortRows(rows, "amount", "asc").map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(sortRows(rows, "amount", "desc").map((r) => r.id)).toEqual(["a", "b", "c"]);
   });
 
   it("does not mutate the input array", () => {
     const rows = [row({ id: "b" }), row({ id: "a" })];
     const original = [...rows];
-    sortLedgerRows(rows, { column: "date", direction: "asc" });
+    sortRows(rows, "date", "asc");
     expect(rows).toEqual(original);
+  });
+});
+
+describe("compareByCurrencyThenAmount", () => {
+  /**
+   * The comparator is exported under its own name so a header can state the
+   * order it is showing — so it is worth one test of its own, independent of
+   * whichever key `sortRows` happens to route to it.
+   */
+  it("orders by currency before it looks at the figure at all", () => {
+    const eur = { amountValue: toMoney("9999"), currency: "EUR" };
+    const pln = { amountValue: toMoney("1"), currency: "PLN" };
+    expect(compareByCurrencyThenAmount(eur, pln)).toBeLessThan(0);
+  });
+
+  it("compares figures as decimals within one currency", () => {
+    const nine = { amountValue: toMoney("9"), currency: "PLN" };
+    const ten = { amountValue: toMoney("10"), currency: "PLN" };
+    // A lexical compare would put "10" before "9".
+    expect(compareByCurrencyThenAmount(nine, ten)).toBeLessThan(0);
+    expect(compareByCurrencyThenAmount(nine, nine)).toBe(0);
   });
 });
 
@@ -116,7 +118,10 @@ describe("cycleSortState", () => {
   });
 
   it("switching to a different column always starts at asc", () => {
-    let sort = cycleSortState(null, "amount");
+    // Annotated with the caller's own column vocabulary, the way a screen
+    // instantiates it — inference off the first call alone would narrow to
+    // the one literal it saw.
+    let sort: SortState<"amount" | "date"> = cycleSortState(null, "amount");
     sort = cycleSortState(sort, "amount");
     expect(sort).toEqual({ column: "amount", direction: "desc" });
 

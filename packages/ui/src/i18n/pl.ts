@@ -238,6 +238,12 @@ export const pl: Messages = {
       "Wczytano tylko pierwsze {{count}} wierszy, więc sortowanie i suma obejmują tylko je. Zawęź filtr, aby zobaczyć cały okres.",
     periodAllTime: "Cały okres",
     periodCustomRange: "{{from}} → {{to}}",
+    uncategorisableSelection:
+      "Żaden z zaznaczonych wierszy nie przyjmuje kategorii — przelewy i korekty jej nie mają.",
+    filterExcludesOne: "Pomija {{count}} wiersz",
+    filterExcludesMany: "Pomija {{count}} wierszy",
+    searchIncomplete:
+      "Lista urwała się na {{count}} wierszach — jedna ze stron wyników wróciła pusta. Odśwież, aby spróbować ponownie.",
   },
   counterparties: {
     settlingWith: "Rozliczenie z {{name}}",

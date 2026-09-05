@@ -73,6 +73,24 @@ function fakeController() {
   );
 }
 
+/**
+ * A port that hands back one row and a cursor, then nothing but the cursor —
+ * the shape the drain's own `break` exists for (L2, round 2). Built by
+ * wrapping `fakeController`'s controller rather than restating forty port
+ * methods: only `searchTransactions` differs.
+ */
+function emptyPageController(): ReturnType<typeof fakeController> {
+  const controller = fakeController();
+  return {
+    ...controller,
+    searchTransactions: (filter, cursor) => {
+      const first = controller.searchTransactions(filter);
+      if (cursor === undefined) return first;
+      return { rows: [], nextCursor: first.nextCursor, total: first.total };
+    },
+  };
+}
+
 describe("useTransactionSearch", () => {
   it("loads the first page, loads more, and stops when the cursor runs out", () => {
     const controller = fakeController();
@@ -118,6 +136,30 @@ describe("useTransactionSearch", () => {
     // The cursor is still set — the reader is told, not silently truncated.
     expect(result.current.capped).toBe(true);
     expect(result.current.hasMore).toBe(true);
+  });
+
+  /**
+   * L2 (round 2) — a page that comes back empty while still handing over a
+   * cursor is the port disagreeing with itself, not a filter selecting a
+   * decade. Both leave a cursor set, so before this they were one flag and
+   * one banner: "narrow the filter", which is advice that cannot work here.
+   */
+  it("a page that returns no rows ends the drain as incomplete, never as capped", () => {
+    const controller = emptyPageController();
+    const { result } = renderHook(() => useTransactionSearch(controller, {}, { loadAll: true }));
+
+    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1"]);
+    expect(result.current.incomplete).toBe(true);
+    expect(result.current.capped).toBe(false);
+    // The cursor is still set, so the phone's own "there is more" is honest.
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("a clean drain is neither capped nor incomplete", () => {
+    const controller = fakeController();
+    const { result } = renderHook(() => useTransactionSearch(controller, {}, { loadAll: true }));
+    expect(result.current.incomplete).toBe(false);
+    expect(result.current.capped).toBe(false);
   });
 
   it("without loadAll the first page is still the only page — the phone list is unchanged", () => {

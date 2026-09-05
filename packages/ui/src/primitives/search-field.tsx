@@ -50,7 +50,7 @@ export type SearchFieldProps = {
    * the rail" — is the one caller: `ledger-screen.tsx`'s desk rail keeps a
    * ref to this field's own `TextInput` and calls its built-in `.focus()`.
    */
-  ref?: React.Ref<TextInput>;
+  ref?: React.Ref<TextInput> | undefined;
 };
 
 /** Drawn at 20, hit-slop restores the §10 floor — `select.tsx`'s token does the same. */
