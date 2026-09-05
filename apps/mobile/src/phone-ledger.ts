@@ -8,10 +8,23 @@ import { Platform } from "react-native";
 
 export const PHONE_LEDGER_AVAILABLE = false as const;
 
-export function requirePhoneLedger(): PhoneLedgerController {
-  throw new Error(
-    `no bundler resolved a platform ledger for ${Platform.OS} — tests inject a controller via <LedgerProvider>`,
-  );
+export type PhoneLedgerStartup =
+  | { status: "ready"; controller: PhoneLedgerController }
+  | { status: "failed"; error: Error };
+
+let startup: PhoneLedgerStartup | null = null;
+
+/** Always `failed`: this variant exists only where Metro resolved neither real one. */
+export function startPhoneLedger(): PhoneLedgerStartup {
+  if (!startup) {
+    startup = {
+      status: "failed",
+      error: new Error(
+        `no bundler resolved a platform ledger for ${Platform.OS} — tests inject a controller via <LedgerProvider>`,
+      ),
+    };
+  }
+  return startup;
 }
 
 /** Always "ready": the fallback's job is to typecheck, and to throw if rendered. */

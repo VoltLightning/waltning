@@ -15,7 +15,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -365,6 +365,100 @@ describe("platform-variant files are imported extension-less", () => {
       }
     }
     expect(offenders, "drop the .tsx — a .web.tsx override would be ignored").toEqual([]);
+  });
+
+  /**
+   * Widened past `.tsx`, to the exact condition that makes an extension
+   * harmful: a relative specifier whose extension-stripped target has a
+   * `.native.*` or `.web.*` sibling on disk. `phone-ledger.native.ts` and
+   * `phone-ledger.web.ts` both imported `"./platform.ts"` — an explicit `.ts`
+   * this time, not `.tsx` — which Metro resolves to the *universal*
+   * `platform.ts` rather than the platform file, so the ledger wired
+   * `setLivePivotReader` into a second module instance the layout never
+   * reads from (§C's brief). Proven to fire first: breaking it against
+   * `"./platform.ts"` turned this test red before the import was fixed.
+   */
+  it("no relative import carries an extension when its target has a platform sibling", () => {
+    const roots = ["packages/ui/src", "apps/mobile"];
+    const PLATFORM_SUFFIXES = [".native.ts", ".native.tsx", ".web.ts", ".web.tsx"];
+    const offenders: string[] = [];
+    for (const root of roots) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        const dir = dirname(file);
+        for (const spec of importsOf(file)) {
+          if (!spec.startsWith(".")) continue;
+          const match = /\.(ts|tsx)$/.exec(spec);
+          if (!match) continue;
+          const target = join(dir, spec.slice(0, -match[0].length));
+          const hasPlatformSibling = PLATFORM_SUFFIXES.some((suffix) =>
+            existsSync(`${target}${suffix}`),
+          );
+          if (hasPlatformSibling) offenders.push(`${rel(file)} → ${spec}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      "an explicit extension resolves the universal file, not the platform one — Metro then wires two module instances",
+    ).toEqual([]);
+  });
+
+  /**
+   * The test that would have caught #109: `platform.native.ts` was missing
+   * `setLivePivotReader`, `setLivePivotSubscriber` and `displayCurrency` —
+   * `platform.ts` had all three, and nothing compared the two files' exports.
+   */
+  it("every platform variant exports the same names as its universal file", () => {
+    const EXPORT_DECL = /^export\s+(?:const|let|function|class|type|interface)\s+([A-Za-z0-9_]+)/gm;
+    const EXPORT_LIST = /^export\s*\{([^}]*)\}/gm;
+
+    function exportedNamesOf(path: string): Set<string> {
+      const text = readFileSync(path, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      const names = new Set<string>();
+      for (const m of text.matchAll(EXPORT_DECL)) {
+        if (m[1]) names.add(m[1]);
+      }
+      for (const m of text.matchAll(EXPORT_LIST)) {
+        for (const entry of (m[1] ?? "").split(",")) {
+          const name = entry
+            .trim()
+            .split(/\s+as\s+/)
+            .pop()
+            ?.trim();
+          if (name) names.add(name);
+        }
+      }
+      return names;
+    }
+
+    const roots = ["apps/mobile/src", "packages/ui/src"];
+    const problems: string[] = [];
+    let pairsChecked = 0;
+    for (const root of roots) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        const match = /^(.*)\.(?:native|web)\.(ts|tsx)$/.exec(file);
+        if (!match) continue;
+        const [, base, ext] = match;
+        const universal = `${base}.${ext}`;
+        if (!existsSync(universal)) continue;
+        pairsChecked += 1;
+
+        const variantNames = exportedNamesOf(file);
+        const universalNames = exportedNamesOf(universal);
+        const missing = [...universalNames].filter((name) => !variantNames.has(name));
+        const extra = [...variantNames].filter((name) => !universalNames.has(name));
+        if (missing.length > 0 || extra.length > 0) {
+          problems.push(
+            `${rel(file)} vs ${rel(universal)}: missing [${missing.join(", ")}], extra [${extra.join(", ")}]`,
+          );
+        }
+      }
+    }
+
+    expect(pairsChecked, "at least one platform-variant pair found").toBeGreaterThan(0);
+    expect(problems, "a platform variant's exports must match its universal file's").toEqual([]);
   });
 });
 

@@ -21,6 +21,12 @@ type MobileDiagnosticEvent =
       phase: "failure";
       component: "fonts";
       error: DiagnosticError;
+    }
+  | {
+      scope: "app_startup";
+      phase: "failure";
+      component: "ledger";
+      error: DiagnosticError;
     };
 
 const BUILD = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev";

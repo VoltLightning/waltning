@@ -14,6 +14,7 @@
 import "../src/polyfills.ts";
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { usePhoneLedgerStartup } from "@waltning/client/ledger/use-phone-ledger-startup";
 import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
@@ -28,8 +29,9 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { DeviceInsets } from "../src/device-insets";
 import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
-import { requirePhoneLedger, usePhoneLedgerReady } from "../src/phone-ledger";
+import { startPhoneLedger, usePhoneLedgerReady } from "../src/phone-ledger";
 import { appearance, DEVICE_LOCALES, displayCurrency, floatPosition } from "../src/platform";
+import { StartupFailedScreen } from "../src/startup-failed-screen";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -38,6 +40,15 @@ export default function RootLayout() {
     appearance,
     systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
   );
+
+  // On the device this is constant `true`; in the browser it turns once the
+  // SQLite worker can answer a synchronous call — opening before that would
+  // time out by construction (see `phone-ledger.web.ts`).
+  const ledgerReady = usePhoneLedgerReady();
+  // `null` until `ledgerReady`, then the session's own outcome — see the
+  // hook's header for why this runs inside render rather than at module
+  // scope: a throw there used to break this module's own evaluation.
+  const startup = usePhoneLedgerStartup(ledgerReady, startPhoneLedger);
 
   useEffect(() => {
     void appearance.hydrate();
@@ -59,6 +70,17 @@ export default function RootLayout() {
   }, [error]);
 
   useEffect(() => {
+    if (startup?.status === "failed") {
+      mobileDiagnostics({
+        scope: "app_startup",
+        phase: "failure",
+        component: "ledger",
+        error: describeDiagnosticError(startup.error),
+      });
+    }
+  }, [startup]);
+
+  useEffect(() => {
     if (loaded && resolved.hydrated) {
       mobileDiagnostics({ scope: "app_startup", phase: "success", component: "root" });
     }
@@ -75,12 +97,7 @@ export default function RootLayout() {
    * the bundle is measured in milliseconds; a spinner would flash and be gone,
    * which reads as a glitch rather than as progress.
    */
-  // On the device this is constant `true`; in the browser it turns once the
-  // SQLite worker can answer a synchronous call — opening before that would
-  // time out by construction (see `phone-ledger.web.ts`).
-  const ledgerReady = usePhoneLedgerReady();
-
-  const ready = (loaded || error) && resolved.hydrated && ledgerReady;
+  const ready = (loaded || error) && resolved.hydrated;
 
   /**
    * **A font that failed to load is a fact, not a reason to stop.**
@@ -151,11 +168,18 @@ export default function RootLayout() {
           <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
             {/* The one place the platform-resolved ledger meets the tree: every
               screen below reads it from context, so a test or a diff preview
-              can hand the same screens a different controller. */}
-            {ready ? (
-              <LedgerProvider controller={requirePhoneLedger()}>
-                <AppShell />
-              </LedgerProvider>
+              can hand the same screens a different controller. A startup
+              failure is a screen too — never expo-router's own
+              `ErrorBoundary`, which reports a missing default export rather
+              than what actually broke. */}
+            {ready && startup ? (
+              startup.status === "ready" ? (
+                <LedgerProvider controller={startup.controller}>
+                  <AppShell />
+                </LedgerProvider>
+              ) : (
+                <StartupFailedScreen error={startup.error} />
+              )
             ) : (
               <StartupBlank />
             )}

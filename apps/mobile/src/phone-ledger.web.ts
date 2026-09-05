@@ -24,7 +24,10 @@
 
 import "./polyfills.ts";
 import { initializeDisplayCurrencyFromLedger } from "@waltning/client/currencies/initialize-display-currency";
-import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
+import {
+  createPhoneLedger,
+  type PhoneLedgerController,
+} from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { currencies } from "@waltning/core/currencies";
 import type { SqliteOpener } from "@waltning/ledger/open";
@@ -41,7 +44,7 @@ import {
 } from "expo-sqlite";
 import { useSyncExternalStore } from "react";
 import { mobileDiagnostics } from "./diagnostics.ts";
-import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform.ts";
+import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform";
 
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
@@ -149,15 +152,24 @@ export function usePhoneLedgerReady(): boolean {
   return useSyncExternalStore(subscribeWarm, readWarm, readWarm);
 }
 
+export type PhoneLedgerStartup =
+  | { status: "ready"; controller: PhoneLedgerController }
+  | { status: "failed"; error: Error };
+
 /**
  * Built on first use rather than at module scope — module evaluation happens
  * before the warm-up above can possibly have finished, and the first caller
- * is the root layout, which waits for `usePhoneLedgerReady()`.
+ * is the root layout, which waits for `usePhoneLedgerReady()`. Cached after
+ * the first call, failure included: the only way out of a failed startup is
+ * relaunching the app, and `createLocalLedgerSession` has already emitted its
+ * own `ledger_startup` failure diagnostic, so nothing more is logged here.
  */
-let controller: ReturnType<typeof createPhoneLedger> | null = null;
+let startup: PhoneLedgerStartup | null = null;
 
-export function requirePhoneLedger() {
-  if (!controller) {
+export function startPhoneLedger(): PhoneLedgerStartup {
+  if (startup) return startup;
+
+  try {
     const session = createLocalLedgerSession({
       open: openPhoneDatabase,
       paths: LEDGER_PATHS,
@@ -173,7 +185,7 @@ export function requirePhoneLedger() {
       bootstrapCurrencies: currencies.map(({ rateSource: _rateSource, ...currency }) => currency),
       diagnostics: mobileDiagnostics,
     });
-    controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
+    const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
     // H1 — the header's live fallback, wired before anything reads it.
     setLivePivotReader(
       () => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null,
@@ -187,6 +199,15 @@ export function requirePhoneLedger() {
     // `initialize-display-currency.ts`. Guarded on hydration inside; never
     // awaited here, same as the fire-and-forget `hydrate()` in `_layout.tsx`.
     void initializeDisplayCurrencyFromLedger(displayCurrency, session.listCurrencySettings);
+
+    startup = { status: "ready", controller };
+  } catch (caught) {
+    // `catch` bindings are `unknown` because the language gives no choice.
+    startup = {
+      status: "failed",
+      error: caught instanceof Error ? caught : new Error(String(caught)),
+    };
   }
-  return controller;
+
+  return startup;
 }

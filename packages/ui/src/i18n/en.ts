@@ -821,6 +821,16 @@ export const en = {
     "stub.body": "This screen isn't built yet.",
     "stub.goToToday": "Go to Today",
   },
+  startup: {
+    /**
+     * `apps/mobile/app/_layout.tsx` — the ledger session could not open at
+     * all. No `action`: the retry is relaunching the app, which nothing in
+     * this screen can trigger for someone.
+     */
+    ledgerFailedTitle: "The ledger could not open",
+    /** The migrator's own sentence, shown verbatim — it is written for a person. */
+    ledgerFailedBody: "{{message}}",
+  },
 } as const;
 
 /**
