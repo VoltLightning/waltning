@@ -381,9 +381,22 @@ export type Backfill = {
  * Postgres error code in its message because that is the only field SQLite
  * gives a trigger to speak through, and the two engines' refusals should be
  * greppable as one thing.
+ *
+ * **`IF NOT EXISTS`, because a database can reach this step already holding
+ * them** (L5, round 3). The two triggers spent one commit inside
+ * `0009_schema.sql` before moving into this hook, so a device migrated by
+ * that build arrives at the same step with both already created — and a bare
+ * `CREATE TRIGGER` would abort the transaction on the duplicate name, roll
+ * the whole step back, and repeat identically on every launch after. That is
+ * a real shape for an unreleased head being carried across a rebuild, and it
+ * is the one kind of failure a migration must never have: one with no way
+ * forward from the phone. It also makes the hook honestly idempotent, which
+ * is what an `objects` hook has to be — it re-runs whenever its step does,
+ * and unlike a `fill` it writes no value a later read could reconcile.
+ * `backfills.test.ts` runs it twice and expects no throw.
  */
 const CATEGORY_KIND_TRIGGERS: readonly string[] = [
-  `CREATE TRIGGER \`transactions_category_kind_matches_type_insert\`
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_category_kind_matches_type_insert\`
 BEFORE INSERT ON \`transactions\`
 WHEN NEW.category_id IS NOT NULL
   AND NEW.type IN ('income', 'expense')
@@ -392,7 +405,7 @@ WHEN NEW.category_id IS NOT NULL
 BEGIN
   SELECT RAISE(ABORT, 'category kind does not match transaction type (WA017)');
 END`,
-  `CREATE TRIGGER \`transactions_category_kind_matches_type_update\`
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_category_kind_matches_type_update\`
 BEFORE UPDATE OF category_id, type ON \`transactions\`
 WHEN NEW.category_id IS NOT NULL
   AND NEW.type IN ('income', 'expense')

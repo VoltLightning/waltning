@@ -91,6 +91,23 @@ import type {
 export type TransactionSearchState = {
   rows: readonly PhoneSearchTransaction[];
   total: PhoneSearchPage["total"];
+  /**
+   * The serialised filter `rows` and `total` actually answer to — the same
+   * `JSON.stringify(filter)` shape `filterKey` triggers on, captured by the
+   * run that produced them.
+   *
+   * **A count is only true of the filter it was taken under**, and this is
+   * the only way a caller can tell. A filter change re-renders the screen
+   * before the effect that re-queries has run, so for one commit `total`
+   * describes the *previous* filter while every other prop describes the
+   * new one. Anything deriving a second figure from `total.count` —
+   * `use-filter-exclusion-counts.ts`, whose numbers are subtractions from it
+   * — would otherwise compute one wrong answer per filter change and render
+   * it, plus a full round of queries to produce it. Empty until the first
+   * successful read, and left alone by a failed one: a stale-but-true key is
+   * what tells a reader of it to wait.
+   */
+  answersTo: string;
   /** False only before the first page has ever resolved. */
   loaded: boolean;
   /** Set by a failed read; cleared by the next successful one. */
@@ -122,6 +139,8 @@ type Internal = {
   rows: readonly PhoneSearchTransaction[];
   total: PhoneSearchPage["total"];
   cursor: TransactionSearchCursorDraft | undefined;
+  /** The filter this state answers to — see `TransactionSearchState`. */
+  answersTo: string;
   loaded: boolean;
   error: string | undefined;
   /** The drain stopped on an empty page rather than at the cap — see `TransactionSearchState`. */
@@ -132,6 +151,7 @@ const INITIAL: Internal = {
   rows: [],
   total: EMPTY_TOTAL,
   cursor: undefined,
+  answersTo: "",
   loaded: false,
   error: undefined,
   incomplete: false,
@@ -171,14 +191,17 @@ export function useTransactionSearch(
   const filterKey = JSON.stringify(filter);
 
   const runFromStart = useCallback(() => {
+    // Read once, and serialised from the same read: what comes back answers
+    // to *this* filter, not to whatever the ref holds when the drain ends.
+    const asked = filterRef.current;
     try {
-      const first = controller.searchTransactions(filterRef.current);
+      const first = controller.searchTransactions(asked);
       const rows: PhoneSearchTransaction[] = [...first.rows];
       let cursor = first.nextCursor;
       let total = first.total;
       let incomplete = false;
       while (loadAll && cursor !== undefined && rows.length < cap) {
-        const page = controller.searchTransactions(filterRef.current, cursor);
+        const page = controller.searchTransactions(asked, cursor);
         // A page that advances the cursor without returning a row would spin
         // here forever — the loop stops on the port rather than trusting it,
         // and says which of the two endings this was.
@@ -190,7 +213,15 @@ export function useTransactionSearch(
         cursor = page.nextCursor;
         total = page.total;
       }
-      setState({ rows, total, cursor, loaded: true, error: undefined, incomplete });
+      setState({
+        rows,
+        total,
+        cursor,
+        answersTo: JSON.stringify(asked),
+        loaded: true,
+        error: undefined,
+        incomplete,
+      });
     } catch (caught) {
       setState((current) => ({ ...current, loaded: true, error: readError(caught) }));
     }
@@ -214,6 +245,7 @@ export function useTransactionSearch(
           rows: [...current.rows, ...page.rows],
           total: page.total,
           cursor: page.nextCursor,
+          answersTo: current.answersTo,
           loaded: true,
           error: undefined,
           incomplete: current.incomplete,
@@ -227,6 +259,7 @@ export function useTransactionSearch(
   return {
     rows: state.rows,
     total: state.total,
+    answersTo: state.answersTo,
     loaded: state.loaded,
     error: state.error,
     hasMore: state.cursor !== undefined,

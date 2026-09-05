@@ -240,8 +240,13 @@ export const pl: Messages = {
     periodCustomRange: "{{from}} → {{to}}",
     uncategorisableSelection:
       "Żaden z zaznaczonych wierszy nie przyjmuje kategorii — przelewy i korekty jej nie mają.",
-    filterExcludesOne: "Pomija {{count}} wiersz",
-    filterExcludesMany: "Pomija {{count}} wierszy",
+    // 1 → wiersz, 2–4 → wiersze, 5+ (and 0) → wierszy. A count of rows is
+    // always whole, so `_other` (fractional) never actually renders — it
+    // carries the `_many` form rather than invent an untested one.
+    filterExcludes_one: "Pomija {{count}} wiersz",
+    filterExcludes_few: "Pomija {{count}} wiersze",
+    filterExcludes_many: "Pomija {{count}} wierszy",
+    filterExcludes_other: "Pomija {{count}} wierszy",
     searchIncomplete:
       "Lista urwała się na {{count}} wierszach — jedna ze stron wyników wróciła pusta. Odśwież, aby spróbować ponownie.",
   },

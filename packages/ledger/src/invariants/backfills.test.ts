@@ -39,7 +39,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fold } from "@waltning/core/capture/names";
 import Database from "better-sqlite3";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { OUTBOX_STEPS, REPLICA_STEPS } from "../ddl.ts";
@@ -179,6 +179,100 @@ describe("every backfill with a fill is proven by a FILLED_COLUMNS row", () => {
       if (backfill.fill === undefined) continue; // check-only — nothing to fill, nothing to prove here
       expect(filledTags.has(tag), `${tag} has a fill and needs a FILLED_COLUMNS entry`).toBe(true);
     }
+  });
+});
+
+/**
+ * The `objects` hook's own class of defect, and it is not the one
+ * `FILLED_COLUMNS` catches. A trigger leaves no column to read back, so
+ * "every filled column holds what the write path would have written" says
+ * nothing about it — and the failure it is exposed to is the same one this
+ * whole file exists for: a hook that is registered, exported, covered by a
+ * behavioural test somewhere else, and never actually reached by the chain.
+ *
+ * So the property is stated from the outside, structurally and generically:
+ * run the real chain twice on two fresh stores, once with the hook and once
+ * with that one hook removed, and compare `sqlite_master`. A hook that is
+ * reached leaves at least one object behind that the same chain without it
+ * does not have. It says nothing about *what* the object is — a trigger
+ * today, a view tomorrow — which is the point: the next `objects` hook
+ * inherits this without a line being added, the same way `FILLED_COLUMNS`
+ * was written as a table rather than an assertion about `name_folded`.
+ */
+describe("every objects hook creates something the chain would not otherwise have", () => {
+  /** Every schema object the full chain leaves behind, by name. */
+  function objectsAfterChain(label: string, backfills: Readonly<Record<string, Backfill>>) {
+    const paths = {
+      replica: join(dir, `${label}-replica.db`),
+      outbox: join(dir, `${label}-outbox.db`),
+    };
+    const ledger = openLedger((filename: string) => {
+      const sqlite = new Database(filename);
+      return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+    }, paths);
+    migrateReplica(ledger.replica, {
+      fs: noopFs,
+      migrations: migrationsFromSteps(REPLICA_STEPS, backfills, "replica"),
+    });
+    const rows = ledger.replica.db.all<{ name: string }>(
+      sql.raw(`select "name" from "sqlite_master" where "name" is not null`),
+    );
+    ledger.close();
+    return new Set(rows.map((row) => row.name));
+  }
+
+  const tagsWithObjects = Object.entries(REPLICA_BACKFILLS)
+    .filter(([, backfill]) => backfill.objects !== undefined)
+    .map(([tag]) => ({ tag }));
+
+  it("there is at least one to check", () => {
+    expect(tagsWithObjects.length, "vacuity guard").toBeGreaterThan(0);
+  });
+
+  /**
+   * And it can run against a database that already holds what it creates
+   * (L5, round 3). An `objects` hook re-runs whenever its step does, and a
+   * device can reach the step with the objects already present — the two
+   * triggers spent one commit inside the generated `.sql` before moving into
+   * this hook. A bare `CREATE TRIGGER` would abort on the duplicate name,
+   * roll the step back, and fail identically on every launch after: a
+   * migration with no way forward from the phone.
+   */
+  it.each(tagsWithObjects)("$tag's objects hook is idempotent", ({ tag }) => {
+    const paths = {
+      replica: join(dir, `${tag}-twice-replica.db`),
+      outbox: join(dir, `${tag}-twice-outbox.db`),
+    };
+    const ledger = openLedger((filename: string) => {
+      const sqlite = new Database(filename);
+      return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+    }, paths);
+    migrateReplica(ledger.replica, { fs: noopFs });
+
+    const objects = REPLICA_BACKFILLS[tag]?.objects;
+    expect(objects, `${tag} has an objects hook`).toBeDefined();
+    // The same two capabilities `migrationsFromSteps` hands it, over a
+    // database the chain has already migrated once.
+    const runner = {
+      all: <T>(query: SQL) => ledger.replica.db.all<T>(query),
+      run: (query: SQL) => {
+        ledger.replica.db.run(query);
+      },
+    };
+    expect(() => objects?.(runner)).not.toThrow();
+    ledger.close();
+  });
+
+  it.each(tagsWithObjects)("$tag's objects hook reaches sqlite_master", ({ tag }) => {
+    const withHook = objectsAfterChain(`${tag}-with`, REPLICA_BACKFILLS);
+    // The same chain with this one hook's `objects` dropped and everything
+    // else — its `check`, its `fill` — left exactly as it is, so the
+    // difference can only be what the hook creates.
+    const { objects: _dropped, ...rest } = REPLICA_BACKFILLS[tag] ?? {};
+    const without = objectsAfterChain(`${tag}-without`, { ...REPLICA_BACKFILLS, [tag]: rest });
+
+    const created = [...withHook].filter((name) => !without.has(name));
+    expect(created.length, `${tag}'s objects hook created nothing`).toBeGreaterThan(0);
   });
 });
 

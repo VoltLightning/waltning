@@ -5,9 +5,11 @@
  * range, and one "clear every filter" action.
  *
  * **It owns its own scroll, and that is why it is a component.** The rail is
- * a fixed 280px column of eight controls; 1024×640 is a legitimate desk
- * viewport under `useBreakpoint`, and without a scroller of its own the
- * bottom of the stack is simply unreachable there. `GroundPanel` cannot
+ * a fixed 280px column carrying a control for each of §4's seven dimensions
+ * — the date range's is two `DateField`s — plus the period stepper and
+ * *Clear all filters*; 1024×640 is a legitimate desk viewport under
+ * `useBreakpoint`, and without a scroller of its own the bottom of the stack
+ * is simply unreachable there. `GroundPanel` cannot
  * supply it — the screen passes `scroll="own"` because the table beside this
  * rail is a `FlatList` that must keep its own height — so the scroll is
  * *this* column's, bounded by the row it sits in, and the two columns scroll
@@ -34,10 +36,17 @@
  * imported.** `packages/client` and `packages/ui` are siblings on the
  * architecture floor, so `LedgerFilterState` cannot come from the hook that
  * owns it; `LedgerFilterRailValue` is the same fields declared here, the
- * same way `LedgerTableSelection` is. `scope` is a bare `string` on purpose:
- * the four values are the caller's `SegmentControl` segments, and a rail
- * that hard-coded them would own a partition (`SPEC.md` §6.7) it does not
- * define.
+ * same way `LedgerTableSelection` is.
+ *
+ * **`scope` is generic, not `string`** (L8, round 3). The rail must not
+ * *name* the four values — that partition is `SPEC.md` §6.7's and the
+ * caller's, not a filter column's — but "not named here" and "not typed at
+ * all" are different things. Declared as a bare `string`, the callback
+ * handed back a `string` to a caller whose state is a union, and the screen
+ * bridged the gap with a cast: a widening the type system had been asked to
+ * perform and then made to forget. `Scope extends string` says the same
+ * thing about ownership and keeps the caller's own union end to end, so
+ * `onChangeScope` can be the setter itself.
  */
 
 import type { TextInput } from "react-native";
@@ -54,12 +63,12 @@ import { makeStyles } from "../theme/styles.ts";
 import { focus, hairline, space, touchTarget } from "../tokens.ts";
 
 /** The filter as the rail draws it — `useLedgerFilters`' own state, restated (see the file doc). */
-export type LedgerFilterRailValue = {
+export type LedgerFilterRailValue<Scope extends string = string> = {
   text: string;
   accountIds: readonly string[];
   categoryIds: readonly string[];
   /** One of `scopes`' own `value`s — the caller owns that partition. */
-  scope: string;
+  scope: Scope;
   /** `""` — every currency. */
   currency: string;
   /** `""` — every counterparty. */
@@ -69,13 +78,13 @@ export type LedgerFilterRailValue = {
 };
 
 /** Everything the four list controls can offer, resolved for display by the caller. */
-export type LedgerFilterRailOptions = {
+export type LedgerFilterRailOptions<Scope extends string = string> = {
   accounts: readonly SelectOption[];
   categories: readonly SelectOption[];
   currencies: readonly SelectOption[];
   counterparties: readonly SelectOption[];
   /** `SegmentControl`'s own shape — at least two, and the caller owns the partition. */
-  scopes: readonly [Segment, Segment, ...Segment[]];
+  scopes: readonly [Segment<Scope>, Segment<Scope>, ...Segment<Scope>[]];
 };
 
 /**
@@ -93,9 +102,9 @@ export type LedgerFilterRailExclusions = {
   dateRange?: number | undefined;
 };
 
-export type LedgerFilterRailProps = {
-  value: LedgerFilterRailValue;
-  options: LedgerFilterRailOptions;
+export type LedgerFilterRailProps<Scope extends string = string> = {
+  value: LedgerFilterRailValue<Scope>;
+  options: LedgerFilterRailOptions<Scope>;
   exclusions?: LedgerFilterRailExclusions | undefined;
   /** The period stepper — its label is derived from the range by the caller (H5, round 1). */
   period: {
@@ -112,7 +121,7 @@ export type LedgerFilterRailProps = {
   onChangeText: (value: string) => void;
   onChangeAccountIds: (ids: readonly string[]) => void;
   onChangeCategoryIds: (ids: readonly string[]) => void;
-  onChangeScope: (scope: string) => void;
+  onChangeScope: (scope: Scope) => void;
   onChangeCurrency: (code: string) => void;
   onChangeCounterpartyId: (id: string) => void;
   onChangeFrom: (value: string) => void;
@@ -121,7 +130,7 @@ export type LedgerFilterRailProps = {
   onClearAll?: (() => void) | undefined;
 };
 
-export function LedgerFilterRail({
+export function LedgerFilterRail<Scope extends string = string>({
   value,
   options,
   exclusions,
@@ -137,7 +146,7 @@ export function LedgerFilterRail({
   onChangeFrom,
   onChangeTo,
   onClearAll,
-}: LedgerFilterRailProps) {
+}: LedgerFilterRailProps<Scope>) {
   const t = useT();
   const styles = useStyles();
 
@@ -265,22 +274,21 @@ function ClearAllFilters({ onPress }: { onPress: () => void }) {
 }
 
 /**
- * "Excludes 34." Nothing at all when the count is absent or zero: a control
- * that hides nothing has nothing to report, and "Excludes 0" beside every
- * unset filter would be noise in a column whose whole argument is that
+ * "Excludes 34 rows." Nothing at all when the count is absent or zero: a
+ * control that hides nothing has nothing to report, and "Excludes 0" beside
+ * every unset filter would be noise in a column whose whole argument is that
  * everything is visible at once.
+ *
+ * **The plural is i18next's, not this component's** (L4, round 3). Choosing
+ * between a `One` and a `Many` key here can reach two forms, and Polish
+ * declines this noun three ways — the resolver is the only thing that knows
+ * which, and it needs `count` rather than a decision already made.
  */
 function ExcludesNote({ count }: { count?: number | undefined }) {
   const t = useT();
   const styles = useStyles();
   if (count === undefined || count <= 0) return null;
-  return (
-    <Text style={styles.excludes}>
-      {count === 1
-        ? t("transactions.filterExcludesOne", { count })
-        : t("transactions.filterExcludesMany", { count })}
-    </Text>
-  );
+  return <Text style={styles.excludes}>{t("transactions.filterExcludes", { count })}</Text>;
 }
 
 const useStyles = makeStyles((theme) => ({

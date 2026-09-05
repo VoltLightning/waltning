@@ -39,8 +39,15 @@ import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { useInteraction } from "./interaction.ts";
 
-export type Segment = {
-  value: string;
+/**
+ * One option. **Generic over its own `value`** so a caller whose values are
+ * a union — scope is `SPEC.md` §6.7's four-way partition, not any string —
+ * keeps that union all the way through `onChange`, instead of getting a bare
+ * `string` back and casting it at the seam. `= string` for every caller that
+ * has no union to keep (L8, round 3).
+ */
+export type Segment<Value extends string = string> = {
+  value: Value;
   label: string;
   /** Shown beside the label. Live — a stale count is worse than none. */
   count?: number;
@@ -59,21 +66,21 @@ export type Segment = {
 
 export type SegmentControlTone = "surface" | "shell";
 
-export type SegmentControlProps = {
+export type SegmentControlProps<Value extends string = string> = {
   /** Two to four. One option is not a choice; five is a menu. */
-  segments: readonly [Segment, Segment, ...Segment[]];
-  value: string;
-  onChange: (value: string) => void;
+  segments: readonly [Segment<Value>, Segment<Value>, ...Segment<Value>[]];
+  value: Value;
+  onChange: (value: Value) => void;
   /** `"surface"` (default) sits on `ground`; `"shell"` is `DeskBand`'s own. */
   tone?: SegmentControlTone;
 };
 
-export function SegmentControl({
+export function SegmentControl<Value extends string = string>({
   segments,
   value,
   onChange,
   tone = "surface",
-}: SegmentControlProps) {
+}: SegmentControlProps<Value>) {
   const styles = useStyles();
 
   return (
@@ -94,14 +101,19 @@ export function SegmentControl({
   );
 }
 
-type SegmentOptionProps = {
-  segment: Segment;
+type SegmentOptionProps<Value extends string> = {
+  segment: Segment<Value>;
   active: boolean;
-  onChange: (value: string) => void;
+  onChange: (value: Value) => void;
   tone: SegmentControlTone;
 };
 
-function SegmentOption({ segment, active, onChange, tone }: SegmentOptionProps) {
+function SegmentOption<Value extends string>({
+  segment,
+  active,
+  onChange,
+  tone,
+}: SegmentOptionProps<Value>) {
   const t = useT();
   const { hovered, focused, handlers } = useInteraction();
   const styles = useStyles();

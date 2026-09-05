@@ -43,14 +43,48 @@
  * press `j` twice to ring row 3, press `Enter`, and row **1** opened.
  *
  * The row body and the checkbox both take `tabIndex={-1}`, leaving the
- * scroller as the single tab stop *inside the table body* — the ring is then
- * the only answer to "which row is current", and `Enter` can only ever open
- * the ringed row however the keyboard arrived. Both stay clickable and stay
- * named for a screen reader; only the tab stop moves. `tabIndex`, not
- * `focusable={false}`: `react-native-web`'s `Pressable` writes `tabIndex`
- * itself from its own `disabled` prop unless one is passed, which overrides
- * `focusable` outright (`Pressable/index.js`'s `_tabIndex`), and `focusable`
- * warns as deprecated besides.
+ * scroller as the single tab stop *inside the table body*. Both stay
+ * clickable and stay named for a screen reader; only the tab stop moves.
+ * `tabIndex`, not `focusable={false}`: `react-native-web`'s `Pressable`
+ * writes `tabIndex` itself from its own `disabled` prop unless one is
+ * passed, which overrides `focusable` outright (`Pressable/index.js`'s
+ * `_tabIndex`), and `focusable` warns as deprecated besides.
+ *
+ * **`tabIndex={-1}` takes an element out of the tab order, not out of the
+ * document** (M1, round 3), and that half was the part left undone. A click
+ * still focuses a `tabIndex={-1}` element, so after checking one row's
+ * checkbox with the mouse, DOM focus sits on that checkbox — and `Enter`
+ * there never reached the container at all: `PressResponder.onKeyDown` fires
+ * for `Enter` on the focused element and calls `stopPropagation()`. Walk to
+ * row 3 with `j`, press `Enter`, and row **1** opened, under a ring drawn
+ * on row 3.
+ *
+ * So the ring is made the only answer twice over, on both halves of the
+ * event:
+ *
+ * - **The row body and the checkbox handle `onKeyDown` themselves and hand
+ *   the event to the table's own handler** — only for the keys
+ *   `PressResponder` swallows (`Enter`, and `Space` on a button-role
+ *   element); everything else, `j`/`k`/`f` included, is left to bubble to
+ *   the scroller on its own, which is why the delegate cannot double-move
+ *   the ring. `react-native-web`'s `Pressable` calls its own key handler
+ *   first and then the one it was passed, so this runs regardless of the
+ *   `stopPropagation` above it.
+ * - **The press that key would otherwise complete is cancelled**, and the
+ *   two controls need two different cancellations because
+ *   `react-native-web` renders them as two different elements.
+ *   `accessibilityRole="button"` becomes a **native `<button>`**, so the
+ *   browser itself fires a `click` for `Enter`: the delegate's own
+ *   `preventDefault()` is what stops it, and that is the same call the
+ *   handler already makes for every key it claims. The checkbox is a
+ *   `<div role="checkbox">`, which the browser activates for nothing — there
+ *   `PressResponder` completes the press itself, from a document-level
+ *   `keyup` listener, so the press is refused instead (`isKeyboardPress`:
+ *   a press whose event is a key event is the keyboard's, and the
+ *   keyboard's answer to "which row" is the ring). Without both, `Enter`
+ *   opens the ringed row *and* re-presses the focused one a moment later.
+ *   A real pointer click carries a `click` event through neither path and is
+ *   untouched.
  *
  * **The header cells stay in the tab order, and that is deliberate.** They
  * are the sort controls; reaching them with the keyboard is the whole
@@ -190,6 +224,60 @@ export function sortLedgerTableRows(
   return sortRows(rows, SORT_KEY[sort.column], sort.direction);
 }
 
+/**
+ * The DOM `keydown` `react-native-web` forwards. `View`'s React Native type
+ * names no `onKeyDown` at all, so the shape is stated here once and used by
+ * both the scroller's handler and each row's delegate rather than written
+ * out twice.
+ */
+type TableKeyEvent = { key: string; preventDefault: () => void };
+
+/** The bag that carries it onto a `View` or a `Pressable` — see `keyboardProps`. */
+type TableKeyProps = { onKeyDown: (event: TableKeyEvent) => void };
+
+/**
+ * The keys `react-native-web`'s `PressResponder` treats as a press —
+ * `Enter` anywhere, `Space` on a button-role element — and therefore the
+ * keys it calls `stopPropagation()` on, which is what keeps them from
+ * reaching the scroller by themselves (`PressResponder.js`'s own
+ * `isValidKeyPress`). A row delegates exactly these and nothing else:
+ * `j`/`k`/`f` bubble on their own, and delegating them too would move the
+ * ring twice per press.
+ */
+function isDelegatedKey(key: string): boolean {
+  return key === "Enter" || key === " " || key === "Spacebar";
+}
+
+/**
+ * Whether this press is one `react-native-web` synthesised from a key rather
+ * than from a pointer.
+ *
+ * `PressResponder` starts a press on `keydown` and *completes* it from a
+ * document-level `keyup` listener, calling `onPress` with that raw
+ * `KeyboardEvent`; a real click arrives as a React synthetic `click`. So the
+ * event's own `type` is the whole test. Without it, `Enter` on a focused row
+ * would do two things at once: the delegate opens the ringed row on
+ * `keydown`, and this press opens the *focused* one a moment later on
+ * `keyup` (M1, round 3).
+ *
+ * `type` is on `BaseSyntheticEvent`, which `GestureResponderEvent` extends —
+ * no cast, and no `unknown`: it is one of the few members that is honestly
+ * declared on both sides of this seam.
+ */
+function isKeyboardPress(event: GestureResponderEvent): boolean {
+  return event.type === "keyup" || event.type === "keydown";
+}
+
+/**
+ * Note on where this is *not* needed: the row body is a native `<button>`
+ * (`react-native-web` renders `accessibilityRole="button"` as one), so
+ * `PressResponder`'s `keyup` path deliberately stands aside for it —
+ * `isNativeInteractiveElement` — and the press arrives as the browser's own
+ * `click` instead. Refusing that by event type would refuse real clicks too;
+ * the delegate's `preventDefault()` on the `keydown` is what stops the
+ * activation before a `click` exists at all.
+ */
+
 export type LedgerTableProps = {
   rows: readonly LedgerTableRow[];
   sort: LedgerTableSortState;
@@ -265,12 +353,13 @@ export function LedgerTable({
   }, [activeId, selection]);
 
   /**
-   * `View`'s React Native type has no `onKeyDown` — the file doc explains
-   * why this stays a separately-typed prop bag rather than a literal JSX
-   * attribute the stricter type would refuse.
+   * Every key the table answers to, wherever inside it the key was pressed
+   * — the scroller has it as `onKeyDown`, and each row hands over the two
+   * keys `react-native-web` would otherwise swallow (the file doc's own
+   * "one tab stop" paragraphs).
    */
-  const keyboardProps: { onKeyDown: (event: KeyboardEvent) => void } = {
-    onKeyDown: (event) => {
+  const handleTableKeyDown = useCallback(
+    (event: TableKeyEvent) => {
       // `Enter` is matched before the fold — it is the one key here whose
       // own name is more than one character, and lowercasing it would make
       // it collide with nothing but read as if it might.
@@ -303,7 +392,15 @@ export function LedgerTable({
         onFocusRail?.();
       }
     },
-  };
+    [handleOpenActive, moveActive, handleToggleActive, onFocusRail],
+  );
+
+  /**
+   * `View`'s React Native type has no `onKeyDown` — the file doc explains
+   * why this stays a separately-typed prop bag rather than a literal JSX
+   * attribute the stricter type would refuse.
+   */
+  const keyboardProps: TableKeyProps = { onKeyDown: handleTableKeyDown };
 
   const handlePressRow = useCallback(
     (id: string) => {
@@ -328,9 +425,10 @@ export function LedgerTable({
         selected={selection.isSelected(item.id)}
         onPress={handlePressRow}
         onToggleSelect={handleToggleSelect}
+        onKeyDown={handleTableKeyDown}
       />
     ),
-    [activeId, selection, handlePressRow, handleToggleSelect],
+    [activeId, selection, handlePressRow, handleToggleSelect, handleTableKeyDown],
   );
   const keyExtractor = useCallback((row: LedgerTableRow) => row.id, []);
 
@@ -453,6 +551,8 @@ type LedgerTableRowViewProps = {
   selected: boolean;
   onPress: (id: string) => void;
   onToggleSelect: (id: string, event: { shiftKey?: boolean }) => void;
+  /** The table's own key handler — see `isDelegatedKey` and the file doc. */
+  onKeyDown: (event: TableKeyEvent) => void;
 };
 
 function LedgerTableRowView({
@@ -461,9 +561,26 @@ function LedgerTableRowView({
   selected,
   onPress,
   onToggleSelect,
+  onKeyDown,
 }: LedgerTableRowViewProps) {
   const styles = useStyles();
   const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
+  /**
+   * `Enter` and `Space` never reach the scroller from here — `PressResponder`
+   * stops them — so the row hands them over itself. Everything else is left
+   * alone and bubbles.
+   */
+  const handleKeyDown = useCallback(
+    (event: TableKeyEvent) => {
+      if (isDelegatedKey(event.key)) onKeyDown(event);
+    },
+    [onKeyDown],
+  );
+  // A prop bag, not a JSX attribute — `Pressable`'s React Native type
+  // declares no `onKeyDown` even though `react-native-web` forwards one
+  // (`threshold-slider.tsx`'s own precedent, and this file's `keyboardProps`
+  // above).
+  const keyboardProps: TableKeyProps = { onKeyDown: handleKeyDown };
   // The one narrow `unknown` step this file needs — the file doc explains
   // why: `GestureResponderEvent` genuinely carries `shiftKey` on web, but
   // its type does not say so, and `unknown` is the sanctioned way through a
@@ -471,6 +588,12 @@ function LedgerTableRowView({
   // leak" — the leak is in `react-native`'s own type, not this file's).
   const handleToggle = useCallback(
     (event: GestureResponderEvent) => {
+      // `Enter`/`Space` on this checkbox are answered by the table's own
+      // handler, on the ringed row. `PressResponder` would complete a second
+      // press here on `keyup` — naming this row rather than the ringed one —
+      // and unlike the row body there is no native activation to
+      // `preventDefault` away (see `isKeyboardPress`).
+      if (isKeyboardPress(event)) return;
       const shiftKey = (event as unknown as { shiftKey?: boolean }).shiftKey === true;
       onToggleSelect(row.id, { shiftKey });
     },
@@ -483,7 +606,12 @@ function LedgerTableRowView({
     >
       <View style={[styles.cell, styles.checkboxCell]}>
         {row.selectable ? (
-          <LedgerRowCheckbox checked={selected} label={row.payee} onPress={handleToggle} />
+          <LedgerRowCheckbox
+            checked={selected}
+            label={row.payee}
+            onPress={handleToggle}
+            keyboardProps={keyboardProps}
+          />
         ) : null}
       </View>
       <Pressable
@@ -498,6 +626,7 @@ function LedgerTableRowView({
         // `focusable` warns as deprecated besides.
         tabIndex={-1}
         onPress={handlePress}
+        {...keyboardProps}
         style={styles.rowBody}
       >
         <Text style={[styles.cellText, styles.dateCell]}>{row.date.slice(5)}</Text>
@@ -531,6 +660,8 @@ type LedgerRowCheckboxProps = {
   checked: boolean;
   label: string;
   onPress: (event: GestureResponderEvent) => void;
+  /** `Enter`/`Space` handed back to the table — see the file doc (M1, round 3). */
+  keyboardProps: TableKeyProps;
 };
 
 /**
@@ -541,7 +672,7 @@ type LedgerRowCheckboxProps = {
  * a rendered one, and draws the same two-bar mark `Checkbox`'s own doc
  * describes, at table density rather than row density.
  */
-function LedgerRowCheckbox({ checked, label, onPress }: LedgerRowCheckboxProps) {
+function LedgerRowCheckbox({ checked, label, onPress, keyboardProps }: LedgerRowCheckboxProps) {
   const t = useT();
   const styles = useStyles();
   return (
@@ -555,6 +686,7 @@ function LedgerRowCheckbox({ checked, label, onPress }: LedgerRowCheckboxProps) 
       // to this control, and it does not move focus off the scroller.
       tabIndex={-1}
       onPress={onPress}
+      {...keyboardProps}
       style={styles.checkboxBox}
     >
       {checked ? <View style={styles.checkboxMark} /> : null}

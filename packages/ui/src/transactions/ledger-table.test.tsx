@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import { LedgerTable, type LedgerTableRow, type LedgerTableSelection } from "./ledger-table";
@@ -472,6 +472,131 @@ describe("LedgerTable", () => {
 
       expect(onOpenRow).toHaveBeenCalledTimes(1);
       expect(onOpenRow).toHaveBeenCalledWith("3");
+    });
+
+    /**
+     * M1 (round 3) — the half `tabIndex={-1}` does not cover. A click
+     * focuses a `tabIndex={-1}` element, so after checking a row with the
+     * mouse DOM focus sits on that checkbox, and `Enter` *there* never
+     * reaches the scroller at all: `react-native-web`'s `PressResponder`
+     * handles it and calls `stopPropagation()`. Walk to row 2 with `j`,
+     * press `Enter`, and row **1** opened under a ring drawn on row 2.
+     *
+     * Fired on the focused checkbox rather than on the scroller, because
+     * that is the whole finding: every other keyboard test here fires on the
+     * container and so never meets the responder that swallows the event.
+     */
+    it("Enter on a focused checkbox opens the ringed row, not the focused one", () => {
+      const onOpenRow = vi.fn();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selectionOf()}
+          onOpenRow={onOpenRow}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const checkbox = screen.getByRole("checkbox", { name: "Select Corner Bakery" });
+      checkbox.focus();
+      // The ring walks to row 2 while focus stays on row 1's checkbox —
+      // `j` is not a key the responder claims, so it bubbles on its own.
+      fireEvent.keyDown(container, { key: "j" });
+      fireEvent.keyDown(container, { key: "j" });
+
+      fireEvent.keyDown(checkbox, { key: "Enter" });
+      expect(onOpenRow).toHaveBeenCalledTimes(1);
+      expect(onOpenRow).toHaveBeenCalledWith("2");
+    });
+
+    /**
+     * And the other half: `react-native-web` completes that press from a
+     * document-level `keyup`, which would open the *focused* row a moment
+     * after the delegate opened the ringed one. A press whose event is a key
+     * event is the keyboard's, and the keyboard's answer is the ring.
+     */
+    it("the keyup react-native-web presses on afterwards opens nothing more", () => {
+      const onOpenRow = vi.fn();
+      const selection = selectionOf();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selection}
+          onOpenRow={onOpenRow}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const checkbox = screen.getByRole("checkbox", { name: "Select Corner Bakery" });
+      checkbox.focus();
+      fireEvent.keyDown(container, { key: "j" });
+      fireEvent.keyDown(container, { key: "j" });
+
+      fireEvent.keyDown(checkbox, { key: "Enter" });
+      fireEvent.keyUp(checkbox, { key: "Enter" });
+
+      expect(onOpenRow).toHaveBeenCalledTimes(1);
+      expect(onOpenRow).toHaveBeenCalledWith("2");
+      // And the checkbox it was pressed on did not toggle either — that is
+      // `Space` on the ringed row's job, not `Enter` on a focused control's.
+      expect(selection.toggleRow).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The row body is the other element a click leaves focused, and it needs
+     * the *other* cancellation: `react-native-web` renders
+     * `accessibilityRole="button"` as a native `<button>`, so the browser
+     * itself would fire a `click` for `Enter` and open the focused row.
+     * `preventDefault` on the keydown is what stops that — asserted here as
+     * the mechanism, because jsdom does not synthesise the activation click
+     * that would otherwise make it visible.
+     */
+    it("Enter on a focused row body opens the ringed row, and cancels the browser's own click", () => {
+      const onOpenRow = vi.fn();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selectionOf()}
+          onOpenRow={onOpenRow}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const body = screen.getByRole("button", { name: "Corner Bakery" });
+      expect(body.tagName).toBe("BUTTON");
+      body.focus();
+      fireEvent.keyDown(container, { key: "j" });
+      fireEvent.keyDown(container, { key: "j" });
+
+      const enter = createEvent.keyDown(body, { key: "Enter" });
+      fireEvent(body, enter);
+
+      expect(onOpenRow).toHaveBeenCalledTimes(1);
+      expect(onOpenRow).toHaveBeenCalledWith("2");
+      expect(enter.defaultPrevented).toBe(true);
+    });
+
+    /** A pointer press is untouched: a real click still opens the row clicked. */
+    it("a click still opens the row it landed on", () => {
+      const onOpenRow = vi.fn();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selectionOf()}
+          onOpenRow={onOpenRow}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Rewe" }));
+      expect(onOpenRow).toHaveBeenCalledWith("2");
     });
 
     it("Enter with no active row yet does nothing", () => {

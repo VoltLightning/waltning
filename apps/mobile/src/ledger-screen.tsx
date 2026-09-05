@@ -35,6 +35,7 @@ import {
   type LedgerFilterState,
   useLedgerFilters,
 } from "@waltning/client/ledger/use-ledger-filters";
+
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useTransactionSearch } from "@waltning/client/ledger/use-transaction-search";
 import { groupByDay } from "@waltning/client/transactions/group-by-day";
@@ -90,6 +91,13 @@ import { FlatList, Pressable, Text, type TextInput, View } from "react-native";
 const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
 
 /**
+ * §6.7's four-way partition, named once. Both `SegmentControl` and
+ * `<LedgerFilterRail>` are generic over it, so this is the type that travels
+ * from the segments through the control and back into `setScope` (L8).
+ */
+type LedgerFilterScope = LedgerFilterState["scope"];
+
+/**
  * S09's route — C5, running in parallel (`wave-3-shared.md` §3b). This
  * worktree's `app/` has no `transaction/[id].tsx` yet, so expo-router's own
  * generated `Href` union (`.expo/types/router.d.ts`, rebuilt from the actual
@@ -123,8 +131,9 @@ function handlePressRoute(id: string) {
  * `snapshot.accountOwnership` is every account, archived included, present
  * from the very first snapshot — round 2's L6, and that field's own doc has
  * why it is a map rather than `loadArchived()` in an effect. A row whose
- * account is in it at all is the one case with no honest scope to state, so
- * it states none.
+ * account is **not** in that map — the one case left, and one nothing on
+ * this screen can currently produce — has no honest scope to state, so it
+ * states none: `—`, never "Mine", which was the specific lie H4 was.
  */
 function toDeskRow(
   row: PhoneSearchTransaction,
@@ -271,6 +280,21 @@ export default function Ledger() {
    * in which the label and the rows disagree. "Clear all" still clears it:
    * this is a starting point, not a floor. The phone branch is untouched —
    * it opens on everything, as it always has.
+   *
+   * **It is read at mount and never again, resize included** (L6, round 3).
+   * `isDesk` is live — widening a window past `breakpoint.desk` swaps the
+   * layout on the very next render — but `initial` here is a `useState`
+   * initialiser, so a phone-width mount dragged out to desk width arrives at
+   * the table showing every transaction rather than this month, and a
+   * desk-width mount narrowed to phone keeps the month it opened with.
+   * Both are deliberate: the seed is a *starting point* for a reader who has
+   * not touched the rail, and re-applying it on a resize would silently
+   * re-narrow a filter that reader had just widened on purpose — the exact
+   * shape of H5, arriving through a different door. Neither state is silent
+   * either, because the label is derived from the filter (`periodMonthOf`):
+   * it reads "All time" or it names the month, and never the other one's
+   * story. The ordinary way in is a mount at one width or the other; a drag
+   * across the breakpoint mid-session is the case being traded away.
    */
   const filters = useLedgerFilters(
     isDesk
@@ -447,13 +471,6 @@ export default function Ledger() {
 
   const handleOpenSheet = useCallback(() => setSheetOpen(true), []);
   const handleDismissSheet = useCallback(() => setSheetOpen(false), []);
-  // `SegmentControl`'s own `onChange` is generic over `string` — the cast is
-  // the same narrow one the phone build always made, just moved to the one
-  // spot a `string` meets `PhoneTransactionScope`.
-  const handleChangeScope = useCallback(
-    (next: string) => filters.setScope(next as LedgerFilterState["scope"]),
-    [filters],
-  );
 
   const handleShortSwipe = useCallback(
     (id: string) => {
@@ -522,7 +539,12 @@ export default function Ledger() {
    * Both surfaces read it: the rail draws a note under each control, the
    * phone's chip row draws it on the chip (`05-composites.md` §5.6).
    */
-  const exclusions = useFilterExclusionCounts(ledger, filters.applied, search.total.count);
+  const exclusions = useFilterExclusionCounts(ledger, filters.applied, {
+    count: search.total.count,
+    // Which filter that count answers to — a subtraction across two of them
+    // is a wrong number, and `answersTo` is how the hook tells (M2, round 3).
+    answersTo: search.answersTo,
+  });
 
   const activeFilters = activeFilterChips(t, filter, {
     accounts: snapshot.accounts,
@@ -539,9 +561,29 @@ export default function Ledger() {
 
   const filtered = filters.hasActiveFilter;
   const showEmpty = search.loaded && search.error === undefined && search.rows.length === 0;
-  // Only asked for when the empty state needs it — an unfiltered count on
-  // every render would be a second query nothing else on screen wants.
-  const excludedCount = showEmpty && filtered ? ledger.searchTransactions({}).total.count : 0;
+  /**
+   * How many rows the ledger holds with no filter at all — asked for only
+   * when the empty state needs it, since an unfiltered count on every render
+   * would be a query nothing else on screen wants, and asked `countOnly`
+   * (M3, round 3): this is a count over the *whole* ledger, and folding
+   * every row of it to read one integer is the worst case that mode exists
+   * for.
+   */
+  const unfilteredCount = showEmpty
+    ? ledger.searchTransactions({}, undefined, { countOnly: true }).total.count
+    : 0;
+  /**
+   * **An empty ledger is a first run even under a filter** (L1, round 3).
+   * The desk branch opens on the current month, so `hasActiveFilter` is true
+   * from the first paint — which on a brand-new install offered *"No
+   * transactions match these filters · Clear filters"* to someone who has
+   * no transactions to filter. Clearing them would have changed nothing.
+   * The unfiltered count is what tells the two apart, and it is already
+   * being asked for: zero rows in the whole ledger is a first run whatever
+   * the rail says, and only a non-empty ledger can be filtered down to
+   * nothing.
+   */
+  const emptyIsFirstRun = unfilteredCount === 0;
 
   const renderItem = useCallback(
     ({ item }: { item: ListEntry }) =>
@@ -563,22 +605,23 @@ export default function Ledger() {
   }, [search]);
 
   if (breakpoint === "desk") {
-    const emptyState = filtered ? (
-      <EmptyState
-        variant="filtered"
-        title={t("transactions.emptyFilteredTitle")}
-        body={t("transactions.emptyFilteredBody")}
-        count={excludedCount}
-        primaryAction={{ label: t("transactions.clearFilters"), onPress: filters.clearAll }}
-      />
-    ) : (
-      <EmptyState
-        variant="first-run"
-        title={t("transactions.emptyFirstRunTitle")}
-        body={t("transactions.emptyFirstRunBody")}
-        primaryAction={{ label: t("routes.expense"), onPress: handleOpenSheet }}
-      />
-    );
+    const emptyState =
+      filtered && !emptyIsFirstRun ? (
+        <EmptyState
+          variant="filtered"
+          title={t("transactions.emptyFilteredTitle")}
+          body={t("transactions.emptyFilteredBody")}
+          count={unfilteredCount}
+          primaryAction={{ label: t("transactions.clearFilters"), onPress: filters.clearAll }}
+        />
+      ) : (
+        <EmptyState
+          variant="first-run"
+          title={t("transactions.emptyFirstRunTitle")}
+          body={t("transactions.emptyFirstRunBody")}
+          primaryAction={{ label: t("routes.expense"), onPress: handleOpenSheet }}
+        />
+      );
 
     return (
       <GroundPanel scroll="own">
@@ -600,7 +643,7 @@ export default function Ledger() {
             onChangeText={filters.setText}
             onChangeAccountIds={filters.setAccountIds}
             onChangeCategoryIds={filters.setCategoryIds}
-            onChangeScope={handleChangeScope}
+            onChangeScope={filters.setScope}
             onChangeCurrency={filters.setCurrency}
             onChangeCounterpartyId={filters.setCounterpartyId}
             onChangeFrom={filters.setFrom}
@@ -754,12 +797,12 @@ export default function Ledger() {
           action={{ label: t("common.retry"), onPress: search.retry }}
         />
       ) : showEmpty ? (
-        filtered ? (
+        filtered && !emptyIsFirstRun ? (
           <EmptyState
             variant="filtered"
             title={t("transactions.emptyFilteredTitle")}
             body={t("transactions.emptyFilteredBody")}
-            count={excludedCount}
+            count={unfilteredCount}
             primaryAction={{ label: t("transactions.clearFilters"), onPress: filters.clearAll }}
           />
         ) : (
@@ -805,7 +848,7 @@ export default function Ledger() {
         <SegmentControl
           segments={scopeSegments(t)}
           value={filter.scope}
-          onChange={handleChangeScope}
+          onChange={filters.setScope}
         />
         <DateField
           label={t("transactions.filterFrom")}
@@ -832,7 +875,20 @@ export default function Ledger() {
   );
 }
 
-function scopeSegments(t: ReturnType<typeof useT>): [Segment, Segment, Segment, Segment] {
+/**
+ * §6.7's partition, as segments. Typed by the scope union rather than by
+ * `string` (L8, round 3) — that is what lets both `SegmentControl` and
+ * `<LedgerFilterRail>` hand `filters.setScope` its own value back with no
+ * cast in between.
+ */
+function scopeSegments(
+  t: ReturnType<typeof useT>,
+): [
+  Segment<LedgerFilterScope>,
+  Segment<LedgerFilterScope>,
+  Segment<LedgerFilterScope>,
+  Segment<LedgerFilterScope>,
+] {
   return [
     { value: "all", label: t("shell.scopeAll") },
     { value: "mine", label: t("shell.scopeMine") },
@@ -976,9 +1032,8 @@ function ActiveFilterChip({ label, excludes, onRemove }: ActiveFilterChipProps) 
       */}
       {excludes !== undefined && excludes > 0 ? (
         <Text style={styles.activeChipExcludes}>
-          {excludes === 1
-            ? t("transactions.filterExcludesOne", { count: excludes })
-            : t("transactions.filterExcludesMany", { count: excludes })}
+          {/* The plural is the resolver's — `ExcludesNote`'s own doc (L4). */}
+          {t("transactions.filterExcludes", { count: excludes })}
         </Text>
       ) : null}
       <View style={styles.activeChipCross}>

@@ -7,7 +7,7 @@
  * technique `use-breakpoint.test.tsx` uses rather than mocking the hook.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneLedgerPort,
@@ -181,6 +181,74 @@ function fakeController(search: FakeSearch, overrides: Partial<PhoneLedgerPort> 
 
 function withLedger(element: ReactElement, controller: ReturnType<typeof fakeController>) {
   return render(<LedgerProvider controller={controller}>{element}</LedgerProvider>);
+}
+
+const COUNTERPARTY = id<"counterparties">("44444444-4444-4444-8444-444444444444");
+
+/**
+ * Enough of a snapshot for §4's last two controls to have something to
+ * offer — a `Select` with only its "every one of them" option cannot be
+ * used to activate a dimension.
+ */
+const EVERY_DIMENSION_SNAPSHOT = {
+  listCurrencies: () =>
+    [{ code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, isPivot: true }] as never,
+  listCounterparties: () => [{ id: COUNTERPARTY, name: "Nina Placeholder" }] as never,
+};
+
+/**
+ * Turn on every one of §4's seven dimensions. Two arrive seeded — the
+ * account from the route param and the month from the desk branch's initial
+ * state — and the other five are switched on through the rail, the way a
+ * reader would.
+ */
+function activateEveryFilterDimension() {
+  // `text` reaches the query 250 ms after the keystroke, so the clock has to
+  // move for it to count as active at all (`use-debounced-value.ts`).
+  vi.useFakeTimers();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Corner" } });
+  act(() => {
+    vi.advanceTimersByTime(500);
+  });
+  vi.useRealTimers();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Business" }));
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Category" })[0] as HTMLElement);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Eating out" }));
+
+  fireEvent.click(screen.getAllByRole("button", { name: /Currency/ })[0] as HTMLElement);
+  fireEvent.click(screen.getByRole("radio", { name: "PLN" }));
+
+  fireEvent.click(screen.getAllByRole("button", { name: /Person or company/ })[0] as HTMLElement);
+  fireEvent.click(screen.getByRole("radio", { name: "Nina Placeholder" }));
+}
+
+/**
+ * Every piece of text the document held at any point, not only at the end —
+ * a `MutationObserver` rather than a component, because a component can only
+ * see the commits it is itself re-rendered in, and a sibling of `<Ledger />`
+ * is re-rendered in none of them.
+ *
+ * `takeRecords()` is what makes it synchronous: the callback would arrive in
+ * a microtask after the test's own assertions, and the queue can be drained
+ * by hand instead. What is read is the *records* — an added node, a changed
+ * text node — never the live DOM, which by then holds only the final state.
+ */
+function textSeenWhile(render: () => void): readonly string[] {
+  const observer = new MutationObserver(() => {});
+  observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+  render();
+  const seen: string[] = [];
+  for (const record of observer.takeRecords()) {
+    if (record.type === "characterData") seen.push(record.target.textContent ?? "");
+    // `NodeList` is indexed rather than iterable under this tsconfig's lib.
+    record.addedNodes.forEach((node) => {
+      seen.push(node.textContent ?? "");
+    });
+  }
+  observer.disconnect();
+  return seen;
 }
 
 /** `use-breakpoint.test.tsx`'s own real-resize technique. */
@@ -406,12 +474,15 @@ describe("Ledger at desk width", () => {
      * by an effect after the first query had already gone out unbounded, so
      * mounting drained the whole ledger and then drained the month — twice
      * the work, and a window in which the header and the rows disagreed.
-     * A drain is a first page: `cursor` undefined. §4's exclusion counts are
-     * first pages too, so they are told apart by the date filter they are
-     * asked *without*.
+     * A drain is a first page with no `countOnly`: §4's exclusion counts are
+     * first pages too, and six of the seven carry a date filter — telling
+     * them apart by the filter they are asked *without* left the assertion
+     * one accidentally-date-free dimension away from being wrong (L7, round
+     * 3). `countOnly` is what actually distinguishes them: a drain reads
+     * rows, a count reads a count.
      */
     const drains = searchTransactions.mock.calls.filter(
-      ([filter, cursor]) => cursor === undefined && filter.from !== undefined,
+      ([, cursor, options]) => cursor === undefined && options?.countOnly !== true,
     );
     expect(drains).toHaveLength(1);
     // Generous on purpose: this asserts "no accidental O(n²) and no per-row
@@ -475,6 +546,128 @@ describe("Ledger at desk width", () => {
     // The desk branch opens on the current month, so `dateRange` is the one
     // active control on first paint.
     expect(screen.getByText("Excludes 10 rows")).toBeDefined();
+  });
+
+  /**
+   * M2 (round 3) — and it says it *once*, right.
+   *
+   * The count is a subtraction from the count on screen, and on the commit a
+   * filter changes in, that count still belongs to the *previous* filter:
+   * the screen re-renders with the new filter before the effect that
+   * re-queries has run. Subtracting it published a number that was wrong
+   * about a set nobody was looking at — 12 here, where the truth is 15 —
+   * and paid a full round of queries to produce it, then another to correct
+   * it. A caption that is briefly wrong is the review's own "looks like
+   * health": both renders are plausible and only one is true.
+   *
+   * The fake answers four ways, so the stale subtraction and the true one
+   * cannot land on the same number by accident. Honest limit: under React 19
+   * the *painted* wrongness turns out not to be reachable from this
+   * screen — the search's own state update lands before the counts effect
+   * first runs, so what round 2's shape actually cost was the doubled round
+   * of queries below, not a visibly wrong caption. This states the property
+   * anyway, over every text the document ever held, because the arrangement
+   * that would paint one is a plausible future edit rather than a
+   * hypothetical.
+   */
+  it("the exclusion note is never briefly wrong on the way to being right", () => {
+    const searchTransactions = vi.fn<FakeSearch>((filter) => {
+      const dated = filter.from !== undefined;
+      const mine = filter.scope === "mine";
+      const count = mine ? (dated ? 5 : 20) : dated ? 8 : 30;
+      return { rows: [expenseRow()], nextCursor: undefined, total: { count, currencies: [] } };
+    });
+    withLedger(<Ledger />, fakeController(searchTransactions));
+
+    // The month alone: 30 rows in the ledger, 8 in September.
+    expect(screen.getByText("Excludes 22 rows")).toBeDefined();
+
+    const seen = textSeenWhile(() => {
+      // By role, not by text: "Mine" is also a value in the table's own
+      // scope column (§6.7), and this is the rail's segment.
+      fireEvent.click(screen.getByRole("tab", { name: "Mine" }));
+    });
+
+    // 20 of the reader's own rows in the whole ledger, 5 this month.
+    expect(seen.length, "vacuity guard — the observer saw the change").toBeGreaterThan(0);
+    expect(screen.getByText("Excludes 15 rows")).toBeDefined();
+    expect(screen.getByText("Excludes 3 rows")).toBeDefined();
+    // 20 − 8: the new query's total against the old filter's count.
+    expect(seen.some((text) => text.includes("Excludes 12 rows"))).toBe(false);
+  });
+
+  /**
+   * M2's other half — one round of counts per filter change, one query per
+   * active dimension. Seven dimensions is the whole of §4, and the shape
+   * that made the old code expensive: every one of them re-ran when the
+   * subtrahend moved, which it did on every drain.
+   */
+  it("one countOnly query per active dimension, once per filter change", () => {
+    useLocalSearchParams.mockReturnValue({ account: ACCOUNT });
+    const searchTransactions = vi.fn<FakeSearch>(() => ({
+      rows: [expenseRow()],
+      nextCursor: undefined,
+      total: { count: 1, currencies: [] },
+    }));
+    withLedger(<Ledger />, fakeController(searchTransactions, EVERY_DIMENSION_SNAPSHOT));
+
+    // Two dimensions arrive seeded — the account from the route param (S10
+    // §2) and the month from the desk branch's own initial state.
+    activateEveryFilterDimension();
+
+    searchTransactions.mockClear();
+    // One more change, and count what it costs.
+    fireEvent.click(screen.getByRole("tab", { name: "Shared" }));
+
+    const counts = searchTransactions.mock.calls.filter(([, , options]) => options?.countOnly);
+    expect(counts).toHaveLength(7);
+    // And exactly one of them per dimension — a second round would be the
+    // same seven again.
+    expect(new Set(counts.map(([filter]) => JSON.stringify(filter))).size).toBe(7);
+  });
+
+  /**
+   * L1 (round 3) — an empty ledger is a first run whatever the rail says.
+   *
+   * The desk branch opens on the current month, so `hasActiveFilter` is true
+   * from the first paint: a brand-new install was offered *"No matching
+   * transactions · Clear filters"* — an instruction that would have changed
+   * nothing, since there is nothing to filter. The unfiltered count is what
+   * tells the two apart, and it is already being asked for.
+   */
+  it("an empty ledger shows the first-run state, not a filtered one, under the seeded month", () => {
+    const searchTransactions = vi.fn<FakeSearch>(() => ({
+      rows: [],
+      nextCursor: undefined,
+      total: { count: 0, currencies: [] },
+    }));
+    withLedger(<Ledger />, fakeController(searchTransactions));
+
+    expect(screen.getByText("No transactions yet")).toBeDefined();
+    expect(screen.queryByText("No matching transactions")).toBeNull();
+    // And the count that decided it is a count, not a page of the whole
+    // ledger read to be thrown away (M3).
+    const unfiltered = searchTransactions.mock.calls.filter(
+      ([filter]) => filter.from === undefined && filter.scope === undefined,
+    );
+    expect(unfiltered.length).toBeGreaterThan(0);
+    for (const call of unfiltered) expect(call[2]).toEqual({ countOnly: true });
+  });
+
+  /**
+   * And the other side of it: a ledger that *does* hold rows, filtered down
+   * to none, still says so — L1 must not swallow the filtered state.
+   */
+  it("a non-empty ledger filtered down to nothing still says the filter is why", () => {
+    const searchTransactions = vi.fn<FakeSearch>((filter) => ({
+      rows: [],
+      nextCursor: undefined,
+      total: { count: filter.from === undefined ? 9 : 0, currencies: [] },
+    }));
+    withLedger(<Ledger />, fakeController(searchTransactions));
+
+    expect(screen.getByText("No matching transactions")).toBeDefined();
+    expect(screen.queryByText("No transactions yet")).toBeNull();
   });
 
   /* ── C2 layer 1 · a mixed batch never reaches a category tree ────────── */

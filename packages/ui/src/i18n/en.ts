@@ -453,9 +453,22 @@ export const en = {
      * §4's per-control exclusion count. "Excludes" rather than "hides": the
      * rows are still in the ledger, and this control is the reason they are
      * not on screen.
+     *
+     * i18next's real `count`-driven suffixes, not a flat `One`/`Many` pair
+     * picked between at the call site (L4, round 3). English's two
+     * categories collapse onto two strings here, but Polish's four each
+     * decline `wiersz` differently — 1 *wiersz*, 2–4 *wiersze*, 5+
+     * *wierszy* — and a caller choosing between two keys can only ever
+     * reach two of them, so every Polish reader with three excluded rows
+     * read a form that does not exist. `en.ts` carries all four keys
+     * regardless: `Messages` is the mapped type over *this* file's keys, so
+     * a language with more grammar than English needs the same key set
+     * here, `fx.noRatesYetFuture`'s own precedent.
      */
-    filterExcludesOne: "Excludes {{count}} row",
-    filterExcludesMany: "Excludes {{count}} rows",
+    filterExcludes_one: "Excludes {{count}} row",
+    filterExcludes_few: "Excludes {{count}} rows",
+    filterExcludes_many: "Excludes {{count}} rows",
+    filterExcludes_other: "Excludes {{count}} rows",
     /**
      * L2 (round 2) — the drain stopped because a page came back empty while
      * still handing over a cursor. Distinct from `narrowTheFilter`: nothing

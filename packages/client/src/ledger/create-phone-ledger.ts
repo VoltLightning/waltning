@@ -429,6 +429,22 @@ export type PhoneSearchFilter = {
 
 export type PhoneSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
 
+/**
+ * How much of the answer the caller wants — `@waltning/ledger`'s own
+ * `TransactionSearchOptions`, restated structurally like every other shape
+ * across this seam.
+ *
+ * **`countOnly` is what makes S10 §4's exclusion counts affordable.** Each
+ * of those asks "how many rows match without this one clause" and reads
+ * nothing but `total.count` off the answer; asking through the full
+ * operation folded every matching row through `decimal.js` for currency
+ * sums nobody renders, over a set deliberately wider than the one on screen.
+ * The reader answers a count-only call with an SQL `COUNT(*)` instead — the
+ * same figure, since `total.count` was only ever the length of the rows it
+ * folded.
+ */
+export type PhoneSearchOptions = { countOnly?: boolean };
+
 /** One row of a search page — every field S10's mobile row (or `TransferRow`) needs. */
 export type PhoneSearchTransaction = {
   id: Id<"transactions">;
@@ -679,7 +695,11 @@ export type PhoneLedgerPort = {
   /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
   balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
   /** C4 — S10's list. A query, not a snapshot field. */
-  searchTransactions: (filter: PhoneSearchFilter, cursor?: PhoneSearchCursor) => PhoneSearchPage;
+  searchTransactions: (
+    filter: PhoneSearchFilter,
+    cursor?: PhoneSearchCursor,
+    options?: PhoneSearchOptions,
+  ) => PhoneSearchPage;
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
   createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
@@ -1325,6 +1345,7 @@ export type PhoneLedgerController = {
   searchTransactions: (
     filter: TransactionFilterDraft,
     cursor?: TransactionSearchCursorDraft,
+    options?: PhoneSearchOptions,
   ) => PhoneSearchPage;
   categorizeBatch: (
     draft: CategorizeBatchDraft,
@@ -2002,7 +2023,7 @@ export function createPhoneLedger(
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listPayeeHistory: () => port.listPayeeHistory(),
-    searchTransactions: (filter, cursor) =>
+    searchTransactions: (filter, cursor, options) =>
       port.searchTransactions(
         {
           ...(filter.text !== undefined ? { text: filter.text } : {}),
@@ -2031,6 +2052,7 @@ export function createPhoneLedger(
         cursor
           ? { date: accountingDate(cursor.date), id: id<"transactions">(cursor.id) }
           : undefined,
+        options,
       ),
     categorizeBatch: (draft) => {
       emitClientDiagnostic(diagnostics, {
