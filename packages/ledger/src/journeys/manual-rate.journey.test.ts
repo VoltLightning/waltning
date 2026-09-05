@@ -2,7 +2,7 @@
  * Proves: screens/S18-settings-exchange-rates.md §7 ("Interaction" — a range
  * write is one action producing many `manual` rows), SPEC.md §7.6 "a manual
  * entry always outranks a synced one" (for the same pair and date).
- * Findings: R1 C1, R1 H3, R1 H3-r5 (reciprocal rounds to zero inside apply).
+ * Findings: R1 C1, R1 H3, R1 H3-r5 — fixed by #119 (reciprocal rounds to zero inside apply).
  */
 import { accountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
@@ -94,9 +94,10 @@ describe("set_manual_rate / clear_manual_rate — §7.6's three-level override",
     }
   });
 
-  it.fails("R1 H3-r5 — a rate too large to reciprocate is refused, not written", () => {
+  it("R1 H3-r5 — a rate too large to reciprocate is refused, not written", () => {
     const j = setup();
     try {
+      seedRate(j, PIVOT, USD, "2026-01-04", "0.2500", "nbp");
       try {
         j.session.setManualRate(
           {

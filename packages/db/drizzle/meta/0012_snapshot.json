@@ -1,5 +1,5 @@
 {
-  "id": "13ddbeb8-17b7-4eb2-8d62-7fb98590e448",
+  "id": "ef15d891-8255-497a-8e3f-63de5977b0df",
   "prevId": "e5aa38e8-2800-47b9-a265-9bc83bec8ce9",
   "version": "7",
   "dialect": "postgresql",
@@ -2078,7 +2078,7 @@
         },
         "fx_rates_rate_bounds": {
           "name": "fx_rates_rate_bounds",
-          "value": "\"fx_rates\".\"rate\" > 0.000000000001 and \"fx_rates\".\"rate\" < 1000000000000"
+          "value": "\"fx_rates\".\"rate\" > 0.000000000001 and \"fx_rates\".\"rate\" < 999999999999"
         },
         "fx_rates_distinct": {
           "name": "fx_rates_distinct",

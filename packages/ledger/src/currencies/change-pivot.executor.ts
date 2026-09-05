@@ -284,9 +284,12 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): ChangePivotResult 
  * in them could actually break: **every leg this rewrite computed shares
  * its date with the reciprocal that bridge produced.** A leg with no
  * same-date reciprocal in `written` names a date rule 1 should have dropped
- * whole (§7.6's rule 1) but did not — exactly the shape a regression in the
- * bridge check above would produce, and exactly what a hand-built `written`
- * missing its reciprocal reproduces in `currency-ops.test.ts`.
+ * whole (§7.6's rule 1) but did not. The reciprocal is always minted
+ * alongside the legs it bridges, so nothing in this function's own logic
+ * today can actually produce that shape — this guards a future
+ * restructuring that writes legs without their reciprocal, and is exactly
+ * what a hand-built `written` missing its reciprocal reproduces in
+ * `currency-ops.test.ts`.
  *
  * The reciprocal's own row needs no witness here: rule 1 already refused
  * unless its date's bridge was real or `derived`, so a reciprocal reaching

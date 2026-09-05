@@ -50,11 +50,15 @@ export const fxRates = k.table("fx_rates", fxRatesColumns(), (t) => [
   // `cast(… as real)`, unlike the Postgres twin: SQLite stores a rate as TEXT
   // (there is no exact decimal type — `kit.ts`'s header), and its type
   // ordering puts *every* TEXT value above *every* number, so an uncast
-  // comparison would read `'0.25' < 1000000000000` as false and refuse every
+  // comparison would read `'0.25' < 999999999999` as false and refuse every
   // row ever written. A double has far more than the twelve places this
-  // interval's endpoints need to be told apart.
+  // interval's endpoints need to be told apart. The ceiling itself is
+  // `999999999999` (`money.ts`'s `RATE_MAX_EXCLUSIVE`), not `1e12` — the
+  // Postgres twin's own reason applies here too, even though SQLite has no
+  // column width to overflow: the two engines hold the same bound so a rate
+  // this CHECK refuses is refused identically on both.
   check(
     "fx_rates_rate_bounds",
-    sql`cast(${t.rate} as real) > 0.000000000001 and cast(${t.rate} as real) < 1000000000000`,
+    sql`cast(${t.rate} as real) > 0.000000000001 and cast(${t.rate} as real) < 999999999999`,
   ),
 ]);

@@ -190,13 +190,15 @@ export const fxRates = pgTable("fx_rates", fxRatesColumns(), (t) => [
   // that lands inside `create_transaction`'s `apply`, *after* the outbox entry
   // has already committed, leaving an entry no replay can ever apply. Each
   // bound makes the far side of that flip storable: above `1e-12` so the flip
-  // fits `numeric(24,12)`, below `1e12` so it does not truncate to a zero
-  // `fx_rates_rate_positive` would then accept (`money.ts`'s
-  // `RATE_MIN_EXCLUSIVE` carries the argument in full). `zUnitsPerPivot`
-  // refuses the same range at the contract edge; this is the half that holds
-  // when the code is wrong — `change_pivot` mints rates by division and parses
-  // none of them.
-  check("fx_rates_rate_bounds", sql`${t.rate} > 0.000000000001 and ${t.rate} < 1000000000000`),
+  // fits `numeric(24,12)`, below `999999999999` — the type's own largest
+  // integer part, not `1e12` itself, which is one digit past what
+  // `numeric(24,12)` can even store and so overflows before this CHECK ever
+  // runs (`money.ts`'s `RATE_MAX_EXCLUSIVE` carries the argument in full) —
+  // so it does not truncate to a zero `fx_rates_rate_positive` would then
+  // accept. `zUnitsPerPivot` refuses the same range at the contract edge;
+  // this is the half that holds when the code is wrong — `change_pivot`
+  // mints rates by division and parses none of them.
+  check("fx_rates_rate_bounds", sql`${t.rate} > 0.000000000001 and ${t.rate} < 999999999999`),
   check("fx_rates_distinct", sql`${t.base} <> ${t.quote}`),
 ]);
 

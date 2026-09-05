@@ -155,25 +155,28 @@ describe("the two rates are reciprocals, and the types know it (H21)", () => {
   /**
    * H2 — what the rate bounds actually buy, stated exactly. **Each bound
    * guarantees the far side of the flip is storable**: above `1e-12`, the
-   * reciprocal stays under `1e12` and so fits `numeric(24,12)`; below `1e12`,
-   * the reciprocal stays above zero at twelve places and so does not trip
-   * `reciprocal`'s own throw. That is the whole claim — and it is *not* the
-   * stronger "the interval is closed under the flip", which twelve-place
-   * truncation makes false at the top: `1 / 999999999999` rounds to exactly
-   * `1e-12`, the excluded floor. Flipping once, at a boundary, is what makes
-   * that harmless; chaining flips is what this file has always refused.
+   * reciprocal stays under `1e12` and so fits `numeric(24,12)`; below
+   * `999999999999` (the type's own largest integer part, not `1e12` itself —
+   * `money.ts`'s own note on why the ceiling sits one step inside the
+   * column's range), the reciprocal stays above zero at twelve places and so
+   * does not trip `reciprocal`'s own throw. That is the whole claim — and it
+   * is *not* the stronger "the interval is closed under the flip", which
+   * twelve-place truncation makes false at the top: `1 / 999999999998`
+   * rounds to exactly `1e-12`, the excluded floor. Flipping once, at a
+   * boundary, is what makes that harmless; chaining flips is what this file
+   * has always refused.
    */
   describe("H2 — the rate bounds, and exactly what they guarantee", () => {
     it("refuses both endpoints, and accepts everything strictly between", () => {
       expect(money.rateInBounds(money.RATE_MIN_EXCLUSIVE)).toBe(false);
       expect(money.rateInBounds(money.RATE_MAX_EXCLUSIVE)).toBe(false);
       expect(money.rateInBounds("0.000000000002")).toBe(true);
-      expect(money.rateInBounds("999999999999")).toBe(true);
+      expect(money.rateInBounds("999999999998")).toBe(true);
       expect(money.rateInBounds("1")).toBe(true);
     });
 
-    it.each(["0.000000000002", "0.0001", "1", "3.7556", "999999999999"])(
-      "%s flips without throwing, to a value that is neither zero nor past 1e12",
+    it.each(["0.000000000002", "0.0001", "1", "3.7556", "999999999998"])(
+      "%s flips without throwing, to a value that is neither zero nor past the ceiling",
       (value) => {
         const rate = money.unitsPerPivot(value);
         expect(money.rateInBounds(rate)).toBe(true);
@@ -184,7 +187,7 @@ describe("the two rates are reciprocals, and the types know it (H21)", () => {
     );
 
     // The endpoints themselves, and why each is excluded rather than allowed.
-    it("1e-12 would flip to exactly 1e12 — past what numeric(24,12) holds", () => {
+    it("1e-12 would flip to exactly 1e12 — past the ceiling numeric(24,12) itself allows", () => {
       const flipped = money.reciprocal(money.unitsPerPivot(money.RATE_MIN_EXCLUSIVE));
       expect(money.dec(flipped).gte(money.RATE_MAX_EXCLUSIVE)).toBe(true);
     });
@@ -192,8 +195,8 @@ describe("the two rates are reciprocals, and the types know it (H21)", () => {
     // And the truncation the *weaker* claim above exists to admit: a rate
     // just inside the ceiling flips onto the floor, which is in `numeric`'s
     // range and out of this interval's.
-    it("a rate just under 1e12 flips onto the excluded floor, not past it", () => {
-      const flipped = money.reciprocal(money.unitsPerPivot("999999999999"));
+    it("a rate just under the ceiling flips onto the excluded floor, not past it", () => {
+      const flipped = money.reciprocal(money.unitsPerPivot("999999999998"));
       expect(flipped).toBe(money.RATE_MIN_EXCLUSIVE);
       expect(money.rateInBounds(flipped)).toBe(false);
     });

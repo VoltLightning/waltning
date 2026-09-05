@@ -42,15 +42,7 @@ import {
 import { openLedger } from "../open.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 
-const {
-  accounts,
-  counterpartyMerges,
-  currencies,
-  fxRates,
-  outbox,
-  transactions,
-  transactionLines,
-} = schema;
+const { accounts, counterpartyMerges, currencies, outbox, transactions, transactionLines } = schema;
 const outboxSchema = { outbox: schema.outbox, outboxSeq: schema.outboxSeq };
 const replicaSchema = {
   accountGroups: schema.accountGroups,
@@ -239,6 +231,24 @@ function insertCounterparty(
 ) {
   ledger.replica.db.run(
     sql`insert into "counterparties" ("id", "name", "created_at", "updated_at") values (${counterpartyId}, ${name}, ${when}, ${when})`,
+  );
+}
+
+/**
+ * A rate, inserted as raw SQL rather than through the typed `fxRates` table
+ * object — the same reason `insertCounterparty` is.
+ *
+ * **Deliberately, not an oversight.** The drizzle schema object always
+ * includes `displaced_rate`, `displaced_source` and `displaced_fetched_at` —
+ * it is the *current* shape of the table — but a database sitting below
+ * version 10 (`0009_schema`, the step that adds the three columns) does not
+ * have them yet, and a typed `.insert()` would name them in the generated
+ * `INSERT` regardless of which version the file is actually at. Only the
+ * columns every version in this suite has are named here.
+ */
+function insertFxRate(ledger: Ledger, base: string, quote: string, date: string, rate: string) {
+  ledger.replica.db.run(
+    sql`insert into "fx_rates" ("base", "quote", "date", "rate", "source") values (${base}, ${quote}, ${date}, ${rate}, 'manual')`,
   );
 }
 
@@ -643,16 +653,7 @@ describe("a populated replica upgrades to current without losing anything", () =
       .values({ code: currencyCode("USD"), name: "Placeholder" })
       .onConflictDoNothing()
       .run();
-    ledger.replica.db
-      .insert(fxRates)
-      .values({
-        base: currencyCode("PLN"),
-        quote: currencyCode("USD"),
-        date: accountingDate("2026-03-01"),
-        rate: money.unitsPerPivot("4.00"),
-        source: "manual",
-      })
-      .run();
+    insertFxRate(ledger, "PLN", "USD", "2026-03-01", "4.00");
 
     // Three counterparties, each exercising a different way `fold()` has to
     // normalise a name: plain ASCII, Polish diacritics in both letter cases

@@ -62,11 +62,13 @@ describe("L3 — transactions_fx_rate_positive", () => {
 });
 
 /**
- * M3 — `fx_rates_rate_bounds` (`0011_fx_rates_derived_and_amount_guards.sql`,
+ * M3 — `fx_rates_rate_bounds` (`0012_fx_rates_derived_and_amount_guards.sql`,
  * `schema.ts`), break it once: a rate at either open bound is refused, one
  * step inside either bound is accepted. `money.ts`'s `RATE_MIN_EXCLUSIVE` /
- * `RATE_MAX_EXCLUSIVE` carry the argument for exactly `1e-12`/`1e12` — the
- * two figures a `numeric(24,12)` reciprocal can and cannot hold.
+ * `RATE_MAX_EXCLUSIVE` carry the argument for exactly `1e-12`/`999999999999`
+ * — the ceiling sits one step inside `numeric(24,12)`'s own range, not at
+ * `1e12` itself, so this CHECK is what actually fires rather than a generic
+ * overflow standing in for it.
  */
 describe("M3 — fx_rates_rate_bounds", () => {
   let scratch: Scratch;
@@ -93,18 +95,17 @@ describe("M3 — fx_rates_rate_bounds", () => {
     ).rejects.toThrow(/fx_rates_rate_bounds/);
   });
 
-  // `1000000000000` is 13 digits — one past `numeric(24,12)`'s own 12-digit
-  // integer part, so the column itself refuses it before `fx_rates_rate_bounds`
-  // ever runs. Both are the same ceiling stated twice, in two different
-  // places (`money.ts`'s own comment on `RATE_MAX_EXCLUSIVE`); either refusal
-  // proves the rate never lands.
-  it("refuses a rate at the ceiling, 1000000000000", async () => {
+  // `999999999999` is `numeric(24,12)`'s own largest storable integer part —
+  // the column can hold it, so this is `fx_rates_rate_bounds` itself firing,
+  // not the generic overflow `1000000000000` (one digit past the column's
+  // range entirely) would trip instead.
+  it("refuses a rate at the ceiling, 999999999999", async () => {
     await expect(
       scratch.sql.unsafe(`
         INSERT INTO fx_rates (base, quote, date, rate, source)
-        VALUES ('USD', 'PLN', '2026-01-02', 1000000000000, 'nbp')
+        VALUES ('USD', 'PLN', '2026-01-02', 999999999999, 'nbp')
       `),
-    ).rejects.toThrow(/fx_rates_rate_bounds|numeric field overflow/);
+    ).rejects.toThrow(/fx_rates_rate_bounds/);
   });
 
   it("accepts a rate one step inside the floor, 0.000000000002", async () => {
@@ -118,14 +119,14 @@ describe("M3 — fx_rates_rate_bounds", () => {
     expect(rows[0]?.rate).toBe("0.000000000002");
   });
 
-  it("accepts a rate one step inside the ceiling, 999999999999", async () => {
+  it("accepts a rate one step inside the ceiling, 999999999998", async () => {
     await scratch.sql.unsafe(`
       INSERT INTO fx_rates (base, quote, date, rate, source)
-      VALUES ('USD', 'PLN', '2026-01-04', 999999999999, 'nbp')
+      VALUES ('USD', 'PLN', '2026-01-04', 999999999998, 'nbp')
     `);
     const rows = await scratch.sql<{ rate: string }[]>`
       SELECT rate::text FROM fx_rates
       WHERE base = 'USD' AND quote = 'PLN' AND date = '2026-01-04'`;
-    expect(rows[0]?.rate).toBe("999999999999.000000000000");
+    expect(rows[0]?.rate).toBe("999999999998.000000000000");
   });
 });

@@ -1208,7 +1208,7 @@ categories_earnings_income_only       kind = 'income' OR is_earnings = false
 accounts_shared_not_business          ownership = 'own' OR is_business = false
 currencies_decimals_sane              decimals BETWEEN 0 AND 8
 fx_rates_rate_positive                rate > 0
-fx_rates_rate_bounds                  rate > 0.000000000001 AND rate < 1000000000000
+fx_rates_rate_bounds                  rate > 0.000000000001 AND rate < 999999999999
 fx_rates_distinct                     base <> quote
 ```
 
@@ -1227,10 +1227,16 @@ exactly once, at the write boundary, between the units-per-pivot `fx_rates`
 stores and the pivot-per-unit `transactions.fx_rate` holds (§4). Each bound
 keeps the far side of that crossing storable: above `1e-12`, because
 `1 / 1e-12` is exactly `1e12` and `numeric(24,12)` cannot hold it; below
-`1e12`, because past that the flip truncates to `0.000000000000` — a value
-`rate > 0` accepts, since the zero arrives from the far side of the crossing,
-where no constraint was looking. Every rate parsed at a contract boundary is
-refused outside the same interval, and the pivot change, which mints rates by
+`999999999999` — the type's own largest integer part, not `1e12` itself,
+which is one digit past what `numeric(24,12)` can even store, so a rate that
+reaches it never reaches this constraint at all: Postgres refuses the write
+with its own generic "numeric field overflow" first. Moving the ceiling one
+step inside the column's range is what makes the CHECK itself the thing that
+fires — on a rate the column can hold but this interval refuses, past the
+ceiling the flip truncates to `0.000000000000` — a value `rate > 0` accepts,
+since the zero arrives from the far side of the crossing, where no
+constraint was looking. Every rate parsed at a contract boundary is refused
+outside the same interval, and the pivot change, which mints rates by
 division rather than parsing them, drops any date whose rebased rate would
 land outside it. The interval is not *closed* under the flip and does not need
 to be — twelve-place rounding folds its top onto its excluded floor — because

@@ -243,22 +243,30 @@ export const unitsPerPivot = (v: string | number | Decimal): UnitsPerPivot =>
   dec(v).toFixed(12) as UnitsPerPivot;
 
 /**
- * The open interval every stored rate lives in — `1e-12 < rate < 1e12`.
+ * The open interval every stored rate lives in —
+ * `1e-12 < rate < 999999999999`.
  *
  * **Each bound exists to make the far side of `reciprocal` storable**, and a
- * rate is `numeric(24,12)`, so `1e-12` is the smallest value that scale can
- * represent and `1e12` the first magnitude that precision cannot hold:
+ * rate is `numeric(24,12)`: twelve digits before the point and twelve after,
+ * so `1e-12` is the smallest value that scale can represent and
+ * `999999999999` (twelve nines) is the largest integer part precision can
+ * hold:
  *
  * - **Above `1e-12`**, because `1 / 1e-12` is exactly `1e12` — the flip of the
  *   floor overflows the column it would be written to.
- * - **Below `1e12`**, because past roughly `2e12` the flip truncates to
- *   `0.000000000000`, which every `rate > 0` CHECK accepts: the zero arrives
- *   from the far side of the crossing, where no CHECK was looking. `1e12` is
- *   the column's own ceiling and the cheaper line to draw.
+ * - **Below `999999999999`, not `1e12`.** `1e12` has thirteen integer
+ *   digits — one past what `numeric(24,12)` can store at all — so a rate
+ *   that reaches it never reaches the CHECK: Postgres refuses the write with
+ *   its own generic *"numeric field overflow"* first, and `fx_rates_rate_bounds`
+ *   never gets to be the name in the error. `999999999999` is the type's own
+ *   ceiling, one step inside its range rather than one step past it, so a
+ *   rate the column *can* hold but this interval refuses (`999999999999.5`,
+ *   say) is refused by the CHECK itself — the failure this bound exists to
+ *   produce, not an unrelated one standing in for it.
  *
  * **Not "closed under the flip", which would be a stronger claim and false.**
  * Twelve-place truncation folds the top of the interval onto its excluded
- * floor: `1 / 999999999999` rounds to exactly `1e-12` (`money.test.ts` pins
+ * floor: `1 / 999999999998` rounds to exactly `1e-12` (`money.test.ts` pins
  * it). What holds is the pair of guarantees above — the flip of an in-bounds
  * rate is never zero and never past `1e12` — and that is enough precisely
  * because a rate is flipped **once, at a boundary**, never chained.
@@ -271,7 +279,7 @@ export const unitsPerPivot = (v: string | number | Decimal): UnitsPerPivot =>
  * rate would land outside.
  */
 export const RATE_MIN_EXCLUSIVE = "0.000000000001";
-export const RATE_MAX_EXCLUSIVE = "1000000000000";
+export const RATE_MAX_EXCLUSIVE = "999999999999";
 
 /** Whether a rate lies strictly inside `RATE_MIN_EXCLUSIVE`…`RATE_MAX_EXCLUSIVE`. */
 export const rateInBounds = (v: Rate | string | number | Decimal): boolean => {

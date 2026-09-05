@@ -1280,11 +1280,11 @@ describe("fx_rates_rate_bounds (SQLite twin)", () => {
     expect(rootCauseMessage(caught)).toMatch(/CHECK constraint failed/);
   });
 
-  it("refuses a rate at the ceiling, 1000000000000", () => {
+  it("refuses a rate at the ceiling, 999999999999", () => {
     let caught: unknown;
     try {
       s.ledger.replica.db.run(
-        sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-02', '1000000000000', 'nbp')`,
+        sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-02', '999999999999', 'nbp')`,
       );
     } catch (error) {
       caught = error;
@@ -1299,11 +1299,11 @@ describe("fx_rates_rate_bounds (SQLite twin)", () => {
     expect(rateRows().find((r) => r.date === "2026-01-03")?.rate).toBe("0.000000000002");
   });
 
-  it("accepts a rate one step inside the ceiling, 999999999999", () => {
+  it("accepts a rate one step inside the ceiling, 999999999998", () => {
     s.ledger.replica.db.run(
-      sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-04', '999999999999', 'nbp')`,
+      sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-04', '999999999998', 'nbp')`,
     );
-    expect(rateRows().find((r) => r.date === "2026-01-04")?.rate).toBe("999999999999");
+    expect(rateRows().find((r) => r.date === "2026-01-04")?.rate).toBe("999999999998");
   });
 });
 
