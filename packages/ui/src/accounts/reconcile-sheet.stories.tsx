@@ -31,7 +31,10 @@ type Story = StoryObj<typeof meta>;
 /** Computed, observed, and the live difference — S16 §5's worked example. */
 export const Reconcile: Story = {
   play: async ({ canvasElement }) => {
-    await userEvent.type(await within(canvasElement).findByLabelText("You observed"), "1198,30");
+    // `BottomSheet` portals into `document.body` — `account-picker.stories.tsx:161`'s
+    // own reason for querying the owner document rather than `canvasElement`.
+    const canvas = within(canvasElement.ownerDocument.body);
+    await userEvent.type(await canvas.findByLabelText("You observed"), "1198,30");
   },
 };
 

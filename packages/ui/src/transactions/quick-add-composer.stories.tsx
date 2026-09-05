@@ -9,8 +9,9 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { currencyCode } from "@waltning/core/money";
+import { useCallback, useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
-import { QuickAddComposer } from "./quick-add-composer";
+import { QuickAddComposer, type QuickAddComposerProps } from "./quick-add-composer";
 
 function noop() {}
 
@@ -143,21 +144,55 @@ export const LastUsedAccount: Story = {
   args: { raw: "48,90", accountId: "account-a", accountMachineFilled: true },
 };
 
-/** §6.6 — a counterparty offered once the ledger holds one, its role picked in the same sheet. */
+/**
+ * §6.6 — a counterparty offered once the ledger holds one, its role picked in
+ * the same sheet.
+ *
+ * `QuickAddComposer` is fully controlled — `counterpartyId`/`counterpartyRole`
+ * only ever reflect props — so a story that wires `onCounterpartyChange` to a
+ * no-op never re-renders with the pick and the role sheet's radiogroup is
+ * unreachable. `render` holds both in local state instead, the way
+ * `primitives/select.stories.tsx`'s `Live` does.
+ */
 export const WithCounterparty: Story = {
   args: {
     raw: "48,90",
     accountId: "account-a",
     counterparties: [{ id: "cp-a", name: "Corner Café" }],
   },
+  render: (args) => <WithCounterpartyDemo {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole("button", { name: "+ Person" }));
-    await userEvent.click(await canvas.findByRole("button", { name: "Counterparty" }));
-    await userEvent.click(await canvas.findByRole("radio", { name: "Corner Café" }));
-    await expect(canvas.findByRole("radiogroup", { name: "Role" })).resolves.toBeDefined();
+    // `BottomSheet` (`shell/bottom-sheet.tsx`) portals its content to a
+    // sibling of `canvasElement` on the web — `account-picker.stories.tsx:161`'s
+    // own reason — so the Select trigger and everything past it is queried
+    // against the owner document, not the canvas.
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole("button", { name: "Counterparty" }));
+    await userEvent.click(await body.findByRole("radio", { name: "Corner Café" }));
+    await expect(body.findByRole("radiogroup", { name: "Role" })).resolves.toBeDefined();
   },
 };
+
+function WithCounterpartyDemo(args: QuickAddComposerProps) {
+  const [counterpartyId, setCounterpartyId] = useState(args.counterpartyId);
+  const [counterpartyRole, setCounterpartyRole] = useState(args.counterpartyRole);
+  const handleCounterpartyChange = useCallback((next: string) => setCounterpartyId(next), []);
+  const handleCounterpartyRoleChange = useCallback(
+    (next: QuickAddComposerProps["counterpartyRole"]) => setCounterpartyRole(next),
+    [],
+  );
+  return (
+    <QuickAddComposer
+      {...args}
+      counterpartyId={counterpartyId}
+      onCounterpartyChange={handleCounterpartyChange}
+      counterpartyRole={counterpartyRole}
+      onCounterpartyRoleChange={handleCounterpartyRoleChange}
+    />
+  );
+}
 
 /** `create_transaction`'s own refusals, rendered under the chip they name. */
 export const FieldErrors: Story = {

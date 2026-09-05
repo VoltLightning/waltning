@@ -47,11 +47,11 @@ it("shows a cross-kind or cycle refusal inline", () => {
       visible
       categoryName="Salary"
       groups={GROUPS}
-      error='"Food" is a expense group — refused across kinds'
+      error='"Food" is an expense group — refused across kinds'
       onSave={vi.fn()}
       onDismiss={vi.fn()}
     />,
   );
 
-  expect(screen.getByText('"Food" is a expense group — refused across kinds')).toBeDefined();
+  expect(screen.getByText('"Food" is an expense group — refused across kinds')).toBeDefined();
 });

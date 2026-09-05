@@ -26,7 +26,7 @@ type Story = StoryObj<typeof meta>;
 export const Expense: Story = {};
 
 export const Income: Story = {
-  args: { amount: toMoney("2000.00"), type: "income", accountName: "Bank A · PLN" },
+  args: { amount: toMoney("2000.00"), type: "income", accountName: "Bank A" },
 };
 
 /** Two legs of one transfer are signed opposite ways and neither is a gain or a loss. */

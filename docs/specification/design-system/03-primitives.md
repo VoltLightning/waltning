@@ -75,7 +75,7 @@ a filter: *mine* and *ours* show together regardless of scope.
 
 | Component | Notes |
 |---|---|
-| `TextField` | Label, hint, error, character counter. **The error replaces the hint** — they answer the same question at different moments, and showing both makes the reader reconcile them. The counter appears only when a limit exists, and counts up: `97/120` states a fact where `23 left` sets a deadline |
+| `TextField` | Label, hint, error, character counter. **The error replaces the hint** — they answer the same question at different moments, and showing both makes the reader reconcile them. The counter appears only when a limit exists, and counts up: `97/120` states a fact where `23 left` sets a deadline. **An errored field's ring is the danger colour** (`theme.dangerBorder`) whether focused or not — the ordinary green focus ring would otherwise swamp the danger border the moment an errored field is focused, which is exactly when the person is looking at it |
 | `AmountField` | Tabular numerals, **comma decimal**, currency affix, right-aligned |
 | `SearchField` | Leading icon, clear button, live results |
 | `Keypad` | 0–9, comma, delete. Bottom-anchored, thumb-zone (Fitts) |

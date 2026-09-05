@@ -93,7 +93,7 @@ export function SearchField({
           autoFocus={autoFocus}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          style={styles.input}
+          style={[styles.input, focused ? styles.inputFocused : null]}
         />
         {showClear ? (
           <Pressable
@@ -132,12 +132,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.surface,
     paddingHorizontal: space.x2,
   },
-  focused: {
-    borderColor: theme.borderStrong,
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: { borderColor: theme.borderStrong },
   glass: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
   glassRing: {
     width: 10,
@@ -155,7 +150,22 @@ const useStyles = makeStyles((theme) => ({
     right: 1,
     bottom: 0,
   },
-  input: { flex: 1, color: theme.text, minHeight: touchTarget.min, ...text.ui("body") },
+  // `outlineWidth: 0` suppresses the browser's own native focus ring on this
+  // `TextInput` — without it, focusing the field draws that ring *here*, on
+  // the actual DOM node that receives focus, on top of whatever ring
+  // `inputFocused` below applies to the same node.
+  input: {
+    flex: 1,
+    color: theme.text,
+    minHeight: touchTarget.min,
+    outlineWidth: 0,
+    ...text.ui("body"),
+  },
+  inputFocused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
   clear: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   /** The ×, drawn: two bars crossed — `select.tsx`'s token cross, same construction. */
   clearCross: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },

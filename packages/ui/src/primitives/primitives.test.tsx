@@ -91,13 +91,13 @@ describe("Button", () => {
     // The label stays mounted and hidden. A spinner that replaces it re-measures
     // the button, and the thing beside an affirmative action is usually the
     // destructive one.
-    render(<Button label="Approve" loading onPress={noop} />);
+    render(<Button label="Approve" loading onPress={noop} variant="primary" />);
     expect(screen.getByText("Approve")).toBeDefined();
   });
 
   it("does not fire while loading", () => {
     const onPress = vi.fn();
-    render(<Button label="Approve" loading onPress={onPress} />);
+    render(<Button label="Approve" loading onPress={onPress} variant="primary" />);
     screen.getByText("Approve").click();
     expect(onPress).not.toHaveBeenCalled();
   });

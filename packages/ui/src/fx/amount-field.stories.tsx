@@ -33,5 +33,5 @@ export const HeroEmpty: Story = {
 
 /** No account chosen yet — the amount has no currency to be labelled in. */
 export const HeroNoCurrency: Story = {
-  args: { variant: "hero", label: "Amount", value: "48,90" },
+  args: { variant: "hero", label: "Amount", currency: undefined, value: "48,90" },
 };

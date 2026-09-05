@@ -156,6 +156,7 @@ export function RateEditor({
           label={confirming ? t("fx.rateEditorConfirmSubmit") : t("fx.rateEditorSubmit")}
           onPress={handlePress}
           disabled={!canSubmit}
+          variant="primary"
         />
       </View>
     </View>

@@ -59,26 +59,36 @@ export default defineConfig({
   expect: {
     toHaveScreenshot: {
       /**
-       * The two knobs do different jobs, and getting the split wrong makes the
-       * suite pass on a real change — which it did, once, before this comment.
+       * `maxDiffPixelRatio: 0.01` was the actual hole, not `threshold` — 1% of
+       * this suite's 900×600 frame is 5,400 pixels, and a whole floating
+       * button, a repointed palette, and a 44×26 toggle track all rendered
+       * fewer differing pixels than that and passed. A *ratio* budget is
+       * generous exactly where the frame is large, which is backwards: the
+       * bigger the frame, the more a real defect can hide inside "1%".
        *
-       * **`threshold` is per-pixel colour distance.** Playwright's default of
-       * `0.2` is far too coarse for a palette: repointing dark `surface` from
-       * `#10251a` to `#1a3326` moves each channel by about ten, lands well
-       * inside `0.2`, and every affected pixel is scored *identical*. The whole
-       * suite passed a deliberate palette break. `0.02` registers it.
+       * **`maxDiffPixels: 24` is an absolute count** — enough to absorb text
+       * anti-aliasing (a few edge pixels differing between runs on the same
+       * machine), nowhere near enough to absorb a control that changed.
        *
-       * **`maxDiffPixelRatio` is how many pixels may differ at all**, and it
-       * absorbs the thing `threshold` must not: text anti-aliasing, where a few
-       * edge pixels differ enormously between runs on the same machine. Those
-       * are numerous enough to notice and far fewer than 1% of the frame.
+       * **`threshold: 0.2`** (Playwright's own default, loosened back up from
+       * this suite's former `0.02`) is the per-pixel colour distance that
+       * decides whether a pixel counts as "different" at all. With the count
+       * budget this tight, `threshold` has to stay loose: at `0.02`, ordinary
+       * anti-aliased edges register as different pixels on their own and blow
+       * a 24-pixel budget on font rendering alone, before any real change. A
+       * `0.02` threshold made sense only paired with the old percentage
+       * budget it was compensating for; paired with an absolute one it only
+       * produces false failures. A pixel that is *actually* wrong — a
+       * repointed palette, a moved control — differs by far more than `0.2`
+       * registers as identical, and still fails on count.
        *
-       * So: strict about *how different* a pixel may be, forgiving about *how
-       * many* may be. A colour change repaints a region and fails on count; a
-       * subpixel wobble does not.
+       * Per-story exceptions, if a story's own text genuinely flickers
+       * sub-pixel between runs, belong on that story's own `toHaveScreenshot`
+       * call in `visual/stories.spec.ts` — never here, which is every story
+       * at once.
        */
-      threshold: 0.02,
-      maxDiffPixelRatio: 0.01,
+      threshold: 0.2,
+      maxDiffPixels: 24,
       /** The spinner in `Button/Loading` never stops on its own. */
       animations: "disabled",
       caret: "hide",

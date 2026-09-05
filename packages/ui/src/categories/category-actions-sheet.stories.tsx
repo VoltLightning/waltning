@@ -32,6 +32,10 @@ export const Group: Story = {
   args: { category: { id: "food", name: "Food", isLeaf: false } },
 };
 
+/** Archiving a group with unarchived children refuses — the sheet's own title names the group the error refuses. */
 export const Refused: Story = {
-  args: { error: '"Food" has 2 unarchived categories inside it' },
+  args: {
+    category: { id: "food", name: "Food", isLeaf: false },
+    error: '"Food" has 2 unarchived categories inside it',
+  },
 };

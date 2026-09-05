@@ -3778,7 +3778,7 @@ export function createPhoneLedger(
               fieldErrors: [
                 {
                   path: "parentId",
-                  message: `"${parent.name}" is a ${parent.kind} group — refused across kinds`,
+                  message: `"${parent.name}" is an ${parent.kind} group — refused across kinds`,
                 },
               ],
             };

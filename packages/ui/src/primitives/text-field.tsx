@@ -123,8 +123,18 @@ export function TextField({
         style={[
           styles.input,
           hovered && !disabled && !focused ? styles.inputHovered : null,
-          focused ? styles.inputFocused : null,
-          error === undefined ? null : styles.inputError,
+          // An errored field's ring is the danger colour whether focused or
+          // not (`design-system/03` §3.7) — `inputError` alone carries that
+          // for the resting border, and `inputErrorFocused` carries it for
+          // the ring too, so the danger border is never swamped by the
+          // ordinary green focus ring.
+          error === undefined
+            ? focused
+              ? styles.inputFocused
+              : null
+            : focused
+              ? styles.inputErrorFocused
+              : styles.inputError,
           disabled ? styles.inputDisabled : null,
         ]}
       />
@@ -167,6 +177,12 @@ const useStyles = makeStyles((theme) => ({
     outlineOffset: focus.offset,
   },
   inputError: { borderColor: theme.dangerBorder },
+  inputErrorFocused: {
+    borderColor: theme.dangerBorder,
+    outlineWidth: focus.width,
+    outlineColor: theme.dangerBorder,
+    outlineOffset: focus.offset,
+  },
   inputDisabled: { opacity: 0.45 },
   meta: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
   spacer: { flex: 1 },

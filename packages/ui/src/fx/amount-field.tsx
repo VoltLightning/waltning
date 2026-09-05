@@ -52,8 +52,13 @@ export type AmountFieldFieldProps = {
 export type AmountFieldHeroProps = {
   variant: "hero";
   label: string;
-  /** Same "not yet known" rule as the field variant — see there. */
-  currency?: string;
+  /**
+   * Same "not yet known" rule as the field variant — see there. `|
+   * undefined` (rather than plain `currency?: string`) so a story can state
+   * "explicitly no currency" against `exactOptionalPropertyTypes` — a story
+   * that omits the key instead has meta's own default leak through.
+   */
+  currency?: string | undefined;
   /**
    * The raw string a `Keypad` edits (`"48,90"`) — the canonical comma,
    * regardless of locale. Rendered through the locale's own decimal mark;
@@ -202,7 +207,7 @@ function EditableAmountField({
   return (
     <View style={styles.block}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.field, focused ? styles.focused : null, error ? styles.invalid : null]}>
+      <View style={[styles.field, error ? styles.invalid : null]}>
         <TextInput
           accessibilityLabel={label}
           // `decimal-pad` rather than `numeric`: it offers the separator and not
@@ -212,7 +217,16 @@ function EditableAmountField({
           onChangeText={handleTextChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          style={styles.input}
+          style={[
+            styles.input,
+            // The ring belongs on this node, not the wrapping `field` View —
+            // `search-field.tsx`'s own defect: the DOM node that receives
+            // focus is this `TextInput`, and without an outline here the
+            // browser draws its own native ring on top of ours. An errored
+            // field's ring is the danger colour whether focused or not, the
+            // same rule `text-field.tsx`'s own fix states.
+            focused ? (error ? styles.inputErrorFocused : styles.inputFocused) : null,
+          ]}
         />
         {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>
@@ -246,11 +260,19 @@ const useStyles = makeStyles((theme) => ({
     // the column of rendered ones beside it.
     textAlign: "right",
     fontVariant: [...tabularNums],
+    // Suppresses the browser's own native focus ring on this `TextInput` —
+    // `search-field.tsx`'s own fix for the same defect.
+    outlineWidth: 0,
   },
   affix: { color: theme.textMuted, ...text.ui("caption") },
-  focused: {
+  inputFocused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
+  inputErrorFocused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.dangerBorder,
     outlineOffset: focus.offset,
   },
   invalid: { borderColor: theme.dangerBorder },

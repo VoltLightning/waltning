@@ -33,7 +33,7 @@ export type ButtonSize = "sm" | "md" | "lg";
 export type ButtonProps = {
   label: string;
   onPress: () => void;
-  variant?: ButtonVariant;
+  variant: ButtonVariant;
   size?: ButtonSize;
   disabled?: boolean;
   /** Spinner replaces the label; the width does not change. */
@@ -53,7 +53,7 @@ const HEIGHT: Record<ButtonSize, number> = { sm: 32, md: 40, lg: 48 };
 export function Button({
   label,
   onPress,
-  variant = "secondary",
+  variant,
   size = "md",
   disabled = false,
   loading = false,
