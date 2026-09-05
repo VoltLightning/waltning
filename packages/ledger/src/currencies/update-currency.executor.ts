@@ -27,7 +27,7 @@
  * unarchived or the row's own history is read, and a shrink that ignores it
  * produces exactly the silent truncation this whole guard exists to refuse.
  * `anyStoredFigureOverScale` mirrors `assert_currency_decimals_safe`
- * (`0012_transaction_scale_and_category_kind.sql`, C1) rather than the
+ * (`0011_transaction_scale_and_category_kind.sql`, C1) rather than the
  * narrower live-reference count above: every account regardless of
  * `archived`, every transaction's four money columns regardless of
  * `deleted_at` (M1 — a soft-deleted row can be restored later, so both
@@ -161,7 +161,7 @@ function assertDecimalsShrinkSafe(input: UpdateCurrencyInput, tx: ReplicaTx): vo
 
 /**
  * R4 H-r4 — the local mirror of `assert_currency_decimals_safe`
- * (`0012_transaction_scale_and_category_kind.sql`, C1). See the file header
+ * (`0011_transaction_scale_and_category_kind.sql`, C1). See the file header
  * for why this scans a different set of rows than the live-reference count
  * above: every account regardless of `archived`, every non-deleted
  * transaction's own money columns, and every transaction line regardless of

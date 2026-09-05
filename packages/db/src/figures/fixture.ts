@@ -27,7 +27,7 @@ export const CURRENCIES = [
   { code: "EUR", name: "Euro", decimals: 2 },
   // Fictional — placeholder only, `CLAUDE.md`'s "public repo, private
   // ledger" rule. H2's `assert_amount_scale` trigger
-  // (`0012_transaction_scale_and_category_kind.sql`) refuses a row past its
+  // (`0011_transaction_scale_and_category_kind.sql`) refuses a row past its
   // own currency's scale, and `…001`/`…002`/`…004`/`…006` below are
   // deliberately eight and nine decimal digits, the fixture's whole point
   // (this file's own top comment). Real currencies never hold eight decimal
@@ -45,7 +45,7 @@ export const ACCOUNTS = [
     ownership: "own",
     isBusiness: false,
     // M1 — `accounts.opening_balance` now has its own scale guarantee
-    // (`assert_account_balance_scale`, `0012_transaction_scale_and_category_kind.sql`),
+    // (`assert_account_balance_scale`, `0011_transaction_scale_and_category_kind.sql`),
     // so a PLN account's own opening figure has to fit PLN's own two decimal
     // places; the eight- and nine-decimal-digit rows this fixture exists to
     // provoke (this file's own top comment) live on `…001`/`…002`/`…004`/

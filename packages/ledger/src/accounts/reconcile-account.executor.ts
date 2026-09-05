@@ -93,7 +93,7 @@ function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTra
   }
 
   // `SPEC.md` §7.2, the local mirror of `assert_account_balance_scale`
-  // (`0012_transaction_scale_and_category_kind.sql`): checked against
+  // (`0011_transaction_scale_and_category_kind.sql`): checked against
   // `observedBalance` directly, not the *derived* `difference` below — a
   // difference can land back at a clean scale by coincidence (an over-scale
   // observation cancelling an equally over-scale `computed`), which would

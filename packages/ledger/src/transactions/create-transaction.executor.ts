@@ -192,7 +192,7 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
 
 /**
  * `SPEC.md` §7.2, the local mirror of `assert_amount_scale`
- * (`0012_transaction_scale_and_category_kind.sql`): `amount_original`,
+ * (`0011_transaction_scale_and_category_kind.sql`): `amount_original`,
  * `to_amount` and `fee` each fit their own currency's declared decimals.
  * `debt_amount`/`debt_currency` are not this executor's — `settle_debt`
  * (`counterparties/settle-debt.executor.ts`) is the only writer of those two

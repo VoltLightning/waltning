@@ -104,7 +104,7 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
   }
 
   // `SPEC.md` §7.2, the local mirror of `assert_transaction_line_amount_scale`
-  // (`0012_transaction_scale_and_category_kind.sql`): a split belongs to the
+  // (`0011_transaction_scale_and_category_kind.sql`): a split belongs to the
   // payment, not the photograph, so each line's own scale is checked against
   // its *parent* transaction's currency — the sum check above proves the
   // total is exact, never that any one line individually is.

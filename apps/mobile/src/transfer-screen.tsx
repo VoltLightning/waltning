@@ -50,7 +50,7 @@ const KNOWN_PATHS = ["amountOriginal", "accountId", "toAccountId", "toAmount", "
  * itself (`packages/client` is not a component). The same two keys
  * `quick-add-screen.tsx`'s own `resolveFieldErrorMessage` resolves for
  * `amountOriginal`; here they can also land on `toAmount` or `fee`
- * (`0012_transaction_scale_and_category_kind.sql`'s extended
+ * (`0011_transaction_scale_and_category_kind.sql`'s extended
  * `assert_amount_scale`), and `accountId` (the *from* leg's own rate guard).
  * Everything else was already `error.message` — the raw English a schema or
  * an executor wrote — never routed through a translation at all.

@@ -106,7 +106,7 @@ export const createAccountExecutor = defineLocalExecutor<
  */
 function insertAccount(input: CreateAccountInput, tx: ReplicaTx): LocalAccountRow {
   // `SPEC.md` §7.2 — the local mirror of `assert_amount_scale`
-  // (`0012_transaction_scale_and_category_kind.sql`): `opening_balance` fits
+  // (`0011_transaction_scale_and_category_kind.sql`): `opening_balance` fits
   // its own currency's declared decimals. Nothing else in this executor's
   // path (`createAccountInput`'s own `zMoney`) knows which currency's scale
   // applies — only a currency lookup, run here, can.

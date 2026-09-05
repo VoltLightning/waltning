@@ -236,7 +236,7 @@ it("shows an unrecognised settle refusal at form level", () => {
  * H — `settle_debt`'s own H2 mirror (`create-phone-ledger.ts`) refuses
  * `discharges.amount` past the picked currency's own scale (matching
  * `assert_amount_scale`'s own `debt_amount`/`debt_currency` pair,
- * `0012_transaction_scale_and_category_kind.sql`); `SETTLE_KNOWN_PATHS`
+ * `0011_transaction_scale_and_category_kind.sql`); `SETTLE_KNOWN_PATHS`
  * already routes it into `byField`, but nothing rendered it.
  */
 it("shows a discharges.amount refusal under the discharges amount field (H)", () => {

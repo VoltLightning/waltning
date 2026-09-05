@@ -1,7 +1,7 @@
 /**
  * A figure past its own currency's declared scale — the local ledger's own
  * version of the guarantee Postgres states through
- * `0012_transaction_scale_and_category_kind.sql`'s `assert_amount_scale` and
+ * `0011_transaction_scale_and_category_kind.sql`'s `assert_amount_scale` and
  * its siblings (`SPEC.md` §7.2).
  *
  * **SQLite carries no trigger of its own** (`ddl.ts` states every `CHECK`

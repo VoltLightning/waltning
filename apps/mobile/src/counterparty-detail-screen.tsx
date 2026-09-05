@@ -197,7 +197,7 @@ function resolveSettleFieldErrorMessage(t: ReturnType<typeof useT>, error: Field
   // M — the same guard `quick-add-screen.tsx`'s own `resolveFieldErrorMessage`
   // resolves for `createTransaction`'s `amountOriginal`/`toAmount`: this is
   // `settleDebt`'s own `discharges.amount` past `discharges.currency`'s own
-  // decimal scale (`0012_transaction_scale_and_category_kind.sql`'s
+  // decimal scale (`0011_transaction_scale_and_category_kind.sql`'s
   // `debt_amount`/`debt_currency` pair).
   if (error.messageKey === "transactions.tooManyDecimals") {
     return t("transactions.tooManyDecimals", {

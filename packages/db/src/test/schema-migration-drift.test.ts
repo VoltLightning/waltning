@@ -30,7 +30,7 @@ const META_DIR = fileURLToPath(new URL("../../drizzle/meta", import.meta.url));
  * diff against.
  *
  * **Not necessarily the last journal entry's own.** A hand-written migration
- * (`0001_database_objects.sql`, and now `0012_transaction_scale_and_category_kind.sql`
+ * (`0001_database_objects.sql`, and now `0011_transaction_scale_and_category_kind.sql`
  * — trigger-only, no `schema.ts` change) never gets a snapshot of its own, so
  * the journal's last entry can land on one of those. Scanning `meta/` for the
  * highest `NNNN_snapshot.json` on disk is what `invariants/migration-drift.test.ts`

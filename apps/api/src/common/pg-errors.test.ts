@@ -238,7 +238,7 @@ describe("every other guard is identifiable", () => {
     await s.sql`DELETE FROM transactions`;
   });
 
-  /** H2 — `0012_transaction_scale_and_category_kind.sql`. PLN holds two decimal places. */
+  /** H2 — `0011_transaction_scale_and_category_kind.sql`. PLN holds two decimal places. */
   it("WA016 · an amount holds more decimals than its own currency", async () => {
     const error = await refusal(
       `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
@@ -274,7 +274,7 @@ describe("every other guard is identifiable", () => {
     expect(error.details?.column).toBe("amount");
   });
 
-  /** C1 — `0012_transaction_scale_and_category_kind.sql`. Lowering under a row that would no longer fit. */
+  /** C1 — `0011_transaction_scale_and_category_kind.sql`. Lowering under a row that would no longer fit. */
   it("WA018 · a currency's own decimals cannot be lowered under an existing row", async () => {
     await s.sql`INSERT INTO currencies (code, name, decimals) VALUES ('XAA', 'Placeholder', 8)`;
     await s.sql`
@@ -291,7 +291,7 @@ describe("every other guard is identifiable", () => {
     expect(error.code).toBe("validation");
   });
 
-  /** H1-b — `0012_transaction_scale_and_category_kind.sql`. `CAT_LEAF` is `expense`. */
+  /** H1-b — `0011_transaction_scale_and_category_kind.sql`. `CAT_LEAF` is `expense`. */
   it("WA017 · a category's own kind disagrees with the transaction's type", async () => {
     const error = await refusal(
       `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, category_id)

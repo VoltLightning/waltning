@@ -62,16 +62,16 @@ export const SQLSTATE = {
   LINES_SUM: "WA015",
   /**
    * H2/H3/M1 — an amount past its own currency's own decimal scale
-   * (`0012_transaction_scale_and_category_kind.sql`). **Shared by several
+   * (`0011_transaction_scale_and_category_kind.sql`). **Shared by several
    * triggers** (`transactions`, `debt_reassignments`, `transaction_lines`,
    * `accounts`, `recurring_transactions`, `targets`, `receipts`) — the
    * migration sets `CONSTRAINT`/`COLUMN` on every raise, and `toDomainError`
    * below reads those off the driver rather than assuming this one entry.
    */
   AMOUNT_SCALE: "WA016",
-  /** H1-b — a category's own kind disagrees with the transaction's type (`0012_transaction_scale_and_category_kind.sql`). */
+  /** H1-b — a category's own kind disagrees with the transaction's type (`0011_transaction_scale_and_category_kind.sql`). */
   CATEGORY_KIND_MATCHES_TYPE: "WA017",
-  /** C1 — a currency's `decimals` cannot be lowered under an existing row (`0012_transaction_scale_and_category_kind.sql`). */
+  /** C1 — a currency's `decimals` cannot be lowered under an existing row (`0011_transaction_scale_and_category_kind.sql`). */
   CURRENCY_DECIMALS_LOWERED: "WA018",
 } as const;
 
@@ -193,7 +193,7 @@ type CausedError = {
   constraint?: string;
   /**
    * M3 — the offending column, when a `RAISE … USING COLUMN = …` set one
-   * (every WA016 raise in `0012_transaction_scale_and_category_kind.sql`
+   * (every WA016 raise in `0011_transaction_scale_and_category_kind.sql`
    * does). Same dual-spelling story as `constraint`/`constraint_name`:
    * postgres.js reads the wire protocol's `Column Name` field as
    * `column_name`, node-postgres as `column`.
@@ -240,7 +240,7 @@ export function toDomainError(e: unknown): DomainError | undefined {
   if (guard) {
     // M3 — several triggers now share WA016, so the map's own `constraint`
     // is only ever a default; a `RAISE … USING CONSTRAINT = …, COLUMN = …`
-    // (every raise in `0012_transaction_scale_and_category_kind.sql`) tells
+    // (every raise in `0011_transaction_scale_and_category_kind.sql`) tells
     // the truth about which one actually fired, and is preferred whenever
     // the driver reported one.
     const constraint = driver.constraint_name ?? driver.constraint ?? guard.constraint;

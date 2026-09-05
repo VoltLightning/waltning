@@ -1930,7 +1930,7 @@ export function createPhoneLedger(
          * currency's scale applies; the controller does, the same reason
          * `createTransaction`'s own H2 check lives here rather than in the
          * schema. Mirrors `accounts_balance_scale_matches_currency`
-         * (`0012_transaction_scale_and_category_kind.sql`) — `opening_balance`
+         * (`0011_transaction_scale_and_category_kind.sql`) — `opening_balance`
          * is the sharpest of the four columns that trigger covers, since it
          * shifts every balance computed from it, forever.
          */
@@ -2608,7 +2608,7 @@ export function createPhoneLedger(
          * account's own — `snapshot.currencies`, not `snapshot.accounts`,
          * is what has its scale. Matches the extended
          * `assert_amount_scale` trigger
-         * (`0012_transaction_scale_and_category_kind.sql`).
+         * (`0011_transaction_scale_and_category_kind.sql`).
          */
         const dischargesCurrency = snapshot.currencies.find(
           (candidate) => candidate.code === draft.dischargesCurrency,
@@ -2854,7 +2854,7 @@ export function createPhoneLedger(
          * transfer's destination leg (§7.5) can carry the same defect in its
          * own currency, and the client-side check must cover the same
          * ground the extended `assert_amount_scale` trigger now does
-         * (`0012_transaction_scale_and_category_kind.sql`). Only checked
+         * (`0011_transaction_scale_and_category_kind.sql`). Only checked
          * when the destination account is known locally, matching the
          * source account's own guard above.
          *
@@ -2900,7 +2900,7 @@ export function createPhoneLedger(
          * the row's own `currency`, so it is checked against `account`'s
          * own scale (the same account `amountOriginal` above is checked
          * against), matching the extended `assert_amount_scale` trigger
-         * (`0012_transaction_scale_and_category_kind.sql`).
+         * (`0011_transaction_scale_and_category_kind.sql`).
          */
         if (draft.fee !== undefined) {
           const parsedFee = zMoney.safeParse(draft.fee);
@@ -2931,7 +2931,7 @@ export function createPhoneLedger(
          * here rather than in the schema. Refused on `categoryId` before the
          * write — the guarantee this mirrors is
          * `transactions_category_kind_matches_type`
-         * (`0012_transaction_scale_and_category_kind.sql`), broken once
+         * (`0011_transaction_scale_and_category_kind.sql`), broken once
          * there to prove it fires even if this refusal is ever bypassed.
          */
         if (draft.categoryId !== null && (draft.type === "income" || draft.type === "expense")) {
@@ -3253,7 +3253,7 @@ export function createPhoneLedger(
          * *which* currency's scale applies — the controller does, the same
          * reason `createTransaction`'s own H2 checks live here rather than
          * in the schema. Mirrors `transaction_lines_amount_scale_matches_currency`
-         * (`0012_transaction_scale_and_category_kind.sql`), refused on the
+         * (`0011_transaction_scale_and_category_kind.sql`), refused on the
          * offending line before the write rather than discovered as a
          * silently truncated figure the day the breakdown is read back.
          */

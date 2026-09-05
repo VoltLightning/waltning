@@ -333,7 +333,7 @@ mirrored in application code rather than in SQLite itself.** SQLite carries no
 trigger of its own that can join to a second table (`ddl.ts` states every
 `CHECK` this schema can enforce alone), so `assert_amount_scale` and
 `assert_currency_decimals_safe`'s own cross-table lookup against
-`currencies.decimals` (`0012_transaction_scale_and_category_kind.sql`, `SPEC.md`
+`currencies.decimals` (`0011_transaction_scale_and_category_kind.sql`, `SPEC.md`
 §6.5) has no SQLite trigger to mirror into. `packages/ledger/src/scale.ts`'s
 `assertMoneyScale` is the device's version instead — run from inside each
 executor's own write path — and `update_currency`'s own executor carries the

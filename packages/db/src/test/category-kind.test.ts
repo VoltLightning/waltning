@@ -9,7 +9,7 @@
  * refuses this before a write ever leaves the phone
  * (`transactions.categoryKindMismatch`), but a client-side refusal is not a
  * guarantee (`CLAUDE.md`: "New guarantee → new constraint").
- * `0012_transaction_scale_and_category_kind.sql` is that constraint; this is
+ * `0011_transaction_scale_and_category_kind.sql` is that constraint; this is
  * what breaks it once to prove it fires.
  */
 

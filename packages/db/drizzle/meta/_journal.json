@@ -80,10 +80,10 @@
       "breakpoints": true
     },
     {
-      "idx": 12,
+      "idx": 11,
       "version": "7",
       "when": 1788589200000,
-      "tag": "0012_transaction_scale_and_category_kind",
+      "tag": "0011_transaction_scale_and_category_kind",
       "breakpoints": true
     }
   ]

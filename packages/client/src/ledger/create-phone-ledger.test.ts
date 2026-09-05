@@ -452,7 +452,7 @@ describe("phone ledger controller", () => {
   /**
    * M1 — `accounts.opening_balance` had no client mirror at all — the
    * sharpest of the four columns `accounts_balance_scale_matches_currency`
-   * covers (`0012_transaction_scale_and_category_kind.sql`), since it
+   * covers (`0011_transaction_scale_and_category_kind.sql`), since it
    * shifts every balance computed from it, forever.
    */
   it("refuses an opening balance past the chosen currency's own scale", () => {
@@ -892,7 +892,7 @@ describe("phone ledger controller", () => {
   /**
    * H1-b — `createTransactionInput` has no category tree in view; the
    * controller does. Mirrors `transactions_category_kind_matches_type`
-   * (`0012_transaction_scale_and_category_kind.sql`), the Postgres guarantee
+   * (`0011_transaction_scale_and_category_kind.sql`), the Postgres guarantee
    * this refusal exists so a write is never the first place it is caught.
    */
   it("refuses a categoryId whose kind disagrees with the transaction's type (H1-b)", () => {
@@ -943,7 +943,7 @@ describe("phone ledger controller", () => {
    * M — the H2 guarantee above checked `amountOriginal` only; a transfer's
    * destination leg (§7.5) can carry the same defect in its own currency,
    * matching `assert_amount_scale`'s own extension
-   * (`0012_transaction_scale_and_category_kind.sql`).
+   * (`0011_transaction_scale_and_category_kind.sql`).
    */
   it("refuses toAmount past the destination account's own scale (M)", () => {
     const { controller, createTransaction } = harness();
@@ -1004,7 +1004,7 @@ describe("phone ledger controller", () => {
    * M — `fee` (S31 §9.1) carries no currency column of its own; it is
    * always the row's own `currency`, so it is checked against the *source*
    * account's own scale, matching the extended `assert_amount_scale`
-   * trigger (`0012_transaction_scale_and_category_kind.sql`).
+   * trigger (`0011_transaction_scale_and_category_kind.sql`).
    */
   it("refuses fee past the account's own scale (M)", () => {
     const { controller, createTransaction } = harness();
@@ -1283,7 +1283,7 @@ describe("phone ledger controller", () => {
      * M1 — `accounts.opening_balance` had no client mirror at all: an
      * account's own opening figure past its own currency's scale used to
      * reach the write unrefused (`accounts_balance_scale_matches_currency`,
-     * `0012_transaction_scale_and_category_kind.sql`, is the guarantee this
+     * `0011_transaction_scale_and_category_kind.sql`, is the guarantee this
      * mirrors).
      */
     it("refuses an opening balance past the account's own currency scale", () => {
@@ -2019,7 +2019,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
    * past the *parent* transaction's own scale (PLN, two decimal places
    * here) used to reach the write unrefused — the client had no mirror of
    * `transaction_lines_amount_scale_matches_currency`
-   * (`0012_transaction_scale_and_category_kind.sql`) at all.
+   * (`0011_transaction_scale_and_category_kind.sql`) at all.
    */
   it("refuses a split line past its parent transaction's own currency scale", () => {
     const { controller, setTransactionLines } = detailHarness();
