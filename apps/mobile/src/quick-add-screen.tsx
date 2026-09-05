@@ -9,7 +9,6 @@ import { parseQuickAddRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
-import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
 import { PROPOSAL_DISPLAY_THRESHOLD, proposeCategory } from "@waltning/core/capture/payee-memory";
@@ -23,6 +22,10 @@ import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
+import {
+  KNOWN_PATHS,
+  resolveFieldErrorMessage,
+} from "@waltning/ui/transactions/field-error-messages";
 import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import {
   QuickAddComposer,
@@ -36,45 +39,6 @@ import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
 type CounterpartyRole = "debt" | "contribution" | "reference";
-
-/** `create_transaction`'s own field paths — everything else lands at form level. */
-const KNOWN_PATHS = [
-  "amountOriginal",
-  "accountId",
-  "categoryId",
-  "payee",
-  "date",
-  "note",
-  "isBusiness",
-  "counterpartyId",
-  "counterpartyRole",
-];
-
-/**
- * A refusal's own text, resolving the one `messageKey` the controller sets
- * (`transactions.needsRate`, on an uncapturable account) through `useT()` —
- * it cannot call the hook itself (`packages/client` is not a component).
- */
-function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
-  if (error.messageKey === "transactions.needsRate") {
-    return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
-  }
-  if (error.messageKey === "transactions.tooManyDecimals") {
-    return t("transactions.tooManyDecimals", {
-      currency: error.params?.["currency"] ?? "",
-      decimals: error.params?.["decimals"] ?? "",
-    });
-  }
-  if (error.messageKey === "transactions.sharedNeverBusiness") {
-    return t("transactions.sharedNeverBusiness");
-  }
-  if (error.messageKey === "transactions.categoryKindMismatch") {
-    const kind =
-      error.params?.["type"] === "income" ? t("transactions.income") : t("transactions.expense");
-    return t("transactions.categoryKindMismatch", { type: kind });
-  }
-  return error.message;
-}
 
 function handleDeskCancel() {
   router.back();

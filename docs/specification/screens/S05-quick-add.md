@@ -113,12 +113,18 @@ and Enter to save. No keypad, no dock, no camera.
 
 Parsing is **deterministic first**: first number is the amount, known account
 and category names bind to their chips, relative dates parse, the rest becomes
-the payee. Instant, no model call.
+the payee — D1's grammar, the one `screens/S05-quick-add.md` §3's own worked
+example resolves. D2's payee memory proposes the category the same way it does
+on the phone, machine-filled at or above `computations.md` §14's display
+threshold and left for the category chip to ask about below it.
 
-When the grammar cannot resolve — no amount found, or too much unmatched — the
-composer offers *interpret with model ⏎* rather than silently spending 2–5 s.
-The slow path is always chosen, never stumbled into, and it renders the same
-`TrailRow` as voice (P2).
+**No model path.** When D1 cannot resolve a line — no amount found, an
+unmatched account, a currency that disagrees with the named account, or too
+much left over — the bar shows the reason beneath it and nothing else. No
+model call is spent guessing; retyping a clearer line is the whole recovery,
+and Enter on such a line is a no-op rather than a save attempt. A model
+fallback for the shape too ambiguous for the grammar remains a real
+possibility (§9 Q3), just not one this bar offers today.
 
 This is a genuine divergence rather than a reflow. The mobile design optimises
 for one thumb and no keyboard; the desktop has a keyboard and a person sitting

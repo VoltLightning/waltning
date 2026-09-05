@@ -311,6 +311,22 @@ export const en = {
 
     /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
     newCounterparty: "+ New person or company",
+
+    /* ── DESK2 · the desk command bar, `screens/S05-quick-add.md` §3 web ── */
+    /** The bar's own placeholder — S05's worked example, one line resolving into chips as it is typed. */
+    commandBarPlaceholder: "48.90 cash coffee yesterday",
+    /** The bar's accessible name — a single-line composer with no room for a visible label above it. */
+    commandBarLabel: "Add a transaction",
+    /** The category chip's own placeholder — asked, not stated, until D2 proposes one or a category name is typed. */
+    commandBarCategoryPrompt: "Category?",
+    /** D1's `no_amount` refusal (`grammar.ts`) — nothing before the amount is worth resolving. */
+    commandBarNoAmount: "No amount found — start the line with a number.",
+    /** D1's `no_account` refusal. */
+    commandBarNoAccount: "No account matched — name one to continue.",
+    /** D1's `currency_mismatch` refusal. */
+    commandBarCurrencyMismatch: "That currency doesn't match the named account.",
+    /** D1's `too_much_unmatched` refusal. */
+    commandBarTooMuchUnmatched: "Too much left over to make sense of — try a shorter line.",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {
@@ -527,8 +543,11 @@ export const en = {
     morePages: "More transactions exist — paging is not built yet.",
     thisOrigin: "this origin",
     /**
-     * `DeskBand`'s command-bar slot (`02-tokens` §2.10) — a disabled
-     * placeholder until DESK2 wires `N` to a real composer.
+     * `DeskBand`'s command-bar slot (`02-tokens` §2.10) — `tabs-shell.tsx`'s
+     * own `DeskCommandBar` fallback while no capturable account exists to
+     * type a capture against, matching `FloatingAdd`'s own
+     * `disabled={!hasAccounts}` on the phone. `<CommandBar>`
+     * (`transactions/command-bar.tsx`) fills the slot once one does.
      */
     deskAddPlaceholder: "Add — press N",
     /** The scope `SegmentControl` on `DeskBand` — `SPEC.md` §6.7's partition. */

@@ -124,3 +124,14 @@ export function saveHaptic(): void {
  * restarting the app.
  */
 export const DEVICE_LOCALES: readonly string[] = getLocales().map((locale) => locale.languageTag);
+
+/**
+ * `N`'s own hotkey — `platform.ts`'s web half. A phone has no hardware
+ * keyboard listening globally the way a browser tab does (§9's "no keypad, no
+ * dock" is the *desk* command bar's own web-only home,
+ * `screens/S05-quick-add.md` §3), so the native build never wires this and
+ * `tabs-shell.tsx`'s own `DeskCommandBar` calls the identical name for nothing.
+ */
+export function subscribeCommandBarHotkey(_onTrigger: () => void): () => void {
+  return () => {};
+}

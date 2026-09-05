@@ -189,6 +189,14 @@ export const pl: Messages = {
     sameAccountRefused: "Przelew wymaga dwóch różnych kont.",
 
     newCounterparty: "+ Nowa osoba lub firma",
+
+    commandBarPlaceholder: "48,90 gotówka kawa wczoraj",
+    commandBarLabel: "Dodaj transakcję",
+    commandBarCategoryPrompt: "Kategoria?",
+    commandBarNoAmount: "Nie znaleziono kwoty — zacznij od liczby.",
+    commandBarNoAccount: "Nie dopasowano konta — podaj nazwę, aby kontynuować.",
+    commandBarCurrencyMismatch: "Ta waluta nie pasuje do wskazanego konta.",
+    commandBarTooMuchUnmatched: "Zbyt wiele niezrozumiałych słów — spróbuj krótszej linii.",
   },
   counterparties: {
     settlingWith: "Rozliczenie z {{name}}",

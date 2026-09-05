@@ -146,3 +146,41 @@ export function saveHaptic(): void {}
  */
 export const DEVICE_LOCALES: readonly string[] =
   typeof navigator === "undefined" ? [] : [...(navigator.languages ?? [])];
+
+/**
+ * `N` focuses the desk command bar from anywhere (`screens/S05-quick-add.md`
+ * §7 Web) — a global keyboard listener, which is a platform read the same way
+ * `DEVICE_LOCALES` above is: `window` exists on the web build and not on a
+ * phone, so this file is where the seam is named (`architecture/11`).
+ * `tabs-shell.tsx`'s own `DeskCommandBar` calls this to move focus onto its own `<CommandBar>`
+ * ref; it never touches `window` itself.
+ *
+ * **Skipped while another field already has focus.** `N` is a letter someone
+ * types into the note field, the payee field, anywhere — stealing focus out
+ * from under a keystroke meant for that field would be exactly the kind of
+ * global shortcut this pattern is usually criticised for. `INPUT`,
+ * `TEXTAREA` and `contentEditable` are the three shapes a typable field takes
+ * in this bundle (`react-native-web`'s own `TextInput` renders the first two).
+ *
+ * Guarded the same way `DEVICE_LOCALES` is: a jsdom-less render (a Node SSR
+ * pass, a non-DOM test) has no `window` to attach to, and the correct answer
+ * there is "the hotkey never fires," not a crash.
+ */
+export function subscribeCommandBarHotkey(onTrigger: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  function handleKeyDown(event: KeyboardEvent): void {
+    if (event.key !== "n" && event.key !== "N") return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    if (target instanceof HTMLElement) {
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+    }
+    event.preventDefault();
+    onTrigger();
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}

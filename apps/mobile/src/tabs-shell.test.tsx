@@ -8,12 +8,17 @@
  * for a given width, not `expo-router`'s own behaviour.
  */
 
-import { act, render, screen } from "@testing-library/react";
-import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  createPhoneLedger,
+  type PhoneAccount,
+  type PhoneCategory,
+  type PhoneLedgerPort,
+} from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { toMoney } from "@waltning/core/money";
+import { currencyCode, toMoney } from "@waltning/core/money";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
 import { Text } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,14 +52,32 @@ vi.mock("expo-router", () => ({
 const { TabsShell, handleSelectType } = await import("./tabs-shell");
 const { router } = await import("expo-router");
 
-function fakeController() {
+function fakeController(
+  overrides: {
+    accounts?: readonly PhoneAccount[];
+    categories?: readonly PhoneCategory[];
+    createTransaction?: PhoneLedgerPort["createTransaction"];
+  } = {},
+) {
   return createPhoneLedger(
     {
-      listAccounts: () => [],
-      listCurrencies: () => [],
+      listAccounts: () => overrides.accounts ?? [],
+      listCurrencies: () =>
+        (overrides.accounts ?? []).length === 0
+          ? []
+          : [
+              {
+                code: currencyCode("PLN"),
+                name: "Polish Złoty",
+                symbol: "zł",
+                decimals: 2,
+                capturable: true,
+                isPivot: true,
+              },
+            ],
       listGroups: () => [],
       listRecent: () => [],
-      listCategories: () => [],
+      listCategories: () => overrides.categories ?? [],
       listCategoryTree: () => [],
       listFullCategoryTree: () => [],
       listCategoryUsage: () => new Map(),
@@ -75,7 +98,7 @@ function fakeController() {
       }),
       categorizeBatch: () => undefined,
       createAccount: () => undefined,
-      createTransaction: () => undefined,
+      createTransaction: overrides.createTransaction ?? (() => undefined),
       createCategory: () => undefined,
       getTransaction: () => null,
       updateTransaction: () => undefined,
@@ -162,6 +185,91 @@ describe("TabsShell", () => {
     expect(screen.getByText("Route content")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.getByText("Add — press N")).toBeDefined();
+  });
+});
+
+const CASH: PhoneAccount = {
+  id: id<"accounts">("33333333-3333-4333-8333-333333333333"),
+  name: "Cash",
+  kind: "cash",
+  currency: currencyCode("PLN"),
+  decimals: 2,
+  balance: toMoney("0"),
+  groupId: null,
+  ownership: "own",
+  isBusiness: false,
+  archived: false,
+  expectedBalance: null,
+  openingBalance: toMoney("0"),
+  openingDate: null,
+  memo: "",
+  version: 1,
+};
+
+/**
+ * DESK2 — `screens/S05-quick-add.md` §3's "Web — ≥1024px", from the keyboard
+ * alone: `DeskBand`'s command-bar slot is `<CommandBar>` once an account
+ * exists, and the S05 example line reaches `create_transaction` with the
+ * resolved row.
+ */
+describe("DeskCommandBar (DESK2)", () => {
+  it("S05's own example line saves the right row on Enter", () => {
+    // `DeskCommandBar` reads "today" from the device's own calendar (§7.0a) —
+    // `deviceRuntime()`, not the fixed capture `fakeController`'s
+    // `createPhoneLedger` runtime hands the ledger's write path — so
+    // "yesterday" is only a fixed date once the system clock itself is.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-03T12:00:00Z")); // Thursday.
+    try {
+      resizeTo(1440);
+      const createTransaction = vi.fn();
+      render(
+        <LedgerProvider controller={fakeController({ accounts: [CASH], createTransaction })}>
+          <TabsShell slot={<Text>Route content</Text>} />
+        </LedgerProvider>,
+      );
+
+      const input = screen.getByRole("textbox");
+      fireEvent.change(input, { target: { value: "48.90 cash coffee yesterday" } });
+      // D1 resolved it live — the chips render before Enter is ever pressed.
+      expect(screen.getByText("Cash")).toBeDefined();
+      expect(screen.getByText("2026-09-02")).toBeDefined();
+
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      expect(createTransaction).toHaveBeenCalledOnce();
+      const [written] = createTransaction.mock.calls[0] as [Record<string, unknown>];
+      expect(written).toMatchObject({
+        type: "expense",
+        accountId: CASH.id,
+        amountOriginal: "48.90000000",
+        payee: "coffee",
+        date: "2026-09-02",
+      });
+      // A save clears the bar for the next line.
+      expect(input).toHaveProperty("value", "");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a line with no amount refuses with the reason under the bar, and never reaches the controller", () => {
+    resizeTo(1440);
+    const createTransaction = vi.fn();
+    render(
+      <LedgerProvider controller={fakeController({ accounts: [CASH], createTransaction })}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "coffee" } });
+    expect(screen.getByText("No amount found — start the line with a number.")).toBeDefined();
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(input).toHaveProperty("value", "coffee");
   });
 });
 
