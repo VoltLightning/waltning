@@ -392,42 +392,53 @@ export default function SettingsCurrenciesScreen() {
 
   return (
     <GroundPanel>
-      <Card title={t("routes.currencies")} action={addAction}>
-        {otherRows.map((row) => (
-          <CurrencyRow
-            key={row.code}
-            row={row}
-            coverage={coverageByCode.get(row.code)}
-            onTogglePinned={handleTogglePinned}
-            onChangeSource={handleChangeSource}
-            onArchive={handleArchive}
-            onEdit={handleOpenEdit}
-            onViewRates={handleViewRates}
-          />
-        ))}
-
-        {pivotRow ? (
-          <View style={styles.pivotRow}>
-            <Text style={styles.pivotLabel}>{t("fx.pivotLabel", { code: pivotRow.code })}</Text>
-            {otherRows.length > 0 ? (
-              <Select
-                label={t("fx.pivotTarget")}
-                placeholder={t("fx.pivotTargetPlaceholder")}
-                options={pivotTargetOptions}
-                value={selectedPivotTarget}
-                onChange={handleChangePivotTarget}
-              />
-            ) : null}
-            <Button
-              label={t("fx.changePivot")}
-              onPress={handleOpenPivotConfirm}
-              variant="ghost"
-              size="sm"
-              disabled={selectedPivotTarget === null}
+      {/*
+        The card is the group of currency rows, so with no rows there is no
+        group — and a titled card holding nothing is chrome claiming a list
+        exists. Only the pivot is set up in that state; *Add currency* is the
+        one thing to do about it, and it is a button, so it sits on the
+        ground (`design-system/05` §5.1).
+      */}
+      {otherRows.length > 0 ? (
+        <Card title={t("routes.currencies")} action={addAction}>
+          {otherRows.map((row) => (
+            <CurrencyRow
+              key={row.code}
+              row={row}
+              coverage={coverageByCode.get(row.code)}
+              onTogglePinned={handleTogglePinned}
+              onChangeSource={handleChangeSource}
+              onArchive={handleArchive}
+              onEdit={handleOpenEdit}
+              onViewRates={handleViewRates}
             />
-          </View>
-        ) : null}
-      </Card>
+          ))}
+        </Card>
+      ) : (
+        addAction
+      )}
+
+      {pivotRow ? (
+        <View style={styles.pivotRow}>
+          <Text style={styles.pivotLabel}>{t("fx.pivotLabel", { code: pivotRow.code })}</Text>
+          {otherRows.length > 0 ? (
+            <Select
+              label={t("fx.pivotTarget")}
+              placeholder={t("fx.pivotTargetPlaceholder")}
+              options={pivotTargetOptions}
+              value={selectedPivotTarget}
+              onChange={handleChangePivotTarget}
+            />
+          ) : null}
+          <Button
+            label={t("fx.changePivot")}
+            onPress={handleOpenPivotConfirm}
+            variant="ghost"
+            size="sm"
+            disabled={selectedPivotTarget === null}
+          />
+        </View>
+      ) : null}
 
       <BottomSheet visible={addOpen} title={t("fx.addCurrency")} onDismiss={handleCloseAdd}>
         <TextField

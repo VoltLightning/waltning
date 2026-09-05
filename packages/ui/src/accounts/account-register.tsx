@@ -34,6 +34,7 @@ import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { IconButton } from "../primitives/icon-button";
 import { SearchField } from "../primitives/search-field";
+import { Card } from "../shell/card";
 import { EmptyState } from "../states/empty-state";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -222,22 +223,22 @@ function KindGroup({ label, rows, onSelectAccount, onTransferFrom }: KindGroupPr
   const styles = useStyles();
   const subtotals = subtotalsOf(rows);
 
+  const action = (
+    <View style={styles.subtotals}>
+      {subtotals.map((subtotal) => (
+        <Amount
+          key={subtotal.currency}
+          value={subtotal.balance}
+          currency={subtotal.currency}
+          decimals={subtotal.decimals}
+          size="small"
+        />
+      ))}
+    </View>
+  );
+
   return (
-    <View style={styles.group}>
-      <View style={styles.groupHeader}>
-        <Text style={styles.groupLabel}>{label}</Text>
-        <View style={styles.subtotals}>
-          {subtotals.map((subtotal) => (
-            <Amount
-              key={subtotal.currency}
-              value={subtotal.balance}
-              currency={subtotal.currency}
-              decimals={subtotal.decimals}
-              size="small"
-            />
-          ))}
-        </View>
-      </View>
+    <Card title={label} action={action}>
       {rows.map((row) => (
         <AccountRegisterRow
           key={row.id}
@@ -246,7 +247,7 @@ function KindGroup({ label, rows, onSelectAccount, onTransferFrom }: KindGroupPr
           {...(onTransferFrom ? { onTransferFrom } : {})}
         />
       ))}
-    </View>
+    </Card>
   );
 }
 
@@ -344,14 +345,6 @@ function ArchivedToggle({ open, accounts, onToggle }: ArchivedToggleProps) {
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
   noMatches: { color: theme.textMuted, ...text.ui("body") },
-  group: { gap: space.md },
-  groupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.md,
-  },
-  groupLabel: { color: theme.textMuted, ...text.ui("kicker"), textTransform: "uppercase" },
   subtotals: { flexDirection: "row", flexWrap: "wrap", gap: space.lg },
   archived: { gap: space.md, marginTop: space.xl },
   rowWithAction: { flexDirection: "row", alignItems: "center", gap: space.sm },

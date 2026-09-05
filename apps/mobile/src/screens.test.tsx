@@ -17,6 +17,7 @@ import {
   type PhoneClearingAccount,
   type PhoneLedgerPort,
   type PhoneNetWorth,
+  type PhoneRecentTransaction,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
@@ -165,14 +166,42 @@ function fakeCategory(
   };
 }
 
-function fakeController(
-  initialAccounts: readonly FakeAccount[] = [],
-  periodSpendRows: readonly PeriodSpendRow[] = [],
-  initialCategories: readonly FakeCategory[] = [],
-  categoryUsage: ReadonlyMap<Id<"categories">, number> = new Map(),
+/**
+ * **Named, not positional.** Six positional parameters had already made
+ * a `fakeController([], [], tree, usage)` call a row of placeholders whose
+ * meaning lived in the signature rather than at the call site, and the
+ * seventh — the unfiltered transaction count S04's empty state now reads —
+ * would have made it seven. Every field is optional, and every default is the
+ * honest empty ledger.
+ */
+type FakeControllerOptions = {
+  accounts?: readonly FakeAccount[];
+  periodSpend?: readonly PeriodSpendRow[];
+  categories?: readonly FakeCategory[];
+  categoryUsage?: ReadonlyMap<Id<"categories">, number>;
   /** H2 — a caller testing the opening-balance banner hands its own rows rather than `unsettledOf`'s generic ones. */
-  unsettledOverride?: readonly PhoneClearingAccount[],
-) {
+  unsettled?: readonly PhoneClearingAccount[];
+  /** S04's Recent rows. Empty by default: most callers here are not about Recent, and an empty ledger is the honest default for a fixture that captures nothing. */
+  recent?: readonly PhoneRecentTransaction[];
+  /**
+   * What an unfiltered `searchTransactions({})` counts — the whole ledger,
+   * which S04 reads to tell *nothing was ever captured* from *the Recent
+   * window came back empty*. Zero by default, which is the same ledger
+   * `recent: []` describes.
+   */
+  transactionCount?: number;
+};
+
+function fakeController(options: FakeControllerOptions = {}) {
+  const {
+    accounts: initialAccounts = [],
+    periodSpend: periodSpendRows = [],
+    categories: initialCategories = [],
+    categoryUsage = new Map<Id<"categories">, number>(),
+    unsettled: unsettledOverride,
+    recent: recentRows = [],
+    transactionCount = 0,
+  } = options;
   let accounts = [...initialAccounts];
   let categoryTree: FakeCategory[] = [...initialCategories];
   const bumpCategory = (categoryId: Id<"categories">, patch: Partial<FakeCategory>) => {
@@ -193,7 +222,7 @@ function fakeController(
       },
     ],
     listGroups: () => [],
-    listRecent: () => [],
+    listRecent: () => recentRows,
     listCategories: () => [],
     listCategoryTree: () => [],
     listFullCategoryTree: () => categoryTree,
@@ -209,11 +238,12 @@ function fakeController(
     listDistinctCounterpartyPairs: () => [],
     balanceAsOf: () => toMoney("0"),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
-    // does) — an empty page and a no-op are enough to satisfy the port.
+    // does) — an empty page and a no-op are enough to satisfy the port. The
+    // count is the one figure S04 does read from it.
     searchTransactions: () => ({
       rows: [],
       nextCursor: undefined,
-      total: { count: 0, currencies: [] },
+      total: { count: transactionCount, currencies: [] },
     }),
     categorizeBatch: () => undefined,
     createAccount: (input) => {
@@ -364,6 +394,21 @@ const SECOND_CLEARING_ACCOUNT: FakeAccount = {
   capturable: true,
 };
 
+/** One captured row — all S04's Recent card needs to be a group of rows. */
+const RECENT_ROW: PhoneRecentTransaction = {
+  id: id<"transactions">("77777777-7777-4777-8777-777777777777"),
+  date: accountingDate("2026-09-03"),
+  payee: "Shop A",
+  categoryName: "Food",
+  accountName: PLN_ACCOUNT.name,
+  amount: toMoney("-48.90"),
+  currency: currencyCode("PLN"),
+  decimals: 2,
+  isBusiness: false,
+  // §14.4b — nothing recognised for this payee; `BrandIcon` draws its monogram.
+  brandKey: null,
+};
+
 function withLedger(element: ReactElement, controller = fakeController()) {
   return render(<LedgerProvider controller={controller}>{element}</LedgerProvider>);
 }
@@ -388,14 +433,62 @@ describe("Today", () => {
   });
 
   it("shows the ledger once an account exists", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], recent: [RECENT_ROW] }));
 
     expect(screen.queryByText("No accounts yet")).toBeNull();
     expect(screen.getByText("Recent")).toBeDefined();
   });
 
+  /**
+   * M-b — S04 §3: the card *is* the group of Recent rows, so an account with
+   * nothing captured yet gets S10's own first-run wording on the ground, not a
+   * *Recent* card with *Show all* over an empty column.
+   */
+  it("draws no Recent card when an account exists but nothing has been captured", () => {
+    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
+
+    expect(screen.queryByText("No accounts yet")).toBeNull();
+    expect(screen.queryByText("Recent")).toBeNull();
+    expect(screen.queryByText("Show all →")).toBeNull();
+    expect(screen.getByText("No transactions yet")).toBeDefined();
+
+    fireEvent.click(screen.getByText("Add"));
+    expect(router.push).toHaveBeenCalledWith("/quick-add");
+  });
+
+  /**
+   * S04 §3 — *which* empty it is, is a count over the whole ledger, never the
+   * emptiness of a five-row window. A ledger that holds rows Recent did not
+   * return has not had a first run, so it gets S04 §6's ordinary empty —
+   * *Nothing recent*, this screen's own pair rather than S10's, whose body
+   * blames an excluding filter Today's Recent does not have — and *Show all*,
+   * which goes where the rows are.
+   *
+   * **Broken once**: with the screen deciding on `snapshot.recent.length`
+   * alone — the shape this replaces — the ledger below reads *No transactions
+   * yet* and offers *Add*, telling someone with a ledger full of rows to
+   * start one.
+   */
+  it("says the ledger is empty, not new, when the count knows the rows are there", () => {
+    withLedger(
+      <Today />,
+      fakeController({ accounts: [PLN_ACCOUNT], recent: [], transactionCount: 12 }),
+    );
+
+    expect(screen.queryByText("Recent")).toBeNull();
+    expect(screen.queryByText("No transactions yet")).toBeNull();
+    // S04 §6's own copy, not S10's — no sentence about a filter on a screen
+    // that has none.
+    expect(screen.queryByText("No matching transactions")).toBeNull();
+    expect(screen.getByText("Nothing recent")).toBeDefined();
+    expect(screen.getByText(/just none among the latest few/)).toBeDefined();
+
+    fireEvent.click(screen.getByText("Show all →"));
+    expect(router.push).toHaveBeenCalledWith("/ledger");
+  });
+
   it("shows mine and ours from net worth, per currency — never a summed total", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT, SHARED_ACCOUNT]));
+    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT, SHARED_ACCOUNT] }));
 
     expect(screen.getByText("mine")).toBeDefined();
     expect(screen.getByText("ours")).toBeDefined();
@@ -410,7 +503,7 @@ describe("Today", () => {
    * when no shared account exists — never a household total printed twice.
    */
   it("shows one figure, not ours repeated, when the ledger holds no shared account", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
     expect(screen.getByText("mine")).toBeDefined();
     expect(screen.queryByText("ours")).toBeNull();
@@ -429,7 +522,7 @@ describe("Today", () => {
         net: toMoney("40.00"),
       },
     ];
-    withLedger(<Today />, fakeController([PLN_ACCOUNT], rows));
+    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], periodSpend: rows }));
 
     expect(screen.getByText("spent")).toBeDefined();
     expect(screen.getByText("net")).toBeDefined();
@@ -440,7 +533,7 @@ describe("Today", () => {
   });
 
   it("shows the unsettled banner and opens the named transaction", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT]));
+    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT, CLEARING_ACCOUNT] }));
 
     expect(screen.getByRole("alert")).toBeDefined();
     fireEvent.click(screen.getByText("Open"));
@@ -457,19 +550,22 @@ describe("Today", () => {
    * so and `Open` falls back to the account's own filtered ledger.
    */
   it("shows the opening-balance banner and falls back to the filtered ledger", () => {
-    const controller = fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT], [], [], new Map(), [
-      {
-        accountId: CLEARING_ACCOUNT.id,
-        name: CLEARING_ACCOUNT.name,
-        currency: CLEARING_ACCOUNT.currency,
-        decimals: CLEARING_ACCOUNT.decimals,
-        balance: CLEARING_ACCOUNT.balance,
-        oldestUnconsumedTransactionId: null,
-        oldestDate: accountingDate("2026-08-01"),
-        oldestUnconsumedRemainder: CLEARING_ACCOUNT.balance,
-        oldestUnconsumedPayee: null,
-      },
-    ]);
+    const controller = fakeController({
+      accounts: [PLN_ACCOUNT, CLEARING_ACCOUNT],
+      unsettled: [
+        {
+          accountId: CLEARING_ACCOUNT.id,
+          name: CLEARING_ACCOUNT.name,
+          currency: CLEARING_ACCOUNT.currency,
+          decimals: CLEARING_ACCOUNT.decimals,
+          balance: CLEARING_ACCOUNT.balance,
+          oldestUnconsumedTransactionId: null,
+          oldestDate: accountingDate("2026-08-01"),
+          oldestUnconsumedRemainder: CLEARING_ACCOUNT.balance,
+          oldestUnconsumedPayee: null,
+        },
+      ],
+    });
     withLedger(<Today />, controller);
 
     const rendered = document.body.textContent ?? "";
@@ -600,19 +696,22 @@ describe("Today", () => {
    * the "differs" parenthetical, and the figure it shows is signed.
    */
   it("shows a negative remainder signed, and does not claim it differs from an equal balance", () => {
-    const controller = fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT], [], [], new Map(), [
-      {
-        accountId: CLEARING_ACCOUNT.id,
-        name: CLEARING_ACCOUNT.name,
-        currency: CLEARING_ACCOUNT.currency,
-        decimals: CLEARING_ACCOUNT.decimals,
-        balance: toMoney("-150"),
-        oldestUnconsumedTransactionId: id<"transactions">("77777777-7777-4777-8777-777777777777"),
-        oldestDate: accountingDate("2026-08-01"),
-        oldestUnconsumedRemainder: toMoney("-150"),
-        oldestUnconsumedPayee: "Hotel",
-      },
-    ]);
+    const controller = fakeController({
+      accounts: [PLN_ACCOUNT, CLEARING_ACCOUNT],
+      unsettled: [
+        {
+          accountId: CLEARING_ACCOUNT.id,
+          name: CLEARING_ACCOUNT.name,
+          currency: CLEARING_ACCOUNT.currency,
+          decimals: CLEARING_ACCOUNT.decimals,
+          balance: toMoney("-150"),
+          oldestUnconsumedTransactionId: id<"transactions">("77777777-7777-4777-8777-777777777777"),
+          oldestDate: accountingDate("2026-08-01"),
+          oldestUnconsumedRemainder: toMoney("-150"),
+          oldestUnconsumedPayee: "Hotel",
+        },
+      ],
+    });
     withLedger(<Today />, controller);
 
     const rendered = document.body.textContent ?? "";
@@ -627,7 +726,10 @@ describe("Today", () => {
    * `Open` still lands on the first (the same one the message names).
    */
   it("names the count in one banner, never a second, when two clearing accounts are unsettled", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT, CLEARING_ACCOUNT, SECOND_CLEARING_ACCOUNT]));
+    withLedger(
+      <Today />,
+      fakeController({ accounts: [PLN_ACCOUNT, CLEARING_ACCOUNT, SECOND_CLEARING_ACCOUNT] }),
+    );
 
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     const rendered = document.body.textContent ?? "";
@@ -644,14 +746,14 @@ describe("Today", () => {
   it("shows no unsettled banner once every clearing account nets to zero", () => {
     withLedger(
       <Today />,
-      fakeController([PLN_ACCOUNT, { ...CLEARING_ACCOUNT, balance: toMoney("0") }]),
+      fakeController({ accounts: [PLN_ACCOUNT, { ...CLEARING_ACCOUNT, balance: toMoney("0") }] }),
     );
 
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("shows all transactions from the Recent card", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], recent: [RECENT_ROW] }));
 
     fireEvent.click(screen.getByText("Show all →"));
     expect(router.push).toHaveBeenCalledWith("/ledger");
@@ -772,7 +874,7 @@ describe("Today", () => {
     vi.useFakeTimers();
     try {
       useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "1" });
-      const { rerender } = withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+      const { rerender } = withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
       expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
 
       act(() => {
@@ -780,7 +882,7 @@ describe("Today", () => {
       });
       useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "2" });
       rerender(
-        <LedgerProvider controller={fakeController([PLN_ACCOUNT])}>
+        <LedgerProvider controller={fakeController({ accounts: [PLN_ACCOUNT] })}>
           <Today />
         </LedgerProvider>,
       );
@@ -810,7 +912,7 @@ describe("QuickAdd", () => {
   // path in full (keypad, chip picks, Save); this file keeps the one smoke
   // test plus the desk fallback (`QuickAddForm`, unchanged by D4b) below.
   it("offers the ledger's accounts to capture against, via the account sheet", () => {
-    withLedger(<QuickAdd />, fakeController([PLN_ACCOUNT]));
+    withLedger(<QuickAdd />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(screen.getByText("Bank A · PLN")).toBeDefined();
@@ -826,7 +928,7 @@ describe("QuickAdd", () => {
       configurable: true,
     });
     act(() => window.dispatchEvent(new Event("resize")));
-    withLedger(<QuickAdd />, fakeController([PLN_ACCOUNT]));
+    withLedger(<QuickAdd />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(screen.getByText("Bank A · PLN")).toBeDefined();
@@ -885,7 +987,7 @@ describe("CategoriesScreen", () => {
   ]);
 
   it("shows the tree, an unused leaf tagged, and Uncategorized apart with its count", () => {
-    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
     expect(screen.getByText("Food")).toBeDefined();
     expect(screen.getByText("214 transactions")).toBeDefined();
@@ -897,7 +999,7 @@ describe("CategoriesScreen", () => {
   });
 
   it("filters the tree by search, keeping a matched leaf's group visible", () => {
-    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
     fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "eating" } });
 
@@ -917,7 +1019,10 @@ describe("CategoriesScreen", () => {
         archived: true,
       }),
     ];
-    withLedger(<CategoriesScreen />, fakeController([], [], archivedTree, usage));
+    withLedger(
+      <CategoriesScreen />,
+      fakeController({ categories: archivedTree, categoryUsage: usage }),
+    );
 
     expect(screen.queryByText("Old subscriptions")).toBeNull();
     fireEvent.click(screen.getByRole("switch", { name: "Show archived" }));
@@ -925,7 +1030,7 @@ describe("CategoriesScreen", () => {
   });
 
   it("renames a category end to end, through the actions sheet", () => {
-    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
     fireEvent.click(screen.getByRole("button", { name: "Groceries actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
@@ -938,7 +1043,7 @@ describe("CategoriesScreen", () => {
   });
 
   it("names the direction it just converted — group vs leaf are different Toasts", () => {
-    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
     fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Convert to group" }));
@@ -950,7 +1055,7 @@ describe("CategoriesScreen", () => {
   });
 
   it("shows the sibling-collision refusal inline, without closing the sheet", () => {
-    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
     fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
@@ -961,7 +1066,7 @@ describe("CategoriesScreen", () => {
   });
 
   it("archives a category — it drops off the default list, no Undo offered", () => {
-    withLedger(<CategoriesScreen />, fakeController([], [], tree, usage));
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
     fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
@@ -992,7 +1097,10 @@ describe("CategoriesScreen", () => {
       [id<"categories">("aaaaaaaa-0000-4000-8000-000000000001"), 214],
       [id<"categories">("aaaaaaaa-0000-4000-8000-000000000002"), 3],
     ]);
-    withLedger(<CategoriesScreen />, fakeController([], [], collisionTree, collisionUsage));
+    withLedger(
+      <CategoriesScreen />,
+      fakeController({ categories: collisionTree, categoryUsage: collisionUsage }),
+    );
 
     expect(screen.getByText("Possibly the same category")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
@@ -1019,7 +1127,10 @@ describe("CategoriesScreen", () => {
       ...tree,
       fakeCategory({ id: incomeLeaf, name: "Uncategorized", kind: "income", isLeaf: true }),
     ];
-    withLedger(<CategoriesScreen />, fakeController([], [], treeWithDuplicate, usage));
+    withLedger(
+      <CategoriesScreen />,
+      fakeController({ categories: treeWithDuplicate, categoryUsage: usage }),
+    );
 
     // The seeded expense leaf still shows apart, and the income leaf still
     // shows in the tree body — two rows, not one collapsed into the other.
@@ -1036,7 +1147,7 @@ describe("CategoriesScreen", () => {
   // `categories-screen.tsx`'s own `messageKey` resolution, independent of
   // whether the refusal is reachable in practice.
   it("resolves a moveAcrossKinds refusal to its Polish sentence, not the English message", () => {
-    const controller = fakeController([], [], tree, usage);
+    const controller = fakeController({ categories: tree, categoryUsage: usage });
     controller.moveCategory = vi.fn(() => ({
       fieldErrors: [
         {

@@ -38,7 +38,7 @@ import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
-import { GroundPanel } from "@waltning/ui/shell/card";
+import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
@@ -274,7 +274,9 @@ export default function Ledger() {
         ) : null}
       </View>
 
-      {search.loaded ? <RunningTotal total={search.total} /> : <TotalSkeleton />}
+      {search.loaded && search.total.count === 0 ? null : (
+        <Card>{search.loaded ? <RunningTotal total={search.total} /> : <TotalSkeleton />}</Card>
+      )}
 
       {!search.loaded ? (
         <View style={styles.skeletonList}>

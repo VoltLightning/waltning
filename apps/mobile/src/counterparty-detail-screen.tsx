@@ -611,15 +611,15 @@ export default function CounterpartyDetail() {
           settlementDecimals={figures.decimals}
           display={figures.display}
         />
-        <View style={styles.actions}>
-          <Button label={t("counterparties.settle")} onPress={handleOpenSettle} variant="primary" />
-          <Button
-            label={t("counterparties.addTransaction")}
-            onPress={handleAddTransaction}
-            variant="secondary"
-          />
-        </View>
       </Card>
+      <View style={styles.actions}>
+        <Button
+          label={t("counterparties.addTransaction")}
+          onPress={handleAddTransaction}
+          variant="secondary"
+        />
+        <Button label={t("counterparties.settle")} onPress={handleOpenSettle} variant="primary" />
+      </View>
 
       {merges.map((merge) => (
         <MergeRow
@@ -727,7 +727,7 @@ export default function CounterpartyDetail() {
 
 const useStyles = makeStyles((theme) => ({
   loadingLedger: { gap: space.x3 },
-  actions: { flexDirection: "row", gap: space.xl, paddingTop: space.xl },
+  actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.md },
   historyHeader: {
     flexDirection: "row",
     alignItems: "center",

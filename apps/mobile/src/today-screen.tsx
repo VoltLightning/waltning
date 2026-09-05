@@ -42,6 +42,16 @@ function handleShowAll() {
   router.push("/ledger");
 }
 
+/**
+ * The empty ledger's one thing to do. The floating `+` reaches the same
+ * route, but it is mounted by `(tabs)/_layout.tsx` above the whole slot and
+ * an `EmptyState` requires an action of its own — so this is the same
+ * destination named in the place the reader is already looking.
+ */
+function handleAddTransaction() {
+  router.push("/quick-add");
+}
+
 /** C5: every Recent row opens S09 — the caller it returns to is this screen. */
 function handleOpenTransaction(id: string) {
   router.push({ pathname: "/transaction/[id]", params: { id } });
@@ -100,6 +110,14 @@ export default function Today() {
     () => ({ label: t("routes.createAccount"), onPress: handleCreateAccount }),
     [t],
   );
+  const addTransactionAction = useMemo(
+    () => ({ label: t("shell.add"), onPress: handleAddTransaction }),
+    [t],
+  );
+  // The ledger holds rows this screen's five-row window did not return — S10
+  // is where they are, and *Show all* is already the Recent card's own way of
+  // saying so. Existing copy, existing destination.
+  const showAllAction = useMemo(() => ({ label: t("shell.showAll"), onPress: handleShowAll }), [t]);
   const snapshot = usePhoneLedger(ledger);
   const systemScheme = useColorScheme();
   const resolved = useAppearance(
@@ -128,6 +146,22 @@ export default function Today() {
   }
   const handleDismissToast = useCallback(() => setToastDismissed(true), []);
   const hasAccounts = snapshot.accounts.length > 0;
+  /**
+   * **An empty Recent is not by itself a first run.** `snapshot.recent` is a
+   * five-row window (`create-phone-ledger.ts` calls `listRecent(5)`), and a
+   * window that came back empty is not the same claim as *this ledger has
+   * never held a transaction* — the second is a count over the whole ledger,
+   * and only the count may choose the `first-run` wording. S10 decides its own
+   * empty the same way, through the same unfiltered `searchTransactions({})`.
+   *
+   * Asked for only when the empty state needs it — `ledger-screen.tsx`'s own
+   * reason: an unfiltered count on every render is a second query nothing
+   * else on this screen wants.
+   */
+  const everCaptured =
+    hasAccounts && snapshot.recent.length === 0
+      ? ledger.searchTransactions({}).total.count > 0
+      : false;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
   // The error a failed refresh set stays on the snapshot until the next
   // success (`create-phone-ledger.ts`'s `refresh()`) — `ErrorState`'s action
@@ -324,17 +358,48 @@ export default function Today() {
   ) : hasAccounts ? (
     <>
       {unsettledBanner}
-      <Card
-        title={t("shell.recent")}
-        action={
-          <Button label={t("shell.showAll")} onPress={handleShowAll} variant="ghost" size="sm" />
-        }
-      >
-        <TransactionList
-          transactions={snapshot.recent.map(toRow)}
-          onPress={handleOpenTransaction}
-        />
-      </Card>
+      {/*
+        S04 §3 — the card *is* the group of Recent rows, so with no rows there
+        is no group to draw, and *Show all* has nothing to show. What replaces
+        it depends on the count, never on the window: an account exists and the
+        ledger has never held a transaction is `first-run` for the ledger, not
+        for the account list; a ledger that holds rows the window did not
+        return is the ordinary empty. Both render on the ground
+        (`design-system/05` §5.1). The first-run pair is S10's own, unchanged —
+        the ledger is empty is the same fact on both screens. The ordinary one
+        is this screen's own (`transactions.emptyRecent*`, S04 §6): S10's says
+        a filter is excluding every row, and Recent has no filter to blame — it
+        has a five-row window, and *Show all* goes where the rows are.
+      */}
+      {snapshot.recent.length === 0 ? (
+        everCaptured ? (
+          <EmptyState
+            variant="filtered"
+            title={t("transactions.emptyRecentTitle")}
+            body={t("transactions.emptyRecentBody")}
+            primaryAction={showAllAction}
+          />
+        ) : (
+          <EmptyState
+            variant="first-run"
+            title={t("transactions.emptyFirstRunTitle")}
+            body={t("transactions.emptyFirstRunBody")}
+            primaryAction={addTransactionAction}
+          />
+        )
+      ) : (
+        <Card
+          title={t("shell.recent")}
+          action={
+            <Button label={t("shell.showAll")} onPress={handleShowAll} variant="ghost" size="sm" />
+          }
+        >
+          <TransactionList
+            transactions={snapshot.recent.map(toRow)}
+            onPress={handleOpenTransaction}
+          />
+        </Card>
+      )}
     </>
   ) : (
     <EmptyState

@@ -171,6 +171,18 @@ it("renders a row per non-pivot currency, and the pivot read-only", () => {
   expect(screen.queryByText("US Dollar")).toBeNull();
 });
 
+/**
+ * `05-composites` §5.1 — a card groups related rows. With only the pivot set
+ * up there are no rows to group, so there is no card: a titled card holding
+ * nothing is chrome claiming a list exists. *Add currency* is a button and
+ * sits on the ground either way.
+ */
+it("renders no currency card when the pivot is the only currency, only the Add button", () => {
+  withLedger({ listCurrencySettings: () => [USD_ROW] });
+  expect(screen.queryByText("Currencies")).toBeNull();
+  expect(screen.getByText("Add currency")).toBeDefined();
+});
+
 it("toggling pinned calls set_pinned with the row's own version", () => {
   const setPinned = vi.fn(() => ({ code: "PLN" }));
   withLedger({ setPinned });

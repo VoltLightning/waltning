@@ -21,7 +21,7 @@ import {
 } from "@waltning/ui/accounts/account-editor";
 import { type ReconcileDraft, ReconcileSheet } from "@waltning/ui/accounts/reconcile-sheet";
 import { useT } from "@waltning/ui/i18n/provider";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 
@@ -183,19 +183,17 @@ export default function AccountEditorScreen() {
 
   return (
     <GroundPanel>
-      <Card>
-        <AccountEditor
-          account={editorAccount}
-          today={today}
-          groups={snapshot.groups}
-          {...(fieldErrors === undefined ? {} : { fieldErrors })}
-          onCancel={handleCancel}
-          onSave={handleSave}
-          onArchive={handleArchive}
-          onReconcile={handleOpenReconcile}
-          onCreateGroup={handleCreateGroup}
-        />
-      </Card>
+      <AccountEditor
+        account={editorAccount}
+        today={today}
+        groups={snapshot.groups}
+        {...(fieldErrors === undefined ? {} : { fieldErrors })}
+        onCancel={handleCancel}
+        onSave={handleSave}
+        onArchive={handleArchive}
+        onReconcile={handleOpenReconcile}
+        onCreateGroup={handleCreateGroup}
+      />
       <ReconcileSheet
         visible={reconcileOpen}
         accountName={account.name}

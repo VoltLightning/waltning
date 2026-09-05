@@ -88,6 +88,13 @@ where a loop is the right shape:
         ◉ from: "that place near the office" → Corner Café   Undo
 ```
 
+**`[ yes ]` and `[ no, the other one ]` are chips, not a button row**, and
+neither is `primary` — `03-primitives` §3.1's own exemption. The
+primary-on-the-right rule governs a decision between an affirmative action
+and its alternative; this is an answer to a question about what happened,
+where recommending one reply by painting it green is exactly the wrong
+affordance. They sit in the order they would be spoken.
+
 **It can ask a question, which a pipeline cannot.** One row, you are present,
 and the interaction *is* the iteration — you are not reviewing an answer, you
 are arriving at one together. Read tools only; the output is still a draft that

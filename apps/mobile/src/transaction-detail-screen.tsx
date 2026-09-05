@@ -268,17 +268,15 @@ export default function TransactionDetail() {
 
   return (
     <GroundPanel>
-      <Card>
-        <TransactionHero
-          amount={detail.amount}
-          currency={detail.currency}
-          decimals={detail.decimals}
-          type={detail.type}
-          accountName={detail.accountName}
-          payee={detail.payee}
-          brandKey={detail.brandKey}
-        />
-      </Card>
+      <TransactionHero
+        amount={detail.amount}
+        currency={detail.currency}
+        decimals={detail.decimals}
+        type={detail.type}
+        accountName={detail.accountName}
+        payee={detail.payee}
+        brandKey={detail.brandKey}
+      />
       <Card>
         <FieldsCard
           fields={toFields(detail)}

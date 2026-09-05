@@ -177,58 +177,84 @@ export default function SettingsRatesScreen() {
   const coverage = ledger.readCoverage(today);
   const quoteCurrencies = useMemo(() => new Set(quoteOptions.map((o) => o.value)), [quoteOptions]);
   const shownCoverage = coverage.filter((row) => quoteCurrencies.has(row.code));
+  /**
+   * **The hint and the coverage card read one state, so they cannot
+   * disagree.** With no currency besides the pivot there is nothing to quote
+   * against: no table, no coverage row, and the hint on the ground is the one
+   * true sentence about it. Both are gated on this value rather than on two
+   * conditions of their own — `shownCoverage.length === 0` was the second
+   * condition, and two conditions that happen to agree today are two
+   * conditions that can drift.
+   *
+   * They agree by construction, not by luck: `readCoverage` returns exactly
+   * one row per non-pivot, non-archived currency (`read-rate.ts`) and
+   * `listCurrencySettings()` excludes archived by default, so `shownCoverage`
+   * is empty when and only when there is no quote currency.
+   */
+  const noQuoteCurrency = quoteOptions.length === 0;
 
   return (
     <GroundPanel scroll="own">
-      <Card title={t("routes.rates")}>
-        {pivot === undefined ? null : (
-          <Select
-            label={t("fx.pairLabel", { base: pivot.code })}
-            placeholder={t("fx.pairPlaceholder")}
-            options={quoteOptions}
-            value={quote}
-            onChange={handleChangeQuote}
-          />
-        )}
+      {pivot === undefined ? null : (
+        <Select
+          label={t("fx.pairLabel", { base: pivot.code })}
+          placeholder={t("fx.pairPlaceholder")}
+          options={quoteOptions}
+          value={quote}
+          onChange={handleChangeQuote}
+        />
+      )}
 
-        <View style={styles.presetRow}>
-          <Button
-            label={t("fx.range30d")}
-            onPress={handlePreset30}
-            variant={preset === "30d" ? "primary" : "secondary"}
-            size="sm"
-          />
-          <Button
-            label={t("fx.range90d")}
-            onPress={handlePreset90}
-            variant={preset === "90d" ? "primary" : "secondary"}
-            size="sm"
-          />
-          <Button
-            label={t("fx.rangeYear")}
-            onPress={handlePresetYear}
-            variant={preset === "year" ? "primary" : "secondary"}
-            size="sm"
-          />
-        </View>
-        <View style={styles.customRow}>
-          <DateField
-            label={t("fx.rangeFrom")}
-            value={custom.from}
-            onChange={handleChangeCustomFrom}
-            today={today}
-          />
-          <DateField
-            label={t("fx.rangeTo")}
-            value={custom.to}
-            onChange={handleChangeCustomTo}
-            today={today}
-          />
-        </View>
+      <View style={styles.presetRow}>
+        <Button
+          label={t("fx.range30d")}
+          onPress={handlePreset30}
+          variant={preset === "30d" ? "primary" : "secondary"}
+          size="sm"
+        />
+        <Button
+          label={t("fx.range90d")}
+          onPress={handlePreset90}
+          variant={preset === "90d" ? "primary" : "secondary"}
+          size="sm"
+        />
+        <Button
+          label={t("fx.rangeYear")}
+          onPress={handlePresetYear}
+          variant={preset === "year" ? "primary" : "secondary"}
+          size="sm"
+        />
+      </View>
+      <View style={styles.customRow}>
+        <DateField
+          label={t("fx.rangeFrom")}
+          value={custom.from}
+          onChange={handleChangeCustomFrom}
+          today={today}
+        />
+        <DateField
+          label={t("fx.rangeTo")}
+          value={custom.to}
+          onChange={handleChangeCustomTo}
+          today={today}
+        />
+      </View>
 
-        {quote === null || range === null || pivot === undefined ? (
-          <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
-        ) : (
+      {/*
+        S18 §3 — the card is the table, and with no quote currency there is no
+        table to card. The hint that says so is a hint: it renders on the
+        ground, beside the controls it is about, rather than inside an empty
+        card whose chrome would claim a group exists.
+
+        `noQuoteCurrency` decides the hint; the nulls beside it are the
+        remaining narrowing this branch needs (a custom range that does not
+        parse, a ledger with no pivot) and draw nothing rather than claiming
+        there is no quote currency.
+      */}
+      {noQuoteCurrency ? (
+        <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
+      ) : quote === null || range === null || pivot === undefined ? null : (
+        <Card>
           <RateTable
             base={pivot.code}
             quote={quote}
@@ -237,55 +263,66 @@ export default function SettingsRatesScreen() {
             rows={rows}
             onSelectRow={handleSelectRow}
           />
-        )}
+        </Card>
+      )}
 
-        <View style={styles.actionsRow}>
-          <Button
-            label={t("fx.setRange")}
-            onPress={handleOpenRangeEditor}
-            variant="secondary"
-            disabled={quote === null || range === null}
-          />
-          <Button
-            label={t("fx.clearManual")}
-            onPress={handleClearManual}
-            variant="ghost"
-            disabled={quote === null || range === null}
-          />
-        </View>
+      <View style={styles.actionsRow}>
+        <Button
+          label={t("fx.setRange")}
+          onPress={handleOpenRangeEditor}
+          variant="secondary"
+          disabled={quote === null || range === null}
+        />
+        <Button
+          label={t("fx.clearManual")}
+          onPress={handleClearManual}
+          variant="ghost"
+          disabled={quote === null || range === null}
+        />
+      </View>
 
-        {editorOpen && quote !== null && pivot !== undefined ? (
-          <RateEditor
-            base={pivot.code}
-            quote={quote}
-            from={editorRange.from}
-            to={editorRange.to}
-            rate={rate}
-            onRateChange={handleChangeRate}
-            existingRows={editorRows}
-            onSubmit={handleSubmitEditor}
-            onCancel={handleCloseEditor}
-          />
-        ) : null}
+      {editorOpen && quote !== null && pivot !== undefined ? (
+        <RateEditor
+          base={pivot.code}
+          quote={quote}
+          from={editorRange.from}
+          to={editorRange.to}
+          rate={rate}
+          onRateChange={handleChangeRate}
+          existingRows={editorRows}
+          onSubmit={handleSubmitEditor}
+          onCancel={handleCloseEditor}
+        />
+      ) : null}
 
-        <Text style={styles.rerateNote}>{t("fx.rerateNotOffered")}</Text>
-      </Card>
+      <Text style={styles.rerateNote}>{t("fx.rerateNotOffered")}</Text>
 
-      <Card title={t("fx.coverageTitle")}>
-        {shownCoverage.map((row) => (
-          <View key={row.code} style={styles.coverageRow}>
-            <Text style={styles.coverageCode}>{row.code}</Text>
-            <CoverageTag
-              days={row.days}
-              realDays={row.realDays}
-              calendarDays={row.calendarDays}
-              futureRows={row.futureRows}
-              pct={row.coveragePct}
-              lastDate={row.lastDate ?? undefined}
-            />
-          </View>
-        ))}
-      </Card>
+      {/*
+        The card is the group of per-currency coverage rows, so with no quote
+        currency there are no rows and no group — a titled card holding
+        nothing is chrome claiming a list exists (`design-system/05` §5.1).
+        The hint above already says why there is nothing here; repeating it
+        under a *Coverage* heading would state the same absence twice. Same
+        `noQuoteCurrency` the hint reads, so the two can never disagree about
+        which state this screen is in.
+      */}
+      {noQuoteCurrency ? null : (
+        <Card title={t("fx.coverageTitle")}>
+          {shownCoverage.map((row) => (
+            <View key={row.code} style={styles.coverageRow}>
+              <Text style={styles.coverageCode}>{row.code}</Text>
+              <CoverageTag
+                days={row.days}
+                realDays={row.realDays}
+                calendarDays={row.calendarDays}
+                futureRows={row.futureRows}
+                pct={row.coveragePct}
+                lastDate={row.lastDate ?? undefined}
+              />
+            </View>
+          ))}
+        </Card>
+      )}
 
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />

@@ -52,7 +52,7 @@ wrong far more often than out of curiosity.
   │  Restore drill     87 days ago ⚠  │
   │                    [ Run a drill ]│
   └───────────────────────────────────┘
-  ┌ FX coverage ──────────────────── ⚠ ┐
+  ┌ FX coverage ─────────────────── ⚠ ┐
   │  PLN EUR GBP BYN        100%      │
   │  RUB                     23%      │
   │  GEL                    0.5%  ⚠   │
@@ -67,6 +67,8 @@ wrong far more often than out of curiosity.
   │                    [ Run now ]    │
   └───────────────────────────────────┘
   ┌ Storage · Services · Model spend ─┐
+  │  …                                │
+  └───────────────────────────────────┘
 ```
 
 The clearing line is **not a defect** — a non-zero clearing balance is a prompt

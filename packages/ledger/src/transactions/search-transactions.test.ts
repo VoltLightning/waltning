@@ -85,13 +85,13 @@ describe("searchTransactions — text", () => {
   });
 
   it("matches an amount exactly, in either decimal mark, and never by digits (§13)", () => {
-    insertExpense({ payee: "Rewe", amountOriginal: money.toMoney("48.90") });
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
     insertExpense({ payee: "Landlord", amountOriginal: money.toMoney("1489.00") });
 
     const payees = (text: string) =>
       searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
-    expect(payees("48,90")).toEqual(["Rewe"]);
-    expect(payees("48.90")).toEqual(["Rewe"]);
+    expect(payees("48,90")).toEqual(["Shop A"]);
+    expect(payees("48.90")).toEqual(["Shop A"]);
     // A substring of the digits is not the amount — and it must not reach the
     // running total either, which folds over the same filtered rows.
     expect(payees("489")).toEqual([]);

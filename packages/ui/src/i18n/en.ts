@@ -101,8 +101,20 @@ export const en = {
     /** `BalanceRow`'s own tags — S16 §4: `BIZ` · clearing's amber marker. */
     tagBiz: "BIZ",
     tagUnsettled: "Unsettled",
-    /** `SharedGroup`'s heading — S16 §3, distinct but not diminished. */
+    /**
+     * The **mark** for shared ownership, wherever it is drawn as a `Tag` —
+     * `SharedGroup`'s card header (S16 §3) and `AccountPicker`'s rows.
+     */
     shared: "Shared",
+    /**
+     * `SharedGroup`'s card title, and deliberately not the word its tag
+     * carries. The card is a full-weight card among identical full-weight
+     * kind cards, so the distinction is drawn by *adding* marks — an accent
+     * edge and the `Shared` tag — and a title repeating the tag verbatim
+     * would be one mark spent twice, saying nothing the tag had not.
+     * S16 §6's own phrase for these accounts.
+     */
+    sharedHeading: "Jointly owned",
     /**
      * The archived toggle. `archivedShow` is the collapsed button, before
      * `loadArchived()` has ever run — the count is not known yet, which is
@@ -267,6 +279,17 @@ export const en = {
     emptyFilteredTitle: "No matching transactions",
     /** Names the excluding filter and its hidden count (S10 §6) — `count` renders via `states.filteredHidden`. */
     emptyFilteredBody: "This filter is excluding every row.",
+    /**
+     * S04 §6's ordinary empty, and only S04's. Today's Recent is a five-row
+     * window over a ledger that holds rows, so neither of the pair above is
+     * true of it: *No transactions yet* is a claim about the whole ledger, and
+     * *This filter is excluding every row* names a filter this screen does not
+     * have. The window came back empty and the full list is where the rows
+     * are — which is what *Show all* beside this does.
+     */
+    emptyRecentTitle: "Nothing recent",
+    emptyRecentBody:
+      "Your ledger has transactions, just none among the latest few. Show all opens the full list.",
     loadFailedTitle: "Couldn't load your transactions",
     loadFailedWhy: "Something went wrong reading the ledger.",
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
@@ -570,7 +593,16 @@ export const en = {
   },
   shell: {
     today: "Today",
-    /** The floating add button. A verb, because a `+` has no name a screen reader can say. */
+    /**
+     * The floating add button. A verb, because a `+` has no name a screen
+     * reader can say.
+     *
+     * Also S04's own label on the empty ledger's `EmptyState(first-run)`: the
+     * `+` floats over that state and reaches the same `/quick-add`, so naming
+     * the button's own word there points at one destination twice rather than
+     * inventing a second one. A different label would be a second name for the
+     * same act.
+     */
     add: "Add",
     /** The parked tab that brings the add button back. */
     showAdd: "Show the add button",

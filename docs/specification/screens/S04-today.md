@@ -46,15 +46,16 @@ tab bar → S10, S11, S12, S03.
 │  │ ◉  "forty-eight ninety, coffee" │ │  ▣   │   │
 │  └─────────────────────────────────┘ └──────┘   │
 │                                                 │
-│  RECENT                                         │
-│  Today      Coffee · Eating out      −48,90 zł  │
-│  Today      Salary · Employment   +9 200,00 zł  │
-│  Yesterday  Rewe · Groceries    62,40 € · 4,02  │  ← FxAmount, foreign
-│                                    251,04 zł    │
-│                                       Show all →│
+│  ┌ Recent ───────────────────────────────────┐  │
+│  │ Today     Coffee · Eating out   −48,90 zł │  │
+│  │ Today     Salary · Employment +9 200,00 zł│  │
+│  │ Yesterday Shop A · Food    62,40 € · 4,02 │  │  ← FxAmount, foreign
+│  │                                 251,04 zł │  │
+│  │                                Show all → │  │
+│  └───────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
 │                                          (＋)   │  ← floats, §2.9
-┌ tab bar · 5 ───────────────────────────────────┐
+┌ tab bar · 5 ────────────────────────────────────┐
 │  Today   Ledger   Calendar   Debt   Settings    │
 └─────────────────────────────────────────────────┘
 ```
@@ -82,6 +83,22 @@ phone held still.
 
 Recent shows five rows, non-scrolling. It is a *confirmation surface*, not a
 browsing one — S10 is a tap away for browsing.
+
+**The Recent card is drawn only when there are rows to group.** An account
+exists but nothing has been captured yet is `EmptyState(first-run)` on the
+ground — *No transactions yet*, the same wording S10's first run uses — never
+a *Recent* card with *Show all* over an empty column, which would be chrome
+claiming a list exists and an action that shows nothing.
+
+**Which empty it is, is a count, not a window.** Recent is the five most
+recent rows; a window that came back empty is not the claim *this ledger has
+never held a transaction*. Only an unfiltered count of the whole ledger may
+choose the first-run wording — the same `searchTransactions({})` count S10
+uses to tell its own two empties apart. A ledger that does hold rows gets
+this screen's own ordinary empty and *Show all*, which goes where the rows
+are — its own, because S10's ordinary empty names a filter as the reason and
+Recent has no filter: it has a window. *Nothing recent* says the window came
+back empty and the full list is where the rows are.
 
 **What earns it the space is the pending row.** Outbox writes appear at the top
 with their `pending` marker until they sync, so an offline save is visibly
@@ -118,12 +135,13 @@ happened*.
 | `PeriodPicker` | Opened by tapping the label or stat row — granularity, presets, arbitrary range (§7) |
 | `StatTile` | Period spend and net. **Period-scoped**; `DualTotal` above it is not |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
+| `Card` | Wraps Recent — a grouped list of rows, `title="Recent"` + `action="Show all"`. **Only when Recent has rows**; an empty ledger renders `EmptyState(first-run)` on the ground instead |
 | `TransactionRow` | Recent; `TransferRow` for transfers; `BIZ` tag where business |
 | `BrandIcon` | `TransactionRow`'s own leading mark for a recognised merchant — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `TabBar` | 5 tabs, all ≥44px. `+` is not one of them |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
-| `EmptyState(first-run)` | No accounts — offers create and import |
+| `EmptyState(first-run)` | Two of them. No accounts — offers create; the import path is S29's, and arrives with it (no route exists yet, and this screen invents none). Accounts but no transactions — *No transactions yet*, S10's own wording, in place of the Recent card. *No transactions yet* is chosen by an unfiltered count, never by an empty Recent window: a ledger holding rows Recent did not return gets `transactions.emptyRecentTitle`/`emptyRecentBody` and *Show all* instead |
 | `AppearanceButton` | Header action; opens the appearance sheet |
 | `BottomSheet(appearance)` | Radio choices: System, Light, Dark |
 
@@ -146,7 +164,7 @@ keeps it fast and what makes it safe to render from cache offline.
 |---|---|
 | Loading | Not modelled — the replica read is synchronous SQLite, with no in-between moment to show a skeleton for (`09-state-matrix.md`) |
 | Populated | As drawn |
-| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account* and *Import from Money Manager* |
+| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account*. *Import from Money Manager* is S29's path — the setup wizard, which S16 enters by that name — and arrives with it; until then this state offers create alone rather than an action with nowhere to go. Accounts with no transactions is the second empty: the hero and period row stay, and *No transactions yet* replaces the Recent card rather than emptying it. That wording is chosen by the unfiltered count — a ledger that holds rows Recent did not return gets this screen's ordinary empty, `transactions.emptyRecentTitle` (*Nothing recent*) and `emptyRecentBody`, with *Show all*. Its own pair rather than S10's: S10's body names an excluding filter, and Recent has a window, not a filter |
 | Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the hero keeps its last known figure with its age** rather than blanking |
 | Offline | Cached, with `Banner(neutral)` — *showing data as of 14:06*. Capture stays fully available; that is the point of the outbox |
 | Gated | n/a — single user |

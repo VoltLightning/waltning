@@ -26,18 +26,18 @@ history.
 ### Both surfaces
 
 ```
-  (A)  Nina
-       person · settles in EUR
-
-  ┌ BalanceLedger ──────────────────────┐
+  ┌─────────────────────────────────────┐
+  │  (A)  Nina                          │
+  │       person · settles in EUR       │
+  │                                     │
   │  PLN      +840,00      owes you     │
   │  EUR      −120,00      you owe      │
   │  ─────────────────────────────────  │
-  │  net in EUR   +74,44   @ 4,3200      │
+  │  net in EUR   +74,44   @ 4,3200     │
   │  net in PLN  +321,60                │
   └─────────────────────────────────────┘
 
-           [ Settle ]   [ Add transaction ]
+        [ Add transaction ]   [ Settle ]
 
   HISTORY                    [ debts only · 3 other rows ]
    6 Aug   dinner, split four ways      +210,00 zł
@@ -50,6 +50,11 @@ the ledger above it. `reference` and `contribution` rows are one tap away — an
 the toggle **states the count it is hiding**, because a default filter that
 silently omits real data is the failure mode, and naming the count is the
 cheapest guard against it (`design-system/08` §8.1).
+
+**One card holds `CounterpartyCard` and `BalanceLedger` together** — the person
+and their position are one thing to read, and the card is the group. *Settle*
+and *Add transaction* sit under it on the ground, in a row with the primary on
+the right (`design-system/03` §3.1).
 
 **This card is what justifies the model change.** Two currencies, opposite
 directions, one person — the account model could only show unrelated balances in
@@ -64,6 +69,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 
 | Component | Notes |
 |---|---|
+| `Card` | Wraps `CounterpartyCard` + `BalanceLedger` — one group, the person and their position. Settle and Add transaction sit under the card, on the ground: `[ Add transaction ]` secondary, `[ Settle ]` primary on the right |
 | `CounterpartyCard` | Name, kind, settlement currency, monogram |
 | `BalanceLedger` | One row per currency. **Direction in words**, sign never alone |
 | `AgeingBar` | Companies only |

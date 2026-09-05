@@ -42,7 +42,7 @@ import {
   type CounterpartyFormValues,
 } from "@waltning/ui/counterparties/counterparty-form";
 import { useT } from "@waltning/ui/i18n/provider";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
 import { Toast } from "@waltning/ui/states/toast";
@@ -327,16 +327,14 @@ export default function CounterpartyEditor() {
   if (snapshot.revision === 0) {
     return (
       <GroundPanel>
-        <Card>
-          <View
-            accessibilityRole="progressbar"
-            accessibilityLabel={t("counterparties.loadingEditor")}
-            style={styles.loadingEditor}
-          >
-            <Skeleton shape="row" label="" />
-            <Skeleton shape="row" label="" />
-          </View>
-        </Card>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel={t("counterparties.loadingEditor")}
+          style={styles.loadingEditor}
+        >
+          <Skeleton shape="row" label="" />
+          <Skeleton shape="row" label="" />
+        </View>
       </GroundPanel>
     );
   }
@@ -361,20 +359,18 @@ export default function CounterpartyEditor() {
 
   return (
     <GroundPanel>
-      <Card>
-        <CounterpartyForm
-          initial={initial}
-          currencies={currencies}
-          matches={matches}
-          onNameBlur={handleNameBlur}
-          onSame={handleSame}
-          onDifferent={handleDifferent}
-          {...(handleArchive ? { onArchive: handleArchive } : {})}
-          {...(fieldErrors === undefined ? {} : { fieldErrors })}
-          onCancel={handleCancel}
-          onSave={handleSave}
-        />
-      </Card>
+      <CounterpartyForm
+        initial={initial}
+        currencies={currencies}
+        matches={matches}
+        onNameBlur={handleNameBlur}
+        onSame={handleSame}
+        onDifferent={handleDifferent}
+        {...(handleArchive ? { onArchive: handleArchive } : {})}
+        {...(fieldErrors === undefined ? {} : { fieldErrors })}
+        onCancel={handleCancel}
+        onSave={handleSave}
+      />
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
       )}

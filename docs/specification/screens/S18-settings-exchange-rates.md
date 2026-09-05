@@ -28,10 +28,27 @@ Pair selector and date range above a `RateTable`. `SyncLog` beneath, carrying
 **coverage per currency** rather than only events. Web places them side by side;
 mobile stacks.
 
+The pair selector, presets, date range and action buttons sit on the ground;
+`RateTable` is the one grouped-rows card, and the per-currency coverage list is
+a second, separate card. **With no quote currency to compare against the pivot
+there is no table, so there is no card** — the hint saying so is a hint, and
+renders on the ground where every other hint on this screen does.
+
+**One state decides both cards.** *No quote currency* is the same fact for the
+table and for the coverage list — the list holds exactly one row per quote
+currency — so the hint and the coverage card are drawn from one value rather
+than from two conditions that happen to agree. A date range that does not parse
+is a different state, and so is a ledger that names no pivot: each leaves
+nothing to table, so each drops the table card and draws **no hint** — neither
+may claim there is no quote currency when there is one. The coverage card is
+not theirs to drop: coverage is per currency, not per range and not per pivot,
+so its rows stay true and stay drawn.
+
 ## 4. Components
 
 | Component | Notes |
 |---|---|
+| `Card` | Two — `RateTable` alone (only when there is a pair to table), and the per-currency coverage list. Everything else — pair select, presets, date range, action buttons, `RateEditor`, and the no-quote hint — sits on the ground |
 | `RateTable` | Virtualized. Gaps render as **explicit empty rows**, never as absence |
 | `RateEditor` | Single date **or a range**; states what it will overwrite before writing |
 | `SyncLog` | `succeeded` · `failed` · **`rate_limited`** — the third is distinct, because retrying a rate limit is futile |
@@ -51,7 +68,7 @@ mobile stacks.
 |---|---|
 | Loading | Virtualized rows resolve as scrolled |
 | Populated | Fresh · stale · syncing · has overrides |
-| Empty | A pair with no rates at all — states the source and its last attempt |
+| Empty | A pair with no rates at all — states the source and its last attempt. No quote currency at all: no table card, no coverage card, and the hint on the ground saying why. **No pivot**, or a custom range that does not parse: no table card and **no hint** either — there is a currency to compare against, so the hint would be false; the coverage card stays |
 | Error | Sync failed → `ErrorState(recoverable)`. **Rate-limited → paced retry**, not immediate |
 | Offline | Read-only from cache; overrides queue |
 | Gated | n/a |

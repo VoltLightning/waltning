@@ -37,7 +37,7 @@ confirm it.
 ```
   ⏳  waiting    queued 14:06 · uploads on reconnect
   ⟳  extracting  2.4 s
-  ✓  ready       Rewe · 62,40 € · 3 lines
+  ✓  ready       Shop A · 62,40 € · 3 lines
   ⚠  unreadable  total not legible          [ Retry ]
 ```
 
@@ -50,7 +50,7 @@ at a time.
 ```
   [ receipt image, tappable to full screen ]
 
-  Merchant   Rewe                        0.97
+  Merchant   Shop A                      0.97
   Date       5 Aug 2026                  0.99
   Total      62,40 €                     0.62  ← per-field confidence
   Currency   EUR  (detected)

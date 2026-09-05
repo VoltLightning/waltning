@@ -3,11 +3,12 @@ import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { SegmentControl, type SegmentControlProps } from "@waltning/ui/primitives/segment-control";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
-import { Card } from "@waltning/ui/shell/card";
+import { Banner } from "@waltning/ui/states/banner";
+import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import * as tokens from "@waltning/ui/tokens";
 import { useCallback, useMemo, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
 function isAppearancePreference(value: string): value is AppearancePreference {
   return value === "system" || value === "light" || value === "dark";
@@ -66,14 +67,16 @@ export function PreviewAppearanceControls({
       >
         {sheet === "reset" ? (
           <View style={styles.content}>
-            <Card title={t("preview.resetPrompt")}>{null}</Card>
+            <Text style={styles.resetPrompt}>{t("preview.resetPrompt")}</Text>
             <Button label={t("common.cancel")} onPress={showAppearance} variant="ghost" />
             <Button label={t("preview.resetTitle")} onPress={reset} variant="danger" />
           </View>
         ) : (
           <View style={styles.content}>
             <SegmentControl segments={choices} value={preference} onChange={changePreference} />
-            {appearanceError ? <Card title={t("preview.appearanceFailed")}>{null}</Card> : null}
+            {appearanceError ? (
+              <Banner tone="negative" message={t("preview.appearanceFailed")} />
+            ) : null}
             {resetEnabled ? (
               <Button label={t("preview.resetAction")} onPress={showReset} variant="danger" />
             ) : null}
@@ -84,8 +87,7 @@ export function PreviewAppearanceControls({
   );
 }
 
-// `makeStyles` rather than `StyleSheet.create`, though nothing here reads the
-// theme today. The pattern is the point: a stylesheet that cannot see the theme
-// is one that answers "add a colour here" with an inline style, and this file
-// already renders inside `ThemeProvider`.
-const useStyles = makeStyles(() => ({ content: { gap: tokens.space.x3 } }));
+const useStyles = makeStyles((theme) => ({
+  content: { gap: tokens.space.x3 },
+  resetPrompt: { color: theme.textMuted, ...text.ui("body") },
+}));
