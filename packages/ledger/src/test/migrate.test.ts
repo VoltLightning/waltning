@@ -36,6 +36,7 @@ import {
   migrateOutbox,
   migrateReplica,
   OUTBOX_MIGRATIONS,
+  PreJournalStoreError,
   REPLICA_MIGRATIONS,
   readAppliedSeq,
 } from "../migrate.ts";
@@ -277,6 +278,18 @@ function refusalMessage(attempt: () => unknown): string {
   } catch (error) {
     // `catch` bindings are `unknown` because the language gives no choice.
     return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("expected a refusal, and nothing was thrown");
+}
+
+/** The same shape as `refusalMessage`, but the error itself — for asserting its class and fields. */
+function refusalError(attempt: () => unknown): Error {
+  try {
+    attempt();
+  } catch (error) {
+    // `catch` bindings are `unknown` because the language gives no choice.
+    if (error instanceof Error) return error;
+    throw new Error(String(error));
   }
   throw new Error("expected a refusal, and nothing was thrown");
 }
@@ -813,8 +826,8 @@ describe("`__ledger_migrations`, the applied-steps journal", () => {
 
     const first = refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }));
     expect(first).toMatch(new RegExp(MIGRATION_JOURNAL));
-    expect(first, "it names the file to delete, not only the problem").toContain(
-      join(dir, "pre-journal-replica.db"),
+    expect(first, "it says the session rebuilds rather than asking for a manual delete").toContain(
+      "The session rebuilds both stores from nothing",
     );
     // And it is the migrator's own sentence, not the driver's. Without the
     // journal this ran `0001_database_objects` over a database that already
@@ -822,6 +835,17 @@ describe("`__ledger_migrations`, the applied-steps journal", () => {
     // phone was `Failed to run the query 'CREATE TABLE …'` — a report of the
     // symptom, from two layers below the decision that caused it.
     expect(first).not.toMatch(/Failed to run the query/i);
+
+    // The structured class carries what `session.ts` needs to act on —
+    // the message alone no longer names the file, now that the recovery is
+    // an automatic rebuild rather than an instruction to delete it by hand.
+    const error = refusalError(() => migrateReplica(ledger.replica, { fs: realFs }));
+    expect(error).toBeInstanceOf(PreJournalStoreError);
+    if (error instanceof PreJournalStoreError) {
+      expect(error.store).toBe("replica");
+      expect(error.path).toBe(join(dir, "pre-journal-replica.db"));
+      expect(error.version).toBe(1);
+    }
 
     // Nothing was written and no copy taken, so the next launch reaches the
     // same refusal rather than reporting a leftover copy.

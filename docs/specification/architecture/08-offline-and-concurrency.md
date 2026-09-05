@@ -275,12 +275,16 @@ intention:
    and a checksum of its statements, created by the migrator before the chain
    and written inside the same transaction as the step it records. Which
    steps run is then what the journal does not hold, in order, with
-   `user_version` a fast path that moves in that same transaction. Three
-   refusals fall out of it, each with nothing written and no copy taken:
+   `user_version` a fast path that moves in that same transaction. Two
+   refusals and one rebuild fall out of it, each with nothing written and no
+   copy taken:
 
    - **A database above version 0 with no journal** was written before the
      journal existed, and which of this build's steps it ran cannot be known.
-     Guessing re-runs a step over real rows.
+     The session deletes both stores and starts from nothing, logging a
+     `ledger_startup` rebuild that names the store — this holds because
+     nothing installed predates the journal; a store worth keeping never
+     reaches it.
    - **A journaled tag whose checksum is not this build's** means a shipped
      file was edited. A generated step's statements are frozen once an
      installed database has run them; a change to what a step does is a new

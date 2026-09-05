@@ -693,6 +693,32 @@ function recordApplied(tx: SqlRunner, step: Migration, appliedAt: string): void 
   );
 }
 
+/** Which of the two chains a refusal or a rebuild names. */
+type LedgerStoreName = "replica" | "outbox";
+
+/**
+ * Thrown by `readAppliedTags` alone — the one refusal a session may turn into
+ * a rebuild rather than a plain failure (`session.ts` `start`). The owner's
+ * ruling is that every current database is disposable until first install,
+ * so this carries what the session needs to act on that: `store` and `path`
+ * name what to delete, `version` is `found` for a diagnostic to log.
+ */
+export class PreJournalStoreError extends Error {
+  override readonly name = "PreJournalStoreError";
+  readonly store: LedgerStoreName;
+  readonly path: string;
+  readonly version: number;
+
+  constructor(store: LedgerStoreName, path: string, version: number) {
+    super(
+      `${store} is at version ${version} and has no ${MIGRATION_JOURNAL} table — it was written by a build from before this migrator journaled what it ran, so which of this build's steps have already been applied cannot be known, and guessing runs a step twice over real rows. Nothing has been written. The session rebuilds both stores from nothing — nothing installed predates the journal.`,
+    );
+    this.store = store;
+    this.path = path;
+    this.version = version;
+  }
+}
+
 /**
  * What this file has already run — and the two refusals that answer "I cannot
  * tell" with a stop rather than a guess.
@@ -701,14 +727,15 @@ function recordApplied(tx: SqlRunner, step: Migration, appliedAt: string): void 
  * just created it, `refuseStaleCopy` has not been reached yet, and there is
  * nothing on disk for a wrong answer to damage.
  *
- * **A database above zero with no journal is refused**, because the only thing
- * that can be said about it is that some build wrote it and did not say what
- * it ran. `user_version` alone is not enough to reconstruct that: this
- * repository has already shipped a build whose whole chain was one version, so
- * `user_version = 1` there means "everything ran" and here means "one step
- * ran", and running the difference destroys the file. Nothing installed
- * predates the journal in a form worth preserving, so the message says to
- * delete the pair and let the app rebuild them.
+ * **A database above zero with no journal throws `PreJournalStoreError`**,
+ * because the only thing that can be said about it is that some build wrote
+ * it and did not say what it ran. `user_version` alone is not enough to
+ * reconstruct that: this repository has already shipped a build whose whole
+ * chain was one version, so `user_version = 1` there means "everything ran"
+ * and here means "one step ran", and running the difference destroys the
+ * file. Nothing installed predates the journal in a form worth preserving,
+ * so `session.ts` catches this one error class and rebuilds the pair rather
+ * than asking a phone user to find and delete files they cannot reach.
  *
  * **A journaled tag whose checksum is not this build's is refused by name.** A
  * generated `.sql` file's statements are frozen the moment an installed
@@ -720,15 +747,13 @@ function readAppliedTags<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
   migrations: readonly Migration[],
   found: number,
-  store: string,
+  store: LedgerStoreName,
   path: string,
 ): ReadonlySet<string> {
   if (found === 0) return new Set<string>();
 
   if (!journalPresent(db)) {
-    throw new Error(
-      `${store} is at version ${found} and has no ${MIGRATION_JOURNAL} table — it was written by a build from before this migrator journaled what it ran, so which of this build's steps have already been applied cannot be known, and guessing runs a step twice over real rows. Nothing has been written. The recovery is to let the app rebuild both files from nothing: with the app closed, delete ${path}, ${path}-wal and ${path}-shm, and the same three files for the other store beside it — the replica and the outbox are only consistent as a pair — then start the app again`,
-    );
+    throw new PreJournalStoreError(store, path, found);
   }
 
   const journal = readJournal(db);

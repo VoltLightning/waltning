@@ -38,12 +38,17 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { id } from "@waltning/core/id";
+import { currencyCode } from "@waltning/core/money";
 import Database from "better-sqlite3";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { LedgerDiagnosticEvent } from "../diagnostics.ts";
 import {
   COPY_SUFFIX,
   MIGRATION_JOURNAL,
+  type Migration,
   migrateOutbox,
   migrateReplica,
   OUTBOX_MIGRATIONS,
@@ -436,6 +441,215 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
       ).toBeLessThanOrEqual(fixture.outboxSeqIssuedBefore);
     } finally {
       fixture.cleanup();
+    }
+  });
+});
+
+/* ── a store written before the journal ──────────────────────────────────── */
+
+/** `openLedger` over a fresh pair of paths this suite made — the whole `Ledger`, not one connection. */
+function openRaw(paths: LedgerPaths) {
+  return openLedger(openWithBetterSqlite, paths);
+}
+
+type RawLedger = ReturnType<typeof openRaw>;
+
+/**
+ * The pre-journal shape: every step's statements ran, `user_version` stamped,
+ * but no `__ledger_migrations` — because `runInOneTransaction` is the only
+ * thing that writes that table, and nothing here goes near it. Mirrors
+ * `test/migrate.test.ts`'s `seedPreJournalReplica`, over a `Ledger` this file
+ * builds with `openLedger` rather than a bare connection.
+ */
+function seedPreJournalReplica(ledger: RawLedger, stampedVersion: number): void {
+  for (const migration of REPLICA_MIGRATIONS) migration.up(ledger.replica.db);
+  ledger.replica.db.run(sql.raw(`pragma user_version = ${stampedVersion}`));
+}
+
+/** The outbox's own pre-journal shape — the same construction, the other chain. */
+function seedPreJournalOutbox(ledger: RawLedger, stampedVersion: number): void {
+  for (const migration of OUTBOX_MIGRATIONS) migration.up(ledger.outbox.db);
+  ledger.outbox.db.run(sql.raw(`pragma user_version = ${stampedVersion}`));
+}
+
+/**
+ * One account row, as raw SQL rather than a typed insert — the replica this
+ * runs against was built by `seedPreJournalReplica`, never through a session,
+ * so no currency has been bootstrapped for a typed insert's foreign key to
+ * find. Placeholder values only, per `docs/agents/domain.md`'s public-repo rule.
+ */
+function insertPreJournalAccount(ledger: RawLedger, accountId: string): void {
+  const now = Date.now();
+  ledger.replica.db.run(
+    sql`insert into "currencies" ("code", "name", "updated_at") values ('PLN', 'Placeholder', ${now})`,
+  );
+  ledger.replica.db.run(
+    sql`insert into "accounts" ("id", "name", "currency", "created_at", "updated_at") values (${accountId}, 'Bank A · PLN', 'PLN', ${now}, ${now})`,
+  );
+}
+
+/** The same row, through the typed schema — for a replica already migrated for real. */
+function seedAccount(db: RawLedger["replica"]["db"], accountId: string): void {
+  db.insert(schema.currencies)
+    .values({ code: currencyCode("PLN"), name: "Placeholder" })
+    .onConflictDoNothing()
+    .run();
+  db.insert(schema.accounts)
+    .values({
+      id: id<"accounts">(accountId),
+      name: "Bank A · PLN",
+      currency: currencyCode("PLN"),
+    })
+    .onConflictDoNothing()
+    .run();
+}
+
+/** Every tag `__ledger_migrations` holds, for comparing against a chain's full tag set. */
+function journalTags(db: Database.Database): string[] {
+  return (
+    db.prepare(`select "tag" from "${MIGRATION_JOURNAL}" order by "tag"`).all() as {
+      tag: string;
+    }[]
+  ).map((row) => row.tag);
+}
+
+function userVersionOf(db: Database.Database): number {
+  const row = db.prepare("pragma user_version").get() as { user_version: number };
+  return row.user_version;
+}
+
+/** The version a fully-migrated store ends at — the chain's own highest step. */
+function headVersion(migrations: readonly Migration[]): number {
+  return Math.max(...migrations.map((m) => m.version));
+}
+
+/**
+ * The owner's ruling — every current database is disposable until first
+ * install (`architecture/08` item 1; `architecture/14` §14.6) — proved
+ * end to end: a pre-journal store makes `createLocalLedgerSession` rebuild
+ * the pair rather than throw, and the rebuilt pair is indistinguishable from
+ * a fresh install.
+ */
+describe("a store written before the journal", () => {
+  it("rebuilds the pair from nothing: fresh files, full journal, the rebuild diagnostic names the store", () => {
+    const { dir, paths } = newPaths("waltning-prejournal-pair-");
+    try {
+      const raw = openRaw(paths);
+      // Only the replica is seeded pre-journal; the outbox is left exactly as
+      // `openLedger` created it — a fresh file at version 0 — which is what
+      // makes `migrateOutbox` (run first, inside `start`) succeed before
+      // `migrateReplica` reaches the pre-journal refusal.
+      seedPreJournalReplica(raw, 1);
+      insertPreJournalAccount(raw, "acc-pre-journal");
+      raw.close();
+
+      const events: LedgerDiagnosticEvent[] = [];
+      const session = createLocalLedgerSession({
+        ...sessionOptionsFor(paths),
+        diagnostics: (event) => events.push(event),
+      });
+      try {
+        expect(
+          session.listAccounts(),
+          "the pre-journal row is gone — the rebuild started from nothing",
+        ).toEqual([]);
+
+        expect(inspect(paths.replica, journalTags).sort()).toEqual(
+          REPLICA_MIGRATIONS.map((m) => m.tag).sort(),
+        );
+        expect(inspect(paths.outbox, journalTags).sort()).toEqual(
+          OUTBOX_MIGRATIONS.map((m) => m.tag).sort(),
+        );
+        expect(inspect(paths.replica, userVersionOf)).toBe(headVersion(REPLICA_MIGRATIONS));
+        expect(inspect(paths.outbox, userVersionOf)).toBe(headVersion(OUTBOX_MIGRATIONS));
+
+        const rebuilds = events.filter((event) => event.phase === "rebuild");
+        expect(rebuilds).toHaveLength(1);
+        expect(rebuilds[0]?.store).toBe("replica");
+
+        expect(existsSync(`${paths.replica}${COPY_SUFFIX}`)).toBe(false);
+        expect(existsSync(`${paths.outbox}${COPY_SUFFIX}`)).toBe(false);
+      } finally {
+        session.close();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a pre-journal outbox beside a journaled replica rebuilds both", () => {
+    const { dir, paths } = newPaths("waltning-prejournal-outbox-");
+    try {
+      const raw = openRaw(paths);
+      // The replica this time is built through the real migrator — a proper,
+      // journaled store, the shape an installed app actually has — and holds
+      // a row of its own, so its loss is the thing under test.
+      migrateReplica(raw.replica, { fs: nodeFs }).copy?.release();
+      seedAccount(raw.replica.db, "acc-real");
+      seedPreJournalOutbox(raw, 1);
+      raw.close();
+
+      const events: LedgerDiagnosticEvent[] = [];
+      const session = createLocalLedgerSession({
+        ...sessionOptionsFor(paths),
+        diagnostics: (event) => events.push(event),
+      });
+      try {
+        expect(
+          session.listAccounts(),
+          "the journaled replica's own row is gone too — the pair rebuilds together, never one side alone",
+        ).toEqual([]);
+
+        const rebuilds = events.filter((event) => event.phase === "rebuild");
+        expect(rebuilds).toHaveLength(1);
+        expect(rebuilds[0]?.store).toBe("outbox");
+      } finally {
+        session.close();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * The other refusal stays a refusal. `PreJournalStoreError` is the one
+   * class `session.ts` rebuilds on — a checksum mismatch is a plain `Error`,
+   * so it must still stop the app rather than erase a database whose only
+   * fault is disagreeing with this build about one step's statements.
+   */
+  it("a checksum mismatch is still a refusal, not a rebuild", () => {
+    const { dir, paths } = newPaths("waltning-checksum-mismatch-");
+    try {
+      const setupSession = createLocalLedgerSession(sessionOptionsFor(paths));
+      setupSession.close();
+
+      const versionBefore = inspect(paths.replica, userVersionOf);
+      const firstTag = REPLICA_MIGRATIONS[0]?.tag;
+      if (firstTag === undefined) throw new Error("REPLICA_MIGRATIONS is empty");
+
+      const sqlite = new Database(paths.replica);
+      try {
+        sqlite
+          .prepare(
+            `update "${MIGRATION_JOURNAL}" set "checksum" = 'bogus-checksum' where "tag" = ?`,
+          )
+          .run(firstTag);
+      } finally {
+        sqlite.close();
+      }
+
+      const events: LedgerDiagnosticEvent[] = [];
+      expect(() =>
+        createLocalLedgerSession({
+          ...sessionOptionsFor(paths),
+          diagnostics: (event) => events.push(event),
+        }),
+      ).toThrow(/is not the one that ran here/);
+
+      expect(events.filter((event) => event.phase === "rebuild")).toHaveLength(0);
+      expect(inspect(paths.replica, userVersionOf)).toBe(versionBefore);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

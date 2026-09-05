@@ -386,12 +386,15 @@ same transaction as the step it records. What runs on a launch is what the
 journal does not hold, in order; `user_version` is the fast path, moving in
 that same transaction.
 
-Three things are then refusals rather than guesses, each with nothing written
-and no pre-migration copy taken:
+Two things are then refusals rather than guesses, and one is a rebuild, each
+with nothing written and no pre-migration copy taken:
 
 - **Above version 0 with no journal.** The file was written before the journal
-  existed and cannot say what it ran; the recovery is to delete both files and
-  let the app rebuild them, which the refusal spells out by name.
+  existed and cannot say what it ran; nothing installed predates the journal
+  in a form worth preserving, so the session deletes both stores and starts
+  from nothing — a `ledger_startup` rebuild, logged with the store's name,
+  rather than a refusal asking someone to find a file on a phone they cannot
+  reach.
 - **A journaled tag whose checksum is not this build's.** A generated
   migration file's statements are frozen the moment an installed database has
   run them — every device that ran the old ones would otherwise disagree

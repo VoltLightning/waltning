@@ -135,7 +135,13 @@ import {
   type LedgerDiagnostics,
   type LedgerStartupStage,
 } from "./diagnostics.ts";
-import { type LedgerFs, type Migration, migrateOutbox, migrateReplica } from "./migrate.ts";
+import {
+  type LedgerFs,
+  type Migration,
+  migrateOutbox,
+  migrateReplica,
+  PreJournalStoreError,
+} from "./migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./open.ts";
 import { type LaunchRecovery, recoverOnLaunch } from "./recover.ts";
 import { ledgerRegistry } from "./registry.ts";
@@ -366,6 +372,24 @@ export type LocalLedgerSessionOptions<TRun> = {
 type SessionLedger<TRun> = Ledger<TRun, typeof ledgerSchema>;
 
 /**
+ * Both files, gone — `reset`'s own delete loop, and now also what a
+ * pre-journal rebuild runs before it retries `start`. `architecture/14`
+ * §14.6: the replica and the outbox are only consistent as a pair, so
+ * whichever store a refusal named, both are deleted together.
+ */
+function removeStorePair<TRun>(
+  options: Pick<LocalLedgerSessionOptions<TRun>, "paths" | "fs" | "removeDatabase">,
+): void {
+  for (const path of [options.paths.replica, options.paths.outbox]) {
+    options.removeDatabase(path);
+    for (const suffix of ["-wal", "-shm", ".pre-migration"]) {
+      const sibling = `${path}${suffix}`;
+      if (options.fs.exists(sibling)) options.fs.remove(sibling);
+    }
+  }
+}
+
+/**
  * `start`'s two results, kept together rather than the recovery discarded.
  *
  * **R4 L2.** `recoverOnLaunch`'s return value used to be called and thrown
@@ -379,7 +403,16 @@ type StartResult<TRun> = {
   readonly recovery: LaunchRecovery;
 };
 
-function start<TRun>(options: LocalLedgerSessionOptions<TRun>): StartResult<TRun> {
+/**
+ * `rebuilt` distinguishes the retry after a rebuild from the original call —
+ * without it, a second `PreJournalStoreError` (the rebuilt pair is itself
+ * pre-journal, which should never happen but must not hang the app) would
+ * rebuild forever instead of surfacing as a failure.
+ */
+function start<TRun>(
+  options: LocalLedgerSessionOptions<TRun>,
+  state: { rebuilt: boolean } = { rebuilt: false },
+): StartResult<TRun> {
   const { diagnostics } = options;
   let stage: LedgerStartupStage = "open";
   emitLedgerDiagnostic(diagnostics, { scope: "ledger_startup", phase: "start", stage });
@@ -443,6 +476,22 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): StartResult<TRun
     });
     return { ledger, recovery };
   } catch (error) {
+    if (
+      error instanceof PreJournalStoreError &&
+      !state.rebuilt &&
+      (stage === "migrate_outbox" || stage === "migrate_replica")
+    ) {
+      ledger.close();
+      emitLedgerDiagnostic(diagnostics, {
+        scope: "ledger_startup",
+        phase: "rebuild",
+        stage,
+        store: error.store,
+        error: describeLedgerError(error),
+      });
+      removeStorePair(options);
+      return start(options, { rebuilt: true });
+    }
     ledger.close();
     emitLedgerDiagnostic(diagnostics, {
       scope: "ledger_startup",
@@ -752,13 +801,7 @@ export function createLocalLedgerSession<TRun>(
       closed = true;
       current.close();
 
-      for (const path of [options.paths.replica, options.paths.outbox]) {
-        options.removeDatabase(path);
-        for (const suffix of ["-wal", "-shm", ".pre-migration"]) {
-          const sibling = `${path}${suffix}`;
-          if (options.fs.exists(sibling)) options.fs.remove(sibling);
-        }
-      }
+      removeStorePair(options);
 
       ({ ledger, recovery: lastRecovery } = start(options));
       closed = false;
