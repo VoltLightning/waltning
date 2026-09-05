@@ -54,7 +54,7 @@ export function BrandIcon({ brandKey, payee, size = 24 }: BrandIconProps) {
     const fill = { backgroundColor: entry.accent };
     const ink = { color: theme.textOnAccent };
     return (
-      <View style={[styles.badge, box, fill]} accessibilityLabel={entry.name}>
+      <View style={[styles.badge, box, fill]} {...DECORATIVE}>
         <Text style={[styles.mark, ink]} numberOfLines={1}>
           {entry.mark}
         </Text>
@@ -68,13 +68,29 @@ export function BrandIcon({ brandKey, payee, size = 24 }: BrandIconProps) {
   const fill = { backgroundColor: monogram.fill };
   const ink = { color: monogram.ink };
   return (
-    <View style={[styles.badge, box, fill]} accessibilityLabel={payee || undefined}>
+    <View style={[styles.badge, box, fill]} {...DECORATIVE}>
       <Text style={[styles.mark, ink]} numberOfLines={1}>
         {monogram.letter}
       </Text>
     </View>
   );
 }
+
+/**
+ * Round 1's L9 — this badge is never its own accessible stop. It used to
+ * carry `accessibilityLabel={entry.name}` (or `payee`), which duplicated
+ * whatever the row around it already announces — `TransactionRow` labels
+ * its own tappable row with the payee, so a screen reader read "ORLEN,
+ * ORLEN" — and gave a blank payee's `?` fallback no label at all, since
+ * `payee || undefined` is `undefined` for `""`. Hidden from the
+ * accessibility tree entirely, on both platforms, is the fix for both: the
+ * mark is decorative everywhere it is used today (S04/S09/S10, S13), and
+ * the payee text beside it already carries the words a screen reader needs.
+ */
+const DECORATIVE = {
+  accessible: false,
+  importantForAccessibility: "no-hide-descendants",
+} as const;
 
 const useStyles = makeStyles(() => ({
   // `radius.xs`, never `radius.pill` — sharp corners are this product's own

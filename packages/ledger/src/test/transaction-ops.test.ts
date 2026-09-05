@@ -216,7 +216,7 @@ describe("update_transaction", () => {
 describe("brand recognition (§14.4b)", () => {
   const ORLEN = id<"transactions">("00000000-0000-4000-8000-000000000b01");
 
-  it("matches a recognised payee and sources it 'catalog', with no caller input", () => {
+  it("matches a recognised payee and sources it 'auto', with no caller input", () => {
     writeLocally(stores.ledger, {
       executor: createTransactionExecutor,
       registry: ledgerRegistry,
@@ -237,7 +237,7 @@ describe("brand recognition (§14.4b)", () => {
       .where(eq(transactions.id, ORLEN))
       .get();
     expect(row?.brandKey).toBe("orlen");
-    expect(row?.brandSource).toBe("catalog");
+    expect(row?.brandSource).toBe("auto");
   });
 
   it("leaves both fields null for an unrecognised payee — never one alone", () => {
@@ -285,14 +285,16 @@ describe("brand recognition (§14.4b)", () => {
           accountId: ACCOUNT,
           amountOriginal: "10",
           currency: PLN,
-          payee: "Netflix",
-          brandKey: "netflix",
+          // Invented — never a real merchant not already in the catalogue
+          // (CLAUDE.md: placeholders only, round 1's L8).
+          payee: "Waltco",
+          brandKey: "waltco",
         },
       }),
     ).toThrow(/brand catalogue/);
   });
 
-  it("re-matches a patched payee when the row carries no manual assignment", () => {
+  it("re-matches a patched payee when the row carries no manual assignment (source null)", () => {
     const before = readTxn();
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
@@ -302,7 +304,31 @@ describe("brand recognition (§14.4b)", () => {
     });
     const after = readTxn();
     expect(after?.brandKey).toBe("orlen");
-    expect(after?.brandSource).toBe("catalog");
+    expect(after?.brandSource).toBe("auto");
+  });
+
+  it("re-matches a patched payee when the row carries an 'auto' match already", () => {
+    const before = readTxn();
+    // Land on an "auto" match first.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { payee: "ORLEN" } },
+    });
+    const auto = readTxn();
+    expect(auto?.brandSource).toBe("auto");
+
+    // A further payee edit re-matches again — "auto" is not sticky.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: auto?.version ?? 0, patch: { payee: "YouTube" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("youtube");
+    expect(after?.brandSource).toBe("auto");
   });
 
   it("a manual assignment is sticky against a later payee edit", () => {
@@ -331,7 +357,14 @@ describe("brand recognition (§14.4b)", () => {
     expect(after?.brandSource).toBe("manual");
   });
 
-  it("clearing brandKey with null lets the payee decide again", () => {
+  /**
+   * Round 1's M4 — a wrong catalogue match used to be uncorrectable:
+   * clearing `brandKey` with `null` fell straight back through the same
+   * match against a payee that still folds to a catalogue alias. `"none"`
+   * is the fix, and it is sticky — the whole point of clearing a match is
+   * that it does not come straight back.
+   */
+  it("clearing brandKey with null is a deliberate, sticky 'no brand' — it does not re-match", () => {
     const before = readTxn();
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
@@ -352,9 +385,64 @@ describe("brand recognition (§14.4b)", () => {
       capture,
       input: { id: TXN, version: manual?.version ?? 0, patch: { brandKey: null } },
     });
+    const cleared = readTxn();
+    expect(cleared?.brandKey).toBeNull();
+    expect(cleared?.brandSource).toBe("none");
+
+    // The payee ("ORLEN") still folds to a catalogue alias — a further,
+    // unrelated payee edit must not bring the match back.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: cleared?.version ?? 0, patch: { note: "unrelated" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBeNull();
+    expect(after?.brandSource).toBe("none");
+  });
+
+  it("'none' stays sticky across a payee edit too", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { brandKey: null } },
+    });
+    const cleared = readTxn();
+    expect(cleared?.brandSource).toBe("none");
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: cleared?.version ?? 0, patch: { payee: "ORLEN" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBeNull();
+    expect(after?.brandSource).toBe("none");
+  });
+
+  it("an explicit brandKey still overrides a sticky 'none'", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { brandKey: null } },
+    });
+    const cleared = readTxn();
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: cleared?.version ?? 0, patch: { brandKey: "orlen" } },
+    });
     const after = readTxn();
     expect(after?.brandKey).toBe("orlen");
-    expect(after?.brandSource).toBe("catalog");
+    expect(after?.brandSource).toBe("manual");
   });
 
   it("supersede_transaction resolves the brand of its replacement, the same as create", () => {
@@ -385,7 +473,7 @@ describe("brand recognition (§14.4b)", () => {
       .where(eq(transactions.id, REPLACEMENT))
       .get();
     expect(replaced?.brandKey).toBe("orlen");
-    expect(replaced?.brandSource).toBe("catalog");
+    expect(replaced?.brandSource).toBe("auto");
   });
 
   it("the transactions_brand_shape CHECK refuses a raw insert with only one field set (L)", () => {

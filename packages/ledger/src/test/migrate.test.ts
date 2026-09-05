@@ -1517,6 +1517,59 @@ describe("a constraint declared in the schema is present on the device", () => {
   });
 
   /**
+   * Round 1's M1 — `recurring_transactions_brand_shape` on the device.
+   * `SPEC.md` §14.4b names no engine exception and `architecture/14` §14.6
+   * requires the phone to refuse at capture time what the server would
+   * refuse, but SQLite got the two columns through a bare `ALTER TABLE …
+   * ADD` (no `ADD CONSTRAINT` exists there) and so got no CHECK at all,
+   * while Postgres refused the same row from the start. `0010_schema`
+   * rebuilds the table for it; this is the break that proves the rebuild
+   * shipped, against the real chain and the real file.
+   *
+   * Raw SQL rather than the query builder, for `seedTransaction`'s own
+   * reason: drizzle's insert names every column the module declares, and
+   * what is being proved here is what the *table* enforces.
+   */
+  it("enforces the recurring-rule brand shape too, on the device, not only on the server", () => {
+    const ledger = openAt("recurring-brand");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    seedReferences(ledger);
+
+    const insert = (columns: string, values: string) =>
+      ledger.replica.db.run(
+        sql.raw(`insert into recurring_transactions (${columns}) values (${values})`),
+      );
+    const COMMON = "type, account_id, amount_original, currency, rrule, created_at, updated_at";
+    const COMMON_VALUES = "'expense', 'acc-1', '18.00', 'PLN', 'FREQ=MONTHLY', 0, 0";
+
+    expect(
+      refusal(() => insert(`id, ${COMMON}, brand_key`, `'rr-1', ${COMMON_VALUES}, 'orlen'`)),
+      "a key with no source — the row a three-valued CHECK admits when it forgets `is not null`",
+    ).toMatch(/CHECK constraint failed/i);
+    expect(
+      refusal(() => insert(`id, ${COMMON}, brand_source`, `'rr-2', ${COMMON_VALUES}, 'auto'`)),
+      "and a source with no key",
+    ).toMatch(/CHECK constraint failed/i);
+    expect(
+      refusal(() =>
+        insert(
+          `id, ${COMMON}, brand_key, brand_source`,
+          `'rr-3', ${COMMON_VALUES}, 'orlen', 'none'`,
+        ),
+      ),
+      "and a key paired with 'none', which by definition names a row with no key",
+    ).toMatch(/CHECK constraint failed/i);
+
+    // The two shapes it must admit: a resolved pair, and a deliberate "no
+    // brand" (§14.4b's third `brand_source` value).
+    insert(`id, ${COMMON}, brand_key, brand_source`, `'rr-4', ${COMMON_VALUES}, 'orlen', 'manual'`);
+    insert(`id, ${COMMON}, brand_source`, `'rr-5', ${COMMON_VALUES}, 'none'`);
+    insert(`id, ${COMMON}`, `'rr-6', ${COMMON_VALUES}`);
+
+    ledger.close();
+  });
+
+  /**
    * `ddl.ts` is output: it is only correct as long as somebody ran `pnpm
    * ledger:generate` after touching a table. A fourteenth shared table added to
    * `packages/schema` without regenerating would compile, query cleanly against
@@ -1587,8 +1640,14 @@ describe("a constraint declared in the schema is present on the device", () => {
    * — the row a naive copy-rename-drop of `transactions`, run with foreign
    * keys still enforced, would cascade away even though nothing asked it to.
    * `runInOneTransaction`'s foreign-keys-off window is what this proves, over
-   * the real chain rather than a synthetic one: `0008_schema` is the rebuild
-   * that adds `transactions_debt_amount_requires_currency`.
+   * the real chain rather than a synthetic one: `REPLICA_MIGRATIONS.slice(0,
+   * -1)` stops one short of whichever migration is currently last, and the
+   * chain's last step has been a `transactions` rebuild since `0008_schema`
+   * (which added `transactions_debt_amount_requires_currency`, the CHECK this
+   * test still asserts by name below) — most recently `0010_schema`
+   * (round 1's L2: this comment named `0008_schema` specifically, which
+   * silently stopped being the last step the moment `0010_schema` landed,
+   * and nothing here flagged the drift).
    */
   it("keeps a child row through the transactions rebuild, and ships the new CHECK", () => {
     const ledger = openAt("rebuild-fk");

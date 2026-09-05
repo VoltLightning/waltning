@@ -29,6 +29,13 @@ afterAll(async () => {
 });
 
 describe("recurring_transactions_brand_shape", () => {
+  /**
+   * Round 1's M4 — this is the exact case the "`brand_source is not null
+   * and` is load-bearing" comment (`packages/db/src/schema.ts`) exists for:
+   * a CHECK that evaluates to `NULL` (not `false`) is admitted, not
+   * refused, so a `brand_key` with no `brand_source` at all is the row a
+   * naive three-value CHECK would let straight through.
+   */
   it("refuses a brand_key with no brand_source", async () => {
     await expect(
       s.sql`insert into recurring_transactions
@@ -46,18 +53,48 @@ describe("recurring_transactions_brand_shape", () => {
         (id, type, account_id, amount_original, currency, rrule, brand_source)
         values (
           ${crypto.randomUUID()}, 'expense', ${ACCOUNT.id}, '10.00', ${CURRENCY.code},
-          'FREQ=MONTHLY', 'catalog'
+          'FREQ=MONTHLY', 'auto'
         )`,
     ).rejects.toThrow(/recurring_transactions_brand_shape/);
   });
 
-  it("admits both present, or both absent", async () => {
+  /** A `brand_key` paired with `'none'` is refused too — `'none'` names a row with no key, by definition. */
+  it("refuses a brand_key paired with 'none'", async () => {
+    await expect(
+      s.sql`insert into recurring_transactions
+        (id, type, account_id, amount_original, currency, rrule, brand_key, brand_source)
+        values (
+          ${crypto.randomUUID()}, 'expense', ${ACCOUNT.id}, '10.00', ${CURRENCY.code},
+          'FREQ=MONTHLY', 'orlen', 'none'
+        )`,
+    ).rejects.toThrow(/recurring_transactions_brand_shape/);
+  });
+
+  it("admits a resolved brand (key + 'auto' or 'manual')", async () => {
     await s.sql`insert into recurring_transactions
       (id, type, account_id, amount_original, currency, rrule, brand_key, brand_source)
       values (
         ${crypto.randomUUID()}, 'expense', ${ACCOUNT.id}, '10.00', ${CURRENCY.code},
-        'FREQ=MONTHLY', 'orlen', 'catalog'
+        'FREQ=MONTHLY', 'orlen', 'auto'
       )`;
+    await s.sql`insert into recurring_transactions
+      (id, type, account_id, amount_original, currency, rrule, brand_key, brand_source)
+      values (
+        ${crypto.randomUUID()}, 'expense', ${ACCOUNT.id}, '10.00', ${CURRENCY.code},
+        'FREQ=MONTHLY', 'youtube', 'manual'
+      )`;
+  });
+
+  it("admits a deliberate 'no brand' (null key, 'none' source)", async () => {
+    await s.sql`insert into recurring_transactions
+      (id, type, account_id, amount_original, currency, rrule, brand_source)
+      values (
+        ${crypto.randomUUID()}, 'expense', ${ACCOUNT.id}, '10.00', ${CURRENCY.code},
+        'FREQ=MONTHLY', 'none'
+      )`;
+  });
+
+  it("admits both absent (never matched)", async () => {
     await s.sql`insert into recurring_transactions
       (id, type, account_id, amount_original, currency, rrule)
       values (${crypto.randomUUID()}, 'expense', ${ACCOUNT.id}, '10.00', ${CURRENCY.code}, 'FREQ=MONTHLY')`;

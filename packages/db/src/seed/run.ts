@@ -5,17 +5,13 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { BRAND_CATALOG } from "@waltning/core/brands/catalog";
 import { currencies as currencySeed } from "@waltning/core/currencies";
 import type { Id } from "@waltning/core/id";
 import { eq } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { requireRow } from "../rows.ts";
-import {
-  brandAliases as brandAliasesTable,
-  categories,
-  currencies as currenciesTable,
-} from "../schema.ts";
+import { categories, currencies as currenciesTable } from "../schema.ts";
+import { seedBrandAliases } from "./brand-aliases.ts";
 import { expenseTree, incomeTree, type SeedGroup, topLevelLeaves } from "./data.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));
@@ -48,30 +44,6 @@ async function seedCurrencies() {
       });
   }
   return currencySeed.length;
-}
-
-/**
- * `SPEC.md` §14.4b — bootstraps `brand_aliases` from the bundled catalogue,
- * the same `ON CONFLICT` shape `seedCurrencies` already gives reference data
- * (`architecture/14` §14.6). Idempotent by the alias's own primary key: a
- * re-run only ever updates which key an existing alias points at, never
- * duplicates a row.
- */
-async function seedBrandAliases() {
-  let aliases = 0;
-  for (const entry of BRAND_CATALOG) {
-    for (const alias of entry.aliases) {
-      await db
-        .insert(brandAliasesTable)
-        .values({ alias, brandKey: entry.key })
-        .onConflictDoUpdate({
-          target: brandAliasesTable.alias,
-          set: { brandKey: entry.key, updatedAt: new Date() },
-        });
-      aliases++;
-    }
-  }
-  return aliases;
 }
 
 /** Upsert one category by its stable seed key, returning its id. */
@@ -162,7 +134,7 @@ async function main() {
   const ccy = await seedCurrencies();
   console.log(`  currencies      ${ccy}`);
 
-  const brandAliasCount = await seedBrandAliases();
+  const brandAliasCount = await seedBrandAliases(db);
   console.log(`  brand aliases   ${brandAliasCount}`);
 
   const inc = await seedTree(incomeTree, 0);

@@ -95,8 +95,12 @@ export const WIDGET_SIZE = ["s", "m", "l"] as const;
  * general reason every enum in this file is restated rather than imported;
  * this one has no core-side brand to pin it against either, the same gap
  * that note records.
+ *
+ * Three values as of round 1's M4: `auto` (matched from the payee offline),
+ * `manual` (asserted by the caller), `none` (a deliberate, sticky "no
+ * brand" — see `@waltning/core/brands/match`'s `resolveBrandPatch`).
  */
-export const BRAND_SOURCE = ["catalog", "manual"] as const;
+export const BRAND_SOURCE = ["auto", "manual", "none"] as const;
 
 export type AccountKind = (typeof ACCOUNT_KIND)[number];
 export type Ownership = (typeof OWNERSHIP)[number];

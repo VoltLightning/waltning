@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+import { check } from "drizzle-orm/sqlite-core";
 import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
@@ -40,7 +42,25 @@ export const recurringTransactionsColumns = () => ({
   version: k.version("version").notNull().default(1),
 });
 
+/**
+ * Round 1's M1 — `recurring_transactions_brand_shape` was missing here
+ * entirely: SQLite had the two columns (a bare `ALTER TABLE … ADD`,
+ * `0010_schema.sql`) with nothing enforcing their pairing, while Postgres
+ * refused it from the start (`packages/db/src/schema.ts`). §14.4b names no
+ * engine exception, and `architecture/14` §14.6 requires the phone to refuse
+ * at capture time what the server would refuse — even though no executor
+ * writes this table yet this arc, the guarantee is stated where the columns
+ * are, not deferred until a write path exists to expose the gap. Same
+ * formula as `transactions_brand_shape` (`transactions.sqlite.ts`) — see its
+ * own comment for the three-value `brand_source` shape.
+ */
 export const recurringTransactions = k.table(
   "recurring_transactions",
   recurringTransactionsColumns(),
+  (t) => [
+    check(
+      "recurring_transactions_brand_shape",
+      sql`(${t.brandKey} IS NULL AND (${t.brandSource} IS NULL OR ${t.brandSource} = 'none')) OR (${t.brandKey} IS NOT NULL AND ${t.brandSource} IS NOT NULL AND ${t.brandSource} IN ('auto', 'manual'))`,
+    ),
+  ],
 );

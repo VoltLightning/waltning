@@ -136,5 +136,24 @@ export const transactions = k.table("transactions", transactionsColumns(), (t) =
     "transactions_debt_amount_requires_currency",
     sql`${t.debtAmount} IS NULL OR ${t.debtCurrency} IS NOT NULL`,
   ),
-  check("transactions_brand_shape", sql`(${t.brandKey} IS NULL) = (${t.brandSource} IS NULL)`),
+  // Round 1's M4 — `brand_source` carries a third value, `'none'`, for a
+  // *deliberate* "no brand" (a cleared catalogue match) — distinct from
+  // `NULL`/`NULL`, which means "never matched at all". So "a valid pair" is
+  // no longer the simpler `(key IS NULL) = (source IS NULL)`: a `NULL` key
+  // pairs with either a `NULL` or a `'none'` source, and a non-`NULL` key
+  // pairs only with `'auto'` or `'manual'` — never `'none'`, which by
+  // definition names a row with no key.
+  //
+  // **`brand_source IS NOT NULL AND` is load-bearing, not decoration.**
+  // SQL's three-valued logic means `x IN (...)` on a `NULL` `x` evaluates to
+  // `NULL`, not `FALSE` — and a CHECK only fails on an explicit `FALSE`, so
+  // `brand_key IS NOT NULL AND brand_source IN ('auto', 'manual')` alone
+  // would evaluate the whole expression to `NULL` (never `FALSE`) for
+  // exactly the row this CHECK exists to refuse — `brand_key` set,
+  // `brand_source` left `NULL` — and SQLite would silently admit it. Broken
+  // once, live, without this clause (`transaction-ops.test.ts`).
+  check(
+    "transactions_brand_shape",
+    sql`(${t.brandKey} IS NULL AND (${t.brandSource} IS NULL OR ${t.brandSource} = 'none')) OR (${t.brandKey} IS NOT NULL AND ${t.brandSource} IS NOT NULL AND ${t.brandSource} IN ('auto', 'manual'))`,
+  ),
 ]);

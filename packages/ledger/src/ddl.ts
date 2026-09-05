@@ -35,7 +35,7 @@
  * know which tags have one.
  */
 
-/** One step per file in `drizzle/replica`, filename order — the fifteen shared tables, `local_meta` and its one row, and every schema change since. */
+/** One step per file in `drizzle/replica`, filename order — the sixteen shared tables (`brand_aliases` since `SPEC.md` §14.4b), `local_meta` and its one row, and every schema change since. */
 export const REPLICA_STEPS: readonly {
   readonly tag: string;
   readonly statements: readonly string[];
@@ -413,8 +413,6 @@ export const REPLICA_STEPS: readonly {
 	\`created_at\` integer NOT NULL,
 	\`updated_at\` integer NOT NULL
 )`,
-      `ALTER TABLE \`recurring_transactions\` ADD \`brand_key\` text`,
-      `ALTER TABLE \`recurring_transactions\` ADD \`brand_source\` text`,
       `CREATE TABLE \`__new_transactions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`date\` text NOT NULL,
@@ -465,13 +463,44 @@ export const REPLICA_STEPS: readonly {
 	FOREIGN KEY (\`to_currency\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (\`recurring_id\`) REFERENCES \`recurring_transactions\`(\`id\`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "transactions_debt_amount_requires_currency" CHECK("__new_transactions"."debt_amount" IS NULL OR "__new_transactions"."debt_currency" IS NOT NULL),
-	CONSTRAINT "transactions_brand_shape" CHECK(("__new_transactions"."brand_key" IS NULL) = ("__new_transactions"."brand_source" IS NULL))
+	CONSTRAINT "transactions_brand_shape" CHECK(("__new_transactions"."brand_key" IS NULL AND ("__new_transactions"."brand_source" IS NULL OR "__new_transactions"."brand_source" = 'none')) OR ("__new_transactions"."brand_key" IS NOT NULL AND "__new_transactions"."brand_source" IS NOT NULL AND "__new_transactions"."brand_source" IN ('auto', 'manual')))
 )`,
       `INSERT INTO \`__new_transactions\`("id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at") SELECT "id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at" FROM \`transactions\``,
       `DROP TABLE \`transactions\``,
       `ALTER TABLE \`__new_transactions\` RENAME TO \`transactions\``,
       `CREATE INDEX \`transactions_category_idx\` ON \`transactions\` (\`category_id\`)`,
       `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
+      `CREATE TABLE \`__new_recurring_transactions\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`type\` text NOT NULL,
+	\`account_id\` text NOT NULL,
+	\`to_account_id\` text,
+	\`category_id\` text,
+	\`counterparty_id\` text,
+	\`amount_original\` text NOT NULL,
+	\`currency\` text NOT NULL,
+	\`payee\` text DEFAULT '' NOT NULL,
+	\`note\` text DEFAULT '' NOT NULL,
+	\`brand_key\` text,
+	\`brand_source\` text,
+	\`rrule\` text NOT NULL,
+	\`next_date\` text,
+	\`end_date\` text,
+	\`enabled\` integer DEFAULT true NOT NULL,
+	\`external_id\` text,
+	\`created_at\` integer NOT NULL,
+	\`updated_at\` integer NOT NULL,
+	\`version\` integer DEFAULT 1 NOT NULL,
+	FOREIGN KEY (\`account_id\`) REFERENCES \`accounts\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`to_account_id\`) REFERENCES \`accounts\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`category_id\`) REFERENCES \`categories\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`counterparty_id\`) REFERENCES \`counterparties\`(\`id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`currency\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "recurring_transactions_brand_shape" CHECK(("__new_recurring_transactions"."brand_key" IS NULL AND ("__new_recurring_transactions"."brand_source" IS NULL OR "__new_recurring_transactions"."brand_source" = 'none')) OR ("__new_recurring_transactions"."brand_key" IS NOT NULL AND "__new_recurring_transactions"."brand_source" IS NOT NULL AND "__new_recurring_transactions"."brand_source" IN ('auto', 'manual')))
+)`,
+      `INSERT INTO \`__new_recurring_transactions\`("id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version") SELECT "id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version" FROM \`recurring_transactions\``,
+      `DROP TABLE \`recurring_transactions\``,
+      `ALTER TABLE \`__new_recurring_transactions\` RENAME TO \`recurring_transactions\``,
     ],
   },
 ];

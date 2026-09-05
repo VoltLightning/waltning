@@ -27,8 +27,24 @@
  * `packages/ui`, which carries no such floor.
  */
 
-/** Reused by `packages/schema`'s `enums.ts` — restated there, not imported, for the same reason every other enum in this registry is restated (core cannot import schema; see `registry/inputs.ts`'s own note on `ACCOUNT_KIND`). */
-export const BRAND_SOURCE = ["catalog", "manual"] as const;
+/**
+ * Reused by `packages/schema`'s `enums.ts` — restated there, not imported,
+ * for the same reason every other enum in this registry is restated (core
+ * cannot import schema; see `registry/inputs.ts`'s own note on
+ * `ACCOUNT_KIND`).
+ *
+ * **Three values, not two — round 1's M4.** `"auto"` (matched from the payee
+ * offline, at write time — the value this file called `"catalog"` through
+ * round 0) and `"manual"` (asserted by the caller) both pair with a non-null
+ * `brand_key`. `"none"` is the third state this round adds: a *deliberate*
+ * "no brand", written when a person clears a wrong catalogue match — paired
+ * with a `null` key, and — unlike a row that was simply never matched, which
+ * is `null`/`null` — sticky against a later payee edit, the same way
+ * `"manual"` already was. Without it, clearing a match that a payee still
+ * folds to had no way to stay cleared (`match.ts`'s own doc on
+ * `resolveBrand`).
+ */
+export const BRAND_SOURCE = ["auto", "manual", "none"] as const;
 export type BrandSource = (typeof BRAND_SOURCE)[number];
 
 export type BrandCatalogEntry = {

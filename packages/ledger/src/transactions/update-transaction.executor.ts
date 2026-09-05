@@ -9,7 +9,7 @@
  * outbox entry carries the right token when it drains.
  */
 
-import { resolveBrand } from "@waltning/core/brands/match";
+import { resolveBrandPatch } from "@waltning/core/brands/match";
 import {
   transactionShapeIssues,
   type UpdateTransactionInput,
@@ -89,28 +89,22 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   }
 
   /**
-   * `SPEC.md` §14.4b. Recomputed here, not carried verbatim from
-   * `input.patch`, because `brand_source` is never a caller input (the same
-   * split `resolveBrand` draws for a fresh row) and because a `payee` edit
-   * has to re-run the match even when the patch never mentions `brandKey` at
-   * all — otherwise correcting a payee from "ORLEN Stacja" to "ORLEN" would
-   * leave the row's brand stuck on whatever the *old* payee resolved to.
-   *
-   * **Manual is sticky; catalogue is not.** A patch that explicitly sets
-   * `brandKey` (including clearing it with `null`) always wins — a person's
-   * own decision is never quietly re-derived out from under them. Absent
-   * that, a `payee` edit re-resolves only while the row's current source is
-   * not `manual`, so an explicit assignment survives a later payee typo-fix
-   * the same way it would if nothing had matched a payee at all.
+   * `SPEC.md` §14.4b, round 1's M4. `resolveBrandPatch` is the single place
+   * this decision is made — see its own doc for the four cases (explicit
+   * assign, explicit clear to a sticky `"none"`, re-match, or leave alone).
+   * Called only when the patch actually touches `brandKey` or `payee`;
+   * `undefined` means neither column is written.
    */
   const patchTouchesBrand = "brandKey" in input.patch;
   const patchTouchesPayee = input.patch.payee !== undefined;
   const brandFields =
-    patchTouchesBrand || (patchTouchesPayee && current.brandSource !== "manual")
-      ? resolveBrand(
+    patchTouchesBrand || patchTouchesPayee
+      ? (resolveBrandPatch(
+          { brandKey: current.brandKey, brandSource: current.brandSource },
           input.patch.payee ?? current.payee,
-          patchTouchesBrand ? (input.patch.brandKey ?? undefined) : undefined,
-        )
+          patchTouchesBrand,
+          input.patch.brandKey,
+        ) ?? {})
       : {};
 
   const updated = tx

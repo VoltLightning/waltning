@@ -1,3 +1,28 @@
+-- `SPEC.md` §14.4b — a transaction (and a recurring rule) may carry a
+-- Waltning-owned brand key, plus the shared `brand_aliases` reference table
+-- the bundled catalogue bootstraps into (`packages/db/src/seed/run.ts`).
+-- Both new columns are nullable and default to NULL on every existing row,
+-- so `*_brand_shape`'s "both null, or both set" holds for the whole table
+-- with nothing to repair — no `NOT VALID` dance is needed here, unlike
+-- `0011`/`0012`'s tightened numeric CHECKs.
+--
+-- Round 1's M1/M4 — edited in place under the owner's own ruling: nothing
+-- has been installed from this file yet ("every database is disposable
+-- until first install"), so both fixes below fold into this migration
+-- rather than adding a new one after it.
+--
+--   M1 — `recurring_transactions_brand_shape` was missing entirely on
+--   SQLite (a bare `ALTER TABLE … ADD` with nothing enforcing the pairing,
+--   while Postgres refused it from the start). It is now the same
+--   copy-rename-drop rebuild `transactions` already needed, carrying the
+--   identical CHECK.
+--
+--   M4 — `brand_source` gained a third value, `'none'`, for a *deliberate*
+--   "no brand" (a cleared catalogue match) distinct from `NULL`/`NULL`
+--   (never matched at all). Both CHECKs below use the three-value shape:
+--   `brand_key IS NULL` pairs with `brand_source IS NULL OR = 'none'`;
+--   `brand_key IS NOT NULL` pairs only with `brand_source IN ('auto',
+--   'manual')`.
 CREATE TABLE `brand_aliases` (
 	`alias` text PRIMARY KEY NOT NULL,
 	`brand_key` text NOT NULL,
@@ -5,8 +30,6 @@ CREATE TABLE `brand_aliases` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE `recurring_transactions` ADD `brand_key` text;--> statement-breakpoint
-ALTER TABLE `recurring_transactions` ADD `brand_source` text;--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_transactions` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -58,7 +81,7 @@ CREATE TABLE `__new_transactions` (
 	FOREIGN KEY (`to_currency`) REFERENCES `currencies`(`code`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`recurring_id`) REFERENCES `recurring_transactions`(`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "transactions_debt_amount_requires_currency" CHECK("__new_transactions"."debt_amount" IS NULL OR "__new_transactions"."debt_currency" IS NOT NULL),
-	CONSTRAINT "transactions_brand_shape" CHECK(("__new_transactions"."brand_key" IS NULL) = ("__new_transactions"."brand_source" IS NULL))
+	CONSTRAINT "transactions_brand_shape" CHECK(("__new_transactions"."brand_key" IS NULL AND ("__new_transactions"."brand_source" IS NULL OR "__new_transactions"."brand_source" = 'none')) OR ("__new_transactions"."brand_key" IS NOT NULL AND "__new_transactions"."brand_source" IS NOT NULL AND "__new_transactions"."brand_source" IN ('auto', 'manual')))
 );
 --> statement-breakpoint
 -- `brand_key`/`brand_source` are absent from both the column list and the
@@ -73,4 +96,39 @@ DROP TABLE `transactions`;--> statement-breakpoint
 ALTER TABLE `__new_transactions` RENAME TO `transactions`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE INDEX `transactions_category_idx` ON `transactions` (`category_id`);--> statement-breakpoint
-CREATE INDEX `transactions_counterparty_idx` ON `transactions` (`counterparty_id`);
+CREATE INDEX `transactions_counterparty_idx` ON `transactions` (`counterparty_id`);--> statement-breakpoint
+CREATE TABLE `__new_recurring_transactions` (
+	`id` text PRIMARY KEY NOT NULL,
+	`type` text NOT NULL,
+	`account_id` text NOT NULL,
+	`to_account_id` text,
+	`category_id` text,
+	`counterparty_id` text,
+	`amount_original` text NOT NULL,
+	`currency` text NOT NULL,
+	`payee` text DEFAULT '' NOT NULL,
+	`note` text DEFAULT '' NOT NULL,
+	`brand_key` text,
+	`brand_source` text,
+	`rrule` text NOT NULL,
+	`next_date` text,
+	`end_date` text,
+	`enabled` integer DEFAULT true NOT NULL,
+	`external_id` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`version` integer DEFAULT 1 NOT NULL,
+	FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`to_account_id`) REFERENCES `accounts`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`counterparty_id`) REFERENCES `counterparties`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`currency`) REFERENCES `currencies`(`code`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "recurring_transactions_brand_shape" CHECK(("__new_recurring_transactions"."brand_key" IS NULL AND ("__new_recurring_transactions"."brand_source" IS NULL OR "__new_recurring_transactions"."brand_source" = 'none')) OR ("__new_recurring_transactions"."brand_key" IS NOT NULL AND "__new_recurring_transactions"."brand_source" IS NOT NULL AND "__new_recurring_transactions"."brand_source" IN ('auto', 'manual')))
+);
+--> statement-breakpoint
+-- Same reasoning as the `transactions` rebuild above: `brand_key`/
+-- `brand_source` are absent from the SELECT because the *old*
+-- `recurring_transactions` (pre-this-migration) does not have them either.
+INSERT INTO `__new_recurring_transactions`("id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version") SELECT "id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version" FROM `recurring_transactions`;--> statement-breakpoint
+DROP TABLE `recurring_transactions`;--> statement-breakpoint
+ALTER TABLE `__new_recurring_transactions` RENAME TO `recurring_transactions`;

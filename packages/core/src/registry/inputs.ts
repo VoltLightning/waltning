@@ -363,7 +363,7 @@ export const createTransactionInput = z
      * `SPEC.md` §14.4b — an explicit assertion, never the common case. Absent,
      * `resolveBrand` (`@waltning/core/brands/match`) tries to match `payee`
      * against the bundled catalogue instead, and the row's `brand_source`
-     * records which happened (`manual` here, `catalog` there) — never a
+     * records which happened (`manual` here, `auto` there) — never a
      * caller input, the same reason `fxRateEstimated` is not one (see
      * "Not here, on purpose", below).
      *
@@ -412,9 +412,11 @@ export const createTransactionInput = z
     //   `deleted_at`            — `delete_transaction`, soft (§6.9).
     //   `brand_source`          — derived by `resolveBrand`, never asserted:
     //                             `manual` when `brandKey` was supplied here,
-    //                             `catalog` when the payee matched instead —
+    //                             `auto` when the payee matched instead —
     //                             the same split `fx_rate_estimated` draws
-    //                             above.
+    //                             above. `update_transaction`'s own patch
+    //                             also reaches the third value, `none` — see
+    //                             `resolveBrandPatch`.
   })
   .superRefine((t, ctx) => {
     /**
@@ -784,12 +786,15 @@ const transactionPatch = z
     isBusiness: z.boolean().optional(),
     isCapital: z.boolean().optional(),
     /**
-     * `SPEC.md` §14.4b. Nullable — `null` clears an explicit assignment back
-     * to "let the payee decide" (the executor re-runs `resolveBrand` against
-     * the row's own payee once this key is gone, rather than leaving a
-     * `brand_source: "manual"` row with nothing to justify it). Present and
-     * non-null follows `createTransactionInput.brandKey`'s own catalogue
-     * check, below.
+     * `SPEC.md` §14.4b — round 1's M4. Nullable — `null` is an explicit
+     * clear, which the executor (`resolveBrandPatch`,
+     * `@waltning/core/brands/match`) writes as `{ brandKey: null,
+     * brandSource: "none" }` and treats as **sticky**: a wrong catalogue
+     * match, once cleared, must not come straight back the next time the
+     * payee happens to fold to the same alias, so this is deliberately not
+     * "let the payee decide again". Present and non-null follows
+     * `createTransactionInput.brandKey`'s own catalogue check, below, and is
+     * always sourced `manual`.
      */
     brandKey: z.string().trim().min(1).max(64).nullable().optional(),
   })

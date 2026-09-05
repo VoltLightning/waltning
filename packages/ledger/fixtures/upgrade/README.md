@@ -61,6 +61,18 @@ rewrite the head pair.)
 `transactions` for the debt columns, and it is the pair with teeth: loading it
 runs a real step against real rows, across a table rebuild, with two
 counterparties whose names fold to one (`Łukasz Placeholder` and `łukasz
-placeholder`, the second archived by the merge the fixture also carries). `v10`
-is the current head, so its upgrade is a no-op — what it catches is drift: a
-`fixture:dump` that stops producing what is committed here.
+placeholder`, the second archived by the merge the fixture also carries).
+`v10` predates `0010_schema` (`SPEC.md` §14.4b's brand columns), so it is a
+second pair with teeth for the identical reason `v8` is — a real rebuild
+against real rows, not a synthetic one — and it is what catches the mistake a
+generated rebuild invites: an `INSERT … SELECT` naming columns the
+pre-rebuild table does not have yet, which only fails when real rows are
+there to copy. **`v11` is the current
+head**, so its upgrade is a no-op — what it catches is drift: a
+`fixture:dump` that stops producing what is committed here. Whichever pair is
+named here stops being "the current head, so its upgrade is a no-op" the
+moment a later migration lands; `pnpm --filter @waltning/ledger fixture:dump`
+is what a PR adding one runs to leave the next PR an honest head pair again.
+This line and `upgrade.journey.test.ts`'s own header comment are the two
+hand-maintained places that name versions, and both go stale exactly this way
+when a PR skips that step.

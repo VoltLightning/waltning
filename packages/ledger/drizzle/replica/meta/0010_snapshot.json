@@ -1227,7 +1227,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "recurring_transactions_brand_shape": {
+          "name": "recurring_transactions_brand_shape",
+          "value": "(\"recurring_transactions\".\"brand_key\" IS NULL AND (\"recurring_transactions\".\"brand_source\" IS NULL OR \"recurring_transactions\".\"brand_source\" = 'none')) OR (\"recurring_transactions\".\"brand_key\" IS NOT NULL AND \"recurring_transactions\".\"brand_source\" IS NOT NULL AND \"recurring_transactions\".\"brand_source\" IN ('auto', 'manual'))"
+        }
+      }
     },
     "tags": {
       "name": "tags",
@@ -1828,7 +1833,7 @@
         },
         "transactions_brand_shape": {
           "name": "transactions_brand_shape",
-          "value": "(\"transactions\".\"brand_key\" IS NULL) = (\"transactions\".\"brand_source\" IS NULL)"
+          "value": "(\"transactions\".\"brand_key\" IS NULL AND (\"transactions\".\"brand_source\" IS NULL OR \"transactions\".\"brand_source\" = 'none')) OR (\"transactions\".\"brand_key\" IS NOT NULL AND \"transactions\".\"brand_source\" IS NOT NULL AND \"transactions\".\"brand_source\" IN ('auto', 'manual'))"
         }
       }
     },

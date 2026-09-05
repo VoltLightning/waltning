@@ -10,7 +10,9 @@ describe("isValidBrandKey", () => {
   });
 
   it("refuses a key the catalogue does not carry", () => {
-    expect(isValidBrandKey("netflix")).toBe(false);
+    // Invented — never a real merchant not already in the catalogue
+    // (CLAUDE.md: placeholders only, round 1's L8).
+    expect(isValidBrandKey("waltco")).toBe(false);
     expect(isValidBrandKey("")).toBe(false);
   });
 
@@ -27,7 +29,7 @@ describe("brandCatalogEntry", () => {
   });
 
   it("returns undefined for an unknown key", () => {
-    expect(brandCatalogEntry("netflix")).toBeUndefined();
+    expect(brandCatalogEntry("waltco")).toBeUndefined();
   });
 });
 
@@ -35,6 +37,15 @@ describe("BRAND_CATALOG shape", () => {
   it("every key is lower-case, permanent-looking (no spaces, no upstream separators)", () => {
     for (const entry of BRAND_CATALOG) {
       expect(entry.key).toMatch(/^[a-z0-9_]+$/);
+    }
+  });
+
+  /** Round 1's L11 — a `find` (`brandCatalogEntry`) silently returns the first match, so a duplicate `key` would shadow its twin with no error anywhere else. */
+  it("no two entries share a key", () => {
+    const seen = new Set<string>();
+    for (const entry of BRAND_CATALOG) {
+      expect(seen.has(entry.key), `key "${entry.key}" appears more than once`).toBe(false);
+      seen.add(entry.key);
     }
   });
 
@@ -64,6 +75,66 @@ describe("BRAND_CATALOG shape", () => {
       expect(entry.accent).toMatch(/^#[0-9a-fA-F]{6}$/);
       expect(entry.mark.length).toBeGreaterThan(0);
       expect(entry.mark.length).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
+/**
+ * Round 1's M3 — the contrast guarantee `catalog.ts`'s own comment on the
+ * YouTube entry claims ("that fails WCAG AA … darkened just enough to clear
+ * 4.5:1") was proved once, by hand, for one entry, and enforced afterwards
+ * only by `BrandIcon`'s own Storybook stories — which exist per catalogue
+ * entry today but do not exist *because* of the catalogue, so a new entry
+ * with no matching story ships unchecked. This makes it a property of
+ * `BRAND_CATALOG` itself.
+ *
+ * **WCAG relative luminance, computed here rather than imported** — `core`'s
+ * dependency floor is decimal.js and zod (`tests/architecture.test.ts`), and
+ * `packages/ui/src/theme/theme.test.tsx` already has an equivalent
+ * `contrastRatio` helper that this deliberately does not import: pulling in
+ * `packages/ui` from a `packages/core` test would cross the one dependency
+ * direction the architecture test enforces, for a formula short enough to
+ * not be worth the cross-package coupling.
+ */
+describe("BRAND_CATALOG accent contrast (M3)", () => {
+  // `packages/ui/src/theme/roles.ts` — `textOnAccent` is `#ffffff` in both
+  // the light and the dark theme (verified by the adversarial review this
+  // test answers), so both are named explicitly rather than assuming one
+  // covers the other; a future theme that splits them would need this test
+  // updated by hand, which is the point of citing the file here.
+  const TEXT_ON_ACCENT_LIGHT = "#ffffff";
+  const TEXT_ON_ACCENT_DARK = "#ffffff";
+  /** WCAG AA, normal (non-large) text — `design-system/10`. */
+  const MIN_CONTRAST = 4.5;
+
+  function srgbToLinear(channel: number): number {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }
+
+  function relativeLuminance(hex: string): number {
+    const r = Number.parseInt(hex.slice(1, 3), 16);
+    const g = Number.parseInt(hex.slice(3, 5), 16);
+    const b = Number.parseInt(hex.slice(5, 7), 16);
+    return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+  }
+
+  function contrastRatio(hexA: string, hexB: string): number {
+    const a = relativeLuminance(hexA);
+    const b = relativeLuminance(hexB);
+    const [lighter, darker] = a > b ? [a, b] : [b, a];
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  it("every accent clears WCAG AA against textOnAccent, in both themes", () => {
+    for (const entry of BRAND_CATALOG) {
+      for (const ink of [TEXT_ON_ACCENT_LIGHT, TEXT_ON_ACCENT_DARK]) {
+        const ratio = contrastRatio(entry.accent, ink);
+        expect(
+          ratio,
+          `${entry.key} (${entry.accent}) against ${ink}: ${ratio.toFixed(2)}:1`,
+        ).toBeGreaterThanOrEqual(MIN_CONTRAST);
+      }
     }
   });
 });

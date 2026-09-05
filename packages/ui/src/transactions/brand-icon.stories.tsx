@@ -21,6 +21,12 @@ export const Unrecognised: Story = {
   args: { brandKey: null, payee: "Corner Café" },
 };
 
+/**
+ * Round 1's L10 — the two-character mark ("YT"), not the default one-
+ * character "O", because a two-glyph mark in a 20px box is the case that
+ * could overflow `numberOfLines={1}` and was the one size/mark combination
+ * with no baseline pinning it.
+ */
 export const WidgetSize: Story = {
-  args: { size: 20 },
+  args: { brandKey: "youtube", payee: "YouTube", size: 20 },
 };

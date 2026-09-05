@@ -125,7 +125,7 @@ const file = [
   HEADER,
   stepsBlock(
     "REPLICA_STEPS",
-    `/** One step per file in \`drizzle/replica\`, filename order — the fifteen shared tables, \`local_meta\` and its one row, and every schema change since. */`,
+    `/** One step per file in \`drizzle/replica\`, filename order — the sixteen shared tables (\`brand_aliases\` since \`SPEC.md\` §14.4b), \`local_meta\` and its one row, and every schema change since. */`,
     stepsIn(new URL("../drizzle/replica", here)),
   ),
   stepsBlock(

@@ -25,8 +25,10 @@ describe("BrandIcon", () => {
   });
 
   it("falls back even for a key this build's catalogue no longer carries", () => {
-    render(<BrandIcon brandKey="netflix" payee="Netflix" />);
-    expect(screen.getByText("N")).toBeDefined();
+    // Invented — never a real merchant not already in the catalogue
+    // (CLAUDE.md: placeholders only, round 1's L8).
+    render(<BrandIcon brandKey="waltco" payee="Waltco" />);
+    expect(screen.getByText("W")).toBeDefined();
   });
 
   it("the fallback for a blank payee is never blank either", () => {
