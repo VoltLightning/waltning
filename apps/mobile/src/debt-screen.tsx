@@ -37,7 +37,6 @@ import { useT } from "@waltning/ui/i18n/provider";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
-import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
