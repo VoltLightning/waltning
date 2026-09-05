@@ -683,7 +683,7 @@ export const en = {
     rateFieldSynced: "Synced: {{rate}}",
     /** `parseRate`'s own refusal — 0, negative, or anything not a positive decimal. */
     ratePositive: "A rate must be a positive number.",
-    /** `RateTable` — `04` §4.6. */
+    /** `RateTable` — `04` §4.7. */
     rateTableGap: "No rate held",
     rateTableGapLabel: "{{date}} — no rate held",
     rateTableEmptyRange: "The range must not end before it starts.",
@@ -696,7 +696,7 @@ export const en = {
     /** C2 — the origin is unlocatable (`change_pivot` can drop it). Never `0 d`, which would read as exact. */
     rateTableCarriedUnknown: "Carried · age not known",
     /**
-     * `RateEditor` — `04` §4.7. `{{quote}} per {{base}}` states which way the
+     * `RateEditor` — `04` §4.8. `{{quote}} per {{base}}` states which way the
      * figure reads (`SPEC.md` §4: `fx_rates.rate` is units of the quote per
      * one pivot) — never a `→` arrow, which reads as a conversion direction
      * and is exactly backwards for this figure.

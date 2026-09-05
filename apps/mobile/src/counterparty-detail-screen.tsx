@@ -68,7 +68,7 @@ import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 /** `settle_debt`'s own field paths (`registry/inputs.ts`) — everything else lands at form level. */
 const SETTLE_KNOWN_PATHS = [
@@ -659,11 +659,7 @@ export default function CounterpartyDetail() {
           }}
         />
       ) : (
-        <ScrollView>
-          {historyRows.map((row) => (
-            <HistoryRow key={row.id} row={row} onPress={handleOpenRow} />
-          ))}
-        </ScrollView>
+        historyRows.map((row) => <HistoryRow key={row.id} row={row} onPress={handleOpenRow} />)
       )}
 
       <Button label={t("common.edit")} onPress={handleEdit} variant="ghost" />

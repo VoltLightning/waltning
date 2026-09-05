@@ -58,7 +58,10 @@ it("trims the name and saves it with the chosen currency, through the shared def
     />,
   );
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "  Bank A  " } });
-  fireEvent.click(screen.getByRole("radio", { name: /BYN/ }));
+  // The tile's own accessible name is the currency's name, not its code
+  // (`CurrencyGrid`'s own anatomy — the code and symbol read on screen, the
+  // name rides along in the label).
+  fireEvent.click(screen.getByRole("radio", { name: /Belarusian Ruble/ }));
   screen.getByRole("button", { name: "Save" }).click();
   expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "BYN" });
 });

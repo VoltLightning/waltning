@@ -251,7 +251,7 @@ export default function Ledger() {
   }, [search]);
 
   return (
-    <GroundPanel>
+    <GroundPanel scroll="own">
       <SearchField
         value={filter.text}
         onChangeText={handleChangeText}

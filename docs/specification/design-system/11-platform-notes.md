@@ -36,7 +36,10 @@ Two rules follow, both in `shell.test.tsx`:
 - **`GroundPanel` clears the bottom and the sides, never the top.** The top
   belongs to the header above it, and the app guarantees there is one: the shell
   on the ledger, a navigation header on every other route. Sides always, because
-  in landscape the notch is on one of them.
+  in landscape the notch is on one of them. The clearance lives on the scroll
+  content, not on the panel itself, so the last row clears the home indicator
+  at the end of the scroll — not at the fold, where a short screen's content
+  happens to end.
 
 **Every route's top strip is painted by the app, in `shell`.** The ledger has
 `TodayFrame`'s shell; every other route takes a navigation header styled from

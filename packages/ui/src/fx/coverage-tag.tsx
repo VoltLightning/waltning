@@ -3,7 +3,7 @@
  * with its source and last quote date. Reporting a currency as present when
  * it holds 0.5% of its range is how GEL stayed broken."*
  *
- * A thin `Tag` composition, not a new primitive: `04` §4.6 already gives
+ * A thin `Tag` composition, not a new primitive: `04` §4.7 already gives
  * `RateTable`'s `manual` marker the rule this reuses — **amber below 100%**,
  * because a currency resting on a coverage gap is exactly the same claim as a
  * row resting on an override (P4), and every other amber in this system

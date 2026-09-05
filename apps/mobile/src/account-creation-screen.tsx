@@ -10,7 +10,7 @@ import {
   CreateAccountForm,
 } from "@waltning/ui/accounts/create-account-form";
 import { useT } from "@waltning/ui/i18n/provider";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 
@@ -107,16 +107,14 @@ export default function NewAccount() {
     <GroundPanel>
       {/* No title: the navigation header carries it, and the same
           string twice on one screen reads as two sections. */}
-      <Card>
-        <CreateAccountForm
-          currencies={snapshot.currencies}
-          today={today}
-          {...(fieldErrors === undefined ? {} : { fieldErrors })}
-          groups={snapshot.groups}
-          onCancel={handleCancel}
-          onSave={handleSave}
-        />
-      </Card>
+      <CreateAccountForm
+        currencies={snapshot.currencies}
+        today={today}
+        {...(fieldErrors === undefined ? {} : { fieldErrors })}
+        groups={snapshot.groups}
+        onCancel={handleCancel}
+        onSave={handleSave}
+      />
     </GroundPanel>
   );
 }

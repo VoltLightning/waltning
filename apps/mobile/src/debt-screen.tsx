@@ -44,7 +44,7 @@ import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
 type DirectionSegment = "all" | "theyOwe" | "youOwe";
@@ -416,11 +416,9 @@ export default function Debt() {
             primaryAction={{ label: t("counterparties.add"), onPress: handleAdd }}
           />
         ) : (
-          <ScrollView>
-            {visibleRows.map((row) => (
-              <DebtCounterpartyRow key={row.counterpartyId} row={row} onSelect={handleSelect} />
-            ))}
-          </ScrollView>
+          visibleRows.map((row) => (
+            <DebtCounterpartyRow key={row.counterpartyId} row={row} onSelect={handleSelect} />
+          ))
         )}
       </View>
     </GroundPanel>

@@ -1,5 +1,5 @@
 /**
- * `<RateTable>` — `design-system/04` §4.6.
+ * `<RateTable>` — `design-system/04` §4.7.
  *
  * *"The rate history for one pair, by date … Columns: date · rate (4dp,
  * tabular) · source · provenance marker … `manual` renders amber and sorts to
@@ -10,7 +10,7 @@
  * actually holds, the same way a database always does. Generating one row per
  * calendar day from `from`…`to` and marking the ones with no match as
  * `"gap"` happens exactly once, here, rather than in every screen that draws
- * this table — the defect §4.6 names (GEL's 11-of-2,080 going unnoticed) was
+ * this table — the defect §4.7 names (GEL's 11-of-2,080 going unnoticed) was
  * a caller scrolling past a silent hole, and a component that can render a
  * sparse list unchanged would let that happen again.
  *
@@ -56,7 +56,7 @@ import { makeStyles } from "../theme/styles.ts";
 import { focus, space, tabularNums, touchTarget } from "../tokens.ts";
 import { formatRate } from "./format-rate.ts";
 
-/** `04` §4.6's own source set — the fourth provider names and the two markers. */
+/** `04` §4.7's own source set — the fourth provider names and the two markers. */
 const SOURCE_LABEL_KEYS = {
   nbp: "fx.sourceNbp",
   ecb: "fx.sourceEcb",
@@ -169,7 +169,7 @@ function RateTableRowView({
   const isManual = row.source === "manual";
   const isCarried = row.source === CARRIED_FORWARD;
 
-  // Never the raw enum with an underscore (`04` §4.6) — every source renders
+  // Never the raw enum with an underscore (`04` §4.7) — every source renders
   // through a translated label, and `carried_forward` states its own age
   // rather than repeating a word that means nothing to whoever reads it.
   const sourceKey =

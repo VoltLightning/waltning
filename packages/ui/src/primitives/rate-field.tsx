@@ -5,7 +5,7 @@
  * **Read-only by default, editable on request.** S14 and S31 both derive their
  * rate from two typed amounts (§7.5, §7.6: *"two amounts are observable from a
  * statement, a rate is not"*) and hand this component the result to *display*
- * — `editable` stays `false` there. `04` §4.7's `RateEditor` sets it `true`
+ * — `editable` stays `false` there. `04` §4.8's `RateEditor` sets it `true`
  * and gets a `TextInput` that accepts paste, because a rate copied off a bank
  * statement is the common case for that screen, not this one.
  *
@@ -62,7 +62,7 @@ export type RateFieldProps = {
   /** Visible above the field and announced as its name. */
   label: string;
   /**
-   * The rate to show — always rendered at `decimals` (4dp, §4.6). A derived
+   * The rate to show — always rendered at `decimals` (4dp, §4.7). A derived
    * `Money`/`Rate` for the read-only path; a raw decimal `string` seeds the
    * editable path's own typed buffer (see above).
    */
@@ -77,7 +77,7 @@ export type RateFieldProps = {
   manual?: boolean;
   /** The caller's own refusal (a contract error, say) — always wins over the field's own, immediate objection to what is currently typed. */
   error?: string;
-  /** The direction stated beside the label, e.g. `"PLN per USD"` (`04` §4.6/§4.7) — a rate has no unit of its own otherwise. */
+  /** The direction stated beside the label, e.g. `"PLN per USD"` (`04` §4.7/§4.8) — a rate has no unit of its own otherwise. */
   unit?: string;
 };
 
@@ -137,7 +137,7 @@ export function RateField({
   // storage form's `4.0231` echoed back unformatted.
   //
   // **At the value's own scale, never rounded down to `decimals` (L10).**
-  // `decimals` is this field's *display* default (4dp, §4.6) — `fx_rates` is
+  // `decimals` is this field's *display* default (4dp, §4.7) — `fx_rates` is
   // stored to 8dp, and opening a synced rate to edit it, untouched, must not
   // silently downgrade its precision before a person has pressed a key. A
   // value with fewer than `decimals` digits still pads to `decimals`,

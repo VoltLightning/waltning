@@ -81,6 +81,29 @@ const isTest = (f: string) => /\.(test|type-test)\.tsx?$/.test(f);
 /** `expo-env.d.ts` and friends are generated ambient types, not authored code. */
 const isAmbient = (f: string) => f.endsWith(".d.ts");
 
+/**
+ * Every screen file, across every app that has one — read from disk rather
+ * than hardcoded to `apps/mobile`, the same reasoning `appRoots()` states for
+ * itself: `apps/web` is covered the day a screen appears there too.
+ */
+function screenFiles(): string[] {
+  return appRoots().flatMap((app) => {
+    const dir = join(app, "src");
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir)
+      .filter((name) => /-screen\.tsx$/.test(name))
+      .map((name) => join(dir, name));
+  });
+}
+
+/** A named import of `name` from `specifier` — spans a multi-line brace list. */
+function importsNamed(text: string, name: string, specifier: string): boolean {
+  const escaped = specifier.replace(/[/.]/g, "\\$&");
+  return new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*["']${escaped}["']`).test(
+    text,
+  );
+}
+
 /* ── Public modules ─────────────────────────────────────────────────────── */
 
 describe("public modules resolve directly to their owners", () => {
@@ -304,6 +327,43 @@ describe("apps hold only what names a platform", () => {
     expect(
       offenders,
       "move platform variants outside app/ and import them from one universal route",
+    ).toEqual([]);
+  });
+});
+
+describe("GroundPanel is the page scroller", () => {
+  it("screens do not import ScrollView — GroundPanel is the page scroller", () => {
+    const files = screenFiles();
+    expect(files.length, "screen files found").toBeGreaterThan(5);
+    const offenders = files
+      .filter((file) => importsNamed(readFileSync(file, "utf8"), "ScrollView", "react-native"))
+      .map(rel);
+    expect(
+      offenders,
+      'GroundPanel scrolls by default (scroll="page") — remove the screen\'s own ScrollView',
+    ).toEqual([]);
+  });
+
+  it("a screen that renders a virtualized list opts GroundPanel out", () => {
+    const files = screenFiles();
+    expect(files.length, "screen files found").toBeGreaterThan(5);
+    const offenders: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      const rendersList =
+        importsNamed(text, "FlatList", "react-native") ||
+        importsNamed(text, "SectionList", "react-native");
+      const optsOut = /scroll="own"/.test(text);
+      if (rendersList && !optsOut) {
+        offenders.push(`${rel(file)}: imports FlatList/SectionList without scroll="own"`);
+      }
+      if (optsOut && !rendersList) {
+        offenders.push(`${rel(file)}: passes scroll="own" without owning a FlatList/SectionList`);
+      }
+    }
+    expect(
+      offenders,
+      'a screen that owns a virtualized list must pass scroll="own", and nothing else may',
     ).toEqual([]);
   });
 });

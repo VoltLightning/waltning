@@ -9,7 +9,7 @@
  * directly (`RateTable`'s own defect before this file existed) is correct
  * and unreadable in the same currency this product is mostly denominated in.
  *
- * **4dp, always** — `04` §4.6's own rule for a rate column and `RateField`'s
+ * **4dp, always** — `04` §4.7's own rule for a rate column and `RateField`'s
  * own rule for the value it edits, so a figure typed in one and rendered in
  * the other are never off by a digit of precision nobody asked to lose.
  *

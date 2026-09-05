@@ -447,7 +447,7 @@ export type LocalRateRow = {
   source: string;
   /**
    * Only present when `source === "carried_forward"` — `readRate`'s own
-   * figure, per row. `RateTable` (`04` §4.6) needs it to state a carried
+   * figure, per row. `RateTable` (`04` §4.7) needs it to state a carried
    * row's own age (*carried · 3 d*) rather than the bare enum.
    *
    * `null` (C2) means the origin is unlocatable — `change_pivot` dropped

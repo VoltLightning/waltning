@@ -153,7 +153,14 @@ describe("the frame clears the device's chrome", () => {
     const root = container.firstElementChild;
     // Shell, then panel — the floating button no longer mounts inside this
     // frame (`(tabs)/_layout.tsx` owns it now), so the panel is the last child.
-    return { shell: root?.firstElementChild ?? null, panel: root?.children[1] ?? null };
+    const outer = root?.children[1] ?? null;
+    // `GroundPanel`'s default `scroll="page"` wraps the panel's content in a
+    // `ScrollView`, and the clearance moved with it — onto the scroll's own
+    // content container, two levels inside the outer panel `View`
+    // (`card.tsx`'s `scrollContent` + `clearance`), which itself now carries
+    // no padding at all.
+    const panel = outer?.firstElementChild?.firstElementChild ?? null;
+    return { shell: root?.firstElementChild ?? null, panel };
   }
 
   it("adds the top inset to the shell's own padding", () => {

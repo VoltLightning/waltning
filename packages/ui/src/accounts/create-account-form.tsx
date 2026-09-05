@@ -32,10 +32,10 @@ import {
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { AmountField } from "../fx/amount-field";
+import { CurrencyGrid } from "../fx/currency-grid";
 import type { Messages } from "../i18n/en.ts";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
-import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { RadioGroup } from "../primitives/radio";
@@ -220,16 +220,12 @@ export function CreateAccountForm({
         {...(nameError === undefined ? {} : { error: nameError })}
       />
       <Text style={styles.label}>{t("accounts.currency")}</Text>
-      <View style={styles.currencies}>
-        {currencies.map((candidate) => (
-          <CurrencyChoice
-            key={candidate.code}
-            currency={candidate}
-            selected={candidate.code === currency}
-            onSelect={setCurrency}
-          />
-        ))}
-      </View>
+      <CurrencyGrid
+        currencies={currencies}
+        selected={currency}
+        onSelect={setCurrency}
+        label={t("accounts.currency")}
+      />
       {currencyError === undefined ? null : <Text style={styles.fieldError}>{currencyError}</Text>}
 
       <Button
@@ -302,37 +298,9 @@ export function CreateAccountForm({
   );
 }
 
-type CurrencyChoiceProps = {
-  currency: CreateAccountCurrency;
-  selected: boolean;
-  onSelect: (code: CurrencyCode) => void;
-};
-
-/**
- * The code and its symbol, not the name. `PLN` is what appears on the account
- * afterwards and on every figure it holds, so the choice and its consequence
- * read the same; `zł` beside it is the glyph the figures will actually carry,
- * which is how someone who thinks in symbols finds the code. The name rides
- * along in the accessible label, where the length costs nothing.
- */
-function CurrencyChoice({ currency, selected, onSelect }: CurrencyChoiceProps) {
-  const t = useT();
-  const handleSelect = useCallback(() => onSelect(currency.code), [currency.code, onSelect]);
-  return (
-    <Chip
-      placeholder={t("accounts.currency")}
-      value={`${currency.code} ${currency.symbol}`}
-      selected={selected}
-      onPress={handleSelect}
-      machineFilled={false}
-    />
-  );
-}
-
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
   label: { color: theme.textMuted, ...text.ui("kicker") },
-  currencies: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   formLevel: { gap: space.xs },
   formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
