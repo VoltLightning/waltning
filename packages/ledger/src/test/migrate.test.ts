@@ -826,8 +826,15 @@ describe("`__ledger_migrations`, the applied-steps journal", () => {
 
     const first = refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }));
     expect(first).toMatch(new RegExp(MIGRATION_JOURNAL));
-    expect(first, "it says the session rebuilds rather than asking for a manual delete").toContain(
-      "The session rebuilds both stores from nothing",
+    // M-2: the migrator states only the fact and that nothing has been
+    // written — the recovery (rebuild, or a refusal naming files to delete)
+    // is `session.ts`'s own decision, per its `preJournalStores` option, so
+    // it is not spelled out in this message at all.
+    expect(first, "nothing has been written, stated plainly").toContain(
+      "Nothing has been written.",
+    );
+    expect(first, "the recovery is not this module's to state").not.toMatch(
+      /rebuild|delete|recovery/i,
     );
     // And it is the migrator's own sentence, not the driver's. Without the
     // journal this ran `0001_database_objects` over a database that already
@@ -837,8 +844,8 @@ describe("`__ledger_migrations`, the applied-steps journal", () => {
     expect(first).not.toMatch(/Failed to run the query/i);
 
     // The structured class carries what `session.ts` needs to act on —
-    // the message alone no longer names the file, now that the recovery is
-    // an automatic rebuild rather than an instruction to delete it by hand.
+    // the message alone never named the file; `path` is a field for
+    // whichever caller decides what to do with it.
     const error = refusalError(() => migrateReplica(ledger.replica, { fs: realFs }));
     expect(error).toBeInstanceOf(PreJournalStoreError);
     if (error instanceof PreJournalStoreError) {

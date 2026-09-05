@@ -96,6 +96,7 @@ describe("close() releases handles without deleting the record", () => {
       fs: nodeFs,
       removeDatabase: (path: string) => rmSync(path, { force: true }),
       bootstrapCurrencies,
+      preJournalStores: "refuse" as const,
     };
 
     try {

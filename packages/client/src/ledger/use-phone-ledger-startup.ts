@@ -21,11 +21,27 @@
  * dependencies as parameters). It never throws in this codebase's own
  * variants — each wraps its own `try`/`catch` and returns `{ status:
  * "failed" }` — so there is nothing here for this hook to catch.
+ *
+ * **A `useRef` guard, not `useMemo`.** `useMemo` is a cache React is free to
+ * discard and recompute — StrictMode's double-invoke of a render function
+ * relies on exactly that freedom to surface impure renders — so a memo is
+ * the wrong tool for "call this at most once, ever, no matter how many times
+ * this component re-renders." Two refs, checked and set during render rather
+ * than in an effect: `started` flips before `start()` is called, so the
+ * second of a StrictMode double-render sees it already true and skips the
+ * call; `result` holds what the first call returned, for every render after.
  */
 
-import { useMemo } from "react";
+import { useRef } from "react";
 
 export function usePhoneLedgerStartup<T>(ready: boolean, start: () => T): T | null {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `ready` is the trigger — `start` runs once, the moment it turns true, not whenever a caller's `start` reference changes.
-  return useMemo(() => (ready ? start() : null), [ready]);
+  const started = useRef(false);
+  const result = useRef<T | null>(null);
+
+  if (ready && !started.current) {
+    started.current = true;
+    result.current = start();
+  }
+
+  return result.current;
 }

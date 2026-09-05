@@ -697,11 +697,14 @@ function recordApplied(tx: SqlRunner, step: Migration, appliedAt: string): void 
 type LedgerStoreName = "replica" | "outbox";
 
 /**
- * Thrown by `readAppliedTags` alone — the one refusal a session may turn into
- * a rebuild rather than a plain failure (`session.ts` `start`). The owner's
- * ruling is that every current database is disposable until first install,
- * so this carries what the session needs to act on that: `store` and `path`
- * name what to delete, `version` is `found` for a diagnostic to log.
+ * Thrown by `readAppliedTags` alone — the one refusal `session.ts`'s `start`
+ * may turn into a rebuild rather than a plain failure, per its own
+ * `preJournalStores` option. This class states only the fact and that
+ * nothing has been written; the recovery — rebuild, or a refusal naming the
+ * files to delete by hand — is the session's decision, never the
+ * migrator's, so it is not spelled out here. `store` and `path` name the
+ * offending file for whichever caller decides; `version` is `found`, for a
+ * diagnostic to log.
  */
 export class PreJournalStoreError extends Error {
   override readonly name = "PreJournalStoreError";
@@ -711,12 +714,32 @@ export class PreJournalStoreError extends Error {
 
   constructor(store: LedgerStoreName, path: string, version: number) {
     super(
-      `${store} is at version ${version} and has no ${MIGRATION_JOURNAL} table — it was written by a build from before this migrator journaled what it ran, so which of this build's steps have already been applied cannot be known, and guessing runs a step twice over real rows. Nothing has been written. The session rebuilds both stores from nothing — nothing installed predates the journal.`,
+      `${store} is at version ${version} and has no ${MIGRATION_JOURNAL} table — it was written by a build from before this migrator journaled what it ran, so which of this build's steps have already been applied cannot be known, and guessing runs a step twice over real rows. Nothing has been written.`,
     );
     this.store = store;
     this.path = path;
     this.version = version;
   }
+}
+
+/**
+ * `error instanceof PreJournalStoreError`, backed up by name.
+ *
+ * Hermes/Babel's transpilation of a class extending a built-in `Error` can
+ * lose the prototype chain `instanceof` walks — and Metro resolving two
+ * copies of this module (the exact failure the platform-variant
+ * extension-less rule in `tests/architecture.test.ts` exists to prevent)
+ * would hand a caller a `PreJournalStoreError` from a different module
+ * instance than the one `instanceof` here checks against. The constructor's
+ * own properties (`store`, `path`, `version`, `name`) are set regardless of
+ * either failure mode, so `name` is a safe fallback rather than a weaker
+ * substitute.
+ */
+export function isPreJournalStoreError(error: unknown): error is PreJournalStoreError {
+  return (
+    error instanceof PreJournalStoreError ||
+    (error instanceof Error && error.name === "PreJournalStoreError")
+  );
 }
 
 /**
@@ -733,9 +756,10 @@ export class PreJournalStoreError extends Error {
  * reconstruct that: this repository has already shipped a build whose whole
  * chain was one version, so `user_version = 1` there means "everything ran"
  * and here means "one step ran", and running the difference destroys the
- * file. Nothing installed predates the journal in a form worth preserving,
- * so `session.ts` catches this one error class and rebuilds the pair rather
- * than asking a phone user to find and delete files they cannot reach.
+ * file. `session.ts`'s `start` catches this one error class and, per its own
+ * `preJournalStores` option, either rebuilds the pair from nothing or
+ * refuses — the choice belongs to the app, at the platform seam, never to
+ * this module or to a schema version.
  *
  * **A journaled tag whose checksum is not this build's is refused by name.** A
  * generated `.sql` file's statements are frozen the moment an installed
@@ -1062,7 +1086,7 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
   // "install the newer build" is the right sentence either way.
   if (found > current) {
     throw new Error(
-      `outbox is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. The outbox is never dropped (architecture/08 §5): install the newer build, or export the entries from S30 before doing anything else`,
+      `outbox is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. The outbox is never dropped for a version mismatch (architecture/08 §5): install the newer build, or export the entries from S30 before doing anything else`,
     );
   }
 

@@ -47,6 +47,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 3,
     why: "two in one constraint — the driver's run-result and the schema map, neither of which this module touches — and the JSON payload the drain replays. It was eight: `TRun` and `TSchema` threaded by hand through three declarations, which is one decision typed out three times",
   },
+  "packages/ledger/src/migrate.ts": {
+    max: 1,
+    why: "isPreJournalStoreError's own parameter — a type guard exists to narrow a value of uncertain type, and its one caller passes a catch binding straight through",
+  },
   "packages/ledger/src/journeys/fixture-dump.ts": {
     max: 2,
     why: "sqlLiteral's own value: a raw SQLite column read back off better-sqlite3, of genuinely unknown shape until narrowed by typeof (ddl.ts names no blob, so text, integer, bigint or null are the only cases) — and the row cast beside it, a constraint position for a table this function has not been taught about",

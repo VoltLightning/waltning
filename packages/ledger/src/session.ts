@@ -136,11 +136,11 @@ import {
   type LedgerStartupStage,
 } from "./diagnostics.ts";
 import {
+  isPreJournalStoreError,
   type LedgerFs,
   type Migration,
   migrateOutbox,
   migrateReplica,
-  PreJournalStoreError,
 } from "./migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./open.ts";
 import { type LaunchRecovery, recoverOnLaunch } from "./recover.ts";
@@ -367,6 +367,20 @@ export type LocalLedgerSessionOptions<TRun> = {
     readonly outbox?: readonly Migration[];
   };
   diagnostics?: LedgerDiagnostics;
+  /**
+   * What a pre-journal store — a file above version 0 with no
+   * `__ledger_migrations`, one no chain can account for — means for this
+   * session. No default: the decision belongs to the platform seam that
+   * knows whether an installed device could hold a ledger worth keeping,
+   * never to a schema version, so every caller states it in the open.
+   *
+   * `"rebuild"` — the pair is deleted and `start` retries from nothing
+   * (`removeStorePair`); the app's own choice while no current install
+   * predates the journal. `"refuse"` — the pair is left untouched and the
+   * migrator's error propagates, wrapped with the recovery this mode is
+   * honest about: a person deleting the files by hand.
+   */
+  preJournalStores: "rebuild" | "refuse";
 };
 
 type SessionLedger<TRun> = Ledger<TRun, typeof ledgerSchema>;
@@ -477,20 +491,43 @@ function start<TRun>(
     return { ledger, recovery };
   } catch (error) {
     if (
-      error instanceof PreJournalStoreError &&
-      !state.rebuilt &&
+      isPreJournalStoreError(error) &&
       (stage === "migrate_outbox" || stage === "migrate_replica")
     ) {
+      if (options.preJournalStores === "rebuild" && !state.rebuilt) {
+        ledger.close();
+        emitLedgerDiagnostic(diagnostics, {
+          scope: "ledger_startup",
+          phase: "rebuild",
+          stage,
+          store: error.store,
+          error: describeLedgerError(error),
+        });
+        removeStorePair(options);
+        return start(options, { rebuilt: true });
+      }
+
+      // Either mode ends here with a plain `Error`, never `PreJournalStoreError`
+      // itself: `state.rebuilt` means the rebuilt pair is *itself* pre-journal,
+      // which should never happen but must surface rather than loop, and
+      // `"refuse"` never rebuilds at all. The migrator's own message states
+      // only the fact (M-2) — the recovery each mode gives is this session's
+      // to add, not the migrator's.
       ledger.close();
+      const wrapped =
+        options.preJournalStores === "rebuild"
+          ? new Error(`the pre-journal rebuild did not take: ${error.message}`, { cause: error })
+          : new Error(
+              `${error.message} The recovery in this mode is to close the app, delete ${error.path}, ${error.path}-wal and ${error.path}-shm, and the same three files for the other store beside it — the replica and the outbox are only consistent as a pair — then start the app again.`,
+              { cause: error },
+            );
       emitLedgerDiagnostic(diagnostics, {
         scope: "ledger_startup",
-        phase: "rebuild",
+        phase: "failure",
         stage,
-        store: error.store,
-        error: describeLedgerError(error),
+        error: describeLedgerError(wrapped),
       });
-      removeStorePair(options);
-      return start(options, { rebuilt: true });
+      throw wrapped;
     }
     ledger.close();
     emitLedgerDiagnostic(diagnostics, {

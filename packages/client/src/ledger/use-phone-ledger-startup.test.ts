@@ -6,6 +6,7 @@
  */
 
 import { renderHook } from "@testing-library/react";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { usePhoneLedgerStartup } from "./use-phone-ledger-startup.ts";
 
@@ -33,6 +34,32 @@ describe("usePhoneLedgerStartup", () => {
     const { result, rerender } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {
       initialProps: { ready: false },
     });
+
+    rerender({ ready: true });
+    expect(result.current).toBe(FAILED);
+    expect(start).toHaveBeenCalledTimes(1);
+
+    rerender({ ready: true });
+    expect(result.current).toBe(FAILED);
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * L-4's own case: `StrictMode` double-invokes a render function to surface
+   * an impure one, which is exactly what a `useMemo` guard cannot survive —
+   * a memo is a cache React is free to discard and recompute, and StrictMode
+   * relies on that freedom. The `useRef` guard is not a cache; it is state
+   * that has already flipped by the second of the two synchronous calls.
+   */
+  it("calls start exactly once even under StrictMode's double-invoked render", () => {
+    const start = vi.fn(() => FAILED);
+    const { result, rerender } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {
+      initialProps: { ready: false },
+      wrapper: StrictMode,
+    });
+
+    expect(result.current).toBeNull();
+    expect(start).not.toHaveBeenCalled();
 
     rerender({ ready: true });
     expect(result.current).toBe(FAILED);

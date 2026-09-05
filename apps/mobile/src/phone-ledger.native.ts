@@ -20,9 +20,14 @@ const LEDGER_PATHS = {
   outbox: "waltning-outbox.db",
 } as const;
 
-const databaseDirectory = new Directory(Paths.document, "SQLite");
-databaseDirectory.create({ idempotent: true, intermediates: true });
-const databaseDirectoryPath = databaseDirectory.uri.replace(/^file:\/\//u, "");
+// Assigned inside `startPhoneLedger`'s own `try` — `new Directory(...)` and
+// `.create()` are both throwable filesystem calls, and a throw here at
+// module scope used to break the layout module's own evaluation (see the
+// function's header). `file`/`openPhoneDatabase` below close over these by
+// reference, so they read whatever `startPhoneLedger` has set by the time a
+// migration actually calls them.
+let databaseDirectory: Directory;
+let databaseDirectoryPath: string;
 const file = (path: string) => new File(databaseDirectory, path);
 
 type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
@@ -44,14 +49,15 @@ export type PhoneLedgerStartup =
   | { status: "failed"; error: Error };
 
 /**
- * Built on first use rather than at module scope — a throw from
- * `createLocalLedgerSession` used to break the layout module's own
- * evaluation, which is why expo-router reported a missing default export and
- * crashed on its own `ErrorBoundary` instead of showing a screen. Cached
- * after the first call, failure included: the only way out of a failed
- * startup is relaunching the app, and `createLocalLedgerSession` has already
- * emitted its own `ledger_startup` failure diagnostic, so nothing more is
- * logged here.
+ * Built on first use rather than at module scope — **nothing throwable runs
+ * outside this function's own `try`**, `new Directory(...)`/`.create()`
+ * included, not only `createLocalLedgerSession`. A throw at module scope
+ * used to break the layout module's own evaluation, which is why
+ * expo-router reported a missing default export and crashed on its own
+ * `ErrorBoundary` instead of showing a screen. Cached after the first call,
+ * failure included: the only way out of a failed startup is relaunching the
+ * app, and `createLocalLedgerSession` has already emitted its own
+ * `ledger_startup` failure diagnostic, so nothing more is logged here.
  */
 let startup: PhoneLedgerStartup | null = null;
 
@@ -59,6 +65,10 @@ export function startPhoneLedger(): PhoneLedgerStartup {
   if (startup) return startup;
 
   try {
+    databaseDirectory = new Directory(Paths.document, "SQLite");
+    databaseDirectory.create({ idempotent: true, intermediates: true });
+    databaseDirectoryPath = databaseDirectory.uri.replace(/^file:\/\//u, "");
+
     const session = createLocalLedgerSession({
       open: openPhoneDatabase,
       paths: LEDGER_PATHS,
@@ -76,6 +86,10 @@ export function startPhoneLedger(): PhoneLedgerStartup {
       // is exactly the set of currencies an account can be opened in.
       bootstrapCurrencies: currencies.map(({ rateSource: _rateSource, ...currency }) => currency),
       diagnostics: mobileDiagnostics,
+      // Every current install is disposable until first install (the
+      // owner's ruling) — decided here, at the platform seam, never by a
+      // schema version.
+      preJournalStores: "rebuild",
     });
 
     const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));

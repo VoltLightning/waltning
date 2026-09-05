@@ -184,6 +184,10 @@ export function startPhoneLedger(): PhoneLedgerStartup {
       // phone gets, because it is the same ledger.
       bootstrapCurrencies: currencies.map(({ rateSource: _rateSource, ...currency }) => currency),
       diagnostics: mobileDiagnostics,
+      // Every current install is disposable until first install (the
+      // owner's ruling) — decided here, at the platform seam, never by a
+      // schema version.
+      preJournalStores: "rebuild",
     });
     const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
     // H1 — the header's live fallback, wired before anything reads it.

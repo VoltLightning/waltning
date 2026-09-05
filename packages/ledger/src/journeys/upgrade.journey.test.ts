@@ -68,13 +68,17 @@ const openWithBetterSqlite: SqliteOpener<Run, Schema> = (filename) => {
   return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
 };
 
-function sessionOptionsFor(paths: LedgerPaths): LocalLedgerSessionOptions<Run> {
+function sessionOptionsFor(
+  paths: LedgerPaths,
+  preJournalStores: "rebuild" | "refuse" = "refuse",
+): LocalLedgerSessionOptions<Run> {
   return {
     open: openWithBetterSqlite,
     paths,
     fs: nodeFs,
     removeDatabase: (path) => rmSync(path, { force: true }),
     bootstrapCurrencies: [],
+    preJournalStores,
   };
 }
 
@@ -541,11 +545,14 @@ describe("a store written before the journal", () => {
       // `migrateReplica` reaches the pre-journal refusal.
       seedPreJournalReplica(raw, 1);
       insertPreJournalAccount(raw, "acc-pre-journal");
+      // The seed actually landed — otherwise "the row is gone" below would
+      // be true for the wrong reason.
+      expect(raw.replica.db.select().from(schema.accounts).all()).toHaveLength(1);
       raw.close();
 
       const events: LedgerDiagnosticEvent[] = [];
       const session = createLocalLedgerSession({
-        ...sessionOptionsFor(paths),
+        ...sessionOptionsFor(paths, "rebuild"),
         diagnostics: (event) => events.push(event),
       });
       try {
@@ -572,6 +579,14 @@ describe("a store written before the journal", () => {
       } finally {
         session.close();
       }
+
+      // No `-wal`/`-shm` litter once the rebuilt pair has closed cleanly —
+      // proof `removeStorePair` took the pre-journal pair's own siblings with
+      // it rather than leaving them for the rebuilt files to inherit.
+      for (const path of [paths.replica, paths.outbox]) {
+        expect(existsSync(`${path}-wal`)).toBe(false);
+        expect(existsSync(`${path}-shm`)).toBe(false);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -586,12 +601,13 @@ describe("a store written before the journal", () => {
       // a row of its own, so its loss is the thing under test.
       migrateReplica(raw.replica, { fs: nodeFs }).copy?.release();
       seedAccount(raw.replica.db, "acc-real");
+      expect(raw.replica.db.select().from(schema.accounts).all()).toHaveLength(1);
       seedPreJournalOutbox(raw, 1);
       raw.close();
 
       const events: LedgerDiagnosticEvent[] = [];
       const session = createLocalLedgerSession({
-        ...sessionOptionsFor(paths),
+        ...sessionOptionsFor(paths, "rebuild"),
         diagnostics: (event) => events.push(event),
       });
       try {
@@ -605,6 +621,11 @@ describe("a store written before the journal", () => {
         expect(rebuilds[0]?.store).toBe("outbox");
       } finally {
         session.close();
+      }
+
+      for (const path of [paths.replica, paths.outbox]) {
+        expect(existsSync(`${path}-wal`)).toBe(false);
+        expect(existsSync(`${path}-shm`)).toBe(false);
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -648,6 +669,51 @@ describe("a store written before the journal", () => {
 
       expect(events.filter((event) => event.phase === "rebuild")).toHaveLength(0);
       expect(inspect(paths.replica, userVersionOf)).toBe(versionBefore);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * C-2's opt-out. Both stores are pre-journal here, deliberately — the
+   * outbox is checked first inside `start`, so it is the one that refuses
+   * and `migrateReplica` never runs at all, which is what makes "both files
+   * intact at their versions" a claim this test can actually make rather
+   * than one true only of whichever store happened to be checked second.
+   */
+  it("in refuse mode a pre-journal pair is refused, nothing deleted", () => {
+    const { dir, paths } = newPaths("waltning-prejournal-refuse-");
+    try {
+      const raw = openRaw(paths);
+      seedPreJournalReplica(raw, 1);
+      insertPreJournalAccount(raw, "acc-pre-journal");
+      expect(raw.replica.db.select().from(schema.accounts).all()).toHaveLength(1);
+      seedPreJournalOutbox(raw, 1);
+      raw.close();
+
+      const replicaVersionBefore = inspect(paths.replica, userVersionOf);
+      const outboxVersionBefore = inspect(paths.outbox, userVersionOf);
+
+      const events: LedgerDiagnosticEvent[] = [];
+      expect(() =>
+        createLocalLedgerSession({
+          ...sessionOptionsFor(paths, "refuse"),
+          diagnostics: (event) => events.push(event),
+        }),
+      ).toThrow(/delete/);
+
+      expect(events.filter((event) => event.phase === "rebuild")).toHaveLength(0);
+      expect(existsSync(paths.replica), "the replica file itself still exists").toBe(true);
+      expect(existsSync(paths.outbox), "the outbox file itself still exists").toBe(true);
+      expect(inspect(paths.replica, userVersionOf)).toBe(replicaVersionBefore);
+      expect(inspect(paths.outbox, userVersionOf)).toBe(outboxVersionBefore);
+      expect(
+        inspect(
+          paths.replica,
+          (db) => (db.prepare('select count(*) as n from "accounts"').get() as { n: number }).n,
+        ),
+        "the seeded row was never touched, let alone deleted",
+      ).toBe(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

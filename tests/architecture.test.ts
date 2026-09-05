@@ -38,7 +38,10 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const IMPORT = /(?:from|import)\s+["']([^"']+)["']/g;
+// A static `from "…"` or bare `import "…"`, or a call form — `import(…)`
+// (no required whitespace before the paren) and `require(…)` — either of
+// which can carry the same harmful explicit extension the static forms can.
+const IMPORT = /(?:\bfrom\s+|\bimport\s+|\bimport\s*\(\s*|\brequire\s*\(\s*)["']([^"']+)["']/g;
 
 /**
  * Comments stripped first, and this is not fastidiousness.
@@ -379,11 +382,15 @@ describe("platform-variant files are imported extension-less", () => {
    * `"./platform.ts"` turned this test red before the import was fixed.
    */
   it("no relative import carries an extension when its target has a platform sibling", () => {
-    const roots = ["packages/ui/src", "apps/mobile"];
+    // Every app, read from disk (`appRoots()`, above) rather than
+    // `apps/mobile` alone — `apps/web` is covered the day it exists, with
+    // nothing here to update — plus `packages/ui/src`, the one package that
+    // ships platform variants.
+    const roots = [...appRoots(), join(repoRoot, "packages/ui/src")];
     const PLATFORM_SUFFIXES = [".native.ts", ".native.tsx", ".web.ts", ".web.tsx"];
     const offenders: string[] = [];
     for (const root of roots) {
-      for (const file of sourceFiles(join(repoRoot, root))) {
+      for (const file of sourceFiles(root)) {
         const dir = dirname(file);
         for (const spec of importsOf(file)) {
           if (!spec.startsWith(".")) continue;
@@ -409,10 +416,22 @@ describe("platform-variant files are imported extension-less", () => {
    * `platform.ts` had all three, and nothing compared the two files' exports.
    */
   it("every platform variant exports the same names as its universal file", () => {
-    const EXPORT_DECL = /^export\s+(?:const|let|function|class|type|interface)\s+([A-Za-z0-9_]+)/gm;
-    const EXPORT_LIST = /^export\s*\{([^}]*)\}/gm;
+    // `default`/`async`/`abstract`/`declare` are all optional modifiers on
+    // the same handful of declaration kinds, `enum` is one more kind.
+    const EXPORT_DECL =
+      /^export\s+(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:abstract\s+)?(?:const|let|var|function|class|type|interface|enum)\s+([A-Za-z0-9_]+)/gm;
+    // A bare `export default …` (anonymous function/class, or an expression)
+    // has no declared name for `EXPORT_DECL` to capture, but the *presence*
+    // of a default export is exactly the property that has to match between
+    // a variant and its universal file — so it contributes a fixed token
+    // rather than nothing.
+    const EXPORT_DEFAULT = /^export\s+default\b/gm;
+    // `type` is optional before the brace list, so `export type { A }` is a
+    // list export like any other, not a declaration `EXPORT_DECL` would see.
+    const EXPORT_LIST = /^export\s+(?:type\s+)?\{([^}]*)\}/gm;
+    const EXPORT_STAR = /^export\s*\*\s*from\s/m;
 
-    function exportedNamesOf(path: string): Set<string> {
+    function exportedNamesOf(path: string): { names: Set<string>; barrel: boolean } {
       const text = readFileSync(path, "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/^\s*\/\/.*$/gm, "");
@@ -420,6 +439,7 @@ describe("platform-variant files are imported extension-less", () => {
       for (const m of text.matchAll(EXPORT_DECL)) {
         if (m[1]) names.add(m[1]);
       }
+      if (EXPORT_DEFAULT.test(text)) names.add("default");
       for (const m of text.matchAll(EXPORT_LIST)) {
         for (const entry of (m[1] ?? "").split(",")) {
           const name = entry
@@ -430,7 +450,7 @@ describe("platform-variant files are imported extension-less", () => {
           if (name) names.add(name);
         }
       }
-      return names;
+      return { names, barrel: EXPORT_STAR.test(text) };
     }
 
     const roots = ["apps/mobile/src", "packages/ui/src"];
@@ -445,10 +465,19 @@ describe("platform-variant files are imported extension-less", () => {
         if (!existsSync(universal)) continue;
         pairsChecked += 1;
 
-        const variantNames = exportedNamesOf(file);
-        const universalNames = exportedNamesOf(universal);
-        const missing = [...universalNames].filter((name) => !variantNames.has(name));
-        const extra = [...variantNames].filter((name) => !universalNames.has(name));
+        const variant = exportedNamesOf(file);
+        const head = exportedNamesOf(universal);
+        // A `*` re-export cannot be resolved into names at all, and it is
+        // already banned repo-wide ("public modules resolve directly to
+        // their owners", above) — its presence in a platform-variant pair is
+        // flagged outright rather than left to fall out of a name diff that
+        // could not see it either way.
+        if (variant.barrel) problems.push(`${rel(file)}: "export * from" — barrels are forbidden`);
+        if (head.barrel)
+          problems.push(`${rel(universal)}: "export * from" — barrels are forbidden`);
+
+        const missing = [...head.names].filter((name) => !variant.names.has(name));
+        const extra = [...variant.names].filter((name) => !head.names.has(name));
         if (missing.length > 0 || extra.length > 0) {
           problems.push(
             `${rel(file)} vs ${rel(universal)}: missing [${missing.join(", ")}], extra [${extra.join(", ")}]`,
