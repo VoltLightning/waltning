@@ -316,6 +316,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts (E6 review fix — update_currency)",
   },
+  "tools/e2e/setup/servers.ts": {
+    max: 1,
+    why: "raceWithChildError's rejection handler — Promise.prototype.then's own lib types the rejection reason as any, so this is written out as unknown by hand rather than left to that default, same reasoning as a catch binding even though the language does not force it here",
+  },
 };
 
 /**

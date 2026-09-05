@@ -6,6 +6,13 @@
  */
 
 import { expect, test } from "@playwright/test";
+// Side-effect only — `support.ts`'s own module-load check that `E2E_WEB_URL`
+// is set. This is the one spec that needs none of `support.ts`'s helpers
+// (no account or counterparty to create first), so without this line it
+// would fail on a missing `E2E_WEB_URL` the same way every other spec's
+// first `page.goto` would without `support.ts`'s check: Playwright's own
+// generic "no baseURL" error, not one naming the variable.
+import "./support.ts";
 
 test("setting a manual rate for a pair with no manual history needs no confirmation", async ({
   page,

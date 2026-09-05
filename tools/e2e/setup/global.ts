@@ -50,17 +50,32 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const apiUrlOverride = process.env["E2E_API_URL"];
   const webUrlOverride = process.env["E2E_WEB_URL"];
 
-  if (apiUrlOverride !== undefined && webUrlOverride !== undefined) {
+  // Truthiness, not `!== undefined`. `.env` (copied from `.env.example`,
+  // which lists both empty) sets `E2E_API_URL=""` — a real, present string,
+  // not an absent variable — and `process.loadEnvFile` (run at module scope
+  // by `packages/db/src/test/scratch.ts`, imported transitively before this
+  // function ever runs) has already loaded it by the time either check
+  // below reads `process.env`. `!== undefined` would treat that empty
+  // string as "set", read a freshly-copied `.env` as appliance mode, and
+  // start nothing at all — a real failure this shipped with once, and one
+  // that blamed this file for doing nothing rather than the empty string
+  // that caused it.
+  if (apiUrlOverride && webUrlOverride) {
     return async () => {};
   }
-  if (apiUrlOverride !== undefined || webUrlOverride !== undefined) {
+  if (apiUrlOverride || webUrlOverride) {
     throw new Error(
-      "E2E_API_URL and E2E_WEB_URL must be set together, for appliance mode " +
-        "(`make appliance-e2e`) or not at all. Only one is set here — " +
-        `E2E_API_URL=${JSON.stringify(apiUrlOverride)}, E2E_WEB_URL=${JSON.stringify(webUrlOverride)} — ` +
-        "and the other would silently fall back to this run's own local stack.",
+      "E2E_API_URL and E2E_WEB_URL name appliance mode (`make appliance-e2e`) only when both are " +
+        `set — set both or leave both empty. Currently E2E_API_URL=${JSON.stringify(apiUrlOverride)}, ` +
+        `E2E_WEB_URL=${JSON.stringify(webUrlOverride)}.`,
     );
   }
+
+  // Both ports read and validated here, before any database work — a typo
+  // in `E2E_API_PORT` should fail before `createScratch()` clones and seeds
+  // anything, not after.
+  const apiFrom = readPort("E2E_API_PORT", process.env["E2E_API_PORT"], DEFAULT_API_PORT);
+  const webFrom = readPort("E2E_WEB_PORT", process.env["E2E_WEB_PORT"], DEFAULT_WEB_PORT);
 
   const cleanups: Array<() => Promise<void>> = [];
 
@@ -90,11 +105,18 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
    * **This is a best-effort race, not a guarantee, and parts of it can still
    * lose — verified empirically, three ways:**
    *
-   * - A child process **already in `cleanups`** dies reliably: `stopper()`'s
-   *   `SIGTERM` is sent synchronously, inside the `Promise` executor, the
-   *   instant `unwind()` reaches that cleanup — the signal is on its way to
-   *   the OS before anything else in this process runs again, whether or not
-   *   this process survives to see the "exit" event confirm it.
+   * - The **last-registered** child in `cleanups` dies reliably:
+   *   `unwind()` processes the array in reverse, and `stopper()`'s `SIGTERM`
+   *   is sent synchronously, inside the `Promise` executor, the instant
+   *   `unwind()` calls that first cleanup — the signal is on its way to the
+   *   OS before anything else in this process runs again, whether or not
+   *   this process survives to see the "exit" event confirm it. An
+   *   *earlier*-registered child is not this lucky: `unwind()` `await`s
+   *   each cleanup before calling the next, so its own `SIGTERM` is not even
+   *   sent until the last-registered one's promise settles — if the process
+   *   is force-exited while still waiting on that, an earlier child's
+   *   cleanup is never reached at all, the same as if it had never been
+   *   registered.
    * - A child process **spawned but not yet in `cleanups`** — `startApi`/
    *   `startWeb` still awaiting their own readiness check when the signal
    *   arrives — is not touched at all: it was never reached. This is the
@@ -107,13 +129,16 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
    *   trip returns, even with this handler's head start.
    *
    * Net effect: a `Ctrl-C` during setup can leave a `waltning_test_e2e_*`
-   * database behind (harmless — the next `pnpm e2e` clones its own, uniquely
-   * named, and never touches an old one) and, less often, a spawned process
-   * still listening on its port (loud, not silent — the next `pnpm e2e`
-   * finds a later port instead, per `findFreePort`, rather than passing
-   * against the wrong server). Removed once setup itself is done (success or
-   * failure) — from then on Playwright's own signal handling, once tests are
-   * running, owns this.
+   * database behind (harmless to a *later run* — the next `pnpm e2e` clones
+   * its own, uniquely named, and never touches an old one) and, less often,
+   * a spawned process still listening on its port (loud, not silent — the
+   * next `pnpm e2e` finds a later port instead, per `findFreePort`, rather
+   * than passing against the wrong server). Nothing reaps a leftover
+   * `waltning_test_e2e_*` database, though — enough interrupted runs leave
+   * enough of them that a person should occasionally check for and drop
+   * them by hand; they cost disk, not correctness. Removed once setup
+   * itself is done (success or failure) — from then on Playwright's own
+   * signal handling, once tests are running, owns this.
    */
   const onSigint = (): void => {
     void unwind().then(() => process.exit(130));
@@ -124,11 +149,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     const scratch = await createScratch();
     cleanups.push(scratch.drop);
 
-    const apiFrom = readPort("E2E_API_PORT", process.env["E2E_API_PORT"], DEFAULT_API_PORT);
     const api = await startApi({ appDatabaseUrl: scratch.appUrl, from: apiFrom });
     cleanups.push(api.stop);
 
-    const webFrom = readPort("E2E_WEB_PORT", process.env["E2E_WEB_PORT"], DEFAULT_WEB_PORT);
     const web = await startWeb({ from: webFrom });
     cleanups.push(web.stop);
 
