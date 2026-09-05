@@ -24,6 +24,15 @@ to its left — `[ Decline ] [ Approve ]` (`05-composites` §5.3),
 transaction ] [ Settle ]` (`screens/S13` §3). One order everywhere, so the
 affirmative action is always in the same place under the thumb.
 
+**Exempt: a conversational reply is not a button row.** The chips that answer
+a question the agent asked — `[ yes ] [ no, the other one ]` (`screens/S05`
+§3) — are §3.5 chips in a transcript, not `Button`s in a decision, and they
+carry **no `primary` at all**. Neither answer is the affirmative one: *yes*
+confirms a guess and *no* corrects it, and painting one of them green would
+recommend an answer to a question about what actually happened. They read
+left to right in the order they would be spoken, which is why the rule above
+governs `Button` and stops there.
+
 ### 3.2 `IconButton`
 
 32 / 40 / 44. **44 minimum for any touch target** (§10). Requires `aria-label`.

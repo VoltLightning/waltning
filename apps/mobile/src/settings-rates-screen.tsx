@@ -277,21 +277,30 @@ export default function SettingsRatesScreen() {
 
       <Text style={styles.rerateNote}>{t("fx.rerateNotOffered")}</Text>
 
-      <Card title={t("fx.coverageTitle")}>
-        {shownCoverage.map((row) => (
-          <View key={row.code} style={styles.coverageRow}>
-            <Text style={styles.coverageCode}>{row.code}</Text>
-            <CoverageTag
-              days={row.days}
-              realDays={row.realDays}
-              calendarDays={row.calendarDays}
-              futureRows={row.futureRows}
-              pct={row.coveragePct}
-              lastDate={row.lastDate ?? undefined}
-            />
-          </View>
-        ))}
-      </Card>
+      {/*
+        The card is the group of per-currency coverage rows, so with no quote
+        currency there are no rows and no group — a titled card holding
+        nothing is chrome claiming a list exists (`design-system/05` §5.1).
+        The hint above already says why there is nothing here; repeating it
+        under a *Coverage* heading would state the same absence twice.
+      */}
+      {shownCoverage.length === 0 ? null : (
+        <Card title={t("fx.coverageTitle")}>
+          {shownCoverage.map((row) => (
+            <View key={row.code} style={styles.coverageRow}>
+              <Text style={styles.coverageCode}>{row.code}</Text>
+              <CoverageTag
+                days={row.days}
+                realDays={row.realDays}
+                calendarDays={row.calendarDays}
+                futureRows={row.futureRows}
+                pct={row.coveragePct}
+                lastDate={row.lastDate ?? undefined}
+              />
+            </View>
+          ))}
+        </Card>
+      )}
 
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />

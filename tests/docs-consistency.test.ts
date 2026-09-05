@@ -364,7 +364,8 @@ describe("screen wireframes are drawn, not sketched", () => {
         col = end;
       }
     });
-    if (inFence) closeFence();
+    // Unconditional: a file ending inside a fence and a file ending outside
+    // one are the same case here — whatever is still open never closed.
     closeFence();
     return problems;
   }

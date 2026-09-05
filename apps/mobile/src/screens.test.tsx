@@ -17,6 +17,7 @@ import {
   type PhoneClearingAccount,
   type PhoneLedgerPort,
   type PhoneNetWorth,
+  type PhoneRecentTransaction,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
@@ -172,6 +173,8 @@ function fakeController(
   categoryUsage: ReadonlyMap<Id<"categories">, number> = new Map(),
   /** H2 — a caller testing the opening-balance banner hands its own rows rather than `unsettledOf`'s generic ones. */
   unsettledOverride?: readonly PhoneClearingAccount[],
+  /** S04's Recent rows. Empty by default: most callers here are not about Recent, and an empty ledger is the honest default for a fixture that captures nothing. */
+  recentRows: readonly PhoneRecentTransaction[] = [],
 ) {
   let accounts = [...initialAccounts];
   let categoryTree: FakeCategory[] = [...initialCategories];
@@ -193,7 +196,7 @@ function fakeController(
       },
     ],
     listGroups: () => [],
-    listRecent: () => [],
+    listRecent: () => recentRows,
     listCategories: () => [],
     listCategoryTree: () => [],
     listFullCategoryTree: () => categoryTree,
@@ -364,6 +367,19 @@ const SECOND_CLEARING_ACCOUNT: FakeAccount = {
   capturable: true,
 };
 
+/** One captured row — all S04's Recent card needs to be a group of rows. */
+const RECENT_ROW: PhoneRecentTransaction = {
+  id: id<"transactions">("77777777-7777-4777-8777-777777777777"),
+  date: accountingDate("2026-09-03"),
+  payee: "Shop A",
+  categoryName: "Food",
+  accountName: PLN_ACCOUNT.name,
+  amount: toMoney("-48.90"),
+  currency: currencyCode("PLN"),
+  decimals: 2,
+  isBusiness: false,
+};
+
 function withLedger(element: ReactElement, controller = fakeController()) {
   return render(<LedgerProvider controller={controller}>{element}</LedgerProvider>);
 }
@@ -388,10 +404,30 @@ describe("Today", () => {
   });
 
   it("shows the ledger once an account exists", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+    withLedger(
+      <Today />,
+      fakeController([PLN_ACCOUNT], [], [], new Map(), undefined, [RECENT_ROW]),
+    );
 
     expect(screen.queryByText("No accounts yet")).toBeNull();
     expect(screen.getByText("Recent")).toBeDefined();
+  });
+
+  /**
+   * M-b — S04 §3: the card *is* the group of Recent rows, so an account with
+   * nothing captured yet gets S10's own first-run wording on the ground, not a
+   * *Recent* card with *Show all* over an empty column.
+   */
+  it("draws no Recent card when an account exists but nothing has been captured", () => {
+    withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+
+    expect(screen.queryByText("No accounts yet")).toBeNull();
+    expect(screen.queryByText("Recent")).toBeNull();
+    expect(screen.queryByText("Show all →")).toBeNull();
+    expect(screen.getByText("No transactions yet")).toBeDefined();
+
+    fireEvent.click(screen.getByText("Add"));
+    expect(router.push).toHaveBeenCalledWith("/quick-add");
   });
 
   it("shows mine and ours from net worth, per currency — never a summed total", () => {
@@ -651,7 +687,10 @@ describe("Today", () => {
   });
 
   it("shows all transactions from the Recent card", () => {
-    withLedger(<Today />, fakeController([PLN_ACCOUNT]));
+    withLedger(
+      <Today />,
+      fakeController([PLN_ACCOUNT], [], [], new Map(), undefined, [RECENT_ROW]),
+    );
 
     fireEvent.click(screen.getByText("Show all →"));
     expect(router.push).toHaveBeenCalledWith("/ledger");

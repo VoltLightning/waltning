@@ -54,7 +54,9 @@ the same size, weight and subtotal treatment as every kind group, marked by a
 drawn by adding a mark, never by taking size or weight away. The title is
 *Jointly owned* and the tag is *Shared*: a title repeating its own tag spends
 one of the two marks twice and says nothing the tag had not. A jointly-owned
-account is an ordinary account that belongs to a different total (§6.7), and
+account is an ordinary account that belongs to a different total (`SPEC.md`
+§6.7 — where *jointly-owned* is the system's own word for it, as it is in
+`flows/J14` §4), and
 **a negative balance here gets no warning treatment**, because a shared account
 being overdrawn is a real fact.
 

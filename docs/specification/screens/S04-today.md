@@ -84,6 +84,12 @@ phone held still.
 Recent shows five rows, non-scrolling. It is a *confirmation surface*, not a
 browsing one — S10 is a tap away for browsing.
 
+**The Recent card is drawn only when there are rows to group.** An account
+exists but nothing has been captured yet is `EmptyState(first-run)` on the
+ground — *No transactions yet*, the same wording S10's first run uses — never
+a *Recent* card with *Show all* over an empty column, which would be chrome
+claiming a list exists and an action that shows nothing.
+
 **What earns it the space is the pending row.** Outbox writes appear at the top
 with their `pending` marker until they sync, so an offline save is visibly
 landed on the screen you saved from. That is the one thing S10 cannot do for
@@ -119,13 +125,13 @@ happened*.
 | `PeriodPicker` | Opened by tapping the label or stat row — granularity, presets, arbitrary range (§7) |
 | `StatTile` | Period spend and net. **Period-scoped**; `DualTotal` above it is not |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
-| `Card` | Wraps Recent — a grouped list of rows, `title="Recent"` + `action="Show all"` |
+| `Card` | Wraps Recent — a grouped list of rows, `title="Recent"` + `action="Show all"`. **Only when Recent has rows**; an empty ledger renders `EmptyState(first-run)` on the ground instead |
 | `TransactionRow` | Recent; `TransferRow` for transfers; `BIZ` tag where business |
 | `BrandIcon` | `TransactionRow`'s own leading mark for a recognised merchant — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `TabBar` | 5 tabs, all ≥44px. `+` is not one of them |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
-| `EmptyState(first-run)` | No accounts — offers create and import |
+| `EmptyState(first-run)` | Two of them. No accounts — offers create and import. Accounts but no transactions — *No transactions yet*, S10's own wording, in place of the Recent card |
 | `AppearanceButton` | Header action; opens the appearance sheet |
 | `BottomSheet(appearance)` | Radio choices: System, Light, Dark |
 
@@ -148,7 +154,7 @@ keeps it fast and what makes it safe to render from cache offline.
 |---|---|
 | Loading | Not modelled — the replica read is synchronous SQLite, with no in-between moment to show a skeleton for (`09-state-matrix.md`) |
 | Populated | As drawn |
-| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account* and *Import from Money Manager* |
+| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account* and *Import from Money Manager*. Accounts with no transactions is the second empty: the hero and period row stay, and *No transactions yet* replaces the Recent card rather than emptying it |
 | Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the hero keeps its last known figure with its age** rather than blanking |
 | Offline | Cached, with `Banner(neutral)` — *showing data as of 14:06*. Capture stays fully available; that is the point of the outbox |
 | Gated | n/a — single user |

@@ -246,3 +246,17 @@ it("clear manual removes the manual rows in the current range", () => {
     expect.anything(),
   );
 });
+
+/**
+ * M-a — the pivot alone. `quoteOptions` is empty, so there is no pair to
+ * table and no currency whose coverage `shownCoverage` would keep: both cards
+ * are gone and the ground carries the hint that says why. A *Coverage* card
+ * drawn around nothing is the empty-card defect wearing a title.
+ */
+it("renders neither card when the pivot is the only currency", () => {
+  withLedger({ listCurrencySettings: () => [USD_ROW] });
+
+  expect(screen.getByText("No currency to compare against the pivot yet.")).toBeDefined();
+  expect(screen.queryByText("Coverage")).toBeNull();
+  expect(screen.queryByText("100%")).toBeNull();
+});

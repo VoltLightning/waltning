@@ -42,6 +42,16 @@ function handleShowAll() {
   router.push("/ledger");
 }
 
+/**
+ * The empty ledger's one thing to do. The floating `+` reaches the same
+ * route, but it is mounted by `(tabs)/_layout.tsx` above the whole slot and
+ * an `EmptyState` requires an action of its own — so this is the same
+ * destination named in the place the reader is already looking.
+ */
+function handleAddTransaction() {
+  router.push("/quick-add");
+}
+
 /** C5: every Recent row opens S09 — the caller it returns to is this screen. */
 function handleOpenTransaction(id: string) {
   router.push({ pathname: "/transaction/[id]", params: { id } });
@@ -98,6 +108,10 @@ export default function Today() {
   // object on every render.
   const createAccountAction = useMemo(
     () => ({ label: t("routes.createAccount"), onPress: handleCreateAccount }),
+    [t],
+  );
+  const addTransactionAction = useMemo(
+    () => ({ label: t("shell.add"), onPress: handleAddTransaction }),
     [t],
   );
   const snapshot = usePhoneLedger(ledger);
@@ -324,17 +338,34 @@ export default function Today() {
   ) : hasAccounts ? (
     <>
       {unsettledBanner}
-      <Card
-        title={t("shell.recent")}
-        action={
-          <Button label={t("shell.showAll")} onPress={handleShowAll} variant="ghost" size="sm" />
-        }
-      >
-        <TransactionList
-          transactions={snapshot.recent.map(toRow)}
-          onPress={handleOpenTransaction}
+      {/*
+        S04 §3 — the card *is* the group of Recent rows, so with no rows there
+        is no group to draw, and *Show all* has nothing to show. An account
+        exists but nothing has been captured yet: that is `first-run` for the
+        ledger, not for the account list, and it renders on the ground
+        (`design-system/05` §5.1) in the wording S10's own first run already
+        uses. No new copy — the same two lines, one screen earlier.
+      */}
+      {snapshot.recent.length === 0 ? (
+        <EmptyState
+          variant="first-run"
+          title={t("transactions.emptyFirstRunTitle")}
+          body={t("transactions.emptyFirstRunBody")}
+          primaryAction={addTransactionAction}
         />
-      </Card>
+      ) : (
+        <Card
+          title={t("shell.recent")}
+          action={
+            <Button label={t("shell.showAll")} onPress={handleShowAll} variant="ghost" size="sm" />
+          }
+        >
+          <TransactionList
+            transactions={snapshot.recent.map(toRow)}
+            onPress={handleOpenTransaction}
+          />
+        </Card>
+      )}
     </>
   ) : (
     <EmptyState

@@ -429,6 +429,26 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * wrappers and looks inside `{cond ? … : …}` / `{cond && …}` expressions,
    * checking every branch. Without that, wrapping the offending card in a
    * `<View>` was a one-line way past the rule.
+   *
+   * **Three evasions are accepted, and stated rather than hidden.** This is a
+   * text scan, not a type-aware parser, so a `Card` it cannot see in the
+   * screen's own JSX is a `Card` it does not judge:
+   *
+   * 1. **A helper component that returns a `Card`** — `<AccountPanel />` in
+   *    the panel, `function AccountPanel() { return <Card>…</Card>; }` below
+   *    it. The panel's sole child reads as `AccountPanel`, not `Card`.
+   * 2. **A hoisted `const card = <Card>…</Card>` rendered as `{card}`** —
+   *    the expression names no component at all, so no branch resolves to a
+   *    `Card`.
+   * 3. **`React.createElement(Card, …)`** — no JSX tag exists to match.
+   *
+   * Each is a deliberate act, not a slip: writing one of these means moving
+   * the card out of the shape the rule reads in order to keep it. The
+   * alternative — a real parser, or a render-time assertion in every screen
+   * test — buys coverage of shapes no screen in this repository uses, at a
+   * cost the same trade-off `importsOf` above already declined to pay. If a
+   * screen ever legitimately reaches for one of these shapes, this list is
+   * where the check has to grow.
    */
   function groundPanelBodies(text: string): string[] {
     const bodies: string[] = [];
@@ -607,20 +627,40 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   }
 
   /**
+   * A navigation header, declared anywhere in a layout — `headerShown`, any
+   * of the `header*` slots, or a bare `header` option. The exemption below
+   * rests entirely on the header's *absence*, so the absence is read, not
+   * assumed: the day `(tabs)/_layout.tsx` grows one of these, the tab roots
+   * have somewhere to put the screen's name and the exemption is gone in the
+   * same commit that adds it.
+   */
+  const HEADER_OPTION = /\b(?:header|headerShown|headerTitle|headerLeft|headerRight)\s*[:=]/;
+
+  function declaresHeader(source: string): boolean {
+    return HEADER_OPTION.test(stripComments(source));
+  }
+
+  /**
    * The screens a tab route renders — read from `app/(tabs)/*.tsx`, not
-   * listed. `(tabs)/_layout.tsx` hides the navigation header for every tab
-   * root, so a tab root has nowhere but a card's own `title` to put the
-   * screen's name: `05-composites` §5.1 states the exception as a principle,
-   * *"a tab root without a navigation header may carry its menu list in a
-   * titled card"*, and this derives it rather than naming a file. A route
-   * file that grows a header, or a menu card that grows something other than
-   * buttons, loses the exemption the same day.
+   * listed. `(tabs)/_layout.tsx` renders no navigation header (it mounts
+   * `expo-router/ui`'s bare `<Tabs>`, and `declaresHeader` above checks that
+   * it stays that way), so a tab root has nowhere but a card's own `title` to
+   * put the screen's name: `05-composites` §5.1 states the exception as a
+   * principle, *"a tab root without a navigation header may carry its menu
+   * list in a titled card"*, and this derives it rather than naming a file.
+   *
+   * **Both halves of the principle are read.** A layout that declares a
+   * header yields no roots at all — every screen under it is judged like any
+   * other — and a menu card that grows something other than buttons stops
+   * matching `isMenuCard`. Either change loses the exemption the same day.
    */
   function tabRootScreens(): Set<string> {
     const roots = new Set<string>();
     for (const app of appRoots()) {
       const dir = join(app, "app", "(tabs)");
       if (!existsSync(dir)) continue;
+      const layout = join(dir, "_layout.tsx");
+      if (!existsSync(layout) || declaresHeader(readFileSync(layout, "utf8"))) continue;
       for (const name of readdirSync(dir)) {
         if (!/\.tsx$/.test(name) || name === "_layout.tsx") continue;
         for (const spec of importsOf(join(dir, name))) {
@@ -703,6 +743,34 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     expect(soleCards(ternary)).toHaveLength(2);
     expect(soleCards(fine)).toHaveLength(0);
     expect(soleCards(skeletonMirror)).toHaveLength(0);
+  });
+
+  /**
+   * **The exemption's premise, checked rather than asserted in prose.** The
+   * menu card is allowed only because a tab root has no navigation header to
+   * carry its name — so the absence of one is read out of
+   * `(tabs)/_layout.tsx`, and `declaresHeader` is broken once here on the two
+   * shapes a header actually arrives in (`screenOptions={{ headerShown: true
+   * }}` and a `header:` render prop). A layout carrying either yields no tab
+   * roots at all, which is exactly the exemption being spent.
+   */
+  it("spends the settings-menu exemption the day a tab layout grows a header", () => {
+    const layouts = appRoots()
+      .map((app) => join(app, "app", "(tabs)", "_layout.tsx"))
+      .filter((file) => existsSync(file));
+    expect(layouts.length, "tab layouts found").toBeGreaterThan(0);
+
+    for (const file of layouts) {
+      expect(declaresHeader(readFileSync(file, "utf8")), `${rel(file)} declares a header`).toBe(
+        false,
+      );
+    }
+    expect(tabRootScreens().size, "tab root screens found").toBeGreaterThan(0);
+
+    expect(declaresHeader("<Tabs screenOptions={{ headerShown: true }}>")).toBe(true);
+    expect(declaresHeader("<Tabs screenOptions={{ header: renderHeader }}>")).toBe(true);
+    // A comment naming a header is prose, not a header.
+    expect(declaresHeader("// no headerShown: true here\n<Tabs>")).toBe(false);
   });
 });
 
