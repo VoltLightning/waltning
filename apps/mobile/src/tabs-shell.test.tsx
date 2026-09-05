@@ -53,28 +53,47 @@ const { TabsShell, handleSelectType } = await import("./tabs-shell");
 const { displayCurrency } = await import("./platform");
 const { router } = await import("expo-router");
 
+const CHF = currencyCode("CHF");
 const EUR = currencyCode("EUR");
 const PLN = currencyCode("PLN");
 
+const BANK_B_EUR: PhoneAccount = {
+  id: id<"accounts">("55555555-5555-4555-8555-555555555555"),
+  name: "Bank B · EUR",
+  kind: "bank",
+  currency: EUR,
+  decimals: 2,
+  balance: toMoney("2100.00"),
+  groupId: null,
+  ownership: "own",
+  isBusiness: false,
+  archived: false,
+  expectedBalance: null,
+  openingBalance: toMoney("0"),
+  openingDate: null,
+  memo: "",
+  version: 1,
+};
+
 /** One EUR account and nothing else — the ledger M-B is about. */
-const EUR_ONLY: PhoneAccount[] = [
+const EUR_ONLY: PhoneAccount[] = [BANK_B_EUR];
+
+/**
+ * Two held currencies, in the order `subtotalsOf` folds them: a dormant `CHF`
+ * savings account opened first, and the `EUR` card everything actually runs
+ * through, in the red. The fallback must lead with `EUR` — the larger absolute
+ * position — not with whichever account happens to have been opened first, and
+ * not by preferring the positive figure.
+ */
+const TWO_CURRENCIES: PhoneAccount[] = [
   {
-    id: id<"accounts">("55555555-5555-4555-8555-555555555555"),
-    name: "Bank B · EUR",
-    kind: "bank",
-    currency: EUR,
-    decimals: 2,
-    balance: toMoney("2100.00"),
-    groupId: null,
-    ownership: "own",
-    isBusiness: false,
-    archived: false,
-    expectedBalance: null,
-    openingBalance: toMoney("0"),
-    openingDate: null,
-    memo: "",
-    version: 1,
+    ...BANK_B_EUR,
+    id: id<"accounts">("66666666-6666-4666-8666-666666666666"),
+    name: "Savings · CHF",
+    currency: CHF,
+    balance: toMoney("40.00"),
   },
+  { ...BANK_B_EUR, name: "Card B · EUR", kind: "card", balance: toMoney("-9000.00") },
 ];
 
 function fakeController(
@@ -186,8 +205,16 @@ function resizeTo(width: number) {
   window.dispatchEvent(new Event("resize"));
 }
 
-beforeEach(() => {
+/**
+ * `displayCurrency` is a module singleton, so a `set` in one test is still in
+ * force in the next one — the two hero tests below chose different currencies
+ * and only passed in the order they happen to be declared in. Reset to `PLN`,
+ * the seeded pivot, so every test starts from the same preference whether it
+ * names one or not.
+ */
+beforeEach(async () => {
   focused = "today";
+  await displayCurrency.set(PLN);
 });
 
 describe("TabsShell", () => {
@@ -262,6 +289,29 @@ describe("TabsShell", () => {
     expect(screen.getByText("2 100.00"), "the held figure, not a vanished hero").toBeDefined();
     expect(screen.getByText("EUR"), "and the code it is actually in").toBeDefined();
     expect(screen.getByText("no balance in PLN"), "captioned as a fallback").toBeDefined();
+  });
+
+  /**
+   * **NEW-5.** Which held currency it falls back to is a decision, and the
+   * decision is the largest absolute position — not `subtotals[0]`, which is
+   * the order the accounts were opened in. Here the dormant `Savings · CHF`
+   * comes first and the `EUR` card everything runs through comes second and is
+   * in the red, so both halves of the rule are exercised at once: insertion
+   * order does not win, and neither does the positive figure.
+   */
+  it("falls back to the largest held currency by absolute total, not the first account's", async () => {
+    await displayCurrency.set(PLN);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController(TWO_CURRENCIES)}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("EUR"), "the larger position, though it is a debt").toBeDefined();
+    expect(screen.queryByText("CHF"), "not the account opened first").toBeNull();
+    expect(screen.getByText("no balance in PLN")).toBeDefined();
   });
 
   /** The preference is honoured whenever the ledger can honour it — no caption then. */

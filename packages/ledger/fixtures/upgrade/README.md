@@ -67,8 +67,12 @@ second pair with teeth for the identical reason `v8` is — a real rebuild
 against real rows, not a synthetic one — and it is what catches the mistake a
 generated rebuild invites: an `INSERT … SELECT` naming columns the
 pre-rebuild table does not have yet, which only fails when real rows are
-there to copy. **`v11` is the current
-head**, so its upgrade is a no-op — what it catches is drift: a
+there to copy. `v11` is the pair `DESK4` left behind: upgrading it runs
+`0011_dashboard_layout_seed` — a seed `INSERT` into a database that already
+holds rows, which is the only way to prove the seed is not skipped for a
+database that is upgrading rather than new — and then `0012_schema`'s
+one-active index, against a table that now has a row in it. **`v13` is the
+current head**, so its upgrade is a no-op — what it catches is drift: a
 `fixture:dump` that stops producing what is committed here. Whichever pair is
 named here stops being "the current head, so its upgrade is a no-op" the
 moment a later migration lands; `pnpm --filter @waltning/ledger fixture:dump`

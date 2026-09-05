@@ -41,8 +41,9 @@ describe("readActiveLayout — DESK4", () => {
    * M5 — the replica had no bound on `is_active` at all: `packages/db` has
    * carried `dashboard_layouts_one_active` since `0000`, and this side had
    * neither the index nor a trigger, while three doc comments claimed `null`
-   * was reachable "only on an empty, never-migrated database". `0011`'s
-   * migration adds the index; this is it refusing.
+   * was reachable "only on an empty, never-migrated database". `0012_schema`
+   * adds the index — `0011_dashboard_layout_seed` writes the row it bounds,
+   * and the index comes after it — and this is that index refusing.
    */
   it("refuses a second active layout", () => {
     stores = scratchStores();

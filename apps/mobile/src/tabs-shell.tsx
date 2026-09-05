@@ -23,6 +23,7 @@ import { useDisplayCurrency } from "@waltning/client/currencies/display-currency
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { DEFAULT_DESK_SCOPE, parseDeskScope } from "@waltning/client/ledger/desk-scope";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import { useLeadCurrency } from "@waltning/client/ledger/use-lead-currency";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
@@ -143,40 +144,6 @@ function DeskNavLink({ item, onSelect }: { item: TabBarItem; onSelect: (name: st
 }
 
 /**
- * The band's hero subtotal — **§7.0's display currency** where the ledger
- * holds one, the same currency `dashboard-screen.tsx` leads its two fold
- * widgets with.
- *
- * It used to be `subtotals[0]`, which `subtotalsOf` returns in account
- * *insertion* order: the band could show one currency while the widgets under
- * it showed another, on the same page, with neither naming itself. One
- * preference decides for both now.
- *
- * **And where the preference names a currency the ledger does not hold, the
- * hero does not vanish — it falls back and says so.** Returning `null` there
- * removed the whole hero row, so a ledger entirely in EUR with the pivot left
- * at PLN showed a band with no figure at all: indistinguishable from an empty
- * ledger, on the one screen whose job is to state your position. `fallback`
- * is `true` for exactly that case, and `DeskHero` turns it into
- * `shell.noBalanceIn` beneath the figure.
- *
- * `null` survives for the one case where it is the truth: no subtotals at
- * all, before the first account. There is no currency to fall back to, and a
- * fabricated `0.00` in an invented currency would be true and useless —
- * `CurrencyTotals` makes the same call on the phone.
- */
-function useLeadCurrency() {
-  const ledger = useLedgerController();
-  const snapshot = usePhoneLedger(ledger);
-  const display = useDisplayCurrency(displayCurrency);
-  const preferred = snapshot.subtotals.find((entry) => entry.currency === display.currency);
-  if (preferred) return { entry: preferred, fallback: false as const };
-  const held = snapshot.subtotals[0];
-  if (!held) return null;
-  return { entry: held, fallback: true as const, missing: display.currency };
-}
-
-/**
  * `04` §4.5's real toggle, filling `DeskBand`'s own `currency` slot — DESK1
  * left it empty for a component E3/E6 had not built yet. `listCurrencySettings`
  * is an on-demand read (`create-phone-ledger.ts`'s own comment on the FX
@@ -208,7 +175,9 @@ function DeskCurrency() {
  */
 function DeskHero({ collapsed }: { collapsed: boolean }) {
   const t = useT();
-  const lead = useLeadCurrency();
+  const ledger = useLedgerController();
+  const display = useDisplayCurrency(displayCurrency);
+  const lead = useLeadCurrency(ledger, display.currency);
   if (lead === null) return null;
 
   return (

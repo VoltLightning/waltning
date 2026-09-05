@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "295bed3d-bb42-4723-b04c-16af5a973aa1",
-  "prevId": "6fab82da-13a6-44d7-ae89-234b11300563",
+  "id": "2b46ddf4-face-4069-a692-1d70d52389e6",
+  "prevId": "90f1c18a-e408-47b8-85f2-29e09adcc4a1",
   "tables": {
     "account_groups": {
       "name": "account_groups",
@@ -211,6 +211,44 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "brand_aliases": {
+      "name": "brand_aliases",
+      "columns": {
+        "alias": {
+          "name": "alias",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "brand_key": {
+          "name": "brand_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -1055,6 +1093,20 @@
           "autoincrement": false,
           "default": "''"
         },
+        "brand_key": {
+          "name": "brand_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "brand_source": {
+          "name": "brand_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "rrule": {
           "name": "rrule",
           "type": "text",
@@ -1184,7 +1236,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "recurring_transactions_brand_shape": {
+          "name": "recurring_transactions_brand_shape",
+          "value": "(\"recurring_transactions\".\"brand_key\" IS NULL AND (\"recurring_transactions\".\"brand_source\" IS NULL OR \"recurring_transactions\".\"brand_source\" = 'none')) OR (\"recurring_transactions\".\"brand_key\" IS NOT NULL AND \"recurring_transactions\".\"brand_source\" IS NOT NULL AND \"recurring_transactions\".\"brand_source\" IN ('auto', 'manual'))"
+        }
+      }
     },
     "tags": {
       "name": "tags",
@@ -1502,6 +1559,20 @@
           "autoincrement": false,
           "default": "''"
         },
+        "brand_key": {
+          "name": "brand_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "brand_source": {
+          "name": "brand_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "is_business": {
           "name": "is_business",
           "type": "integer",
@@ -1768,6 +1839,10 @@
         "transactions_debt_amount_requires_currency": {
           "name": "transactions_debt_amount_requires_currency",
           "value": "\"transactions\".\"debt_amount\" IS NULL OR \"transactions\".\"debt_currency\" IS NOT NULL"
+        },
+        "transactions_brand_shape": {
+          "name": "transactions_brand_shape",
+          "value": "(\"transactions\".\"brand_key\" IS NULL AND (\"transactions\".\"brand_source\" IS NULL OR \"transactions\".\"brand_source\" = 'none')) OR (\"transactions\".\"brand_key\" IS NOT NULL AND \"transactions\".\"brand_source\" IS NOT NULL AND \"transactions\".\"brand_source\" IN ('auto', 'manual'))"
         }
       }
     },

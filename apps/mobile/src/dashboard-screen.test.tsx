@@ -108,6 +108,7 @@ const RECENT: PhoneRecentTransaction = {
   currency: PLN,
   decimals: 2,
   isBusiness: false,
+  brandKey: null,
 };
 
 const STANDING_LAYOUT: PhoneDashboardLayout = {

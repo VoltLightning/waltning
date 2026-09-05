@@ -41,7 +41,8 @@
  */
 
 import * as money from "@waltning/core/money";
-import { Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { type LayoutChangeEvent, Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { text } from "../theme/fonts.ts";
 import { useTheme } from "../theme/provider";
@@ -73,27 +74,47 @@ export type IncomeVsExpenseWidgetProps = WidgetFrame & {
   error?: string | undefined;
 };
 
+/** One stripe plus the gap after it — the distance from a stripe's left edge to the next one's. */
+const HATCH_PITCH = hairline.width * 2 + space.xs;
+
 /**
  * The `assertedFill` hatching laid over a partial bucket's fill. Stripes are
  * `View`s rather than a background image: RN has no CSS gradient and this
  * module carries no drawing dependency, the same argument `Marker` makes for
- * drawing its triangle out of borders. More stripes are rendered than a full
- * bar needs and the fill clips the rest, because the fill's width is a
- * `flexGrow` share that is not known here.
+ * drawing its triangle out of borders.
+ *
+ * **The count is measured, not guessed.** A fixed forty stripes covered
+ * `HATCH_PITCH × 40` and no more, so the moment the partial bucket was the
+ * *largest* one in the range — a January against a quiet December, or the
+ * first month of a new job — its bar ran full width and the hatch stopped
+ * partway across it. The mark that says "this month is not finished" then
+ * covered the left of the bar and left the right plain, which reads as two
+ * segments rather than as one incomplete figure. `onLayout` gives this
+ * element its own width (it is absolutely positioned to fill the bar, so that
+ * *is* the bar's width) and the stripe count follows from it.
+ *
+ * Zero stripes before the first layout pass: the fill is painted in its series
+ * hue either way, so the un-hatched frame is the bar without its mark, never a
+ * gap in the chart.
  */
 function Hatch() {
   const styles = useStyles();
+  const [width, setWidth] = useState(0);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    setWidth(event.nativeEvent.layout.width);
+  }, []);
+  const stripes = useMemo(
+    () => Array.from({ length: Math.ceil(width / HATCH_PITCH) }, (_, i) => `stripe-${i}`),
+    [width],
+  );
   return (
-    <View style={styles.hatch}>
-      {HATCH_STRIPES.map((key) => (
+    <View style={styles.hatch} onLayout={handleLayout}>
+      {stripes.map((key) => (
         <View key={key} style={styles.hatchStripe} />
       ))}
     </View>
   );
 }
-
-/** Enough stripes to cover the widest bar this widget draws; the fill clips the rest. */
-const HATCH_STRIPES = Array.from({ length: 40 }, (_, i) => `stripe-${i}`);
 
 /** The triangle both the legend and every bar row draw — up for income, down for expense. */
 function Marker({ direction, color }: { direction: "up" | "down"; color: string }) {

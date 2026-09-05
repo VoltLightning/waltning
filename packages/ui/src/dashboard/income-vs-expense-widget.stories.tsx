@@ -91,6 +91,45 @@ export const PartialCurrentMonth: Story = {
   },
 };
 
+/**
+ * **NEW-2 — the partial month is the *largest* bucket**, so both its bars run
+ * the full width of the track and the hatch has to reach the end of them. A
+ * fixed stripe count covered a fixed distance, which was enough for the short
+ * bar `PartialCurrentMonth` draws and not for this one: the mark stopped
+ * partway and the rest of the bar read as a second, unmarked segment. This is
+ * the case that story cannot show — a month that is both incomplete and the
+ * biggest thing in the range, which is what the first month of new work, or a
+ * January after a quiet December, actually looks like.
+ */
+export const PartialIsLargest: Story = {
+  args: {
+    bars: [
+      {
+        label: "July 2026",
+        income: money.toMoney("1200"),
+        expense: money.toMoney("900"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "August 2026",
+        income: money.toMoney("1500"),
+        expense: money.toMoney("1100"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "September 2026 · to date",
+        income: money.toMoney("18400"),
+        expense: money.toMoney("16900"),
+        currency: "PLN",
+        decimals: 2,
+        partial: true,
+      },
+    ],
+  },
+};
+
 /** H1 — one scale means one currency, so the rest are listed unconverted rather than dropped. */
 export const WithOtherCurrencies: Story = {
   args: {
