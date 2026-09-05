@@ -22,6 +22,7 @@ import {
 } from "@waltning/core/registry/inputs";
 import { and, desc, eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
+import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -58,6 +59,12 @@ export const createTransactionExecutor = defineLocalExecutor<
    */
   mints: (input) => [input.id],
 
+  // R4 H1-r4 — read-only, run before the outbox commits (`LocalExecutor`'s
+  // own doc): a fee (or either amount) past its own currency's scale is
+  // refused the same way `zero destination`/`negative fee` already are,
+  // never queued as an intent nothing will ever apply.
+  validate: (input, tx) => assertTransactionScale(input, tx),
+
   apply: (input, tx) => insertTransaction(input, tx),
 });
 
@@ -74,6 +81,7 @@ export function insertTransaction(
   tx: ReplicaTx,
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
+  assertTransactionScale(input, tx);
 
   /**
    * **`to_amount` is copied from the input and is never derived.** §14.6:
@@ -166,6 +174,24 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
     throw new LocalRefusal(
       "create_transaction: a business transaction cannot move into a shared account (SPEC.md §6.7)",
     );
+  }
+}
+
+/**
+ * `SPEC.md` §7.2, the local mirror of `assert_amount_scale`
+ * (`0012_transaction_scale_and_category_kind.sql`): `amount_original`,
+ * `to_amount` and `fee` each fit their own currency's declared decimals.
+ * `debt_amount`/`debt_currency` are not this executor's — `settle_debt`
+ * (`counterparties/settle-debt.executor.ts`) is the only writer of those two
+ * columns, and carries the identical check for them.
+ */
+function assertTransactionScale(input: CreateTransactionInput, tx: ReplicaTx): void {
+  assertMoneyScale(tx, input.amountOriginal, input.currency, "create_transaction: amount_original");
+  if (input.toAmount !== undefined && input.toCurrency !== undefined) {
+    assertMoneyScale(tx, input.toAmount, input.toCurrency, "create_transaction: to_amount");
+  }
+  if (input.fee !== undefined) {
+    assertMoneyScale(tx, input.fee, input.currency, "create_transaction: fee");
   }
 }
 

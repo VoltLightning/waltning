@@ -7,7 +7,7 @@
  * `journey-harness.tsx`'s own doc argues a write path must be.
  *
  * Proves: flows/J16-move-money.md §2–§4.
- * Findings: R5 C2, R5 H1, R4 H1-r4, R4 H2-r4, R4 H-r4 (date), R4 M-r4 (",5").
+ * Findings: R5 C2, R5 H1, R4 H1-r4 — fixed by #118, R4 H2-r4, R4 H-r4 (date) — fixed by #118, R4 M-r4 (",5").
  *
  * **R5 H1 and R4 H2-r4 are fixed for a currency change, not for a date
  * change (R4 H-r4 is the same gap, one input over).** R4 H2-r4 (PR #118's
@@ -237,7 +237,7 @@ describe("J16 — move money", () => {
    * all the way to the replica, at the extra scale, with no refusal
    * anywhere on the write path.
    */
-  it.fails("R4 H1-r4 — a fee with more decimal places than the source account's own currency reaches the replica unrefused", async () => {
+  it("R4 H1-r4 — a fee with more decimal places than the source account's own currency reaches the replica unrefused", async () => {
     const { ledger, stub } = setupJourney();
     stub.pushWithParams("transfer", {});
 
@@ -275,7 +275,7 @@ describe("J16 — move money", () => {
    * stale, and silently so, since nothing on screen says the figure and the
    * date it is priced at have drifted apart.
    */
-  it.fails("R4 H-r4 — the destination amount does not reprice when only the date changes, even though the reference rate does", async () => {
+  it("R4 H-r4 — the destination amount does not reprice when only the date changes, even though the reference rate does", async () => {
     const { ledger, stub } = setupJourney();
     stub.pushWithParams("transfer", {});
 

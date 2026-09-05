@@ -443,14 +443,9 @@ END $$;
 CREATE TRIGGER currencies_decimals_safe
   BEFORE UPDATE OF decimals ON currencies
   FOR EACH ROW EXECUTE FUNCTION assert_currency_decimals_safe();
---> statement-breakpoint
 
--- ═══ M2 — `fee` carries no sign constraint ═════════════════════════════════
---
--- `computations.md` §12.2 reports `fee` verbatim as the institution's own
--- stated-fee line; a negative value is never a fee, it is a rebate wearing
--- the wrong sign. A single-column CHECK, not a trigger — declared in
--- `schema.ts` as `transactions_fee_positive` (regenerate `0000_schema.sql`
--- to pick it up); added here by hand so it holds before that regeneration.
-ALTER TABLE "transactions" ADD CONSTRAINT "transactions_fee_positive"
-  CHECK ("fee" IS NULL OR "fee" >= 0);
+-- M2's own `fee` sign constraint (`transactions_fee_positive`) is dropped
+-- from here as of the rebase onto main for #118: `0009_transactions_to_amount_and_fee_positive.sql`
+-- landed the same guarantee first, stricter (`> 0`, not `>= 0` — a zero fee
+-- is repaired to `NULL` there too), so re-adding the same constraint name
+-- here would fail outright rather than merely duplicate it.

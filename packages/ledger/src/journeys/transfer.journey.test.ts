@@ -4,8 +4,8 @@
  * from the rate margin), SPEC.md §7.5 (a transfer stores both legs; the
  * destination amount is copied from the input and never derived).
  *
- * Findings: R5 H1, R5 H3, R4 M2-r4 (fee sign), R4 H3-r4 (line scale),
- * R4 H1-r4 (malformed fee).
+ * Findings: R5 H1, R5 H3, R4 M2-r4 (fee sign), R4 H3-r4 (line scale) — fixed by #118,
+ * R4 H1-r4 (malformed fee) — fixed by #118.
  *
  * **R5 H3 and R4 M2-r4 are already fixed on main.** `createTransactionInput`'s
  * own `superRefine` (`packages/core/src/registry/inputs.ts`) carries two
@@ -155,7 +155,7 @@ describe("create_transaction (transfer) — J16 §2–§4, computations.md §12.
     }
   });
 
-  it.fails("R4 H1-r4 — a malformed fee (more places than the source account's own currency) is not refused", () => {
+  it("R4 H1-r4 — a malformed fee (more places than the source account's own currency) is not refused", () => {
     const j = setup();
     try {
       const before = outboxEntries(j).length;
@@ -188,7 +188,7 @@ describe("create_transaction (transfer) — J16 §2–§4, computations.md §12.
     }
   });
 
-  it.fails("R4 H3-r4 — set_transaction_lines checks only the lines' sum, never an individual line's own scale", () => {
+  it("R4 H3-r4 — set_transaction_lines checks only the lines' sum, never an individual line's own scale", () => {
     const j = setup();
     try {
       const created = j.session.createTransaction(

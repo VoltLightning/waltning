@@ -28,6 +28,7 @@ import {
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
+import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import {
   insertTransaction,
@@ -61,6 +62,19 @@ function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTra
   if (account.archived) {
     throw new LocalRefusal(`reconcile_account: ${input.accountId} is archived`);
   }
+
+  // `SPEC.md` §7.2, the local mirror of `assert_account_balance_scale`
+  // (`0012_transaction_scale_and_category_kind.sql`): checked against
+  // `observedBalance` directly, not the *derived* `difference` below — a
+  // difference can land back at a clean scale by coincidence (an over-scale
+  // observation cancelling an equally over-scale `computed`), which would
+  // let the same figure through to `accounts.expected_balance` unrefused.
+  assertMoneyScale(
+    tx,
+    input.observedBalance,
+    account.currency,
+    "reconcile_account: expected_balance",
+  );
 
   const computed = computedBalance(account.id, account.openingBalance, input.asOf, tx);
   const difference = money.sub(input.observedBalance, computed);

@@ -2,7 +2,7 @@
  * Proves: flows/J07-lend-and-settle.md §3–§5, SPEC.md §6.5 (a row's currency
  * is its account's).
  *
- * Findings: R2 H3 — fixed by #116, R4 (settle scale mirror).
+ * Findings: R2 H3 — fixed by #116, R4 (settle scale mirror) — fixed by #118.
  *
  * **Scenario (5) from the brief is dropped.** `settleDebtInput`
  * (`packages/core/src/registry/inputs.ts`) carries no field for the balance
@@ -142,7 +142,7 @@ describe("settle_debt — J07 §3–§5, a settlement never implicitly clears a 
     }
   });
 
-  it.fails("R4 — settle_debt mirrors no currency-scale check: settleDebtInput accepts more places than the currency's own decimals", () => {
+  it("R4 — settle_debt mirrors no currency-scale check: settleDebtInput accepts more places than the currency's own decimals", () => {
     const j = setup();
     try {
       lend(j);

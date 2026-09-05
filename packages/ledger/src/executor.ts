@@ -158,6 +158,26 @@ export type LocalExecutor<Input extends z.ZodTypeAny, Row, Tx> = {
   input: Input;
 
   /**
+   * Refuse the write before intent ever reaches the outbox — optional, and
+   * the exception to "the refusal is inside `apply`, reached only after
+   * `writeLocally` commits the outbox entry" (`executors.test.ts`'s own
+   * documented shape for a business rule a *future* server might still
+   * resolve differently). A figure past its own currency's declared scale is
+   * never one of those: no replay, local or server-side, ever admits it, so
+   * queuing intent for a write nothing will ever apply is a stuck entry with
+   * no fix (`update_currency`'s own `assertScaleSurvivesShrink` and every
+   * `assertMoneyScale` call in `scale.ts` are exactly this — a currency
+   * lookup no Zod schema can make, and a defect the schema-level refusals
+   * beside them already model "refused before any outbox entry" for).
+   *
+   * Read-only by convention — nothing here should write, and `writeLocally`
+   * runs it inside its own throwaway transaction on the *replica*, before
+   * the outbox transaction even opens, so a write here would commit with
+   * nothing to roll it back against.
+   */
+  validate?(input: z.output<Input>, tx: Tx): void;
+
+  /**
    * Apply the write to the local tables.
    *
    * Declared with method syntax, not as an arrow property, and the difference is
@@ -257,7 +277,7 @@ export function defineLocalExecutor<Input extends z.ZodTypeAny, Row, Tx>(
  */
 export type AnyLocalExecutor<Tx> = Omit<
   LocalExecutor<z.ZodTypeAny, unknown, Tx>,
-  "apply" | "mints"
+  "apply" | "mints" | "validate"
 >;
 
 /**

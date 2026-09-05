@@ -24,6 +24,7 @@ import {
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
+import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalTransactionRow } from "./create-transaction.executor.ts";
@@ -75,6 +76,20 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
   if (input.lines.length > 0 && !money.eq(total, current.amountOriginal)) {
     throw new LocalRefusal(
       `set_transaction_lines: lines sum to ${total}, the transaction is ${current.amountOriginal}`,
+    );
+  }
+
+  // `SPEC.md` §7.2, the local mirror of `assert_transaction_line_amount_scale`
+  // (`0012_transaction_scale_and_category_kind.sql`): a split belongs to the
+  // payment, not the photograph, so each line's own scale is checked against
+  // its *parent* transaction's currency — the sum check above proves the
+  // total is exact, never that any one line individually is.
+  for (const line of input.lines) {
+    assertMoneyScale(
+      tx,
+      line.amount,
+      current.currency,
+      `set_transaction_lines: transaction_lines[${line.id}].amount`,
     );
   }
 

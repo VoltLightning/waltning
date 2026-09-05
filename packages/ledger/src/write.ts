@@ -180,6 +180,21 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
   const input = executor.input.parse(write.input);
   const payload = toPayload(input);
 
+  // ─── 0. An executor's own pre-outbox refusal, if it declares one ─────────
+  //
+  // Read-only, and thrown here rather than left to `apply` — see
+  // `LocalExecutor.validate`'s own doc for why a figure past its own
+  // currency's scale belongs on this side of the outbox commit rather than
+  // the other. A throwaway transaction on the replica alone: nothing here
+  // writes, so nothing needs a real one to roll back against, and the type
+  // this way matches `apply`'s own `Tx` exactly rather than the plain,
+  // non-transactional handle `ledger.replica.db` otherwise is.
+  if (executor.validate) {
+    ledger.replica.db.transaction((tx) => {
+      executor.validate?.(input, tx);
+    });
+  }
+
   // ─── 1. Intent, alone, in outbox.db ──────────────────────────────────────
   emitLedgerDiagnostic(diagnostics, {
     scope: "local_write",

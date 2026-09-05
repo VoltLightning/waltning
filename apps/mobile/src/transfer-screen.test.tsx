@@ -95,7 +95,6 @@ const SAVINGS_EUR: PhoneAccount = {
   currency: EUR,
 };
 
-
 function fakeController(
   overrides: {
     createTransaction?: PhoneLedgerPort["createTransaction"];

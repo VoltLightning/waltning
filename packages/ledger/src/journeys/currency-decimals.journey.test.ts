@@ -4,7 +4,7 @@
  * 'must never' gets both a service check (good error) and a constraint
  * (holds when code is wrong)".
  *
- * Findings: R4 C1-r3, R4 H-r4 (mirror parity).
+ * Findings: R4 C1-r3, R4 H-r4 (mirror parity) — fixed by #118.
  *
  * **`XAA` is seeded as its own pivot**, not alongside a separate pivot with a
  * seeded rate to it — `create_transaction`'s `provisionalFxRate` refuses to
@@ -154,7 +154,7 @@ describe("update_currency — SPEC.md §7.2, a decimals shrink checked against l
     }
   });
 
-  it.fails("R4 H-r4 — mirror parity: the live-reference check scans only `accounts` and `transactions`, so the archived account's opening balance and its soft-deleted transaction's line survive a decimals shrink at the old, wider scale", () => {
+  it("R4 H-r4 — mirror parity: the live-reference check scans only `accounts` and `transactions`, so the archived account's opening balance and its soft-deleted transaction's line survive a decimals shrink at the old, wider scale", () => {
     const j = setup();
     try {
       const txn = archiveAndBookLiveTransaction(j);

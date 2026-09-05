@@ -865,16 +865,22 @@ describe("settle_debt", () => {
       counterpartyId: NINA,
     });
 
+    // R4 — the refusal below is decided entirely by the *pre-existing*
+    // balance `debtRow` just inserted (dust, raw, bypassing the scale
+    // check `create_transaction` itself now carries); this settle's own
+    // `amount`/`discharges.amount` never factors into "nothing to settle",
+    // so it is scripted at EUR's own valid 2dp scale rather than the
+    // fixture's original `0.001`.
     expect(() =>
       write(settleDebtExecutor, {
         id: "f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0",
         counterpartyId: NINA,
         accountId: ACCOUNT,
         date: "2026-08-04",
-        amount: "0.001",
+        amount: "0.01",
         currency: "EUR",
         type: "expense",
-        discharges: { currency: "EUR", amount: "0.001" },
+        discharges: { currency: "EUR", amount: "0.01" },
       }),
     ).toThrow(/nothing to settle/);
   });
@@ -886,10 +892,15 @@ describe("settle_debt", () => {
    * "settled" on screen.
    */
   it("does not report over-settlement when the residual rounds to zero", () => {
+    // R4 — the dust lives in the *debt* row, inserted raw (bypassing
+    // `create_transaction`'s own scale check, the same way a real
+    // FX-converted lend can fold to sub-cent precision at 8dp); the settle
+    // itself pays a clean, currency-valid `0.01` against it, still leaving
+    // the same rounds-to-zero residual (`0.004`) this scenario is about.
     debtRow({
       id: "11111111-2222-4333-8444-555555555501",
       type: "expense",
-      amount: "0.01",
+      amount: "0.014",
       counterpartyId: NINA,
     });
 
@@ -898,10 +909,10 @@ describe("settle_debt", () => {
       counterpartyId: NINA,
       accountId: ACCOUNT,
       date: "2026-08-04",
-      amount: "0.014",
+      amount: "0.01",
       currency: "EUR",
       type: "income",
-      discharges: { currency: "EUR", amount: "0.014" },
+      discharges: { currency: "EUR", amount: "0.01" },
     });
 
     expect(result.row.overSettled).toBe(false);

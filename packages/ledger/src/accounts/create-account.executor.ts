@@ -17,6 +17,7 @@
 
 import { type CreateAccountInput, createAccountInput } from "@waltning/core/registry/inputs";
 import { defineLocalExecutor } from "../executor.ts";
+import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -97,6 +98,13 @@ export const createAccountExecutor = defineLocalExecutor<
  * you had since edited by hand.
  */
 function insertAccount(input: CreateAccountInput, tx: ReplicaTx): LocalAccountRow {
+  // `SPEC.md` §7.2 — the local mirror of `assert_amount_scale`
+  // (`0012_transaction_scale_and_category_kind.sql`): `opening_balance` fits
+  // its own currency's declared decimals. Nothing else in this executor's
+  // path (`createAccountInput`'s own `zMoney`) knows which currency's scale
+  // applies — only a currency lookup, run here, can.
+  assertMoneyScale(tx, input.openingBalance, input.currency, "create_account: opening_balance");
+
   // Built once and used twice — as the insert and as the conflict update — so
   // the two cannot describe different rows. A hand-written `set` is the shape
   // that goes stale the first time a column is added to the schema above it.

@@ -222,14 +222,18 @@ describe("fee carries no sign of its own (M2)", () => {
     expect(code).toBe("23514");
   });
 
-  it("admits a zero fee and a positive one", async () => {
+  // H3 (0009_transactions_to_amount_and_fee_positive.sql) — a typed `0` fee
+  // is "no fee", never a fee of zero; the constraint refuses it the same as
+  // a negative one, and the app's own contract is to drop a typed `0` to
+  // `NULL` before the write ever reaches here.
+  it("refuses a zero fee, and admits a positive one", async () => {
     const zeroId = nextId();
     const zero = await refusal(() =>
       s.sql.unsafe(`
         INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate, fee)
         VALUES ('${zeroId}', '${ACCOUNT}', '2026-01-01', 'expense', 10, 'PLN', 1, 0)`),
     );
-    expect(zero).toBeNull();
+    expect(zero).toBe("23514");
 
     const positiveId = nextId();
     const positive = await refusal(() =>

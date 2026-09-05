@@ -42,6 +42,7 @@ import {
 } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
+import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import {
   insertTransaction,
@@ -71,6 +72,21 @@ export const settleDebtExecutor = defineLocalExecutor<
   input: settleDebtInput,
   /** One id: the settlement transaction's own — never the counterparty's. */
   mints: (input) => [input.id],
+  // R4 — read-only, run before the outbox commits (`LocalExecutor.validate`'s
+  // own doc): both figures — `amount` (what changed hands, in `currency`)
+  // and `discharges.amount` (S14's coalesce, in `discharges.currency`) — are
+  // refused past their own currency's scale the same way a malformed
+  // `create_transaction` fee already is, never queued as an intent nothing
+  // will ever apply.
+  validate: (input, tx) => {
+    assertMoneyScale(tx, input.amount, input.currency, "settle_debt: amount_original");
+    assertMoneyScale(
+      tx,
+      input.discharges.amount,
+      input.discharges.currency,
+      "settle_debt: debt_amount",
+    );
+  },
   apply: (input, tx) => settleDebt(input, tx),
 });
 
@@ -164,6 +180,20 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     }),
     tx,
   );
+
+  // `SPEC.md` §7.2 — `debt_amount` fits `debt_currency`'s own declared
+  // decimals, the same guarantee `insertTransaction`'s own
+  // `assertTransactionScale` already gave `amount_original` above; that
+  // check never sees these two columns (`createTransactionInput` does not
+  // carry them — see the comment below), so this executor is their only
+  // scale check. `decimals`, not another lookup: already read above, for the
+  // same currency, to round the balance sign.
+  if (money.dec(input.discharges.amount).decimalPlaces() > decimals) {
+    throw new Error(
+      `settle_debt: debt_amount ${input.discharges.amount} holds more decimal places than ` +
+        `${input.discharges.currency} allows (${decimals})`,
+    );
+  }
 
   // `debt_currency`/`debt_amount` are not on `createTransactionInput` (the
   // ordinary capture path never sets them — see its own "not here, on
