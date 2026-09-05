@@ -111,11 +111,18 @@ const SEARCH_AMOUNT = /^\d+(?:[.,]\d{1,8})?$/;
  * are two questions; capture's grammar is free to change without moving what
  * a search box means.
  *
- * Space and no-break space are grouping and are dropped; a comma or point is
- * the decimal mark (`money.ts` takes a point), so `"1 500,00"` and `"1500.00"`
- * are the same amount. Compared as money downstream, never as digits: a
- * substring match let `489` find `1 489,00` and fold it into the running
- * total. `489` is not `48,90`; only `48,90` is.
+ * The grammar is `computations.md` §13's own, stated there so the two engines
+ * cannot drift: space and no-break space are grouping and are dropped; a comma
+ * or point is the decimal mark (`money.ts` takes a point), so `"1 500,00"` and
+ * `"1500.00"` are the same amount. Nothing else — `"48,90 zł"` and `"1.500,00"`
+ * are text, deliberately. §13 gives the reason: a trailing currency token
+ * cannot be told from an ordinary payee word without the ledger's whole
+ * currency list, so accepting it would make `"100 lat"` match every row at
+ * `100,00` — M6 again, one spelling later.
+ *
+ * Compared as money downstream, never as digits: a substring match let `489`
+ * find `1 489,00` and fold it into the running total. `489` is not `48,90`;
+ * only `48,90` is.
  */
 function parseSearchAmount(text: string): Money | null {
   const ungrouped = text.trim().replace(/[ \u00a0]/g, "");

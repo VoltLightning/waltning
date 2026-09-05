@@ -12,14 +12,14 @@
  * introducing a divergence *fails*.
  */
 
+import type { JsonObject, JsonValue } from "@waltning/core/json";
 import { type AnyOperation, defineOperation } from "@waltning/core/registry/operation";
 import { toolSchemas } from "@waltning/core/registry/tools";
-import * as dbSchema from "@waltning/db/schema";
-import { getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { routerFromRegistry } from "../trpc/from-registry.ts";
 import { appRouter } from "../trpc/router.ts";
+import { AUDIT_ENTITIES } from "./audit-entities.ts";
 import type { OperationContext } from "./context.ts";
 import { defineOperation as defineApiOperation } from "./define.ts";
 import { registry } from "./index.ts";
@@ -33,6 +33,16 @@ const names = (r: object) => Object.keys(r).sort();
  * handler is not the thing under test.
  */
 const unusedContext = {} as OperationContext;
+
+/**
+ * A JSON Schema is `{ [key: string]: JsonValue }`, so walking into it is a
+ * walk through a union. One narrowing helper rather than a cast at each step:
+ * a cast would let a schema that lost its `properties` object pass the walk
+ * and fail the assertion for the wrong reason.
+ */
+function jsonObject(value: JsonValue | undefined): JsonObject | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
+}
 
 /**
  * The procedure names tRPC actually exposes.
@@ -389,14 +399,11 @@ describe("offline eligibility", () => {
  * this is what holds every declaration to it.
  */
 describe("an audit spec names its table the way the database does", () => {
-  // Narrowed with drizzle's own `is()` rather than a hand-written type
-  // predicate: the schema module exports more than tables (enums, helpers),
-  // so a `value is Table` annotation is not assignable to that union — `is()`
-  // is the runtime check *and* the narrowing, which is what it is for.
-  const sqlTableNames = new Set<string>();
-  for (const value of Object.values(dbSchema)) {
-    if (is(value, Table)) sqlTableNames.add(getTableName(value));
-  }
+  // The same derivation `get_audit_log`'s Zod input is built from
+  // (`audit-entities.ts`), imported rather than repeated. Two copies of a
+  // derivation agree until one of them is edited, and the failure that
+  // follows is an empty audit trail — which is silence, not an error.
+  const sqlTableNames = new Set(AUDIT_ENTITIES);
 
   const auditEntities = Object.values(registry)
     .map((op) => op.audit?.entity)
@@ -407,6 +414,10 @@ describe("an audit spec names its table the way the database does", () => {
     // an empty set — a test that passes when the registry is empty proves
     // nothing about the registry.
     expect(sqlTableNames.size).toBeGreaterThan(10);
+    // One audited declaration today (`create_counterparty`). The walk below is
+    // over `Object.values(registry)`, not over a list written here, so it
+    // covers every declaration the registry grows — this guard only asserts
+    // the walk is not vacuous.
     expect(auditEntities.length).toBeGreaterThan(0);
   });
 
@@ -422,5 +433,41 @@ describe("an audit spec names its table the way the database does", () => {
     // a table, `accountGroups` is a property name that names no row anywhere.
     expect(sqlTableNames.has("account_groups")).toBe(true);
     expect(sqlTableNames.has("accountGroups")).toBe(false);
+  });
+
+  /**
+   * The read side of the same hazard.
+   *
+   * A `z.string()` here would have made `get_audit_log("accountGroups", id)` a
+   * successful call returning `[]` — indistinguishable from a row with nothing
+   * recorded against it, and the one answer a caller must never be given
+   * silently. The enum turns it into a validation error naming the field.
+   */
+  it("refuses a camelCase entity on get_audit_log and accepts the SQL name", async () => {
+    const widened: AnyOperation<OperationContext> = registry.get_audit_log;
+    const entityId = "11111111-1111-1111-1111-000000000001";
+
+    await expect(
+      widened.invoke({ entity: "accountGroups", entityId }, unusedContext),
+    ).rejects.toThrow(/entity/);
+
+    // The accepted spelling parses. `invoke` is not used here because the
+    // handler would then reach for a database this test does not open — the
+    // question is validation, and `input.parse` is exactly that half.
+    expect(() =>
+      registry.get_audit_log.input.parse({ entity: "account_groups", entityId }),
+    ).not.toThrow();
+  });
+
+  it("hands the model the permitted entity names in the tool schema", () => {
+    // The enum is only useful to an agent if it survives into the JSON Schema
+    // the tool is described by — otherwise the model still guesses, and a
+    // guessed spelling is the silent-empty-history failure again.
+    const schema = toolSchemas(registry).find((t) => t.name === "get_audit_log")?.inputSchema;
+    const properties = jsonObject(schema)?.["properties"];
+    const values = jsonObject(jsonObject(properties)?.["entity"])?.["enum"];
+
+    expect(values).toContain("account_groups");
+    expect(values).not.toContain("accountGroups");
   });
 });

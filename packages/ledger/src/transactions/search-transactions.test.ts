@@ -157,6 +157,38 @@ describe("searchTransactions — text", () => {
     expect(payees("1500.00")).toEqual(["Shop A"]);
   });
 
+  /**
+   * The two spellings §13 refuses, pinned so the refusal is a decision.
+   *
+   * `"48,90 zł"` and `"1.500,00"` are both amounts a person could reasonably
+   * type, and both are text here. §13 says why: a trailing token cannot be
+   * told from an ordinary payee word without the ledger's whole currency
+   * list, and a point cannot be told from a decimal mark without knowing what
+   * was meant. A grammar loose enough for the first is loose enough to make
+   * `"100 lat"` match every row at `100,00` — M6, one spelling later. So the
+   * amount clause stays silent and the substring match answers alone, which
+   * for these queries means nothing.
+   */
+  it("leaves a currency token and a point-grouped amount as text (§13)", () => {
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("1500") });
+    // The payee that makes the currency-token case dangerous rather than
+    // merely unhelpful: a real word beside a number.
+    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("100") });
+
+    const payees = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+
+    expect(payees("48,90 zł")).toEqual([]);
+    expect(payees("1.500,00")).toEqual([]);
+    expect(payees("100 lat")).toEqual([]);
+
+    // The spellings §13 does accept still find the same rows, so this pins a
+    // boundary rather than a broken parser.
+    expect(payees("48,90")).toEqual(["Shop A"]);
+    expect(payees("1 500,00")).toEqual(["Shop B"]);
+  });
+
   it("never lets a purely alphabetic query match on amount alone", () => {
     insertExpense({ payee: "Corner Café" });
 

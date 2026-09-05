@@ -28,9 +28,13 @@
  * because both sides would have moved together.
  */
 
-import type { PhoneAuditEntry } from "@waltning/client/ledger/create-phone-ledger";
+import type {
+  PhoneAuditEntry,
+  PhoneCounterparty,
+  TransactionType,
+} from "@waltning/client/ledger/create-phone-ledger";
 import type { LocalAuditEntry } from "@waltning/ledger/transactions/read-audit-log";
-import type { Actor } from "@waltning/schema/enums";
+import type { Actor, CounterpartyKind, TxnType } from "@waltning/schema/enums";
 
 type Expect<T extends true> = T;
 
@@ -43,3 +47,24 @@ export type PhoneActorIsSchemaActor = Expect<Equals<PhoneAuditEntry["actor"], Ac
 
 /** And the reader that answers through it agrees, so the seam has no gap. */
 export type LocalActorIsSchemaActor = Expect<Equals<LocalAuditEntry["actor"], Actor>>;
+
+/**
+ * The other two unions `packages/client` restates by hand, held to the same
+ * standard.
+ *
+ * `TransactionType` and `PhoneCounterparty["kind"]` are written out as string
+ * literals in `create-phone-ledger.ts` for the same reason `actor` was — that
+ * package stays free of `@waltning/schema`. `actor` is the one that has
+ * already drifted, but nothing about it made it more likely to than these:
+ * they are three copies of the same kind, and only one of them was checked.
+ *
+ * Equality is invariant on purpose. A narrowed copy — dropping `adjustment`
+ * because no screen offers it yet — is as wrong as a widened one: the ledger
+ * still answers with rows carrying that type, and a `switch` written against
+ * the narrowed union would compile as exhaustive while missing a real case.
+ */
+export type PhoneTransactionTypeIsSchemaTxnType = Expect<Equals<TransactionType, TxnType>>;
+
+export type PhoneCounterpartyKindIsSchemaKind = Expect<
+  Equals<PhoneCounterparty["kind"], CounterpartyKind>
+>;

@@ -557,9 +557,26 @@ and Russian. Trigram similarity needs to know none of that: it is
 language-agnostic by construction, which is the property that matters here and
 the reason this choice survives the language mix changing again.
 
-An amount token matches `amount_original` exactly, in any currency. A match
-inside a receipt names the line that matched. Offline search is substring-only
-over the cache, and says so.
+An amount token matches `amount_original` exactly, in any currency. **A query
+is an amount token only when the whole of it is one** — digits, an optional
+decimal mark (comma or point, read alike), and spaces or no-break spaces as
+thousands grouping, which are dropped. `48,90`, `48.90`, `1 500,00` and
+`1500.00` are amount tokens. Anything else beside the digits is not: a currency
+symbol or code (`48,90 zł`), a point standing for thousands (`1.500,00`), a
+year inside a phrase (`Shop A 2024`). Those stay text, matched by substring
+alone.
+
+The exclusions are the rule, not a shortfall of it. The amount match runs
+*beside* the text match rather than instead of it, so every spelling the
+grammar accepts adds rows to what S10 §3 promises is the total of what you
+filtered to. A currency token cannot be told from an ordinary payee word
+without knowing every currency in the ledger, and a point cannot be told from a
+decimal mark without knowing what was meant — so a grammar loose enough to
+accept `48,90 zł` is loose enough to make `100 lat` match every row costing
+`100,00`. Both are refused, and the search box stays predictable.
+
+A match inside a receipt names the line that matched. Offline search is
+substring-only over the cache, and says so.
 
 **Offline has no similarity score to rank by**, so its order is `date`
 descending, then `id` descending — a plain, total order rather than an
