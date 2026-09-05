@@ -8,14 +8,15 @@
  * quotes and `carried_forward` chains and all, mechanically reproducible from
  * one seed so a failing date can be reported and revisited.
  *
- * **Two `"derived"` rows.** `FX_SOURCE` (`@waltning/schema/enums`) now lists
- * `derived` alongside `nbp`, `carried_forward` and `manual` — R1's own
- * rebase added it — so this generator produces two of them, at fixed
- * relative positions distinct from the one `manual` row: `findOrigin`
- * (`currencies/read-rate.ts`) treats `derived` as an origin exactly like a
- * real quote (only `carried_forward` is excluded), so two adjacent
- * `derived` days exercise the same carry-forward and origin-walk paths a
- * real quote would, off a source `change_pivot` actually produces.
+ * **Two `"derived"` rows.** `FX_SOURCE` (`@waltning/schema/enums`) lists
+ * `derived` alongside `nbp`, `carried_forward` and `manual` — `change_pivot`
+ * stamps every rebased cross with it — so this generator produces two of
+ * them, adjacent, at a fixed position distinct from the one `manual` row.
+ * `findOrigin` (`currencies/read-rate.ts`) treats `derived` as an origin
+ * exactly like a real quote (only `carried_forward` is excluded), and a lone
+ * `derived` day can only ever prove that much; a back-to-back pair is what
+ * puts a second `derived` row *behind* the origin, which is the walk this
+ * fixture exists to cover.
  */
 
 import { type AccountingDate, accountingDate, addDays, daysBetween } from "@waltning/core/date";
@@ -95,10 +96,14 @@ export function generateRateTable(seed: number, days: number): RateRow[] {
 
   const holeStart = Math.max(0, days - HOLE_DAYS);
   const manualDay = Math.floor(holeStart / 2);
-  // Two adjacent days, well clear of `manualDay` — `change_pivot`'s own
-  // rewrite produces a `derived` row per rebased quote, never a lone one, so
-  // a back-to-back pair (one carrying into the other exactly like two real
-  // quotes would) is the representative shape, not an isolated day.
+  // Two adjacent days, well clear of `manualDay`. The pair is here to cover
+  // the *walk across two adjacent `derived` rows* — `findOrigin`
+  // (`currencies/read-rate.ts`) stops at the first non-`carried_forward` row
+  // it meets, so a lone `derived` day only ever exercises "the origin is
+  // derived", never "the row before the origin is derived too". How many
+  // `derived` rows `change_pivot` happens to mint on a given date is not the
+  // question; this generator is a fixture for the reader, not a model of the
+  // writer.
   const derivedDay = Math.floor(holeStart / 4);
 
   let lastReal: { date: AccountingDate; rate: string } | undefined;

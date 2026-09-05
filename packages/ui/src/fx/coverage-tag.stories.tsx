@@ -11,7 +11,7 @@ function noop() {}
 const meta = {
   title: "FX/CoverageTag",
   component: CoverageTag,
-  args: { days: 100, realDays: 100, calendarDays: 100, pct: 100 },
+  args: { days: 100, realDays: 100, calendarDays: 100, futureRows: 0, pct: 100 },
 } satisfies Meta<typeof CoverageTag>;
 
 export default meta;
@@ -32,6 +32,11 @@ export const NearlyEmpty: Story = {
 /** A currency just added — never a bare "0%". Tappable, wired by S17's own row. */
 export const NoRatesYet: Story = {
   args: { days: 0, realDays: 0, calendarDays: 0, pct: 0, onPress: noop },
+};
+
+/** L7 — nothing due yet is not nothing set: rates are held, just future-dated. */
+export const NoRatesYetFuture: Story = {
+  args: { days: 0, realDays: 0, calendarDays: 0, futureRows: 3, pct: 0, onPress: noop },
 };
 
 /** M1/M3 — a dead source carried every day to today: filled by count, amber by real quotes. */

@@ -687,7 +687,11 @@ describe("H2 — an orphaned carried_forward bridge must not refuse a capture, e
       .filter((row) => row.quote === USD);
     expect(chfToUsd).toHaveLength(1);
     expect(chfToUsd[0]?.date).toBe(accountingDate("2026-01-05"));
-    expect(chfToUsd[0]?.source).toBe("derived");
+    // H1-r6 — the reciprocal keeps the *bridge's own* source. `nbp` published
+    // this very pair, and reading its quote the other way round is the same
+    // publication, not a triangulation; only a cross computed *through* the
+    // bridge is `derived`.
+    expect(chfToUsd[0]?.source).toBe("nbp");
     // 1 USD = 0.25 CHF (the seeded rate) ⇒ 1 CHF = 4 USD.
     expect(chfToUsd[0]?.rate).toBe(money.unitsPerPivot("4"));
 

@@ -114,7 +114,7 @@ function fakeController(overrides: {
     archiveCurrency: vi.fn(),
     setRateSource: vi.fn(),
     setPinned: vi.fn(),
-    changePivot: vi.fn(),
+    changePivot: vi.fn(() => ({ droppedDates: 0 })),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
     updateCurrency: vi.fn(),

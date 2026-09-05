@@ -397,6 +397,13 @@ export const pl: Messages = {
     coverageBelow: "{{pct}}% · ostatni kurs {{date}}",
     coverageTitle: "Pokrycie",
     noRatesYet: "brak kursów · ustaw ręcznie",
+    // 1 → ustawiony, 2–4 → ustawione, 5+ (and 0) → ustawionych. `futureRows`
+    // is always a whole count, so `_other` (fractional) never actually
+    // renders — it carries the `_many` form rather than invent an untested one.
+    noRatesYetFuture_one: "brak kursów · {{count}} ustawiony na później",
+    noRatesYetFuture_few: "brak kursów · {{count}} ustawione na później",
+    noRatesYetFuture_many: "brak kursów · {{count}} ustawionych na później",
+    noRatesYetFuture_other: "brak kursów · {{count}} ustawionych na później",
     noQuoteYet: "brak kursu",
     rateFieldSynced: "Zsynchronizowany: {{rate}}",
     ratePositive: "Kurs musi być liczbą dodatnią.",
@@ -447,6 +454,17 @@ export const pl: Messages = {
       "Waluta bazowa to techniczny punkt odniesienia, względem którego przechowywany jest każdy kurs. Odmówiona, jeśli istnieje choć jedna transakcja — telefon sam nie ma jak przeliczyć historii, która by po niej została. Zmiana jest rzadka, audytowana i nigdy nie jest wymagana tylko dlatego, że się przeprowadziłeś.",
     pivotConfirmSubmit: "Tak, zmień",
     pivotChangeRefused: "Waluty bazowej nie można zmienić, dopóki istnieje transakcja.",
+    // 1 → data, 2–4 → daty, 5+ (and 0) → dat. `droppedDates` is always a whole
+    // count, so `_other` (fractional) never actually renders — it carries the
+    // `_many` form rather than invent an untested one.
+    pivotChangeDroppedDates_one:
+      "Waluta bazowa zmieniona · {{count}} data bez kursu do przeliczenia została pominięta",
+    pivotChangeDroppedDates_few:
+      "Waluta bazowa zmieniona · {{count}} daty bez kursu do przeliczenia zostały pominięte",
+    pivotChangeDroppedDates_many:
+      "Waluta bazowa zmieniona · {{count}} dat bez kursu do przeliczenia zostało pominiętych",
+    pivotChangeDroppedDates_other:
+      "Waluta bazowa zmieniona · {{count}} dat bez kursu do przeliczenia zostało pominiętych",
     pivotAlreadyPivot: "Ta waluta jest już walutą bazową.",
     pivotTarget: "Nowa waluta bazowa",
     pivotTargetPlaceholder: "Wybierz walutę",

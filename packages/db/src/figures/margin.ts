@@ -25,10 +25,10 @@ export type MarginRow = {
   /**
    * The plain ratio §4a defines — margin ÷ amount_pivot — not ×100.
    *
-   * M2 — nullable. `amount_pivot` is guarded by `NULLIF` below, and a
-   * migration `NOT VALID` (M1, `0014_…sql`) means a pre-existing zero-amount
-   * row can still reach this query — its margin is genuinely unpriceable,
-   * not a number to fake.
+   * M2 — nullable. `amount_pivot` is guarded by `NULLIF` below, and
+   * `transactions_amount_positive` standing `NOT VALID` (M1) means a
+   * pre-existing zero-amount row can still reach this query — its margin is
+   * genuinely unpriceable, not a number to fake.
    */
   marginPct: Money | null;
   /**

@@ -8,6 +8,14 @@
  * hand-entered rate could take, and the pivot is data the input's own Zod
  * schema cannot see (only the replica knows which currency it is).
  *
+ * **M1 — `today` comes from the input when given, and from the `Capture`
+ * otherwise.** §7.6 refuses a rate set for a date that has not happened yet,
+ * and this file is where that refusal lives whenever the day was not supplied
+ * — the schema can only check a value it was handed. Deriving it from the
+ * capture rather than demanding it is what lets an entry queued by an older
+ * build replay at all: a required field would fail `parse` forever, and
+ * `recover.ts` halts at the first entry it cannot apply.
+ *
  * **Checked before anything is written.** `overwriteManual` carries S18 §8's
  * second confirmation as data, and a partial write followed by a refusal
  * would leave some days replaced and others not — indistinguishable from a
@@ -52,7 +60,7 @@ import { type SetManualRateInput, setManualRateInput } from "@waltning/core/regi
 import { and, asc, eq, gte, lte, ne } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type Capture, captureDate, type LocalTx } from "../write.ts";
 
 const { currencies, fxRates } = schema;
 
@@ -73,7 +81,7 @@ export const setManualRateExecutor = defineLocalExecutor<
   opVersion: 1,
   input: setManualRateInput,
   mints: () => [],
-  apply: (input, tx) => setManualRate(input, tx),
+  apply: (input, tx, capture) => setManualRate(input, tx, capture),
 });
 
 /** Every date from `from` to `to`, inclusive. */
@@ -83,7 +91,26 @@ function dateRange(from: AccountingDate, to: AccountingDate): AccountingDate[] {
   return dates;
 }
 
-function setManualRate(input: SetManualRateInput, tx: ReplicaTx): SetManualRateResult {
+function setManualRate(
+  input: SetManualRateInput,
+  tx: ReplicaTx,
+  capture: Capture,
+): SetManualRateResult {
+  // M1 — `today` is optional on the input so a payload queued before the
+  // field existed still parses and still replays. Absent, it is the day the
+  // capture itself happened, read in the capture's own zone — the same value
+  // the screen would have passed, derived from the two fields the outbox
+  // records beside every entry. The refusal is *here* rather than only in the
+  // schema for exactly that reason: an operation whose rule mentions today
+  // must still enforce it when today came from the capture.
+  const today = input.today ?? captureDate(capture);
+  if (input.to > today) {
+    throw new Error(
+      `set_manual_rate: ${input.to} has not happened yet (today is ${today}) — ` +
+        "a rate cannot be set for a future date",
+    );
+  }
+
   const [pivot] = tx.select().from(currencies).where(eq(currencies.isPivot, true)).all();
   if (!pivot) {
     throw new LocalRefusal("set_manual_rate: no pivot currency is set", { dependency: true });

@@ -99,6 +99,13 @@
       "when": 1788532732988,
       "tag": "0012_transactions_amount_strictly_positive",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788575592596,
+      "tag": "0013_fx_rates_rate_bounds",
+      "breakpoints": true
     }
   ]
 }

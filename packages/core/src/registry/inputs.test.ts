@@ -982,10 +982,23 @@ describe("setManualRateInput", () => {
     expect(paths(result)).toContain("rate");
   });
 
-  it("accepts the smallest positive rate", () => {
-    const parsed = setManualRateInput.parse({ ...range, rate: "0.000000000001" });
-    expect(String(parsed.rate)).toBe("0.000000000001");
+  // H2 — the smallest rate strictly *inside* the bounds, not the smallest
+  // positive one. `1e-12` is refused: its reciprocal is exactly `1e12`, which
+  // `numeric(24,12)` cannot hold, and the interval is open at both ends so
+  // that every rate in it flips to another rate in it (`money.ts`).
+  it("accepts the smallest rate strictly inside the rate bounds", () => {
+    const parsed = setManualRateInput.parse({ ...range, rate: "0.000000000002" });
+    expect(String(parsed.rate)).toBe("0.000000000002");
   });
+
+  it.each(["0.000000000001", "1000000000000"])(
+    "refuses %s — a rate at an endpoint has no usable reciprocal",
+    (rate) => {
+      const result = setManualRateInput.safeParse({ ...range, rate });
+      expect(result.success).toBe(false);
+      expect(paths(result)).toContain("rate");
+    },
+  );
 
   // L11 — an unbounded manual range writes one `manual` row per day; capped
   // at a year so a typo in `to` cannot silently queue thousands of rows.

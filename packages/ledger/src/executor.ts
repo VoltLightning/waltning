@@ -22,6 +22,7 @@
  */
 
 import type { z } from "zod";
+import type { Capture } from "./write.ts";
 
 /**
  * A business refusal — the write is invalid, not merely undelivered.
@@ -222,8 +223,18 @@ export type LocalExecutor<Input extends z.ZodTypeAny, Row, Tx> = {
    * parameters, so a concrete executor would not be assignable to the widened
    * form a registry holds. Method syntax is bivariant, which is the case it
    * exists for.
+   *
+   * **M1 — `capture` is where the device's *day* comes from.** An operation
+   * whose input needs "today" (`set_manual_rate`'s `to <= today`) cannot take
+   * it as a required field: an entry captured by an older build carries no
+   * such field, and a schema that demands one halts replay on that entry
+   * forever. The zone and instant that produced the entry are already
+   * recorded beside it (`outbox.captured_tz` / `captured_at`), so `recover.ts`
+   * hands the same `Capture` back at replay that `writeLocally` passed at
+   * capture — and the executor derives the day from it rather than from a
+   * clock `packages/ledger` does not have.
    */
-  apply(input: z.output<Input>, tx: Tx): Row;
+  apply(input: z.output<Input>, tx: Tx, capture: Capture): Row;
 
   /**
    * The client-minted ids this write brings into existence.
@@ -261,7 +272,7 @@ export type LocalExecutor<Input extends z.ZodTypeAny, Row, Tx> = {
    *
    * Built by `defineLocalExecutor`; never written by hand.
    */
-  invoke(raw: unknown, tx: Tx): Row;
+  invoke(raw: unknown, tx: Tx, capture: Capture): Row;
 
   /**
    * `mints`, reached through validation, for a caller holding a raw payload.
@@ -304,10 +315,10 @@ export function defineLocalExecutor<Input extends z.ZodTypeAny, Row, Tx>(
     // scale refusal recorded at capture must refuse the same way on replay —
     // never silently admit on the second attempt what the first refused
     // before the outbox even committed.
-    invoke: (raw, tx) => {
+    invoke: (raw, tx, capture) => {
       const input = executor.input.parse(raw);
       executor.validate?.(input, tx);
-      return executor.apply(input, tx);
+      return executor.apply(input, tx, capture);
     },
     mintedIds: (raw) => executor.mints(executor.input.parse(raw)),
   };

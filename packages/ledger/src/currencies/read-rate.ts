@@ -315,6 +315,21 @@ export type LocalCoverage = {
    * quote. Floored while incomplete, so 2,075/2,080 reads `99%`, never `100%`.
    */
   coveragePct: number;
+  /**
+   * L7 — rows held *past* today (S18 §7's "set a range" allows a future end
+   * date), excluded from `days`/`calendarDays`/`coveragePct` alike (M4) so
+   * they cannot inflate a figure `calendarDays` only counts through today.
+   * `CoverageTag` reads this instead when `days === 0`: a currency with only
+   * future rows has held rates set, just none due yet — a different state
+   * from *no rates yet*, and worth saying so rather than reading identically.
+   *
+   * **H3 — `set_manual_rate` refusing a future `to` does not empty this.**
+   * That refusal governs one operation. Future-dated rows still reach the
+   * replica from a build that predates it, from arc 2's sync, from
+   * `change_pivot` copying whatever dates it rebased, and from a device
+   * whose clock sits behind dates the replica already holds.
+   */
+  futureRows: number;
 };
 
 /**
@@ -358,6 +373,7 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       realDays: 0,
       calendarDays: 0,
       coveragePct: 0,
+      futureRows: 0,
     };
     // No pivot set at all — vacuous, same empty answer as a currency with
     // no rows (`fx_rates` is always stored `base = pivot`, §4).
@@ -371,7 +387,8 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
     // without a fresh quote. Every count is scoped `date <= today` in the
     // `case` itself (M4) rather than the `where`, so a row past today (which
     // `set_manual_rate` refuses to write, L2) cannot inflate a figure that
-    // only counts through today.
+    // only counts through today — L7 needs `futureN`'s complementary count
+    // from the very same aggregate, still one query per currency.
     const [agg] = db
       .select({
         n: sql<number>`count(case when ${fxRates.date} <= ${today} then 1 else null end)`,
@@ -382,13 +399,15 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
         lastRealDate: sql<
           string | null
         >`max(case when ${fxRates.date} <= ${today} and ${fxRates.source} <> ${CARRIED_FORWARD} then ${fxRates.date} else null end)`,
+        futureN: sql<number>`count(case when ${fxRates.date} > ${today} then 1 else null end)`,
       })
       .from(fxRates)
       .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot)))
       .all();
 
     const days = agg?.n ?? 0;
-    if (days === 0 || !agg?.firstDate) return empty;
+    const futureRows = agg?.futureN ?? 0;
+    if (days === 0 || !agg?.firstDate) return { ...empty, futureRows };
 
     const firstDate = agg.firstDate as AccountingDate;
     const realDays = agg.realN ?? 0;
@@ -415,6 +434,7 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       realDays,
       calendarDays,
       coveragePct,
+      futureRows,
     };
   });
 }

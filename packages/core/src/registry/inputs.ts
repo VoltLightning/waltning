@@ -999,6 +999,16 @@ const MANUAL_RATE_RANGE_ISSUE = {
  * device date and passes it, and `to <= today` is checked against exactly
  * that value rather than a server clock a phone-only write has no access to.
  *
+ * **M1 — and it is *optional*, at the same `opVersion`.** A required field
+ * would make every entry already queued by a build that predates it fail
+ * `parse`, and `recover.ts` halts replay at the first entry it cannot apply
+ * — permanently, since nothing ever rewrites a queued payload. Absent, the
+ * executor derives the day from the entry's own `Capture` (`captureDate`,
+ * `write.ts`), which is where the day was always coming from; the `to <=
+ * today` refusal below then runs there instead of here, on exactly the same
+ * value. So the payload shape only ever *widened*, and no version bump is
+ * owed.
+ *
  * **H3-r5 — a rate too large to reciprocate is refused here, before the
  * outbox entry exists.** `set-manual-rate.executor.ts`'s own `apply` runs
  * *after* the intent is already enqueued (`write.ts`'s two-phase write), so
@@ -1024,7 +1034,7 @@ export const setManualRateInput = z
     ...rateRange,
     rate: zUnitsPerPivot,
     overwriteManual: z.boolean().default(false),
-    today: zAccountingDate,
+    today: zAccountingDate.optional(),
   })
   .refine((v) => v.base !== v.quote, {
     message: "a rate needs two different currencies",
@@ -1032,7 +1042,7 @@ export const setManualRateInput = z
   })
   .refine(rateRangeOrdered, RATE_RANGE_ISSUE)
   .refine(manualRateRangeWithinCap, MANUAL_RATE_RANGE_ISSUE)
-  .refine((v) => v.to <= v.today, {
+  .refine((v) => v.today === undefined || v.to <= v.today, {
     message: "a manual rate cannot be set for a date that has not happened yet",
     path: ["to"],
   })

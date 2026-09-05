@@ -1163,8 +1163,10 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 **`actor`** — `user` · `agent` · `import` · `migration`
 **`import_row_status`** — `pending` · `ready` · `needs_review` · `duplicate` ·
 `imported` · `skipped`
-**`fx_source`** — `nbp` · `ecb` · `nbrb` · `nbg` · `manual` · `carried_forward`
-(§7.6; `manual` outranks every synced source for the same pair and date)
+**`fx_source`** — `nbp` · `ecb` · `nbrb` · `nbg` · `manual` · `carried_forward` ·
+`derived` (§7.6; `manual` outranks every synced source for the same pair and
+date, and `derived` marks a rate triangulated by a pivot change rather than
+published by anyone)
 
 ### 6.4 The clearing accounts
 
@@ -1187,22 +1189,52 @@ unallocated group expense. That becomes a dashboard warning and an agent tool
 Enforced in the database, not merely the application:
 
 ```sql
-transactions_amount_positive     amount_original >= 0
-transactions_transfer_shape      (type = 'transfer') = (to_account_id IS NOT NULL)
-transactions_transfer_distinct   to_account_id IS NULL OR to_account_id <> account_id
-transactions_category_shape      type IN ('income','expense') OR category_id IS NULL
-transactions_to_amount_shape     (type = 'transfer') = (to_amount IS NOT NULL)
-transactions_to_amount_positive  to_amount IS NULL OR to_amount > 0
-transactions_to_currency_shape   (type = 'transfer') = (to_currency IS NOT NULL)
-transactions_to_fx_rate_shape    (type = 'transfer') = (to_fx_rate IS NOT NULL)
-transactions_fee_positive        fee IS NULL OR fee > 0
-categories_no_self_parent        id <> parent_id
-categories_earnings_income_only  kind = 'income' OR is_earnings = false
-accounts_shared_not_business     ownership = 'own' OR is_business = false
-currencies_decimals_sane         decimals BETWEEN 0 AND 8
-fx_rates_rate_positive           rate > 0
-fx_rates_distinct                base <> quote
+transactions_amount_positive          amount_original > 0 OR type = 'adjustment'
+transactions_transfer_shape           (type = 'transfer') = (to_account_id IS NOT NULL)
+transactions_transfer_distinct        to_account_id IS NULL OR to_account_id <> account_id
+transactions_category_shape           type IN ('income','expense') OR category_id IS NULL
+transactions_to_amount_shape          (type = 'transfer') = (to_amount IS NOT NULL)
+transactions_to_amount_positive       to_amount IS NULL OR to_amount > 0
+transactions_to_currency_shape        (type = 'transfer') = (to_currency IS NOT NULL)
+transactions_to_fx_rate_shape         (type = 'transfer') = (to_fx_rate IS NOT NULL)
+transactions_fx_rate_positive         fx_rate IS NULL OR fx_rate > 0
+transactions_fee_positive             fee IS NULL OR fee > 0
+transactions_counterparty_role_shape  (counterparty_id IS NOT NULL) = (counterparty_role IS NOT NULL)
+transactions_occurrence_shape         (recurring_id IS NULL) = (occurrence_date IS NULL)
+transactions_debt_shape               (debt_currency IS NULL) = (debt_amount IS NULL)
+transactions_tax_fx_shape             (tax_fx_rate IS NULL) = (tax_fx_date IS NULL)
+categories_no_self_parent             id <> parent_id
+categories_earnings_income_only       kind = 'income' OR is_earnings = false
+accounts_shared_not_business          ownership = 'own' OR is_business = false
+currencies_decimals_sane              decimals BETWEEN 0 AND 8
+fx_rates_rate_positive                rate > 0
+fx_rates_rate_bounds                  rate > 0.000000000001 AND rate < 1000000000000
+fx_rates_distinct                     base <> quote
 ```
+
+**`transactions_amount_positive` refuses zero, not only a negative.** A
+zero-amount income, expense or transfer is not a payment event (§6.10), and
+§7.5's margin divides by `amount_pivot = amount_original × fx_rate`. An
+adjustment is exempt: reconciling to an unchanged balance is a real outcome,
+and an adjustment carries its own sign either way (§7.2). Because a database
+already holding zero-amount rows cannot be repaired without inventing a figure
+nobody recorded, the tightened constraint is added `NOT VALID` — every new or
+updated row is refused immediately, and the existing rows are grandfathered
+until the owner resolves them and validates it by hand.
+
+**`fx_rates_rate_bounds` is not a second `rate > 0`.** A rate is crossed
+exactly once, at the write boundary, between the units-per-pivot `fx_rates`
+stores and the pivot-per-unit `transactions.fx_rate` holds (§4). Each bound
+keeps the far side of that crossing storable: above `1e-12`, because
+`1 / 1e-12` is exactly `1e12` and `numeric(24,12)` cannot hold it; below
+`1e12`, because past that the flip truncates to `0.000000000000` — a value
+`rate > 0` accepts, since the zero arrives from the far side of the crossing,
+where no constraint was looking. Every rate parsed at a contract boundary is
+refused outside the same interval, and the pivot change, which mints rates by
+division rather than parsing them, drops any date whose rebased rate would
+land outside it. The interval is not *closed* under the flip and does not need
+to be — twelve-place rounding folds its top onto its excluded floor — because
+a rate is crossed once, at a boundary, and never chained.
 
 The two `to_*` shape constraints matter more than they look. `to_amount` was
 already guarded; `to_currency` and `to_fx_rate` were not, so a transfer could be
@@ -2065,11 +2097,50 @@ can always be traced to its origin:
    (§7.7).
 
 `fx_rates.source` carries the provenance: `nbp`, `ecb`, `nbrb`, `nbg`,
-`manual`, or `carried_forward`. A manual entry always outranks a synced one for
-the same pair and date, is never overwritten by a later sync, and writes to
-`audit_log`. Reports can be filtered to show which figures rest on overrides —
-useful when a period is being reconciled and you need to know what was asserted
-rather than observed.
+`manual`, `carried_forward`, or `derived`. A manual entry always outranks a
+synced one for the same pair and date, is never overwritten by a later sync,
+and writes to `audit_log`. Reports can be filtered to show which figures rest
+on overrides — useful when a period is being reconciled and you need to know
+what was asserted rather than observed.
+
+**`source` carries provenance and nothing else.** How stale a figure is, is a
+separate fact, and it is measured at read time by walking `carried_forward`
+rows back to the real quote they copy and counting the days (§7.7's ten-day
+cap). Stamping an otherwise-real row `carried_forward` to signal that it was
+computed from something stale destroys both readings at once: the row stops
+naming who published it, and the pair it belongs to becomes unreadable
+whenever no real row stands behind it. Provenance is written; staleness is
+derived.
+
+#### Changing the pivot
+
+Re-basing the whole rate table onto a new pivot (§7.0) is a rewrite, one date
+at a time, and it obeys the same separation:
+
+- **A date is re-based only when the bridge — the old pivot's own rate against
+  the new one, for that date — is a real published quote.** A bridge that is
+  itself `carried_forward` holds no rate of its own, only a copy of an earlier
+  day's, and dividing every other quote on the date by that copy produces
+  figures nobody can date. A carried or missing bridge drops the whole date,
+  counted and reported rather than swallowed. Carry-forward then answers for
+  that date at read time, from whichever earlier date did re-base, with the
+  true age.
+- **A cross re-based onto the new pivot is `derived`.** Both quotes were
+  published on that date, so the figure is fresh for it, and `derived` names
+  what actually produced it — a triangulation, not a provider who never quoted
+  this pair. A cross computed from a `manual` leg is `derived` too: the person
+  asserted their own pair, not this one. A leg whose own row is
+  `carried_forward` is dropped rather than re-based, because its origin's date
+  has already produced (or been dropped with) the `derived` row carry-forward
+  will reach.
+- **The reciprocal — the new pivot against the old — keeps the bridge's own
+  source.** `manual` stays `manual`: the reciprocal of an assertion is the
+  same assertion read the other way round, not a computation. A provider's
+  source stays that provider's, for the same reason.
+- **Every row the rewrite leaves must trace to a real-source row for its own
+  pair, at or before its own date.** That is what makes the result readable at
+  all, and the operation asserts it before committing rather than trusting the
+  rules above to have held.
 
 #### When no rate exists at all
 

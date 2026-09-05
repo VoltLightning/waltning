@@ -127,14 +127,11 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
 
   // §14.6: capturing in a non-pivot currency needs a rate the replica holds —
   // seeded through `set_manual_rate`, the same op S18 exposes, not a raw row.
-  // H1 — the range covers yesterday too: the "prior" capture below is dated
-  // `addDays(today, -1)`, and `readRate` now prices a capture from the rate
-  // held *at its own date*, not the newest row regardless of date.
   const today = deviceRuntime().capture().date;
   const rate = controller.setManualRate({
     base: "USD",
     quote: "PLN",
-    from: addDays(today, -1),
+    from: today,
     to: today,
     rate: "4.00",
     overwriteManual: true,

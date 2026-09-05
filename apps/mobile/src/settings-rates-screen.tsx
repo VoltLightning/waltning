@@ -279,6 +279,7 @@ export default function SettingsRatesScreen() {
               days={row.days}
               realDays={row.realDays}
               calendarDays={row.calendarDays}
+              futureRows={row.futureRows}
               pct={row.coveragePct}
               lastDate={row.lastDate ?? undefined}
             />

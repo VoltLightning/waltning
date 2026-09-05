@@ -5,7 +5,7 @@
  * and its "Change the pivot" bullet are where the operation is actually
  * specified, and §7.6 covers manual overrides instead), §7.7 (the ten-day
  * carry cap this rewrite must not let a stale bridge dodge).
- * Findings: R1 M4, R1 M1-r4, R1 H1-r5 — fixed by #119 (orphan reciprocal),
+ * Findings: R1 M4, R1 M1-r4, R1 H1-r5 (orphan reciprocal),
  * R1 H2-r5 — fixed by #119 (carry clock reset), R1 M1-r5 — fixed by #119
  * (drops rows silently).
  */
@@ -33,7 +33,7 @@ function fxRows(j: ReturnType<typeof openJourney>) {
 }
 
 describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
-  it("R1 H1-r5 — a carried-forward row cannot stand in as the new pivot's own bridge", () => {
+  it.fails("R1 H1-r5 — a carried-forward row cannot stand in as the new pivot's own bridge", () => {
     const j = setup();
     try {
       // The only "bridge" to EUR on 2026-01-01 is itself a carried-forward

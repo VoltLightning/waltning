@@ -112,6 +112,7 @@ function fakeController(overrides: {
           realDays: 2100,
           calendarDays: 2100,
           coveragePct: 100,
+          futureRows: 0,
         },
       ]),
     listFxRates: () => [],
@@ -119,7 +120,7 @@ function fakeController(overrides: {
     archiveCurrency: overrides.archiveCurrency ?? vi.fn(() => ({ code: "PLN" })),
     setRateSource: vi.fn(() => ({ code: "PLN" })),
     setPinned: overrides.setPinned ?? vi.fn(() => ({ code: "PLN" })),
-    changePivot: overrides.changePivot ?? vi.fn(() => ({ code: "USD" })),
+    changePivot: overrides.changePivot ?? vi.fn(() => ({ code: "USD", droppedDates: 0 })),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
     updateCurrency: overrides.updateCurrency ?? vi.fn(() => ({ code: "PLN" })),
@@ -208,7 +209,7 @@ it("adding a currency writes through add_currency and closes the sheet", () => {
 it("changing the pivot writes the chosen target, never the current pivot (C1)", () => {
   // PLN is the fixture's only non-pivot row (USD is the pivot) — the target
   // `Select` defaults to it, so no explicit choice is needed for one candidate.
-  const changePivot = vi.fn(() => ({ code: "PLN" }));
+  const changePivot = vi.fn(() => ({ code: "PLN", droppedDates: 0 }));
   withLedger({ changePivot });
   fireEvent.click(screen.getByText("Change pivot"));
   expect(changePivot).not.toHaveBeenCalled();
@@ -241,7 +242,7 @@ it("M7 — the pivot target select recovers after a successful change", () => {
   ];
   const changePivot = vi.fn((input: { code: string }) => {
     pivot = input.code;
-    return { code: input.code };
+    return { code: input.code, droppedDates: 0 };
   });
   withLedger({ listCurrencySettings, changePivot });
 
@@ -260,6 +261,28 @@ it("M7 — the pivot target select recovers after a successful change", () => {
   fireEvent.click(screen.getByText("Change pivot"));
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(changePivot).not.toHaveBeenCalledWith({ code: "EUR" }, expect.anything());
+});
+
+// M2 — the rewrite drops every date it cannot re-base against the new pivot
+// (§7.0), and until now it said so to nobody: the change succeeded either
+// way, and the screen looked identical whether one date survived or all of
+// them did. Not an error, so a toast rather than a field error.
+it("M2 — a pivot change that dropped dates says how many, in a toast", () => {
+  const changePivot = vi.fn(() => ({ code: "PLN", droppedDates: 27 }));
+  withLedger({ changePivot });
+  fireEvent.click(screen.getByText("Change pivot"));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
+  expect(
+    screen.getByText("Pivot changed · 27 dates had no rate to rebase and were dropped"),
+  ).toBeDefined();
+});
+
+it("M2 — a pivot change that dropped nothing says nothing", () => {
+  const changePivot = vi.fn(() => ({ code: "PLN", droppedDates: 0 }));
+  withLedger({ changePivot });
+  fireEvent.click(screen.getByText("Change pivot"));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
+  expect(screen.queryByText(/had no rate to rebase/)).toBeNull();
 });
 
 it("maps the executor's two refusals to their own texts, never one fallback (C1)", () => {
@@ -320,6 +343,7 @@ it("a currency with no rates yet says so, and opens S18 with the pair preselecte
         realDays: 0,
         calendarDays: 0,
         coveragePct: 0,
+        futureRows: 0,
       },
     ],
   });

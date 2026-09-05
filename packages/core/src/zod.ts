@@ -25,6 +25,9 @@ import {
   dec,
   type Money,
   type PivotPerUnit,
+  RATE_MAX_EXCLUSIVE,
+  RATE_MIN_EXCLUSIVE,
+  rateInBounds,
   toMoney,
   type UnitsPerPivot,
 } from "./money.ts";
@@ -80,11 +83,24 @@ export const zFee = z
  * (`toPivot`/`fromPivot`) produce `Infinity` or a flipped sign, branded as
  * `Money` — a bug the type system would otherwise wave through, because
  * nothing about the brand says "positive".
+ *
+ * **H2 — and bounded, `1e-12 < rate < 1e12`.** Positive alone is not enough:
+ * `numeric(24,12)` cannot hold `1e12`, and `money.reciprocal` throws on
+ * anything whose flip truncates to `0.000000000000` — a throw that used to
+ * land inside `create_transaction`'s `apply`, *after* `writeLocally` had
+ * already committed the outbox entry, leaving an entry no replay could ever
+ * apply. `money.ts`'s own `RATE_MIN_EXCLUSIVE`/`RATE_MAX_EXCLUSIVE` argue
+ * what each bound buys; refusing here is what keeps that throw unreachable
+ * from a parsed input.
  */
 export const zPivotPerUnit = z
   .string()
   .regex(/^-?\d+(\.\d+)?$/, "expected a rate as a string")
   .refine((v) => dec(v).gt(0), "a rate is pivot per unit and must be positive")
+  .refine(
+    rateInBounds,
+    `a rate must lie strictly between ${RATE_MIN_EXCLUSIVE} and ${RATE_MAX_EXCLUSIVE}`,
+  )
   .transform((v): PivotPerUnit => v as PivotPerUnit);
 
 /**
@@ -95,12 +111,17 @@ export const zPivotPerUnit = z
  *
  * **Refused at zero or below**, same reason as `zPivotPerUnit`: a zero rate
  * makes `toPivotByDivision` divide by zero and return `Infinity` branded as
- * `Money`.
+ * `Money`. **And bounded the same way (H2), `1e-12 < rate < 1e12`** — see
+ * `zPivotPerUnit` above and `money.ts`'s `RATE_MIN_EXCLUSIVE`.
  */
 export const zUnitsPerPivot = z
   .string()
   .regex(/^-?\d+(\.\d+)?$/, "expected a rate as a string")
   .refine((v) => dec(v).gt(0), "a rate is units per pivot and must be positive")
+  .refine(
+    rateInBounds,
+    `a rate must lie strictly between ${RATE_MIN_EXCLUSIVE} and ${RATE_MAX_EXCLUSIVE}`,
+  )
   .transform((v): UnitsPerPivot => v as UnitsPerPivot);
 
 /**

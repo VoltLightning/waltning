@@ -41,7 +41,7 @@ mobile stacks.
 
 | Reads | Writes |
 |---|---|
-| `fx_rates(base, quote, range)` | `set_manual_rate(pair, from, to, rate)` |
+| `fx_rates(base, quote, range)` | `set_manual_rate(pair, from, to, rate, overwriteManual, today?)` |
 | Sync history and per-currency coverage | `clear_manual_rate` · `force_sync` |
 | Count of estimated transactions in range, split **open / closed period** | `rerate_transactions(range)` — gated, open periods only |
 
@@ -70,6 +70,11 @@ makes RUB recoverable in one entry rather than 1,600.
   range are counted separately and require a second confirmation.
 - **§7.7** — carry-forward is capped at 10 days; the table shows the cap being
   hit rather than hiding the gap.
+- **A rate is never set for a date that has not happened yet.** The screen
+  passes `today` — the device's own day, since nothing below the client holds
+  a zone. It is optional on the operation, and an entry that omits it is
+  checked against the day its capture happened on instead, so a queue written
+  by an older build still replays.
 - The rate **table** never holds an invented figure. Estimates live on the
   transaction (§7.6).
 

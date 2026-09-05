@@ -563,6 +563,8 @@ export type PhoneCoverage = {
   /** Calendar days from `firstDate` to today, inclusive (H3). */
   calendarDays: number;
   coveragePct: number;
+  /** L7 — rows held past today, excluded from every figure above (M4). */
+  futureRows: number;
 };
 
 /** One row of S18's rate table — `listFxRates`'s answer. */
@@ -658,8 +660,16 @@ export type PhoneLedgerPort = {
   archiveCurrency: (input: ArchiveCurrencyInput, capture: PhoneCapture) => void;
   setRateSource: (input: SetRateSourceInput, capture: PhoneCapture) => void;
   setPinned: (input: SetPinnedInput, capture: PhoneCapture) => void;
-  /** §7.0 — refused by the executor while any transaction exists (S29a). */
-  changePivot: (input: ChangePivotInput, capture: PhoneCapture) => void;
+  /**
+   * §7.0 — refused by the executor while any transaction exists (S29a).
+   *
+   * **M2 — `droppedDates` is a return value, not a detail.** The rewrite drops
+   * every date it cannot re-derive against the new pivot (§7.0's *"dropped
+   * rather than left mis-quoted"*), and a run that dropped every date but one
+   * used to look exactly like a run that dropped none. Carried through the
+   * port so the screen can say so.
+   */
+  changePivot: (input: ChangePivotInput, capture: PhoneCapture) => { droppedDates: number };
   setManualRate: (
     input: SetManualRateInput,
     capture: PhoneCapture,
@@ -1252,9 +1262,10 @@ export type PhoneLedgerController = {
   setPinned: (
     draft: SetPinnedDraft,
   ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  /** M2 — `droppedDates` rides alongside the code; S17's own toast reads it. */
   changePivot: (
     draft: ChangePivotDraft,
-  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  ) => { code: CurrencyCode; droppedDates: number } | { fieldErrors: readonly FieldError[] };
   setManualRate: (
     draft: SetManualRateDraft,
   ) => { written: number; replacedManual: number } | { fieldErrors: readonly FieldError[] };
@@ -3509,8 +3520,9 @@ export function createPhoneLedger(
             { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
           );
         }
+        let droppedDates: number;
         try {
-          port.changePivot(parsed.data, runtime.capture());
+          droppedDates = port.changePivot(parsed.data, runtime.capture()).droppedDates;
         } catch (writeError) {
           const fieldError = changePivotRefusal(writeError);
           return finish(
@@ -3523,7 +3535,7 @@ export function createPhoneLedger(
         return finish(
           diagnostics,
           { scope: "client_action", action: "change_pivot" },
-          { code: parsed.data.code },
+          { code: parsed.data.code, droppedDates },
         );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {

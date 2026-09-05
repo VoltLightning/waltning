@@ -153,6 +153,53 @@ describe("the two rates are reciprocals, and the types know it (H21)", () => {
   });
 
   /**
+   * H2 — what the rate bounds actually buy, stated exactly. **Each bound
+   * guarantees the far side of the flip is storable**: above `1e-12`, the
+   * reciprocal stays under `1e12` and so fits `numeric(24,12)`; below `1e12`,
+   * the reciprocal stays above zero at twelve places and so does not trip
+   * `reciprocal`'s own throw. That is the whole claim — and it is *not* the
+   * stronger "the interval is closed under the flip", which twelve-place
+   * truncation makes false at the top: `1 / 999999999999` rounds to exactly
+   * `1e-12`, the excluded floor. Flipping once, at a boundary, is what makes
+   * that harmless; chaining flips is what this file has always refused.
+   */
+  describe("H2 — the rate bounds, and exactly what they guarantee", () => {
+    it("refuses both endpoints, and accepts everything strictly between", () => {
+      expect(money.rateInBounds(money.RATE_MIN_EXCLUSIVE)).toBe(false);
+      expect(money.rateInBounds(money.RATE_MAX_EXCLUSIVE)).toBe(false);
+      expect(money.rateInBounds("0.000000000002")).toBe(true);
+      expect(money.rateInBounds("999999999999")).toBe(true);
+      expect(money.rateInBounds("1")).toBe(true);
+    });
+
+    it.each(["0.000000000002", "0.0001", "1", "3.7556", "999999999999"])(
+      "%s flips without throwing, to a value that is neither zero nor past 1e12",
+      (value) => {
+        const rate = money.unitsPerPivot(value);
+        expect(money.rateInBounds(rate)).toBe(true);
+        const flipped = money.reciprocal(rate);
+        expect(money.dec(flipped).isZero()).toBe(false);
+        expect(money.dec(flipped).lt(money.RATE_MAX_EXCLUSIVE)).toBe(true);
+      },
+    );
+
+    // The endpoints themselves, and why each is excluded rather than allowed.
+    it("1e-12 would flip to exactly 1e12 — past what numeric(24,12) holds", () => {
+      const flipped = money.reciprocal(money.unitsPerPivot(money.RATE_MIN_EXCLUSIVE));
+      expect(money.dec(flipped).gte(money.RATE_MAX_EXCLUSIVE)).toBe(true);
+    });
+
+    // And the truncation the *weaker* claim above exists to admit: a rate
+    // just inside the ceiling flips onto the floor, which is in `numeric`'s
+    // range and out of this interval's.
+    it("a rate just under 1e12 flips onto the excluded floor, not past it", () => {
+      const flipped = money.reciprocal(money.unitsPerPivot("999999999999"));
+      expect(flipped).toBe(money.RATE_MIN_EXCLUSIVE);
+      expect(money.rateInBounds(flipped)).toBe(false);
+    });
+  });
+
+  /**
    * The failure H21 actually was: the wrong direction applied, silently, to a
    * figure that still looks like money. At 3.81 the two answers differ by
    * 14.5× — which is the order of magnitude the defect register recorded.
