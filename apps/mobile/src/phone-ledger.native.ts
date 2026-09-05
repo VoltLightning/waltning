@@ -48,6 +48,8 @@ export type PhoneLedgerStartup =
   | { status: "ready"; controller: PhoneLedgerController }
   | { status: "failed"; error: Error };
 
+let startup: PhoneLedgerStartup | null = null;
+
 /**
  * Built on first use rather than at module scope — **nothing throwable runs
  * outside this function's own `try`**, `new Directory(...)`/`.create()`
@@ -59,8 +61,6 @@ export type PhoneLedgerStartup =
  * app, and `createLocalLedgerSession` has already emitted its own
  * `ledger_startup` failure diagnostic, so nothing more is logged here.
  */
-let startup: PhoneLedgerStartup | null = null;
-
 export function startPhoneLedger(): PhoneLedgerStartup {
   if (startup) return startup;
 

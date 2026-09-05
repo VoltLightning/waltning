@@ -503,7 +503,26 @@ function start<TRun>(
           store: error.store,
           error: describeLedgerError(error),
         });
-        removeStorePair(options);
+        try {
+          removeStorePair(options);
+        } catch (removeError) {
+          // A rebuild that cannot even delete the pair must not vanish into
+          // an unrelated throw with no `ledger_startup` failure logged —
+          // the original `PreJournalStoreError` is why a delete was ever
+          // attempted, so it rides along as `cause`.
+          const message = removeError instanceof Error ? removeError.message : String(removeError);
+          const wrapped = new Error(
+            `the pre-journal rebuild could not delete the pair: ${message}`,
+            { cause: error },
+          );
+          emitLedgerDiagnostic(diagnostics, {
+            scope: "ledger_startup",
+            phase: "failure",
+            stage,
+            error: describeLedgerError(wrapped),
+          });
+          throw wrapped;
+        }
         return start(options, { rebuilt: true });
       }
 
@@ -518,7 +537,7 @@ function start<TRun>(
         options.preJournalStores === "rebuild"
           ? new Error(`the pre-journal rebuild did not take: ${error.message}`, { cause: error })
           : new Error(
-              `${error.message} The recovery in this mode is to close the app, delete ${error.path}, ${error.path}-wal and ${error.path}-shm, and the same three files for the other store beside it — the replica and the outbox are only consistent as a pair — then start the app again.`,
+              `${error.message} The recovery in this mode is to close the app, delete ${error.path}, ${error.path}-wal, ${error.path}-shm and ${error.path}.pre-migration, and the same four files for the other store beside it — the replica and the outbox are only consistent as a pair — then start the app again.`,
               { cause: error },
             );
       emitLedgerDiagnostic(diagnostics, {

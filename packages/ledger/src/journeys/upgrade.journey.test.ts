@@ -70,7 +70,7 @@ const openWithBetterSqlite: SqliteOpener<Run, Schema> = (filename) => {
 
 function sessionOptionsFor(
   paths: LedgerPaths,
-  preJournalStores: "rebuild" | "refuse" = "refuse",
+  preJournalStores: "rebuild" | "refuse",
 ): LocalLedgerSessionOptions<Run> {
   return {
     open: openWithBetterSqlite,
@@ -321,7 +321,7 @@ let fresh: {
 
 beforeAll(() => {
   const { dir, paths } = newPaths("waltning-upgrade-fresh-");
-  const session = createLocalLedgerSession(sessionOptionsFor(paths));
+  const session = createLocalLedgerSession(sessionOptionsFor(paths, "refuse"));
   session.close();
 
   fresh = {
@@ -345,7 +345,7 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
       // files (every step this fixture's version is behind the chain head,
       // in place) and then runs `recoverOnLaunch`, which is what applies the
       // pending entry Step 1 left above the watermark.
-      const session = createLocalLedgerSession(sessionOptionsFor(fixture.paths));
+      const session = createLocalLedgerSession(sessionOptionsFor(fixture.paths, "refuse"));
       try {
         const replicaCountsAfter = inspect(fixture.paths.replica, tableRowCounts);
         const outboxCountsAfter = inspect(fixture.paths.outbox, tableRowCounts);
@@ -414,7 +414,7 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
   it("leaves no `.pre-migration` copy behind once the session has opened", () => {
     const fixture = loadFixture(pair);
     try {
-      const session = createLocalLedgerSession(sessionOptionsFor(fixture.paths));
+      const session = createLocalLedgerSession(sessionOptionsFor(fixture.paths, "refuse"));
       try {
         expect(existsSync(`${fixture.paths.replica}${COPY_SUFFIX}`)).toBe(false);
         expect(existsSync(`${fixture.paths.outbox}${COPY_SUFFIX}`)).toBe(false);
@@ -641,7 +641,7 @@ describe("a store written before the journal", () => {
   it("a checksum mismatch is still a refusal, not a rebuild", () => {
     const { dir, paths } = newPaths("waltning-checksum-mismatch-");
     try {
-      const setupSession = createLocalLedgerSession(sessionOptionsFor(paths));
+      const setupSession = createLocalLedgerSession(sessionOptionsFor(paths, "refuse"));
       setupSession.close();
 
       const versionBefore = inspect(paths.replica, userVersionOf);
@@ -662,7 +662,7 @@ describe("a store written before the journal", () => {
       const events: LedgerDiagnosticEvent[] = [];
       expect(() =>
         createLocalLedgerSession({
-          ...sessionOptionsFor(paths),
+          ...sessionOptionsFor(paths, "refuse"),
           diagnostics: (event) => events.push(event),
         }),
       ).toThrow(/is not the one that ran here/);
@@ -714,6 +714,44 @@ describe("a store written before the journal", () => {
         ),
         "the seeded row was never touched, let alone deleted",
       ).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * A rebuild that cannot even delete the pair must not vanish into an
+   * unrelated throw with nothing logged — `removeStorePair`'s own failure
+   * is wrapped and reported, and the `PreJournalStoreError` that started
+   * the rebuild rides along as `cause` rather than being lost.
+   */
+  it("a rebuild that cannot delete the pair emits a failure diagnostic with the original error as cause", () => {
+    const { dir, paths } = newPaths("waltning-prejournal-delete-fails-");
+    try {
+      const raw = openRaw(paths);
+      seedPreJournalReplica(raw, 1);
+      raw.close();
+
+      const events: LedgerDiagnosticEvent[] = [];
+      expect(() =>
+        createLocalLedgerSession({
+          ...sessionOptionsFor(paths, "rebuild"),
+          removeDatabase: (path) => {
+            if (path === paths.replica) throw new Error("disk is full");
+          },
+          diagnostics: (event) => events.push(event),
+        }),
+      ).toThrow(/the pre-journal rebuild could not delete the pair: disk is full/);
+
+      const rebuilds = events.filter((event) => event.phase === "rebuild");
+      expect(rebuilds, "the rebuild was still attempted and logged").toHaveLength(1);
+
+      const failure = events.find((event) => event.phase === "failure");
+      expect(failure?.error.message).toMatch(/could not delete the pair/);
+      expect(
+        failure?.error.cause?.name,
+        "the original PreJournalStoreError rides along as cause",
+      ).toBe("PreJournalStoreError");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

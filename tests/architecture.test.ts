@@ -410,54 +410,87 @@ describe("platform-variant files are imported extension-less", () => {
     ).toEqual([]);
   });
 
+  // `default`/`async`/`abstract`/`declare` are all optional modifiers on
+  // the same handful of declaration kinds, `enum` is one more kind.
+  const EXPORT_DECL =
+    /^export\s+(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:abstract\s+)?(?:const|let|var|function|class|type|interface|enum)\s+([A-Za-z0-9_]+)/gm;
+  // A bare `export default …` (anonymous function/class, or an expression)
+  // has no declared name for `EXPORT_DECL` to capture, but the *presence*
+  // of a default export is exactly the property that has to match between a
+  // variant and its universal file — so it contributes a fixed token rather
+  // than nothing. No `g`: this is used with `.test()`, and a global regex's
+  // `lastIndex` survives across calls on the *same* instance — which this
+  // is, called once per file, many files per run. With `g` a variant's
+  // `export default` sitting after wherever the previous file's scan ended
+  // reads as absent, and reversed a real gap between two files can read as
+  // present; the "guards the guard" test below pins exactly that failure
+  // mode.
+  const EXPORT_DEFAULT = /^export\s+default\b/m;
+  // `type` is optional before the brace list, so `export type { A }` is a
+  // list export like any other, not a declaration `EXPORT_DECL` would see.
+  // `\s*` before the brace, not `\s+`: `export{ A }` needs no space either.
+  const EXPORT_LIST = /^export\s*(?:type\s+)?\{([^}]*)\}/gm;
+  const EXPORT_STAR = /^export\s*\*\s*from\s/m;
+
+  function namesFromText(rawText: string): { names: Set<string>; barrel: boolean } {
+    const text = rawText.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const names = new Set<string>();
+    for (const m of text.matchAll(EXPORT_DECL)) {
+      if (m[1]) names.add(m[1]);
+    }
+    if (EXPORT_DEFAULT.test(text)) names.add("default");
+    for (const m of text.matchAll(EXPORT_LIST)) {
+      for (const entry of (m[1] ?? "").split(",")) {
+        const name = entry
+          .trim()
+          .split(/\s+as\s+/)
+          .pop()
+          ?.trim();
+        if (name) names.add(name);
+      }
+    }
+    return { names, barrel: EXPORT_STAR.test(text) };
+  }
+
+  function exportedNamesOf(path: string): { names: Set<string>; barrel: boolean } {
+    return namesFromText(readFileSync(path, "utf8"));
+  }
+
+  /**
+   * Guards the guard, the same shape `docs-consistency.test.ts` uses for its
+   * own citation parser: a detector that only ever ran against one file per
+   * process could hide a `lastIndex` leak forever. A `g`-flagged regex used
+   * with `.test()` resumes its *next* call from wherever the *previous* one
+   * matched — so a long source with `export default` far in reads first,
+   * pushing `lastIndex` well past the end of a short source scanned right
+   * after, whose own `export default` sits at offset zero. With `g` the
+   * second call finds nothing (`lastIndex` starts beyond the whole string) —
+   * exactly the false "no default export" this test would otherwise hide
+   * forever, on the very `EXPORT_DEFAULT` instance the real test below
+   * shares across every file it scans.
+   */
+  it("the default-export detector does not leak state across files", () => {
+    const longWithDefaultFarIn = `${"const line = 1;\n".repeat(40)}export default function Foo() {}\n`;
+    const shortWithDefaultAtStart = "export default function Bar() {}\n";
+
+    expect(namesFromText(longWithDefaultFarIn).names.has("default")).toBe(true);
+    expect(namesFromText(shortWithDefaultAtStart).names.has("default")).toBe(true);
+  });
+
   /**
    * The test that would have caught #109: `platform.native.ts` was missing
    * `setLivePivotReader`, `setLivePivotSubscriber` and `displayCurrency` —
    * `platform.ts` had all three, and nothing compared the two files' exports.
    */
   it("every platform variant exports the same names as its universal file", () => {
-    // `default`/`async`/`abstract`/`declare` are all optional modifiers on
-    // the same handful of declaration kinds, `enum` is one more kind.
-    const EXPORT_DECL =
-      /^export\s+(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:abstract\s+)?(?:const|let|var|function|class|type|interface|enum)\s+([A-Za-z0-9_]+)/gm;
-    // A bare `export default …` (anonymous function/class, or an expression)
-    // has no declared name for `EXPORT_DECL` to capture, but the *presence*
-    // of a default export is exactly the property that has to match between
-    // a variant and its universal file — so it contributes a fixed token
-    // rather than nothing.
-    const EXPORT_DEFAULT = /^export\s+default\b/gm;
-    // `type` is optional before the brace list, so `export type { A }` is a
-    // list export like any other, not a declaration `EXPORT_DECL` would see.
-    const EXPORT_LIST = /^export\s+(?:type\s+)?\{([^}]*)\}/gm;
-    const EXPORT_STAR = /^export\s*\*\s*from\s/m;
-
-    function exportedNamesOf(path: string): { names: Set<string>; barrel: boolean } {
-      const text = readFileSync(path, "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^\s*\/\/.*$/gm, "");
-      const names = new Set<string>();
-      for (const m of text.matchAll(EXPORT_DECL)) {
-        if (m[1]) names.add(m[1]);
-      }
-      if (EXPORT_DEFAULT.test(text)) names.add("default");
-      for (const m of text.matchAll(EXPORT_LIST)) {
-        for (const entry of (m[1] ?? "").split(",")) {
-          const name = entry
-            .trim()
-            .split(/\s+as\s+/)
-            .pop()
-            ?.trim();
-          if (name) names.add(name);
-        }
-      }
-      return { names, barrel: EXPORT_STAR.test(text) };
-    }
-
-    const roots = ["apps/mobile/src", "packages/ui/src"];
+    // Every app plus `packages/ui/src` — the same roots the platform-sibling
+    // rule above uses, for the same reason: `apps/web` is covered the day it
+    // exists, with nothing here to update.
+    const roots = [...appRoots(), join(repoRoot, "packages/ui/src")];
     const problems: string[] = [];
     let pairsChecked = 0;
     for (const root of roots) {
-      for (const file of sourceFiles(join(repoRoot, root))) {
+      for (const file of sourceFiles(root)) {
         const match = /^(.*)\.(?:native|web)\.(ts|tsx)$/.exec(file);
         if (!match) continue;
         const [, base, ext] = match;

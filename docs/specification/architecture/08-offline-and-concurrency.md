@@ -275,9 +275,9 @@ intention:
    and a checksum of its statements, created by the migrator before the chain
    and written inside the same transaction as the step it records. Which
    steps run is then what the journal does not hold, in order, with
-   `user_version` a fast path that moves in that same transaction. Two
-   refusals and one rebuild fall out of it, each with nothing written and no
-   copy taken:
+   `user_version` a fast path that moves in that same transaction. Two of the
+   three are always refusals, and the third is the app's own choice, each
+   with nothing written and no copy taken:
 
    - **A database above version 0 with no journal** was written before the
      journal existed, and which of this build's steps it ran cannot be known
@@ -322,7 +322,7 @@ intention:
    operation belonging to sync (arc 2), triggered by sync's own decisions (an
    epoch mismatch, an explicit reset a person asked for), never by a schema
    version. A separate, forward-only, never-destructive chain for the outbox,
-   same rule.
+   same rule, same exception.
 2. **The outbox table's shape never changes with the domain.** The payload is
    opaque to it, so domain changes change *payloads*, not tables.
 3. **Upcasters, not migrations.** Pure functions `upcast(op, v, payload)` chained
