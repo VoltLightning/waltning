@@ -9,10 +9,20 @@
  * someone opens the file, at which point it is a lie of a different shape
  * than the one `it.fails` exists to catch.
  *
- * This file does two things: asserts every `it.fails(` title on the branch
- * starts with a finding id, and — on failure only — prints the full
- * inventory (file, id, title) so the assertion message itself is the list a
- * fix PR reads, rather than something a human has to go and recompute.
+ * This file's job is to guard the *scanner*, not to demand that failures
+ * exist. The live inventory is allowed to be empty — a branch where every
+ * encoded finding has been fixed is the goal, not a bug in this test — so
+ * what's asserted directly is that each shape the scanner has to recognise
+ * (a direct `it.fails(` call, the bound `finding ? it.fails : it` form, a
+ * loop-expanded template-literal title, and a mention inside a comment that
+ * must be ignored) is fed through the same regexes this file uses on real
+ * source and comes out found and classified exactly. A scan-sanity check
+ * guards the other way a count of zero could lie: that the glob actually
+ * matched at least one journey/invariant file, so a moved or renamed
+ * directory can't make the whole scan vacuous while still reporting zero.
+ * Only once those hold does the file assert every *live* `it.fails(` title
+ * starts with a finding id — printing the full inventory on failure, and
+ * saying plainly when there's nothing to print.
  *
  * The checked set is the same glob `docs-consistency.test.ts` uses for
  * `describe("journeys and invariants")` — derived from the filesystem, so a
@@ -159,11 +169,18 @@ function inventoryTable(entries: Entry[]): string {
 }
 
 describe("known failures", () => {
-  it("is scanning something", () => {
+  /**
+   * Guards the other way a live count of zero could lie: a moved or renamed
+   * journeys/invariants directory would make the glob below match nothing,
+   * and a scan over an empty file list reports zero findings whether or not
+   * any exist. This is independent of whether the branch currently carries
+   * any `it.fails(` calls at all.
+   */
+  it("scans at least one journey or invariant file", () => {
     expect(
-      allEntries.length,
-      "it.fails( calls found across journeys and invariants",
-    ).toBeGreaterThan(5);
+      journeyFiles.length,
+      "journey/invariant files matched by the glob this scan runs over",
+    ).toBeGreaterThan(0);
   });
 
   /**
@@ -181,11 +198,20 @@ describe("known failures", () => {
   });
 
   /**
-   * Guards the scan itself: template-literal titles, titles bound through a
+   * Guards the scan itself, one shape at a time: a plain direct call, a
+   * loop-expanded template-literal title, a title bound through a
    * `finding ? it.fails : it` name, and a doc-comment mention of
-   * `it.fails("…")` that never actually calls it.
+   * `it.fails("…")` that never actually calls it and must be ignored. Each
+   * sample is fed through the exact same regexes and functions the live scan
+   * uses, so these fixtures prove the scanner works whether or not the live
+   * inventory below finds anything.
    */
-  it("recognises a template-literal title, a bound-form title, and ignores a comment mention", () => {
+  it("finds and classifies a direct call, a template-literal title, a bound-form title, and ignores a comment mention", () => {
+    const directSample = stripBlockComments('it.fails("R2 H3 — a real finding", () => {});\n');
+    expect(directFindingsIn("sample", directSample).map((e) => e.title)).toEqual([
+      "R2 H3 — a real finding",
+    ]);
+
     const templateSample = stripBlockComments(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: a plain string standing in for a source file's own text — `${seed}` here is literal characters this sample is scanned for, never interpolated.
       "for (const seed of SEEDS) {\n  it.fails(`R1 H1-r4 — seed ${seed}: a template title`, () => {});\n}\nconst SEEDS = [1, 2, 3] as const;\n",
@@ -212,15 +238,16 @@ describe("known failures", () => {
     expect(directFindingsIn("sample", commentSample)).toEqual([]);
   });
 
-  it("gives every it.fails( a title that starts with a finding id", () => {
+  it("gives every live it.fails( a title that starts with a finding id, or reports there are none", () => {
     const offenders = allEntries.filter((e) => !FINDING_ID_RE.test(e.title));
-    expect(
-      offenders,
-      offenders.length === 0
-        ? "every it.fails( title starts with a finding id"
-        : `it.fails( titles with no leading finding id — the list a fix PR consults:\n${inventoryTable(
+    const message =
+      offenders.length > 0
+        ? `it.fails( titles with no leading finding id — the list a fix PR consults:\n${inventoryTable(
             offenders,
-          )}\n\nfull inventory:\n${inventoryTable(allEntries)}`,
-    ).toEqual([]);
+          )}\n\nfull inventory:\n${inventoryTable(allEntries)}`
+        : allEntries.length === 0
+          ? "no known failures — every encoded finding is fixed"
+          : "every it.fails( title starts with a finding id";
+    expect(offenders, message).toEqual([]);
   });
 });
