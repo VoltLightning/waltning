@@ -41,6 +41,13 @@ function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError)
   if (error.messageKey === "transactions.needsRate") {
     return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
   }
+  /** M1 — `openingBalance`'s own scale mirror (`create-phone-ledger.ts`). */
+  if (error.messageKey === "transactions.tooManyDecimals") {
+    return t("transactions.tooManyDecimals", {
+      currency: error.params?.["currency"] ?? "",
+      decimals: error.params?.["decimals"] ?? "",
+    });
+  }
   return error.message;
 }
 

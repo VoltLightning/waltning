@@ -12,7 +12,8 @@ import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
-import { proposeCategory } from "@waltning/core/capture/payee-memory";
+import { PROPOSAL_DISPLAY_THRESHOLD, proposeCategory } from "@waltning/core/capture/payee-memory";
+import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
@@ -31,7 +32,7 @@ import {
 } from "@waltning/ui/transactions/quick-add-composer";
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
@@ -60,8 +61,19 @@ function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError)
   if (error.messageKey === "transactions.needsRate") {
     return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
   }
+  if (error.messageKey === "transactions.tooManyDecimals") {
+    return t("transactions.tooManyDecimals", {
+      currency: error.params?.["currency"] ?? "",
+      decimals: error.params?.["decimals"] ?? "",
+    });
+  }
   if (error.messageKey === "transactions.sharedNeverBusiness") {
     return t("transactions.sharedNeverBusiness");
+  }
+  if (error.messageKey === "transactions.categoryKindMismatch") {
+    const kind =
+      error.params?.["type"] === "income" ? t("transactions.income") : t("transactions.expense");
+    return t("transactions.categoryKindMismatch", { type: kind });
   }
   return error.message;
 }
@@ -223,6 +235,13 @@ export default function QuickAdd() {
     accounts.some((account) => account.id === draft.accountId) ? (draft.accountId ?? null) : null,
   );
   const [composerCategoryId, setComposerCategoryId] = useState<string | null>(null);
+  /**
+   * H1 — S05 §8's Undo, for a proposal the draft applied on its own. Reset
+   * whenever the payee's *fold* changes (the effect beside `payeeFold`
+   * below): a different payee earns its own proposal a fresh chance, rather
+   * than inheriting a dismissal that was never about it.
+   */
+  const [categoryProposalDismissed, setCategoryProposalDismissed] = useState(false);
   const [composerPayee, setComposerPayee] = useState("");
   const [composerDate, setComposerDate] = useState<string>(today);
   const [composerNote, setComposerNote] = useState("");
@@ -256,6 +275,18 @@ export default function QuickAdd() {
   );
 
   const payeeFold = useMemo(() => fold(composerPayee), [composerPayee]);
+  /**
+   * M — reset the Undo dismissal only when the payee's *fold* actually
+   * changes, not on every keystroke. `handleComposerPayeeChange` used to
+   * reset `categoryProposalDismissed` on raw text, so a no-op edit — retype
+   * the same fold, or a keystroke `fold` collapses away (case, punctuation,
+   * whitespace) — silently revived a proposal someone had just dismissed
+   * with S05 §8's own Undo.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: payeeFold is the trigger; the effect body reads no value from it
+  useEffect(() => {
+    setCategoryProposalDismissed(false);
+  }, [payeeFold]);
   // `payeeFold` (not `composerPayee`) is both the dependency and the value
   // `proposeCategory` is given: `fold` is idempotent, so this is the same
   // match `proposeCategory`'s own internal fold would produce, and it is what
@@ -266,6 +297,44 @@ export default function QuickAdd() {
     () => proposeCategory(payeeFold, ledger.listPayeeHistory()) ?? undefined,
     [ledger, payeeFold],
   );
+  /**
+   * H1-b — the proposal's own category kind, read off the replica the same
+   * way `pickedCategory`/`proposedCategory` already gate by `kind === type`
+   * inside `QuickAddComposer` (`transactions_category_shape`, §7's own
+   * rule: a category attaches to income or expense, never either
+   * interchangeably). `proposeCategory` itself carries no `kind` — the
+   * category tree is a client concern (`payee-memory.ts`'s own doc) — so
+   * this is the one lookup that answers it.
+   */
+  const proposedCategoryKind = categoryProposal
+    ? snapshot.categories.find((category) => category.id === categoryProposal.categoryId)?.kind
+    : undefined;
+  /**
+   * H1 — a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` **is** the
+   * draft's category the moment it fills, not only a suggestion the sheet
+   * has to confirm (S05 §8). `composerCategoryId` (a real pick) always wins;
+   * short of that, the effective category is the proposal's own id, exactly
+   * the pattern `effectiveAccountId`/`lastUsedAccountId` already keeps for
+   * the account chip.
+   *
+   * H1-b — and only while the proposal's own kind still matches
+   * `composerType`. Without this, switching Expense→Income after an expense
+   * proposal auto-filled left `effectiveCategoryId` naming the stale
+   * expense leaf while the chip itself rendered empty (`QuickAddComposer`'s
+   * own `pickedCategory` already filters by kind) — Save would have sent an
+   * income row carrying an expense category, invisibly. A type switch needs
+   * no separate "clear" action: this is derived fresh from `composerType`
+   * every render, so the mismatch alone is what turns it off.
+   */
+  const categoryAutoFilled =
+    composerCategoryId === null &&
+    categoryProposal !== undefined &&
+    categoryProposal.confidence >= PROPOSAL_DISPLAY_THRESHOLD &&
+    !categoryProposalDismissed &&
+    proposedCategoryKind === composerType;
+  const effectiveCategoryId =
+    composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
+  const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);
 
   const handleKey = useCallback(
     (key: KeypadKey) =>
@@ -286,13 +355,36 @@ export default function QuickAdd() {
    * would carry `isBusiness: true` into a shared account exactly the way
    * `ScopeSegments` exists to prevent, just reached from the other chip.
    */
+  /**
+   * H2 — an account switch to a smaller scale never silently changes the
+   * typed figure. `createTransaction`'s own `transactions.tooManyDecimals`
+   * refusal (`create-phone-ledger.ts`) is what a Save would hit; this is the
+   * same fact, caught the moment the switch itself would have made it true,
+   * so the draft never carries an amount its new account cannot hold. The
+   * switch is refused outright — the account stays as it was — rather than
+   * truncating the amount on the person's behalf.
+   */
   const handleComposerAccountChange = useCallback(
     (next: string) => {
-      setComposerAccountId(next);
       const account = composerAccounts.find((candidate) => candidate.id === next);
+      const parsedAmount = parseAmount(composerAmountRaw);
+      if (
+        account !== undefined &&
+        parsedAmount !== null &&
+        money.dec(parsedAmount).decimalPlaces() > account.decimals
+      ) {
+        const message = t("transactions.tooManyDecimals", {
+          currency: account.currency,
+          decimals: String(account.decimals),
+        });
+        setFieldErrors(mapFieldErrors([{ path: "accountId", message }], KNOWN_PATHS));
+        return;
+      }
+      setFieldErrors(undefined);
+      setComposerAccountId(next);
       if (account?.ownership === "shared") setComposerIsBusiness(false);
     },
-    [composerAccounts],
+    [composerAccounts, composerAmountRaw, t],
   );
   const handlePickComposerAccount = useCallback(
     (next: string) => {
@@ -339,7 +431,9 @@ export default function QuickAdd() {
     setComposerCategoryId(next);
     setComposerCategorySheet((current) => ({ ...current, open: false }));
   }, []);
-  const handleComposerPayeeChange = useCallback((next: string) => setComposerPayee(next), []);
+  const handleComposerPayeeChange = useCallback((next: string) => {
+    setComposerPayee(next);
+  }, []);
   const handleComposerDateChange = useCallback((next: string) => setComposerDate(next), []);
   const handleComposerBusinessChange = useCallback(
     (next: boolean) => setComposerIsBusiness(next),
@@ -390,7 +484,7 @@ export default function QuickAdd() {
       type: composerType,
       amount,
       accountId: effectiveAccountId,
-      categoryId: composerCategoryId,
+      categoryId: effectiveCategoryId,
       payee: composerPayee,
       date: composerDate,
       note: composerNote,
@@ -430,7 +524,7 @@ export default function QuickAdd() {
     router.dismissTo("/");
   }, [
     composerAmountRaw,
-    composerCategoryId,
+    effectiveCategoryId,
     composerCounterpartyId,
     composerCounterpartyRole,
     composerDate,
@@ -550,8 +644,23 @@ export default function QuickAdd() {
           accountMachineFilled={accountMachineFilled}
           onOpenAccountPicker={handleOpenComposerAccountPicker}
           categories={snapshot.categories}
-          categoryId={composerCategoryId}
-          {...(categoryProposal === undefined ? {} : { categoryProposal })}
+          categoryId={effectiveCategoryId}
+          /*
+           * M — withheld once dismissed, not only while `categoryAutoFilled`
+           * is false for some other reason: the composer's own "shown, not
+           * yet applied" state (S05 §8's amber, pre-`categoryAutoFilled`)
+           * cannot otherwise tell "never applied" apart from "Undo just
+           * dismissed it", and showed the proposal machine-filled again the
+           * instant Undo ran, at or above §14's threshold, defeating Undo
+           * outright. `CategorySheet` below still gets the proposal
+           * regardless — a deliberate open of the sheet is not the passive
+           * auto-fill Undo exists to reverse.
+           */
+          {...(categoryProposal === undefined || categoryProposalDismissed
+            ? {}
+            : { categoryProposal })}
+          categoryAutoFilled={categoryAutoFilled}
+          onUndoCategory={handleUndoCategory}
           onOpenCategoryPicker={handleComposerOpenCategoryPicker}
           payee={composerPayee}
           onPayeeChange={handleComposerPayeeChange}

@@ -984,3 +984,52 @@ describe("every component builds its styles the same way", () => {
     expect(offenders, "tokens.ts and theme/roles.ts hold these").toEqual([]);
   });
 });
+
+/**
+ * L1 — `create-phone-ledger.ts` used to assert `phase: "success"` by hand at
+ * every one of its own controllers' return sites; 43 of them sat immediately
+ * before a `return { fieldErrors }` and reported a refusal as a success. The
+ * fix (`finish()`, the same file) derives the phase from the outcome once,
+ * in one place — this is the rule that keeps a new call site from
+ * reintroducing the bug by hand-writing the literal again. `phase: "start"`
+ * and `phase: "failure"` carry no equivalent risk (a caught exception is
+ * unambiguously a failure) and are left alone.
+ */
+describe("a refusal is never reported as a success", () => {
+  it("create-phone-ledger.ts derives phase through finish(), never by a bare literal", () => {
+    const file = join(repoRoot, "packages/client/src/ledger/create-phone-ledger.ts");
+    const lines = readFileSync(file, "utf8").split("\n");
+
+    const finishStart = lines.findIndex((line) => line.includes("function finish<T>("));
+    expect(finishStart, "the finish() helper must exist").toBeGreaterThan(-1);
+    // The next top-level function declaration closes finish()'s own body —
+    // a non-vacuity anchor rather than counting braces, the same reason
+    // every other check in this file roots itself at real source structure.
+    const finishEnd = lines.findIndex((line, i) => i > finishStart && line.startsWith("function "));
+    expect(finishEnd, "finish() must be followed by another top-level function").toBeGreaterThan(
+      finishStart,
+    );
+
+    // L5 — matched anywhere in the line, not against the line's entire
+    // trimmed content: an exact-line check misses the identical literal
+    // sharing a line with other content (`{ phase: "success", operation }`,
+    // one object per line) or spaced differently (`phase:"success"`,
+    // `phase :  "success"`) — none of which is a different rule, only a
+    // different formatting of the same reintroduced bug. A comment line
+    // (`* …`, `// …` — this file's own JSDoc and line-comment style
+    // throughout) is excluded: this section's own prose *names* the literal
+    // it replaced, which is not a call site to flag.
+    const PHASE_SUCCESS_LITERAL = /phase\s*:\s*"success"/;
+    const offenders = lines
+      .map((line, i) => ({ trimmed: line.trim(), index: i }))
+      .filter(({ trimmed }) => !trimmed.startsWith("*") && !trimmed.startsWith("//"))
+      .filter(({ trimmed }) => PHASE_SUCCESS_LITERAL.test(trimmed))
+      .filter(({ index }) => index < finishStart || index >= finishEnd)
+      .map((o) => o.index + 1);
+
+    expect(
+      offenders,
+      'a bare phase: "success" literal outside finish() reintroduces L1 — every controller returns its outcome through finish() instead',
+    ).toEqual([]);
+  });
+});

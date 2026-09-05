@@ -277,6 +277,11 @@ export function SettleSheet({
   const intoLabel = sign < 0 ? t("transactions.from") : t("counterparties.into");
 
   const dischargesError = fieldErrors?.byField["discharges.currency"]?.[0];
+  // H — `settle_debt`'s own H2 mirror (`create-phone-ledger.ts`) refuses
+  // `discharges.amount` past the picked currency's own scale; `SETTLE_KNOWN_
+  // PATHS` already routes it into `byField`, but nothing here ever read it —
+  // the refusal fired and nothing on screen said so.
+  const dischargesAmountError = fieldErrors?.byField["discharges.amount"]?.[0];
   const accountError = fieldErrors?.byField["accountId"]?.[0];
   const amountError = fieldErrors?.byField["amount"]?.[0];
   // H1 — `settleDebtRefusal` (`create-phone-ledger.ts`) never returns
@@ -365,6 +370,9 @@ export function SettleSheet({
             onPress={handleActivateDischarges}
             active={activeField === "discharges"}
           />
+        )}
+        {dischargesAmountError === undefined ? null : (
+          <Text style={styles.fieldError}>{dischargesAmountError}</Text>
         )}
 
         <Chip

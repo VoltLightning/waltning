@@ -158,9 +158,38 @@ export const en = {
      * simply not valued yet, so the wording says "saved", never "failed".
      */
     deferredNoRate: "Saved — it will be valued once an exchange rate for {{currency}} is known.",
+    /**
+     * H2 — `createTransactionInput`'s `amountOriginal` cannot know the
+     * account's currency, only the controller can: refused here, on
+     * `amountOriginal`, rather than let a figure past the decimal places its
+     * own currency holds.
+     */
+    tooManyDecimals: "{{currency}} holds {{decimals}} decimal places — this amount has more.",
+    /**
+     * H1 — a fee that fails `parseAmount` (`"1,234.56"`, `"1.2.3"`, `"12."`,
+     * `"abc"`) used to be dropped silently and the transfer saved with no
+     * fee at all. Named onto the field it refuses, the same as
+     * `tooManyDecimals` above.
+     */
+    invalidAmount: "Enter a valid amount.",
     expense: "Expense",
     income: "Income",
     category: "Category",
+    /**
+     * H1-a — §14's display threshold, below which a proposal is a
+     * suggestion, never a value: the category chip's own placeholder while
+     * `categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD`, in the
+     * placeholder's own ink (never machine-filled) rather than the chip
+     * silently carrying the guess.
+     */
+    categorySuggested: "Suggested: {{name}}",
+    /**
+     * H1-b — `categories.kind` disagrees with `type` (income/expense). The
+     * controller refuses this before the write (`transactions_category_
+     * kind_matches_type`'s own guarantee), the same rule a type switch after
+     * an auto-fill exists to prevent from ever reaching here.
+     */
+    categoryKindMismatch: "This category doesn't match {{type}}.",
     noCategory: "No category",
     more: "More",
     date: "Date",
@@ -418,6 +447,13 @@ export const en = {
     suggested: "Suggested",
     /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */
     lowConfidence: "Low confidence — check before using.",
+    /**
+     * §14, P2's own trail — the caption under a category chip that filled
+     * itself from a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD`, so the
+     * value reads as sourced rather than as a black box (S05 §8). Paired with
+     * `states.undo` on the same row.
+     */
+    fromHistory: "From your history: {{payee}}",
     noMatchTitle: "No matching category",
     noMatchBody: 'Nothing here matches "{{query}}".',
     /** The create row's group chooser, shown when no group chip narrowed the sheet first. */

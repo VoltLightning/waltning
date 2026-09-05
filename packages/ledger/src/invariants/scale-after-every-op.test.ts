@@ -1,7 +1,7 @@
 /**
  * Proves: SPEC.md §6.5 ("Integrity constraints" — `currencies_decimals_sane`,
  * `decimals BETWEEN 0 AND 8`, the rule this script scans every op for).
- * Findings: R4 H2, R4 C1-r3, R4 M1-r3.
+ * Findings: R4 H2, R4 C1-r3 — fixed by #118, R4 M1-r3.
  *
  * **Why `createAccount` carries the finding here.** The header's three ids
  * name candidate defects this fixed script can surface, not three separate
@@ -144,7 +144,7 @@ function setup(): Journey {
 }
 
 describe("scale after every op — SPEC.md §7.2", () => {
-  it.fails("R4 C1-r3 — create_account's opening_balance carries no currency-scale check (op 15 of the fixed script)", () => {
+  it("R4 C1-r3 — create_account's opening_balance carries no currency-scale check (op 15 of the fixed script)", () => {
     const j = setup();
     try {
       let n = 0;

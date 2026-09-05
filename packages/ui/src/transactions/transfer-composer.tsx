@@ -187,11 +187,13 @@ export function TransferComposer({
   // screen states while typing. `FX Cost` (§12.2) still reports them apart;
   // this is a capture-time convenience, not a second definition of "total".
   //
-  // C2 — `fee` is raw typed text, and `money.toMoney` throws on anything that
-  // is not a number (a letter, mid-typed punctuation). `parseAmount` is the
-  // one place that boundary is crossed; `null` on a non-empty field is
-  // *unparsable*, not *absent*, so the total omits it (never a mid-typed
-  // fraction of a fee) and the field shows its own caption instead.
+  // C2/H1 — `fee` is raw typed text, and `money.toMoney` throws on anything
+  // that is not a number (a letter, mid-typed punctuation) — `parseAmount`
+  // is the one place that boundary is crossed. `null` on a non-empty field
+  // is *unparsable*, not *absent*, so the total omits it (never a mid-typed
+  // fraction of a fee) and the field shows its own caption instead — the
+  // screen's own `saveDisabled`/`fieldErrors` are what actually refuse the
+  // malformed figure.
   const parsedFee = fee === "" ? null : parseAmount(fee);
   const feeAmount = parsedFee === null ? undefined : money.toMoney(parsedFee);
   const feeUnparsable = fee !== "" && parsedFee === null;

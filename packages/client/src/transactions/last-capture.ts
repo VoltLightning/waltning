@@ -44,6 +44,10 @@ function parseLastCapture(raw: string): LastCapture | null {
   const { accountId, at } = value as Record<string, unknown>;
   if (typeof accountId !== "string" || accountId === "") return null;
   if (!Number.isFinite(at)) return null;
+  // M2 — a capture stamped in the future is not a fact this device can trust
+  // (a clock set forward when it was stored, then corrected). Read here,
+  // once, rather than threaded through `parse`'s own fixed signature.
+  if ((at as number) > Date.now()) return null;
   return { accountId, at: at as number };
 }
 
@@ -85,7 +89,12 @@ export function useLastUsedAccount(
   const snapshot: DevicePreferenceSnapshot<LastCapture> = useDevicePreference(pref);
   const value = snapshot.value;
   if (!value) return null;
-  if (now - value.at >= LAST_USED_WINDOW_MS) return null;
+  // M2 — `age` must be both recent *and* non-negative: a bare `>= WINDOW`
+  // check lets a backwards clock (`now` moved behind `value.at`) produce a
+  // negative age, which reads as "just captured" and reopens a window that
+  // should have stayed closed.
+  const age = now - value.at;
+  if (!(age >= 0 && age < LAST_USED_WINDOW_MS)) return null;
   const account = accounts.find((candidate) => candidate.id === value.accountId);
   if (!account?.capturable) return null;
   return account.id;

@@ -865,16 +865,22 @@ describe("settle_debt", () => {
       counterpartyId: NINA,
     });
 
+    // R4 — the refusal below is decided entirely by the *pre-existing*
+    // balance `debtRow` just inserted (dust, raw, bypassing the scale
+    // check `create_transaction` itself now carries); this settle's own
+    // `amount`/`discharges.amount` never factors into "nothing to settle",
+    // so it is scripted at EUR's own valid 2dp scale rather than the
+    // fixture's original `0.001`.
     expect(() =>
       write(settleDebtExecutor, {
         id: "f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0",
         counterpartyId: NINA,
         accountId: ACCOUNT,
         date: "2026-08-04",
-        amount: "0.001",
+        amount: "0.01",
         currency: "EUR",
         type: "expense",
-        discharges: { currency: "EUR", amount: "0.001" },
+        discharges: { currency: "EUR", amount: "0.01" },
       }),
     ).toThrow(/nothing to settle/);
   });
@@ -884,12 +890,29 @@ describe("settle_debt", () => {
    * agrees with `settleResidualDirection`: a residual that rounds to `0,00`
    * reads as settled everywhere, never a flipped direction here and
    * "settled" on screen.
+   *
+   * C2 — this must be an actual over-settlement in raw terms (paying more
+   * than the debt, flipping the balance's sign), or the rounding this test
+   * claims to cover is never exercised: a debt of `0.014` settled by `0.01`
+   * (the earlier script here) is *under*-settled — the residual (`0.004`)
+   * never crosses zero, so `overSettled` reads `false` for a reason this
+   * test does not test. Here the debt is `0.006` and the settle pays `0.01`:
+   * raw residual `-0.004` (paid more than owed, sign flipped — a genuine
+   * over-settlement) which rounds to `0.00` at EUR's own 2dp — `overSettled`
+   * is `false` only because of that rounding. Mutation-proven: replacing
+   * `money.round(residual, decimals)` with the raw `residual` in the
+   * executor flips this to `true`, and reverting restores `false`.
    */
   it("does not report over-settlement when the residual rounds to zero", () => {
+    // The dust lives in the *debt* row, inserted raw (bypassing
+    // `create_transaction`'s own scale check, the same way a real
+    // FX-converted lend can fold to sub-cent precision at 8dp); the settle
+    // itself pays a clean, currency-valid `0.01` against it, genuinely
+    // over-paying the `0.006` owed.
     debtRow({
       id: "11111111-2222-4333-8444-555555555501",
       type: "expense",
-      amount: "0.01",
+      amount: "0.006",
       counterpartyId: NINA,
     });
 
@@ -898,12 +921,17 @@ describe("settle_debt", () => {
       counterpartyId: NINA,
       accountId: ACCOUNT,
       date: "2026-08-04",
-      amount: "0.014",
+      amount: "0.01",
       currency: "EUR",
       type: "income",
-      discharges: { currency: "EUR", amount: "0.014" },
+      discharges: { currency: "EUR", amount: "0.01" },
     });
 
+    // Raw residual is `-0.004` — a genuine sign flip (paid more than owed) —
+    // and rounds to zero at EUR's own 2dp; `cmp` reads that rounded `-0.00`
+    // as equal to zero, which is the only reason `overSettled` comes out
+    // `false` here.
+    expect(money.round(result.row.residual, 2)).toBe("-0.00");
     expect(result.row.overSettled).toBe(false);
   });
 

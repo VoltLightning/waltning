@@ -8,6 +8,7 @@ import {
   type CreateAccountDraft,
   createPhoneLedger,
   type PhoneAccount,
+  type PhoneCategory,
   type PhoneCategoryNode,
   type PhoneCounterparty,
   type PhoneCounterpartyBalance,
@@ -136,6 +137,7 @@ function harness(
   options?: {
     categoryTree?: readonly PhoneFullCategoryNode[];
     categoryUsage?: ReadonlyMap<Id<"categories">, number>;
+    categories?: readonly PhoneCategory[];
   },
 ) {
   let accounts: PhoneAccount[] = [];
@@ -306,7 +308,7 @@ function harness(
     listCurrencies: () => CURRENCIES,
     listGroups: () => groups,
     listRecent: (limit) => recent.slice(0, limit),
-    listCategories: () => [],
+    listCategories: () => options?.categories ?? [],
     listCategoryTree: () => [],
     listFullCategoryTree: () => fullCategoryTree,
     listCategoryUsage: () => categoryUsage,
@@ -445,6 +447,43 @@ describe("phone ledger controller", () => {
       memo: "",
       isBusiness: false,
     });
+  });
+
+  /**
+   * M1 — `accounts.opening_balance` had no client mirror at all — the
+   * sharpest of the four columns `accounts_balance_scale_matches_currency`
+   * covers (`0011_transaction_scale_and_category_kind.sql`), since it
+   * shifts every balance computed from it, forever.
+   */
+  it("refuses an opening balance past the chosen currency's own scale", () => {
+    const { controller, createAccount } = harness();
+
+    const result = controller.createAccount({
+      ...minimalDraft("Bank A · PLN", PLN),
+      openingBalance: "48.905",
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "openingBalance",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+    expect(createAccount).not.toHaveBeenCalled();
+  });
+
+  it("admits an opening balance at exactly the chosen currency's own scale", () => {
+    const { controller, createAccount } = harness();
+
+    const result = controller.createAccount({
+      ...minimalDraft("Bank A · PLN", PLN),
+      openingBalance: "48.90",
+    });
+
+    expect("id" in result).toBe(true);
+    expect(createAccount).toHaveBeenCalledOnce();
   });
 
   /**
@@ -699,6 +738,74 @@ describe("phone ledger controller", () => {
     expect(controller.getSnapshot().recent).toEqual([]);
   });
 
+  /**
+   * L4 — a local `LocalRefusal` (`@waltning/ledger/scale.ts`'s own thrown
+   * shape — `column`/`params` fields directly on the error, matched
+   * structurally rather than by importing the class: this controller never
+   * depends on `@waltning/ledger`, by design) routes to the field its own
+   * `column` names, not by parsing `error.message` — the message here
+   * carries the operation's own prefix (`"create_transaction: …"`), exactly
+   * the shape a `^`-anchored regex against Postgres's own text could never
+   * have matched, which was the actual bug this replaces.
+   */
+  it.each([
+    ["amount_original", "amountOriginal"],
+    ["to_amount", "toAmount"],
+    ["fee", "fee"],
+  ] as const)("routes a local scale refusal on %s to the %s field", (column, path) => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    createTransaction.mockImplementationOnce(() => {
+      throw Object.assign(
+        new Error(
+          `create_transaction: ${column} 10.125 holds more decimal places than PLN allows (2)`,
+        ),
+        { name: "LocalRefusal", column, params: { currency: "PLN", decimals: "2" } },
+      );
+    });
+
+    const result = controller.createTransaction(expenseDraft(accountId));
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path,
+        message: expect.stringContaining(column),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+  });
+
+  /**
+   * L4 — the other path: a server envelope (`DomainError`'s own
+   * `ErrorDetails.column`, `apps/api/src/common/pg-errors.ts`'s M3 fix)
+   * reaching this same controller shaped as `{ details: { column } }`,
+   * carrying no `params` of its own (the server envelope has none to give) —
+   * routed by the same `columnOf` read, falling back to the bare message
+   * with no interpolation.
+   */
+  it("routes a server envelope's own column to the same field, with no params to interpolate", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    createTransaction.mockImplementationOnce(() => {
+      throw Object.assign(
+        new Error("amount_original 10.125 holds more decimal places than PLN allows (2)"),
+        {
+          details: { column: "amount_original" },
+        },
+      );
+    });
+
+    const result = controller.createTransaction(expenseDraft(accountId));
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "amountOriginal",
+        message: expect.stringContaining("amount_original"),
+      },
+    ]);
+  });
+
   it.each(["0", "-1"])("rejects the non-positive amount %s before writing", (amount) => {
     const { controller, createTransaction } = harness();
     const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
@@ -732,6 +839,198 @@ describe("phone ledger controller", () => {
     expect("deferred" in result && result.deferred).toBe(true);
     // Not a refusal: nothing named `fieldErrors` on this outcome.
     expect(result).not.toHaveProperty("fieldErrors");
+  });
+
+  /**
+   * M4 — `money.toMoney` calls `Decimal`'s own constructor, which throws
+   * `DecimalError` on a malformed string rather than returning one. This
+   * controller used to call it directly on `draft.amount`, so a malformed
+   * figure threw out of `createTransaction` instead of refusing.
+   */
+  it("refuses a malformed amount through fieldErrors, never throws", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    expect(() => controller.createTransaction(expenseDraft(accountId, "abc"))).not.toThrow();
+
+    const result = controller.createTransaction(expenseDraft(accountId, "abc"));
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "amountOriginal", message: expect.any(String) },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * H2 — `createTransactionInput` cannot know the account's currency, only
+   * the controller has both in view. PLN holds 2 decimal places here; a
+   * third digit is refused on `amountOriginal` before the write, never
+   * silently truncated or stored past the account's own scale.
+   */
+  it("refuses an amount with more fractional digits than the account's currency holds", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction(expenseDraft(accountId, "10.125"));
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "amountOriginal",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: PLN, decimals: "2" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("accepts an amount at exactly the account's own scale", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction(expenseDraft(accountId, "10.12"));
+    expect("id" in result).toBe(true);
+    expect(createTransaction).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * H1-b — `createTransactionInput` has no category tree in view; the
+   * controller does. Mirrors `transactions_category_kind_matches_type`
+   * (`0011_transaction_scale_and_category_kind.sql`), the Postgres guarantee
+   * this refusal exists so a write is never the first place it is caught.
+   */
+  it("refuses a categoryId whose kind disagrees with the transaction's type (H1-b)", () => {
+    const expenseCategory: PhoneCategory = {
+      id: id<"categories">("66666666-6666-4666-8666-666666666666"),
+      name: "Eating out",
+      kind: "expense",
+    };
+    const { controller, createTransaction } = harness(undefined, {
+      categories: [expenseCategory],
+    });
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      type: "income",
+      categoryId: expenseCategory.id,
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "categoryId",
+        message: expect.stringContaining("income"),
+        messageKey: "transactions.categoryKindMismatch",
+        params: { type: "income" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("admits a categoryId whose kind matches the transaction's type", () => {
+    const expenseCategory: PhoneCategory = {
+      id: id<"categories">("66666666-6666-4666-8666-666666666666"),
+      name: "Eating out",
+      kind: "expense",
+    };
+    const { controller, createTransaction } = harness(undefined, {
+      categories: [expenseCategory],
+    });
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      categoryId: expenseCategory.id,
+    });
+    expect("id" in result).toBe(true);
+    expect(createTransaction).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * M — the H2 guarantee above checked `amountOriginal` only; a transfer's
+   * destination leg (§7.5) can carry the same defect in its own currency,
+   * matching `assert_amount_scale`'s own extension
+   * (`0011_transaction_scale_and_category_kind.sql`).
+   */
+  it("refuses toAmount past the destination account's own scale (M)", () => {
+    const { controller, createTransaction } = harness();
+    const fromId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const toId = idOf(controller.createAccount(minimalDraft("Bank B · BYN", BYN)));
+
+    const result = controller.createTransaction({
+      type: "transfer",
+      amount: "10",
+      accountId: fromId,
+      categoryId: null,
+      date: "2026-08-23",
+      note: "",
+      isBusiness: false,
+      counterpartyId: null,
+      counterpartyRole: null,
+      toAccountId: toId,
+      toAmount: "10.125",
+      toCurrency: BYN,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "toAmount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: BYN, decimals: "2" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("admits toAmount at exactly the destination account's own scale", () => {
+    const { controller, createTransaction } = harness();
+    const fromId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const toId = idOf(controller.createAccount(minimalDraft("Bank B · BYN", BYN)));
+
+    const result = controller.createTransaction({
+      type: "transfer",
+      amount: "10",
+      accountId: fromId,
+      categoryId: null,
+      date: "2026-08-23",
+      note: "",
+      isBusiness: false,
+      counterpartyId: null,
+      counterpartyRole: null,
+      toAccountId: toId,
+      toAmount: "10.12",
+      toCurrency: BYN,
+    });
+
+    expect("id" in result).toBe(true);
+    expect(createTransaction).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * M — `fee` (S31 §9.1) carries no currency column of its own; it is
+   * always the row's own `currency`, so it is checked against the *source*
+   * account's own scale, matching the extended `assert_amount_scale`
+   * trigger (`0011_transaction_scale_and_category_kind.sql`).
+   */
+  it("refuses fee past the account's own scale (M)", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({ ...expenseDraft(accountId), fee: "0.125" });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "fee",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: PLN, decimals: "2" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("admits fee at exactly the account's own scale", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({ ...expenseDraft(accountId), fee: "0.12" });
+
+    expect("id" in result).toBe(true);
+    expect(createTransaction).toHaveBeenCalledOnce();
   });
 
   /**
@@ -888,6 +1187,28 @@ describe("phone ledger controller", () => {
     expect(serialized).not.toContain("10.00000000");
   });
 
+  /**
+   * L — a refusal is not a success: `phase` used to read "success" on every
+   * one of `createTransaction`'s own early returns, including the two H2/
+   * H1-b checks this file's `it`s above pin — reporting a validation bounce
+   * the same way a completed write would.
+   */
+  it("reports a refusal's own phase as failure, not success", () => {
+    const diagnostics: object[] = [];
+    const { controller } = harness((event) => diagnostics.push(event));
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    controller.createTransaction(expenseDraft(accountId, "10.125"));
+
+    const createTransactionEvents = diagnostics.filter(
+      (event) => "action" in event && event.action === "create_transaction",
+    );
+    expect(createTransactionEvents).toContainEqual(expect.objectContaining({ phase: "failure" }));
+    expect(createTransactionEvents).not.toContainEqual(
+      expect.objectContaining({ phase: "success" }),
+    );
+  });
+
   describe("updateAccount", () => {
     it("patches only what changed and refreshes the list", () => {
       const { controller, updateAccount } = harness();
@@ -957,6 +1278,48 @@ describe("phone ledger controller", () => {
       expect("fieldErrors" in result).toBe(true);
       expect(updateAccount).not.toHaveBeenCalled();
     });
+
+    /**
+     * M1 — `accounts.opening_balance` had no client mirror at all: an
+     * account's own opening figure past its own currency's scale used to
+     * reach the write unrefused (`accounts_balance_scale_matches_currency`,
+     * `0011_transaction_scale_and_category_kind.sql`, is the guarantee this
+     * mirrors).
+     */
+    it("refuses an opening balance past the account's own currency scale", () => {
+      const { controller, updateAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.updateAccount({
+        id: accountId,
+        version: 1,
+        patch: { openingBalance: "48.905" },
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        {
+          path: "openingBalance",
+          message: expect.stringContaining("decimal places"),
+          messageKey: "transactions.tooManyDecimals",
+          params: { currency: "PLN", decimals: "2" },
+        },
+      ]);
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    it("admits an opening balance at exactly the account's own currency scale", () => {
+      const { controller, updateAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.updateAccount({
+        id: accountId,
+        version: 1,
+        patch: { openingBalance: "48.90" },
+      });
+
+      expect("id" in result).toBe(true);
+      expect(updateAccount).toHaveBeenCalledOnce();
+    });
   });
 
   describe("archiveAccount", () => {
@@ -1003,6 +1366,35 @@ describe("phone ledger controller", () => {
       });
       expect("id" in result).toBe(true);
       expect(controller.getSnapshot().accounts[0]?.expectedBalance).toBe(money.toMoney("42.20"));
+    });
+
+    /**
+     * M1 — `observedBalance` is what this write puts onto
+     * `accounts.expected_balance`; the same
+     * `accounts_balance_scale_matches_currency` trigger that column shares
+     * with `opening_balance` had no client mirror here either.
+     */
+    it("refuses an observed balance past the account's own currency scale", () => {
+      const { controller, reconcileAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.reconcileAccount({
+        accountId,
+        observedBalance: "42.205",
+        asOf: "2026-08-23",
+        note: "",
+        categoryId: null,
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        {
+          path: "observedBalance",
+          message: expect.stringContaining("decimal places"),
+          messageKey: "transactions.tooManyDecimals",
+          params: { currency: "PLN", decimals: "2" },
+        },
+      ]);
+      expect(reconcileAccount).not.toHaveBeenCalled();
     });
   });
 
@@ -1621,13 +2013,56 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       },
     ]);
   });
+
+  /**
+   * H3 — `transaction_lines.amount` carries no currency of its own; a split
+   * past the *parent* transaction's own scale (PLN, two decimal places
+   * here) used to reach the write unrefused — the client had no mirror of
+   * `transaction_lines_amount_scale_matches_currency`
+   * (`0011_transaction_scale_and_category_kind.sql`) at all.
+   */
+  it("refuses a split line past its parent transaction's own currency scale", () => {
+    const { controller, setTransactionLines } = detailHarness();
+
+    const result = controller.setTransactionLines(TXN, 1, [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        description: "Groceries",
+        amount: "4.905",
+      },
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        description: "Fuel",
+        amount: "43.995",
+      },
+    ]);
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "lines.0.amount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+      {
+        path: "lines.1.amount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+    expect(setTransactionLines).not.toHaveBeenCalled();
+  });
 });
 
 describe("phone ledger controller — counterparties and settlement", () => {
   const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
   const MAREK = id<"counterparties">("22222222-2222-4222-8222-222222222222");
 
-  function counterpartyHarness(overrides: Partial<PhoneLedgerPort> = {}) {
+  function counterpartyHarness(
+    overrides: Partial<PhoneLedgerPort> = {},
+    diagnostics?: (event: object) => void,
+  ) {
     let counterparties: PhoneCounterparty[] = [
       {
         id: NINA,
@@ -1835,6 +2270,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
         offsetMinutes: 120,
         at: new Date("2026-08-23T10:00:00Z"),
       }),
+      ...(diagnostics ? { diagnostics } : {}),
       id: <Table extends IdTable>() => id<Table>("00000000-0000-4000-8000-000000000099"),
     });
 
@@ -2039,6 +2475,264 @@ describe("phone ledger controller — counterparties and settlement", () => {
       },
     ]);
     expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /**
+   * M — the H2 guarantee (`createTransaction`) checked `amountOriginal`
+   * only; `discharges.amount` values `debt_amount` (S14's coalesce) and can
+   * carry the same defect, past `discharges.currency`'s own scale.
+   */
+  it("settleDebt: refuses discharges.amount past its own currency's scale", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "PLN",
+      dischargesCurrency: "PLN",
+      dischargesAmount: "50.125",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "discharges.amount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /**
+   * M — `settle_debt`'s own `amount` (the "Into"/"From" leg, in the
+   * account's own currency) had no client mirror at all — only
+   * `discharges.amount` did (the test above). Same guarantee, mirrored the
+   * same way `createTransaction`'s own `amountOriginal` guard is.
+   */
+  it("settleDebt: refuses amount past the account currency's own scale", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50.125",
+      currency: "PLN",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "amount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      },
+    ]);
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /**
+   * M4 — `money.toMoney` calls `Decimal`'s own constructor, which throws
+   * `DecimalError` on a malformed string rather than returning one. This
+   * controller used to call it directly on `draft.amount`, so a malformed
+   * figure threw out of `settleDebt` instead of refusing.
+   */
+  it("settleDebt: a malformed amount refuses through fieldErrors, never throws", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    expect(() =>
+      controller.settleDebt({
+        counterpartyId: NINA,
+        accountId: "33333333-3333-4333-8333-333333333333",
+        date: "2026-08-04",
+        amount: "abc",
+        currency: "PLN",
+        dischargesCurrency: "PLN",
+        dischargesAmount: "50",
+        note: "",
+        categoryId: null,
+      }),
+    ).not.toThrow();
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "abc",
+      currency: "PLN",
+      dischargesCurrency: "PLN",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+    expect("fieldErrors" in result && result.fieldErrors.some((e) => e.path === "amount")).toBe(
+      true,
+    );
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /** M4 — same guard, the "Discharges" leg (`draft.dischargesAmount`). */
+  it("settleDebt: a malformed discharges.amount refuses through fieldErrors, never throws", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "PLN",
+      dischargesCurrency: "PLN",
+      dischargesAmount: "abc",
+      note: "",
+      categoryId: null,
+    });
+    expect(
+      "fieldErrors" in result && result.fieldErrors.some((e) => e.path === "discharges.amount"),
+    ).toBe(true);
+    expect(settleDebt).not.toHaveBeenCalled();
+  });
+
+  /**
+   * L — every early return here used to report `phase: "success"`, the same
+   * defect `createTransaction`'s own diagnostics test pins above: a refusal
+   * is not a success.
+   */
+  it("settleDebt: reports a refusal's own phase as failure, not success", () => {
+    const diagnostics: object[] = [];
+    const { controller } = counterpartyHarness(
+      {
+        listAccounts: () => [
+          account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+        ],
+        listCurrencies: () => [
+          {
+            code: PLN,
+            name: "Polish Złoty",
+            symbol: "zł",
+            decimals: 2,
+            capturable: true,
+            isPivot: true,
+          },
+        ],
+      },
+      (event) => diagnostics.push(event),
+    );
+
+    controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50.125",
+      currency: "PLN",
+      dischargesCurrency: "EUR",
+      dischargesAmount: "50",
+      note: "",
+      categoryId: null,
+    });
+
+    const settleDebtEvents = diagnostics.filter(
+      (event) => "action" in event && event.action === "settle_debt",
+    );
+    expect(settleDebtEvents).toContainEqual(expect.objectContaining({ phase: "failure" }));
+    expect(settleDebtEvents).not.toContainEqual(expect.objectContaining({ phase: "success" }));
+  });
+
+  it("settleDebt: admits discharges.amount at exactly its own currency's scale", () => {
+    const { controller, settleDebt } = counterpartyHarness({
+      listAccounts: () => [
+        account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
+      ],
+      listCurrencies: () => [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
+    });
+
+    const result = controller.settleDebt({
+      counterpartyId: NINA,
+      accountId: "33333333-3333-4333-8333-333333333333",
+      date: "2026-08-04",
+      amount: "50",
+      currency: "PLN",
+      dischargesCurrency: "PLN",
+      dischargesAmount: "50.12",
+      note: "",
+      categoryId: null,
+    });
+
+    expect("id" in result).toBe(true);
+    expect(settleDebt).toHaveBeenCalledOnce();
   });
 
   it("settle_debt: the residual and overSettled come from the port, never derived locally", () => {

@@ -91,14 +91,38 @@ export function parseAmount(input: string): string | null {
   const separators = (trimmed.match(/[.,]/g) ?? []).length;
   if (separators > 1) return null;
 
-  const normalized = trimmed.replace(",", ".");
-  if (!/^-?\d*\.?\d*$/.test(normalized)) return null;
-  if (!/\d/.test(normalized)) return null;
-  // M3 — "5," normalizes to "5.", a shape `zMoney` refuses (its regex
+  const commaNormalized = trimmed.replace(",", ".");
+  if (!/^-?\d*\.?\d*$/.test(commaNormalized)) return null;
+  if (!/\d/.test(commaNormalized)) return null;
+  // M4 — a leading separator (",5" → ".5") is a real, complete number as
+  // typed — the same way "5," is still mid-entry is not the same shape as
+  // this one — but `.5` is not: `zMoney`'s regex requires a digit before the
+  // mark once one is written at all (`^-?\d+(\.\d+)?$`), so this was
+  // returned as a value and refused downstream instead of accepted here.
+  // `"0" + "."` is the same number, in the shape the contract already takes.
+  const normalized = commaNormalized.startsWith(".")
+    ? `0${commaNormalized}`
+    : commaNormalized.startsWith("-.")
+      ? `-0${commaNormalized.slice(1)}`
+      : commaNormalized;
+  // M3/M1 — "5," normalizes to "5.", a shape `zMoney` refuses (its regex
   // requires a digit after the mark once one is typed). A trailing
   // separator is still mid-entry, the same "not yet a number" state as "."
   // alone, and belongs on the same side of the refusal.
   if (normalized.endsWith(".")) return null;
+  // M1 — `zMoney`'s own refine (`dec(v).abs().lt("1000000000000")`): at most
+  // twelve integer digits. Past that the schema would refuse the write
+  // anyway; catching it here keeps Save disabled instead of enabled on a
+  // figure the account never held.
+  //
+  // L — counted by *significance*, not by character: `zMoney`'s refine
+  // compares the numeric value, so "0000000000001" (thirteen characters, one
+  // significant digit) is nowhere near the cap it describes — a bare
+  // `.length` would have refused it anyway, disabling Save on a figure the
+  // schema was always going to accept.
+  const integerPart = normalized.replace("-", "").split(".")[0] ?? "";
+  const significantIntegerDigits = integerPart.replace(/^0+(?=\d)/, "").length;
+  if (significantIntegerDigits > 12) return null;
 
   return normalized;
 }

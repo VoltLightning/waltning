@@ -200,6 +200,22 @@ describe("create_account materialises and records its intent", () => {
     expect(entry?.opVersion).toBe(1);
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(result.seq);
   });
+
+  /**
+   * H2 — `validate` refuses this before the outbox entry commits, not only
+   * inside `apply`: an `opening_balance` past PLN's own two decimal places
+   * used to queue an entry `apply` would then refuse — a stuck entry with
+   * no fix, since nothing will ever apply it. No entry means no orphan.
+   */
+  it("refuses an opening_balance past the chosen currency's own scale before queuing an entry (H2)", () => {
+    expect(() =>
+      write(createAccountExecutor, { ...accountInput(ACCOUNT_NEW), openingBalance: "1.005" }),
+    ).toThrow(/holds more decimal places/);
+    expect(entries()).toHaveLength(0);
+    expect(
+      s.ledger.replica.db.select().from(accounts).where(eq(accounts.id, ACCOUNT_NEW)).all(),
+    ).toHaveLength(0);
+  });
 });
 
 describe("create_transaction materialises and records its intent", () => {

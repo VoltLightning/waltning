@@ -22,6 +22,7 @@ import {
 } from "@waltning/core/registry/inputs";
 import { and, desc, eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
+import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -58,6 +59,12 @@ export const createTransactionExecutor = defineLocalExecutor<
    */
   mints: (input) => [input.id],
 
+  // R4 H1-r4 — read-only, run before the outbox commits (`LocalExecutor`'s
+  // own doc): a fee (or either amount) past its own currency's scale is
+  // refused the same way `zero destination`/`negative fee` already are,
+  // never queued as an intent nothing will ever apply.
+  validate: (input, tx) => assertTransactionScale(input, tx),
+
   apply: (input, tx) => insertTransaction(input, tx),
 });
 
@@ -74,6 +81,20 @@ export function insertTransaction(
   tx: ReplicaTx,
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
+  // R4 re-review — restored. L10 had dropped this call on the theory that
+  // `create_transaction`'s own `validate` already ran it, pre-outbox, on this
+  // exact `input`, so a second call here would check nothing new — true only
+  // while `validate` actually runs. `write.ts`'s own M3 ruling swallows
+  // anything `validate` throws that is not a `LocalRefusal` (a driver fault,
+  // a bug in the check itself) and lets the write proceed regardless, so a
+  // `validate` that faults for a non-refusal reason must not leave the write
+  // itself unchecked — the same reason `create-account.executor.ts`'s own
+  // `insertAccount` and `set-transaction-lines.executor.ts`'s own
+  // `replaceLines` each keep their check in both places. `settle_debt` and
+  // `supersede_transaction` carry the identical duplication for their own
+  // inputs; `reconcile_account` checks `observedBalance` itself, which bounds
+  // the derived `difference` this function receives from it.
+  assertTransactionScale(input, tx);
 
   /**
    * **`to_amount` is copied from the input and is never derived.** §14.6:
@@ -166,6 +187,34 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
     throw new LocalRefusal(
       "create_transaction: a business transaction cannot move into a shared account (SPEC.md §6.7)",
     );
+  }
+}
+
+/**
+ * `SPEC.md` §7.2, the local mirror of `assert_amount_scale`
+ * (`0011_transaction_scale_and_category_kind.sql`): `amount_original`,
+ * `to_amount` and `fee` each fit their own currency's declared decimals.
+ * `debt_amount`/`debt_currency` are not this executor's — `settle_debt`
+ * (`counterparties/settle-debt.executor.ts`) is the only writer of those two
+ * columns, and carries the identical check for them.
+ *
+ * **Exported.** `insertTransaction` no longer runs this itself (L10 — it
+ * used to, which made `create_transaction`'s own `validate` and `apply`
+ * check the identical `input` twice); each caller now runs it on the value
+ * that is actually theirs to check. `create_transaction`'s own `validate`
+ * (below) covers its call; `settle_debt`'s own `validate` covers its;
+ * `reconcile_account` checks its *derived* `difference` explicitly, right
+ * before calling `insertTransaction`; `supersede_transaction` — the one
+ * caller with no `validate` of its own and a genuinely new, unvalidated
+ * `replacement` — calls this directly for the same reason.
+ */
+export function assertTransactionScale(input: CreateTransactionInput, tx: ReplicaTx): void {
+  assertMoneyScale(tx, input.amountOriginal, input.currency, "create_transaction: amount_original");
+  if (input.toAmount !== undefined && input.toCurrency !== undefined) {
+    assertMoneyScale(tx, input.toAmount, input.toCurrency, "create_transaction: to_amount");
+  }
+  if (input.fee !== undefined) {
+    assertMoneyScale(tx, input.fee, input.currency, "create_transaction: fee");
   }
 }
 

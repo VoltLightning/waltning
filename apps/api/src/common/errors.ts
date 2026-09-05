@@ -59,6 +59,14 @@ export type ErrorDetails = {
   fieldErrors?: readonly { path: string; message: string }[];
   /** The database constraint that refused it, when one did. */
   constraint?: string;
+  /**
+   * M3 — the column the constraint actually named, for a `validation` code
+   * a single `constraint` cannot disambiguate on its own (WA016's
+   * `assert_amount_scale` refuses `amount_original`, `to_amount`,
+   * `debt_amount` and `fee` alike). A client routes a refusal to the right
+   * field from this rather than parsing the message.
+   */
+  column?: string;
   /** The period that is closed, for `period_closed`. */
   period?: string;
   /** Versions involved, for `stale_version` and `unsupported_version`. */

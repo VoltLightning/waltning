@@ -86,12 +86,22 @@ export const ReadyToSave: Story = {
   args: { raw: "48,90", accountId: "account-a" },
 };
 
-/** D2's proposal, confident — the category chip fills machine (P2) before anyone taps it. */
+/**
+ * H1, D2's proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` — it **is** the
+ * draft's category, not only a suggestion the sheet has to confirm: the chip
+ * fills machine (P2), and the trail underneath names where it came from with
+ * an Undo (S05 §8). `categoryId` and `categoryAutoFilled` are the screen's
+ * own computed state, not something a person tapped — the same pairing
+ * `quick-add-screen.tsx` derives from `composerCategoryId` and the proposal.
+ */
 export const WithProposal: Story = {
   args: {
     raw: "48,90",
     accountId: "account-a",
     payee: "Corner shop",
+    categoryId: "cat-eating-out",
+    categoryAutoFilled: true,
+    onUndoCategory: noop,
     categoryProposal: {
       categoryId: "cat-eating-out",
       confidence: 0.92,
@@ -102,9 +112,12 @@ export const WithProposal: Story = {
 };
 
 /**
- * Below §14's `PROPOSAL_DISPLAY_THRESHOLD` (0.85) — still shown, still
- * machine-filled, but with `categories.lowConfidence` under the chip too, the
- * one thing that visibly separates this from `WithProposal` above.
+ * Below §14's `PROPOSAL_DISPLAY_THRESHOLD` (0.85) — H1-a: never machine-filled,
+ * because that would claim more confidence than the proposal itself carries.
+ * The chip's own placeholder names the suggestion instead
+ * (`transactions.categorySuggested`), in the placeholder's own ink, with
+ * `categories.lowConfidence` underneath — no accent border, no Undo, nothing
+ * an applied pick would show.
  */
 export const LowConfidence: Story = {
   args: {
@@ -115,7 +128,7 @@ export const LowConfidence: Story = {
       categoryId: "cat-eating-out",
       confidence: 0.62,
       basis: "neighbours",
-      neighbours: [{ payee: "Corner shop", similarity: 0.4 }],
+      neighbours: [{ payee: "Corner shop", similarity: 0.4, categoryId: "cat-eating-out" }],
     },
   },
 };
@@ -135,13 +148,13 @@ export const WithCounterparty: Story = {
   args: {
     raw: "48,90",
     accountId: "account-a",
-    counterparties: [{ id: "cp-a", name: "Costa" }],
+    counterparties: [{ id: "cp-a", name: "Corner Café" }],
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole("button", { name: "+ Person" }));
     await userEvent.click(await canvas.findByRole("button", { name: "Counterparty" }));
-    await userEvent.click(await canvas.findByRole("radio", { name: "Costa" }));
+    await userEvent.click(await canvas.findByRole("radio", { name: "Corner Café" }));
     await expect(canvas.findByRole("radiogroup", { name: "Role" })).resolves.toBeDefined();
   },
 };

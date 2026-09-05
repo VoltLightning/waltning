@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
+import { zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
 
 describe("zMoney", () => {
   it("accepts the largest numeric(20,8) magnitude", () => {
@@ -13,6 +13,52 @@ describe("zMoney", () => {
       expect(zMoney.safeParse(value).success).toBe(false);
     },
   );
+});
+
+describe("zFee (M2)", () => {
+  it("accepts a positive fee", () => {
+    expect(zFee.parse("5.00")).toBe("5.00000000");
+  });
+
+  it("refuses a negative fee — a fee is never a rebate wearing the wrong sign", () => {
+    const result = zFee.safeParse("-5.00");
+    expect(result.success).toBe(false);
+    expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+      "greater than zero",
+    );
+  });
+
+  /**
+   * M2 — `transactions_fee_positive` is `fee > 0`, strictly: "no fee" is
+   * `NULL`, never a typed `0`. A caller meaning "no fee" omits the field.
+   */
+  it("refuses a zero fee", () => {
+    const result = zFee.safeParse("0");
+    expect(result.success).toBe(false);
+    expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+      "greater than zero",
+    );
+  });
+
+  /**
+   * M2 — a genuinely negative fee that rounds to `"-0.00000000"` at storage
+   * scale used to read as non-negative (`dec("-0.00000000").gte(0)` is
+   * `true`), admitting it. Checked on the original string, before rounding.
+   */
+  it("refuses a fee that is negative before rounding, even once rounding would erase the sign", () => {
+    const result = zFee.safeParse("-0.0000000001");
+    expect(result.success).toBe(false);
+  });
+
+  /**
+   * M2 — the opposite direction: a tiny positive fee that rounds *down* to
+   * exactly zero at `numeric(20,8)` is "no fee" wearing a fee's own field,
+   * checked again after `zMoney`'s own rounding.
+   */
+  it("refuses a fee that rounds down to zero at storage scale", () => {
+    const result = zFee.safeParse("0.000000001");
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("zUnitsPerPivot", () => {

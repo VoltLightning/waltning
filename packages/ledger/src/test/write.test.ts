@@ -591,6 +591,92 @@ describe("a failure between the two commits keeps the intent", () => {
   });
 });
 
+/** H2/M3 — an executor whose `validate` throws whatever the test hands it. */
+const validateThrows = (error: unknown) =>
+  defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+    operation: "validate_throws",
+    opVersion: 1,
+    input: CREATE_TRANSACTION,
+    mints: () => [],
+    validate: () => {
+      throw error;
+    },
+    apply: (input, tx) => {
+      const [row] = tx
+        .insert(transactions)
+        .values({
+          id: id<"transactions">(input.id) as Id<"transactions">,
+          date: accountingDate("2026-03-12"),
+          type: "expense",
+          accountId: id<"accounts">(input.account_id),
+          amountOriginal: money.toMoney(input.amount_original),
+          currency: currencyCode("PLN"),
+          fxRate: money.pivotPerUnit("1.000000000000"),
+        })
+        .returning({ id: transactions.id })
+        .all();
+      if (!row) throw new Error("no row returned");
+      return row;
+    },
+  });
+
+describe("M3 — what `validate` is allowed to break", () => {
+  it("a plain Error from validate never loses the capture — the entry commits and the write applies", () => {
+    const executor = validateThrows(new Error("the driver hiccuped"));
+    const registry = localRegistry<Tx>([executor]);
+
+    const result = writeLocally(s.ledger, {
+      executor,
+      registry,
+      input: input("txn-1"),
+      capture,
+    });
+
+    expect(result.row.id).toBe("txn-1");
+    expect(entries()).toHaveLength(1);
+    expect(rows()).toHaveLength(1);
+  });
+
+  it("a LocalRefusal from validate leaves no entry and no row", () => {
+    const executor = validateThrows(new LocalRefusal("refused", { column: "amount_original" }));
+    const registry = localRegistry<Tx>([executor]);
+
+    expect(() =>
+      writeLocally(s.ledger, { executor, registry, input: input("txn-1"), capture }),
+    ).toThrow(LocalRefusal);
+
+    expect(entries()).toHaveLength(0);
+    expect(rows()).toHaveLength(0);
+  });
+
+  it("reports start and failure diagnostics on the validate boundary for a refusal, and does not report success", () => {
+    const executor = validateThrows(new LocalRefusal("refused"));
+    const registry = localRegistry<Tx>([executor]);
+    const diagnostics: object[] = [];
+
+    expect(() =>
+      writeLocally(s.ledger, {
+        executor,
+        registry,
+        input: input("txn-1"),
+        capture,
+        diagnostics: (event: object) => diagnostics.push(event),
+      }),
+    ).toThrow(LocalRefusal);
+
+    expect(diagnostics).toEqual([
+      { scope: "local_write", phase: "start", boundary: "validate", operation: "validate_throws" },
+      {
+        scope: "local_write",
+        phase: "failure",
+        boundary: "validate",
+        operation: "validate_throws",
+        error: expect.objectContaining({ name: "LocalRefusal", message: "refused" }),
+      },
+    ]);
+  });
+});
+
 describe("the two stores are two files", () => {
   it("keeps the outbox out of the replica, and the ledger out of the outbox", () => {
     const tablesIn = (db: Database.Database) =>

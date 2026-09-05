@@ -194,6 +194,17 @@ function resolveSettleFieldErrorMessage(t: ReturnType<typeof useT>, error: Field
   if (error.messageKey === "transactions.needsRate") {
     return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
   }
+  // M — the same guard `quick-add-screen.tsx`'s own `resolveFieldErrorMessage`
+  // resolves for `createTransaction`'s `amountOriginal`/`toAmount`: this is
+  // `settleDebt`'s own `discharges.amount` past `discharges.currency`'s own
+  // decimal scale (`0011_transaction_scale_and_category_kind.sql`'s
+  // `debt_amount`/`debt_currency` pair).
+  if (error.messageKey === "transactions.tooManyDecimals") {
+    return t("transactions.tooManyDecimals", {
+      currency: error.params?.["currency"] ?? "",
+      decimals: error.params?.["decimals"] ?? "",
+    });
+  }
   // C1 — an executor refusal `settleDebtRefusal` does not recognise now
   // carries `common.couldNotSave` rather than `null`, so it never falls
   // through to the raw English `refusalFromThrow` would otherwise print.
@@ -383,15 +394,58 @@ export default function CounterpartyDetail() {
   }, []);
   const handleDismissSettledToast = useCallback(() => setSettledToastMessage(null), []);
   const handleDismissUnmergeToast = useCallback(() => setUnmergeToast(false), []);
+  /**
+   * L6 — a keystroke clears a stale refusal rather than leaving it stand
+   * against a figure that has since changed. `handleDischargesCurrencyChange`
+   * (below) is the one place this screen sets `settleFieldErrors`, and its
+   * own refusal is exactly the shape this closes: switch the discharges
+   * currency to a smaller scale, refused, then type a now-valid figure —
+   * without this, the stale caption stayed on screen against a figure that
+   * would no longer trip it.
+   */
   const handleSettleKey = useCallback(
     (key: KeypadKey) => {
       if (settleActiveField === "amount") {
         setSettleAmountRaw((current) => applyKey(current, key, settleAccountDecimals));
+        setSettleFieldErrors(undefined);
         return;
       }
       setSettleDischargesRaw((current) => applyKey(current, key, settleDischargesDecimals));
+      setSettleFieldErrors(undefined);
     },
     [settleActiveField, settleAccountDecimals, settleDischargesDecimals],
+  );
+  /**
+   * H — the same guard `quick-add-screen.tsx`'s own `handleComposerAccountChange`
+   * states for an account switch (H2): a currency switch to a smaller scale
+   * never silently carries an already-typed figure past what it can hold.
+   * `settleDebt`'s own H2 mirror (`create-phone-ledger.ts`) is what a Settle
+   * tap would hit; this is the same fact, caught the moment the switch
+   * itself would have made it true. The switch is refused outright — the
+   * discharges currency stays as it was — rather than truncating the raw on
+   * the person's behalf.
+   */
+  const handleDischargesCurrencyChange = useCallback(
+    (next: string) => {
+      const decimals =
+        snapshot.currencies.find((currency) => currency.code === next)?.decimals ??
+        group?.balances.find((row) => row.currency === next)?.decimals ??
+        2;
+      const parsedDischarges = parseAmount(settleDischargesRaw);
+      if (parsedDischarges !== null && money.dec(parsedDischarges).decimalPlaces() > decimals) {
+        const message = t("transactions.tooManyDecimals", {
+          currency: next,
+          decimals: String(decimals),
+        });
+        setSettleFieldErrors(
+          mapFieldErrors([{ path: "discharges.amount", message }], SETTLE_KNOWN_PATHS),
+        );
+        return;
+      }
+      setSettleFieldErrors(undefined);
+      setSettleDischargesCurrency(next);
+    },
+    [snapshot.currencies, group, settleDischargesRaw, t],
   );
   const handleSettleSave = useCallback(() => {
     if (!rawId || settleAccountId === null || settleDischargesCurrency === null) return;
@@ -611,7 +665,7 @@ export default function CounterpartyDetail() {
         accounts={settleAccounts}
         amountRaw={settleAmountRaw}
         dischargesCurrency={settleDischargesCurrency}
-        onDischargesCurrencyChange={setSettleDischargesCurrency}
+        onDischargesCurrencyChange={handleDischargesCurrencyChange}
         dischargesRaw={settleDischargesRaw}
         activeField={settleActiveField}
         onActiveFieldChange={setSettleActiveField}

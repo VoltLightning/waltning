@@ -58,8 +58,37 @@ describe("proposeCategory", () => {
       categoryId: "groceries",
       confidence: 1,
       basis: "neighbours",
-      neighbours: [{ payee: "Zeta Mart Deluxe", similarity: expect.any(Number) }],
+      neighbours: [
+        { payee: "Zeta Mart Deluxe", similarity: expect.any(Number), categoryId: "groceries" },
+      ],
     });
+  });
+
+  /**
+   * M — the reviewer's own case: a caption naming "where the pick came
+   * from" must name a neighbour that actually sits in the *winning*
+   * category. The closest neighbour by similarity alone ("Coffee Hous",
+   * missing one letter) sits in the *losing* `groceries` category — `dining`
+   * wins the plurality (2 votes to 1) even though its own closest neighbour
+   * ranks second and third overall. `neighbours` now carries each entry's
+   * own `categoryId`, so a caller can find the closest neighbour *of the
+   * winning category* rather than defaulting to `neighbours[0]`.
+   */
+  it("carries each neighbour's own categoryId, so a caller can skip past a losing rank-0 (M)", () => {
+    const history = [
+      row("Coffee Hous", "groceries", "2026-01-01"),
+      row("Coffee Shop", "dining", "2026-01-02"),
+      row("Coffee Stop", "dining", "2026-01-03"),
+    ];
+
+    const result = proposeCategory("Coffee House", history, 3);
+
+    expect(result?.categoryId).toBe("dining");
+    // The closest neighbour overall is the *groceries* row — the caption
+    // must not name it for a `dining` pick.
+    expect(result?.neighbours[0]).toMatchObject({ payee: "Coffee Hous", categoryId: "groceries" });
+    const winningNeighbour = result?.neighbours.find((n) => n.categoryId === result.categoryId);
+    expect(winningNeighbour?.payee).not.toBe("Coffee Hous");
   });
 
   it("returns null when no prior payee clears the similarity floor", () => {

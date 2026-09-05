@@ -85,9 +85,22 @@ export type QuickAddComposerProps = {
   /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
   onOpenAccountPicker: () => void;
   categories: readonly QuickAddComposerCategory[];
+  /**
+   * The draft's effective category — the screen's own pick, or (H1) a
+   * proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` it has applied on the
+   * draft's behalf. `categoryAutoFilled` is what tells the two apart.
+   */
   categoryId: string | null;
   /** D2's own proposal, already computed by the screen — this composer never proposes. */
   categoryProposal?: CategoryProposal;
+  /**
+   * True only while `categoryId` is the proposal's own id, applied without a
+   * tap — never true for a category a person actually picked, even one that
+   * happens to match the proposal (H1, S05 §8's P2 trail).
+   */
+  categoryAutoFilled?: boolean;
+  /** P2's Undo — clears the automatic pick, shown only while `categoryAutoFilled`. */
+  onUndoCategory?: () => void;
   onOpenCategoryPicker: () => void;
   payee: string;
   onPayeeChange: (payee: string) => void;
@@ -130,6 +143,8 @@ export function QuickAddComposer({
   categories,
   categoryId,
   categoryProposal,
+  categoryAutoFilled = false,
+  onUndoCategory,
   onOpenCategoryPicker,
   payee,
   onPayeeChange,
@@ -178,20 +193,73 @@ export function QuickAddComposer({
           (category) => category.id === categoryProposal.categoryId && category.kind === type,
         )
       : undefined;
-  const categoryValue = pickedCategory?.name ?? proposedCategory?.name;
-  const categoryMachineFilled = pickedCategory === undefined && proposedCategory !== undefined;
   /**
-   * §14's display threshold — below it, the chip alone (already amber, P2's
-   * trail marker on every machine-filled value) is not enough: a guess this
-   * unsure needs the words, not only the tint (P5). At or above, the plain
-   * machine-filled chip already says "something chose this" and a proposal
-   * that confident is not the thing P4's amber exists to flag.
+   * H1-a — below §14's display threshold, a guess this unsure never reads as
+   * a *value*: `categoryAutoFilled` already implies `pickedCategory !==
+   * undefined` (the screen never applies a proposal outside the categories
+   * list), so `proposedCategory` is only ever defined in the "shown, not yet
+   * applied" state this flag names.
    */
-  const categoryLowConfidence =
-    categoryMachineFilled &&
+  const proposedBelowThreshold =
+    proposedCategory !== undefined &&
     categoryProposal !== undefined &&
     categoryProposal !== null &&
     categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD;
+  const categoryValue =
+    pickedCategory?.name ?? (proposedBelowThreshold ? undefined : proposedCategory?.name);
+  /**
+   * Amber (P2) either while an at-or-above-threshold proposal is shown but
+   * not applied, or (H1) while `categoryId` itself is the applied proposal —
+   * `categoryAutoFilled` names the second case, since `pickedCategory` finds
+   * an applied proposal by id exactly the way it finds a real pick. Never
+   * for a below-threshold proposal (H1-a) — that one is a suggestion, not a
+   * filled field, and machine-filled would claim more confidence than the
+   * proposal itself carries.
+   */
+  const categoryMachineFilled =
+    categoryAutoFilled ||
+    (pickedCategory === undefined && proposedCategory !== undefined && !proposedBelowThreshold);
+  /**
+   * §14's display threshold — below it, the chip's own placeholder already
+   * carries the words (`categoryPlaceholder` below, H1-a); this caption
+   * states the same fact again, matching `CategorySheet`'s own D2 row.
+   */
+  const categoryLowConfidence = proposedBelowThreshold;
+  /**
+   * H1-a — the chip's placeholder itself, replaced by the suggestion below
+   * the display threshold rather than left generic: `Chip` renders whatever
+   * this names in the placeholder's own ink (never the filled one) the
+   * moment `categoryValue` is unset.
+   */
+  const categoryPlaceholder =
+    proposedBelowThreshold && proposedCategory !== undefined
+      ? t("transactions.categorySuggested", { name: proposedCategory.name })
+      : t("transactions.category");
+  /**
+   * H1, S05 §8's P2 trail — the caption and Undo for an applied proposal.
+   * Named from the proposal's own neighbour, not the typed `payee`: an
+   * applied proposal can win on a fold match against a differently-spelled
+   * history row (S05 §8's own worked example), and the trail is naming
+   * *where the pick came from*, not echoing what was just typed. An exact
+   * match's own neighbour list is empty (`payee-memory.ts`), but an exact
+   * match is by definition the same fold as `payee`, so the fallback reads
+   * identically either way.
+   *
+   * M — the *closest neighbour of the winning category*, not `neighbours[0]`
+   * unconditionally: the closest neighbour overall can sit in a different,
+   * losing category (`payee-memory.ts`'s own reviewer case) and still rank
+   * first by similarity alone — naming it would claim the pick came from a
+   * row that never voted for it. `neighbours` is already sorted by
+   * similarity (`proposeCategory`), so the first entry whose own `categoryId`
+   * matches the proposal's is the closest one that actually is.
+   */
+  const categoryFromHistory = !categoryAutoFilled
+    ? undefined
+    : t("categories.fromHistory", {
+        payee:
+          categoryProposal?.neighbours.find((n) => n.categoryId === categoryProposal.categoryId)
+            ?.payee ?? payee,
+      });
 
   const notePreview =
     note.trim() === ""
@@ -263,7 +331,7 @@ export function QuickAddComposer({
           machineFilled={accountMachineFilled && selectedAccount !== undefined}
         />
         <Chip
-          placeholder={t("transactions.category")}
+          placeholder={categoryPlaceholder}
           value={categoryValue}
           onPress={onOpenCategoryPicker}
           machineFilled={categoryMachineFilled}
@@ -305,6 +373,14 @@ export function QuickAddComposer({
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
       {!categoryLowConfidence ? null : (
         <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
+      )}
+      {categoryFromHistory === undefined ? null : (
+        <View style={styles.trailRow}>
+          <Text style={styles.trailCaption}>{categoryFromHistory}</Text>
+          {onUndoCategory === undefined ? null : (
+            <Button label={t("states.undo")} onPress={onUndoCategory} variant="ghost" size="sm" />
+          )}
+        </View>
       )}
       {payeeError === undefined ? null : <Text style={styles.fieldError}>{payeeError}</Text>}
       {dateError === undefined ? null : <Text style={styles.fieldError}>{dateError}</Text>}
@@ -583,6 +659,9 @@ const useStyles = makeStyles((theme) => ({
   lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
   /** §14.6's own caption — a fact about now, not an error (`quick-add-form.tsx`'s `blocked`, matched). */
   needsRate: { color: theme.textMuted, ...text.ui("caption") },
+  /** H1, S05 §8's P2 trail row — the caption and Undo beside it. */
+  trailRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   counterparty: { gap: space.x3 },
   typeToggle: {
     flexDirection: "row",

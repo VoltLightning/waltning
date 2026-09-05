@@ -74,8 +74,27 @@ export const dec = (v: Money | string | number | Decimal): Decimal => new Decima
  * and comes back at a known scale. So the brand is never merely asserted —
  * every `Money` in the system has been parsed at least once.
  */
-export const toMoney = (v: Decimal | Money | string | number, scale = 8): Money =>
-  dec(v).toFixed(scale) as Money;
+/**
+ * L2 — exponent notation, refused rather than silently normalised.
+ *
+ * `Decimal` accepts `"1e3"` as readily as `"1000"`, so `toMoney("1e3")` used
+ * to return `1000.00000000` without complaint — past `zMoney`'s own regex
+ * (`^-?\d+(\.\d+)?$`), which already refuses the same string. A caller that
+ * reaches `toMoney` directly (`createTransaction`'s controller does, on
+ * `draft.amount`, before any schema sees it) got a laxer rule than the one
+ * every schema-validated path enforces, for the same "decimal string"
+ * concept. Checked on the raw string, before `Decimal` ever parses it —
+ * `dec(v).toFixed(scale)` below always *emits* fixed notation regardless of
+ * magnitude, so this is purely an input-side refusal.
+ */
+const EXPONENT_NOTATION = /e/i;
+
+export const toMoney = (v: Decimal | Money | string | number, scale = 8): Money => {
+  if (typeof v === "string" && EXPONENT_NOTATION.test(v)) {
+    throw new Error(`toMoney: expected a decimal amount, not exponent notation: ${v}`);
+  }
+  return dec(v).toFixed(scale) as Money;
+};
 
 /**
  * The additive identity, at storage scale — a fallback figure for a screen

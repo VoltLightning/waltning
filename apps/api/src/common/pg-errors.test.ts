@@ -237,6 +237,68 @@ describe("every other guard is identifiable", () => {
 
     await s.sql`DELETE FROM transactions`;
   });
+
+  /** H2 — `0011_transaction_scale_and_category_kind.sql`. PLN holds two decimal places. */
+  it("WA016 · an amount holds more decimals than its own currency", async () => {
+    const error = await refusal(
+      `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
+       VALUES ('2026-01-01', 'expense', '${ACC_PLN}', 10.125, 'PLN', 1)`,
+    );
+    expect(error.details?.constraint).toBe(TRIGGER.AMOUNT_SCALE);
+    // M3 — the column rides the envelope too, so a client can route the
+    // refusal to the right field without parsing the message.
+    expect(error.details?.column).toBe("amount_original");
+  });
+
+  /**
+   * M3 — the concrete bug: WA016 is shared by several triggers, and the map
+   * used to hard-wire every one of them to `TRIGGER.AMOUNT_SCALE`
+   * (`transactions_amount_scale_matches_currency`) regardless of which
+   * table actually refused. `debt_reassignments_amount_scale_matches_currency`
+   * is a different trigger on a different table; it must report itself.
+   */
+  it("WA016 · a debt reassignment's own trigger reports its own name, not transactions'", async () => {
+    await s.sql`INSERT INTO counterparties (name, kind) VALUES ('Placeholder Nina', 'person')`;
+    await s.sql`INSERT INTO counterparties (name, kind) VALUES ('Placeholder Marek', 'person')`;
+    const [nina] = await s.sql<{ id: string }[]>`
+      SELECT id FROM counterparties WHERE name = 'Placeholder Nina'`;
+    const [marek] = await s.sql<{ id: string }[]>`
+      SELECT id FROM counterparties WHERE name = 'Placeholder Marek'`;
+
+    const error = await refusal(
+      `INSERT INTO debt_reassignments (date, from_counterparty_id, to_counterparty_id, currency, amount)
+       VALUES ('2026-01-01', '${nina?.id}', '${marek?.id}', 'PLN', 10.125)`,
+    );
+    expect(error.details?.constraint).not.toBe(TRIGGER.AMOUNT_SCALE);
+    expect(error.details?.constraint).toBe("debt_reassignments_amount_scale_matches_currency");
+    expect(error.details?.column).toBe("amount");
+  });
+
+  /** C1 — `0011_transaction_scale_and_category_kind.sql`. Lowering under a row that would no longer fit. */
+  it("WA018 · a currency's own decimals cannot be lowered under an existing row", async () => {
+    await s.sql`INSERT INTO currencies (code, name, decimals) VALUES ('XAA', 'Placeholder', 8)`;
+    await s.sql`
+      INSERT INTO accounts (name, currency, ownership) VALUES ('Placeholder XAA', 'XAA', 'own')`;
+    const [account] = await s.sql<{ id: string }[]>`
+      SELECT id FROM accounts WHERE name = 'Placeholder XAA'`;
+    if (!account) throw new Error("fixture insert did not return a row");
+    await s.sql`
+      INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
+      VALUES ('2026-01-01', 'expense', ${account.id}::uuid, 48.90512340, 'XAA', 1)`;
+
+    const error = await refusal(`UPDATE currencies SET decimals = 2 WHERE code = 'XAA'`);
+    expect(error.details?.constraint).toBe(TRIGGER.CURRENCY_DECIMALS_SAFE);
+    expect(error.code).toBe("validation");
+  });
+
+  /** H1-b — `0011_transaction_scale_and_category_kind.sql`. `CAT_LEAF` is `expense`. */
+  it("WA017 · a category's own kind disagrees with the transaction's type", async () => {
+    const error = await refusal(
+      `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, category_id)
+       VALUES ('2026-01-01', 'income', '${ACC_OWN}', 10, 'USD', 1, '${CAT_LEAF}')`,
+    );
+    expect(error.details?.constraint).toBe(TRIGGER.CATEGORY_KIND_MATCHES_TYPE);
+  });
 });
 
 describe("Postgres's own refusals", () => {

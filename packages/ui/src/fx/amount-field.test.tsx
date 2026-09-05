@@ -52,6 +52,49 @@ describe("parseAmount — comma decimal", () => {
     expect(parseAmount("-5,")).toBeNull();
   });
 
+  it("refuses a trailing separator with nothing typed after it (M1)", () => {
+    // "48," and "0," are not yet amounts — `zMoney`'s own regex requires at
+    // least one digit after the point, and Save must agree before the write
+    // ever sees them.
+    expect(parseAmount("48,")).toBeNull();
+    expect(parseAmount("0,")).toBeNull();
+    expect(parseAmount("48.")).toBeNull();
+  });
+
+  /**
+   * M4 — a leading separator (",5") normalized to ".5", a shape `zMoney`
+   * refuses (its regex requires a digit *before* the mark, `^-?\d+(\.\d+)?$`).
+   * Unlike a trailing separator, this is a complete, real number as typed —
+   * it belongs on the accepted side of the refusal, in the shape the
+   * contract already takes.
+   */
+  it("accepts a leading separator, filling in the whole part (M4)", () => {
+    expect(parseAmount(",5")).toBe("0.5");
+    expect(parseAmount(".5")).toBe("0.5");
+    expect(parseAmount("-,5")).toBe("-0.5");
+    expect(parseAmount("-.5")).toBe("-0.5");
+  });
+
+  it("refuses more than twelve integer digits, matching zMoney's own refine (M1)", () => {
+    expect(parseAmount("999999999999")).toBe("999999999999"); // twelve nines — the boundary itself
+    expect(parseAmount("1000000000000")).toBeNull(); // thirteen digits
+    expect(parseAmount("1234567890123,45")).toBeNull();
+  });
+
+  /**
+   * L — the twelve-digit cap counts by *significance*, not by character:
+   * `zMoney`'s own refine compares the numeric value, so a run of leading
+   * zeros must not count toward the cap the way `.length` alone would.
+   */
+  it("does not count leading zeros toward the twelve-digit cap (L)", () => {
+    expect(parseAmount("0000000000001")).toBe("0000000000001"); // 1 significant digit, 13 characters
+    expect(parseAmount("00000000000000000001,50")).toBe("00000000000000000001.50");
+    // Twelve significant digits, padded with a leading zero — still admitted.
+    expect(parseAmount("0999999999999")).toBe("0999999999999");
+    // Thirteen significant digits, once the leading zero is stripped — still refused.
+    expect(parseAmount("09999999999999")).toBeNull();
+  });
+
   it("renders with a currency affix", () => {
     render(<AmountField label="Amount" currency="PLN" onChange={noop} />);
     expect(screen.getByText("PLN")).toBeDefined();

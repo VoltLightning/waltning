@@ -20,7 +20,11 @@ import { and, eq, isNull } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
-import { insertTransaction, type LocalTransactionRow } from "./create-transaction.executor.ts";
+import {
+  assertTransactionScale,
+  insertTransaction,
+  type LocalTransactionRow,
+} from "./create-transaction.executor.ts";
 
 const { transactions } = schema;
 
@@ -95,6 +99,15 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
   if (!deleted) {
     throw new Error("supersede_transaction: the superseded row changed between read and write");
   }
+
+  // `SPEC.md` §7.2 — `input.replacement` is a genuinely new row this
+  // executor has no `validate` of its own for, unlike `create_transaction`
+  // and `settle_debt` (each checks its own input pre-outbox). `insertTransaction`
+  // carries the identical call too, the same duplication every scale-checked
+  // executor keeps — named here as well so the refusal reads as
+  // `supersede_transaction`'s own, not a passthrough from a function two
+  // layers away.
+  assertTransactionScale(input.replacement, tx);
 
   return insertTransaction(input.replacement, tx);
 }

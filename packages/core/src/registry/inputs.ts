@@ -29,10 +29,11 @@
 import { z } from "zod";
 import { type AccountingDate, daysBetween } from "../date.ts";
 import type { Id } from "../id.ts";
-import { type CurrencyCode, dec, type Money, type TxnType } from "../money.ts";
+import { type CurrencyCode, type Decimal, dec, type Money, type TxnType } from "../money.ts";
 import {
   zAccountingDate,
   zCurrencyCode,
+  zFee,
   zId,
   zMoney,
   zPivotPerUnit,
@@ -191,6 +192,24 @@ export type TransactionShape = {
 export type TransactionShapeIssue = { field: keyof TransactionShape; message: string };
 
 /**
+ * M4 — `dec(raw)`, safe for a `raw` that already failed its own `zMoney`
+ * regex. `superRefine` still runs even when a sibling field-level check has
+ * already failed (Zod does not short-circuit one check on another's issue),
+ * so the value a `.superRefine` sees here can still be the malformed raw
+ * string a schema's own output type claims cannot exist. `dec()` — `Decimal`'s
+ * own constructor — throws on that. `undefined` rather than throwing:
+ * a malformed value already has its own issue from the field's regex, so a
+ * caller checking `safeDec(raw)?.foo` simply has nothing further to add.
+ */
+function safeDec(raw: string): Decimal | undefined {
+  try {
+    return dec(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The two `type`-shape CHECKs, checked once and read by both writers.
  *
  * `create_transaction`'s `.superRefine` below and `update_transaction`'s
@@ -323,7 +342,7 @@ export const createTransactionInput = z
      * Cost` reports them as separate lines because a fee is avoidable by
      * choosing another route and a margin is not.
      */
-    fee: zMoney.optional(),
+    fee: zFee.optional(),
 
     payee: z.string().trim().max(200).default(""),
     note: z.string().trim().max(2000).default(""),
@@ -368,7 +387,10 @@ export const createTransactionInput = z
      * `>= 0 or type = 'adjustment'` and a schema that refused every negative
      * would make reconciling an account downward impossible.
      */
-    if (t.type !== "adjustment" && dec(t.amountOriginal).lt(0)) {
+    // M4 — `safeDec`, not `dec`: `superRefine` still runs even when
+    // `amountOriginal` already failed `zMoney`'s own regex, and `dec()`
+    // throws on that (see `safeDec`'s own comment, above).
+    if (t.type !== "adjustment" && safeDec(t.amountOriginal)?.lt(0) === true) {
       ctx.addIssue({
         code: "custom",
         path: ["amountOriginal"],
@@ -412,7 +434,10 @@ export const createTransactionInput = z
     // H3 — `<= 0`, not `< 0`: a zero destination amount is a transfer that
     // moves nothing into the other leg, refused the same as a negative one
     // (transactions_to_amount_positive, now `> 0`).
-    if (t.toAmount !== undefined && dec(t.toAmount).lte(0)) {
+    // M4 — `safeDec`, the same guard `amountOriginal` above needs: `superRefine`
+    // still runs even when `toAmount` already failed `zMoney`'s own regex, and
+    // `dec()` throws on that (see `safeDec`'s own comment, above).
+    if (t.toAmount !== undefined && safeDec(t.toAmount)?.lte(0) === true) {
       ctx.addIssue({
         code: "custom",
         path: ["toAmount"],
@@ -696,7 +721,7 @@ const transactionPatch = z
     toCurrency: zCurrencyCode.nullable().optional(),
     fxRate: zPivotPerUnit.optional(),
     toFxRate: zPivotPerUnit.nullable().optional(),
-    fee: zMoney.nullable().optional(),
+    fee: zFee.nullable().optional(),
     payee: z.string().trim().max(200).optional(),
     note: z.string().trim().max(2000).optional(),
     isBusiness: z.boolean().optional(),
@@ -1176,14 +1201,23 @@ export const settleDebtInput = z
     //                 screen and never stored (S14 §7).
   })
   .superRefine((v, ctx) => {
-    if (dec(v.amount).lte(0)) {
+    // M4 — `superRefine` still runs even when `amount`/`discharges.amount`
+    // already failed `zMoney`'s own field-level regex (Zod does not short-
+    // circuit a sibling check on a nested issue), so `v.amount` here can
+    // still be the raw, malformed string rather than the `Money` the output
+    // type claims. `dec()` throws on that (`Decimal`'s own constructor
+    // does), which is exactly the unguarded call M4 exists to close — a
+    // malformed figure already has its own issue from `zMoney`'s regex, so
+    // this positivity check is simply skipped for it rather than duplicating
+    // that refusal or throwing past it.
+    if (safeDec(v.amount)?.lte(0) === true) {
       ctx.addIssue({
         code: "custom",
         path: ["amount"],
         message: "the amount that changed hands is positive — direction comes from the balance",
       });
     }
-    if (dec(v.discharges.amount).lte(0)) {
+    if (safeDec(v.discharges.amount)?.lte(0) === true) {
       ctx.addIssue({
         code: "custom",
         path: ["discharges", "amount"],

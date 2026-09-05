@@ -359,6 +359,59 @@ describe("reconcile_account", () => {
     expect(result.row.amountOriginal).toBe("-42.20000000");
   });
 
+  /**
+   * H2 — `validate` refuses this before the outbox entry commits, not only
+   * inside `apply`: an `observedBalance` past PLN's own two decimal places
+   * used to queue an entry `apply` would then refuse — a stuck entry with
+   * no fix, since nothing will ever apply it. No entry means no orphan.
+   */
+  it("refuses an observed_balance past the account's own currency scale before queuing an entry (H2)", () => {
+    expect(() =>
+      write(reconcileAccountExecutor, {
+        accountId: ACCOUNT_A,
+        adjustmentId: ADJUSTMENT,
+        observedBalance: "1198.305",
+        asOf: "2026-03-12",
+      }),
+    ).toThrow(/holds more decimal places/);
+    expect(entries()).toHaveLength(0);
+  });
+
+  /**
+   * H2 — the same refusal for the *derived* value: `difference` is never the
+   * validated `observedBalance` itself, so this proves the scale check runs
+   * on it too, still before any entry is queued.
+   */
+  it("refuses when the derived adjustment amount is past scale, before queuing an entry (H2)", () => {
+    // opening 0 + one income of 1240.505 (seeded raw, bypassing
+    // create_transaction's own scale check — the same way the invariants
+    // suite fabricates dust) makes `computed` itself carry a third decimal
+    // place, so a clean, 2dp `observedBalance` still derives an over-scale
+    // `difference`.
+    s.ledger.replica.db
+      .insert(transactions)
+      .values({
+        id: id<"transactions">("88888888-8888-4888-8888-888888888888"),
+        date: accountingDate("2026-03-01"),
+        type: "income",
+        accountId: ACCOUNT_A,
+        amountOriginal: money.toMoney("1240.505"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+
+    expect(() =>
+      write(reconcileAccountExecutor, {
+        accountId: ACCOUNT_A,
+        adjustmentId: ADJUSTMENT,
+        observedBalance: "1198.30",
+        asOf: "2026-03-12",
+      }),
+    ).toThrow(/holds more decimal places/);
+    expect(entries()).toHaveLength(0);
+  });
+
   it("refuses a zero difference — nothing to reconcile", () => {
     seedComputedBalance();
 

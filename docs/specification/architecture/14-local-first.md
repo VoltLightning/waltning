@@ -322,11 +322,24 @@ invariant SQLite can express is mirrored into the local schema — foreign keys,
 `CHECK`s, the split-line sum, one-pivot as a partial unique index — so a bad row
 is rejected while the person who typed it is still looking at it, rather than
 days later as a `blocked` outbox entry. What has no device equivalent is stated
-rather than approximated: **role grants (T1) and cross-table triggers stay on
-the server.** T1 in particular is not portable *in principle* — it works because
-the export runs as a separate OS process holding a connection string it cannot
-change, and on a phone one app process owns the file and every credential in it.
-There is no adversary a role would exclude.
+rather than approximated: **role grants (T1) stay on the server.** T1 is not
+portable *in principle* — it works because the export runs as a separate OS
+process holding a connection string it cannot change, and on a phone one app
+process owns the file and every credential in it. There is no adversary a role
+would exclude.
+
+**A cross-table trigger otherwise stays on the server — with one exception,
+mirrored in application code rather than in SQLite itself.** SQLite carries no
+trigger of its own that can join to a second table (`ddl.ts` states every
+`CHECK` this schema can enforce alone), so `assert_amount_scale` and
+`assert_currency_decimals_safe`'s own cross-table lookup against
+`currencies.decimals` (`0011_transaction_scale_and_category_kind.sql`, `SPEC.md`
+§6.5) has no SQLite trigger to mirror into. `packages/ledger/src/scale.ts`'s
+`assertMoneyScale` is the device's version instead — run from inside each
+executor's own write path — and `update_currency`'s own executor carries the
+second half, scanning every table a decimals shrink could invalidate before
+admitting it. A figure past its own currency's scale is refused at capture
+the same way a `CHECK` violation is, even though nothing here is a trigger.
 
 **A migration must not be able to destroy the ledger.** With no backend the
 phone's database is the only copy, and unlike the server there is nothing to

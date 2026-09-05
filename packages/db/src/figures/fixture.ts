@@ -25,6 +25,16 @@ export const CURRENCIES = [
   // discharge a PLN debt, proving `debt_amount`/`debt_currency` value the
   // row, never the leg's own amount in the leg's own currency.
   { code: "EUR", name: "Euro", decimals: 2 },
+  // Fictional — placeholder only, `CLAUDE.md`'s "public repo, private
+  // ledger" rule. H2's `assert_amount_scale` trigger
+  // (`0011_transaction_scale_and_category_kind.sql`) refuses a row past its
+  // own currency's scale, and `…001`/`…002`/`…004`/`…006` below are
+  // deliberately eight and nine decimal digits, the fixture's whole point
+  // (this file's own top comment). Real currencies never hold eight decimal
+  // places (SPEC.md's own reference set tops out at two), so those rows get
+  // their own currency here rather than widening PLN's real, two-place
+  // scale to fit them.
+  { code: "ZZZ", name: "Test 8dp", decimals: 8 },
 ] as const;
 
 export const ACCOUNTS = [
@@ -34,7 +44,14 @@ export const ACCOUNTS = [
     currency: "PLN",
     ownership: "own",
     isBusiness: false,
-    opening: "10.12345678",
+    // M1 — `accounts.opening_balance` now has its own scale guarantee
+    // (`assert_account_balance_scale`, `0011_transaction_scale_and_category_kind.sql`),
+    // so a PLN account's own opening figure has to fit PLN's own two decimal
+    // places; the eight- and nine-decimal-digit rows this fixture exists to
+    // provoke (this file's own top comment) live on `…001`/`…002`/`…004`/
+    // `…006` below, in `ZZZ`, precisely so an *opening balance* never has to
+    // carry that precision.
+    opening: "10.12",
     kind: "other",
   },
   {
@@ -112,6 +129,30 @@ export const ACCOUNTS = [
     opening: "0",
     kind: "clearing",
   },
+  /**
+   * The rounding-mode and eight-decimal rows (`…001`, `…002`, `…006`) live
+   * here, at `ZZZ`'s own eight-place scale, rather than on `Bank A · PLN` —
+   * `assert_amount_scale` refuses any of them past PLN's real two places.
+   */
+  {
+    id: "00000000-0000-4000-8000-000000000012",
+    name: "Precision · ZZZ",
+    currency: "ZZZ",
+    ownership: "own",
+    isBusiness: false,
+    opening: "0",
+    kind: "other",
+  },
+  /** The `…004` transfer's destination — shared, matching what it tested before moving off PLN. */
+  {
+    id: "00000000-0000-4000-8000-000000000013",
+    name: "Shared precision · ZZZ",
+    currency: "ZZZ",
+    ownership: "shared",
+    isBusiness: false,
+    opening: "0",
+    kind: "other",
+  },
 ] as const;
 
 /**
@@ -171,17 +212,17 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     id: "20000000-0000-4000-8000-000000000001",
     date: "2026-09-01",
     type: "income",
-    accountId: ACCOUNTS[0].id,
+    accountId: ACCOUNTS[8].id,
     amountOriginal: "100.000000005",
-    currency: "PLN",
+    currency: "ZZZ",
   },
   {
     id: "20000000-0000-4000-8000-000000000002",
     date: "2026-09-01",
     type: "expense",
-    accountId: ACCOUNTS[0].id,
+    accountId: ACCOUNTS[8].id,
     amountOriginal: "0.00000001",
-    currency: "PLN",
+    currency: "ZZZ",
   },
   {
     id: "20000000-0000-4000-8000-000000000003",
@@ -191,17 +232,17 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "-2.5",
     currency: "PLN",
   },
-  // a transfer OUT of Bank A, INTO the shared Household account
+  // a transfer OUT of the own ZZZ precision account, INTO the shared one
   {
     id: "20000000-0000-4000-8000-000000000004",
     date: "2026-09-02",
     type: "transfer",
-    accountId: ACCOUNTS[0].id,
-    toAccountId: ACCOUNTS[2].id,
+    accountId: ACCOUNTS[8].id,
+    toAccountId: ACCOUNTS[9].id,
     amountOriginal: "40.33333333",
     toAmount: "40.33333333",
-    currency: "PLN",
-    toCurrency: "PLN",
+    currency: "ZZZ",
+    toCurrency: "ZZZ",
   },
   // a cross-currency transfer OUT of Bank A, INTO Cash · USD
   {
@@ -219,9 +260,9 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     id: "20000000-0000-4000-8000-000000000006",
     date: "2026-09-03",
     type: "expense",
-    accountId: ACCOUNTS[1].id,
+    accountId: ACCOUNTS[8].id,
     amountOriginal: "7.77777777",
-    currency: "PLN",
+    currency: "ZZZ",
   },
   // lent 200 out of Bank A: a receivable, counterparty on the source leg
   {

@@ -232,6 +232,24 @@ it("shows an unrecognised settle refusal at form level", () => {
   ).toBeDefined();
 });
 
+/**
+ * H — `settle_debt`'s own H2 mirror (`create-phone-ledger.ts`) refuses
+ * `discharges.amount` past the picked currency's own scale (matching
+ * `assert_amount_scale`'s own `debt_amount`/`debt_currency` pair,
+ * `0011_transaction_scale_and_category_kind.sql`); `SETTLE_KNOWN_PATHS`
+ * already routes it into `byField`, but nothing rendered it.
+ */
+it("shows a discharges.amount refusal under the discharges amount field (H)", () => {
+  renderSheet({
+    dischargesRaw: "1,23",
+    fieldErrors: {
+      byField: { "discharges.amount": ["EUR holds 0 decimal places — this amount has more"] },
+      formLevel: [],
+    },
+  });
+  expect(screen.getByText("EUR holds 0 decimal places — this amount has more")).toBeDefined();
+});
+
 it("shows a counterpartyId refusal under the header", () => {
   renderSheet({
     fieldErrors: {

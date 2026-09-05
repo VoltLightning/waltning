@@ -60,6 +60,19 @@ export const SQLSTATE = {
   ACCOUNT_CURRENCY_CHANGE: "WA013",
   ACCOUNT_MADE_SHARED: "WA014",
   LINES_SUM: "WA015",
+  /**
+   * H2/H3/M1 — an amount past its own currency's own decimal scale
+   * (`0011_transaction_scale_and_category_kind.sql`). **Shared by several
+   * triggers** (`transactions`, `debt_reassignments`, `transaction_lines`,
+   * `accounts`, `recurring_transactions`, `targets`, `receipts`) — the
+   * migration sets `CONSTRAINT`/`COLUMN` on every raise, and `toDomainError`
+   * below reads those off the driver rather than assuming this one entry.
+   */
+  AMOUNT_SCALE: "WA016",
+  /** H1-b — a category's own kind disagrees with the transaction's type (`0011_transaction_scale_and_category_kind.sql`). */
+  CATEGORY_KIND_MATCHES_TYPE: "WA017",
+  /** C1 — a currency's `decimals` cannot be lowered under an existing row (`0011_transaction_scale_and_category_kind.sql`). */
+  CURRENCY_DECIMALS_LOWERED: "WA018",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -85,6 +98,15 @@ export const TRIGGER = {
   BUSINESS_NOT_SHARED_TARGET: "transactions_business_not_shared_target",
   ACCOUNT_CHANGE_SAFE: "accounts_change_safe",
   LINES_SUM: "transaction_lines_sum_matches",
+  /**
+   * The *default* — used only when the driver did not report a `constraint`
+   * of its own (`toDomainError` prefers the driver's). `transactions` is the
+   * oldest of the WA016 raisers and the one every existing caller of this
+   * map already expects here.
+   */
+  AMOUNT_SCALE: "transactions_amount_scale_matches_currency",
+  CATEGORY_KIND_MATCHES_TYPE: "transactions_category_kind_matches_type",
+  CURRENCY_DECIMALS_SAFE: "currencies_decimals_safe",
 } as const;
 
 /**
@@ -128,6 +150,18 @@ export const GUARDS: Record<GuardState, Guard> = {
   // The client still sees one refusal for one intention, because the whole
   // split is one operation.
   [SQLSTATE.LINES_SUM]: { code: "validation", constraint: TRIGGER.LINES_SUM },
+
+  [SQLSTATE.AMOUNT_SCALE]: { code: "validation", constraint: TRIGGER.AMOUNT_SCALE },
+
+  [SQLSTATE.CATEGORY_KIND_MATCHES_TYPE]: {
+    code: "validation",
+    constraint: TRIGGER.CATEGORY_KIND_MATCHES_TYPE,
+  },
+
+  [SQLSTATE.CURRENCY_DECIMALS_LOWERED]: {
+    code: "validation",
+    constraint: TRIGGER.CURRENCY_DECIMALS_SAFE,
+  },
 };
 
 /**
@@ -157,6 +191,15 @@ type CausedError = {
    */
   constraint_name?: string;
   constraint?: string;
+  /**
+   * M3 — the offending column, when a `RAISE … USING COLUMN = …` set one
+   * (every WA016 raise in `0011_transaction_scale_and_category_kind.sql`
+   * does). Same dual-spelling story as `constraint`/`constraint_name`:
+   * postgres.js reads the wire protocol's `Column Name` field as
+   * `column_name`, node-postgres as `column`.
+   */
+  column_name?: string;
+  column?: string;
   message?: string;
   cause?: CausedError;
 };
@@ -195,7 +238,17 @@ export function toDomainError(e: unknown): DomainError | undefined {
 
   const guard = BY_STATE.get(driver.code);
   if (guard) {
-    return new DomainError(guard.code, messageOf(e), { constraint: guard.constraint });
+    // M3 — several triggers now share WA016, so the map's own `constraint`
+    // is only ever a default; a `RAISE … USING CONSTRAINT = …, COLUMN = …`
+    // (every raise in `0011_transaction_scale_and_category_kind.sql`) tells
+    // the truth about which one actually fired, and is preferred whenever
+    // the driver reported one.
+    const constraint = driver.constraint_name ?? driver.constraint ?? guard.constraint;
+    const column = driver.column_name ?? driver.column;
+    return new DomainError(guard.code, messageOf(e), {
+      constraint,
+      ...(column === undefined ? {} : { column }),
+    });
   }
 
   if (driver.code === UNIQUE_VIOLATION) {

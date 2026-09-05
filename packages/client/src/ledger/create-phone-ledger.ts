@@ -2,6 +2,7 @@ import { fold } from "@waltning/core/capture/names";
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
+import type { DiagnosticError } from "@waltning/core/diagnostics";
 import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
 import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
@@ -69,9 +70,71 @@ import {
   updateCurrencyInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
-import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
+import { zMoney } from "@waltning/core/zod";
+import {
+  type ClientDiagnosticEvent,
+  type ClientDiagnostics,
+  clientFailure,
+  emitClientDiagnostic,
+} from "../diagnostics.ts";
 import { type FieldError, fieldErrorsFromZod } from "../transport/field-errors.ts";
+
 // ── end E2 block ─────────────────────────────────────────────────────────
+
+/**
+ * `Omit` over a union collapses to the union's *common* keys — `keyof (A|B)`
+ * is an intersection, not a union — which would erase `action` and `update`
+ * down to nothing both branches share. Distributing over `T` first keeps each
+ * branch's own extra key.
+ */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+/**
+ * L1 — phase derived from the outcome, once, rather than asserted by hand at
+ * every call site. 43 of the 75 `phase: "success"` emits this file used to
+ * carry sat immediately before a `return { fieldErrors }` — a refusal
+ * reported as a success, because the two were typed independently and
+ * nothing forced them to agree. Every controller below returns through this
+ * instead: `outcome` is `undefined` for a controller with no return value at
+ * all (`refresh()`, `reset()`), and otherwise the phase is "success" unless
+ * `outcome` itself carries a `fieldErrors` key — a refusal is never a
+ * success, no matter how deep in a controller it was produced.
+ *
+ * `tests/architecture.test.ts` refuses a bare `phase: "success"` literal
+ * anywhere else in this file, so a new call site cannot reintroduce the bug
+ * this replaced.
+ */
+function finish<T>(
+  diagnostics: ClientDiagnostics | undefined,
+  event: DistributiveOmit<Extract<ClientDiagnosticEvent, { phase: "start" }>, "phase">,
+  outcome: T,
+): T {
+  const errors = fieldErrorsOf(outcome);
+  emitClientDiagnostic(
+    diagnostics,
+    (errors
+      ? { ...event, phase: "failure", error: fieldErrorsDiagnostic(errors) }
+      : { ...event, phase: "success" }) as ClientDiagnosticEvent,
+  );
+  return outcome;
+}
+
+/** `outcome`'s own `fieldErrors`, when it has any — every controller's refusal shape. */
+function fieldErrorsOf(outcome: unknown): readonly FieldError[] | undefined {
+  if (typeof outcome !== "object" || outcome === null || !("fieldErrors" in outcome)) {
+    return undefined;
+  }
+  const errors = (outcome as { fieldErrors: unknown }).fieldErrors;
+  return Array.isArray(errors) ? (errors as readonly FieldError[]) : undefined;
+}
+
+/** A refusal's own fields, described the way a caught exception already is. */
+function fieldErrorsDiagnostic(errors: readonly FieldError[]): DiagnosticError {
+  return {
+    name: "FieldErrors",
+    message: errors.map((error) => error.message).join("; ") || "validation failed",
+  };
+}
 
 export type PhoneCapture = {
   date: AccountingDate;
@@ -1325,7 +1388,93 @@ function createTransactionRefusal(error: unknown): FieldError | null {
       messageKey: "transactions.sharedNeverBusiness",
     };
   }
+  const scaleRefusal = amountScaleRefusal(error);
+  if (scaleRefusal) return scaleRefusal;
   return null;
+}
+
+/**
+ * L4 — a scale refusal, local or server-side, routed to the field it
+ * actually named.
+ *
+ * **Structured, not parsed.** This used to read `error.message` against a
+ * `^`-anchored regex shaped for Postgres's own `assert_amount_scale` text
+ * (`'amount_original % holds more decimal places …'`) — which never matched
+ * the phone's own `scale.ts` refusal, because that one is prefixed with the
+ * operation's own name (`'create_transaction: amount_original % holds …'`)
+ * for a person reading the raw message. A caller-specific prefix is not
+ * something a shared regex can skip on every caller's behalf, so every
+ * *local* scale refusal silently fell through as an unrouted, form-level
+ * message instead of landing on the field it named.
+ *
+ * `columnOf`/`paramsOf` below read the column and the interpolation values
+ * structurally instead — `error.column` for a local `LocalRefusal`
+ * (`@waltning/ledger/scale.ts`'s own thrown shape, matched **without**
+ * importing it: `create-phone-ledger.ts` never depends on `@waltning/ledger`,
+ * by design, so this stays a duck-typed read the same way every other
+ * refusal mapper in this file already narrows "whatever was thrown"), or
+ * `error.details.column` for the server's own envelope (`DomainError`'s
+ * `ErrorDetails.column`, `apps/api/src/common/pg-errors.ts`'s own M3 fix —
+ * the SQLSTATE alone cannot tell `amount_original`/`to_amount`/`fee` apart
+ * either, and the column rides the envelope for exactly this reason).
+ *
+ * **Gated on `error.name` for the direct read.** `LocalRefusal.name` is
+ * always the literal string `"LocalRefusal"` (`@waltning/ledger/executor.ts`'s
+ * own class field), and this is the one property that class shape and a raw
+ * driver error can share by coincidence — `pg`'s own `DatabaseError` carries
+ * a `.column` too, naming the table column a constraint violation touched,
+ * which is not this field's vocabulary (`amount_original`/`to_amount`/`fee`)
+ * and is not routed through an envelope at all. Reading `.column` off any
+ * object that happens to carry one would treat that raw error as if it were
+ * a classified scale refusal; checking `.name` first is what keeps this
+ * duck-typed read narrow to the one shape it is meant for.
+ */
+const AMOUNT_SCALE_COLUMN_PATH: Readonly<Record<string, string>> = {
+  amount_original: "amountOriginal",
+  to_amount: "toAmount",
+  fee: "fee",
+};
+
+/** The column a local `LocalRefusal` or a server envelope named, if either shape did. */
+function columnOf(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  if ((error as { name?: string }).name === "LocalRefusal") {
+    const direct = (error as { column?: unknown }).column;
+    if (typeof direct === "string") return direct;
+  }
+  const details = (error as { details?: unknown }).details;
+  if (typeof details !== "object" || details === null) return undefined;
+  const nested = (details as { column?: unknown }).column;
+  return typeof nested === "string" ? nested : undefined;
+}
+
+/** `LocalRefusal.params`, when the thrown value carries one — the same shape `FieldError.params` takes. */
+function paramsOf(error: unknown): Readonly<Record<string, string>> | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const params = (error as { params?: unknown }).params;
+  if (typeof params !== "object" || params === null) return undefined;
+  const entries = Object.entries(params).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function amountScaleRefusal(error: unknown): FieldError | null {
+  const column = columnOf(error);
+  if (column === undefined) return null;
+  const path = AMOUNT_SCALE_COLUMN_PATH[column];
+  if (path === undefined) return null;
+  const message = error instanceof Error ? error.message : String(error);
+  const params = paramsOf(error);
+  // `messageKey` is set only once real `params` are in hand — a `LocalRefusal`
+  // carries its own currency/decimals, the values `transactions.tooManyDecimals`
+  // needs to interpolate. A server envelope's `details.column` carries no
+  // such pair, and templating with blanks would read worse than the
+  // server's own message, which is already a complete English sentence
+  // naming both — so that case is routed onto the field verbatim instead.
+  return params
+    ? { path, message, messageKey: "transactions.tooManyDecimals", params }
+    : { path, message };
 }
 
 /** `reconcile_account`'s one refusal — S16 §5: a zero difference lands on `observedBalance`. */
@@ -1657,11 +1806,7 @@ export function createPhoneLedger(
         distinctCounterpartyPairs: port.listDistinctCounterpartyPairs(),
       };
       for (const listener of listeners) listener();
-      emitClientDiagnostic(diagnostics, {
-        scope: "client_state",
-        update: "phone_ledger_refresh",
-        phase: "success",
-      });
+      finish(diagnostics, { scope: "client_state", update: "phone_ledger_refresh" }, undefined);
     } catch (error) {
       emitClientDiagnostic(diagnostics, {
         scope: "client_state",
@@ -1745,21 +1890,19 @@ export function createPhoneLedger(
           categoryId: draft.categoryId,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "categorize_batch",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "categorize_batch" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         port.categorizeBatch(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "categorize_batch",
-          phase: "success",
-        });
-        return { count: parsed.data.transactionIds.length };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "categorize_batch" },
+          { count: parsed.data.transactionIds.length },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -1781,6 +1924,44 @@ export function createPhoneLedger(
       });
       try {
         const capture = runtime.capture();
+        /**
+         * M1 — `createAccountInput` validates `openingBalance`'s own shape,
+         * but has no currency list in view and so cannot know *which*
+         * currency's scale applies; the controller does, the same reason
+         * `createTransaction`'s own H2 check lives here rather than in the
+         * schema. Mirrors `accounts_balance_scale_matches_currency`
+         * (`0011_transaction_scale_and_category_kind.sql`) — `opening_balance`
+         * is the sharpest of the four columns that trigger covers, since it
+         * shifts every balance computed from it, forever.
+         */
+        const openingCurrency = snapshot.currencies.find(
+          (candidate) => candidate.code === draft.currency,
+        );
+        const parsedOpeningBalance = zMoney.safeParse(draft.openingBalance);
+        if (
+          openingCurrency !== undefined &&
+          parsedOpeningBalance.success &&
+          money.dec(parsedOpeningBalance.data).decimalPlaces() > openingCurrency.decimals
+        ) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "create_account" },
+            {
+              fieldErrors: [
+                {
+                  path: "openingBalance",
+                  message: `${openingCurrency.code} holds ${openingCurrency.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: {
+                    currency: openingCurrency.code,
+                    decimals: String(openingCurrency.decimals),
+                  },
+                },
+              ],
+            },
+          );
+        }
+
         const parsed = createAccountInput.safeParse({
           id: runtime.id<"accounts">(),
           ...draft,
@@ -1788,21 +1969,19 @@ export function createPhoneLedger(
           groupId: draft.groupId ?? undefined,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "create_account",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "create_account" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         port.createAccount(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "create_account",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "create_account" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -1821,38 +2000,62 @@ export function createPhoneLedger(
       });
       try {
         const capture = runtime.capture();
+        /** M1 — the same `openingBalance` mirror `createAccount` carries, above, against the account's own (unpatchable) currency. */
+        const account = snapshot.accounts.find((candidate) => candidate.id === draft.id);
+        const parsedPatchOpeningBalance =
+          draft.patch.openingBalance === undefined
+            ? undefined
+            : zMoney.safeParse(draft.patch.openingBalance);
+        if (
+          account !== undefined &&
+          parsedPatchOpeningBalance?.success === true &&
+          money.dec(parsedPatchOpeningBalance.data).decimalPlaces() > account.decimals
+        ) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_account" },
+            {
+              fieldErrors: [
+                {
+                  path: "openingBalance",
+                  message: `${account.currency} holds ${account.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: { currency: account.currency, decimals: String(account.decimals) },
+                },
+              ],
+            },
+          );
+        }
+
         const parsed = updateAccountInput.safeParse({
           id: draft.id,
           version: draft.version,
           patch: draft.patch,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_account",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_account" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.updateAccount(parsed.data, capture);
         } catch (refusal) {
           const fieldError = accountWriteRefusal(refusal);
           if (!fieldError) throw refusal;
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_account",
-            phase: "success",
-          });
-          return { fieldErrors: [fieldError] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_account" },
+            { fieldErrors: [fieldError] },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "update_account",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "update_account" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -1873,32 +2076,29 @@ export function createPhoneLedger(
         const capture = runtime.capture();
         const parsed = archiveAccountInput.safeParse({ id: draft.id, version: draft.version });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "archive_account",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "archive_account" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.archiveAccount(parsed.data, capture);
         } catch (refusal) {
           const fieldError = accountWriteRefusal(refusal);
           if (!fieldError) throw refusal;
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "archive_account",
-            phase: "success",
-          });
-          return { fieldErrors: [fieldError] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "archive_account" },
+            { fieldErrors: [fieldError] },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "archive_account",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "archive_account" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -1917,6 +2117,40 @@ export function createPhoneLedger(
       });
       try {
         const capture = runtime.capture();
+        /**
+         * M1 — `observedBalance` is what `reconcile_account`'s executor
+         * writes onto `accounts.expected_balance` (S16 §5); the same
+         * `accounts_balance_scale_matches_currency` trigger `openingBalance`
+         * mirrors, above, covers that column too.
+         */
+        const reconcileAccount = snapshot.accounts.find(
+          (candidate) => candidate.id === draft.accountId,
+        );
+        const parsedObservedBalance = zMoney.safeParse(draft.observedBalance);
+        if (
+          reconcileAccount !== undefined &&
+          parsedObservedBalance.success &&
+          money.dec(parsedObservedBalance.data).decimalPlaces() > reconcileAccount.decimals
+        ) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "reconcile_account" },
+            {
+              fieldErrors: [
+                {
+                  path: "observedBalance",
+                  message: `${reconcileAccount.currency} holds ${reconcileAccount.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: {
+                    currency: reconcileAccount.currency,
+                    decimals: String(reconcileAccount.decimals),
+                  },
+                },
+              ],
+            },
+          );
+        }
+
         const parsed = reconcileAccountInput.safeParse({
           accountId: draft.accountId,
           adjustmentId: runtime.id<"transactions">(),
@@ -1926,32 +2160,29 @@ export function createPhoneLedger(
           categoryId: draft.categoryId ?? undefined,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "reconcile_account",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "reconcile_account" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.reconcileAccount(parsed.data, capture);
         } catch (refusal) {
           const fieldError = reconcileAccountRefusal(refusal);
           if (!fieldError) throw refusal;
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "reconcile_account",
-            phase: "success",
-          });
-          return { fieldErrors: [fieldError] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "reconcile_account" },
+            { fieldErrors: [fieldError] },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "reconcile_account",
-          phase: "success",
-        });
-        return { id: parsed.data.adjustmentId };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "reconcile_account" },
+          { id: parsed.data.adjustmentId },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -1976,21 +2207,19 @@ export function createPhoneLedger(
           institution: draft.institution,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "create_group",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "create_group" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         port.createGroup(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "create_group",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "create_group" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2023,31 +2252,28 @@ export function createPhoneLedger(
           note: draft.note,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "create_counterparty",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "create_counterparty" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.createCounterparty(parsed.data, capture);
         } catch (refusal) {
           const fieldError = createCounterpartyRefusal(refusal);
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "create_counterparty",
-            phase: "success",
-          });
-          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "create_counterparty" },
+            { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "create_counterparty",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "create_counterparty" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2072,31 +2298,28 @@ export function createPhoneLedger(
           patch: draft.patch,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_counterparty",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_counterparty" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.updateCounterparty(parsed.data, capture);
         } catch (refusal) {
           const fieldError = counterpartyWriteRefusal(refusal);
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_counterparty",
-            phase: "success",
-          });
-          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_counterparty" },
+            { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(refusal) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "update_counterparty",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "update_counterparty" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2140,31 +2363,28 @@ export function createPhoneLedger(
           movedTransactionIds,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "merge_counterparties",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "merge_counterparties" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.mergeCounterparties(parsed.data, capture);
         } catch (writeError) {
           const fieldError = mergeCounterpartiesRefusal(writeError);
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "merge_counterparties",
-            phase: "success",
-          });
-          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "merge_counterparties" },
+            { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "merge_counterparties",
-          phase: "success",
-        });
-        return { id: parsed.data.mergeId };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "merge_counterparties" },
+          { id: parsed.data.mergeId },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2185,31 +2405,28 @@ export function createPhoneLedger(
         const capture = runtime.capture();
         const parsed = unmergeCounterpartiesInput.safeParse({ mergeId: draft.mergeId });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "unmerge_counterparties",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "unmerge_counterparties" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.unmergeCounterparties(parsed.data, capture);
         } catch (writeError) {
           const fieldError = unmergeCounterpartiesRefusal(writeError);
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "unmerge_counterparties",
-            phase: "success",
-          });
-          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "unmerge_counterparties" },
+            { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "unmerge_counterparties",
-          phase: "success",
-        });
-        return { id: parsed.data.mergeId };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "unmerge_counterparties" },
+          { id: parsed.data.mergeId },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2233,12 +2450,11 @@ export function createPhoneLedger(
           bId: draft.bId,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "record_distinct_counterparties",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "record_distinct_counterparties" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.recordDistinctCounterparties(parsed.data, capture);
@@ -2248,20 +2464,18 @@ export function createPhoneLedger(
           // operation names a field a form could point at — every refusal
           // here is already the fallback `refusalFromThrow` gives the other
           // five writes for a message their own mapper does not recognise.
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "record_distinct_counterparties",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "record_distinct_counterparties" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "record_distinct_counterparties",
-          phase: "success",
-        });
-        return { aId: parsed.data.aId, bId: parsed.data.bId };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "record_distinct_counterparties" },
+          { aId: parsed.data.aId, bId: parsed.data.bId },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2299,7 +2513,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.needsRate")),
           });
           return {
             fieldErrors: [
@@ -2329,7 +2544,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("settleDebt.currencyMismatch")),
           });
           return {
             fieldErrors: [
@@ -2338,6 +2554,94 @@ export function createPhoneLedger(
                 message: `This account only holds ${account.currency} — settle in that currency.`,
                 messageKey: "settleDebt.currencyMismatch",
                 params: { accountCurrency: account.currency },
+              },
+            ],
+          };
+        }
+
+        /**
+         * M — `settle_debt`'s own `amount` (the "Into"/"From" leg, in the
+         * *account's* currency) had no client mirror at all — only
+         * `discharges.amount` (below) did. Same guarantee, same shape as
+         * `createTransaction`'s own `amountOriginal` guard above: refused
+         * here, on the account's own scale, before the write rather than
+         * discovered as a silently truncated figure.
+         *
+         * M4 — `zMoney.safeParse` first, not `money.toMoney` directly:
+         * `toMoney` calls `Decimal`'s own constructor, which throws
+         * `DecimalError` on a malformed string (`"abc"`) rather than
+         * returning one — this controller would throw instead of refusing.
+         * A malformed `draft.amount` falls through to `settleDebtInput`'s
+         * own parse below, which reports it as an ordinary `fieldErrors`
+         * refusal the same way every other malformed field here already
+         * does.
+         */
+        const parsedSettleAmount = zMoney.safeParse(draft.amount);
+        if (
+          account !== undefined &&
+          parsedSettleAmount.success &&
+          money.dec(parsedSettleAmount.data).decimalPlaces() > account.decimals
+        ) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "amount",
+                message: `${account.currency} holds ${account.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: { currency: account.currency, decimals: String(account.decimals) },
+              },
+            ],
+          };
+        }
+
+        /**
+         * M — the H2 guarantee (`createTransaction`, above) checked
+         * `amount_original` only; `settle_debt`'s own `discharges` maps onto
+         * `debt_amount`/`debt_currency` (S14's settlement coalesce) and can
+         * carry the same defect, in a currency that need not be any
+         * account's own — `snapshot.currencies`, not `snapshot.accounts`,
+         * is what has its scale. Matches the extended
+         * `assert_amount_scale` trigger
+         * (`0011_transaction_scale_and_category_kind.sql`).
+         */
+        const dischargesCurrency = snapshot.currencies.find(
+          (candidate) => candidate.code === draft.dischargesCurrency,
+        );
+        // M4 — same `zMoney.safeParse` guard as `draft.amount` above: a
+        // malformed `draft.dischargesAmount` falls through to the schema
+        // parse below rather than throwing out of `money.toMoney`.
+        const parsedDischargesAmount = zMoney.safeParse(draft.dischargesAmount);
+        if (
+          dischargesCurrency !== undefined &&
+          parsedDischargesAmount.success &&
+          money.dec(parsedDischargesAmount.data).decimalPlaces() > dischargesCurrency.decimals
+        ) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
+          });
+          return {
+            fieldErrors: [
+              {
+                // `settleDebtInput`'s own nested path (`discharges.amount`,
+                // `discharges: z.object({...})`), matching `settle-sheet.tsx`'s
+                // own `byField["discharges.currency"]` read of the schema's
+                // own refusal on the sibling field.
+                path: "discharges.amount",
+                message: `${dischargesCurrency.code} holds ${dischargesCurrency.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: {
+                  currency: dischargesCurrency.code,
+                  decimals: String(dischargesCurrency.decimals),
+                },
               },
             ],
           };
@@ -2391,7 +2695,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(parsed.error),
           });
           return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
         }
@@ -2402,17 +2707,17 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "settle_debt",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(refusal),
           });
           return { fieldErrors: [settleDebtRefusal(refusal)] };
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "settle_debt",
-          phase: "success",
-        });
-        return { id: parsed.data.id, residual: settled.residual, overSettled: settled.overSettled };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "settle_debt" },
+          { id: parsed.data.id, residual: settled.residual, overSettled: settled.overSettled },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2433,10 +2738,14 @@ export function createPhoneLedger(
       try {
         const account = snapshot.accounts.find((candidate) => candidate.id === draft.accountId);
         if (!account) {
+          // L — a refusal is not a success (the same fix `tooManyDecimals`
+          // below already carries): every early return here bounces the
+          // write, and `phase: "success"` misreported every one of them.
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("accountId required")),
           });
           return {
             fieldErrors: [{ path: "accountId", message: "Choose an account before saving" }],
@@ -2458,7 +2767,8 @@ export function createPhoneLedger(
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.needsRate")),
           });
           return {
             fieldErrors: [
@@ -2472,16 +2782,180 @@ export function createPhoneLedger(
           };
         }
 
-        const normalized = money.toMoney(draft.amount);
+        /**
+         * M4 — `zMoney.safeParse` first, not `money.toMoney` directly, the
+         * same reason `draft.toAmount`/`draft.fee` below are: `toMoney`
+         * calls `Decimal`'s own constructor, which throws `DecimalError` on
+         * a malformed string (`"abc"`) rather than returning one — this
+         * controller would throw instead of refusing. `quick-add-screen.tsx`
+         * always hands `draft.amount` through `parseAmount` first, but this
+         * is a controller boundary, not a component.
+         */
+        const parsedAmount = zMoney.safeParse(draft.amount);
+        if (!parsedAmount.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_transaction",
+            phase: "failure",
+            error: clientFailure(parsedAmount.error),
+          });
+          // A field error named onto `amountOriginal` — `fieldErrorsFromZod`
+          // would report a bare schema's own empty path, which lands
+          // form-level rather than on the field a person is looking at.
+          return {
+            fieldErrors: [{ path: "amountOriginal", message: "Amount must be a decimal number" }],
+          };
+        }
+        const normalized = parsedAmount.data;
         if (money.dec(normalized).lte(0)) {
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(new Error("amount must be greater than zero")),
           });
           return {
             fieldErrors: [{ path: "amountOriginal", message: "Amount must be greater than zero" }],
           };
+        }
+
+        /**
+         * H2 — `createTransactionInput` validates the amount's own shape, but
+         * has no account in view and so cannot know *which* currency's scale
+         * applies; the controller does, the same reason `account.capturable`
+         * above is checked here rather than left to the schema. Refused on
+         * `amountOriginal` before the write, not discovered as a silently
+         * truncated figure the day someone reads the row back.
+         */
+        if (money.dec(normalized).decimalPlaces() > account.decimals) {
+          // L — a refusal is not a success: `phase` used to read "success" on
+          // every early return here, which reported a validation bounce the
+          // same way a completed write would.
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "create_transaction",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "amountOriginal",
+                message: `${account.currency} holds ${account.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: { currency: account.currency, decimals: String(account.decimals) },
+              },
+            ],
+          };
+        }
+
+        /**
+         * M — the H2 guarantee above checked `amountOriginal` only; a
+         * transfer's destination leg (§7.5) can carry the same defect in its
+         * own currency, and the client-side check must cover the same
+         * ground the extended `assert_amount_scale` trigger now does
+         * (`0011_transaction_scale_and_category_kind.sql`). Only checked
+         * when the destination account is known locally, matching the
+         * source account's own guard above.
+         *
+         * L — `money.toMoney` throws on anything that is not a decimal
+         * (`Decimal` does), and `draft.toAmount` is a raw string this
+         * controller does not otherwise validate before this point. The
+         * screen always hands it through `parseAmount` first, but this is a
+         * controller boundary, not a component — `zMoney.safeParse` is that
+         * same shape check, run here rather than assumed.
+         */
+        const parsedToAmount =
+          draft.toAmount === undefined ? undefined : zMoney.safeParse(draft.toAmount);
+        if (draft.toAmount !== undefined && draft.toAccountId !== undefined) {
+          const toAccount = snapshot.accounts.find(
+            (candidate) => candidate.id === draft.toAccountId,
+          );
+          if (
+            toAccount !== undefined &&
+            parsedToAmount?.success === true &&
+            money.dec(parsedToAmount.data).decimalPlaces() > toAccount.decimals
+          ) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.tooManyDecimals")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "toAmount",
+                  message: `${toAccount.currency} holds ${toAccount.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: { currency: toAccount.currency, decimals: String(toAccount.decimals) },
+                },
+              ],
+            };
+          }
+        }
+
+        /**
+         * M — `fee` (S31 §9.1) carries no currency of its own; it is always
+         * the row's own `currency`, so it is checked against `account`'s
+         * own scale (the same account `amountOriginal` above is checked
+         * against), matching the extended `assert_amount_scale` trigger
+         * (`0011_transaction_scale_and_category_kind.sql`).
+         */
+        if (draft.fee !== undefined) {
+          const parsedFee = zMoney.safeParse(draft.fee);
+          if (parsedFee.success && money.dec(parsedFee.data).decimalPlaces() > account.decimals) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.tooManyDecimals")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "fee",
+                  message: `${account.currency} holds ${account.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: { currency: account.currency, decimals: String(account.decimals) },
+                },
+              ],
+            };
+          }
+        }
+
+        /**
+         * H1-b — `createTransactionInput` has no category tree in view and
+         * so cannot know a category's own `kind`; the controller does
+         * (`snapshot.categories`), the same reason the two checks above live
+         * here rather than in the schema. Refused on `categoryId` before the
+         * write — the guarantee this mirrors is
+         * `transactions_category_kind_matches_type`
+         * (`0011_transaction_scale_and_category_kind.sql`), broken once
+         * there to prove it fires even if this refusal is ever bypassed.
+         */
+        if (draft.categoryId !== null && (draft.type === "income" || draft.type === "expense")) {
+          const category = snapshot.categories.find(
+            (candidate) => candidate.id === draft.categoryId,
+          );
+          if (category !== undefined && category.kind !== draft.type) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.categoryKindMismatch")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "categoryId",
+                  message: `This category doesn't match ${draft.type}`,
+                  messageKey: "transactions.categoryKindMismatch",
+                  params: { type: draft.type },
+                },
+              ],
+            };
+          }
         }
 
         const capture = runtime.capture();
@@ -2506,15 +2980,24 @@ export function createPhoneLedger(
           // `createTransactionInput`'s own shape refusal is what catches a
           // `type: "transfer"` missing one of these, not this method.
           ...(draft.toAccountId === undefined ? {} : { toAccountId: draft.toAccountId }),
-          ...(draft.toAmount === undefined ? {} : { toAmount: money.toMoney(draft.toAmount) }),
+          // L — `zMoney` (`toAmount`'s own field type) is `z.string()` and
+          // does its own parse-and-transform; passing the raw string lets a
+          // malformed `toAmount` land as an ordinary `fieldErrors` refusal
+          // from `safeParse` below, the same as every other field here, in
+          // place of `money.toMoney` throwing before this call is even made.
+          ...(draft.toAmount === undefined ? {} : { toAmount: draft.toAmount }),
           ...(draft.toCurrency === undefined ? {} : { toCurrency: draft.toCurrency }),
-          ...(draft.fee === undefined ? {} : { fee: money.toMoney(draft.fee) }),
+          // `zMoney` (`fee`'s own field type) is `z.string()` and does its
+          // own parse-and-transform, the same reason `toAmount` above is
+          // passed raw rather than pre-converted.
+          ...(draft.fee === undefined ? {} : { fee: draft.fee }),
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(parsed.error),
           });
           return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
         }
@@ -2543,29 +3026,28 @@ export function createPhoneLedger(
            */
           if (refusal instanceof Error && refusal.name === "LocalDeferral") {
             refresh();
-            emitClientDiagnostic(diagnostics, {
-              scope: "client_action",
-              action: "create_transaction",
-              phase: "success",
-            });
-            return { id: parsed.data.id, deferred: true };
+            return finish(
+              diagnostics,
+              { scope: "client_action", action: "create_transaction" },
+              { id: parsed.data.id, deferred: true },
+            );
           }
           const fieldError = createTransactionRefusal(refusal);
           if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",
             action: "create_transaction",
-            phase: "success",
+            phase: "failure",
+            error: clientFailure(refusal),
           });
           return { fieldErrors: [fieldError] };
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "create_transaction",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "create_transaction" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2605,14 +3087,13 @@ export function createPhoneLedger(
             fold(node.name) === target,
         );
         if (collision) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "create_category",
-            phase: "success",
-          });
-          return {
-            fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
-          };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "create_category" },
+            {
+              fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+            },
+          );
         }
 
         const capture = runtime.capture();
@@ -2623,21 +3104,19 @@ export function createPhoneLedger(
           parentId: draft.parentId,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "create_category",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "create_category" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         port.createCategory(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "create_category",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "create_category" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2668,12 +3147,11 @@ export function createPhoneLedger(
           },
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_transaction",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_transaction" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.updateTransaction(parsed.data, runtime.capture());
@@ -2683,20 +3161,18 @@ export function createPhoneLedger(
           // throw. Caught here, not left to propagate: S09 §6 keeps the
           // draft on the screen and states the refusal on the field, which
           // needs a `fieldErrors` return, not an exception.
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_transaction",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_transaction" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "update_transaction",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "update_transaction" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2716,30 +3192,27 @@ export function createPhoneLedger(
       try {
         const parsed = deleteTransactionInput.safeParse({ id, version });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "delete_transaction",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_transaction" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.deleteTransaction(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "delete_transaction",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_transaction" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "delete_transaction",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "delete_transaction" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2768,12 +3241,40 @@ export function createPhoneLedger(
           })),
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_transaction_lines",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_transaction_lines" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        /**
+         * H3 — `setTransactionLinesInput` validates each line's amount as a
+         * decimal string, but has no parent row in view and so cannot know
+         * *which* currency's scale applies — the controller does, the same
+         * reason `createTransaction`'s own H2 checks live here rather than
+         * in the schema. Mirrors `transaction_lines_amount_scale_matches_currency`
+         * (`0011_transaction_scale_and_category_kind.sql`), refused on the
+         * offending line before the write rather than discovered as a
+         * silently truncated figure the day the breakdown is read back.
+         */
+        const parent = port.getTransaction(id);
+        if (parent !== null) {
+          const overScale = parsed.data.lines
+            .map((line, index) => ({ line, index }))
+            .filter(({ line }) => money.dec(line.amount).decimalPlaces() > parent.decimals);
+          if (overScale.length > 0) {
+            const fieldErrors = overScale.map(({ index }) => ({
+              path: `lines.${index}.amount`,
+              message: `${parent.currency} holds ${parent.decimals} decimal places — this amount has more`,
+              messageKey: "transactions.tooManyDecimals",
+              params: { currency: parent.currency, decimals: String(parent.decimals) },
+            }));
+            return finish(
+              diagnostics,
+              { scope: "client_action", action: "set_transaction_lines" },
+              { fieldErrors },
+            );
+          }
         }
         try {
           port.setTransactionLines(parsed.data, runtime.capture());
@@ -2781,20 +3282,18 @@ export function createPhoneLedger(
           // `set_transaction_lines` throws on a sum mismatch (§10.3) the same
           // way `update_transaction` throws on a stale version — caught here
           // so the refusal lands on the breakdown card rather than a crash.
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_transaction_lines",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_transaction_lines" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "set_transaction_lines",
-          phase: "success",
-        });
-        return { id: parsed.data.transactionId };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "set_transaction_lines" },
+          { id: parsed.data.transactionId },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2828,30 +3327,27 @@ export function createPhoneLedger(
           pinned: draft.pinned,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "add_currency",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "add_currency" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.addCurrency(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "add_currency",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "add_currency" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "add_currency",
-          phase: "success",
-        });
-        return { code: parsed.data.code };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "add_currency" },
+          { code: parsed.data.code },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2871,30 +3367,27 @@ export function createPhoneLedger(
       try {
         const parsed = archiveCurrencyInput.safeParse({ code: draft.code, version: draft.version });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "archive_currency",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "archive_currency" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.archiveCurrency(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "archive_currency",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "archive_currency" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "archive_currency",
-          phase: "success",
-        });
-        return { code: parsed.data.code };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "archive_currency" },
+          { code: parsed.data.code },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2918,30 +3411,27 @@ export function createPhoneLedger(
           rateSource: draft.rateSource,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_rate_source",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_rate_source" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.setRateSource(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_rate_source",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_rate_source" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "set_rate_source",
-          phase: "success",
-        });
-        return { code: parsed.data.code };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "set_rate_source" },
+          { code: parsed.data.code },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -2965,30 +3455,27 @@ export function createPhoneLedger(
           pinned: draft.pinned,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_pinned",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_pinned" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.setPinned(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_pinned",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_pinned" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "set_pinned",
-          phase: "success",
-        });
-        return { code: parsed.data.code };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "set_pinned" },
+          { code: parsed.data.code },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3008,31 +3495,28 @@ export function createPhoneLedger(
       try {
         const parsed = changePivotInput.safeParse({ code: draft.code });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "change_pivot",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "change_pivot" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.changePivot(parsed.data, runtime.capture());
         } catch (writeError) {
           const fieldError = changePivotRefusal(writeError);
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "change_pivot",
-            phase: "success",
-          });
-          return { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "change_pivot" },
+            { fieldErrors: fieldError ? [fieldError] : refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "change_pivot",
-          phase: "success",
-        });
-        return { code: parsed.data.code };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "change_pivot" },
+          { code: parsed.data.code },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3059,31 +3543,24 @@ export function createPhoneLedger(
           overwriteManual: draft.overwriteManual,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_manual_rate",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_manual_rate" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         let result: { written: number; replacedManual: number };
         try {
           result = port.setManualRate(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "set_manual_rate",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_manual_rate" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "set_manual_rate",
-          phase: "success",
-        });
-        return result;
+        return finish(diagnostics, { scope: "client_action", action: "set_manual_rate" }, result);
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3108,31 +3585,24 @@ export function createPhoneLedger(
           to: draft.to,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "clear_manual_rate",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "clear_manual_rate" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         let result: { deleted: number };
         try {
           result = port.clearManualRate(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "clear_manual_rate",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "clear_manual_rate" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "clear_manual_rate",
-          phase: "success",
-        });
-        return result;
+        return finish(diagnostics, { scope: "client_action", action: "clear_manual_rate" }, result);
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3156,30 +3626,27 @@ export function createPhoneLedger(
           patch: draft.patch,
         });
         if (!parsed.success) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_currency",
-            phase: "success",
-          });
-          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_currency" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
         }
         try {
           port.updateCurrency(parsed.data, runtime.capture());
         } catch (writeError) {
-          emitClientDiagnostic(diagnostics, {
-            scope: "client_action",
-            action: "update_currency",
-            phase: "success",
-          });
-          return { fieldErrors: refusalFromThrow(writeError) };
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "update_currency" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
         }
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "update_currency",
-          phase: "success",
-        });
-        return { code: parsed.data.code };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "update_currency" },
+          { code: parsed.data.code },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3234,12 +3701,11 @@ export function createPhoneLedger(
         }
         port.renameCategory(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "rename_category",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "rename_category" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3319,12 +3785,11 @@ export function createPhoneLedger(
         }
         port.reparentCategory(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "reparent_category",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "reparent_category" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3394,12 +3859,11 @@ export function createPhoneLedger(
         }
         port.convertLeafGroup(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "convert_leaf_group",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "convert_leaf_group" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3465,12 +3929,11 @@ export function createPhoneLedger(
         }
         port.mergeCategories(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "merge_categories",
-          phase: "success",
-        });
-        return { id: parsed.data.winnerId };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "merge_categories" },
+          { id: parsed.data.winnerId },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3520,12 +3983,11 @@ export function createPhoneLedger(
         }
         port.archiveCategory(parsed.data, capture);
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "archive_category",
-          phase: "success",
-        });
-        return { id: parsed.data.id };
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "archive_category" },
+          { id: parsed.data.id },
+        );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
@@ -3549,11 +4011,7 @@ export function createPhoneLedger(
         archivedRequested = false;
         archivedCounterpartiesRequested = false;
         refresh();
-        emitClientDiagnostic(diagnostics, {
-          scope: "client_action",
-          action: "reset_preview",
-          phase: "success",
-        });
+        finish(diagnostics, { scope: "client_action", action: "reset_preview" }, undefined);
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
