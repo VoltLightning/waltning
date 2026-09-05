@@ -19,6 +19,10 @@ test-results/
 playwright-report/
 blob-report/
 
+# `pnpm e2e`'s own API and web bundle, spawned by `tools/e2e/setup/global.ts`
+# — read only when a process never comes up, never a spec's own output.
+tools/e2e/.logs/
+
 # Scratch space for skills that draft in the working tree. Not source, and its
 # drafts are throwaway HTML that Biome would lint as if it were shipped.
 .superpowers/

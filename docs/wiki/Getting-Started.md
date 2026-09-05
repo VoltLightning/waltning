@@ -89,10 +89,20 @@ graph LR
     API -->|"<i>as waltning_app</i>"| PG["<b>Postgres</b><br/><i>in Docker<br/>127.0.0.1:5442</i>"]
 ```
 
-`make e2e` then checks that chain against what is actually running — the probes,
-[[Offline and Sync|Rule 0]] authenticating a real response, a read returning
-seeded rows with its declared fields, and a refusal arriving as a domain error
-rather than a transport failure. Read-only unless you pass `--write`.
+`make e2e` runs the automated suite — nothing above needs to be running
+first, except Postgres (`pnpm db:up`), which it clones its own scratch
+database from. It starts its own API and Expo web bundle on their own
+ports, probes the API five ways, drives five journeys through the real
+browser build (first run, capture, transfer, debt, rates — the same ones
+tier 1 covers headless), then
+tears all three down. `make appliance-e2e` runs the same suite against the
+appliance instead of a fresh local stack.
+
+For a quick read-only probe of *whatever you already have running* instead —
+the health checks, [[Offline and Sync|Rule 0]] authenticating a real
+response, a read returning seeded rows with its declared fields, and a
+refusal arriving as a domain error rather than a transport failure — there is
+`pnpm e2e:smoke` (add `--write` to also create one placeholder row).
 
 **Two settings, each for one surface only.** The browser needs
 `DEV_CORS_ORIGIN=http://localhost:8081`, because Metro and the API are two

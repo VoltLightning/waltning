@@ -14,6 +14,22 @@
 
 import type { Page } from "@playwright/test";
 
+/**
+ * Every helper below navigates with a relative `page.goto`, which resolves
+ * against `playwright.config.ts`'s `baseURL` — itself `E2E_WEB_URL`, with no
+ * fallback of its own. Checked here, at module load, so a missing
+ * `E2E_WEB_URL` fails by name before some journey's first `goto` hits
+ * Playwright's own much less specific "no baseURL" error. `setup/global.ts`
+ * sets it before any spec runs.
+ */
+function requireEnv(name: string): void {
+  if (!process.env[name]) {
+    throw new Error(`${name} is not set — setup/global.ts sets this before any spec runs.`);
+  }
+}
+
+requireEnv("E2E_WEB_URL");
+
 export type CurrencyChoice = { code: string; symbol: string };
 
 /** `packages/core/src/currencies.ts`'s own reference set — the three this suite ever picks. */

@@ -1,0 +1,648 @@
+/**
+ * The two processes tier 2 drives: the API under test and its own dedicated
+ * Expo web bundle, each started and stopped by `global.ts`'s own
+ * `globalSetup`.
+ *
+ * **Why not Playwright's `webServer`.** `webServer` starts before
+ * `globalSetup` runs, and the API this suite drives must be pointed at a
+ * database that only `globalSetup` creates (`database.ts`'s `createScratch`)
+ * — there is no `APP_DATABASE_URL` to hand it until the scratch clone exists.
+ * `globalSetup` owning the whole lifecycle, in order, is the only sequencing
+ * that works; `servers.ts` is the part of it that knows how to start, wait
+ * for, and stop a process.
+ *
+ * **Every step here is unwound by hand on the way out**, success or failure
+ * — `global.ts`'s own header explains why (`globalSetup` throwing gets no
+ * teardown from Playwright), and it is why `startApi`/`startWeb` themselves
+ * stop the child they just spawned if the readiness wait after it throws (or
+ * the child itself reports a spawn error — see `raceWithChildError`), rather
+ * than leaving an orphaned process for `global.ts` to never learn about.
+ */
+
+import { type ChildProcess, spawn } from "node:child_process";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  statSync,
+} from "node:fs";
+import { connect, createServer } from "node:net";
+import { fileURLToPath } from "node:url";
+
+export type Server = {
+  url: string;
+  stop: () => Promise<void>;
+};
+
+/** `tools/e2e/setup/` → the repo root, same resolution `database.ts` uses. */
+const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
+
+/** Gitignored — see `.gitignore`. Never the place to look for what a spec asserted; only for why a process never came up. */
+const LOG_DIR = fileURLToPath(new URL("../.logs", import.meta.url));
+
+/** Truncated (`"w"`), not appended, so a log never carries a previous run's output into this one's error message. */
+function logPath(name: string): string {
+  if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
+  const path = `${LOG_DIR}/${name}`;
+  closeSync(openSync(path, "w"));
+  return path;
+}
+
+/** Bounds a single read regardless of how long a run has been writing to the file — a slow Metro bundle's log can run to megabytes. */
+const TAIL_BYTES = 64 * 1024;
+
+/** The log file's last 64 KiB, for an error message — read by offset, never the whole file. */
+function tail(file: string): string {
+  if (!existsSync(file)) return "(no log file)";
+  const { size } = statSync(file);
+  if (size === 0) return "(empty log file)";
+
+  const length = Math.min(size, TAIL_BYTES);
+  const buffer = Buffer.alloc(length);
+  const fd = openSync(file, "r");
+  try {
+    readSync(fd, buffer, 0, length, size - length);
+  } finally {
+    closeSync(fd);
+  }
+  return buffer.toString("utf8").trimEnd();
+}
+
+/** A single attempt must not itself be able to hang past the overall deadline — a server that accepts a connection and never answers would otherwise block every retry behind it. */
+const ATTEMPT_TIMEOUT_MS = 5_000;
+
+/**
+ * Polls `url` until it answers `200`, or throws with the log's tail — the
+ * only way to say *why* a process never came up rather than just that it
+ * didn't.
+ */
+export async function waitForHttp(
+  url: string,
+  options: { timeoutMs: number; label: string; logFile: string; intervalMs?: number },
+): Promise<void> {
+  const intervalMs = options.intervalMs ?? 250;
+  const deadline = Date.now() + options.timeoutMs;
+
+  for (;;) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS) });
+      if (res.status === 200) return;
+    } catch {
+      // Not up yet — connection refused (or a single attempt timing out) is
+      // the expected state until it is.
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `${options.label} never answered 200 at ${url} within ${options.timeoutMs}ms.\n\n` +
+          `${options.logFile}, last lines:\n${tail(options.logFile)}`,
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/**
+ * Polls a log file until some line contains every one of `needles`, or
+ * throws with the log's tail. Read as a whole each poll (not by offset,
+ * unlike `tail`) — the file is still small at this point in a run, well
+ * before a slow bundle's output could make that expensive.
+ */
+async function waitForLogLine(
+  logFile: string,
+  needles: readonly string[],
+  options: { timeoutMs: number; label: string; intervalMs?: number },
+): Promise<void> {
+  const intervalMs = options.intervalMs ?? 100;
+  const deadline = Date.now() + options.timeoutMs;
+
+  for (;;) {
+    if (existsSync(logFile)) {
+      const lines = readFileSync(logFile, "utf8").split("\n");
+      if (lines.some((line) => needles.every((needle) => line.includes(needle)))) return;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `${options.label} never logged a line containing ${needles.map((n) => JSON.stringify(n)).join(" and ")} ` +
+          `within ${options.timeoutMs}ms.\n\n${logFile}, last lines:\n${tail(logFile)}`,
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/**
+ * Reads a port number from an env var (`E2E_API_PORT`, `E2E_WEB_PORT`) that
+ * may be *explicitly empty* — `E2E_API_PORT=` in `.env` is a real line, not
+ * an absent one. `Number(raw ?? fallback)` would turn that into
+ * `Number("")`, which is `0`: `??` only stands in for `undefined`/`null`,
+ * never `""`. A falsy `raw` (`undefined` or `""`) uses `fallback` instead;
+ * otherwise `raw` must match `/^\d+$/` before it is trusted to `Number()` at
+ * all — `Number()`'s own parsing accepts things a port never is (`"3300.5"`,
+ * `"  3300"`, `"0x3300"`, `"Infinity"`), and the regex rejects all of them
+ * before they can reach the bounds check below.
+ *
+ * The value this returns is where `findFreePort` *starts* probing, not
+ * necessarily the port a server ends up on — see its own doc.
+ */
+export function readPort(name: string, raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${name} must be a positive integer TCP port — got ${JSON.stringify(raw)}.`);
+  }
+  const value = Number(raw);
+  if (value <= 0 || value >= 65536) {
+    throw new Error(
+      `${name} must be an integer TCP port between 1 and 65535 — got ${JSON.stringify(raw)}.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * One address family's half of a bind-test. `EADDRNOTAVAIL`/`EAFNOSUPPORT`
+ * on `::1` mean this machine has no IPv6 loopback to worry about, not that
+ * the port is busy — `EADDRINUSE` means something is bound to this exact
+ * address and port. `EACCES`/`EPERM` (a privileged port, or a sandboxing
+ * policy) is neither: no address this process tries will ever succeed, so
+ * this throws rather than reporting "busy" and sending `findFreePort`
+ * scanning upward through a whole range it was never going to bind either.
+ */
+function tryBind(port: number, host: string): Promise<"bound" | "busy" | "unsupported"> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "EADDRNOTAVAIL" || error.code === "EAFNOSUPPORT") resolve("unsupported");
+      else if (error.code === "EACCES" || error.code === "EPERM") {
+        reject(
+          new Error(
+            `Cannot bind port ${port} on ${host} (${error.code}) — a permission problem, not a ` +
+              "busy one: either it is a privileged port (below 1024, which this process has no " +
+              "business binding anyway) or a sandbox/firewall policy is refusing it. Re-running " +
+              "`pnpm e2e` will not change either.",
+          ),
+        );
+      } else resolve("busy");
+    });
+    server.listen(port, host, () => {
+      server.close(() => resolve("bound"));
+    });
+  });
+}
+
+/**
+ * One address family's half of a connect-test. `ECONNREFUSED` is the only
+ * answer that means nothing is listening; `EADDRNOTAVAIL`/`EAFNOSUPPORT`
+ * (dialling `::1` with no IPv6 loopback configured) and `EHOSTUNREACH`/
+ * `ENETUNREACH` (dialling `::1` with no route to it — some machines refuse
+ * a route to a loopback address they otherwise accept binds on) all mean
+ * there is nothing to check on this address family at all, same as
+ * `tryBind`'s own case. A successful connection, or a socket that neither
+ * connects nor errors within a second, both mean something is there.
+ */
+function tryConnect(port: number, host: string): Promise<"refused" | "answered" | "unsupported"> {
+  return new Promise((resolve) => {
+    const socket = connect({ port, host });
+    socket.setTimeout(1_000);
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve("answered");
+    });
+    socket.once("timeout", () => {
+      socket.destroy();
+      resolve("answered");
+    });
+    socket.once("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "ECONNREFUSED") resolve("refused");
+      else if (
+        error.code === "EADDRNOTAVAIL" ||
+        error.code === "EAFNOSUPPORT" ||
+        error.code === "EHOSTUNREACH" ||
+        error.code === "ENETUNREACH"
+      )
+        resolve("unsupported");
+      else resolve("answered");
+    });
+  });
+}
+
+/**
+ * A port is free only if both a bind-test *and* a connect-test agree, on
+ * both `127.0.0.1` and `::1`.
+ *
+ * **The bind-test alone is not enough.** On this machine (confirmed
+ * directly, not assumed), a `listen()` on `127.0.0.1:<port>` succeeds even
+ * while something else already holds a *wildcard* listener on that port
+ * (`0.0.0.0`/`::`, `SO_REUSEADDR`) — which is exactly how Metro binds by
+ * default. A leaked `expo start --web` from an interrupted run would read
+ * as free, `findFreePort` would hand its own port straight back to it, and
+ * the new `expo start --web --port <n>` this run spawns would fail to bind
+ * and abort — surfacing as `waitForLogLine` timing out on a log line that
+ * was never going to arrive, not as the port conflict it actually is.
+ *
+ * **The connect-test closes exactly that gap.** A wildcard listener still
+ * *answers* a connection dialled at `127.0.0.1` or `::1` — sockets are
+ * address-specific to bind, not to accept — so `tryConnect` sees it even
+ * though `tryBind` alone could not.
+ *
+ * **Neither test alone covers what the other does.** A connect-test by
+ * itself misses a listener bound to one address family and not the other
+ * (`python3 -m http.server 8099 --bind ::1` answers nothing on `127.0.0.1`,
+ * so a `127.0.0.1`-only connect-test would call it free) — the bind-test on
+ * `::1` catches that with `EADDRINUSE`. Together: a `listen()` proves no
+ * *specific* listener is already on that exact address, and a connect
+ * proves no *wildcard* listener is answering there either.
+ *
+ * The `::1` connect-test is skipped entirely once the `::1` bind-test has
+ * already said `"unsupported"` — a machine with no IPv6 loopback to bind
+ * has none to dial either, and asking anyway would only wait out
+ * `tryConnect`'s own timeout for an answer that was never coming.
+ */
+async function canBindPort(port: number): Promise<boolean> {
+  if ((await tryBind(port, "127.0.0.1")) !== "bound") return false;
+
+  const v6Bind = await tryBind(port, "::1");
+  if (v6Bind === "busy") return false;
+
+  if ((await tryConnect(port, "127.0.0.1")) !== "refused") return false;
+  if (v6Bind === "unsupported") return true;
+
+  const v6Connect = await tryConnect(port, "::1");
+  return v6Connect === "refused" || v6Connect === "unsupported";
+}
+
+/**
+ * Ports are found, not refused on. A stale process squatting on the default
+ * (`3300`, `8082`) is common enough — a previous run's API left running by a
+ * killed terminal, a developer's own server — that failing the whole suite
+ * over it would train people to go find and kill it by hand every time
+ * instead of just trying the next port, which is all this run actually
+ * needs.
+ *
+ * **This is a probe, not a reservation — there is a real TOCTOU window
+ * between it and the `spawn()` a caller makes with the port it returns.**
+ * Something else can still win that race. Closing it here (holding the
+ * listening socket this function only tested with) would just move the same
+ * race into whichever `bind()` call happened first; instead, `startApi`/
+ * `startWeb` close it after the fact — see their own comments on exactly
+ * what that check does and does not prove.
+ */
+export async function findFreePort(from: number, attempts = 50): Promise<number> {
+  for (let port = from; port < from + attempts && port <= 65535; port++) {
+    if (await canBindPort(port)) return port;
+  }
+  throw new Error(`No free TCP port found in ${from}..${Math.min(from + attempts - 1, 65535)}.`);
+}
+
+/**
+ * Kills the process group `child` leads (`detached: true` gave it one), so a
+ * `tsx`/Expo child dies with it rather than surviving as an orphan. `SIGKILL`
+ * follows after 5s only if `SIGTERM` was ignored.
+ *
+ * **Signals the group even when `child` itself has already exited.** `pnpm`
+ * exiting does not end the process group it led — the real `tsx`/`expo`
+ * process it `exec`s (or spawns and outlives) is the one actually holding
+ * the port, and can still be a live member of that group after `pnpm`
+ * itself is gone. `ESRCH` ("no such process") from either `kill()` call
+ * means the whole group is already gone, which is success, not a failure
+ * to report — every `catch` here is that case, not an oversight.
+ */
+function stopper(child: ChildProcess): () => Promise<void> {
+  return () =>
+    new Promise((resolve) => {
+      const pid = child.pid;
+      if (pid === undefined) {
+        resolve();
+        return;
+      }
+
+      if (child.exitCode !== null || child.signalCode !== null) {
+        // `child`'s own "exit" already fired, once, in the past — a `once`
+        // listener registered now will never see it again, so there is
+        // nothing to resolve this on except the schedule itself.
+        try {
+          process.kill(-pid, "SIGTERM");
+        } catch {
+          // ESRCH — the whole group is already gone, and that is the proof:
+          // resolve now rather than on the schedule, and never queue a
+          // SIGKILL against a pid the kernel may already have recycled.
+          resolve();
+          return;
+        }
+        const poll = setInterval(() => {
+          try {
+            process.kill(-pid, 0);
+          } catch {
+            // ESRCH — the last member of the group has exited.
+            clearInterval(poll);
+            clearTimeout(hardKill);
+            resolve();
+          }
+        }, 100);
+        const hardKill = setTimeout(() => {
+          clearInterval(poll);
+          try {
+            process.kill(-pid, "SIGKILL");
+          } catch {
+            // ESRCH — already gone by the time this fired.
+          }
+          resolve();
+        }, 5_000);
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          // ESRCH — already gone between the timer firing and this running.
+        }
+      }, 5_000);
+
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+
+      try {
+        process.kill(-pid, "SIGTERM");
+      } catch {
+        // ESRCH — the "exit" listener above still resolves.
+      }
+    });
+}
+
+/**
+ * A permanent, do-nothing `"error"` listener — Node treats an `"error"`
+ * event with *no* listener attached as an unhandled exception and crashes
+ * the whole process, not just the emitter. `raceWithChildError`'s own
+ * `once("error", …)` only covers the readiness window and is removed once
+ * `work` settles; without a permanent listener underneath it, an error the
+ * child emits later — while its output is only being driven through by
+ * specs, long after `startApi`/`startWeb` returned — would take this
+ * process down with it instead of, at worst, doing nothing.
+ */
+function armAgainstUnhandledError(child: ChildProcess): void {
+  child.on("error", () => {});
+}
+
+/**
+ * Runs `work`, but rejects immediately if `child` itself emits `"error"`
+ * (failed to spawn at all — a missing binary, `EACCES`, and the like) or
+ * `"exit"` (started, then died before finishing `work`) — without this,
+ * either failure would leave `waitForHttp`/`waitForLogLine` polling for up
+ * to their own full timeout for a process that was never going to answer,
+ * instead of failing immediately with the exit code and the log's own tail.
+ *
+ * One registration spans however much of `work` the caller passes —
+ * `waitForOwnProcess` calls this once around its whole log-line-then-`200`
+ * sequence, not once per step, so a child that dies between the two still
+ * fails immediately rather than only during whichever step happened to be
+ * running.
+ */
+function raceWithChildError<T>(
+  child: ChildProcess,
+  logFile: string,
+  label: string,
+  work: Promise<T>,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onError = (error: Error): void => reject(error);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+      reject(
+        new Error(
+          `${label} exited before it was ready (code ${code}, signal ${signal ?? "none"}).\n\n` +
+            `${logFile}, last lines:\n${tail(logFile)}`,
+        ),
+      );
+    };
+    child.once("error", onError);
+    child.once("exit", onExit);
+    work.then(
+      (value) => {
+        child.off("error", onError);
+        child.off("exit", onExit);
+        resolve(value);
+      },
+      // `unknown`, the same as a `catch` binding — a promise's rejection
+      // reason is exactly that, and the language gives no more choice here
+      // than it does there.
+      (error: unknown) => {
+        child.off("error", onError);
+        child.off("exit", onExit);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * `findFreePort` only proves a port was free at the moment it probed it;
+ * something else can still bind it before `spawn()` runs. What follows
+ * narrows that, in order, to no stronger a claim than the evidence supports:
+ *
+ * 1. **The child's own log says it bound this exact port.** For the API,
+ *    that is `apps/api/src/index.ts`'s `server started` diagnostic —
+ *    `{"scope":"server","phase":"started","port":<n>}`; for the web bundle,
+ *    Metro's own `Waiting on http://localhost:<n>`. A `200` *before* this
+ *    line exists is not this run's process answering — it is something
+ *    else already on the port, which is exactly the failure `findFreePort`
+ *    cannot rule out on its own (its TOCTOU window, stated on its own doc).
+ * 2. **Only then does this wait for `200`.** Between 1 and this, nothing
+ *    stops a *third* process from taking the port instead — that window is
+ *    real and not closed by anything here.
+ * 3. **The child must still be running.** `exitCode === null` after both of
+ *    the above: a process that had already lost the port would show up as
+ *    dead, not as a startup line with no `200` to follow. `raceWithChildError`
+ *    (wrapping both steps together, below) already catches the far more
+ *    common shape of that same failure — the child exiting *during* 1 or
+ *    2 — immediately rather than waiting either step out; this is the one
+ *    remaining case, the child dying in the gap after `work` resolves but
+ *    before this line runs.
+ *
+ * None of this is a lock. It is what turns "something on this port answered
+ * 200" into "the log line, then the port, then the process — all three,
+ * still this run's own" — which is the one shape of failure `00-smoke.
+ * spec.ts` must never quietly pass against.
+ */
+async function waitForOwnProcess(
+  child: ChildProcess,
+  options: {
+    logFile: string;
+    logNeedles: readonly string[];
+    logTimeoutMs: number;
+    httpUrl: string;
+    httpTimeoutMs: number;
+    label: string;
+    port: number;
+    httpIntervalMs?: number;
+  },
+): Promise<void> {
+  await raceWithChildError(
+    child,
+    options.logFile,
+    options.label,
+    (async () => {
+      await waitForLogLine(options.logFile, options.logNeedles, {
+        timeoutMs: options.logTimeoutMs,
+        label: options.label,
+      });
+      await waitForHttp(options.httpUrl, {
+        timeoutMs: options.httpTimeoutMs,
+        label: options.label,
+        logFile: options.logFile,
+        ...(options.httpIntervalMs === undefined ? {} : { intervalMs: options.httpIntervalMs }),
+      });
+    })(),
+  );
+
+  if (child.exitCode !== null) {
+    throw new Error(
+      `${options.label} on port ${options.port} answered ready, but the process this run spawned ` +
+        `for it has already exited (code ${child.exitCode}) — something else must have taken the ` +
+        `port first. Re-run \`pnpm e2e\`.`,
+    );
+  }
+}
+
+/**
+ * Spawns the API under test, pointed at the scratch database `global.ts`
+ * just cloned, and waits for it to answer ready.
+ *
+ * `from` is where this starts probing (`global.ts`'s `E2E_API_PORT`, default
+ * 3300) — the API can end up on a later port than that if the first is
+ * busy; `url` on the returned `Server` is always the port it actually got,
+ * and always `127.0.0.1` — never `localhost`, which resolves to whichever
+ * address family the OS tries first and could reach a *different* socket
+ * than the one `findFreePort` just proved free on both (`canBindPort`'s own
+ * doc).
+ *
+ * `/readyz`, not `/healthz` (`apps/api/src/http/health.ts`): `/healthz`
+ * proves only that the process is up, and this suite needs proof the API
+ * reached *this* run's Postgres — `/readyz`'s `ok` follows the database alone
+ * (MinIO is reported, never required — `health.ts`'s own `readiness()`), and
+ * nothing in this stack configures `MINIO_ENDPOINT`, so it turns green on the
+ * database check without ever waiting on a dependency this run has no
+ * container for.
+ */
+export async function startApi(options: { appDatabaseUrl: string; from: number }): Promise<Server> {
+  const { appDatabaseUrl, from } = options;
+  const port = await findFreePort(from);
+  console.log(`[e2e] API → port ${port}`);
+
+  const logFile = logPath("api.log");
+  const url = `http://127.0.0.1:${port}`;
+  let child: ChildProcess | undefined;
+  try {
+    const logFd = openSync(logFile, "a");
+    try {
+      child = spawn("pnpm", ["--filter", "@waltning/api", "start"], {
+        cwd: repoRoot,
+        env: { ...process.env, APP_DATABASE_URL: appDatabaseUrl, API_PORT: String(port) },
+        detached: true,
+        stdio: ["ignore", logFd, logFd],
+      });
+      armAgainstUnhandledError(child);
+    } finally {
+      closeSync(logFd);
+    }
+
+    await waitForOwnProcess(child, {
+      logFile,
+      logNeedles: ['"scope":"server"', '"phase":"started"', `"port":${port}`],
+      // 10s — the process logging that it bound should be near-instant;
+      // the remaining budget is `httpTimeoutMs`'s, for the database
+      // roundtrip `/readyz` itself makes.
+      logTimeoutMs: 10_000,
+      httpUrl: `${url}/readyz`,
+      httpTimeoutMs: 30_000,
+      label: "API",
+      port,
+    });
+
+    return { url, stop: stopper(child) };
+  } catch (error) {
+    // `error`'s type is `unknown` — a catch binding is one of the few places
+    // this repo allows it, since the language gives no choice.
+    if (child) await stopper(child)();
+    throw error;
+  }
+}
+
+/**
+ * Spawns tier 2's own Expo web bundle, on its own dedicated port, and waits
+ * for it to answer ready.
+ *
+ * **Never a developer's own Metro.** `:8081` — the default port a
+ * developer's own `pnpm dev:web` binds to — is never a candidate here, on
+ * purpose: OPFS is scoped per *origin*, and every port is its own origin, so
+ * a developer's `:8081` tab and this suite sharing that port would share one
+ * SQLite worker and one bootstrapped ledger between a person's own testing
+ * and this suite's writes. A dedicated port (`from` — `global.ts`'s `E2E_WEB_PORT`,
+ * default 8082 — or the next free one after it) keeps tier 2's origin, and
+ * therefore its ledger, its own — never touching `:8081` and never touched
+ * by it. `url` on the returned `Server` names whichever port it actually
+ * got, always as `127.0.0.1` — same reasoning as `startApi`'s own doc,
+ * despite Metro's own log line always saying `localhost`.
+ *
+ * `EXPO_NO_TELEMETRY: "1"` alongside `CI: "1"` — non-interactive (no
+ * keyboard shortcuts to answer, no reload prompts) and no telemetry ping a
+ * test run has no reason to make. Metro's first bundle is slow, so the
+ * budget is 180s, not the API's 30s.
+ */
+export async function startWeb(options: { from: number }): Promise<Server> {
+  const { from } = options;
+  const port = await findFreePort(from);
+  console.log(`[e2e] Web → port ${port}`);
+
+  const logFile = logPath("web.log");
+  const url = `http://127.0.0.1:${port}`;
+  let child: ChildProcess | undefined;
+  try {
+    const logFd = openSync(logFile, "a");
+    try {
+      child = spawn(
+        "pnpm",
+        ["--filter", "@waltning/mobile", "exec", "expo", "start", "--web", "--port", String(port)],
+        {
+          cwd: repoRoot,
+          env: { ...process.env, CI: "1", EXPO_NO_TELEMETRY: "1" },
+          detached: true,
+          stdio: ["ignore", logFd, logFd],
+        },
+      );
+      armAgainstUnhandledError(child);
+    } finally {
+      closeSync(logFd);
+    }
+
+    await waitForOwnProcess(child, {
+      logFile,
+      logNeedles: [`Waiting on http://localhost:${port}`],
+      // Metro logs this before it bundles anything — slower than the API's
+      // own startup line, since it is still booting the bundler itself, but
+      // much faster than a first full bundle. The bulk of the budget is
+      // `httpTimeoutMs`'s, for that bundle.
+      logTimeoutMs: 60_000,
+      httpUrl: url,
+      httpTimeoutMs: 180_000,
+      httpIntervalMs: 1_000,
+      label: "Web",
+      port,
+    });
+
+    return { url, stop: stopper(child) };
+  } catch (error) {
+    // `error`'s type is `unknown` — a catch binding is one of the few places
+    // this repo allows it, since the language gives no choice.
+    if (child) await stopper(child)();
+    throw error;
+  }
+}

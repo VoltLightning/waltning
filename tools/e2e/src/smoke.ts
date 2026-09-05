@@ -22,7 +22,8 @@
  * **`pnpm e2e` is a different check.** Tier 2 (`specs/`) wraps this file's
  * probes in `00-smoke.spec.ts` and adds four more that drive the real Expo
  * web build — `--write`'s reasoning does not apply there, because
- * `setup/database.ts` hands the API a Postgres database that exists only for
+ * `setup/global.ts` starts the API under test itself, pointed at a Postgres
+ * database (`setup/database.ts`'s `createScratch()`) that exists only for
  * that run: every spec writes freely, and nothing it leaves behind is ever a
  * development ledger's problem.
  */
