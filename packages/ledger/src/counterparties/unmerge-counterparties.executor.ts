@@ -90,12 +90,18 @@ function unmergeCounterparties(
   if (!loserRow) {
     throw new LocalRefusal(`unmerge_counterparties: no counterparty ${merge.loserId}`);
   }
+  // `nameFolded !== ""` excludes the unset sentinel (`counterparties.sqlite.ts`'s
+  // own comment on it) — otherwise two rows nothing has folded yet (a raw
+  // fixture insert, say) would read as colliding with each other under this
+  // hand-written check, which `counterparties_name_uq`'s own `!= ''` clause
+  // already knows to ignore.
   const [collision] = tx
     .select({ id: counterparties.id, name: counterparties.name })
     .from(counterparties)
     .where(
       and(
         eq(counterparties.nameFolded, loserRow.nameFolded),
+        ne(counterparties.nameFolded, ""),
         eq(counterparties.archived, false),
         ne(counterparties.id, merge.loserId),
       ),

@@ -8,9 +8,9 @@
  * which transactions moved. Unmerge restores them and un-archives it."). The
  * brief cites "§9.3" — S15 has no numbered §9.3; §9 is "Open questions", an
  * unordered list, and its second item is the heading actually cited above.
- * Findings: R2 H1 (unmerge repoints a later reassignment), R2 H2 (chained
- * merge), R2 H5 (moved ids on the payload), R2 M2-r4 (loser cannot be lost
- * twice).
+ * Findings: R2 H1 — fixed by #116 (unmerge repoints a later reassignment),
+ * R2 H2 — fixed by #116 (chained merge), R2 H5 — fixed by #116 (moved ids on
+ * the payload), R2 M2-r4 (loser cannot be lost twice).
  *
  * **R2 H1 is one half of a joint rule with `counterparty-names.journey.test.ts`'s
  * own R2 M3**: an archived name is free (the other file), but an unmerge
@@ -71,7 +71,7 @@ function setup() {
 }
 
 describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's reversible merge", () => {
-  it.fails("R2 H5 — listCounterpartyMerges carries a moved-row count but not the moved ids themselves", () => {
+  it("R2 H5 — listCounterpartyMerges carries a moved-row count but not the moved ids themselves", () => {
     const j = setup();
     try {
       j.session.mergeCounterparties(
@@ -95,7 +95,7 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
     }
   });
 
-  it.fails("R2 H1 — unmerge repoints every originally-moved id back to the loser, overwriting a reassignment made after the merge", () => {
+  it("R2 H1 — unmerge repoints every originally-moved id back to the loser, overwriting a reassignment made after the merge", () => {
     const j = setup();
     try {
       j.session.mergeCounterparties(
@@ -136,7 +136,7 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
     }
   });
 
-  it.fails("R2 H2 — a winner still holding an open (un-reversed) merge can itself be merged away, chaining the absorption", () => {
+  it("R2 H2 — a winner still holding an open (un-reversed) merge can itself be merged away, chaining the absorption", () => {
     const j = setup();
     try {
       j.session.mergeCounterparties(

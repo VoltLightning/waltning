@@ -99,12 +99,17 @@ function patchCounterparty(input: UpdateCounterpartyInput, tx: ReplicaTx): Local
   // just ran against the same target value a renamed patch would un-archive
   // into, so running it twice would only repeat the same query.
   if (input.patch.archived === false && nameFolded === undefined) {
+    // `nameFolded !== ""` excludes the unset sentinel — see
+    // `counterparties.sqlite.ts`'s own comment on it. Without it, two rows
+    // nothing has folded yet would read as colliding with each other here,
+    // which `counterparties_name_uq`'s own `!= ''` clause already ignores.
     const [archiveCollision] = tx
       .select({ id: counterparties.id, name: counterparties.name })
       .from(counterparties)
       .where(
         and(
           eq(counterparties.nameFolded, current.nameFolded),
+          ne(counterparties.nameFolded, ""),
           eq(counterparties.archived, false),
           ne(counterparties.id, input.id),
         ),

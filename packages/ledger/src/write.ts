@@ -304,8 +304,32 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
     // `pending`, exactly as the outbox commit left it, because the drain
     // must still try to send it (§14.1) and local replay must still retry
     // it, neither of which a `blocked` write.ts would ever attempt.
+    //
+    // R2 H1-r4 — a `LocalRefusal` met here is not automatically trustworthy,
+    // the same reason `recover.ts`'s own `anyDeferredSoFar` (R4 H1) exists:
+    // this write's own `apply` may have refused it only because an earlier
+    // capture is itself still `deferred` — a rate not yet known, say — and
+    // the row this write names (an update's target transaction, most often)
+    // has therefore not materialised yet, not because it never will. Every
+    // entry this one could depend on was claimed a lower `seq` than this
+    // one, so "any entry still `deferred`" is exactly "an entry ahead of
+    // this one is still outstanding" — this write's own enqueue above ran
+    // before `apply`, so its own entry cannot be the one this query finds.
+    // A refusal met while that is true is marked `deferred` instead of
+    // `refused`, so `recover.ts`'s `outstanding` query retries it once the
+    // entry ahead of it resolves, rather than blocking it terminally for a
+    // row that may exist by the very next launch.
     if (error instanceof LocalRefusal || error instanceof LocalDeferral) {
-      const disposition = error instanceof LocalRefusal ? "refused" : "deferred";
+      const anEarlierEntryIsDeferred =
+        error instanceof LocalRefusal &&
+        ledger.outbox.db
+          .select({ id: outbox.id })
+          .from(outbox)
+          .where(eq(outbox.disposition, "deferred"))
+          .limit(1)
+          .all().length > 0;
+      const disposition =
+        error instanceof LocalDeferral || anEarlierEntryIsDeferred ? "deferred" : "refused";
       const reason = error.message;
       try {
         ledger.outbox.db

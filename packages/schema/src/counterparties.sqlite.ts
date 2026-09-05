@@ -64,6 +64,20 @@ export const counterpartiesColumns = () => ({
    * backfill a real value. The backfill itself is a follow-up PR's, not this
    * migration's — it runs as ordinary application code after 0006 applies
    * and before 0007 does, writing `fold(name)` into every row.
+   *
+   * **`''` never reaches the unique index below, by construction.**
+   * `createCounterpartyInput`'s `name` is `z.string().trim().min(1)`, and
+   * `fold()` is length-preserving, so no write through the executors can
+   * ever produce an empty folded name. The only rows that hold the raw `''`
+   * default are ones nothing has computed a real value for yet — pre-backfill
+   * rows on an upgrading phone, and this file's own fixture helpers (`seed.ts`'s
+   * `seedCounterparty`, which inserts straight into the table the way
+   * `executors.test.ts`'s own `seed()` does, bypassing `create_counterparty`
+   * on purpose). Treating `''` as "not yet folded" rather than "folded to
+   * nothing" is what the index's `and ${t.nameFolded} != ''` clause below
+   * says: a real collision (two folded names that agree) is still refused,
+   * but two rows that both still carry the unset sentinel are not mistaken
+   * for that.
    */
   nameFolded: k.text("name_folded").notNull().default(""),
   kind: k.text("kind", { enum: COUNTERPARTY_KIND }).notNull().default("person"),
@@ -81,5 +95,10 @@ export const counterpartiesColumns = () => ({
 export const counterparties = k.table("counterparties", counterpartiesColumns(), (t) => [
   // M3 — an archived counterparty's old name must not block a fresh one from
   // taking it; history stays under the old row regardless (§9.2).
-  k.uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
+  // The `!= ''` half excludes the unset sentinel — see the comment on
+  // `nameFolded` above.
+  k
+    .uniqueIndex("counterparties_name_uq")
+    .on(t.nameFolded)
+    .where(sql`not ${t.archived} and ${t.nameFolded} != ''`),
 ]);

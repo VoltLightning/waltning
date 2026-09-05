@@ -264,7 +264,7 @@ export const REPLICA_DDL: readonly string[] = [
   `CREATE UNIQUE INDEX \`counterparty_merges_loser_open_uq\` ON \`counterparty_merges\` (\`loser_id\`) WHERE "counterparty_merges"."unmerged_at" is null`,
   `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
   `DROP INDEX \`counterparties_name_uq\``,
-  `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
+  `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived" and "counterparties"."name_folded" != ''`,
 ];
 
 /** The queue, its index, and the counter `claimSeq` allocates from. */

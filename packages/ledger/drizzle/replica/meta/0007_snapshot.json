@@ -450,7 +450,7 @@
             "name_folded"
           ],
           "isUnique": true,
-          "where": "not \"counterparties\".\"archived\""
+          "where": "not \"counterparties\".\"archived\" and \"counterparties\".\"name_folded\" != ''"
         }
       },
       "foreignKeys": {

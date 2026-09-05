@@ -2,7 +2,7 @@
  * Proves: flows/J07-lend-and-settle.md §3–§5, SPEC.md §6.5 (a row's currency
  * is its account's).
  *
- * Findings: R2 H3, R4 (settle scale mirror).
+ * Findings: R2 H3 — fixed by #116, R4 (settle scale mirror).
  *
  * **Scenario (5) from the brief is dropped.** `settleDebtInput`
  * (`packages/core/src/registry/inputs.ts`) carries no field for the balance
@@ -111,7 +111,7 @@ describe("settle_debt — J07 §3–§5, a settlement never implicitly clears a 
     }
   });
 
-  it.fails("R2 H3 — settle_debt never checks that `currency` names the destination account's own currency (SPEC.md §6.5)", () => {
+  it("R2 H3 — settle_debt never checks that `currency` names the destination account's own currency (SPEC.md §6.5)", () => {
     const j = setup();
     try {
       lend(j);

@@ -22,6 +22,12 @@ export type LocalCounterpartyMerge = {
   mergedAt: Date;
   /** How many transactions this merge repointed — `movedTransactionIds.length`, not a second count. */
   movedCount: number;
+  /**
+   * The moved ids themselves (R2 H5) — `merge_counterparties` already wrote
+   * them; `movedCount` alone left a caller needing them (S13's "Undo", say)
+   * with nothing to reverse.
+   */
+  movedTransactionIds: readonly Id<"transactions">[];
 };
 
 export function readCounterpartyMerges<TRun, TSchema extends typeof ledgerSchema>(
@@ -45,5 +51,6 @@ export function readCounterpartyMerges<TRun, TSchema extends typeof ledgerSchema
       loserName: row.loserName,
       mergedAt: row.mergedAt,
       movedCount: row.movedTransactionIds.length,
+      movedTransactionIds: row.movedTransactionIds,
     }));
 }

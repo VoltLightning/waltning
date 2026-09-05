@@ -20,14 +20,15 @@
  * engine disagree with the corpus for a different reason without the other
  * file's `it.fails` needing to move.
  *
- * Findings: R2 C1 (SQLite's ASCII-only `lower()` lets a Polish diacritic case
- * pair through — `counterparty-names.journey.test.ts` already covers the
- * single-word case; this file adds the full-diacritic Zażółć/ZAZOLC pair,
- * which fails the same way), R2 H1-r3 (NFC/NFD). Tab, NBSP and vertical tab
- * are *not* findings here: `z.string().trim()` strips ECMAScript's whole
- * whitespace set before the name ever reaches SQLite's `lower(trim())`, so
- * the phone refuses all three — see R2 M1-r4 / R2 C1-r4 in the Postgres half,
- * where `btrim`'s narrower default disagrees.
+ * Findings: R2 C1 — fixed by #116 (SQLite's ASCII-only `lower()` lets a
+ * Polish diacritic case pair through — `counterparty-names.journey.test.ts`
+ * already covers the single-word case; this file adds the full-diacritic
+ * Zażółć/ZAZOLC pair, which fails the same way), R2 H1-r3 — fixed by #116
+ * (NFC/NFD). Tab, NBSP and vertical tab are *not* findings here:
+ * `z.string().trim()` strips ECMAScript's whole whitespace set before the
+ * name ever reaches SQLite's `lower(trim())`, so the phone refuses all three
+ * — see R2 M1-r4 / R2 C1-r4 in the Postgres half, where `btrim`'s narrower
+ * default disagreed.
  */
 
 import { NAME_PAIRS } from "@waltning/core/capture/names-corpus";
@@ -78,11 +79,11 @@ function attemptCollision(a: string, b: string): boolean {
  * disagrees with the corpus's `collide`. `undefined` means the executor
  * agrees with the corpus.
  */
-const LEDGER_FINDING: Partial<Record<number, string>> = {
-  0: "R2 C1", // Łukasz/łukasz
-  1: "R2 H1-r3", // NFC/NFD
-  10: "R2 C1", // Zażółć/ZAZOLC
-};
+// Every index this once disagreed with the corpus on — R2 C1 (Łukasz/łukasz,
+// Zażółć/ZAZOLC) and R2 H1-r3 (NFC/NFD) — is fixed by #116: `fold()` now
+// normalises to NFC first and folds the nine Polish diacritics before either
+// engine's index ever sees the name.
+const LEDGER_FINDING: Partial<Record<number, string>> = {};
 
 describe("create_counterparty — the phone's half of the fold-guard parity", () => {
   NAME_PAIRS.forEach((pair, index) => {

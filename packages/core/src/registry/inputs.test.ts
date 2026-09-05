@@ -1119,6 +1119,19 @@ describe("mergeCounterpartiesInput", () => {
     expect(parsed.winnerId).toBe(COUNTERPARTY_ID);
     expect(parsed.movedTransactionIds).toEqual([SETTLE_TXN_ID]);
   });
+
+  // R2 H5 — a caller with no pre-read to name the moved ids from (this
+  // operation's own fixtures included) omits the field, and the executor
+  // discovers them itself at apply time.
+  it("leaves movedTransactionIds unset for a caller with nothing to name", () => {
+    const parsed = mergeCounterpartiesInput.parse({
+      mergeId: MERGE_ID,
+      winnerId: COUNTERPARTY_ID,
+      loserId: OTHER_COUNTERPARTY_ID,
+    });
+
+    expect(parsed.movedTransactionIds).toBeUndefined();
+  });
 });
 
 describe("unmergeCounterpartiesInput", () => {
@@ -1162,10 +1175,14 @@ describe("settleDebtInput", () => {
     discharges: { currency: "EUR", amount: "50" },
   };
 
-  // R2 H4 — carried, not derived: the schema now requires it.
-  it("requires type — income or expense, never optional", () => {
+  // R2 H4 — carried when the caller has one, verified rather than derived
+  // (`settle-debt.executor.ts`); optional here so a caller with no live-sign
+  // read to carry — this operation's own fixtures included — still parses,
+  // and gets the executor's own read of the live sign instead.
+  it("accepts type when the caller supplies one, and leaves it unset otherwise", () => {
     const { type: _omit, ...withoutType } = base;
-    expect(settleDebtInput.safeParse(withoutType).success).toBe(false);
+    expect(settleDebtInput.safeParse(withoutType).success).toBe(true);
+    expect(settleDebtInput.parse(withoutType).type).toBeUndefined();
     expect(settleDebtInput.parse(base).type).toBe("expense");
   });
 

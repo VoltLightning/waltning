@@ -3,10 +3,16 @@
  * counterparty is archived, not deleted, and the merge records exactly which
  * transactions moved."*
  *
- * Exactly the transactions the controller named are repointed to
- * `winnerId` (R2 H5 — see `apply` below), the moved ids are recorded on a
- * `counterparty_merges` row, and the loser is archived (never deleted —
- * §6.9). `unmerge_counterparties` reverses precisely that recorded list.
+ * Every transaction that ends up moved is repointed to `winnerId`, the moved
+ * ids are recorded on a `counterparty_merges` row, and the loser is archived
+ * (never deleted — §6.9). `unmerge_counterparties` reverses precisely that
+ * recorded list. **Which ids "end up moved" has two paths (R2 H5 —
+ * `namedMovedRows` and `mergeCounterparties` below):** a caller that named
+ * them explicitly (its own pre-read of the replica) gets exactly that list,
+ * refused if any of it no longer names the loser; a caller with nothing to
+ * name gets whatever this transaction discovers pointing at the loser right
+ * now, atomically. Both are recorded the same way, and `listCounterpartyMerges`
+ * reads either back the same way.
  *
  * **This deliberately differs from `merge_categories` (J12), which is not
  * reversible in one step.** A counterparty merge only re-points a foreign
@@ -19,14 +25,15 @@
  * as either role, on a merge that is still open (`unmerged_at is null`).
  *
  * **Asserts the loser is actually empty before archiving it (R2 L3).** The
- * H5 stale check above only catches a *named* id reassigned away from the
- * loser; it says nothing about a live row the controller never named at all
- * — one captured after the sheet read the loser's transactions, say. Rather
- * than archive a counterparty that still has a live transaction pointing at
- * it (invisible from then on — S12 only lists unarchived counterparties),
- * this refuses the whole merge instead.
+ * named path's stale check only catches a *named* id reassigned away from
+ * the loser; it says nothing about a live row the controller never named at
+ * all — one captured after the sheet read the loser's transactions, say.
+ * Rather than archive a counterparty that still has a live transaction
+ * pointing at it (invisible from then on — S12 only lists unarchived
+ * counterparties), this refuses the whole merge instead.
  */
 
+import type { Id } from "@waltning/core/id";
 import {
   type MergeCounterpartiesInput,
   mergeCounterpartiesInput,
@@ -67,6 +74,45 @@ export const mergeCounterpartiesExecutor = defineLocalExecutor<
   mints: (input) => [input.mergeId],
   apply: (input, tx) => mergeCounterparties(input, tx),
 });
+
+/**
+ * The caller-named half of R2 H5 — refuses if any named id no longer points
+ * at the loser, then moves exactly the named ids. Chunked (R2 M3): a single
+ * `inArray` over every named id binds one SQLite variable per id, and a move
+ * past `SQLITE_MAX_VARIABLE_NUMBER` (999) would otherwise throw "too many
+ * SQL variables" instead of the refusal below.
+ */
+function namedMovedRows(
+  tx: ReplicaTx,
+  loserId: Id<"counterparties">,
+  winnerId: Id<"counterparties">,
+  movedTransactionIds: readonly Id<"transactions">[],
+): { id: Id<"transactions"> }[] {
+  if (movedTransactionIds.length === 0) return [];
+  const named = chunkIds(movedTransactionIds).flatMap((batch) =>
+    tx
+      .select({ id: transactions.id, counterpartyId: transactions.counterpartyId })
+      .from(transactions)
+      .where(inArray(transactions.id, batch))
+      .all(),
+  );
+  const counterpartyById = new Map(named.map((row) => [row.id, row.counterpartyId]));
+  const stale = movedTransactionIds.filter((id) => counterpartyById.get(id) !== loserId);
+  if (stale.length > 0) {
+    throw new LocalRefusal(
+      `merge_counterparties: ${stale.length} named transaction(s) no longer name ` +
+        `${loserId} (${stale.join(", ")}) — reload and try again`,
+    );
+  }
+  return chunkIds(movedTransactionIds).flatMap((batch) =>
+    tx
+      .update(transactions)
+      .set({ counterpartyId: winnerId })
+      .where(inArray(transactions.id, batch))
+      .returning({ id: transactions.id })
+      .all(),
+  );
+}
 
 function mergeCounterparties(
   input: MergeCounterpartiesInput,
@@ -134,53 +180,28 @@ function mergeCounterparties(
     );
   }
 
-  // R2 H5 — moves exactly the ids the controller named (computed from the
-  // replica it could see), never "everything currently pointing at the
-  // loser" — the same reason `unmerge_counterparties` reverses a recorded
-  // list rather than re-deriving one. Refuses if any named id no longer
-  // points at the loser: a concurrent write already reassigned it, and
-  // silently dropping it from the moved set would move a different set than
-  // the controller — and the person — saw.
-  if (input.movedTransactionIds.length > 0) {
-    // R2 M3 — chunked: a single `inArray` over every moved id binds one
-    // SQLite variable per id, and a move past `SQLITE_MAX_VARIABLE_NUMBER`
-    // (999) would throw "too many SQL variables" instead of this refusal.
-    const named = chunkIds(input.movedTransactionIds).flatMap((batch) =>
-      tx
-        .select({ id: transactions.id, counterpartyId: transactions.counterpartyId })
-        .from(transactions)
-        .where(inArray(transactions.id, batch))
-        .all(),
-    );
-    const counterpartyById = new Map(named.map((row) => [row.id, row.counterpartyId]));
-    const stale = input.movedTransactionIds.filter(
-      (id) => counterpartyById.get(id) !== input.loserId,
-    );
-    if (stale.length > 0) {
-      throw new LocalRefusal(
-        `merge_counterparties: ${stale.length} named transaction(s) no longer name ` +
-          `${input.loserId} (${stale.join(", ")}) — reload and try again`,
-      );
-    }
-  }
+  // R2 H5 — a caller with its own pre-read (`create-phone-ledger.ts`'s
+  // `mergeCounterparties` action, paging `searchTransactions`) names exactly
+  // the ids it saw, and this refuses one that no longer names the loser: a
+  // concurrent write already reassigned it, and silently dropping it from
+  // the moved set would move a different set than the controller — and the
+  // person — saw. A caller with no such pre-read (this operation's own
+  // fixtures included) omits the field entirely and gets the ids this
+  // transaction discovers for itself, below — never a mix of the two, since
+  // an omitted list is `undefined`, not `[]`.
+  const movedRows = input.movedTransactionIds
+    ? namedMovedRows(tx, input.loserId, input.winnerId, input.movedTransactionIds)
+    : tx
+        .update(transactions)
+        .set({ counterpartyId: input.winnerId })
+        .where(and(eq(transactions.counterpartyId, input.loserId), isNull(transactions.deletedAt)))
+        .returning({ id: transactions.id })
+        .all();
 
-  // R2 M3 — chunked for the same reason as the stale check above.
-  const movedRows =
-    input.movedTransactionIds.length === 0
-      ? []
-      : chunkIds(input.movedTransactionIds).flatMap((batch) =>
-          tx
-            .update(transactions)
-            .set({ counterpartyId: input.winnerId })
-            .where(inArray(transactions.id, batch))
-            .returning({ id: transactions.id })
-            .all(),
-        );
-
-  // R2 L3 — the H5 stale check above only catches a *named* id reassigned
-  // away from the loser; it says nothing about a live transaction the
-  // controller never named at all. Asserted straight after the move rather
-  // than trusted: archiving a counterparty that still holds a live
+  // R2 L3 — the named path's stale check only catches a *named* id
+  // reassigned away from the loser; it says nothing about a live transaction
+  // the controller never named at all. Asserted straight after the move
+  // rather than trusted: archiving a counterparty that still holds a live
   // transaction would make that row's counterparty vanish from S12, which
   // only lists unarchived rows. Refused, not archived, if one turns up.
   const [stillLive] = tx
@@ -209,10 +230,14 @@ function mergeCounterparties(
   // A plain insert, not `onConflictDoUpdate` — the entry mints `mergeId`
   // (`mints` above), so a genuine replay of this exact write is "twice is
   // once" by the id, the same H13 argument `create_counterparty`'s idempotent
-  // insert gives. A replay would in any case be caught earlier: the named
-  // ids in `input.movedTransactionIds` now point at `winnerId`, not
-  // `loserId`, so the H5 stale check above refuses it before this insert is
-  // ever reached — a duplicate `mergeId` would otherwise fail loudly here.
+  // insert gives. Both paths above would in any case be caught earlier on a
+  // replay: a named list is stale by then (its ids now point at `winnerId`,
+  // not `loserId`), and a discovered list reads back empty for the same
+  // reason — either way `loser.archived` refuses the second attempt before
+  // this insert is reached. That never fires today, but a silently-empty
+  // `movedTransactionIds` is the wrong failure mode to leave reachable by a
+  // future change to that guard; a duplicate `mergeId` now fails loudly
+  // instead.
   const [mergeRow] = tx
     .insert(counterpartyMerges)
     .values({
