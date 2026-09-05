@@ -22,8 +22,24 @@ import type { AppRouter } from "@waltning/api/router";
 import { WALTNING_HEADER } from "@waltning/core/protocol";
 import { ruleZeroFetch } from "@waltning/core/rule-zero-fetch";
 
-/** `smoke.ts`'s own default — deliberately not `use.baseURL`, which names the *web* bundle, not the API. */
-const API = process.env["E2E_API_URL"] ?? "http://127.0.0.1:3000";
+/**
+ * Required, not defaulted — deliberately not `use.baseURL`, which names the
+ * *web* bundle, not the API. `setup/global.ts` sets `E2E_API_URL` before any
+ * spec runs (to whichever port `startApi` actually found — `global.ts`'s own
+ * default, 3300, is only where it started probing), and this run's worker
+ * process inherits it. A fallback here — `smoke.ts`'s own script has one,
+ * for pointing it by hand at a manually-started stack — would let this spec
+ * quietly pass against a stray server on someone's own port instead.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is not set — setup/global.ts sets this before any spec runs.`);
+  }
+  return value;
+}
+
+const API = requireEnv("E2E_API_URL");
 
 /** Set by the Rule 0 wrapper so a failure can say *why*, not just "it threw". */
 let lastRuleZeroFailure: string | null = null;

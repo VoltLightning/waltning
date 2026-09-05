@@ -73,9 +73,18 @@ export type Scratch = {
 };
 
 /**
- * Builds the template if it does not already exist, clones a fresh scratch
- * database from it, and seeds it — the reference currencies
- * `00-smoke.spec.ts`'s `read()` check and every journey after it depend on.
+ * Drops and rebuilds the template unconditionally — `createTemplate()`
+ * (`scratch.ts`) does not check whether one already exists first, so
+ * `pnpm test` running in this *same checkout* at the same moment would have
+ * its own template dropped out from under it mid-run. Cross-worktree is
+ * safe, not by accident but by name: `TEMPLATE_DB` is a hash of
+ * `scratch.ts`'s own *absolute path* (`scratch.ts`'s own doc), which differs
+ * between checkouts sharing one Postgres, so two worktrees' templates never
+ * collide — only two runs in the one checkout can race.
+ *
+ * Then clones a fresh scratch database from the template and seeds it — the
+ * reference currencies `00-smoke.spec.ts`'s `read()` check and every journey
+ * after it depend on.
  */
 export async function createScratch(): Promise<Scratch> {
   await createTemplate();

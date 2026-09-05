@@ -149,10 +149,10 @@ verify: ## The gate: format, types, tests. What the pre-commit hook runs
 test: ## Just the tests
 	pnpm test
 
-e2e: ## Check the running development stack end to end
+e2e: ## Tier 2, end to end — its own scratch database, API and web bundle, torn down after
 	pnpm e2e
 
-appliance-e2e: ## The same check, against the appliance on :8080
+appliance-e2e: ## The same suite, against the appliance on :8080 instead — nothing local spun up
 	E2E_API_URL=$(APPLIANCE_URL) E2E_WEB_URL=$(APPLIANCE_URL) pnpm e2e
 
 wiki: ## Check the published wiki against docs/wiki
