@@ -113,6 +113,52 @@ describe("needs-visual.sh — the trigger set is computed from staged paths (M-3
   });
 });
 
+describe("needs-visual.sh — its header list and its pattern are the same list (L-3)", () => {
+  const script = readFileSync(new URL("../.githooks/needs-visual.sh", import.meta.url), "utf8");
+
+  // Only the enumerated block, so the exit-code table below it (which is
+  // also `#   `-indented) cannot be mistaken for a trigger path.
+  const header = script.slice(
+    script.indexOf("The full trigger set"),
+    script.indexOf("Exit code is the whole contract"),
+  );
+  /** The paths the header tells a reader are triggers. */
+  const documented = [...header.matchAll(/^#\s{3}(\S+)\s+—/gm)].map((m) => m[1] ?? "");
+
+  /** The same list, read back out of the grep pattern the script actually runs. */
+  const enforced = (/grep -qE '([^']+)'/.exec(script)?.[1] ?? "")
+    .split("|")
+    .filter(Boolean)
+    .map((alternative) => alternative.replace(/^\^/, "").replace(/\$$/, "").replace(/\\\./g, "."))
+    // A prefix alternative (`packages/ui/`) is a whole subtree; the header
+    // writes that as `packages/ui/**`.
+    .map((path) => (path.endsWith("/") ? `${path}**` : path));
+
+  /** A concrete path a reader would expect that entry to cover. */
+  function exampleFor(entry: string): string {
+    return entry.endsWith("**") ? `${entry.slice(0, -2)}example.tsx` : entry;
+  }
+
+  it("documents exactly the paths it enforces, neither more nor fewer", () => {
+    // The prose is what anyone changing this script reads first. A comment
+    // that lists four paths while the regex matches three is worse than no
+    // comment: it is a wrong answer delivered confidently.
+    expect(documented.length, "trigger paths found in the header").toBeGreaterThan(3);
+    expect(enforced.length, "alternatives found in the grep pattern").toBe(documented.length);
+    expect([...documented].sort()).toEqual([...enforced].sort());
+  });
+
+  it("runs the real script against each documented path, and one off the list", () => {
+    for (const entry of documented) {
+      expect(needsVisualExitCode([exampleFor(entry)]), `${entry} must need the suite`).toBe(0);
+    }
+    // Off the list on purpose: a client-package source file is not in the
+    // trigger set today, and this is the assertion that notices if it
+    // quietly becomes one without the header saying so.
+    expect(needsVisualExitCode(["packages/client/src/accounts/use-accounts.ts"])).toBe(1);
+  });
+});
+
 describe("needs-visual.sh — only exit 1 skips; everything else runs the suite (H-1)", () => {
   it("exits 0 on a match, 1 on no match — the two decided answers", () => {
     expect(needsVisualExitCode(["packages/ui/src/x.tsx"])).toBe(0);
@@ -161,21 +207,36 @@ describe("needs-visual.sh — only exit 1 skips; everything else runs the suite 
 });
 
 describe("the ui→core trace needs-visual.sh assumes (M-2)", () => {
-  const uiPkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } =
-    JSON.parse(readFileSync(new URL("../packages/ui/package.json", import.meta.url), "utf8"));
+  const uiPkg: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  } = JSON.parse(readFileSync(new URL("../packages/ui/package.json", import.meta.url), "utf8"));
   const coreExports: Record<string, string> = JSON.parse(
     readFileSync(new URL("../packages/core/package.json", import.meta.url), "utf8"),
   ).exports;
 
-  it("packages/ui depends on exactly @waltning/core among workspace packages, dependencies or devDependencies (L-e)", () => {
-    const workspaceDeps = Object.keys({ ...uiPkg.dependencies, ...uiPkg.devDependencies }).filter(
-      (name) => name.startsWith("@waltning/"),
-    );
+  it("packages/ui depends on exactly @waltning/core across all three dependency fields (L-5)", () => {
+    // All three, not two. `peerDependencies` is how this package already
+    // declares react, react-native and reanimated, so it is the field a
+    // workspace dependency would most naturally be added to next — and a
+    // floor that reads two of the three fields is a floor with a gap in the
+    // shape of the field the package actually uses.
+    expect(
+      uiPkg.peerDependencies,
+      "packages/ui declares peerDependencies — if that stops being true this check is reading nothing",
+    ).toBeDefined();
+
+    const workspaceDeps = Object.keys({
+      ...uiPkg.dependencies,
+      ...uiPkg.devDependencies,
+      ...uiPkg.peerDependencies,
+    }).filter((name) => name.startsWith("@waltning/"));
     expect(
       workspaceDeps,
-      "packages/ui/package.json's @waltning/* dependencies (or devDependencies) changed — " +
-        ".githooks/needs-visual.sh assumes packages/core is the only one and " +
-        "needs its trigger set updated if that is no longer true",
+      "packages/ui/package.json's @waltning/* dependencies, devDependencies or " +
+        "peerDependencies changed — .githooks/needs-visual.sh assumes packages/core " +
+        "is the only one and needs its trigger set updated if that is no longer true",
     ).toEqual(["@waltning/core"]);
   });
 
@@ -244,6 +305,24 @@ describe("real staged state, not hand-written paths (H-2, M-1)", () => {
       .filter(Boolean);
   }
 
+  /** The hook's `$present`: the same list, minus deletions. */
+  function presentPaths(dir: string): string[] {
+    assertIsolated(dir);
+    return git(dir, ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "--no-renames"])
+      .split("\n")
+      .filter(Boolean);
+  }
+
+  /** What section 1's `git check-ignore -q --no-index` answers for one path. */
+  function isIgnored(dir: string, path: string): boolean {
+    try {
+      git(dir, ["check-ignore", "-q", "--no-index", "--", path]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   afterEach(() => {
     while (tmpDirs.length) {
       const dir = tmpDirs.pop();
@@ -305,6 +384,32 @@ describe("real staged state, not hand-written paths (H-2, M-1)", () => {
     expect(withRenameDetection.split("\n").filter(Boolean)).toEqual(["docs/movable.tsx"]);
   });
 
+  it("L-1: deleting a force-added gitignored file does not reach the force-add check", () => {
+    // Section 1 asks `git check-ignore` about every path it is given. A
+    // force-added path stays gitignored forever, so on the commit that
+    // *removes* it that question still answers "yes" — and the hook refused
+    // the cleanup commit. The fix is the input, not the question: section 1
+    // reads `$present`, which has no deletions in it.
+    const dir = createTempGitRepo();
+    tmpDirs.push(dir);
+    writeFileSync(join(dir, ".gitignore"), "secret.txt\n");
+    writeFileSync(join(dir, "secret.txt"), "x\n");
+    git(dir, ["add", "-A"]);
+    git(dir, ["add", "-f", "secret.txt"]);
+    git(dir, ["commit", "-q", "-m", "init"]);
+
+    // Still ignored while tracked — this is the answer that used to block.
+    expect(isIgnored(dir, "secret.txt")).toBe(true);
+
+    git(dir, ["rm", "-q", "secret.txt"]);
+
+    expect(
+      stagedPaths(dir),
+      "the deletion is in $staged, where the gate decision needs it",
+    ).toEqual(["secret.txt"]);
+    expect(presentPaths(dir), "and not in $present, which section 1 reads").toEqual([]);
+  });
+
   it("L-d: deleting a secret-shaped file does not appear in the blocked-shape check's input", () => {
     // Section 2 of the hook must not refuse a commit that only *removes* a
     // `.env`/`.sqlite`/etc. file — that is cleanup, not the shape the check
@@ -336,13 +441,22 @@ describe("package.json and the hook share one decision, with no environment over
     readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   ).scripts;
 
-  it("section 2's blocked-shape and CSV checks read $present, not $staged (L-d)", () => {
+  it("sections 1 and 2 both read $present, not $staged (L-1, L-d)", () => {
     expect(hook).toMatch(
       /present=\$\(git diff --cached --name-only --diff-filter=ACMR --no-renames\)/,
     );
+    const section1 = hook.slice(hook.indexOf("── 1 ·"), hook.indexOf("── 2 ·"));
     const section2 = hook.slice(hook.indexOf("── 2 ·"), hook.indexOf("── 3 ·"));
-    expect(section2).toContain("printf '%s\\n' \"$present\"");
-    expect(section2).not.toContain("printf '%s\\n' \"$staged\"");
+    for (const section of [section1, section2]) {
+      expect(section).toContain("printf '%s\\n' \"$present\"");
+      // Section 1 asked git whether each path is ignored. Fed `$staged`, it
+      // asked that about deleted paths too — so removing a file that had
+      // once been force-added past .gitignore failed the commit that
+      // removed it, which is the opposite of what this hook wants.
+      expect(section).not.toContain("printf '%s\\n' \"$staged\"");
+    }
+    // `present` is computed once, ahead of both, rather than between them.
+    expect(hook.indexOf("present=$(")).toBeLessThan(hook.indexOf("── 1 ·"));
   });
 
   it("verify:fast is everything but Playwright; verify is verify:fast plus the visual suite", () => {

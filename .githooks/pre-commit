@@ -47,6 +47,18 @@ fail() {
 # `.githooks/needs-visual.sh` included.
 staged=$(git diff --cached --name-only --diff-filter=ACMRD --no-renames)
 
+# The same list minus deletions, for the checks that ask "may this file enter
+# history?" rather than "did this commit touch it?". Sections 1 and 2 below
+# are both of the first kind: they guard against a file that will still
+# *exist* in the tree after this commit, so removing a force-added gitignored
+# file, or removing a `.env`, is cleanup rather than the shape being caught.
+# Everything after them wants the deletions and reads `$staged`.
+#
+# Computed the same way `$staged` is, minus `D`, rather than filtered out of
+# `$staged` afterwards: two lists agreeing on order, de-duplication and
+# rename handling is not something to re-derive by hand in a second place.
+present=$(git diff --cached --name-only --diff-filter=ACMR --no-renames)
+
 # ── 1 · Anything force-added past .gitignore ─────────────────────────────────
 #
 # Ask git rather than re-implementing its rules. The list in the next block is
@@ -58,7 +70,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACMRD --no-renames)
 # `git add -f`, which is exactly the case this hook exists for. Checking it
 # this way inherits every present and future ignore rule and cannot drift.
 forced=$(
-  printf '%s\n' "$staged" | while IFS= read -r f; do
+  printf '%s\n' "$present" | while IFS= read -r f; do
     # --no-index is load-bearing. `git check-ignore` consults the index, and a
     # force-added path is *tracked* — so ignore rules stop applying to it and
     # the check silently returns "not ignored" for precisely the files this
@@ -72,16 +84,9 @@ fi
 
 # ── 2 · Files that must never enter history, ignored or not ──────────────────
 #
-# The second layer, for shapes .gitignore does not cover.
-#
-# Scoped to paths that still exist (`--diff-filter=ACMR`, no `D`) — deleting
-# a `.env` or a `.sqlite` file is cleanup, not the shape this guards against,
-# and `$staged` includes deletions (H-2) precisely so the checks that *do*
-# want to see them still can. A `present` computed the same way `$staged` is,
-# minus `D`, is the fix rather than reusing `$staged` and filtering after:
-# the two lists agreeing on order and de-duplication is not something to
-# re-derive by hand in two places.
-present=$(git diff --cached --name-only --diff-filter=ACMR --no-renames)
+# The second layer, for shapes .gitignore does not cover. Reads `$present`
+# for the same reason section 1 does — a commit that only *removes* a `.env`
+# or a `.sqlite` file is the outcome this check wants, not a violation of it.
 
 blocked=$(
   printf '%s\n' "$present" \

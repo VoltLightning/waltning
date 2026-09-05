@@ -129,6 +129,38 @@ describe("Make does not change what it wraps", () => {
   });
 });
 
+describe("Make orchestrates and pnpm implements — in that direction (L-4)", () => {
+  it("`make db` calls pnpm db:ready instead of keeping its own polling loop", () => {
+    const recipe = /^db:.*\n(?:\t.*\n?)*/m.exec(makefile)?.[0] ?? "";
+    expect(recipe, "the db target").toContain("pnpm db:ready");
+    expect(recipe, "the container start belongs to the script now").not.toMatch(
+      /docker compose up/,
+    );
+    expect(recipe, "so does the health poll").not.toMatch(/sleep/);
+  });
+
+  it("no pnpm script shells back into make", () => {
+    // This is the direction that breaks the rule. `dev:all` used to run
+    // `make db`, which made Make a dependency of the *implementation*: the
+    // command stops working wherever Make is missing, for a reason nothing
+    // about `pnpm dev:all` suggests, and one procedure ends up half in each
+    // file. Make may call pnpm; pnpm may not call Make.
+    const offenders = Object.entries(scripts)
+      .filter(([, body]) => /(?:^|[\s;&|])make(?:$|[\s;&|])/.test(body))
+      .map(([name]) => name);
+    expect(offenders, "pnpm scripts that shell into make").toEqual([]);
+  });
+
+  it("both callers wait for Postgres through that one script", () => {
+    expect(scripts["db:ready"], "package.json must define db:ready").toBeDefined();
+    expect(scripts["dev:all"]).toContain("pnpm db:ready");
+    // `db:up` stays, and stays different: it starts the container and
+    // returns. Anything that then talks to the database wants `db:ready`.
+    expect(scripts["db:up"]).toContain("docker compose up");
+    expect(scripts["db:up"]).not.toContain("db:ready");
+  });
+});
+
 describe("package.json stays the implementation", () => {
   it("still defines the scripts the docs tell people to run", () => {
     // These names appear in the README, the wiki and the Makefile. Renaming one

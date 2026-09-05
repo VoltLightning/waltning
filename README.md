@@ -163,10 +163,10 @@ For the native route, `pnpm --filter @waltning/mobile dev` starts Expo Go alone
 (`apps/mobile/README.md` has the `a`/`i`/`w` shortcuts) — the native preview
 doesn't call the API, so there's normally nothing to run alongside it.
 `pnpm dev:all` is `make dev`'s pnpm-spelled sibling for this surface: the same
-pattern — Postgres first, and waited for (`make db`, the same prerequisite
-every Makefile dev target uses — `pnpm db:up` alone only starts the
-container, it does not wait), then two processes together, Ctrl-C stops
-both — for the API and Expo Go instead of the API and the web app. One
+pattern — Postgres first, and waited for (`pnpm db:ready`, the same script
+`make db` calls — `pnpm db:up` alone only starts the container, it does not
+wait), then two processes together, Ctrl-C stops both — for the API and Expo
+Go instead of the API and the web app. One
 thing it can't do: under `pnpm --parallel`'s piped output Expo's keyboard
 shortcuts (`a`/`i`/`w`) don't work, so reach for `pnpm dev:android`,
 `pnpm dev:ios`, or `pnpm dev:web` when you need one of those interactively.

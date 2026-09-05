@@ -97,16 +97,12 @@ dev-ios: db ## The app in the iOS simulator
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
+# The waiting itself lives in `tools/db-ready.sh`, behind `pnpm db:ready`,
+# because `pnpm dev:all` needs exactly the same thing and the alternative was
+# a pnpm script that shells back into Make — which would make Make a
+# dependency of the implementation instead of the other way round.
 db: ## Start Postgres and wait for it to be ready
-	@docker compose up -d postgres
-	@printf "  waiting for postgres"
-	@for i in $$(seq 1 30); do \
-	  if docker compose ps --format '{{.Service}} {{.Health}}' | grep -qx 'postgres healthy'; then \
-	    echo " ready"; exit 0; \
-	  fi; \
-	  printf "."; sleep 1; \
-	done; \
-	echo " TIMED OUT"; docker compose logs --tail 20 postgres; exit 1
+	@pnpm db:ready
 
 db-reset: db ## Drop, migrate, grant, seed — the whole database from nothing
 	pnpm db:reset
