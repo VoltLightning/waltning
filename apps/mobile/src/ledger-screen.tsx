@@ -34,16 +34,17 @@ import {
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useTransactionSearch } from "@waltning/client/ledger/use-transaction-search";
 import { groupByDay } from "@waltning/client/transactions/group-by-day";
-import { sortLedgerRows } from "@waltning/client/transactions/ledger-table-sort";
 import { useLedgerTableSelection } from "@waltning/client/transactions/use-ledger-table-selection";
 import { useLedgerTableSort } from "@waltning/client/transactions/use-ledger-table-sort";
 import {
   accountingDate,
   addDays,
+  isAccountingDate,
   shiftMonth,
   type YearMonth,
   yearMonth,
 } from "@waltning/core/date";
+import { sortLedgerRows } from "@waltning/core/ledger-table";
 import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { Amount } from "@waltning/ui/fx/amount";
@@ -53,11 +54,12 @@ import { Chip } from "@waltning/ui/primitives/chip";
 import { DateField } from "@waltning/ui/primitives/date-field";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
-import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
+import { MultiSelect, Select, type SelectOption } from "@waltning/ui/primitives/select";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { PeriodHeader } from "@waltning/ui/shell/period-header";
+import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
@@ -74,8 +76,8 @@ import { SwipeableRow } from "@waltning/ui/transactions/swipeable-row";
 import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { type Href, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, Text, type TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, Pressable, ScrollView, Text, type TextInput, View } from "react-native";
 
 const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
 
@@ -100,6 +102,17 @@ function handlePressRoute(id: string) {
  * on both. `scope` reads the *account's* `ownership` — `isBusiness` is a
  * property of the row, not the account, and takes precedence the same way
  * the scope `SegmentControl`'s four values partition (`SPEC.md` §6.7).
+ *
+ * **`accounts` must include the archived ones** (DESK3 review round 1, H4).
+ * Archiving an account does not delete its transactions, and
+ * `snapshot.accounts` holds only the live ones — so a row in an archived
+ * *shared* account found no account here and fell through a `?.` to
+ * "Mine", while the scope *filter* (`search-transactions.ts`'s own SQL join,
+ * which never excludes archived) correctly classed the same row `Shared`.
+ * Two answers to §6.7's partition on one screen, and the wrong one silently
+ * called shared money your own. The desk branch asks for the archived list
+ * on mount and passes both here; a row whose account is in neither is the
+ * one case with no honest scope to state, so it states none.
  */
 function toDeskRow(
   row: PhoneSearchTransaction,
@@ -109,9 +122,11 @@ function toDeskRow(
   const account = accounts.find((candidate) => candidate.id === row.accountId);
   const scope = row.isBusiness
     ? t("shell.scopeBusiness")
-    : account?.ownership === "shared"
-      ? t("shell.scopeShared")
-      : t("shell.scopeMine");
+    : account === undefined
+      ? "—"
+      : account.ownership === "shared"
+        ? t("shell.scopeShared")
+        : t("shell.scopeMine");
   // §6.1 — a transfer stays one row; both accounts read here rather than
   // only the "from" leg, so a re-pair a person would otherwise have to do
   // by eye never comes up.
@@ -137,7 +152,7 @@ function toDeskRow(
   };
 }
 
-/** The desk categorize-selection flow's own state machine — one `useState`, five shapes. */
+/** The desk categorize-selection flow's own state machine — one `useState`, six shapes. */
 type DeskCategorizeState =
   | { phase: "picking"; kind: "income" | "expense" }
   | {
@@ -146,8 +161,56 @@ type DeskCategorizeState =
       categoryName: string;
       count: number;
       transactionIds: readonly string[];
+      /** Distinct categories the batch is leaving, already display-resolved (M, round 1). */
+      fromCategories: readonly string[];
+      /** How many of `count` already carry `categoryName` — the confirm says so. */
+      alreadyMatching: number;
     }
   | { phase: "approved"; count: number };
+
+/**
+ * What kind of category the current selection can take — `null` when nothing
+ * is selected, `"mixed"` when it spans both (C2 layer 1, round 1).
+ *
+ * A batch of income and expense rows has no single valid tree to offer: the
+ * screen used to open the *expense* tree for anything that was not
+ * entirely income, so one income row picked up among expenses got an expense
+ * category written onto it locally, and the outbox carried it to Postgres to
+ * be refused by WA017 days later with no field on screen to attach the
+ * refusal to. Three layers refuse it now and this is the first: the tree is
+ * never offered at all.
+ */
+type DeskSelectionKind = "income" | "expense" | "mixed" | null;
+
+function deskSelectionKind(rows: readonly PhoneSearchTransaction[]): DeskSelectionKind {
+  let kind: DeskSelectionKind = null;
+  for (const row of rows) {
+    if (row.type !== "income" && row.type !== "expense") continue;
+    if (kind === null) kind = row.type;
+    else if (kind !== row.type) return "mixed";
+  }
+  return kind;
+}
+
+/**
+ * The desk rail's period label, derived from the filter rather than kept
+ * beside it (H5, round 1).
+ *
+ * `periodMonth` used to be its own `useState`, coupled to `from`/`to` only
+ * by the stepper's own handler — so the first paint read "September 2026"
+ * over a table covering every transaction ever, and "Clear all filters" left
+ * the label naming a month it no longer filtered. One state means the label
+ * can only ever say what the query is actually doing: a whole calendar month
+ * names the month, no range at all says so, and anything else prints its own
+ * two ends.
+ */
+function periodMonthOf(from: string, to: string): YearMonth | null {
+  if (!isAccountingDate(from) || !isAccountingDate(to)) return null;
+  const month = yearMonth(from.slice(0, 7));
+  const monthStart = `${month}-01`;
+  const monthEnd = addDays(accountingDate(`${shiftMonth(month, 1)}-01`), -1);
+  return from === monthStart && to === monthEnd ? month : null;
+}
 
 function deskCategorizeConfirmState(
   phase: Exclude<DeskCategorizeState["phase"], "picking">,
@@ -168,13 +231,23 @@ export default function Ledger() {
   // arriving later would not retroactively seed a filter already in use.
   const filters = useLedgerFilters({ accountIds: account ? [account] : [] });
   const { filter } = filters;
+  const breakpoint = useBreakpoint();
+  const isDesk = breakpoint === "desk";
   const [sheetOpen, setSheetOpen] = useState(false);
   const [categorizeSheet, setCategorizeSheet] = useState<{
     transactionId: string;
     kind: "income" | "expense";
   } | null>(null);
 
-  const search = useTransactionSearch(ledger, filters.draft);
+  /**
+   * The desk table loads the whole filtered period, the phone list pages on
+   * scroll (C1, round 1). A table sorts by column header, and a sort over
+   * only the first fifty rows reorders those fifty under a header that
+   * counts a thousand — the arrow, the order and the count all agreeing on a
+   * wrong answer. `use-transaction-search.ts`'s own doc holds the rest,
+   * `SEARCH_LOAD_ALL_CAP` included.
+   */
+  const search = useTransactionSearch(ledger, filters.draft, { loadAll: isDesk });
 
   const today = deviceRuntime().capture().date;
   const yesterday = addDays(today, -1);
@@ -190,13 +263,22 @@ export default function Ledger() {
   );
   const entries = useMemo(() => flattenSections(sections), [sections]);
 
-  const breakpoint = useBreakpoint();
-
   /* ── Desk (S10 §3 web): the table's own rows, sorted and selectable ──── */
   const deskSort = useLedgerTableSort();
+  // H4 — `snapshot.archivedAccounts` is lazy (S16's own toggle), so the desk
+  // branch asks for it once; without it a row in an archived shared account
+  // has no account to read `ownership` from. See `toDeskRow`'s own doc.
+  const { loadArchived } = ledger;
+  useEffect(() => {
+    if (isDesk) loadArchived();
+  }, [isDesk, loadArchived]);
+  const deskAccounts = useMemo(
+    () => [...snapshot.accounts, ...snapshot.archivedAccounts],
+    [snapshot.accounts, snapshot.archivedAccounts],
+  );
   const unsortedDeskRows = useMemo(
-    () => search.rows.map((row) => toDeskRow(row, snapshot.accounts, t)),
-    [search.rows, snapshot.accounts, t],
+    () => search.rows.map((row) => toDeskRow(row, deskAccounts, t)),
+    [search.rows, deskAccounts, t],
   );
   const deskRows = useMemo(
     () => sortLedgerRows(unsortedDeskRows, deskSort.sort),
@@ -205,66 +287,123 @@ export default function Ledger() {
   const deskSelection = useLedgerTableSelection(deskRows);
 
   const [deskCategorize, setDeskCategorize] = useState<DeskCategorizeState | null>(null);
+  const selectedRows = useMemo(
+    () => search.rows.filter((row) => deskSelection.isSelected(row.id)),
+    [search.rows, deskSelection],
+  );
+  const selectionKind = deskSelectionKind(selectedRows);
   const handleOpenCategorizeSelection = useCallback(() => {
-    const rows = search.rows.filter((row) => deskSelection.isSelected(row.id));
-    const allIncome = rows.length > 0 && rows.every((row) => row.type === "income");
-    setDeskCategorize({ phase: "picking", kind: allIncome ? "income" : "expense" });
-  }, [search.rows, deskSelection]);
+    // Nothing opens for a mixed batch — `deskSelectionKind`'s own doc says
+    // why, and the banner below the bar says it to the reader.
+    if (selectionKind !== "income" && selectionKind !== "expense") return;
+    setDeskCategorize({ phase: "picking", kind: selectionKind });
+  }, [selectionKind]);
   const handleDismissDeskCategorize = useCallback(() => setDeskCategorize(null), []);
   const handlePickDeskCategory = useCallback(
     (categoryId: string) => {
-      const rows = search.rows.filter((row) => deskSelection.isSelected(row.id));
       const category = snapshot.categories.find((candidate) => candidate.id === categoryId);
+      const categoryName = category?.name ?? "";
+      // What each selected row is leaving, de-duplicated in encounter order —
+      // the confirm's own "from X, Y → Z" line (M, round 1).
+      const fromCategories: string[] = [];
+      let alreadyMatching = 0;
+      for (const row of selectedRows) {
+        const current = row.categoryName ?? t("transactions.uncategorised");
+        if (row.categoryName === categoryName) alreadyMatching += 1;
+        if (!fromCategories.includes(current)) fromCategories.push(current);
+      }
       setDeskCategorize({
         phase: "confirming",
         categoryId,
-        categoryName: category?.name ?? "",
-        count: rows.length,
-        transactionIds: rows.map((row) => row.id),
+        categoryName,
+        count: selectedRows.length,
+        transactionIds: selectedRows.map((row) => row.id),
+        fromCategories,
+        alreadyMatching,
       });
     },
-    [search.rows, deskSelection, snapshot.categories],
+    [selectedRows, snapshot.categories, t],
   );
   const handleDeclineDeskCategorize = useCallback(() => setDeskCategorize(null), []);
   const handleApproveDeskCategorize = useCallback(() => {
     if (deskCategorize?.phase !== "confirming") return;
-    const { categoryId, categoryName, count, transactionIds } = deskCategorize;
-    setDeskCategorize({ phase: "applying", categoryId, categoryName, count, transactionIds });
+    // Every field but `phase` carried across, named rather than spread —
+    // the three destinations below differ only in which phase they are in.
+    const batch = {
+      categoryId: deskCategorize.categoryId,
+      categoryName: deskCategorize.categoryName,
+      count: deskCategorize.count,
+      transactionIds: deskCategorize.transactionIds,
+      fromCategories: deskCategorize.fromCategories,
+      alreadyMatching: deskCategorize.alreadyMatching,
+    };
+    setDeskCategorize({ phase: "applying", ...batch });
     try {
-      const result = ledger.categorizeBatch({ transactionIds, categoryId });
+      const result = ledger.categorizeBatch({
+        transactionIds: batch.transactionIds,
+        categoryId: batch.categoryId,
+      });
       if ("fieldErrors" in result) {
-        setDeskCategorize({ phase: "error", categoryId, categoryName, count, transactionIds });
+        setDeskCategorize({ phase: "error", ...batch });
         return;
       }
       deskSelection.clear();
       setDeskCategorize({ phase: "approved", count: result.count });
     } catch {
-      setDeskCategorize({ phase: "error", categoryId, categoryName, count, transactionIds });
+      setDeskCategorize({ phase: "error", ...batch });
     }
   }, [deskCategorize, ledger, deskSelection]);
 
-  /* ── Desk rail: the period stepper (§3 web) — month bounds feed `filters.setRange` ── */
+  /* ── Desk rail: the period stepper (§3 web) — one state with the filter ── */
   const currentMonth = yearMonth(today.slice(0, 7));
-  const [periodMonth, setPeriodMonth] = useState<YearMonth>(currentMonth);
+  // The label *is* the filter — `periodMonthOf`'s own doc has the reasoning.
+  const periodMonth = periodMonthOf(filter.from, filter.to);
+  const { setRange } = filters;
   const applyPeriodMonth = useCallback(
     (month: YearMonth) => {
-      setPeriodMonth(month);
-      filters.setRange(`${month}-01`, addDays(accountingDate(`${shiftMonth(month, 1)}-01`), -1));
+      setRange(`${month}-01`, addDays(accountingDate(`${shiftMonth(month, 1)}-01`), -1));
     },
-    [filters],
+    [setRange],
   );
+  /**
+   * The desk branch opens on the current month rather than on every
+   * transaction ever (H5) — S10 §3 web is a reconciliation surface, and "the
+   * whole ledger, unbounded" is not a period anyone reconciles. Once only:
+   * `hasSeededPeriod` is a ref, not state, so re-running it is impossible
+   * and clearing the filter afterwards stays cleared. The phone branch is
+   * untouched — it opens on everything, as it always has.
+   */
+  const hasSeededPeriod = useRef(false);
+  useEffect(() => {
+    if (!isDesk || hasSeededPeriod.current) return;
+    hasSeededPeriod.current = true;
+    applyPeriodMonth(currentMonth);
+  }, [isDesk, currentMonth, applyPeriodMonth]);
+  // Stepping from "All time" or from a custom range starts at the current
+  // month — there is no month to step *from*, and inventing one from a
+  // range's first day would name a month the filter does not cover.
+  const steppedFrom = periodMonth ?? currentMonth;
   const handlePeriodPrevious = useCallback(
-    () => applyPeriodMonth(shiftMonth(periodMonth, -1)),
-    [periodMonth, applyPeriodMonth],
+    () => applyPeriodMonth(shiftMonth(steppedFrom, -1)),
+    [steppedFrom, applyPeriodMonth],
   );
   const handlePeriodNext = useCallback(
-    () => applyPeriodMonth(shiftMonth(periodMonth, 1)),
-    [periodMonth, applyPeriodMonth],
+    () => applyPeriodMonth(shiftMonth(steppedFrom, 1)),
+    [steppedFrom, applyPeriodMonth],
   );
   const handlePeriodToday = useCallback(
     () => applyPeriodMonth(currentMonth),
     [currentMonth, applyPeriodMonth],
   );
+  const periodLabel =
+    periodMonth !== null
+      ? monthLabel(periodMonth, locale)
+      : filter.from === "" && filter.to === ""
+        ? t("transactions.periodAllTime")
+        : t("transactions.periodCustomRange", {
+            from: filter.from || "…",
+            to: filter.to || "…",
+          });
 
   // `F` — S10 §7 web. `SearchField`'s own `ref` prop (React 19, no `forwardRef`)
   // reaches the real `TextInput.focus()` this needs.
@@ -311,6 +450,26 @@ export default function Ledger() {
     value: category.id,
     label: category.name,
   }));
+  /**
+   * §4's remaining two dimensions, for the desk rail. Both lead with an
+   * explicit "every one of them" option rather than a clear affordance
+   * beside the control: `Select`'s own value is `string | null`, and "" is
+   * the one value `useLedgerFilters` already reads as no filter.
+   */
+  const currencyOptions: SelectOption[] = [
+    { value: "", label: t("transactions.filterEveryCurrency") },
+    ...snapshot.currencies.map((currency) => ({
+      value: currency.code,
+      label: currency.code,
+    })),
+  ];
+  const counterpartyOptions: SelectOption[] = [
+    { value: "", label: t("transactions.filterEveryCounterparty") },
+    ...snapshot.counterparties.map((counterparty) => ({
+      value: counterparty.id,
+      label: counterparty.name,
+    })),
+  ];
 
   const activeFilters = activeFilterChips(t, filter, {
     accounts: snapshot.accounts,
@@ -367,7 +526,21 @@ export default function Ledger() {
     return (
       <GroundPanel>
         <View style={styles.deskLayout}>
-          <View style={styles.deskRail}>
+          {/*
+            The rail scrolls in its own right (M, round 1). It is a fixed
+            280px column holding eight controls plus a clear-all, and 1024×640
+            is a legitimate desk viewport under `useBreakpoint` — without a
+            scroller of its own the bottom of the stack is simply
+            unreachable there. Its own `ScrollView`, not the panel's: the
+            table beside it is a `FlatList` that must keep its own scroll and
+            its own height, so the two columns scroll independently and the
+            page itself does not.
+          */}
+          <ScrollView
+            style={styles.deskRail}
+            contentContainerStyle={styles.deskRailContent}
+            testID="ledger-desk-rail"
+          >
             <SearchField
               ref={searchInputRef}
               value={filter.text}
@@ -375,7 +548,7 @@ export default function Ledger() {
               placeholder={t("transactions.searchPlaceholder")}
             />
             <PeriodHeader
-              label={monthLabel(periodMonth, locale)}
+              label={periodLabel}
               onPrevious={handlePeriodPrevious}
               onNext={handlePeriodNext}
               onToday={handlePeriodToday}
@@ -402,6 +575,42 @@ export default function Ledger() {
               value={filter.scope}
               onChange={handleChangeScope}
             />
+            <Select
+              label={t("transactions.filterCurrency")}
+              placeholder={t("transactions.filterEveryCurrency")}
+              options={currencyOptions}
+              value={filter.currency}
+              onChange={filters.setCurrency}
+            />
+            <Select
+              label={t("transactions.filterCounterparty")}
+              placeholder={t("transactions.filterEveryCounterparty")}
+              options={counterpartyOptions}
+              value={filter.counterpartyId}
+              onChange={filters.setCounterpartyId}
+              searchable
+            />
+            {/*
+              §4's arbitrary date range, which the stepper above cannot
+              express — at desk width these two were reachable only through
+              the phone's bottom sheet, which the desk branch never opens, so
+              a range that was not one calendar month could be neither set
+              nor seen (M, round 1). Setting either end makes the stepper's
+              own label say "from → to" rather than naming a month it is not
+              filtering.
+            */}
+            <DateField
+              label={t("transactions.filterFrom")}
+              value={filter.from}
+              onChange={filters.setFrom}
+              today={today}
+            />
+            <DateField
+              label={t("transactions.filterTo")}
+              value={filter.to}
+              onChange={filters.setTo}
+              today={today}
+            />
             {/*
               The rail *is* the "shown, not silently applied" treatment at
               desk width (S10 §3 web: "the filter bar as a persistent left
@@ -422,21 +631,42 @@ export default function Ledger() {
                 <Text style={styles.clearAllText}>{t("transactions.clearAllFilters")}</Text>
               </Pressable>
             ) : null}
-          </View>
+          </ScrollView>
 
           <View style={styles.deskMain}>
             {search.loaded && search.total.count === 0 ? null : (
-              <Card>{search.loaded ? <RunningTotal total={search.total} /> : <TotalSkeleton />}</Card>
+              <Card>
+                {search.loaded ? (
+                  <RunningTotal total={search.total} shown={search.rows.length} />
+                ) : (
+                  <TotalSkeleton />
+                )}
+              </Card>
             )}
+            {search.capped ? (
+              <Banner
+                tone="warn"
+                message={t("transactions.narrowTheFilter", { count: search.rows.length })}
+              />
+            ) : null}
             <LedgerSelectionBar
               count={deskSelection.count}
               onCategorize={handleOpenCategorizeSelection}
               onClear={deskSelection.clear}
             />
+            {selectionKind === "mixed" ? (
+              <Banner tone="warn" message={t("transactions.mixedKindSelection")} />
+            ) : null}
             {deskCategorize && deskCategorize.phase !== "picking" ? (
               <CategorizeSelectionConfirm
                 count={deskCategorize.count}
                 categoryName={"categoryName" in deskCategorize ? deskCategorize.categoryName : ""}
+                fromCategories={
+                  "fromCategories" in deskCategorize ? deskCategorize.fromCategories : []
+                }
+                alreadyMatching={
+                  "alreadyMatching" in deskCategorize ? deskCategorize.alreadyMatching : 0
+                }
                 state={deskCategorizeConfirmState(deskCategorize.phase)}
                 onApprove={handleApproveDeskCategorize}
                 onDecline={handleDeclineDeskCategorize}
@@ -693,16 +923,29 @@ function ActiveFilterChip({ label, onRemove }: ActiveFilterChipProps) {
 
 /* ── The running total — S10 §3, §9 ──────────────────────────────────────── */
 
-type RunningTotalProps = { total: { count: number; currencies: readonly PhoneCurrencyTotal[] } };
+type RunningTotalProps = {
+  total: { count: number; currencies: readonly PhoneCurrencyTotal[] };
+  /**
+   * How many rows are actually loaded. Equal to `total.count` once the desk
+   * drain has run to the end, and less than it when the drain hit its cap —
+   * in which case the header says both numbers rather than the one that is
+   * no longer true of what is on screen (C1, round 1). Absent on the phone,
+   * whose list pages and whose count has always meant "matching", not
+   * "loaded".
+   */
+  shown?: number;
+};
 
-function RunningTotal({ total }: RunningTotalProps) {
+function RunningTotal({ total, shown }: RunningTotalProps) {
   const t = useT();
   const styles = useStyles();
   if (total.count === 0) return null;
   const countLabel =
-    total.count === 1
-      ? t("transactions.totalCountOne", { count: total.count })
-      : t("transactions.totalCountMany", { count: total.count });
+    shown !== undefined && shown < total.count
+      ? t("transactions.showingOfTotal", { shown, count: total.count })
+      : total.count === 1
+        ? t("transactions.totalCountOne", { count: total.count })
+        : t("transactions.totalCountMany", { count: total.count });
 
   return (
     <View style={styles.total}>
@@ -895,10 +1138,15 @@ const useStyles = makeStyles((theme) => ({
   deskLayout: { flex: 1, flexDirection: "row", gap: space.x5 },
   deskRail: {
     width: 280,
-    gap: space.x3,
+    flexGrow: 0,
+    flexShrink: 0,
     paddingRight: space.x3,
     borderRightWidth: hairline.width,
     borderRightColor: theme.hairline,
   },
+  // The gap lives on the content, not the `ScrollView` itself — a
+  // `ScrollView`'s own style is its viewport, and spacing set there would
+  // not travel with the scrolled content.
+  deskRailContent: { gap: space.x3, paddingBottom: space.x3 },
   deskMain: { flex: 1, gap: space.md, borderRadius: radius.md },
 }));

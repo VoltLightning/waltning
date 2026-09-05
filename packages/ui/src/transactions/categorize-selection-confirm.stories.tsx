@@ -10,6 +10,11 @@ const meta = {
   args: {
     count: 24,
     categoryName: "Eating out",
+    // What the batch is leaving, and how much of it is not really changing —
+    // the round-1 addition. A confirm that stated only the count read the
+    // same whether twenty rows were uncategorised or already correct.
+    fromCategories: ["Groceries", "Uncategorised", "Leisure"],
+    alreadyMatching: 6,
     state: "pending",
     onApprove: fn(),
     onDecline: fn(),
@@ -21,7 +26,12 @@ type Story = StoryObj<typeof meta>;
 
 export const Pending: Story = {};
 
-export const SingleRow: Story = { args: { count: 1 } };
+export const SingleRow: Story = {
+  args: { count: 1, fromCategories: ["Uncategorised"], alreadyMatching: 0 },
+};
+
+/** Nothing to say about the before — the caller passed no categories at all. */
+export const NoOrigin: Story = { args: { fromCategories: [], alreadyMatching: 0 } };
 
 export const Applying: Story = { args: { state: "applying" } };
 

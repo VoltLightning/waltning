@@ -94,6 +94,40 @@ describe("useTransactionSearch", () => {
     expect(result.current.rows).toHaveLength(3);
   });
 
+  /**
+   * C1 (DESK3 review round 1) — the desk table's own load. `fakeController`
+   * pages one row at a time, so "every page" here is three calls, and the
+   * assertion is that the caller never had to ask for the second and third.
+   */
+  it("loadAll drains every page in one go, and reports nothing left", () => {
+    const controller = fakeController();
+    const { result } = renderHook(() => useTransactionSearch(controller, {}, { loadAll: true }));
+
+    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1", "Row 2", "Row 3"]);
+    expect(result.current.hasMore).toBe(false);
+    expect(result.current.capped).toBe(false);
+  });
+
+  it("loadAll stops at its cap, with capped true and pages still unread", () => {
+    const controller = fakeController();
+    const { result } = renderHook(() =>
+      useTransactionSearch(controller, {}, { loadAll: true, cap: 2 }),
+    );
+
+    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1", "Row 2"]);
+    // The cursor is still set — the reader is told, not silently truncated.
+    expect(result.current.capped).toBe(true);
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("without loadAll the first page is still the only page — the phone list is unchanged", () => {
+    const controller = fakeController();
+    const { result } = renderHook(() => useTransactionSearch(controller, {}));
+
+    expect(result.current.rows).toHaveLength(1);
+    expect(result.current.capped).toBe(false);
+  });
+
   it("resets to the first page when the filter changes", () => {
     const controller = fakeController();
     const { result, rerender } = renderHook(

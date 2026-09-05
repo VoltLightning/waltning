@@ -13,7 +13,8 @@
  * than a limitation of the stories that exercise it.
  *
  * **Sorting and selection are owned by the caller.** `rows` arrives already
- * sorted and filtered (`sortLedgerRows`, `useTransactionSearch`) and
+ * sorted and filtered (`@waltning/core/ledger-table`'s `sortLedgerRows`,
+ * `useTransactionSearch`) and
  * `selection` is `useLedgerTableSelection`'s own result — this component
  * reads both and writes to neither on its own initiative; it only ever
  * calls back (`onSortColumn`, `selection.toggleRow`). That split is what
@@ -30,6 +31,23 @@
  * into it once, then never touch the mouse again — exactly what "the keys
  * above all work with no mouse" asks for, not a global page-level listener
  * this component has no business installing.
+ *
+ * **The container is the table's *only* tab stop, so `activeId` and DOM
+ * focus are one thing** (DESK3 review round 1, M). Row bodies were
+ * `accessibilityRole="button"` and therefore tab-focusable, and
+ * `react-native-web`'s own `PressResponder` fires a press for `Enter` and
+ * then calls `stopPropagation()` — so Tab into row 1, press `j` twice to
+ * ring row 3, press `Enter`, and row **1** opened: two "current rows", and
+ * the ring named the wrong one. `focusable={false}` takes the rows out of
+ * the tab order (RNW writes `tabIndex="-1"`), leaving the ring the single
+ * answer to "which row is current" and the container the single holder of
+ * focus. The rows stay clickable and stay named for a screen reader; only
+ * the tab stop moves.
+ *
+ * **The keys are matched case-insensitively.** `event.key` is `"J"` with
+ * Shift held or Caps Lock on, and S10 §7 and the design card both *write*
+ * these keys as capitals — a reader who types what the spec printed got
+ * nothing at all before.
  *
  * **The checkbox column reads `shiftKey` off `onPress`'s own event.**
  * `react-native-web`'s `Pressable` forwards a real DOM `MouseEvent` into
@@ -68,7 +86,7 @@ import { TRANSACTION_AMOUNT_KIND, type TransactionType } from "./transaction-row
 
 export type LedgerTableColumn = "date" | "payee" | "category" | "account" | "scope" | "amount";
 export type LedgerTableSortDirection = "asc" | "desc";
-/** `null` — the caller's own order, untouched (`ledger-table-sort.ts`'s own doc). */
+/** `null` — the caller's own order, untouched (`@waltning/core/ledger-table`'s own doc). */
 export type LedgerTableSortState = {
   column: LedgerTableColumn;
   direction: LedgerTableSortDirection;
@@ -178,16 +196,22 @@ export function LedgerTable({
    */
   const keyboardProps: { onKeyDown: (event: KeyboardEvent) => void } = {
     onKeyDown: (event) => {
-      if (event.key === "j") {
-        event.preventDefault();
-        moveActive(1);
-      } else if (event.key === "k") {
-        event.preventDefault();
-        moveActive(-1);
-      } else if (event.key === "Enter") {
+      // `Enter` is matched before the fold — it is the one key here whose
+      // own name is more than one character, and lowercasing it would make
+      // it collide with nothing but read as if it might.
+      if (event.key === "Enter") {
         event.preventDefault();
         handleOpenActive();
-      } else if (event.key === "f" || event.key === "/") {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "j") {
+        event.preventDefault();
+        moveActive(1);
+      } else if (key === "k") {
+        event.preventDefault();
+        moveActive(-1);
+      } else if (key === "f" || key === "/") {
         // S10 §7 web — `/` and `F` both reach the rail's search field. The
         // spec's own two verbs ("focuses search" / "opens the filter rail")
         // described a collapsible rail; this one is persistent (§3: "the
@@ -315,6 +339,15 @@ function LedgerTableHeaderCell({ column, sort, onSortColumn }: LedgerTableHeader
   // Arrows carry no letters, so they read the same in every language —
   // `PeriodHeader`'s own "‹"/"›" make the same call.
   const indicator = active ? (sort?.direction === "asc" ? " ↑" : " ↓") : "";
+  /**
+   * The amount column groups by currency before it compares amounts
+   * (`@waltning/core/ledger-table`'s own `compareRows` — H3, round 1),
+   * because 200 EUR and 200 PLN are not two figures on one axis. That is a
+   * surprising order to meet undeclared, so while the column is sorted the
+   * header says which order it is in. `accessibilityLabel` stays the bare
+   * column name — the sort order is a caption, not a second control.
+   */
+  const orderNote = active && column === "amount" ? t("transactions.sortedByCurrency") : null;
 
   return (
     <Pressable
@@ -327,6 +360,7 @@ function LedgerTableHeaderCell({ column, sort, onSortColumn }: LedgerTableHeader
         {t(COLUMN_LABEL_KEY[column])}
         {indicator}
       </Text>
+      {orderNote === null ? null : <Text style={styles.headerNote}>{orderNote}</Text>}
     </Pressable>
   );
 }
@@ -373,6 +407,14 @@ function LedgerTableRowView({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={row.payee || row.account}
+        // The file doc's own "one tab stop" paragraph — the container holds
+        // focus, `activeId` holds the ring, and there is only ever one
+        // "current row" between them. `tabIndex`, not `focusable={false}`:
+        // `react-native-web`'s `Pressable` writes `tabIndex` itself from its
+        // own `disabled` prop unless one is passed, which overrides
+        // `focusable` outright (`Pressable/index.js`'s `_tabIndex`) — and
+        // `focusable` warns as deprecated besides.
+        tabIndex={-1}
         onPress={handlePress}
         style={styles.rowBody}
       >
@@ -445,6 +487,7 @@ const useStyles = makeStyles((theme) => ({
     borderBottomColor: theme.hairline,
   },
   headerLabel: { color: theme.textMuted, ...text.ui("caption", 600) },
+  headerNote: { color: theme.textMuted, ...text.ui("caption") },
   row: {
     flexDirection: "row",
     alignItems: "center",

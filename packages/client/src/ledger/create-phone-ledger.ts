@@ -417,6 +417,8 @@ export type PhoneSearchFilter = {
   accountIds?: readonly Id<"accounts">[];
   categoryIds?: readonly Id<"categories">[];
   scope?: PhoneTransactionScope;
+  /** §4's own filter dimension — matches either leg, like `accountIds`. */
+  currency?: CurrencyCode;
   from?: AccountingDate;
   to?: AccountingDate;
   /** S13's whole history — every row naming this counterparty, any role. */
@@ -1020,6 +1022,8 @@ export type TransactionFilterDraft = {
   accountIds?: readonly string[];
   categoryIds?: readonly string[];
   scope?: PhoneTransactionScope;
+  /** A bare code — `""` is "every currency", the same "not yet a value" treatment `from`/`to` get. */
+  currency?: string;
   from?: string;
   to?: string;
   counterpartyId?: string;
@@ -1988,6 +1992,7 @@ export function createPhoneLedger(
             ? { categoryIds: filter.categoryIds.map((categoryId) => id<"categories">(categoryId)) }
             : {}),
           ...(filter.scope ? { scope: filter.scope } : {}),
+          ...(filter.currency ? { currency: money.currencyCode(filter.currency) } : {}),
           // A `DateField` mid-edit is not yet a real date — dropped from the
           // filter rather than thrown, the same "not yet a value" treatment
           // `isRealCalendarDate` gives an in-progress typed date elsewhere.

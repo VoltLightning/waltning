@@ -70,8 +70,36 @@ describe("useLedgerFilters", () => {
       accountIds: [],
       categoryIds: [],
       scope: "all",
+      currency: "",
       from: "",
       to: "",
     });
+  });
+
+  /**
+   * §4's two extra desk dimensions (DESK3 round 1, M). `counterpartyId` is
+   * *absent* from the draft when unset rather than `""` — the port reads any
+   * present `counterpartyId` as a filter, so an empty one would match no row
+   * at all instead of every row.
+   */
+  it("counterparty leaves the draft entirely when unset, and joins it when set", () => {
+    const { result } = renderHook(() => useLedgerFilters());
+    expect("counterpartyId" in result.current.draft).toBe(false);
+    expect(result.current.hasActiveFilter).toBe(false);
+
+    act(() => result.current.setCounterpartyId("cp-1"));
+    expect(result.current.draft.counterpartyId).toBe("cp-1");
+    expect(result.current.hasActiveFilter).toBe(true);
+  });
+
+  it("currency is an active filter, and clearAll forgets it", () => {
+    const { result } = renderHook(() => useLedgerFilters());
+    act(() => result.current.setCurrency("EUR"));
+    expect(result.current.draft.currency).toBe("EUR");
+    expect(result.current.hasActiveFilter).toBe(true);
+
+    act(() => result.current.clearAll());
+    expect(result.current.filter).toEqual(EMPTY_LEDGER_FILTER);
+    expect(result.current.hasActiveFilter).toBe(false);
   });
 });

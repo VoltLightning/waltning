@@ -13,6 +13,13 @@
  * exactly the shape `useTransactionSearch` wants, memoised so its `filterKey`
  * (`JSON.stringify`) only changes when a value actually did.
  *
+ * **Every dimension §4 names lives here, not only the ones the phone sheet
+ * draws.** `currency` and `counterpartyId` are the desk rail's own two extra
+ * controls (S10 §4: "account · category · scope · currency · date range ·
+ * counterparty"); the phone sheet simply does not render them yet. Filing
+ * them anywhere else would make the desk rail's state a second filter object
+ * beside this one, which is exactly the divergence H5 was.
+ *
  * **`clearAll` forgets a filter that arrived from another screen.** S10 §2:
  * a filter carried in from S25 or S12 seeds the initial state, but "Clear
  * all" is the reader's own decision to see everything — it resets to the
@@ -27,6 +34,10 @@ export type LedgerFilterState = {
   accountIds: readonly string[];
   categoryIds: readonly string[];
   scope: PhoneTransactionScope;
+  /** `""` — every currency. A bare code otherwise. */
+  currency: string;
+  /** `""` — every counterparty. */
+  counterpartyId: string;
   from: string;
   to: string;
 };
@@ -36,6 +47,8 @@ export const EMPTY_LEDGER_FILTER: LedgerFilterState = {
   accountIds: [],
   categoryIds: [],
   scope: "all",
+  currency: "",
+  counterpartyId: "",
   from: "",
   to: "",
 };
@@ -49,6 +62,8 @@ export type UseLedgerFiltersResult = {
   setAccountIds: (ids: readonly string[]) => void;
   setCategoryIds: (ids: readonly string[]) => void;
   setScope: (scope: PhoneTransactionScope) => void;
+  setCurrency: (code: string) => void;
+  setCounterpartyId: (id: string) => void;
   setFrom: (value: string) => void;
   setTo: (value: string) => void;
   /** Both ends in one update — the desk rail's period stepper never wants a half-set range on screen. */
@@ -77,6 +92,12 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
   }, []);
   const setScope = useCallback((scope: PhoneTransactionScope) => {
     setFilter((current) => ({ ...current, scope }));
+  }, []);
+  const setCurrency = useCallback((code: string) => {
+    setFilter((current) => ({ ...current, currency: code }));
+  }, []);
+  const setCounterpartyId = useCallback((counterpartyId: string) => {
+    setFilter((current) => ({ ...current, counterpartyId }));
   }, []);
   const setFrom = useCallback((value: string) => {
     setFilter((current) => ({ ...current, from: value }));
@@ -113,6 +134,8 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
       accountIds: filter.accountIds,
       categoryIds: filter.categoryIds,
       scope: filter.scope,
+      currency: filter.currency,
+      ...(filter.counterpartyId === "" ? {} : { counterpartyId: filter.counterpartyId }),
       from: filter.from,
       to: filter.to,
     }),
@@ -123,6 +146,8 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
     filter.accountIds.length > 0 ||
     filter.categoryIds.length > 0 ||
     filter.scope !== "all" ||
+    filter.currency !== "" ||
+    filter.counterpartyId !== "" ||
     filter.from !== "" ||
     filter.to !== "";
 
@@ -134,6 +159,8 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
     setAccountIds,
     setCategoryIds,
     setScope,
+    setCurrency,
+    setCounterpartyId,
     setFrom,
     setTo,
     setRange,

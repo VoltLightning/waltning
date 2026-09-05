@@ -147,6 +147,10 @@ export const pl: Messages = {
     filterScope: "Zakres",
     filterFrom: "Od",
     filterTo: "Do",
+    filterCurrency: "Waluta",
+    filterCounterparty: "Osoba lub firma",
+    filterEveryCurrency: "Każda waluta",
+    filterEveryCounterparty: "Wszyscy",
     totalCountOne: "{{count}} transakcja",
     totalCountMany: "{{count}} transakcji",
     totalExcludingCapitalOne: "{{amount}} bez {{count}} jednorazowej",
@@ -222,6 +226,18 @@ export const pl: Messages = {
     categorizeBatchAppliedMany: "Skategoryzowano {{count}} transakcji",
     categorizeBatchFailedWhy:
       "Jeden z zaznaczonych wierszy nie kwalifikuje się już do zmiany — mógł zostać usunięty albo jest przelewem lub korektą.",
+    sortedByCurrency: "wg waluty, potem kwoty",
+    categorizeBatchFromTo: "z {{from}} → {{to}}",
+    categorizeBatchAlreadyOne: "{{count}} wiersz już ma {{category}}",
+    categorizeBatchAlreadyMany: "{{count}} wierszy już ma {{category}}",
+    uncategorised: "Bez kategorii",
+    mixedKindSelection:
+      "Zaznaczenie zawiera wiersze przychodów i wydatków. Kategoryzuj po jednym rodzaju — kategoria wydatku nie pasuje do przychodu.",
+    showingOfTotal: "widocznych {{shown}} z {{count}}",
+    narrowTheFilter:
+      "Wczytano tylko pierwsze {{count}} wierszy, więc sortowanie i suma obejmują tylko je. Zawęź filtr, aby zobaczyć cały okres.",
+    periodAllTime: "Cały okres",
+    periodCustomRange: "{{from}} → {{to}}",
   },
   counterparties: {
     settlingWith: "Rozliczenie z {{name}}",

@@ -21,6 +21,8 @@ export type TransactionSearchFilter = {
   accountIds?: readonly Id<"accounts">[];
   categoryIds?: readonly Id<"categories">[];
   scope?: TransactionSearchScope;
+  /** Matches either leg, the same reasoning `accountIds` already gives (§4 web rail — DESK3 round 1, M). */
+  currency?: CurrencyCode;
   from?: AccountingDate;
   to?: AccountingDate;
   /** S13's whole history — every row naming this counterparty, any role. */
@@ -273,6 +275,9 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
         )
       : undefined,
     categoryIds.length > 0 ? inArray(transactions.categoryId, categoryIds) : undefined,
+    filter.currency !== undefined
+      ? or(eq(transactions.currency, filter.currency), eq(transactions.toCurrency, filter.currency))
+      : undefined,
     scopeCondition(scope),
     filter.counterpartyId !== undefined
       ? eq(transactions.counterpartyId, filter.counterpartyId)

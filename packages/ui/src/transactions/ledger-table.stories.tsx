@@ -1,17 +1,22 @@
 /**
  * `LedgerTable` — S10 §3 (web ≥1024px), a month scanned rather than scrolled.
  *
- * **`useLedgerTableSort`/`useLedgerTableSelection` are not imported here.**
- * They live in `@waltning/client`, which `packages/ui` may not depend on
- * (the architecture floor: siblings, neither imports the other) — every
- * interactive story below wires the same three-state cycle and shift-click
- * range logic by hand, in `useState`, the way a real screen wires the real
- * hooks. The stories exercise the component's contract; the hooks' own
- * behaviour is `use-ledger-table-sort.test.ts` and `use-ledger-table-
- * selection.test.ts`'s job.
+ * **These stories run the shipped algorithms, not a copy of them** (DESK3
+ * review round 1, M). They used to restate the sort cycle, the comparator
+ * and the shift-click range by hand — which made `SortedByAmount` and
+ * `RangeSelected` two screenshots certifying *the story file's* logic while
+ * looking exactly like proof of the component's. `sortLedgerRows`,
+ * `cycleSortState` and `selectableRange` live in `@waltning/core/ledger-
+ * table` — the one package both `packages/client` and `packages/ui` already
+ * depend on, since the two are siblings on the architecture floor and
+ * neither may import the other — so the stories below call the identical
+ * functions `useLedgerTableSort` and `useLedgerTableSelection` wrap. What is
+ * left restated is only the `useState` those two hooks hold, which is what a
+ * screen supplies and a story must therefore stand in for.
  *
  * **No thousand-row story.** The gate task's own performance claim is
- * `ledger-table-sort.perf.test.ts`'s job — a real `FlatList` mounted a
+ * `packages/core/src/ledger-table.perf.test.ts`'s and the desk screen's own
+ * thousand-row render test's job — a real `FlatList` mounted a
  * thousand rows tall inside Storybook's auto-height harness grows without
  * ever settling, which is `visual/stories.spec.ts`'s screenshot-stability
  * wait timing out on an image that never stops changing size. A real desk
@@ -21,6 +26,12 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import {
+  cycleSortState,
+  type SortState,
+  selectableRange,
+  sortLedgerRows,
+} from "@waltning/core/ledger-table";
 import * as money from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
@@ -34,7 +45,6 @@ import {
   type LedgerTableColumn,
   type LedgerTableRow,
   type LedgerTableSelection,
-  type LedgerTableSortState,
 } from "./ledger-table";
 
 const PAYEES = [
@@ -58,8 +68,15 @@ function generateRows(count: number): LedgerTableRow[] {
   for (let i = 0; i < count; i++) {
     const day = 28 - (i % 28);
     const month = i % 28 < 14 ? "08" : "07";
-    const amount = ((i * 37) % 950) + 5.5;
+    // A decimal string from the start — `CLAUDE.md`'s money rule holds in a
+    // story fixture too, and `toFixed` on a float is the shape it bans.
+    const cents = String(((i * 37) % 95000) + 550).padStart(3, "0");
+    const amount = `${cents.slice(0, -2)}.${cents.slice(-2)}`;
     const isExpense = i % 5 !== 0;
+    // Every sixth row is a transfer — `transactions_category_shape` gives it
+    // no checkbox, which is what makes `RangeSelected` a real test of H6's
+    // "the range skips it" rather than a fixture where every row is alike.
+    const isTransfer = i % 6 === 5;
     rows.push({
       id: `row-${i}`,
       date: `2026-${month}-${String(day).padStart(2, "0")}`,
@@ -67,12 +84,15 @@ function generateRows(count: number): LedgerTableRow[] {
       category: CATEGORIES[i % CATEGORIES.length] ?? "",
       account: ACCOUNTS[i % ACCOUNTS.length] ?? "",
       scope: SCOPES[i % SCOPES.length] ?? "",
-      amountValue: money.toMoney(isExpense ? `-${amount.toFixed(2)}` : amount.toFixed(2)),
-      currency: "PLN",
+      amountValue: money.toMoney(isExpense ? `-${amount}` : amount),
+      // Two currencies, on purpose — `sortLedgerRows` groups by currency
+      // before it compares amounts (H3), so a single-currency fixture would
+      // screenshot a sort whose defining property never showed.
+      currency: i % 4 === 3 ? "EUR" : "PLN",
       decimals: 2,
-      type: isExpense ? "expense" : "income",
+      type: isTransfer ? "transfer" : isExpense ? "expense" : "income",
       isBusiness: i % 7 === 0,
-      selectable: true,
+      selectable: !isTransfer,
     });
   }
   return rows;
@@ -80,53 +100,35 @@ function generateRows(count: number): LedgerTableRow[] {
 
 const FORTY_ROWS = generateRows(40);
 
-function compareStrings(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-/** The same three-state cycle `use-ledger-table-sort.ts` implements — restated for the story. */
-function nextSort(current: LedgerTableSortState, column: LedgerTableColumn): LedgerTableSortState {
-  if (current === null || current.column !== column) return { column, direction: "asc" };
-  if (current.direction === "asc") return { column, direction: "desc" };
-  return null;
-}
-
-function sortRows(rows: readonly LedgerTableRow[], sort: LedgerTableSortState): LedgerTableRow[] {
-  if (sort === null) return [...rows];
-  const sign = sort.direction === "asc" ? 1 : -1;
-  const column = sort.column;
-  return [...rows].sort((a, b) => {
-    const primary =
-      column === "amount"
-        ? money.cmp(a.amountValue, b.amountValue)
-        : compareStrings(a[column], b[column]);
-    return primary !== 0 ? primary * sign : compareStrings(a.id, b.id);
-  });
-}
+/**
+ * Rows 3 through 9 as a shift-click would actually resolve them — through
+ * `selectableRange`, so the transfer inside the span is skipped rather than
+ * painted selected with no checkbox to unselect it (H6). `?? []` covers the
+ * impossible branch where an id is not in its own fixture.
+ */
+const PRESELECTED_RANGE =
+  selectableRange(FORTY_ROWS, FORTY_ROWS[2]?.id ?? "", FORTY_ROWS[8]?.id ?? "") ?? [];
 
 type DemoTableProps = { rows: readonly LedgerTableRow[]; initialSelected?: readonly string[] };
 
 function DemoTable({ rows, initialSelected = [] }: DemoTableProps) {
   const styles = useStyles();
-  const [sort, setSort] = useState<LedgerTableSortState>(null);
+  const [sort, setSort] = useState<SortState>(null);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set(initialSelected));
   const [anchorId, setAnchorId] = useState<string | null>(null);
 
-  const sorted = useMemo(() => sortRows(rows, sort), [rows, sort]);
+  const sorted = useMemo(() => sortLedgerRows(rows, sort), [rows, sort]);
 
   const onSortColumn = useCallback((column: LedgerTableColumn) => {
-    setSort((current) => nextSort(current, column));
+    setSort((current) => cycleSortState(current, column));
   }, []);
 
   const toggleRow = useCallback(
     (id: string, rangeExtend: boolean) => {
       if (rangeExtend && anchorId !== null) {
-        const ids = sorted.map((row) => row.id);
-        const a = ids.indexOf(anchorId);
-        const b = ids.indexOf(id);
-        if (a !== -1 && b !== -1) {
-          const [start, end] = a <= b ? [a, b] : [b, a];
-          setSelectedIds(new Set(ids.slice(start, end + 1)));
+        const range = selectableRange(sorted, anchorId, id);
+        if (range !== null) {
+          setSelectedIds(new Set(range));
           return;
         }
       }
@@ -203,13 +205,18 @@ export const Populated: Story = {
   render: () => <DemoTable rows={FORTY_ROWS} />,
 };
 
-/** Sorted by amount, ascending — the header click cycle from a clean start. */
+/**
+ * Sorted by amount, ascending — the header click cycle from a clean start,
+ * over the shipped `sortLedgerRows`. The fixture holds two currencies, so
+ * this screenshots the real grouping (EUR block, then PLN) and the header's
+ * own "by currency" caption that states it (H3).
+ */
 export const SortedByAmount: Story = {
   render: () => {
-    const [sort, setSort] = useState<LedgerTableSortState>({ column: "amount", direction: "asc" });
-    const sorted = useMemo(() => sortRows(FORTY_ROWS, sort), [sort]);
+    const [sort, setSort] = useState<SortState>({ column: "amount", direction: "asc" });
+    const sorted = useMemo(() => sortLedgerRows(FORTY_ROWS, sort), [sort]);
     const onSortColumn = useCallback((column: LedgerTableColumn) => {
-      setSort((current) => nextSort(current, column));
+      setSort((current) => cycleSortState(current, column));
     }, []);
     const selection: LedgerTableSelection = useMemo(
       () => ({
@@ -264,18 +271,22 @@ export const FilteredToEmpty: Story = {
   },
 };
 
-/** A shift-click range, pre-selected — rows 3 through 9 of the populated set. */
+/**
+ * A shift-click range, pre-selected — rows 3 through 9 of the populated set,
+ * resolved by the shipped `selectableRange`, which skips a non-selectable
+ * row inside the span rather than painting it selected with no checkbox (H6).
+ */
 export const RangeSelected: Story = {
-  render: () => (
-    <DemoTable rows={FORTY_ROWS} initialSelected={FORTY_ROWS.slice(2, 9).map((row) => row.id)} />
-  ),
+  render: () => <DemoTable rows={FORTY_ROWS} initialSelected={PRESELECTED_RANGE} />,
 };
 
 /** "Categorise n selected" behind one confirm — S10 §7 web. */
 export const CategorizeConfirm: Story = {
   render: () => {
     const styles = useStyles();
-    const selectedRows = FORTY_ROWS.slice(2, 6);
+    // Selectable rows only — a transfer painted "selected" with no checkbox
+    // to unselect it is the exact dead end H6 named.
+    const selectedRows = FORTY_ROWS.filter((row) => row.selectable).slice(2, 6);
     const selection: LedgerTableSelection = {
       selectedIds: new Set(selectedRows.map((row) => row.id)),
       isSelected: (id) => selectedRows.some((row) => row.id === id),
@@ -289,6 +300,8 @@ export const CategorizeConfirm: Story = {
         <CategorizeSelectionConfirm
           count={selection.count}
           categoryName="Eating out"
+          fromCategories={["Groceries", "Uncategorised"]}
+          alreadyMatching={1}
           state="pending"
           onApprove={noop}
           onDecline={noop}

@@ -1131,6 +1131,127 @@ describe("categorize_batch", () => {
 
     expect(readTxn()?.categoryId).toBe(CATEGORY);
   });
+
+  /**
+   * DESK3 review round 1, C2 layer 2 — the executor's own kind check, both
+   * directions, the same pair `packages/db/src/test/category-kind.test.ts`
+   * runs for Postgres's WA017. `TXN` and `CATEGORY` are both `expense` by the
+   * two `beforeEach`s above, so each test only has to add the one row or
+   * category of the other kind.
+   */
+  describe("H1-b — a category's kind must match every named row's type", () => {
+    const INCOME_CATEGORY = id<"categories">("00000000-0000-4000-8000-0000000000c2");
+    const INCOME_TXN = id<"transactions">("00000000-0000-4000-8000-000000000006");
+
+    beforeEach(() => {
+      stores.ledger.replica.db
+        .insert(categories)
+        .values({ id: INCOME_CATEGORY, name: "Salary", kind: "income", isLeaf: true })
+        .run();
+      writeLocally(stores.ledger, {
+        executor: createTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          id: INCOME_TXN,
+          date: "2026-09-03",
+          type: "income",
+          accountId: ACCOUNT,
+          amountOriginal: "9200",
+          currency: PLN,
+          payee: "Salary",
+        },
+      });
+    });
+
+    it("refuses an expense category on an income row", () => {
+      expect(() =>
+        writeLocally(stores.ledger, {
+          executor: categorizeBatchExecutor,
+          registry: ledgerRegistry,
+          capture,
+          input: { transactionIds: [INCOME_TXN], categoryId: CATEGORY },
+        }),
+      ).toThrow(/categorize_batch/);
+
+      const row = stores.ledger.replica.db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.id, INCOME_TXN))
+        .get();
+      expect(row?.categoryId).toBeNull();
+    });
+
+    it("refuses an income category on an expense row", () => {
+      expect(() =>
+        writeLocally(stores.ledger, {
+          executor: categorizeBatchExecutor,
+          registry: ledgerRegistry,
+          capture,
+          input: { transactionIds: [TXN], categoryId: INCOME_CATEGORY },
+        }),
+      ).toThrow(/categorize_batch/);
+
+      expect(readTxn()?.categoryId).toBeNull();
+    });
+
+    it("refuses a batch mixing an income row into an otherwise-valid expense batch", () => {
+      expect(() =>
+        writeLocally(stores.ledger, {
+          executor: categorizeBatchExecutor,
+          registry: ledgerRegistry,
+          capture,
+          input: { transactionIds: [TXN, INCOME_TXN], categoryId: CATEGORY },
+        }),
+      ).toThrow(/categorize_batch/);
+
+      // All or nothing — the batch's one valid row is not categorised either.
+      expect(readTxn()?.categoryId).toBeNull();
+    });
+
+    /**
+     * C2 layer 3 — broken once, per `CLAUDE.md`'s own rule for a new
+     * guarantee. This writes straight to the replica through drizzle,
+     * skipping `categorizeBatchExecutor`'s own `WHERE` entirely, so the only
+     * thing that can refuse it is `transactions_category_kind_matches_type_
+     * update` (`drizzle/replica/0009_schema.sql`) — the backstop this
+     * executor's own doc comment names.
+     */
+    it("the replica's own trigger refuses a raw UPDATE the executor never ran (C2 layer 3)", () => {
+      expect(() =>
+        stores.ledger.replica.db
+          .update(transactions)
+          .set({ categoryId: CATEGORY })
+          .where(eq(transactions.id, INCOME_TXN))
+          .run(),
+      ).toThrow(/WA017/);
+    });
+
+    /**
+     * The insert-time twin of the trigger above — a freshly inserted row,
+     * not an update. The values are an existing row read back and altered,
+     * rather than a literal: `transactions` carries three dozen columns and
+     * a hand-written literal here would be a second, drifting statement of
+     * what a valid row is. Only `id` and `categoryId` differ, so the one
+     * thing under test is the one thing that changed.
+     */
+    it("the replica's own trigger refuses a raw INSERT carrying the wrong kind (C2 layer 3)", () => {
+      const BAD_INSERT = id<"transactions">("00000000-0000-4000-8000-000000000007");
+      const template = stores.ledger.replica.db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.id, INCOME_TXN))
+        .get();
+      if (template === undefined) throw new Error("the income row the beforeEach wrote is missing");
+
+      expect(() =>
+        stores.ledger.replica.db
+          .insert(transactions)
+          .values({ ...template, id: BAD_INSERT, categoryId: CATEGORY })
+          .run(),
+      ).toThrow(/WA017/);
+    });
+  });
 });
 
 /**

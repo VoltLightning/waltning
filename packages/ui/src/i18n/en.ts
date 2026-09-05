@@ -260,6 +260,13 @@ export const en = {
     filterScope: "Scope",
     filterFrom: "From",
     filterTo: "To",
+    /* ── S10 §4's remaining filter dimensions — the desk rail (DESK3 round 1, M) ── */
+    /** §4 names currency and counterparty beside account, category and scope; the phone sheet has not grown them yet. */
+    filterCurrency: "Currency",
+    filterCounterparty: "Person or company",
+    /** The "no filter on this dimension" option each of those two offers. */
+    filterEveryCurrency: "Every currency",
+    filterEveryCounterparty: "Everyone",
     /** The running total's row count — S10 §3's "1 284 transactions". */
     totalCountOne: "{{count}} transaction",
     totalCountMany: "{{count}} transactions",
@@ -416,6 +423,25 @@ export const en = {
     /** `transactions_category_shape`'s own refusal, stated once rather than the raw thrown message. */
     categorizeBatchFailedWhy:
       "One of the selected rows is no longer eligible — it may have been deleted, or it is a transfer or an adjustment.",
+    /** The amount header's own caption while it is the sorted column (H3) — 200 EUR and 200 PLN are not one axis. */
+    sortedByCurrency: "by currency, then amount",
+    /** The confirm's "what is being left behind" line — `from` arrives already joined. */
+    categorizeBatchFromTo: "from {{from}} → {{to}}",
+    categorizeBatchAlreadyOne: "{{count}} row already {{category}}",
+    categorizeBatchAlreadyMany: "{{count}} rows already {{category}}",
+    /** A row that carries no category yet, named in the confirm's "from" list. */
+    uncategorised: "Uncategorised",
+    /** C2 (round 1) — a batch spanning both kinds has no single valid tree to offer. */
+    mixedKindSelection:
+      "The selection holds both income and expense rows. Categorise one kind at a time — an expense category cannot go on an income row.",
+    /** The desk header once the whole filtered period is loaded, and once it is not (C1). */
+    showingOfTotal: "showing {{shown}} of {{count}}",
+    narrowTheFilter:
+      "Only the first {{count}} rows are loaded, so sorting and the total cover those rows alone. Narrow the filter to see the whole period.",
+    /** The desk rail's period label when no date range is set at all (H5). */
+    periodAllTime: "All time",
+    /** …and when the range is not one whole calendar month. */
+    periodCustomRange: "{{from}} → {{to}}",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {

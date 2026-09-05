@@ -41,3 +41,43 @@ DROP TABLE `fx_rates`;--> statement-breakpoint
 ALTER TABLE `__new_fx_rates` RENAME TO `fx_rates`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE UNIQUE INDEX `fx_rates_pk` ON `fx_rates` (`base`,`quote`,`date`);
+--> statement-breakpoint
+-- ═══ DESK3 review round 1, C2 layer 3 — the same guarantee Postgres's
+-- WA017 (`assert_category_kind_matches_type`, `packages/db/drizzle/
+-- 0011_transaction_scale_and_category_kind.sql`) already enforces, added
+-- here under the disposable-until-first-install ruling: nothing has
+-- installed this schema yet, so the head migration is still the file to
+-- edit rather than a new one.
+--
+-- `categorize-batch.executor.ts`'s own `WHERE` clause already refuses a
+-- kind mismatch with a real message; this is the backstop `CLAUDE.md` asks
+-- for beside it — "holds when code is wrong," not the caller's own
+-- good-error path. `create-transaction.executor.ts` and
+-- `update-transaction.executor.ts` write a single row each and take the
+-- same trigger for free.
+--
+-- Two triggers, not one: SQLite's `UPDATE OF <columns>` restricts which
+-- column changes fire a trigger, but that clause does not exist for
+-- `INSERT` — an inserted row has no "before" to name columns against — so
+-- an insert-time check needs its own trigger, the only way SQLite's grammar
+-- lets one mirror Postgres's single `BEFORE INSERT OR UPDATE OF
+-- category_id, type`.
+CREATE TRIGGER `transactions_category_kind_matches_type_insert`
+BEFORE INSERT ON `transactions`
+WHEN NEW.category_id IS NOT NULL
+  AND NEW.type IN ('income', 'expense')
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) IS NOT NULL
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) <> NEW.type
+BEGIN
+  SELECT RAISE(ABORT, 'category kind does not match transaction type (WA017)');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `transactions_category_kind_matches_type_update`
+BEFORE UPDATE OF category_id, type ON `transactions`
+WHEN NEW.category_id IS NOT NULL
+  AND NEW.type IN ('income', 'expense')
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) IS NOT NULL
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) <> NEW.type
+BEGIN
+  SELECT RAISE(ABORT, 'category kind does not match transaction type (WA017)');
+END;

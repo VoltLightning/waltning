@@ -4,7 +4,13 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useLedgerTableSelection } from "./use-ledger-table-selection.ts";
 
-const ROWS = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e" }];
+const ROWS = [
+  { id: "a", selectable: true },
+  { id: "b", selectable: true },
+  { id: "c", selectable: true },
+  { id: "d", selectable: true },
+  { id: "e", selectable: true },
+];
 
 describe("useLedgerTableSelection", () => {
   it("starts empty", () => {
@@ -70,6 +76,24 @@ describe("useLedgerTableSelection", () => {
     // The anchor cleared too — a shift-click right after starts fresh.
     act(() => result.current.toggleRow("d", true));
     expect(result.current.selectedIds).toEqual(new Set(["d"]));
+  });
+
+  /** H6 (DESK3 review round 1) — the hook's own wiring onto `selectableRange`. */
+  it("shift-click skips a non-selectable row inside the range, and the count matches", () => {
+    const withTransfer = [
+      { id: "a", selectable: true },
+      { id: "b", selectable: true },
+      { id: "transfer", selectable: false },
+      { id: "d", selectable: true },
+    ];
+    const { result } = renderHook(() => useLedgerTableSelection(withTransfer));
+
+    act(() => result.current.toggleRow("a", false));
+    act(() => result.current.toggleRow("d", true));
+
+    expect(result.current.selectedIds).toEqual(new Set(["a", "b", "d"]));
+    expect(result.current.isSelected("transfer")).toBe(false);
+    expect(result.current.count).toBe(3);
   });
 
   it("drops a selected row once it falls out of the current row set", () => {

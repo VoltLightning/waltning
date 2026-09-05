@@ -1,6 +1,11 @@
 /**
  * `useLedgerTableSelection` — the shift-click range behind S10 §7 (web):
  * "Shift-click selects a range and multi-select enables `categorize_batch`."
+ * `@waltning/core/ledger-table`'s `selectableRange` holds the pure range
+ * resolution (inclusive, restricted to selectable rows — H6, round 1); this
+ * is only the `useState` wiring around it, so `packages/ui`'s own stories
+ * can call the identical function directly instead of keeping a second copy
+ * (DESK3 review round 1, M).
  *
  * **Ordinary click toggles one row and moves the anchor; shift-click
  * replaces the selection with the inclusive range between the anchor and
@@ -23,9 +28,8 @@
  * can actually see are selected, not a phantom row a filter just hid.
  */
 
+import { type LedgerSelectableRow, selectableRange } from "@waltning/core/ledger-table";
 import { useCallback, useEffect, useRef, useState } from "react";
-
-export type LedgerSelectableRow = { id: string };
 
 export type LedgerTableSelection = {
   selectedIds: ReadonlySet<string>;
@@ -48,14 +52,11 @@ export function useLedgerTableSelection<Row extends LedgerSelectableRow>(
   const toggleRow = useCallback(
     (id: string, rangeExtend: boolean) => {
       if (rangeExtend && anchorId !== null) {
-        const ids = rowsRef.current.map((row) => row.id);
-        const anchorIndex = ids.indexOf(anchorId);
-        const targetIndex = ids.indexOf(id);
-        if (anchorIndex === -1 || targetIndex === -1) return;
-        const [start, end] =
-          anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-        setSelectedIds(new Set(ids.slice(start, end + 1)));
-        return;
+        const range = selectableRange(rowsRef.current, anchorId, id);
+        if (range !== null) {
+          setSelectedIds(new Set(range));
+          return;
+        }
       }
 
       setSelectedIds((current) => {

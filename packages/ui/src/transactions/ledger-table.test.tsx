@@ -97,6 +97,58 @@ describe("LedgerTable", () => {
     expect(screen.getByText("Amount ↑")).toBeDefined();
   });
 
+  /**
+   * H3 (DESK3 review round 1) — the amount column groups by currency before
+   * it compares amounts, which is a surprising order to meet undeclared.
+   * The caption appears only while amount is the sorted column.
+   */
+  it("the amount header says it sorts by currency first, and only while it is sorted", () => {
+    const { rerender } = render(
+      <LedgerTable
+        rows={ROWS}
+        sort={{ column: "amount", direction: "desc" }}
+        onSortColumn={noop}
+        selection={selectionOf()}
+        onOpenRow={noop}
+      />,
+    );
+    expect(screen.getByText("by currency, then amount")).toBeDefined();
+
+    rerender(
+      <LedgerTable
+        rows={ROWS}
+        sort={{ column: "payee", direction: "asc" }}
+        onSortColumn={noop}
+        selection={selectionOf()}
+        onOpenRow={noop}
+      />,
+    );
+    expect(screen.queryByText("by currency, then amount")).toBeNull();
+  });
+
+  /**
+   * M (round 1) — `activeId` and DOM focus were two different "current
+   * rows": a row body was tab-focusable *and* `react-native-web` fires its
+   * press on `Enter` and stops the event, so the ringed row and the opened
+   * row could differ. The container is the table's only tab stop now.
+   */
+  it("row bodies are out of the tab order — the scroller is the one tab stop", () => {
+    render(
+      <LedgerTable
+        rows={ROWS}
+        sort={null}
+        onSortColumn={noop}
+        selection={selectionOf()}
+        onOpenRow={noop}
+      />,
+    );
+
+    expect(screen.getByTestId("ledger-table-scroller").getAttribute("tabindex")).toBe("0");
+    expect(screen.getByRole("button", { name: "Corner Bakery" }).getAttribute("tabindex")).toBe(
+      "-1",
+    );
+  });
+
   it("clicking a row opens it", () => {
     const onOpenRow = vi.fn();
     render(
@@ -262,6 +314,26 @@ describe("LedgerTable", () => {
       const container = renderTable(vi.fn(), onFocusRail);
 
       fireEvent.keyDown(container, { key: "/" });
+      expect(onFocusRail).toHaveBeenCalled();
+    });
+
+    /**
+     * M8 (round 1) — `event.key` is `"J"` with Shift held or Caps Lock on,
+     * and S10 §7 and the design card both *print* these keys as capitals. A
+     * reader who typed what the spec showed used to get nothing at all.
+     */
+    it("capital J, K and F work — the spec prints them that way", () => {
+      const onOpenRow = vi.fn();
+      const onFocusRail = vi.fn();
+      const container = renderTable(onOpenRow, onFocusRail);
+
+      fireEvent.keyDown(container, { key: "J", shiftKey: true });
+      fireEvent.keyDown(container, { key: "J", shiftKey: true });
+      fireEvent.keyDown(container, { key: "K", shiftKey: true });
+      fireEvent.keyDown(container, { key: "Enter" });
+      expect(onOpenRow).toHaveBeenCalledWith("1");
+
+      fireEvent.keyDown(container, { key: "F", shiftKey: true });
       expect(onFocusRail).toHaveBeenCalled();
     });
 

@@ -36,6 +36,22 @@
  * **Errors are caught, not thrown through a render.** A corrupt replica read
  * is still possible even offline-only — S10 §6's `ErrorState(recoverable)`
  * needs something to react to, and `retry` just re-runs the same query.
+ *
+ * **`loadAll` drains the whole filtered period in one go** (DESK3 review
+ * round 1, C1). The phone list pages on scroll, which is right for a list
+ * whose only affordance is "further down"; a desk *table* sorts by column
+ * header, and a sort over the first page alone reorders fifty rows under a
+ * header that names a thousand — a wrong answer that looks like a right one.
+ * So the desk branch asks for every page up front. Each page is a synchronous
+ * SQLite read on the replica (see the top of this doc), so the drain is an
+ * ordinary `while` rather than a chain of awaits, and it happens inside the
+ * one `runFromStart` a filter change or a write already triggers.
+ *
+ * **`SEARCH_LOAD_ALL_CAP` is a ceiling, not a page size.** Some filter
+ * somewhere selects a decade; loading it would freeze the tab, and silently
+ * truncating it would put C1 straight back. The drain stops at the cap with
+ * its cursor still set, `capped` goes true, and the screen owes the reader
+ * both halves of the truth — how many rows are loaded and how many match.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -56,6 +72,11 @@ export type TransactionSearchState = {
   error: string | undefined;
   /** Whether another page exists — `loadMore` is a no-op once this is false. */
   hasMore: boolean;
+  /**
+   * `loadAll` only: the drain stopped at `cap` with pages still unread, so
+   * `rows` is a prefix of the filtered set rather than the whole of it.
+   */
+  capped: boolean;
 };
 
 export type TransactionSearchResult = TransactionSearchState & {
@@ -85,11 +106,28 @@ function readError(caught: unknown): string {
   return caught instanceof Error ? caught.message : String(caught);
 }
 
+/** The row ceiling a `loadAll` drain stops at — see this file's own doc. */
+export const SEARCH_LOAD_ALL_CAP = 5000;
+
+export type TransactionSearchOptions = {
+  /** Load every page of the filtered set up front, not one page per scroll (C1). */
+  loadAll?: boolean;
+  /** Override the drain's own ceiling — a test's lever, not a screen's. */
+  cap?: number;
+};
+
 export function useTransactionSearch(
   controller: PhoneLedgerController,
   filter: TransactionFilterDraft,
+  options: TransactionSearchOptions = {},
 ): TransactionSearchResult {
   const [state, setState] = useState<Internal>(INITIAL);
+  // Destructured to primitives before they reach a dependency array — a
+  // caller passing `{ loadAll: true }` inline would otherwise hand
+  // `runFromStart` a new identity every render, which is the very effect
+  // loop `filterKey` exists to avoid one file-doc paragraph above.
+  const loadAll = options.loadAll === true;
+  const cap = options.cap ?? SEARCH_LOAD_ALL_CAP;
 
   // Read fresh inside a callback without becoming part of its identity — see
   // this file's own doc for why that split is load-bearing here.
@@ -99,18 +137,24 @@ export function useTransactionSearch(
 
   const runFromStart = useCallback(() => {
     try {
-      const page = controller.searchTransactions(filterRef.current);
-      setState({
-        rows: page.rows,
-        total: page.total,
-        cursor: page.nextCursor,
-        loaded: true,
-        error: undefined,
-      });
+      const first = controller.searchTransactions(filterRef.current);
+      let rows = first.rows;
+      let cursor = first.nextCursor;
+      let total = first.total;
+      while (loadAll && cursor !== undefined && rows.length < cap) {
+        const page = controller.searchTransactions(filterRef.current, cursor);
+        // A page that advances the cursor without returning a row would spin
+        // here forever — the loop stops on the port rather than trusting it.
+        if (page.rows.length === 0) break;
+        rows = [...rows, ...page.rows];
+        cursor = page.nextCursor;
+        total = page.total;
+      }
+      setState({ rows, total, cursor, loaded: true, error: undefined });
     } catch (caught) {
       setState((current) => ({ ...current, loaded: true, error: readError(caught) }));
     }
-  }, [controller]);
+  }, [controller, loadAll, cap]);
 
   // `filterKey` is not read in this body — it is the trigger, standing in for
   // `filter`'s shape so a caller's unmemoised object does not refetch on
@@ -145,6 +189,7 @@ export function useTransactionSearch(
     loaded: state.loaded,
     error: state.error,
     hasMore: state.cursor !== undefined,
+    capped: loadAll && state.cursor !== undefined,
     loadMore,
     retry: runFromStart,
   };

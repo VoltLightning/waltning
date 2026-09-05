@@ -402,6 +402,24 @@ export const REPLICA_STEPS: readonly {
       `DROP TABLE \`fx_rates\``,
       `ALTER TABLE \`__new_fx_rates\` RENAME TO \`fx_rates\``,
       `CREATE UNIQUE INDEX \`fx_rates_pk\` ON \`fx_rates\` (\`base\`,\`quote\`,\`date\`)`,
+      `CREATE TRIGGER \`transactions_category_kind_matches_type_insert\`
+BEFORE INSERT ON \`transactions\`
+WHEN NEW.category_id IS NOT NULL
+  AND NEW.type IN ('income', 'expense')
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) IS NOT NULL
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) <> NEW.type
+BEGIN
+  SELECT RAISE(ABORT, 'category kind does not match transaction type (WA017)');
+END`,
+      `CREATE TRIGGER \`transactions_category_kind_matches_type_update\`
+BEFORE UPDATE OF category_id, type ON \`transactions\`
+WHEN NEW.category_id IS NOT NULL
+  AND NEW.type IN ('income', 'expense')
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) IS NOT NULL
+  AND (SELECT kind FROM categories WHERE id = NEW.category_id) <> NEW.type
+BEGIN
+  SELECT RAISE(ABORT, 'category kind does not match transaction type (WA017)');
+END`,
     ],
   },
   {

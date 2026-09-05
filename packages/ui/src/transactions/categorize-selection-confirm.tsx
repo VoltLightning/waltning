@@ -7,11 +7,19 @@
  * a per-row before/after — right for one transaction, one agent write —
  * and a batch spans rows that each carried a different category before, so
  * a single before/after pair would either lie (pick one row's) or say
- * nothing (blank). This states the same three things a confirm needs —
- * what changes, how many rows, and the two actions — without pretending to
- * be the three-call-site component `05` names for the agent, voice and
- * receipt flows. `docs/specification/screens/S10-transactions-list.md` §7
+ * nothing (blank). `docs/specification/screens/S10-transactions-list.md` §7
  * has been written to match: a confirm, not a claimed `DiffCard`.
+ *
+ * **It states what is being overwritten, which a count alone does not**
+ * (DESK3 review round 1, M). Select twenty rows of which fourteen already
+ * read `Groceries` and six read `Eating out`, pick `Groceries`, and a bare
+ * "Categorise 20 transactions as Groceries?" is indistinguishable from the
+ * case where all twenty were uncategorised — the reader is approving a
+ * change they cannot see the shape of. `fromCategories` is the third option
+ * the `DiffCard` argument above skips over: not one row's before/after and
+ * not nothing, but the *set* of categories the batch is leaving —
+ * "from Eating out, Uncategorised → Groceries" — plus how many rows already
+ * carry the target and are therefore not really changing at all.
  *
  * **Never a modal** — `05` §5.3's own rule for the component this replaces
  * still applies: the confirm *is* the decision, not a dialog on top of one.
@@ -34,8 +42,17 @@ import { hairline, radius, space } from "../tokens.ts";
 export type CategorizeSelectionConfirmState = "pending" | "applying" | "approved" | "error";
 
 export type CategorizeSelectionConfirmProps = {
+  /** Rows in the batch — every one of them is written, matching or not. */
   count: number;
   categoryName: string;
+  /**
+   * The distinct categories those rows carry *now*, already resolved for
+   * display (an uncategorised row arrives as the caller's own word for it).
+   * Empty renders no "from" line at all — a caller with nothing to say.
+   */
+  fromCategories?: readonly string[];
+  /** How many of `count` already carry `categoryName` — `0` renders no line. */
+  alreadyMatching?: number;
   state: CategorizeSelectionConfirmState;
   onApprove: () => void;
   onDecline: () => void;
@@ -46,6 +63,8 @@ export type CategorizeSelectionConfirmProps = {
 export function CategorizeSelectionConfirm({
   count,
   categoryName,
+  fromCategories = [],
+  alreadyMatching = 0,
   state,
   onApprove,
   onDecline,
@@ -76,6 +95,29 @@ export function CategorizeSelectionConfirm({
           ? t("transactions.confirmCategorizeBatchOne", { count, category: categoryName })
           : t("transactions.confirmCategorizeBatchMany", { count, category: categoryName })}
       </Text>
+      {fromCategories.length > 0 ? (
+        <Text style={styles.detail}>
+          {t("transactions.categorizeBatchFromTo", {
+            // Joined here rather than by the caller so the separator is one
+            // decision in one place; the words themselves are the caller's.
+            from: fromCategories.join(", "),
+            to: categoryName,
+          })}
+        </Text>
+      ) : null}
+      {alreadyMatching > 0 ? (
+        <Text style={styles.detail}>
+          {alreadyMatching === 1
+            ? t("transactions.categorizeBatchAlreadyOne", {
+                count: alreadyMatching,
+                category: categoryName,
+              })
+            : t("transactions.categorizeBatchAlreadyMany", {
+                count: alreadyMatching,
+                category: categoryName,
+              })}
+        </Text>
+      ) : null}
       {state === "error" ? (
         <Text style={styles.error}>{t("transactions.categorizeBatchFailedWhy")}</Text>
       ) : null}
@@ -116,6 +158,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.accentFill,
   },
   summary: { color: theme.text, ...text.ui("bodySm", 500) },
+  detail: { color: theme.textMuted, ...text.ui("caption") },
   approvedText: { color: theme.income, ...text.ui("bodySm", 600) },
   error: { color: theme.dangerText, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.md },
