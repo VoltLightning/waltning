@@ -26,7 +26,7 @@
     "check": "biome check .",
     "fix": "biome check --write .",
     "rules": "npx --yes ai-rulez@4.11.2 generate",
-    "verify": "pnpm check && pnpm typecheck && pnpm test && pnpm test:visual",
+    "verify": "pnpm check && pnpm typecheck && pnpm test && pnpm run verify:visual",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
@@ -53,7 +53,8 @@
     "storybook": "pnpm --filter @waltning/ui storybook",
     "storybook:build": "pnpm --filter @waltning/ui build-storybook",
     "test:visual": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual",
-    "test:visual:update": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual:update"
+    "test:visual:update": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual:update",
+    "verify:visual": "sh .githooks/verify-visual-gate.sh || pnpm test:visual"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

@@ -168,14 +168,23 @@ fi
 #
 # **Scoped to changes that can move a pixel**, which is not the same as skipping
 # when it is inconvenient. A doc or migration commit cannot alter a render, so
-# paying thirty seconds for it would train people to reach for --no-verify —
-# and a gate that gets bypassed by habit protects nothing. `core` is in the list
-# because `Amount` renders through `money.ts`.
-if printf '%s\n' "$staged" | grep -qE '^packages/(ui|core)/'; then
-  if ! pnpm --filter @waltning/ui build-storybook --quiet >/dev/null 2>&1; then
-    fail "storybook build failed." "run: pnpm --filter @waltning/ui build-storybook"
-  fi
-  if ! pnpm --filter @waltning/ui test:visual; then
-    fail "visual checks failed." "review the diff, then: pnpm test:visual:update"
-  fi
+# paying nine minutes for it would train people to reach for --no-verify — and a
+# gate that gets bypassed by habit protects nothing. `packages/core/src/` is in
+# the pattern because `Amount` renders through `money.ts`; `.githooks/needs-visual.sh`
+# is the one place that pattern is written, so this hook and a bare `pnpm verify`
+# can never see two different answers to "does this diff need Playwright".
+#
+# The decision becomes `VERIFY_VISUAL` for `pnpm verify` itself: `.githooks/
+# verify-visual-gate.sh` is what `verify:visual` checks, so setting the env var
+# here reaches the exact same gate a developer hits running `pnpm verify` by
+# hand — which runs everything, because that gate defaults to "needed" absent
+# this hook's staged-path finding.
+if printf '%s\n' "$staged" | sh .githooks/needs-visual.sh; then
+  export VERIFY_VISUAL=1
+else
+  export VERIFY_VISUAL=0
+  export VERIFY_VISUAL_REASON="no packages/ui or packages/core/src/ file staged"
+fi
+if ! pnpm run verify:visual; then
+  fail "visual checks failed." "review the diff, then: pnpm test:visual:update"
 fi
