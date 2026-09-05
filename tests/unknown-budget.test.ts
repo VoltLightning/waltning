@@ -35,6 +35,10 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
  * A file absent from this map must contain **no** `unknown` at all.
  */
 const BUDGET: Record<string, { max: number; why: string }> = {
+  "packages/ui/visual/storybook-channel.d.ts": {
+    max: 1,
+    why: "the preview channel's own last-emitted args, for a deliberately heterogeneous set of events (a `storyFinished` payload and a `playFunctionThrewException` one share nothing) — narrowed with a specific tuple type at each call site in stories.spec.ts rather than typed here, where there is exactly one shape that could ever be honest for all of them",
+  },
   "apps/api/src/common/pg-errors.ts": {
     max: 5,
     why: "catch bindings — the language gives no choice, and each one is narrowed by a type guard rather than cast",

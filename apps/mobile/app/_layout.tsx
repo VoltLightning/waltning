@@ -18,6 +18,7 @@ import { usePhoneLedgerStartup } from "@waltning/client/ledger/use-phone-ledger-
 import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
+import { StartupFailed } from "@waltning/ui/states/startup-failed";
 import { text } from "@waltning/ui/theme/fonts";
 import { ThemeProvider, useTheme } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -31,7 +32,6 @@ import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
 import { startPhoneLedger, usePhoneLedgerReady } from "../src/phone-ledger";
 import { appearance, DEVICE_LOCALES, displayCurrency, floatPosition } from "../src/platform";
-import { StartupFailedScreen } from "../src/startup-failed-screen";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -178,7 +178,7 @@ export default function RootLayout() {
                   <AppShell />
                 </LedgerProvider>
               ) : (
-                <StartupFailedScreen error={startup.error} />
+                <StartupFailed error={startup.error} />
               )
             ) : (
               <StartupBlank />

@@ -10,7 +10,9 @@
  * story would screenshot identically to the three-column ones, a duplicate
  * baseline standing in for a state nothing here can actually render. The
  * responsive split is covered instead by `currency-grid.test.tsx`'s own
- * unit test, which mocks `useBreakpoint` directly.
+ * unit test — a real jsdom resize (`document.documentElement.clientWidth`
+ * plus a dispatched `resize` event, the same way `use-breakpoint.test.tsx`
+ * drives it), never a mock of `useBreakpoint` itself.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";

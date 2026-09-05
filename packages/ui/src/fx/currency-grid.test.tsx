@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { currencyCode } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 import { CurrencyGrid, type CurrencyGridItem } from "./currency-grid";
@@ -79,10 +79,10 @@ function resizeTo(width: number) {
 }
 
 it("four cells per row at the desk breakpoint", () => {
-  resizeTo(1024);
+  act(() => resizeTo(1024));
   render(<CurrencyGrid currencies={[PLN, USD, EUR]} selected={null} onSelect={noop} />);
   for (const radio of screen.getAllByRole("radio")) {
     expect(getComputedStyle(radio.parentElement as Element).flexBasis).toBe("23%");
   }
-  resizeTo(390);
+  act(() => resizeTo(390));
 });

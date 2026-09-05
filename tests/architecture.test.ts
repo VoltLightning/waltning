@@ -306,14 +306,6 @@ describe("apps hold only what names a platform", () => {
         // `app/`'s, not a second `app/` — so it earns the same exemption
         // without needing to name a platform on its own.
         if (/^apps\/[^/]+\/src\/journeys\//.test(rel(file))) continue;
-        // `startup-failed-screen.tsx` composes two already platform-neutral
-        // `@waltning/ui` pieces (`GroundPanel`, `ErrorState`) and reads
-        // nothing of its own — the same reasoning `src/journeys/` gets its
-        // exemption for. It is `_layout.tsx`'s own composition for the one
-        // state a route tree cannot render (startup itself failed, before
-        // any router exists), kept as a named file rather than folded into
-        // `_layout.tsx` because it has its own test.
-        if (/^apps\/[^/]+\/src\/startup-failed-screen\.tsx$/.test(rel(file))) continue;
         if (!NAMES_PLATFORM.test(readFileSync(file, "utf8"))) offenders.push(rel(file));
       }
     }

@@ -35,24 +35,24 @@
  * virtualized list (`FlatList`/`SectionList`) passes `scroll="own"` instead —
  * nesting a list inside a `ScrollView` of the same orientation is the React
  * Native double-scroll warning, not a second kind of page. That includes a
- * list owned one layer removed, through a component the screen renders
- * (`RateTable`'s own `FlatList`, reached from `settings-rates-screen.tsx`) —
- * the warning does not care whether the screen wrote the `FlatList` itself or
- * a component it composes did. Either way, nothing nests a second scroller of
- * its own; `tests/architecture.test.ts` enforces both halves of that,
- * discovering which components own one from disk rather than a hardcoded
- * list.
+ * list owned one hop removed, through a component the screen renders
+ * directly (`RateTable`'s own `FlatList`, reached from
+ * `settings-rates-screen.tsx`) — the warning does not care whether the screen
+ * wrote the `FlatList` itself or a component it composes did. A list two hops
+ * away, behind a second layer of composition, is not detected — the check
+ * only follows one. Either way, nothing nests a second scroller of its own;
+ * `tests/architecture.test.ts` enforces both halves of that, discovering
+ * which components own one from disk rather than a hardcoded list.
  *
  * The clearance lives on the scroll content, not on the panel itself — so the
  * last row clears the home indicator at the end of the scroll, at the bottom
  * of what was typed or read, rather than at the fold where a short screen's
- * content happens to end. `clearBottom` (default `true`) turns off the
- * *bottom* half of that — the design padding (`space.x5`) stays, but not the
- * device's own home-indicator inset — for a screen whose bottom edge is
- * already owned by something else fixed there (`Dock`, on `transfer-screen.tsx`
- * and `quick-add-screen.tsx`): two things adding the same inset is the
- * double-padding `11-platform-notes.md` already states the rule against for
- * the shell and the panel.
+ * content happens to end. `clearBottom` (default `true`) is for a panel that
+ * is not actually the screen's own bottom edge — a `Dock` sits below it
+ * (`transfer-screen.tsx`, `quick-add-screen.tsx`) and reaches the home
+ * indicator itself, so the panel above it was never the thing clearing that
+ * inset and `clearBottom={false}` says so; the design padding (`space.x5`)
+ * stays regardless, since that is breathing room, not a device read.
  */
 
 import { ScrollView, Text, View } from "react-native";
@@ -97,10 +97,11 @@ export type GroundPanelProps = {
   scroll?: "page" | "own";
   /**
    * `true` (default) — the panel clears the home-indicator inset at the
-   * bottom, same as it always has. `false` — the design padding
-   * (`space.x5`) stays, but not the device inset: for a screen whose bottom
-   * edge is already owned by something else fixed there (`Dock`), the panel
-   * adding the same inset a second time would double-pad it.
+   * bottom, same as it always has. `false` — for a panel that is not
+   * actually the screen's own bottom edge (`Dock` sits below it and clears
+   * that inset itself): the panel has no device inset of its own to clear
+   * there, so it does not add one. The design padding (`space.x5`) stays
+   * either way — that is breathing room, not a device read.
    */
   clearBottom?: boolean;
 };

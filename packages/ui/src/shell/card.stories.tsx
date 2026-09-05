@@ -13,11 +13,15 @@
  * shows up as a screenshot that never moved, not only as a property nothing
  * looks at.
  *
- * **The assertion only bites in a real browser.** jsdom has no layout, so
- * `scrollHeight` and `clientHeight` both read `0` there and the guard below
- * skips the check entirely rather than asserting `0 <= 0` and calling that
- * coverage — the same split `stories.test.tsx` states for colour contrast.
- * The visual suite is a real Chromium, where the geometry is real.
+ * **The geometry only exists in a real browser, but the throw is not
+ * optional there.** jsdom has no layout, so `scrollHeight`/`clientHeight`
+ * both read `0` and the play function returns early rather than asserting
+ * `0 <= 0` and calling that coverage — the same split `stories.test.tsx`
+ * states for colour contrast. In the visual suite's own Chromium, that same
+ * `scrollHeight <= clientHeight` reading would mean the panel never scrolled
+ * at all, and the function throws instead of returning. `visual/stories.spec.ts`
+ * fails the story's own test on any play throw — a baseline alone was never
+ * proof this passed, only a picture that happened to be taken after it did.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
@@ -71,8 +75,17 @@ export const TallContentStory: Story = {
       throw new Error("card.stories.tsx: no GroundPanel scroll container to scroll");
     }
 
-    // jsdom answers both as `0` — nothing to scroll and nothing to assert.
-    if (scroll.scrollHeight <= scroll.clientHeight) return;
+    // jsdom has no layout — `scrollHeight`/`clientHeight` both read `0`
+    // there, so there is nothing to scroll and nothing to assert. In a real
+    // browser (the visual suite) that same condition is the regression
+    // itself and must throw, never quietly return.
+    if (scroll.scrollHeight <= scroll.clientHeight) {
+      if (navigator.userAgent.includes("jsdom")) return;
+      throw new Error(
+        "card.stories.tsx: the panel did not scroll — scrollHeight <= clientHeight " +
+          "in a real browser",
+      );
+    }
 
     scroll.scrollTop = scroll.scrollHeight;
 

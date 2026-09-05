@@ -5,6 +5,15 @@
  * Two checks share one browser launch because they need the same expensive
  * thing: a real render. Splitting them would double the slowest part of the
  * suite to separate two assertions about the same pixels.
+ *
+ * **A baseline alone was never proof a story's own `play` function passed.**
+ * `toHaveScreenshot` compares pixels; a `play` function that throws — H1's
+ * own `TallContent` regression test, say — leaves Storybook mid-render,
+ * which can screenshot as a perfectly ordinary, wrong frame. `open()` below
+ * fails the test if the installed Storybook's own preview channel recorded
+ * either failure (`failIfStoryErrored`'s own docstring has the detail, and
+ * why the obvious-looking `storyFinished`-status check is not the safe one)
+ * before either check runs, so both inherit the guarantee.
  */
 
 import { readFileSync } from "node:fs";
@@ -95,6 +104,49 @@ async function open(page: Page, id: string, theme: string, { freeze = false } = 
   await page.goto(`/iframe.html?id=${id}&globals=appearance:${theme}&viewMode=story`);
   await page.waitForSelector("#storybook-root > *", { state: "attached" });
   await settle(page);
+  await failIfStoryErrored(page);
+}
+
+/**
+ * Fails the test if the story's own `play` function threw, or if the story
+ * threw while rendering at all. A screenshot diff was never proof of either
+ * on its own: `toHaveScreenshot` only compares pixels, and a story that
+ * errored can still leave behind an ordinary-looking, wrong frame to
+ * photograph (H1's own `TallContent` regression check exists for exactly
+ * this — a `play` throw with no gate watching it would go unnoticed here).
+ *
+ * **Read from the installed Storybook's own `preview/runtime.js`, not
+ * assumed, and empirically checked against it** — `storyFinished`'s own
+ * `status` looked like the obvious signal but is not a safe one: for a story
+ * `addon-a11y` re-renders to run its own accessibility pass (every story
+ * here), that later, `play`-free re-render's own success can overwrite the
+ * channel's last `storyFinished` record, so a genuinely thrown `play`
+ * function was observed reading back `status: "success"`.
+ * `playFunctionThrewException` (a `play` throw) and `storyThrewException` (a
+ * throw during rendering itself, `play` or none) are each written once, only
+ * on the failure they name, and neither is touched by that later re-render —
+ * confirmed by inspecting the channel's own recorded events directly rather
+ * than trusting the general-purpose one. `settle()` already waited long
+ * enough for either to have landed by the time this reads them, since both
+ * fire well before the fonts/animations work it waits on.
+ */
+async function failIfStoryErrored(page: Page) {
+  const [playError, renderError] = await page.evaluate(() => {
+    const channel = window.__STORYBOOK_ADDONS_CHANNEL__;
+    const thrownInPlay = channel?.last("playFunctionThrewException") as
+      | [{ message?: string }]
+      | undefined;
+    const thrownInRender = channel?.last("storyThrewException") as
+      | [{ message?: string }]
+      | undefined;
+    return [thrownInPlay?.[0]?.message, thrownInRender?.[0]?.message] as const;
+  });
+  if (playError !== undefined) {
+    throw new Error(`stories.spec.ts: the story's play function threw: ${playError}`);
+  }
+  if (renderError !== undefined) {
+    throw new Error(`stories.spec.ts: the story threw while rendering: ${renderError}`);
+  }
 }
 
 /**
