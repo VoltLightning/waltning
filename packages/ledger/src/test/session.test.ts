@@ -213,6 +213,35 @@ describe("the phone ledger session", () => {
     session.close();
   });
 
+  /**
+   * `get_audit_log` — `audit_log` is not a replicated table
+   * (`architecture/14-local-first.md`), so the session's own reader always
+   * answers the one status. This pins that exposure, not a query result.
+   */
+  it("exposes getAuditLog, always unavailable_on_device", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    session.createTransaction(expenseInput(), capture);
+
+    expect(session.getAuditLog("transactions", transactionId)).toEqual({
+      status: "unavailable_on_device",
+    });
+    session.close();
+  });
+
+  /**
+   * M1 — `getAuditLog` never touches the connection, but a closed session
+   * must refuse it the same way it refuses every other read: a caller
+   * holding a stale session should not get a quiet answer from nowhere.
+   */
+  it("refuses getAuditLog once the session is closed", () => {
+    const session = createLocalLedgerSession(options());
+    session.close();
+    expect(() => session.getAuditLog("transactions", transactionId)).toThrow(
+      /the local ledger session is closed/,
+    );
+  });
+
   it("replays an intent whose replica half is missing before the first read", () => {
     createLocalLedgerSession(options()).close();
     const ledger = openLedger(open, paths);

@@ -13,7 +13,7 @@ import type { ApiClient } from "../transport/client.ts";
  *
  * The conditional form was here and it fails in the wrong place: if
  * `get_accounts` ever returns a page instead of a bare array — exactly what
- * already happened to `list_transactions` — the type silently becomes `never`
+ * `search_transactions` already returns — the type silently becomes `never`
  * and the error surfaces at whichever component first touches a field, reading
  * `Property 'code' does not exist on type 'never'`. That names neither the
  * operation nor the change that caused it.

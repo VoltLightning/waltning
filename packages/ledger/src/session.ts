@@ -162,6 +162,7 @@ import {
   type LocalTransactionRow,
 } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
+import { type AuditLogResult, readAuditLog } from "./transactions/read-audit-log.ts";
 import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
 import { readPayeeHistory } from "./transactions/read-payee-history.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
@@ -282,6 +283,13 @@ export type LocalLedgerSession = {
   ) => readonly LocalTransactionRow[];
   /** S09's whole subject, one query — `null` for a row that is gone or soft-deleted. */
   getTransaction: (id: Id<"transactions">) => LocalTransactionDetail | null;
+  /**
+   * S09's audit history — `requireOpen()`'d like every other read on this
+   * session even though the result never touches the connection, so a
+   * closed session refuses this the same way it refuses every other read.
+   * See `read-audit-log.ts` for why the answer is always the one status.
+   */
+  getAuditLog: (entity: string, entityId: string) => AuditLogResult;
   updateTransaction: (input: UpdateTransactionInput, capture: Capture) => LocalTransactionRow;
   deleteTransaction: (input: DeleteTransactionInput, capture: Capture) => LocalTransactionRow;
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
@@ -629,6 +637,10 @@ export function createLocalLedgerSession<TRun>(
     searchTransactions: (filter, cursor) =>
       searchTransactions(requireOpen().replica.db, filter, cursor),
     getTransaction: (id) => readTransaction(requireOpen().replica.db, id),
+    getAuditLog: (entity, entityId) => {
+      requireOpen();
+      return readAuditLog(entity, entityId);
+    },
     createAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: createAccountExecutor,

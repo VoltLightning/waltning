@@ -4,6 +4,7 @@ import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
 import type { DiagnosticError } from "@waltning/core/diagnostics";
 import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
+import type { JsonValue } from "@waltning/core/json";
 import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
@@ -519,6 +520,44 @@ export type PhoneTransactionDetail = {
 };
 
 /**
+ * S09's audit history — `LocalAuditEntry`'s own shape (`@waltning/ledger`'s
+ * `read-audit-log.ts`), structural for the same reason `PhoneTransactionDetail`
+ * above is. `actor` restates `@waltning/schema`'s `Actor` by hand (`kind`
+ * above does the same for `CounterpartyKind`) rather than importing it — this
+ * package stays free of `@waltning/schema` too. **Known gap, not fixed
+ * here:** §15.1 writes `actor = 'system'` on an invariant violation, a value
+ * neither the schema's `Actor` nor this restatement carries.
+ *
+ * `entity` is `string`, not `IdTable` — the real table set an audit row can
+ * name includes `currencies` and `fx_rates`, natural-keyed tables with no
+ * branded row id, which `IdTable` (a list of tables a *row* is branded
+ * against) omits by construction. `IdTable` here would have made S18's own
+ * audited manual-rate trail unaskable.
+ */
+export type PhoneAuditEntry = {
+  id: string;
+  entity: string;
+  entityId: string;
+  action: string;
+  actor: "user" | "agent" | "import" | "migration";
+  before: JsonValue | null;
+  after: JsonValue | null;
+  at: string;
+};
+
+/**
+ * `get_audit_log`'s result — a status, never a bare empty array standing in
+ * for "no data yet" (H3, §11.0's "no nullish 'didn't work'"). The phone
+ * always answers `unavailable_on_device`: `audit_log` is not a replicated
+ * table (`architecture/14-local-first.md`), so there is nothing local to
+ * mirror it from. `ok` is carried so a real handler's answer slots into the
+ * same type once one exists.
+ */
+export type PhoneAuditLogResult =
+  | { status: "unavailable_on_device" }
+  | { status: "ok"; rows: readonly PhoneAuditEntry[] };
+
+/**
  * §4's rate for one pair, as of a date — `readRate`'s answer, structural for
  * the same reason `PhoneCurrency` is (no `@waltning/ledger` import).
  */
@@ -645,6 +684,8 @@ export type PhoneLedgerPort = {
   /** C4 — S10's swipe-categorize. One category over N ids, refused as a whole or not at all. */
   categorizeBatch: (input: CategorizeBatchInput, capture: PhoneCapture) => void;
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
+  /** S09's audit history — always `unavailable_on_device`; see `PhoneAuditLogResult`'s own doc. */
+  getAuditLog: (entity: string, entityId: string) => PhoneAuditLogResult;
   updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
   deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
@@ -1181,6 +1222,8 @@ export type PhoneLedgerController = {
   refresh: () => void;
   /** S09's whole subject, read fresh — not carried in the snapshot. */
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
+  /** S09's audit history, read fresh — not carried in the snapshot. */
+  getAuditLog: (entity: string, entityId: string) => PhoneAuditLogResult;
   createAccount: (
     draft: CreateAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
@@ -2000,6 +2043,7 @@ export function createPhoneLedger(
       }
     },
     getTransaction: (id) => port.getTransaction(id),
+    getAuditLog: (entity, entityId) => port.getAuditLog(entity, entityId),
     readCategoryReferenceCounts: (categoryId) =>
       port.readCategoryReferenceCounts(brandId<"categories">(categoryId)),
     createAccount: (draft) => {

@@ -3,8 +3,16 @@
  *
  * **`FxAmount`'s full basis, the receipt card and the audit history are not
  * built.** `wave-3-shared.md` names all three unbuilt this wave — no rate
- * table (`#e3`), no receipts, no audit log on the phone — so the layout
- * leaves no gap for them, per the plan.
+ * table (`#e3`), no receipts, and no `AuditHistory`
+ * (`design-system/05-composites.md`) — so the layout leaves no gap for them,
+ * per the plan.
+ *
+ * **The audit section is not merely deferred.** `audit_log` is not a
+ * replicated table (`architecture/14-local-first.md`), so the phone's own
+ * `get_audit_log` answers `unavailable_on_device` rather than rows. When
+ * `AuditHistory` lands here it renders *not available on this device* — S09
+ * §6's Offline row — never an empty list standing in for "nothing ever
+ * changed this row".
  *
  * **Deletion has no undo, on the phone, today.** `operations.md` calls
  * deletion "the one thing you cannot un-notice" and the mock shows an

@@ -1,3 +1,9 @@
+/**
+ * `readTransaction` — `get_transaction` (`operations.md`), S09's whole
+ * subject: the row plus its account, category and lines, `null` for a
+ * missing or soft-deleted row (§6.9).
+ */
+
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";

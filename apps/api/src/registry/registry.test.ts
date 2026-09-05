@@ -12,12 +12,14 @@
  * introducing a divergence *fails*.
  */
 
+import type { JsonObject, JsonValue } from "@waltning/core/json";
 import { type AnyOperation, defineOperation } from "@waltning/core/registry/operation";
 import { toolSchemas } from "@waltning/core/registry/tools";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { routerFromRegistry } from "../trpc/from-registry.ts";
 import { appRouter } from "../trpc/router.ts";
+import { AUDIT_ENTITIES } from "./audit-entities.ts";
 import type { OperationContext } from "./context.ts";
 import { defineOperation as defineApiOperation } from "./define.ts";
 import { registry } from "./index.ts";
@@ -31,6 +33,16 @@ const names = (r: object) => Object.keys(r).sort();
  * handler is not the thing under test.
  */
 const unusedContext = {} as OperationContext;
+
+/**
+ * A JSON Schema is `{ [key: string]: JsonValue }`, so walking into it is a
+ * walk through a union. One narrowing helper rather than a cast at each step:
+ * a cast would let a schema that lost its `properties` object pass the walk
+ * and fail the assertion for the wrong reason.
+ */
+function jsonObject(value: JsonValue | undefined): JsonObject | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
+}
 
 /**
  * The procedure names tRPC actually exposes.
@@ -193,6 +205,43 @@ describe("the widened form cannot skip validation", () => {
     await expect(widened.invoke("garbage", unusedContext)).rejects.toThrow();
   });
 
+  /**
+   * A filter the server cannot apply must be a **refusal**, not a shrug.
+   *
+   * §13's free-text search is a trigram index this branch does not build, so
+   * `search_transactions` has no `text` input. The failure mode worth naming
+   * is not the missing feature — it is a plain `z.object()`, which strips an
+   * unknown key silently: a caller searching for "toner" would then receive
+   * a correctly-shaped page of *every* row in range, and a running total
+   * (S10 §3) computed over the wrong set. `.strict()` turns that into an
+   * error that names the field.
+   */
+  it("refuses a text filter rather than answering with unfiltered rows", async () => {
+    const widened: AnyOperation<OperationContext> = registry.search_transactions;
+    await expect(widened.invoke({ text: "toner" }, unusedContext)).rejects.toThrow(/text/);
+  });
+
+  /**
+   * `audit_log.entity_id` is a uuid. A natural key — a currency code, a tag
+   * name — must be refused here, naming the field, rather than reach Postgres
+   * as bad uuid syntax that no guard maps (22P02 surfaced as `internal`).
+   */
+  it("refuses a non-uuid entityId on get_audit_log, by name", () => {
+    const input = registry.get_audit_log.input;
+    expect(() => input.parse({ entity: "currencies", entityId: "PLN" })).toThrow(/entityId/);
+    expect(() =>
+      input.parse({ entity: "currencies", entityId: "0f2b7a5e-8d3c-4a1b-9e6f-1c2d3e4f5a6b" }),
+    ).not.toThrow();
+  });
+
+  it("still accepts the structural filters beside it", () => {
+    // The refusal above must be about `text` specifically, not about
+    // `.strict()` having broken every caller of this operation.
+    expect(() =>
+      registry.search_transactions.input.parse({ scope: "business", limit: 10 }),
+    ).not.toThrow();
+  });
+
   it("applies schema defaults on the way through", async () => {
     // The agent calls with `{}`. Defaults must arrive from the schema, not
     // from a handler, or the two callers diverge on the first optional field.
@@ -342,5 +391,96 @@ describe("offline eligibility", () => {
     // both create the same person and one drain fails on a constraint after
     // transactions are already attached.
     expect(registry["create_counterparty"]?.offlineEligible).toBe(false);
+  });
+});
+
+/**
+ * `audit_log.entity` carries the **SQL** table name.
+ *
+ * The registry writes the audit row on a handler's behalf
+ * (`registry/operation.ts`), copying `AuditSpec.entity` straight into
+ * `audit_log.entity` — so whatever a declaration spells there is what every
+ * later reader must ask for. Drizzle gives two spellings of the same table:
+ * the camelCase TypeScript property (`accountGroups`) and the SQL identifier
+ * the row is actually stored under (`account_groups`). They are equally easy
+ * to type and only one of them can ever match, which is exactly the kind of
+ * divergence that reads as an empty audit trail rather than as an error —
+ * `get_audit_log("accountGroups", …)` would return no rows for a row that has
+ * a full history.
+ *
+ * `@waltning/ledger`'s `read-audit-log.ts` states the convention in prose;
+ * this is what holds every declaration to it.
+ */
+describe("an audit spec names its table the way the database does", () => {
+  // The same derivation `get_audit_log`'s Zod input is built from
+  // (`audit-entities.ts`), imported rather than repeated. Two copies of a
+  // derivation agree until one of them is edited, and the failure that
+  // follows is an empty audit trail — which is silence, not an error.
+  const sqlTableNames = new Set(AUDIT_ENTITIES);
+
+  const auditEntities = Object.values(registry)
+    .map((op) => op.audit?.entity)
+    .filter((entity): entity is string => entity !== undefined);
+
+  it("has a schema and at least one audited operation to check", () => {
+    // Both guards exist because every assertion below is vacuously true over
+    // an empty set — a test that passes when the registry is empty proves
+    // nothing about the registry.
+    expect(sqlTableNames.size).toBeGreaterThan(10);
+    // One audited declaration today (`create_counterparty`). The walk below is
+    // over `Object.values(registry)`, not over a list written here, so it
+    // covers every declaration the registry grows — this guard only asserts
+    // the walk is not vacuous.
+    expect(auditEntities.length).toBeGreaterThan(0);
+  });
+
+  it("spells every entity as the SQL table name, not the camelCase property", () => {
+    for (const entity of auditEntities) {
+      expect(sqlTableNames.has(entity), `audit entity "${entity}"`).toBe(true);
+      expect(entity, `audit entity "${entity}"`).toMatch(/^[a-z][a-z0-9_]*$/);
+    }
+  });
+
+  it("would reject the camelCase spelling — the check has teeth", () => {
+    // The divergence this exists to catch, shown failing: `account_groups` is
+    // a table, `accountGroups` is a property name that names no row anywhere.
+    expect(sqlTableNames.has("account_groups")).toBe(true);
+    expect(sqlTableNames.has("accountGroups")).toBe(false);
+  });
+
+  /**
+   * The read side of the same hazard.
+   *
+   * A `z.string()` here would have made `get_audit_log("accountGroups", id)` a
+   * successful call returning `[]` — indistinguishable from a row with nothing
+   * recorded against it, and the one answer a caller must never be given
+   * silently. The enum turns it into a validation error naming the field.
+   */
+  it("refuses a camelCase entity on get_audit_log and accepts the SQL name", async () => {
+    const widened: AnyOperation<OperationContext> = registry.get_audit_log;
+    const entityId = "11111111-1111-4111-8111-000000000001"; // RFC 4122 shaped: z.uuid() checks the version and variant nibbles
+
+    await expect(
+      widened.invoke({ entity: "accountGroups", entityId }, unusedContext),
+    ).rejects.toThrow(/entity/);
+
+    // The accepted spelling parses. `invoke` is not used here because the
+    // handler would then reach for a database this test does not open — the
+    // question is validation, and `input.parse` is exactly that half.
+    expect(() =>
+      registry.get_audit_log.input.parse({ entity: "account_groups", entityId }),
+    ).not.toThrow();
+  });
+
+  it("hands the model the permitted entity names in the tool schema", () => {
+    // The enum is only useful to an agent if it survives into the JSON Schema
+    // the tool is described by — otherwise the model still guesses, and a
+    // guessed spelling is the silent-empty-history failure again.
+    const schema = toolSchemas(registry).find((t) => t.name === "get_audit_log")?.inputSchema;
+    const properties = jsonObject(schema)?.["properties"];
+    const values = jsonObject(jsonObject(properties)?.["entity"])?.["enum"];
+
+    expect(values).toContain("account_groups");
+    expect(values).not.toContain("accountGroups");
   });
 });

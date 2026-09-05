@@ -1,3 +1,8 @@
+/**
+ * `readCategoryTree` — `get_category_tree` (`operations.md`), S06/S19's
+ * whole taxonomy, flattened depth-first (`TAXONOMY.md`).
+ */
+
 import { id } from "@waltning/core/id";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ledgerSchema } from "../schema-map.ts";

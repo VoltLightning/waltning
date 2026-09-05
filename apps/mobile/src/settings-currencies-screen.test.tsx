@@ -1,8 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * S17 against an in-memory ledger — the shape `account-editor-screen.
- * test.tsx` already uses for a full `PhoneLedgerPort`.
+ * S17 against an in-memory ledger — `@waltning/client/ledger/test-port`'s
+ * shared `basePort` (M4).
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -11,9 +11,10 @@ import {
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode, toMoney } from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
@@ -62,46 +63,7 @@ function fakeController(overrides: {
   updateCurrency?: PhoneLedgerPort["updateCurrency"];
   readCoverage?: PhoneLedgerPort["readCoverage"];
 }) {
-  const port: PhoneLedgerPort = {
-    listAccounts: () => [],
-    listCurrencies: () => [],
-    listGroups: () => [],
-    listRecent: () => [],
-    listCategories: () => [],
-    listCategoryTree: () => [],
-    listCounterparties: () => [],
-    listPayeeHistory: () => [],
-    listNetWorth: () => [],
-    readPeriodSpend: () => [],
-    readSpendByCategory: () => [],
-    readIncomeVsExpense: () => [],
-    readActiveDashboardLayout: () => null,
-    listUnsettledClearing: () => [],
-    balanceAsOf: () => toMoney("0"),
-    createAccount: vi.fn(),
-    createTransaction: vi.fn(),
-    createCategory: vi.fn(),
-    updateAccount: vi.fn(),
-    archiveAccount: vi.fn(),
-    reconcileAccount: vi.fn(),
-    createGroup: vi.fn(),
-    createCounterparty: vi.fn(),
-    updateCounterparty: vi.fn(),
-    mergeCounterparties: vi.fn(),
-    unmergeCounterparties: vi.fn(),
-    recordDistinctCounterparties: vi.fn(),
-    settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
-    searchTransactions: () => ({
-      rows: [],
-      nextCursor: undefined,
-      total: { count: 0, currencies: [] },
-    }),
-    categorizeBatch: () => undefined,
-    getTransaction: () => null,
-    updateTransaction: () => undefined,
-    deleteTransaction: () => undefined,
-    setTransactionLines: () => undefined,
-    readRate: () => null,
+  const port = basePort({
     listCurrencySettings: overrides.listCurrencySettings ?? (() => [PLN_ROW, USD_ROW]),
     readCoverage:
       overrides.readCoverage ??
@@ -118,29 +80,12 @@ function fakeController(overrides: {
           futureRows: 0,
         },
       ]),
-    listFxRates: () => [],
-    addCurrency: overrides.addCurrency ?? vi.fn(() => ({ code: "EUR" })),
-    archiveCurrency: overrides.archiveCurrency ?? vi.fn(() => ({ code: "PLN" })),
-    setRateSource: vi.fn(() => ({ code: "PLN" })),
-    setPinned: overrides.setPinned ?? vi.fn(() => ({ code: "PLN" })),
-    changePivot: overrides.changePivot ?? vi.fn(() => ({ code: "USD", droppedDates: 0 })),
-    setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-    clearManualRate: vi.fn(() => ({ deleted: 0 })),
-    updateCurrency: overrides.updateCurrency ?? vi.fn(() => ({ code: "PLN" })),
-    listCounterpartyBalances: vi.fn(() => []),
-    listFullCategoryTree: vi.fn(() => []),
-    listCategoryUsage: vi.fn(() => new Map()),
-    readCategoryReferenceCounts: vi.fn(() => ({ transactions: 0, lines: 0, rules: 0 })),
-    renameCategory: vi.fn(),
-    reparentCategory: vi.fn(),
-    convertLeafGroup: vi.fn(),
-    mergeCategories: vi.fn(),
-    archiveCategory: vi.fn(),
-    readCrossRate: vi.fn(() => null),
-    listCounterpartyMerges: vi.fn(() => []),
-    listDistinctCounterpartyPairs: vi.fn(() => []),
-    reset: vi.fn(),
-  };
+    addCurrency: overrides.addCurrency ?? (() => ({ code: "EUR" })),
+    archiveCurrency: overrides.archiveCurrency ?? (() => ({ code: "PLN" })),
+    setPinned: overrides.setPinned ?? (() => ({ code: "PLN" })),
+    changePivot: overrides.changePivot ?? (() => ({ code: "USD", droppedDates: 0 })),
+    updateCurrency: overrides.updateCurrency ?? (() => ({ code: "PLN" })),
+  });
   return createPhoneLedger(port, {
     capture: () => ({
       date: accountingDate("2026-09-03"),

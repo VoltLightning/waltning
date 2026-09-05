@@ -2,10 +2,17 @@
  * §3, server side. A sum of §2 balances grouped by currency and split by
  * ownership — never a cross-currency sum, and business accounts are in
  * `mine` (the scope partition is a transaction filter, not a balance one).
+ *
+ * **`loan_receivable` is excluded**, matching `@waltning/ledger`'s
+ * `readAccountsForNetWorth`. §3: *"Receivables are excluded — lending is an
+ * expense and repayment an unearned inflow (§6.6). Net worth is money you
+ * hold."* The lent amount already left a real account as an ordinary
+ * expense; counting the `loan_receivable` balance too would hold the same
+ * money twice. `loan_payable` stays in — a debt you owe is a real liability.
  */
 
 import type { Money } from "@waltning/core/money";
-import { getTableName, sql } from "drizzle-orm";
+import { and, getTableName, ne, sql } from "drizzle-orm";
 import type { DbHandle } from "../client.ts";
 import { accounts, transactions } from "../schema.ts";
 import { signedFromLeg } from "./signed.sql.ts";
@@ -49,7 +56,7 @@ export async function netWorth(db: DbHandle): Promise<NetWorthRow[]> {
       ours: sql<Money>`sum(${balance})::numeric(20,8)::text`,
     })
     .from(accounts)
-    .where(sql`${accounts.archived} = false`)
+    .where(and(sql`${accounts.archived} = false`, ne(accounts.kind, "loan_receivable")))
     .groupBy(accounts.currency)
     .orderBy(accounts.currency);
   return rows;

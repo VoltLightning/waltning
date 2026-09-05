@@ -12,7 +12,8 @@ import {
   type TransactionSearchCursor,
 } from "./search-transactions.ts";
 
-const { accounts, categories, counterparties, currencies, transactions } = ledgerSchema;
+const { accounts, categories, counterparties, currencies, transactionLines, transactions } =
+  ledgerSchema;
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -76,10 +77,12 @@ beforeEach(() => {
 
 describe("searchTransactions — text", () => {
   it("matches folded, diacritic-insensitive payee and note", () => {
-    insertExpense({ payee: "Żabka", note: "poranna kawa" });
+    // An invented name, and one carrying three of the diacritics `fold()` maps
+    // — Ż, ó and ł — so the fold is what the assertions below actually test.
+    insertExpense({ payee: "Sklep Żółty", note: "poranna kawa" });
 
-    expect(searchTransactions(stores.ledger.replica.db, { text: "zabka" }).rows).toHaveLength(1);
-    expect(searchTransactions(stores.ledger.replica.db, { text: "ŻABKA" }).rows).toHaveLength(1);
+    expect(searchTransactions(stores.ledger.replica.db, { text: "zolty" }).rows).toHaveLength(1);
+    expect(searchTransactions(stores.ledger.replica.db, { text: "ŻÓŁTY" }).rows).toHaveLength(1);
     expect(searchTransactions(stores.ledger.replica.db, { text: "kawa" }).rows).toHaveLength(1);
     expect(searchTransactions(stores.ledger.replica.db, { text: "nope" }).rows).toHaveLength(0);
   });
@@ -99,12 +102,170 @@ describe("searchTransactions — text", () => {
     expect(payees("999")).toEqual([]);
   });
 
+  /**
+   * M6 — a query naming a payee is text-only, even when a number sits in it.
+   *
+   * `@waltning/core/capture/amount`'s `findAmount` reads the first number
+   * *inside* free text, which is right for quick-add and wrong here: it let a
+   * payee-and-year query silently also filter by amount. `parseSearchAmount`
+   * (`search-transactions.ts`) requires the whole query to be the amount.
+   */
+  it("does not read an amount out of a query that also names a payee (§13, M6)", () => {
+    // The row is seeded at exactly the number sitting in the query, which is
+    // what makes this a real regression test: nothing here matches on text
+    // ("shop a 2024" is not a substring of the payee "Shop A", which is the
+    // whole point of a *substring* match), so the only way this row could
+    // come back is an amount clause reading "2024" out of the middle of the
+    // query — which is what capture's `findAmount` did before M6.
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("2024") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("999") });
+
+    expect(searchTransactions(stores.ledger.replica.db, { text: "Shop A 2024" }).rows).toHaveLength(
+      0,
+    );
+
+    // And the bare amount still matches, so the clause was narrowed, not lost.
+    expect(
+      searchTransactions(stores.ledger.replica.db, { text: "2024" }).rows.map((row) => row.payee),
+    ).toEqual(["Shop A"]);
+  });
+
+  /**
+   * `parseSearchAmount`'s own grammar, which is deliberately **not** capture's.
+   *
+   * `findAmount` groups thousands in threes (`\d{1,3}(?: \d{3})*`), so a bare
+   * ungrouped "1500" parses there as `150` and "12345" as `123`. Reading a
+   * search box through that grammar meant typing an amount with no separator
+   * — the ordinary way to type one — returned rows worth a tenth or a
+   * hundredth of what was asked for. A search query is not a captured phrase;
+   * it gets its own reader, and these four are what it must answer.
+   */
+  it("reads an ungrouped amount whole — 1500 is not 150 (§13)", () => {
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("1500") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("150") });
+    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("2024") });
+    insertExpense({ payee: "Shop D", amountOriginal: money.toMoney("12345") });
+
+    const payees = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+
+    expect(payees("1500")).toEqual(["Shop A"]);
+    expect(payees("2024")).toEqual(["Shop C"]);
+    expect(payees("12345")).toEqual(["Shop D"]);
+    // Grouping is whitespace and the decimal mark is a comma or a point, so
+    // the separated spelling of the same amount finds the same row.
+    expect(payees("1 500,00")).toEqual(["Shop A"]);
+    expect(payees("1\u00a0500,00")).toEqual(["Shop A"]);
+    expect(payees("1500.00")).toEqual(["Shop A"]);
+  });
+
+  /**
+   * The two spellings §13 refuses, pinned so the refusal is a decision.
+   *
+   * `"48,90 zł"` and `"1.500,00"` are both amounts a person could reasonably
+   * type, and both are text here. §13 says why: a trailing token cannot be
+   * told from an ordinary payee word without the ledger's whole currency
+   * list, and a point cannot be told from a decimal mark without knowing what
+   * was meant. A grammar loose enough for the first is loose enough to make
+   * `"100 lat"` match every row at `100,00` — M6, one spelling later. So the
+   * amount clause stays silent and the substring match answers alone, which
+   * for these queries means nothing.
+   */
+  it("leaves a currency token and a point-grouped amount as text (§13)", () => {
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("1500") });
+    // The payee that makes the currency-token case dangerous rather than
+    // merely unhelpful: a real word beside a number.
+    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("100") });
+
+    const payees = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+
+    expect(payees("48,90 zł")).toEqual([]);
+    expect(payees("1.500,00")).toEqual([]);
+    expect(payees("100 lat")).toEqual([]);
+
+    // The spellings §13 does accept still find the same rows, so this pins a
+    // boundary rather than a broken parser.
+    expect(payees("48,90")).toEqual(["Shop A"]);
+    expect(payees("1 500,00")).toEqual(["Shop B"]);
+  });
+
+  /**
+   * M1 — the two rules that make a space and a decimal mark readable.
+   *
+   * A space is grouping only where grouping belongs. `"1 500"` is fifteen
+   * hundred; `"1 5 0 0"` is four digits a person spaced out for some other
+   * reason, and stripping every space would have made it the same amount. And
+   * `"1.500"` is refused rather than guessed: it is one-and-a-half under one
+   * convention and fifteen hundred under the other, and the query carries no
+   * grouping space to settle it. §13 states both.
+   */
+  it("groups only at grouping positions, and refuses the ambiguous tail (§13)", () => {
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("1500") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("1.5") });
+    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("0.05") });
+
+    const payees = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+
+    // Grouping at a grouping position is dropped.
+    expect(payees("1 500")).toEqual(["Shop A"]);
+    // Spaces anywhere else are not grouping, so the query is text and matches
+    // no payee — note it would be `1500` if every space were simply stripped.
+    expect(payees("1 5 0 0")).toEqual([]);
+    // Ambiguous between 1,5 and 1500, so neither row comes back.
+    expect(payees("1.500")).toEqual([]);
+    expect(payees("1,500")).toEqual([]);
+    // A decimal mark with one or two digits after it is unambiguous.
+    expect(payees("1,5")).toEqual(["Shop B"]);
+    expect(payees("0,05")).toEqual(["Shop C"]);
+    // And a grouping space settles the mark, so three decimals read fine.
+    expect(payees("1 500,000")).toEqual(["Shop A"]);
+  });
+
   it("never lets a purely alphabetic query match on amount alone", () => {
     insertExpense({ payee: "Corner Café" });
 
     // No digit in the needle — the amount check must not fire on an empty
     // digit string, or every row would match every text search.
     expect(searchTransactions(stores.ledger.replica.db, { text: "zzz" }).rows).toHaveLength(0);
+  });
+
+  /**
+   * H2 — §13: trigram runs "over `payee`, `note`, `receipts.merchant` and
+   * `transaction_lines.description`". The phone's substring match had the
+   * first two and skipped the fourth entirely, so a line-only word like
+   * "toner" found nothing even though the row it belongs to was live on the
+   * replica the whole time.
+   */
+  it("matches a word that lives only in a line's own description", () => {
+    const txnId = insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    stores.ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e1"),
+        transactionId: txnId,
+        description: "Printer toner",
+        amount: money.toMoney("48.90"),
+      })
+      .run();
+
+    const result = searchTransactions(stores.ledger.replica.db, { text: "toner" });
+
+    expect(result.rows.map((row) => row.id)).toEqual([txnId]);
+    expect(result.total).toEqual({
+      count: 1,
+      currencies: [
+        {
+          currency: PLN,
+          decimals: 2,
+          sum: "-48.90000000",
+          sumExcludingCapital: "-48.90000000",
+          capitalCount: 0,
+        },
+      ],
+    });
   });
 });
 
@@ -375,5 +536,51 @@ describe("searchTransactions — transfers", () => {
     const row = all.rows[0];
     expect(row?.toAccountName).toBe("Wallet · USD");
     expect(row?.toAmount).toBe("31.25000000");
+  });
+});
+
+/**
+ * L — pins the tie-break `(date, id)` order both branches promise (this
+ * file's own doc on `searchTransactions`): newest date first, and id
+ * descending among rows sharing a date. Two ids on the same date sort
+ * lexicographically, never by insertion order, in both the plain listing
+ * (SQL `ORDER BY`) and a `text` search (the same rows, filtered in JS,
+ * order untouched by the filter).
+ */
+describe("searchTransactions — offline ordering (date desc, id desc)", () => {
+  beforeEach(() => {
+    insertExpense({
+      id: "00000000-0000-4000-8000-00000000d001",
+      payee: "Shop toner run",
+      date: accountingDate("2026-08-20"),
+    });
+    insertExpense({
+      id: "00000000-0000-4000-8000-00000000d002",
+      payee: "Shop toner run",
+      date: accountingDate("2026-08-20"),
+    });
+    insertExpense({
+      id: "00000000-0000-4000-8000-00000000d000",
+      payee: "Shop toner run",
+      date: accountingDate("2026-08-21"),
+    });
+  });
+
+  it("orders the plain listing by date desc, then id desc", () => {
+    const result = searchTransactions(stores.ledger.replica.db, {});
+    expect(result.rows.map((row) => row.id)).toEqual([
+      "00000000-0000-4000-8000-00000000d000",
+      "00000000-0000-4000-8000-00000000d002",
+      "00000000-0000-4000-8000-00000000d001",
+    ]);
+  });
+
+  it("keeps the same order once a text filter narrows the set in JS", () => {
+    const result = searchTransactions(stores.ledger.replica.db, { text: "toner" });
+    expect(result.rows.map((row) => row.id)).toEqual([
+      "00000000-0000-4000-8000-00000000d000",
+      "00000000-0000-4000-8000-00000000d002",
+      "00000000-0000-4000-8000-00000000d001",
+    ]);
   });
 });

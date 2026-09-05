@@ -17,8 +17,15 @@ import type { Id } from "@waltning/core/id";
 import type * as money from "@waltning/core/money";
 import type { DbHandle } from "@waltning/db/client";
 import { signedFromLeg } from "@waltning/db/figures/signed.sql";
-import { accounts, categories, transactions } from "@waltning/db/schema";
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import {
+  accounts,
+  categories,
+  currencies,
+  transactionLines,
+  transactions,
+} from "@waltning/db/schema";
+import type { CounterpartyRole } from "@waltning/schema/enums";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 
 export type TransactionRow = {
   id: string;
@@ -39,8 +46,50 @@ export type TransactionPage = {
   nextCursor: { date: string; id: string } | null;
 };
 
-export async function listTransactions(
+/** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
+export type SearchScope = "all" | "mine" | "shared" | "business";
+
+/**
+ * The structural filters, and **no `text`**.
+ *
+ * §13's free-text match is a trigram search: `pg_trgm` plus a GIN index over
+ * `payee`, `note`, `receipts.merchant` and `transaction_lines.description`.
+ * That is a migration, and this branch holds none. Until it lands, `text` is
+ * not a field here and not a field on `search_transactions`'s input — a
+ * caller that sends one gets a validation error naming it, rather than a
+ * full page of structurally-filtered rows that quietly ignored the only
+ * filter the caller cared about. The phone's own `TransactionSearchFilter`
+ * keeps its `text`, because offline it genuinely applies one
+ * (`@waltning/ledger`'s `search-transactions.ts`, fold-and-substring); the
+ * two filters differing here is the honest description of what each side can
+ * actually do.
+ */
+export type SearchTransactionsFilter = {
+  accountIds?: readonly Id<"accounts">[] | undefined;
+  categoryIds?: readonly Id<"categories">[] | undefined;
+  scope?: SearchScope | undefined;
+  from?: AccountingDate | undefined;
+  to?: AccountingDate | undefined;
+  counterpartyId?: Id<"counterparties"> | undefined;
+  counterpartyRole?: CounterpartyRole | undefined;
+};
+
+function scopeCondition(scope: SearchScope): SQL | undefined {
+  switch (scope) {
+    case "all":
+      return undefined;
+    case "mine":
+      return and(eq(accounts.ownership, "own"), eq(transactions.isBusiness, false));
+    case "business":
+      return eq(transactions.isBusiness, true);
+    case "shared":
+      return eq(accounts.ownership, "shared");
+  }
+}
+
+export async function searchTransactions(
   db: DbHandle,
+  filter: SearchTransactionsFilter,
   limit: number,
   /**
    * **Branded, because a cursor is client input.** It is echoed back from a
@@ -51,6 +100,35 @@ export async function listTransactions(
    */
   cursor: { date: AccountingDate; id: Id<"transactions"> } | null,
 ): Promise<TransactionPage> {
+  const accountIds = filter.accountIds ?? [];
+  const categoryIds = filter.categoryIds ?? [];
+
+  const structural: (SQL | undefined)[] = [
+    isNull(transactions.deletedAt),
+    filter.from !== undefined ? gte(transactions.date, filter.from) : undefined,
+    filter.to !== undefined ? lte(transactions.date, filter.to) : undefined,
+    accountIds.length > 0
+      ? or(
+          inArray(transactions.accountId, [...accountIds]),
+          inArray(transactions.toAccountId, [...accountIds]),
+        )
+      : undefined,
+    categoryIds.length > 0 ? inArray(transactions.categoryId, [...categoryIds]) : undefined,
+    scopeCondition(filter.scope ?? "all"),
+    filter.counterpartyId !== undefined
+      ? eq(transactions.counterpartyId, filter.counterpartyId)
+      : undefined,
+    filter.counterpartyRole !== undefined
+      ? eq(transactions.counterpartyRole, filter.counterpartyRole)
+      : undefined,
+    cursor
+      ? or(
+          lt(transactions.date, cursor.date),
+          and(eq(transactions.date, cursor.date), lt(transactions.id, cursor.id)),
+        )
+      : undefined,
+  ];
+
   // One more than asked for: whether a next page exists is a fact about the
   // data, not a guess from `rows.length === limit` — which is wrong exactly
   // when the last page is full.
@@ -68,17 +146,7 @@ export async function listTransactions(
     .from(transactions)
     .innerJoin(accounts, eq(accounts.id, transactions.accountId))
     .leftJoin(categories, eq(categories.id, transactions.categoryId))
-    .where(
-      and(
-        isNull(transactions.deletedAt),
-        cursor
-          ? or(
-              lt(transactions.date, cursor.date),
-              and(eq(transactions.date, cursor.date), lt(transactions.id, cursor.id)),
-            )
-          : undefined,
-      ),
-    )
+    .where(and(...structural.filter((c): c is SQL => c !== undefined)))
     .orderBy(desc(transactions.date), desc(transactions.id))
     .limit(limit + 1);
 
@@ -89,4 +157,81 @@ export async function listTransactions(
     rows: page,
     nextCursor: rows.length > limit && last ? { date: last.date, id: last.id } : null,
   };
+}
+
+export type TransactionLineRow = {
+  id: string;
+  description: string;
+  amount: money.Money;
+  categoryId: string | null;
+  categoryName: string | null;
+};
+
+export type TransactionDetail = {
+  id: string;
+  date: string;
+  type: "income" | "expense" | "transfer" | "adjustment";
+  payee: string;
+  note: string;
+  isBusiness: boolean;
+  accountId: string;
+  accountName: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  amount: money.Money;
+  currency: string;
+  decimals: number;
+  version: number;
+  lines: TransactionLineRow[];
+};
+
+/**
+ * `get_transaction` — S09's whole subject, one query plus lines, mirroring
+ * `@waltning/ledger`'s `readTransaction` field-for-field. `null` for a row
+ * that does not exist or is soft-deleted (§6.9) — the same "not there" a
+ * caller gets for either.
+ */
+export async function getTransactionById(
+  db: DbHandle,
+  transactionId: Id<"transactions">,
+): Promise<TransactionDetail | null> {
+  const [row] = await db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      type: transactions.type,
+      payee: transactions.payee,
+      note: transactions.note,
+      isBusiness: transactions.isBusiness,
+      accountId: transactions.accountId,
+      accountName: accounts.name,
+      categoryId: transactions.categoryId,
+      categoryName: categories.name,
+      amount: signedFromLeg,
+      currency: transactions.currency,
+      decimals: currencies.decimals,
+      version: transactions.version,
+    })
+    .from(transactions)
+    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .innerJoin(currencies, eq(transactions.currency, currencies.code))
+    .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .where(and(eq(transactions.id, transactionId), isNull(transactions.deletedAt)));
+
+  if (!row) return null;
+
+  const lines = await db
+    .select({
+      id: transactionLines.id,
+      description: transactionLines.description,
+      amount: transactionLines.amount,
+      categoryId: transactionLines.categoryId,
+      categoryName: categories.name,
+    })
+    .from(transactionLines)
+    .leftJoin(categories, eq(transactionLines.categoryId, categories.id))
+    .where(eq(transactionLines.transactionId, transactionId))
+    .orderBy(asc(transactionLines.sort), asc(transactionLines.id));
+
+  return { ...row, lines };
 }

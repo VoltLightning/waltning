@@ -3,10 +3,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createPhoneLedger, type PhoneSearchTransaction } from "./create-phone-ledger.ts";
+import { basePort } from "./test-port.ts";
 import { useTransactionSearch } from "./use-transaction-search.ts";
 
 const PLN = currencyCode("PLN");
@@ -42,25 +42,7 @@ function fakeController() {
   const rows = [row(1), row(2), row(3)];
 
   return createPhoneLedger(
-    {
-      listAccounts: () => [],
-      listCurrencies: () => [],
-      listGroups: () => [],
-      listRecent: () => [],
-      listCategories: () => [],
-      listCategoryTree: () => [],
-      listCounterparties: () => [],
-      listPayeeHistory: () => [],
-      listNetWorth: () => [],
-      readPeriodSpend: () => [],
-      readSpendByCategory: () => [],
-      readIncomeVsExpense: () => [],
-      readActiveDashboardLayout: () => null,
-      listUnsettledClearing: () => [],
-      listCounterpartyBalances: () => [],
-      listCounterpartyMerges: () => [],
-      listDistinctCounterpartyPairs: () => [],
-      balanceAsOf: vi.fn(),
+    basePort({
       searchTransactions: (filter, cursor) => {
         const start = cursor === undefined ? 0 : rows.findIndex((r) => r.id === cursor.id) + 1;
         const matched =
@@ -78,50 +60,7 @@ function fakeController() {
           total: { count: matched.length, currencies: [] },
         };
       },
-      createAccount: () => undefined,
-      createTransaction: () => undefined,
-      createCategory: () => undefined,
-      // The port need not do anything real — `createPhoneLedger.categorizeBatch`
-      // calls `refresh()` after this returns, which is what notifies every
-      // `controller.subscribe` listener, `useTransactionSearch`'s included.
-      categorizeBatch: () => undefined,
-      getTransaction: () => null,
-      updateTransaction: () => undefined,
-      deleteTransaction: () => undefined,
-      setTransactionLines: () => undefined,
-      updateAccount: () => undefined,
-      archiveAccount: () => undefined,
-      reconcileAccount: () => undefined,
-      createGroup: () => undefined,
-      readRate: () => null,
-      readCrossRate: () => null,
-      listCurrencySettings: () => [],
-      readCoverage: () => [],
-      listFxRates: () => [],
-      addCurrency: () => undefined,
-      archiveCurrency: () => undefined,
-      setRateSource: () => undefined,
-      setPinned: () => undefined,
-      changePivot: () => ({ droppedDates: 0 }),
-      setManualRate: () => ({ written: 0, replacedManual: 0 }),
-      clearManualRate: () => ({ deleted: 0 }),
-      updateCurrency: vi.fn(),
-      createCounterparty: () => undefined,
-      updateCounterparty: () => undefined,
-      mergeCounterparties: () => undefined,
-      unmergeCounterparties: () => undefined,
-      recordDistinctCounterparties: () => undefined,
-      settleDebt: () => ({ residual: money.toMoney("0"), overSettled: false }),
-      listFullCategoryTree: () => [],
-      listCategoryUsage: () => new Map(),
-      readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-      renameCategory: () => undefined,
-      reparentCategory: () => undefined,
-      convertLeafGroup: () => undefined,
-      mergeCategories: () => undefined,
-      archiveCategory: () => undefined,
-      reset: () => undefined,
-    },
+    }),
     {
       capture: () => ({
         date: accountingDate("2026-08-23"),
@@ -198,70 +137,12 @@ describe("useTransactionSearch", () => {
   it("surfaces a thrown read as an error, and retry clears it", () => {
     let broken = true;
     const controller = createPhoneLedger(
-      {
-        listAccounts: () => [],
-        listCurrencies: () => [],
-        listGroups: () => [],
-        listRecent: () => [],
-        listCategories: () => [],
-        listCategoryTree: () => [],
-        listCounterparties: () => [],
-        listPayeeHistory: () => [],
-        listNetWorth: () => [],
-        readPeriodSpend: () => [],
-        readSpendByCategory: () => [],
-        readIncomeVsExpense: () => [],
-        readActiveDashboardLayout: () => null,
-        listUnsettledClearing: () => [],
-        listCounterpartyBalances: () => [],
-        listCounterpartyMerges: () => [],
-        listDistinctCounterpartyPairs: () => [],
-        balanceAsOf: vi.fn(),
+      basePort({
         searchTransactions: () => {
           if (broken) throw new Error("replica is unreadable");
           return { rows: [], nextCursor: undefined, total: { count: 0, currencies: [] } };
         },
-        createAccount: () => undefined,
-        createTransaction: () => undefined,
-        createCategory: () => undefined,
-        categorizeBatch: () => undefined,
-        getTransaction: () => null,
-        updateTransaction: () => undefined,
-        deleteTransaction: () => undefined,
-        setTransactionLines: () => undefined,
-        updateAccount: () => undefined,
-        archiveAccount: () => undefined,
-        reconcileAccount: () => undefined,
-        createGroup: () => undefined,
-        readRate: () => null,
-        readCrossRate: () => null,
-        listCurrencySettings: () => [],
-        readCoverage: () => [],
-        listFxRates: () => [],
-        addCurrency: () => undefined,
-        archiveCurrency: () => undefined,
-        setRateSource: () => undefined,
-        setPinned: () => undefined,
-        changePivot: () => ({ droppedDates: 0 }),
-        setManualRate: () => ({ written: 0, replacedManual: 0 }),
-        clearManualRate: () => ({ deleted: 0 }),
-        updateCurrency: vi.fn(),
-        createCounterparty: () => undefined,
-        updateCounterparty: () => undefined,
-        mergeCounterparties: () => undefined,
-        unmergeCounterparties: () => undefined,
-        recordDistinctCounterparties: () => undefined,
-        settleDebt: () => ({ residual: money.toMoney("0"), overSettled: false }),
-        listFullCategoryTree: () => [],
-        listCategoryUsage: () => new Map(),
-        readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-        renameCategory: () => undefined,
-        reparentCategory: () => undefined,
-        convertLeafGroup: () => undefined,
-        mergeCategories: () => undefined,
-        archiveCategory: () => undefined,
-        reset: () => undefined,
-      },
+      }),
       {
         capture: () => ({
           date: accountingDate("2026-08-23"),

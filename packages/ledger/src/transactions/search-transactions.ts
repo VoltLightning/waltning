@@ -1,22 +1,21 @@
-import { findAmount } from "@waltning/core/capture/amount";
 import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
-import type { Id } from "@waltning/core/id";
+import { id as brandId, type Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
-import { and, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
-const { accounts, categories, currencies, transactions } = ledgerSchema;
+const { accounts, categories, currencies, transactionLines, transactions } = ledgerSchema;
 
 /** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
 export type TransactionSearchScope = "all" | "mine" | "shared" | "business";
 
 export type TransactionSearchFilter = {
-  /** Folded and matched against payee, note, and the amount's digits (§13). */
+  /** Folded and matched against payee, note, every line's description, and the amount, exactly (§13). */
   text?: string;
   /** Matches either leg — a transfer touching a filtered account still shows. */
   accountIds?: readonly Id<"accounts">[];
@@ -83,25 +82,100 @@ export type TransactionSearchPage = {
   total: TransactionSearchTotals;
 };
 
-/** 50 per page (S10 §5's "50 per page"). Exported so the paging test can size its fixture by it. */
+/**
+ * A page size, named rather than a bare literal in the query below —
+ * `operations.md`/S10 name paging (`search_transactions(filter, page)`) but
+ * not a number; 50 is this file's own choice, not a spec-stated figure.
+ * Exported so the paging test can size its fixture by it.
+ */
 export const SEARCH_PAGE_SIZE = 50;
 
 /**
- * Whether `row` matches the folded `needle` — payee, note, or the source
- * leg's amount **exactly** (§13: "an amount token matches `amount_original`
- * exactly, in any currency"). The token is read the way capture reads one
- * (`findAmount` — `48,90` and `48.90` are the same value), and compared as
- * money, never as digits: a substring match let `489` find `1 489,00` and
- * put it in the running total. `489` is not `48,90`; only `48,90` is.
+ * Digits with no grouping at all, optionally a decimal fraction to
+ * `numeric(20,8)`'s eight places, and nothing else — `1500`, `48,90`, `0,05`.
+ */
+const UNGROUPED_AMOUNT = /^\d+(?:[.,]\d{1,8})?$/;
+
+/**
+ * The same, written with thousands grouping: one to three digits, then groups
+ * of **exactly** three separated by a space or no-break space. `1 500,00`
+ * matches; `1 5 0 0` does not, which is the whole reason this is a shape and
+ * not a `replace(/\s/g, "")` — a space that is not at a grouping position is
+ * not grouping, and a query holding one is text.
+ */
+const GROUPED_AMOUNT = /^\d{1,3}(?:[ \u00a0]\d{3})*(?:[.,]\d{1,8})?$/;
+
+/**
+ * A decimal mark followed by exactly three digits: the one spelling the two
+ * conventions read differently and neither can win. `1.500` and `1,500` are
+ * one-and-a-half to a reader who takes the mark as decimal and fifteen hundred
+ * to one who takes it as grouping. Refused unless the query grouped something
+ * with a space, which settles the question — `1 500,000` is fifteen hundred.
+ */
+const AMBIGUOUS_TAIL = /[.,]\d{3}$/;
+
+/**
+ * The **whole** query read as an amount, or `null`.
+ *
+ * §13's rule is that an amount *token* matches `amount_original` exactly, and
+ * a search box is a query rather than free text: it names an amount only when
+ * there is nothing else in it. Deliberately its own grammar and not
+ * `@waltning/core/capture/amount`'s `findAmount`, which answers a different
+ * question — quick-add reads the *first number inside* a phrase, on purpose
+ * (`"2 coffees 18"` binds to `2`), and it groups thousands in threes, so
+ * `"1500"` reads there as `150`. Borrowing it here made a payee-and-year
+ * search like `"Shop A 2024"` silently also match every row costing
+ * `2 024,00`, and a bare `"1500"` match `150,00`. Two readers because there
+ * are two questions; capture's grammar is free to change without moving what
+ * a search box means.
+ *
+ * The grammar is `computations.md` §13's own, stated there so the two engines
+ * cannot drift. A comma or point is the decimal mark (`money.ts` takes a
+ * point), so `"1 500,00"` and `"1500.00"` are the same amount. Space and
+ * no-break space are grouping — but only where grouping belongs, which is why
+ * `"1 500"` is `1500` and `"1 5 0 0"` is text: stripping every space would
+ * have made the second an amount too, and a user who typed it meant no such
+ * thing. `"1.500"` and `"1,500"` are refused for the opposite reason — both
+ * conventions read them, differently, and no grouping space is present to say
+ * which. Nothing else either: `"48,90 zł"` and `"1.500,00"` are text,
+ * deliberately. §13 gives that reason: a trailing currency token cannot be
+ * told from an ordinary payee word without the ledger's whole currency list,
+ * so accepting it would make `"100 lat"` match every row at `100,00` — M6
+ * again, one spelling later.
+ *
+ * Compared as money downstream, never as digits: a substring match let `489`
+ * find `1 489,00` and fold it into the running total. `489` is not `48,90`;
+ * only `48,90` is.
+ */
+function parseSearchAmount(text: string): Money | null {
+  const query = text.trim();
+  const spaced = /[ \u00a0]/.test(query);
+  if (spaced ? !GROUPED_AMOUNT.test(query) : !UNGROUPED_AMOUNT.test(query)) return null;
+  // A grouping space settles which convention the decimal mark belongs to;
+  // with no space, a three-digit tail is unreadable and the query stays text.
+  if (!spaced && AMBIGUOUS_TAIL.test(query)) return null;
+  return money.toMoney(query.replace(/[ \u00a0]/g, "").replace(",", "."));
+}
+
+/**
+ * Whether `row` matches the folded `needle` — payee, note, one of the
+ * transaction's own line descriptions, or the source leg's amount
+ * **exactly** (§13: "Trigram … over `payee`, `note`, `receipts.merchant` and
+ * `transaction_lines.description`" — the phone has no receipts table to
+ * search yet, but the lines it holds are exactly this list's fourth column,
+ * and H2 found them missing). The amount is read by `parseSearchAmount`
+ * above, and compared as money.
  */
 function matchesText(
   row: { payee: string; note: string; amountOriginal: Money },
   needle: string,
   needleAmount: Money | null,
+  lineDescriptions: readonly string[],
 ): boolean {
   if (fold(row.payee).includes(needle)) return true;
   if (fold(row.note).includes(needle)) return true;
   if (needleAmount !== null && money.eq(row.amountOriginal, needleAmount)) return true;
+  if (lineDescriptions.some((description) => fold(description).includes(needle))) return true;
   return false;
 }
 
@@ -210,7 +284,10 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   const structuralWhere = and(...structuralConditions.filter((c): c is SQL => c !== undefined));
 
   const needle = filter.text !== undefined ? fold(filter.text.trim()) : "";
-  const needleAmount = filter.text === undefined ? null : (findAmount(filter.text)?.amount ?? null);
+  // M6 — the whole query must *be* an amount, not merely contain one:
+  // `parseSearchAmount("Shop A 2024")` is `null`, where capture's `findAmount`
+  // would have read `2024` out of the middle of a payee-and-year search.
+  const needleAmount = filter.text === undefined ? null : parseSearchAmount(filter.text);
 
   const rowsQuery = () =>
     db
@@ -327,7 +404,59 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
     .all()
     .map(signRow);
 
-  const filtered = rows.filter((row) => matchesText(row, needle, needleAmount));
+  // H2 — one query for every matched row's own lines, grouped by transaction.
+  // A description lives on `transaction_lines`, not `transactions`, so
+  // `rowsQuery()`'s join set (built for display, not for search) never
+  // carries it — this is a second, narrow query rather than a wider join
+  // that would multiply every multi-line transaction's row.
+  //
+  // L — the lines are selected by a **correlated subquery over the same
+  // `structuralWhere`**, not by `inArray` over the ids just read. The two
+  // return the same rows, and the difference is what happens when there are
+  // many of them: `rows` is deliberately unbounded here (the text filter
+  // cannot be pushed into SQL, so every structurally-matching row is read),
+  // so `inArray` binds one SQL parameter per row and SQLite refuses past
+  // `SQLITE_MAX_VARIABLE_NUMBER` — "too many SQL variables", thrown at
+  // exactly the ledger sizes this list is meant to grow into, and only when
+  // a text filter is active. Restating the predicate costs the planner one
+  // more pass over an index it has already used and binds nothing.
+  const linesByTransaction = new Map<Id<"transactions">, string[]>();
+  if (rows.length > 0) {
+    const lineRows = db
+      .select({
+        transactionId: transactionLines.transactionId,
+        description: transactionLines.description,
+      })
+      .from(transactionLines)
+      .where(
+        exists(
+          // The projection is `transactions.id` rather than a raw `sql`1``:
+          // `EXISTS` ignores what a subquery selects, and a real column keeps
+          // the builder typed where a raw fragment would be `SQL<unknown>`.
+          db
+            .select({ matched: transactions.id })
+            .from(transactions)
+            .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+            .where(and(eq(transactions.id, transactionLines.transactionId), structuralWhere)),
+        ),
+      )
+      .all();
+    for (const line of lineRows) {
+      // `transactionLines.transactionId`'s own column type is `Id<IdTable>`
+      // — every branded table, not just this one — because the schema
+      // declares it `k.uuid("transaction_id")` with no `<Table>` given.
+      // Narrowed here, at the boundary, the same way `@waltning/core/id`'s
+      // own `id()` is meant to be used.
+      const transactionId = brandId<"transactions">(line.transactionId);
+      const descriptions = linesByTransaction.get(transactionId);
+      if (descriptions) descriptions.push(line.description);
+      else linesByTransaction.set(transactionId, [line.description]);
+    }
+  }
+
+  const filtered = rows.filter((row) =>
+    matchesText(row, needle, needleAmount, linesByTransaction.get(row.id) ?? []),
+  );
   const total = totalsOf(filtered);
 
   const remaining =

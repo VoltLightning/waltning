@@ -13,6 +13,7 @@ import {
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate, addDays, todayIn } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { crossRate, currencyCode, toMoney, unitsPerPivot } from "@waltning/core/money";
@@ -104,7 +105,7 @@ function fakeController(
     readCrossRate?: PhoneLedgerPort["readCrossRate"];
   } = {},
 ) {
-  const port: PhoneLedgerPort = {
+  const port = basePort({
     listAccounts: () => overrides.accounts ?? [HOUSEHOLD, CASH],
     listCurrencies: () => [
       {
@@ -132,37 +133,7 @@ function fakeController(
         isPivot: false,
       },
     ],
-    listGroups: () => [],
-    listRecent: () => [],
-    listCategories: () => [],
-    listCategoryTree: () => [],
-    listCounterparties: () => [],
-    listPayeeHistory: () => [],
-    listNetWorth: () => [],
-    readPeriodSpend: () => [],
-    readSpendByCategory: () => [],
-    readIncomeVsExpense: () => [],
-    readActiveDashboardLayout: () => null,
-    listUnsettledClearing: () => [],
-    balanceAsOf: () => toMoney("0"),
-    createAccount: vi.fn(),
-    createTransaction: overrides.createTransaction ?? vi.fn(),
-    createCategory: vi.fn(),
-    updateAccount: vi.fn(),
-    archiveAccount: vi.fn(),
-    reconcileAccount: vi.fn(),
-    createGroup: vi.fn(),
-    searchTransactions: () => ({
-      rows: [],
-      nextCursor: undefined,
-      total: { count: 0, currencies: [] },
-    }),
-    categorizeBatch: () => undefined,
-    getTransaction: () => null,
-    updateTransaction: () => undefined,
-    deleteTransaction: () => undefined,
-    setTransactionLines: () => undefined,
-    readRate: vi.fn(() => null),
+    createTransaction: overrides.createTransaction ?? (() => undefined),
     // S31 §9's own worked example: 3.8100 PLN per USD, `readCrossRate`'s
     // triangulated direction (M1) — multiply the USD leg by this to reach PLN.
     // USD→EUR is a second, distinct reference (H1's re-prefill tests, and
@@ -174,7 +145,7 @@ function fakeController(
     // fixture used to before H2's split.
     readCrossRate:
       overrides.readCrossRate ??
-      vi.fn(({ from, to }) => {
+      (({ from, to }) => {
         if (from === USD && to === PLN) {
           const leg = {
             rate: unitsPerPivot("1"),
@@ -195,36 +166,7 @@ function fakeController(
         }
         return null;
       }),
-    readCoverage: vi.fn(() => []),
-    listFxRates: vi.fn(() => []),
-    addCurrency: vi.fn(),
-    archiveCurrency: vi.fn(),
-    setRateSource: vi.fn(),
-    setPinned: vi.fn(),
-    changePivot: vi.fn(() => ({ droppedDates: 0 })),
-    setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-    clearManualRate: vi.fn(() => ({ deleted: 0 })),
-    createCounterparty: vi.fn(),
-    updateCounterparty: vi.fn(),
-    mergeCounterparties: vi.fn(),
-    unmergeCounterparties: vi.fn(),
-    recordDistinctCounterparties: vi.fn(),
-    settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
-    listCounterpartyBalances: vi.fn(() => []),
-    listFullCategoryTree: vi.fn(() => []),
-    listCategoryUsage: vi.fn(() => new Map()),
-    readCategoryReferenceCounts: vi.fn(() => ({ transactions: 0, lines: 0, rules: 0 })),
-    renameCategory: vi.fn(),
-    reparentCategory: vi.fn(),
-    convertLeafGroup: vi.fn(),
-    mergeCategories: vi.fn(),
-    archiveCategory: vi.fn(),
-    listCounterpartyMerges: vi.fn(() => []),
-    listDistinctCounterpartyPairs: vi.fn(() => []),
-    listCurrencySettings: vi.fn(() => []),
-    updateCurrency: vi.fn(),
-    reset: vi.fn(),
-  };
+  });
   return createPhoneLedger(port, {
     capture: () => ({
       date: accountingDate("2026-08-12"),

@@ -8,11 +8,9 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import {
-  createPhoneLedger,
-  type PhoneLedgerPort,
-} from "@waltning/client/ledger/create-phone-ledger";
+import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
@@ -62,7 +60,7 @@ function fakeController(rows: readonly Row[]) {
     memo: "",
     version: 1,
   }));
-  const port: PhoneLedgerPort = {
+  const port = basePort({
     listAccounts: (options) =>
       options?.includeArchived ? accounts : accounts.filter((a) => !a.archived),
     listCurrencies: () => [
@@ -76,68 +74,7 @@ function fakeController(rows: readonly Row[]) {
       },
       { code: USD, name: "US dollar", symbol: "$", decimals: 2, capturable: true, isPivot: false },
     ],
-    listGroups: () => [],
-    listRecent: () => [],
-    listCategories: () => [],
-    listCategoryTree: () => [],
-    listCounterparties: () => [],
-    listPayeeHistory: () => [],
-    listNetWorth: () => [],
-    readPeriodSpend: () => [],
-    readSpendByCategory: () => [],
-    readIncomeVsExpense: () => [],
-    readActiveDashboardLayout: () => null,
-    listUnsettledClearing: () => [],
-    listCounterpartyBalances: () => [],
-    listCounterpartyMerges: () => [],
-    listDistinctCounterpartyPairs: () => [],
-    balanceAsOf: () => toMoney("0"),
-    createAccount: vi.fn(),
-    createTransaction: vi.fn(),
-    createCategory: vi.fn(),
-    updateAccount: vi.fn(),
-    archiveAccount: vi.fn(),
-    reconcileAccount: vi.fn(),
-    createGroup: vi.fn(),
-    createCounterparty: vi.fn(),
-    updateCounterparty: vi.fn(),
-    mergeCounterparties: vi.fn(),
-    unmergeCounterparties: vi.fn(),
-    recordDistinctCounterparties: vi.fn(),
-    settleDebt: vi.fn(() => ({ residual: toMoney("0"), overSettled: false })),
-    searchTransactions: () => ({
-      rows: [],
-      nextCursor: undefined,
-      total: { count: 0, currencies: [] },
-    }),
-    categorizeBatch: () => undefined,
-    getTransaction: () => null,
-    updateTransaction: () => undefined,
-    deleteTransaction: () => undefined,
-    setTransactionLines: () => undefined,
-    readRate: () => null,
-    readCrossRate: () => null,
-    listCurrencySettings: () => [],
-    readCoverage: () => [],
-    listFxRates: () => [],
-    addCurrency: vi.fn(),
-    archiveCurrency: vi.fn(),
-    setRateSource: vi.fn(),
-    setPinned: vi.fn(),
-    changePivot: vi.fn(() => ({ droppedDates: 0 })),
-    setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
-    clearManualRate: vi.fn(() => ({ deleted: 0 })),
-    updateCurrency: vi.fn(),
-    listFullCategoryTree: vi.fn(() => []),
-    listCategoryUsage: vi.fn(() => new Map()),
-    readCategoryReferenceCounts: vi.fn(() => ({ transactions: 0, lines: 0, rules: 0 })),
-    renameCategory: vi.fn(),
-    reparentCategory: vi.fn(),
-    convertLeafGroup: vi.fn(),
-    mergeCategories: vi.fn(),
-    archiveCategory: vi.fn(),
-    reset: vi.fn(),
-  };
+  });
   return createPhoneLedger(port, {
     capture: () => ({
       date: accountingDate("2026-09-03"),

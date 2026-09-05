@@ -53,6 +53,7 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
-    "@waltning/api": "workspace:*"
+    "@waltning/api": "workspace:*",
+    "@waltning/schema": "workspace:*"
   }
 }

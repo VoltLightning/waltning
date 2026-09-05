@@ -21,9 +21,10 @@ import {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode, toMoney } from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -99,67 +100,7 @@ type FakeSearch = (
 ) => ReturnType<PhoneLedgerPort["searchTransactions"]>;
 
 function fakeController(search: FakeSearch) {
-  const port: PhoneLedgerPort = {
-    listAccounts: () => [],
-    listCurrencies: () => [],
-    listGroups: () => [],
-    listRecent: () => [],
-    listCategories: () => [],
-    listCategoryTree: () => [],
-    listCounterparties: () => [],
-    listPayeeHistory: () => [],
-    listNetWorth: () => [],
-    readPeriodSpend: () => [],
-    readSpendByCategory: () => [],
-    readIncomeVsExpense: () => [],
-    readActiveDashboardLayout: () => null,
-    listUnsettledClearing: () => [],
-    listCounterpartyBalances: () => [],
-    listCounterpartyMerges: () => [],
-    listDistinctCounterpartyPairs: () => [],
-    balanceAsOf: () => toMoney("0"),
-    searchTransactions: search,
-    createAccount: () => undefined,
-    createTransaction: () => undefined,
-    createCategory: () => undefined,
-    categorizeBatch: () => undefined,
-    getTransaction: () => null,
-    updateTransaction: () => undefined,
-    deleteTransaction: () => undefined,
-    setTransactionLines: () => undefined,
-    updateAccount: () => undefined,
-    archiveAccount: () => undefined,
-    reconcileAccount: () => undefined,
-    createGroup: () => undefined,
-    readRate: () => null,
-    readCrossRate: () => null,
-    listCurrencySettings: () => [],
-    readCoverage: () => [],
-    listFxRates: () => [],
-    addCurrency: () => undefined,
-    archiveCurrency: () => undefined,
-    setRateSource: () => undefined,
-    setPinned: () => undefined,
-    changePivot: () => ({ droppedDates: 0 }),
-    setManualRate: () => ({ written: 0, replacedManual: 0 }),
-    clearManualRate: () => ({ deleted: 0 }),
-    updateCurrency: vi.fn(),
-    createCounterparty: () => undefined,
-    updateCounterparty: () => undefined,
-    mergeCounterparties: () => undefined,
-    unmergeCounterparties: () => undefined,
-    recordDistinctCounterparties: () => undefined,
-    settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
-    listFullCategoryTree: () => [],
-    listCategoryUsage: () => new Map(),
-    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-    renameCategory: () => undefined,
-    reparentCategory: () => undefined,
-    convertLeafGroup: () => undefined,
-    mergeCategories: () => undefined,
-    archiveCategory: () => undefined,
-    reset: () => undefined,
-  };
+  const port = basePort({ searchTransactions: search });
   return createPhoneLedger(port, {
     capture: () => ({
       date: TODAY,

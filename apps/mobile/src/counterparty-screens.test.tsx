@@ -12,11 +12,12 @@ import {
   type PhoneAccount,
   type PhoneCounterparty,
   type PhoneCounterpartyBalance,
+  type PhoneCurrency,
   type PhoneLedgerController,
   type PhoneLedgerPort,
-  type PhoneSearchPage,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { basePort as sharedBasePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { type Id, id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
@@ -119,89 +120,22 @@ const EUR_PIVOT_CURRENCY = {
   isPivot: true,
 } as const;
 
-const EMPTY_PAGE: PhoneSearchPage = {
-  rows: [],
-  nextCursor: undefined,
-  total: { count: 0, currencies: [] },
+const PLN_CURRENCY: PhoneCurrency = {
+  code: PLN,
+  name: "Polish Złoty",
+  symbol: "zł",
+  decimals: 2,
+  capturable: true,
+  isPivot: true,
 };
 
 /**
- * Every `PhoneLedgerPort` method, defaulted to the emptiest honest answer —
- * the same shape `screens.test.tsx`'s own `fakeController` builds, so a test
- * overrides only what it is actually about.
+ * This screen's own default over `@waltning/client/ledger/test-port`'s
+ * shared `basePort` (M4): every `PhoneLedgerPort` method at the emptiest
+ * honest answer, plus the one currency these three screens all assume.
  */
 function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerPort {
-  return {
-    listAccounts: () => [],
-    listCurrencies: () => [
-      {
-        code: PLN,
-        name: "Polish Złoty",
-        symbol: "zł",
-        decimals: 2,
-        capturable: true,
-        isPivot: true,
-      },
-    ],
-    listGroups: () => [],
-    listRecent: () => [],
-    listCategories: () => [],
-    listCategoryTree: () => [],
-    listCounterparties: () => [],
-    listPayeeHistory: () => [],
-    listCounterpartyBalances: () => [],
-    listCounterpartyMerges: () => [],
-    listDistinctCounterpartyPairs: () => [],
-    listNetWorth: () => [],
-    readPeriodSpend: () => [],
-    readSpendByCategory: () => [],
-    readIncomeVsExpense: () => [],
-    readActiveDashboardLayout: () => null,
-    listUnsettledClearing: () => [],
-    balanceAsOf: () => toMoney("0"),
-    searchTransactions: () => EMPTY_PAGE,
-    createAccount: () => undefined,
-    createTransaction: () => undefined,
-    createCategory: () => undefined,
-    categorizeBatch: () => undefined,
-    getTransaction: () => null,
-    updateTransaction: () => undefined,
-    deleteTransaction: () => undefined,
-    setTransactionLines: () => undefined,
-    updateAccount: () => undefined,
-    archiveAccount: () => undefined,
-    reconcileAccount: () => undefined,
-    createGroup: () => undefined,
-    readRate: () => null,
-    readCoverage: () => [],
-    listFxRates: () => [],
-    addCurrency: () => undefined,
-    archiveCurrency: () => undefined,
-    setRateSource: () => undefined,
-    setPinned: () => undefined,
-    changePivot: () => ({ droppedDates: 0 }),
-    setManualRate: () => ({ written: 0, replacedManual: 0 }),
-    clearManualRate: () => ({ deleted: 0 }),
-    createCounterparty: () => undefined,
-    updateCounterparty: () => undefined,
-    mergeCounterparties: () => undefined,
-    unmergeCounterparties: () => undefined,
-    recordDistinctCounterparties: () => undefined,
-    settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
-    listFullCategoryTree: () => [],
-    listCategoryUsage: () => new Map(),
-    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-    renameCategory: () => undefined,
-    reparentCategory: () => undefined,
-    convertLeafGroup: () => undefined,
-    mergeCategories: () => undefined,
-    archiveCategory: () => undefined,
-    readCrossRate: () => null,
-    listCurrencySettings: vi.fn(() => []),
-    updateCurrency: vi.fn(),
-    reset: () => undefined,
-    ...overrides,
-  };
+  return sharedBasePort({ listCurrencies: () => [PLN_CURRENCY], ...overrides });
 }
 
 /**
