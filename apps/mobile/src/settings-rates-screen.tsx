@@ -177,6 +177,21 @@ export default function SettingsRatesScreen() {
   const coverage = ledger.readCoverage(today);
   const quoteCurrencies = useMemo(() => new Set(quoteOptions.map((o) => o.value)), [quoteOptions]);
   const shownCoverage = coverage.filter((row) => quoteCurrencies.has(row.code));
+  /**
+   * **The hint and the coverage card read one state, so they cannot
+   * disagree.** With no currency besides the pivot there is nothing to quote
+   * against: no table, no coverage row, and the hint on the ground is the one
+   * true sentence about it. Both are gated on this value rather than on two
+   * conditions of their own — `shownCoverage.length === 0` was the second
+   * condition, and two conditions that happen to agree today are two
+   * conditions that can drift.
+   *
+   * They agree by construction, not by luck: `readCoverage` returns exactly
+   * one row per non-pivot, non-archived currency (`read-rate.ts`) and
+   * `listCurrencySettings()` excludes archived by default, so `shownCoverage`
+   * is empty when and only when there is no quote currency.
+   */
+  const noQuoteCurrency = quoteOptions.length === 0;
 
   return (
     <GroundPanel scroll="own">
@@ -230,10 +245,15 @@ export default function SettingsRatesScreen() {
         table to card. The hint that says so is a hint: it renders on the
         ground, beside the controls it is about, rather than inside an empty
         card whose chrome would claim a group exists.
+
+        `noQuoteCurrency` decides the hint; the nulls beside it are the
+        remaining narrowing this branch needs (a custom range that does not
+        parse, a ledger with no pivot) and draw nothing rather than claiming
+        there is no quote currency.
       */}
-      {quote === null || range === null || pivot === undefined ? (
+      {noQuoteCurrency ? (
         <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
-      ) : (
+      ) : quote === null || range === null || pivot === undefined ? null : (
         <Card>
           <RateTable
             base={pivot.code}
@@ -282,9 +302,11 @@ export default function SettingsRatesScreen() {
         currency there are no rows and no group — a titled card holding
         nothing is chrome claiming a list exists (`design-system/05` §5.1).
         The hint above already says why there is nothing here; repeating it
-        under a *Coverage* heading would state the same absence twice.
+        under a *Coverage* heading would state the same absence twice. Same
+        `noQuoteCurrency` the hint reads, so the two can never disagree about
+        which state this screen is in.
       */}
-      {shownCoverage.length === 0 ? null : (
+      {noQuoteCurrency ? null : (
         <Card title={t("fx.coverageTitle")}>
           {shownCoverage.map((row) => (
             <View key={row.code} style={styles.coverageRow}>

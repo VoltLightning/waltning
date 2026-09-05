@@ -114,6 +114,10 @@ export default function Today() {
     () => ({ label: t("shell.add"), onPress: handleAddTransaction }),
     [t],
   );
+  // The ledger holds rows this screen's five-row window did not return — S10
+  // is where they are, and *Show all* is already the Recent card's own way of
+  // saying so. Existing copy, existing destination.
+  const showAllAction = useMemo(() => ({ label: t("shell.showAll"), onPress: handleShowAll }), [t]);
   const snapshot = usePhoneLedger(ledger);
   const systemScheme = useColorScheme();
   const resolved = useAppearance(
@@ -142,6 +146,22 @@ export default function Today() {
   }
   const handleDismissToast = useCallback(() => setToastDismissed(true), []);
   const hasAccounts = snapshot.accounts.length > 0;
+  /**
+   * **An empty Recent is not by itself a first run.** `snapshot.recent` is a
+   * five-row window (`create-phone-ledger.ts` calls `listRecent(5)`), and a
+   * window that came back empty is not the same claim as *this ledger has
+   * never held a transaction* — the second is a count over the whole ledger,
+   * and only the count may choose the `first-run` wording. S10 decides its own
+   * empty the same way, through the same unfiltered `searchTransactions({})`.
+   *
+   * Asked for only when the empty state needs it — `ledger-screen.tsx`'s own
+   * reason: an unfiltered count on every render is a second query nothing
+   * else on this screen wants.
+   */
+  const everCaptured =
+    hasAccounts && snapshot.recent.length === 0
+      ? ledger.searchTransactions({}).total.count > 0
+      : false;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
   // The error a failed refresh set stays on the snapshot until the next
   // success (`create-phone-ledger.ts`'s `refresh()`) — `ErrorState`'s action
@@ -340,19 +360,30 @@ export default function Today() {
       {unsettledBanner}
       {/*
         S04 §3 — the card *is* the group of Recent rows, so with no rows there
-        is no group to draw, and *Show all* has nothing to show. An account
-        exists but nothing has been captured yet: that is `first-run` for the
-        ledger, not for the account list, and it renders on the ground
-        (`design-system/05` §5.1) in the wording S10's own first run already
-        uses. No new copy — the same two lines, one screen earlier.
+        is no group to draw, and *Show all* has nothing to show. What replaces
+        it depends on the count, never on the window: an account exists and the
+        ledger has never held a transaction is `first-run` for the ledger, not
+        for the account list; a ledger that holds rows the window did not
+        return is the ordinary empty. Both render on the ground
+        (`design-system/05` §5.1), in the wording S10's own two empties already
+        use. No new copy — the same lines, one screen earlier.
       */}
       {snapshot.recent.length === 0 ? (
-        <EmptyState
-          variant="first-run"
-          title={t("transactions.emptyFirstRunTitle")}
-          body={t("transactions.emptyFirstRunBody")}
-          primaryAction={addTransactionAction}
-        />
+        everCaptured ? (
+          <EmptyState
+            variant="filtered"
+            title={t("transactions.emptyFilteredTitle")}
+            body={t("transactions.emptyFilteredBody")}
+            primaryAction={showAllAction}
+          />
+        ) : (
+          <EmptyState
+            variant="first-run"
+            title={t("transactions.emptyFirstRunTitle")}
+            body={t("transactions.emptyFirstRunBody")}
+            primaryAction={addTransactionAction}
+          />
+        )
       ) : (
         <Card
           title={t("shell.recent")}

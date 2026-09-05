@@ -62,6 +62,40 @@ it("groups by kind, in S16's order, with a subtotal header per currency", () => 
   expect(screen.getByText("BIZ")).toBeDefined();
 });
 
+/**
+ * S16 §3 — every kind group is a card, and a card is the group of rows it
+ * holds (`design-system/05` §5.1). A kind nobody has an account in has no
+ * group, so it must draw no card: a *Card* heading with a subtotal of nothing
+ * under it is chrome claiming a group exists.
+ *
+ * **Broken once**: with the `.filter((group) => group.rows.length > 0)` gone
+ * from `groups`, this ledger renders all nine `KIND_ORDER` headings, seven of
+ * them empty, and the assertions below fail on the first of them.
+ */
+it("draws no card for a kind nobody holds an account in", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "bank-1", name: "Bank A · PLN", kind: "bank" }),
+        account({ id: "cash-1", name: "Cash", kind: "cash", balance: money.toMoney("40") }),
+      ]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+
+  // `getAllByText` — each kind word appears twice here, once as the group's
+  // card title and once as its one row's own kind label.
+  expect(screen.getAllByText("Bank").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
+  // The kinds this ledger holds nothing in — no heading, so no card.
+  for (const kind of ["Card", "Clearing", "Investment", "Deposit", "Other"]) {
+    expect(screen.queryByText(kind), `${kind} group drawn with no rows`).toBeNull();
+  }
+});
+
 it("puts a clearing account's non-zero balance under the amber marker", () => {
   render(
     <AccountRegister

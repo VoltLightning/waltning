@@ -90,6 +90,13 @@ ground — *No transactions yet*, the same wording S10's first run uses — neve
 a *Recent* card with *Show all* over an empty column, which would be chrome
 claiming a list exists and an action that shows nothing.
 
+**Which empty it is, is a count, not a window.** Recent is the five most
+recent rows; a window that came back empty is not the claim *this ledger has
+never held a transaction*. Only an unfiltered count of the whole ledger may
+choose the first-run wording — the same `searchTransactions({})` count S10
+uses to tell its own two empties apart. A ledger that does hold rows gets
+S10's ordinary empty and *Show all*, which goes where the rows are.
+
 **What earns it the space is the pending row.** Outbox writes appear at the top
 with their `pending` marker until they sync, so an offline save is visibly
 landed on the screen you saved from. That is the one thing S10 cannot do for
@@ -131,7 +138,7 @@ happened*.
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `TabBar` | 5 tabs, all ≥44px. `+` is not one of them |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
-| `EmptyState(first-run)` | Two of them. No accounts — offers create and import. Accounts but no transactions — *No transactions yet*, S10's own wording, in place of the Recent card |
+| `EmptyState(first-run)` | Two of them. No accounts — offers create; the import path is S02's, and arrives with it (no route exists yet, and this screen invents none). Accounts but no transactions — *No transactions yet*, S10's own wording, in place of the Recent card. *No transactions yet* is chosen by an unfiltered count, never by an empty Recent window: a ledger holding rows Recent did not return gets S10's ordinary empty and *Show all* instead |
 | `AppearanceButton` | Header action; opens the appearance sheet |
 | `BottomSheet(appearance)` | Radio choices: System, Light, Dark |
 
@@ -154,7 +161,7 @@ keeps it fast and what makes it safe to render from cache offline.
 |---|---|
 | Loading | Not modelled — the replica read is synchronous SQLite, with no in-between moment to show a skeleton for (`09-state-matrix.md`) |
 | Populated | As drawn |
-| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account* and *Import from Money Manager*. Accounts with no transactions is the second empty: the hero and period row stay, and *No transactions yet* replaces the Recent card rather than emptying it |
+| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account*. *Import from Money Manager* is S02's path and arrives with it — until then this state offers create alone rather than an action with nowhere to go. Accounts with no transactions is the second empty: the hero and period row stay, and *No transactions yet* replaces the Recent card rather than emptying it. That wording is chosen by the unfiltered count — a ledger that holds rows Recent did not return gets S10's ordinary empty and *Show all* |
 | Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the hero keeps its last known figure with its age** rather than blanking |
 | Offline | Cached, with `Banner(neutral)` — *showing data as of 14:06*. Capture stays fully available; that is the point of the outbox |
 | Gated | n/a — single user |

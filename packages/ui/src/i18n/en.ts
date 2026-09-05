@@ -582,7 +582,16 @@ export const en = {
   },
   shell: {
     today: "Today",
-    /** The floating add button. A verb, because a `+` has no name a screen reader can say. */
+    /**
+     * The floating add button. A verb, because a `+` has no name a screen
+     * reader can say.
+     *
+     * Also S04's own label on the empty ledger's `EmptyState(first-run)`: the
+     * `+` floats over that state and reaches the same `/quick-add`, so naming
+     * the button's own word there points at one destination twice rather than
+     * inventing a second one. A different label would be a second name for the
+     * same act.
+     */
     add: "Add",
     /** The parked tab that brings the add button back. */
     showAdd: "Show the add button",

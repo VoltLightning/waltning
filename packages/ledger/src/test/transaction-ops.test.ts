@@ -19,6 +19,8 @@ import { ledgerSchema } from "../schema-map.ts";
 import { categorizeBatchExecutor } from "../transactions/categorize-batch.executor.ts";
 import { createTransactionExecutor } from "../transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "../transactions/delete-transaction.executor.ts";
+import { readRecent } from "../transactions/read-recent.ts";
+import { searchTransactions } from "../transactions/search-transactions.ts";
 import { setTransactionLinesExecutor } from "../transactions/set-transaction-lines.executor.ts";
 import { supersedeTransactionExecutor } from "../transactions/supersede-transaction.executor.ts";
 import { updateTransactionExecutor } from "../transactions/update-transaction.executor.ts";
@@ -591,6 +593,33 @@ describe("delete_transaction", () => {
       }),
     ).toThrow(/stale/);
     expect(readTxn()?.deletedAt).toBeNull();
+  });
+
+  /**
+   * **The two reads S04 tells its empties apart with, on the one ledger where
+   * they could disagree.** The Recent window (`readRecent`) is what the screen
+   * draws; the unfiltered count (`searchTransactions({})`) is what decides
+   * whether *No transactions yet* is a true sentence. A ledger whose every row
+   * is soft-deleted is the case worth pinning: the row is still in the table,
+   * so a read that forgot `deleted_at` would return it, and the screen would
+   * then draw an empty Recent card over a count that says rows exist.
+   *
+   * Both exclude it, so a ledger emptied by deletion genuinely is first-run
+   * again — S04's wording is right, and it is right for a reason this test
+   * states rather than a coincidence the screen assumed.
+   */
+  it("leaves both of S04's reads empty — the window and the unfiltered count", () => {
+    writeLocally(stores.ledger, {
+      executor: deleteTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: readTxn()?.version ?? 0 },
+    });
+
+    // The row is still there — this is a soft delete, not a gap in the fixture.
+    expect(readTxn()).toBeDefined();
+    expect(readRecent(stores.ledger.replica.db, 5)).toEqual([]);
+    expect(searchTransactions(stores.ledger.replica.db, {}).total.count).toBe(0);
   });
 });
 

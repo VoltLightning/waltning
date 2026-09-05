@@ -430,17 +430,33 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * checking every branch. Without that, wrapping the offending card in a
    * `<View>` was a one-line way past the rule.
    *
-   * **Three evasions are accepted, and stated rather than hidden.** This is a
-   * text scan, not a type-aware parser, so a `Card` it cannot see in the
+   * **A screen's panel is not always in the screen's own file.** The fourth
+   * evasion is not a trick at all — it is how `today-screen.tsx` is written:
+   * the `<GroundPanel>` belongs to `TodayFrame` in `packages/ui`, and the
+   * screen hands its content in through a prop. Reading only the screens'
+   * own `<GroundPanel>` tags, the rule simply never looked at Today.
+   *
+   * So it is read through the frame. Every `packages/ui` component whose own
+   * render is a `GroundPanel` around a `children`/`body` prop is found from
+   * disk (`panelFrames()`), and the JSX a screen passes to that prop *is*
+   * that panel's content — including the common shape of hoisting it as
+   * `const body = (…)` and passing `body={body}`, which is followed to the
+   * declaration. `today-screen.tsx` falls under the rule that way, and a
+   * frame added tomorrow is covered the day it exists rather than the day
+   * someone remembers it here.
+   *
+   * **Two evasions remain accepted, and stated rather than hidden.** This is
+   * a text scan, not a type-aware parser, so a `Card` it cannot see in the
    * screen's own JSX is a `Card` it does not judge:
    *
    * 1. **A helper component that returns a `Card`** — `<AccountPanel />` in
    *    the panel, `function AccountPanel() { return <Card>…</Card>; }` below
    *    it. The panel's sole child reads as `AccountPanel`, not `Card`.
-   * 2. **A hoisted `const card = <Card>…</Card>` rendered as `{card}`** —
-   *    the expression names no component at all, so no branch resolves to a
-   *    `Card`.
-   * 3. **`React.createElement(Card, …)`** — no JSX tag exists to match.
+   * 2. **`React.createElement(Card, …)`** — no JSX tag exists to match.
+   *
+   * (The third — a hoisted `const card = <Card>…</Card>` rendered as
+   * `{card}` — is gone: the same declaration-following the frame prop needed
+   * closes it, so a lone `{identifier}` inside a panel is now resolved.)
    *
    * Each is a deliberate act, not a slip: writing one of these means moving
    * the card out of the shape the rule reads in order to keep it. The
@@ -581,31 +597,72 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     return !isOverlayName(child.name);
   }
 
+  /** A bare identifier, and nothing else — `{body}`, not `{body.rows}`. */
+  const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+  /**
+   * The JSX a `const NAME = …;` in this file holds, so `{body}` and
+   * `body={body}` are followed to what they actually render. Read to the
+   * first `;` outside every bracket, which is where the declaration ends —
+   * the initializer's own `(`/`{`/`[` are counted rather than searched past.
+   */
+  function jsxOfIdentifier(source: string, name: string): string | undefined {
+    const src = stripComments(source);
+    const decl = new RegExp(`\\bconst\\s+${name}\\s*=\\s*`).exec(src);
+    if (!decl) return undefined;
+    const from = decl.index + decl[0].length;
+    let depth = 0;
+    for (let i = from; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "{" || c === "[") depth++;
+      else if (c === ")" || c === "}" || c === "]") depth--;
+      else if (c === ";" && depth === 0) return src.slice(from, i);
+    }
+    return undefined;
+  }
+
   /**
    * What a panel (or a wrapper inside one) can actually render, one entry per
-   * branch. A `View`/fragment around exactly one thing renders that thing, and
-   * a conditional renders one of its branches — so both are followed through
+   * branch. A `View`/fragment around exactly one thing renders that thing, a
+   * conditional renders one of its branches, and a lone `{identifier}` renders
+   * whatever that identifier was declared as — all three are followed through
    * rather than counted as content of their own. Anything with two or more
    * real children is a screen with siblings and yields nothing: the rule is
    * only about a panel that *is* one card.
+   *
+   * `source` is the file the JSX came from, and it is only ever read to
+   * resolve an identifier. `seen` stops `const a = <>{a}</>` from looping.
    */
-  function soleContents(jsx: string): Child[] {
+  function soleContents(
+    jsx: string,
+    source: string,
+    seen: ReadonlySet<string> = new Set(),
+  ): Child[] {
     const content = topLevelChildren(jsx).filter(isRealContent);
     const only = content.length === 1 ? content[0] : undefined;
     if (!only) return [];
     if (only.name === EXPRESSION) {
+      const inner = only.raw.slice(1, -1);
       // Each JSX element at the top level of the expression is one branch of
       // a ternary or a `&&`; `{rows.map(…)}` yields its row element, which is
       // not a `Card` and so is simply not an offender.
-      return topLevelChildren(only.raw.slice(1, -1)).flatMap((branch) =>
-        branch.name === EXPRESSION ? [] : resolve(branch),
-      );
+      const branches = topLevelChildren(inner);
+      if (branches.length > 0) {
+        return branches.flatMap((branch) =>
+          branch.name === EXPRESSION ? [] : resolve(branch, source, seen),
+        );
+      }
+      const name = stripComments(inner).trim();
+      if (!IDENTIFIER.test(name) || seen.has(name)) return [];
+      const declared = jsxOfIdentifier(source, name);
+      return declared === undefined ? [] : soleContents(declared, source, new Set([...seen, name]));
     }
-    return resolve(only);
+    return resolve(only, source, seen);
   }
 
-  function resolve(child: Child): Child[] {
-    if (child.name === "View" || child.name === FRAGMENT) return soleContents(innerOf(child));
+  function resolve(child: Child, source: string, seen: ReadonlySet<string>): Child[] {
+    if (child.name === "View" || child.name === FRAGMENT)
+      return soleContents(innerOf(child), source, seen);
     return [child];
   }
 
@@ -627,40 +684,67 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   }
 
   /**
-   * A navigation header, declared anywhere in a layout — `headerShown`, any
-   * of the `header*` slots, or a bare `header` option. The exemption below
-   * rests entirely on the header's *absence*, so the absence is read, not
-   * assumed: the day `(tabs)/_layout.tsx` grows one of these, the tab roots
-   * have somewhere to put the screen's name and the exemption is gone in the
-   * same commit that adds it.
+   * **The header is read where it is decided, and by its value.**
+   *
+   * A tab root has no navigation header because `app/_layout.tsx` says so:
+   * `<Stack.Screen name="(tabs)" options={{ headerShown: false }} />`. The
+   * `(tabs)` layout itself declares nothing about a header — it mounts
+   * `expo-router/ui`'s bare `<Tabs>` — so scanning *that* file for the word
+   * `headerShown` reads a file that never had a say. And scanning for the
+   * option *name* is not enough either: `headerShown: true` matches the name
+   * exactly as `false` does, so a name match alone spends nothing. The value
+   * is what the exemption rests on, and the value is what is checked.
+   *
+   * The tabs layout is still consulted, but only as the fallback for a root
+   * layout with no `<Stack.Screen name="(tabs)">` at all — the one shape in
+   * which `expo-router` would take the option from the group's own layout
+   * instead. With neither saying `false`, a `Stack` shows a header by
+   * default, so the exemption is not granted.
    */
-  const HEADER_OPTION = /\b(?:header|headerShown|headerTitle|headerLeft|headerRight)\s*[:=]/;
+  const HEADER_HIDDEN = /\bheaderShown\s*[:=]\s*\{?\s*false\b/;
 
-  function declaresHeader(source: string): boolean {
-    return HEADER_OPTION.test(stripComments(source));
+  /** The `<Stack.Screen name="(tabs)" …/>` element of a root layout, if it has one. */
+  function tabsScreenTag(rootLayout: string): string | undefined {
+    for (const m of stripComments(rootLayout).matchAll(/<Stack\.Screen\b[\s\S]*?\/>/g)) {
+      if (/\bname\s*=\s*["'`]\(tabs\)["'`]/.test(m[0])) return m[0];
+    }
+    return undefined;
   }
+
+  /** Whether the tab group's screens render with no navigation header. */
+  function tabsHeaderHidden(rootLayout: string, tabsLayout: string): boolean {
+    const tag = tabsScreenTag(rootLayout);
+    if (tag !== undefined) return HEADER_HIDDEN.test(tag);
+    return HEADER_HIDDEN.test(stripComments(tabsLayout));
+  }
+
+  const sourceOf = (file: string) => (existsSync(file) ? readFileSync(file, "utf8") : "");
 
   /**
    * The screens a tab route renders — read from `app/(tabs)/*.tsx`, not
-   * listed. `(tabs)/_layout.tsx` renders no navigation header (it mounts
-   * `expo-router/ui`'s bare `<Tabs>`, and `declaresHeader` above checks that
-   * it stays that way), so a tab root has nowhere but a card's own `title` to
-   * put the screen's name: `05-composites` §5.1 states the exception as a
-   * principle, *"a tab root without a navigation header may carry its menu
-   * list in a titled card"*, and this derives it rather than naming a file.
+   * listed. The tab group renders with no navigation header, which
+   * `tabsHeaderHidden` above reads out of the option that decides it, so a
+   * tab root has nowhere but a card's own `title` to put the screen's name:
+   * `05-composites` §5.1 states the exception as a principle, *"a tab root
+   * without a navigation header may carry its menu list in a titled card"*,
+   * and this derives it rather than naming a file.
    *
-   * **Both halves of the principle are read.** A layout that declares a
-   * header yields no roots at all — every screen under it is judged like any
-   * other — and a menu card that grows something other than buttons stops
-   * matching `isMenuCard`. Either change loses the exemption the same day.
+   * **Both halves of the principle are read.** An app whose tab group is
+   * given a header yields no roots at all — every screen under it is judged
+   * like any other — and a menu card that grows something other than buttons
+   * stops matching `isMenuCard`. Either change loses the exemption the same
+   * day.
    */
   function tabRootScreens(): Set<string> {
     const roots = new Set<string>();
     for (const app of appRoots()) {
       const dir = join(app, "app", "(tabs)");
       if (!existsSync(dir)) continue;
-      const layout = join(dir, "_layout.tsx");
-      if (!existsSync(layout) || declaresHeader(readFileSync(layout, "utf8"))) continue;
+      const hidden = tabsHeaderHidden(
+        sourceOf(join(app, "app", "_layout.tsx")),
+        sourceOf(join(dir, "_layout.tsx")),
+      );
+      if (!hidden) continue;
       for (const name of readdirSync(dir)) {
         if (!/\.tsx$/.test(name) || name === "_layout.tsx") continue;
         for (const spec of importsOf(join(dir, name))) {
@@ -671,6 +755,123 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
       }
     }
     return roots;
+  }
+
+  /**
+   * The end of the tag opening at `at` — brace- and string-aware, so an
+   * element nested inside a prop (`appearanceAction={<Controls … />}`) does
+   * not end it at the first `>` it contains.
+   */
+  function openTagEnd(src: string, at: number): { end: number; selfClosing: boolean } | undefined {
+    let depth = 0;
+    for (let i = at + 1; i < src.length; i++) {
+      const c = src[i];
+      if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (c === '"' || c === "'" || c === "`") {
+        const close = src.indexOf(c, i + 1);
+        if (close < 0) return undefined;
+        i = close;
+      } else if (c === ">" && depth === 0) {
+        return { end: i + 1, selfClosing: src[i - 1] === "/" };
+      }
+    }
+    return undefined;
+  }
+
+  /** The `{…}` a named prop is given, brace-matched rather than line-matched. */
+  function propValue(tag: string, prop: string): string | undefined {
+    const m = new RegExp(`\\b${prop}\\s*=\\s*\\{`).exec(tag);
+    if (!m) return undefined;
+    const from = m.index + m[0].length;
+    let depth = 1;
+    for (let i = from; i < tag.length; i++) {
+      if (tag[i] === "{") depth++;
+      else if (tag[i] === "}") depth--;
+      if (depth === 0) return tag.slice(from, i);
+    }
+    return undefined;
+  }
+
+  /**
+   * The prop a `GroundPanel` renders, unwrapped through `View`s and
+   * fragments — `TodayFrame`'s panel holds `<View style={styles.body}>{body}
+   * </View>`, so the prop is `body`. A panel holding anything else (fixed
+   * content, two children) is not a frame and yields nothing.
+   */
+  function panelPropName(body: string): string | undefined {
+    let jsx = body;
+    // Bounded: each turn strips one wrapper, and no screen nests ten.
+    for (let step = 0; step < 10; step++) {
+      const content = topLevelChildren(jsx).filter(isRealContent);
+      const only = content.length === 1 ? content[0] : undefined;
+      if (!only) return undefined;
+      if (only.name === EXPRESSION) {
+        const name = stripComments(only.raw.slice(1, -1)).trim();
+        return IDENTIFIER.test(name) ? name : undefined;
+      }
+      if (only.name !== "View" && only.name !== FRAGMENT) return undefined;
+      jsx = innerOf(only);
+    }
+    return undefined;
+  }
+
+  /** The nearest `function Name(` declared above `at` — the component this JSX belongs to. */
+  function enclosingComponent(source: string, at: number): string | undefined {
+    let name: string | undefined;
+    for (const m of source.slice(0, at).matchAll(/\bfunction\s+([A-Z][\w]*)\s*\(/g)) name = m[1];
+    return name;
+  }
+
+  /**
+   * Every `packages/ui` component whose own render is a `GroundPanel` around
+   * a prop — the component's name to the prop that becomes the panel's
+   * content. Read from disk, so a second frame is covered the day it is
+   * written. Stories and tests are excluded: a story's panel is a fixture,
+   * not a screen's.
+   */
+  function panelFrames(): Map<string, string> {
+    const frames = new Map<string, string>();
+    const files = sourceFiles(join(repoRoot, "packages/ui/src")).filter(
+      (f) => /\.tsx$/.test(f) && !isTest(f) && !/\.stories\.tsx$/.test(f),
+    );
+    for (const file of files) {
+      const source = readFileSync(file, "utf8");
+      for (const body of groundPanelBodies(source)) {
+        const prop = panelPropName(body);
+        if (prop === undefined) continue;
+        const component = enclosingComponent(source, source.indexOf(body));
+        if (component !== undefined) frames.set(component, prop);
+      }
+    }
+    return frames;
+  }
+
+  /**
+   * The JSX a screen hands a frame's panel — the frame element's own
+   * children when the frame renders `{children}`, otherwise the value of the
+   * named prop. This is the screen's content in the frame's panel, so it is
+   * read exactly as if the screen had written the `<GroundPanel>` itself.
+   */
+  function framedPanelBodies(source: string, frames: ReadonlyMap<string, string>): string[] {
+    const src = stripComments(source);
+    const bodies: string[] = [];
+    for (const [component, prop] of frames) {
+      const open = new RegExp(`<${component}\\b`, "g");
+      for (let m = open.exec(src); m !== null; m = open.exec(src)) {
+        const tag = openTagEnd(src, m.index);
+        if (!tag) continue;
+        if (prop === "children") {
+          const close = src.indexOf(`</${component}>`, tag.end);
+          if (tag.selfClosing || close < 0) continue;
+          bodies.push(src.slice(tag.end, close));
+          continue;
+        }
+        const value = propValue(src.slice(m.index, tag.end), prop);
+        if (value !== undefined) bodies.push(`{${value}}`);
+      }
+    }
+    return bodies;
   }
 
   /** A menu list: every real child of the card is a `Button`. */
@@ -686,11 +887,13 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     const files = screenFiles();
     expect(files.length, "screen files found").toBeGreaterThan(5);
     const tabRoots = tabRootScreens();
+    const frames = panelFrames();
+    expect(frames.size, "packages/ui frames that hold a screen's panel found").toBeGreaterThan(0);
     const offenders: string[] = [];
     for (const file of files) {
       const text = readFileSync(file, "utf8");
-      for (const body of groundPanelBodies(text)) {
-        const only = soleContents(body).find(
+      for (const body of [...groundPanelBodies(text), ...framedPanelBodies(text, frames)]) {
+        const only = soleContents(body, text).find(
           (child) =>
             child.name === "Card" &&
             !isSkeletonCard(child) &&
@@ -736,7 +939,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
 
     const soleCards = (source: string) =>
       groundPanelBodies(source)
-        .flatMap(soleContents)
+        .flatMap((body) => soleContents(body, source))
         .filter((child) => child.name === "Card" && !isSkeletonCard(child));
 
     expect(soleCards(wrapped)).toHaveLength(1);
@@ -746,31 +949,102 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   });
 
   /**
+   * **Broken once on the fourth evasion**, which is not a trick but the way
+   * `today-screen.tsx` is built: the panel is `TodayFrame`'s, in
+   * `packages/ui`, and the screen hands it a hoisted `const body`. Before
+   * this, the screen had no `<GroundPanel>` of its own and so was never
+   * looked at — the same offending shape, invisible for the price of a
+   * frame. The frame below is `TodayFrame`'s own render, so the discovery is
+   * exercised rather than assumed.
+   */
+  it("reads a screen's panel through a packages/ui frame, and through the const it hoists", () => {
+    const frame = `export function TodayFrame({ total, body }: TodayFrameProps) {
+      return (
+        <View style={styles.root}>
+          <Shell hero={total} />
+          <GroundPanel>
+            <View style={styles.body}>{body}</View>
+          </GroundPanel>
+        </View>
+      );
+    }`;
+    const frames = new Map(
+      groundPanelBodies(frame).flatMap((panel) => {
+        const prop = panelPropName(panel);
+        const component = enclosingComponent(frame, frame.indexOf(panel));
+        return prop !== undefined && component !== undefined ? [[component, prop] as const] : [];
+      }),
+    );
+    expect([...frames]).toEqual([["TodayFrame", "body"]]);
+
+    const offending = `const body = (
+      <Card title="Recent"><Rows /></Card>
+    );
+    return <TodayFrame total={hero} body={body} />;`;
+    const fine = `const body = (
+      <>
+        <Card title="Recent"><Rows /></Card>
+        <Button label="Show all" onPress={handleShowAll} />
+      </>
+    );
+    return <TodayFrame total={hero} body={body} />;`;
+
+    const soleCards = (screen: string) =>
+      framedPanelBodies(screen, frames)
+        .flatMap((panel) => soleContents(panel, screen))
+        .filter((child) => child.name === "Card" && !isSkeletonCard(child));
+
+    expect(soleCards(offending)).toHaveLength(1);
+    expect(soleCards(fine)).toHaveLength(0);
+    // A frame whose panel holds fixed content is not a frame — `StartupFailed`
+    // renders its own `ErrorState`, and nothing of a screen's goes through it.
+    expect(panelPropName("<View style={styles.center}><ErrorState /></View>")).toBeUndefined();
+  });
+
+  /**
    * **The exemption's premise, checked rather than asserted in prose.** The
    * menu card is allowed only because a tab root has no navigation header to
-   * carry its name — so the absence of one is read out of
-   * `(tabs)/_layout.tsx`, and `declaresHeader` is broken once here on the two
-   * shapes a header actually arrives in (`screenOptions={{ headerShown: true
-   * }}` and a `header:` render prop). A layout carrying either yields no tab
-   * roots at all, which is exactly the exemption being spent.
+   * carry its name, and that is decided in exactly one place —
+   * `app/_layout.tsx`'s `<Stack.Screen name="(tabs)" options={…}>`. So the
+   * premise is read from that option's *value*, and broken once here in both
+   * ways it can end: the value flips to `true`, and the whole line goes away
+   * (leaving a `Stack`, which shows a header by default). Either way the app
+   * yields no tab roots at all — the exemption being spent.
    */
-  it("spends the settings-menu exemption the day a tab layout grows a header", () => {
+  it("spends the settings-menu exemption when the tab group's header comes back", () => {
     const layouts = appRoots()
-      .map((app) => join(app, "app", "(tabs)", "_layout.tsx"))
-      .filter((file) => existsSync(file));
-    expect(layouts.length, "tab layouts found").toBeGreaterThan(0);
-
-    for (const file of layouts) {
-      expect(declaresHeader(readFileSync(file, "utf8")), `${rel(file)} declares a header`).toBe(
-        false,
-      );
-    }
+      .map((app) => join(app, "app", "_layout.tsx"))
+      .filter((file) => existsSync(file) && existsSync(join(dirname(file), "(tabs)")));
+    expect(layouts.length, "root layouts over a tab group found").toBeGreaterThan(0);
     expect(tabRootScreens().size, "tab root screens found").toBeGreaterThan(0);
 
-    expect(declaresHeader("<Tabs screenOptions={{ headerShown: true }}>")).toBe(true);
-    expect(declaresHeader("<Tabs screenOptions={{ header: renderHeader }}>")).toBe(true);
-    // A comment naming a header is prose, not a header.
-    expect(declaresHeader("// no headerShown: true here\n<Tabs>")).toBe(false);
+    for (const file of layouts) {
+      const source = readFileSync(file, "utf8");
+      const tag = tabsScreenTag(source);
+      expect(tag, `${rel(file)} decides the tab group's header`).toBeDefined();
+      expect(tabsHeaderHidden(source, ""), `${rel(file)} hides it`).toBe(true);
+
+      const flipped = source.replace(/(name="\(tabs\)"[\s\S]*?headerShown:\s*)false/, "$1true");
+      expect(flipped, "the flip rewrote the option").not.toBe(source);
+      expect(tabsHeaderHidden(flipped, "")).toBe(false);
+
+      const deleted = source.replace(tag ?? "", "");
+      expect(deleted, "the deletion removed the line").not.toBe(source);
+      expect(tabsHeaderHidden(deleted, "")).toBe(false);
+    }
+
+    // Moved to the group's own layout — the one other place expo-router could
+    // take the option from, and only when the root layout names no screen.
+    expect(tabsHeaderHidden("<Stack />", "<Tabs screenOptions={{ headerShown: false }}>")).toBe(
+      true,
+    );
+    // A name match alone spends nothing: the option named, without the value.
+    expect(tabsHeaderHidden("<Stack />", "<Tabs screenOptions={{ headerShown }}>")).toBe(false);
+    expect(
+      tabsHeaderHidden('<Stack.Screen name="(tabs)" options={{ headerTitle: title }} />', ""),
+    ).toBe(false);
+    // A comment naming the option is prose, not a decision.
+    expect(tabsHeaderHidden("<Stack />", "// headerShown: false here\n<Tabs>")).toBe(false);
   });
 });
 

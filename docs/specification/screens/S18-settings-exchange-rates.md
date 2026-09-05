@@ -34,6 +34,13 @@ a second, separate card. **With no quote currency to compare against the pivot
 there is no table, so there is no card** — the hint saying so is a hint, and
 renders on the ground where every other hint on this screen does.
 
+**One state decides both cards.** *No quote currency* is the same fact for the
+table and for the coverage list — the list holds exactly one row per quote
+currency — so the hint and the coverage card are drawn from one value rather
+than from two conditions that happen to agree. A date range that does not parse
+is a different state and draws neither card and no hint: it must not claim
+there is no quote currency when there is one.
+
 ## 4. Components
 
 | Component | Notes |
