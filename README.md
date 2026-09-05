@@ -118,7 +118,7 @@ ones you'll use most:
 make dev        API + web together, from source (Ctrl-C stops both)
 make doctor     checks what's installed and tells you what to fix
 make up         the whole thing as it ships, in containers, on :8080
-make e2e        checks whatever is currently running, end to end
+make e2e        its own database, API, and browser — end to end
 make verify     the gate: formatting, types, and tests
 ```
 
@@ -161,15 +161,24 @@ Two things need a bit of setup the first time:
 ### Checking it works
 
 ```sh
-make e2e             # against whatever you're running from source
-make appliance-e2e   # against the containers
+make e2e             # spins up its own database, API, and web bundle
+make appliance-e2e   # the same suite, against the containers instead
 pnpm test            # the full suite, against a real Postgres
 pnpm verify          # the gate the pre-commit hook runs for you
 ```
 
-`make e2e` exercises the whole chain against a live server: the health checks, a
-real read returning seeded rows, and a rejected write coming back as a proper
-error rather than a network failure. It's read-only unless you pass `--write`.
+`make e2e` runs the Playwright suite. It needs only Postgres running
+(`pnpm db:up`) — from there it clones and seeds its own scratch database,
+starts its own API and web bundle on ports it probes for itself, drives
+ten journeys through a real browser, and tears everything down again.
+Nothing else needs to already be running, and nothing it does touches your
+own development ledger.
+
+For a quick read-only check of *whatever you already have running*
+instead — the health checks, a real read returning seeded rows, and a
+rejected write coming back as a proper error rather than a network
+failure — there is `pnpm e2e:smoke` (add `--write` to also create one
+placeholder row).
 
 `pnpm test` runs against a real Postgres — each test file gets its own database
 cloned from a migrated template, then dropped. There are no database mocks.

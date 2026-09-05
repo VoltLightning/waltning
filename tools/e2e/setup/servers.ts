@@ -184,8 +184,9 @@ function tryBind(port: number, host: string): Promise<"bound" | "busy" | "unsupp
         reject(
           new Error(
             `Cannot bind port ${port} on ${host} (${error.code}) — a permission problem, not a ` +
-              "busy port. Check what else is running as a different user, or a sandbox/firewall " +
-              "policy, rather than re-running `pnpm e2e`.",
+              "busy one: either it is a privileged port (below 1024, which this process has no " +
+              "business binding anyway) or a sandbox/firewall policy is refusing it. Re-running " +
+              "`pnpm e2e` will not change either.",
           ),
         );
       } else resolve("busy");
@@ -199,10 +200,12 @@ function tryBind(port: number, host: string): Promise<"bound" | "busy" | "unsupp
 /**
  * One address family's half of a connect-test. `ECONNREFUSED` is the only
  * answer that means nothing is listening; `EADDRNOTAVAIL`/`EAFNOSUPPORT`
- * (dialling `::1` with no IPv6 loopback configured) means there is nothing
- * to check on this address family at all, same as `tryBind`'s own case. A
- * successful connection, or a socket that neither connects nor errors
- * within a second, both mean something is there.
+ * (dialling `::1` with no IPv6 loopback configured) and `EHOSTUNREACH`/
+ * `ENETUNREACH` (dialling `::1` with no route to it — some machines refuse
+ * a route to a loopback address they otherwise accept binds on) all mean
+ * there is nothing to check on this address family at all, same as
+ * `tryBind`'s own case. A successful connection, or a socket that neither
+ * connects nor errors within a second, both mean something is there.
  */
 function tryConnect(port: number, host: string): Promise<"refused" | "answered" | "unsupported"> {
   return new Promise((resolve) => {
@@ -218,7 +221,12 @@ function tryConnect(port: number, host: string): Promise<"refused" | "answered" 
     });
     socket.once("error", (error: NodeJS.ErrnoException) => {
       if (error.code === "ECONNREFUSED") resolve("refused");
-      else if (error.code === "EADDRNOTAVAIL" || error.code === "EAFNOSUPPORT")
+      else if (
+        error.code === "EADDRNOTAVAIL" ||
+        error.code === "EAFNOSUPPORT" ||
+        error.code === "EHOSTUNREACH" ||
+        error.code === "ENETUNREACH"
+      )
         resolve("unsupported");
       else resolve("answered");
     });
@@ -251,11 +259,21 @@ function tryConnect(port: number, host: string): Promise<"refused" | "answered" 
  * `::1` catches that with `EADDRINUSE`. Together: a `listen()` proves no
  * *specific* listener is already on that exact address, and a connect
  * proves no *wildcard* listener is answering there either.
+ *
+ * The `::1` connect-test is skipped entirely once the `::1` bind-test has
+ * already said `"unsupported"` — a machine with no IPv6 loopback to bind
+ * has none to dial either, and asking anyway would only wait out
+ * `tryConnect`'s own timeout for an answer that was never coming.
  */
 async function canBindPort(port: number): Promise<boolean> {
   if ((await tryBind(port, "127.0.0.1")) !== "bound") return false;
-  if ((await tryBind(port, "::1")) === "busy") return false;
+
+  const v6Bind = await tryBind(port, "::1");
+  if (v6Bind === "busy") return false;
+
   if ((await tryConnect(port, "127.0.0.1")) !== "refused") return false;
+  if (v6Bind === "unsupported") return true;
+
   const v6Connect = await tryConnect(port, "::1");
   return v6Connect === "refused" || v6Connect === "unsupported";
 }
@@ -287,13 +305,41 @@ export async function findFreePort(from: number, attempts = 50): Promise<number>
  * Kills the process group `child` leads (`detached: true` gave it one), so a
  * `tsx`/Expo child dies with it rather than surviving as an orphan. `SIGKILL`
  * follows after 5s only if `SIGTERM` was ignored.
+ *
+ * **Signals the group even when `child` itself has already exited.** `pnpm`
+ * exiting does not end the process group it led — the real `tsx`/`expo`
+ * process it `exec`s (or spawns and outlives) is the one actually holding
+ * the port, and can still be a live member of that group after `pnpm`
+ * itself is gone. `ESRCH` ("no such process") from either `kill()` call
+ * means the whole group is already gone, which is success, not a failure
+ * to report — every `catch` here is that case, not an oversight.
  */
 function stopper(child: ChildProcess): () => Promise<void> {
   return () =>
     new Promise((resolve) => {
       const pid = child.pid;
-      if (pid === undefined || child.exitCode !== null || child.signalCode !== null) {
+      if (pid === undefined) {
         resolve();
+        return;
+      }
+
+      if (child.exitCode !== null || child.signalCode !== null) {
+        // `child`'s own "exit" already fired, once, in the past — a `once`
+        // listener registered now will never see it again, so there is
+        // nothing to resolve this on except the schedule itself.
+        try {
+          process.kill(-pid, "SIGTERM");
+        } catch {
+          // ESRCH — the whole group is already gone.
+        }
+        setTimeout(() => {
+          try {
+            process.kill(-pid, "SIGKILL");
+          } catch {
+            // ESRCH — already gone by the time this fired.
+          }
+          resolve();
+        }, 5_000);
         return;
       }
 
@@ -301,7 +347,7 @@ function stopper(child: ChildProcess): () => Promise<void> {
         try {
           process.kill(-pid, "SIGKILL");
         } catch {
-          // Already gone between the timer firing and this running.
+          // ESRCH — already gone between the timer firing and this running.
         }
       }, 5_000);
 
@@ -313,7 +359,7 @@ function stopper(child: ChildProcess): () => Promise<void> {
       try {
         process.kill(-pid, "SIGTERM");
       } catch {
-        // Already gone — the "exit" listener above still resolves.
+        // ESRCH — the "exit" listener above still resolves.
       }
     });
 }
