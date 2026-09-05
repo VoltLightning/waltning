@@ -11,7 +11,7 @@
   "scripts": {
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "dev:api": "pnpm --filter @waltning/api dev",
-    "dev:all": "pnpm --filter @waltning/mobile dev:all",
+    "dev:all": "pnpm db:ready && pnpm --parallel --filter @waltning/api --filter @waltning/mobile dev",
     "dev:android": "pnpm --filter @waltning/mobile dev:android",
     "dev:ios": "pnpm --filter @waltning/mobile dev:ios",
     "dev:web": "pnpm --filter @waltning/mobile dev:web",
@@ -27,7 +27,9 @@
     "fix": "biome check --write .",
     "rules": "npx --yes ai-rulez@4.11.2 generate",
     "verify": "pnpm check && pnpm typecheck && pnpm test && pnpm test:visual",
+    "verify:fast": "pnpm check && pnpm typecheck && pnpm test",
     "db:up": "docker compose up -d postgres",
+    "db:ready": "sh tools/db-ready.sh",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
     "db:psql": "docker compose exec postgres psql -U waltning -d waltning",

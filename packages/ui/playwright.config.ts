@@ -104,13 +104,37 @@ export default defineConfig({
   },
 
   /**
-   * One worker, deliberately.
+   * Four workers, measured.
    *
-   * Parallel workers share the GPU and the font cache, and the resulting
-   * one-pixel differences are indistinguishable from real ones. A visual suite
-   * that is occasionally wrong is worse than a slower one that is not.
+   * `testDir` holds exactly one spec file, and without `fullyParallel`
+   * Playwright shards work by file, not by test — `workers` above 1 was
+   * previously a dead number: `--workers=4` against this suite printed
+   * `Running 1097 tests using 1 worker` and took the same ~9 minutes as
+   * `workers: 1`, because there was only ever one file to hand a second
+   * worker.
+   *
+   * `fullyParallel: true` is what actually spreads the 1097 stories across
+   * workers, which is the concurrent-GPU-and-font-cache case this config
+   * used to avoid outright rather than test. Measured against the same
+   * static Storybook build: three consecutive `--workers=4` runs, each
+   * 1097/1097 passing, zero flaky retries, wall clock 2:31 / 2:28 / 2:30 —
+   * against ~8:48 at one worker. No story failed under parallel load that
+   * passed serially, at `threshold: 0.02` / `maxDiffPixels: 50` on this
+   * machine, with the viewport pinned and the clock frozen for the
+   * `ThinkingIndicator` stories exactly as before. A visual suite that is
+   * occasionally wrong is worse than a slower one that is not — this is the
+   * evidence that it isn't, not an assumption that it can't be.
+   *
+   * **`4` is this machine's number, not a portable constant.** Playwright's
+   * own default is `cpus/2`; this machine has enough cores that `4` is
+   * conservative, and the same `4` would be aggressive on a small CI box or
+   * a 4-core laptop, where it would compete with the `vite preview` server
+   * for the same cores this measurement had spare. Re-measure before trusting
+   * this number on different hardware — the method above, not the result, is
+   * what travels.
    */
-  workers: 1,
+  fullyParallel: true,
+  workers: 4,
 
   /**
    * **No retries.** A screenshot that passes on the second attempt did not

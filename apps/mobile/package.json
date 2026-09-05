@@ -9,7 +9,6 @@
     "bundle:ios": "expo export --platform ios",
     "bundle:web": "expo export --platform web",
     "dev": "expo start --go",
-    "dev:all": "expo start --go",
     "dev:android": "expo start --android --go",
     "dev:client": "expo start --dev-client",
     "dev:ios": "expo start --ios --go",

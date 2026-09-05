@@ -13,7 +13,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -129,6 +130,38 @@ describe("Make does not change what it wraps", () => {
   });
 });
 
+describe("Make orchestrates and pnpm implements — in that direction (L-4)", () => {
+  it("`make db` calls pnpm db:ready instead of keeping its own polling loop", () => {
+    const recipe = /^db:.*\n(?:\t.*\n?)*/m.exec(makefile)?.[0] ?? "";
+    expect(recipe, "the db target").toContain("pnpm db:ready");
+    expect(recipe, "the container start belongs to the script now").not.toMatch(
+      /docker compose up/,
+    );
+    expect(recipe, "so does the health poll").not.toMatch(/sleep/);
+  });
+
+  it("no pnpm script shells back into make", () => {
+    // This is the direction that breaks the rule. `dev:all` used to run
+    // `make db`, which made Make a dependency of the *implementation*: the
+    // command stops working wherever Make is missing, for a reason nothing
+    // about `pnpm dev:all` suggests, and one procedure ends up half in each
+    // file. Make may call pnpm; pnpm may not call Make.
+    const offenders = Object.entries(scripts)
+      .filter(([, body]) => /(?:^|[\s;&|])make(?:$|[\s;&|])/.test(body))
+      .map(([name]) => name);
+    expect(offenders, "pnpm scripts that shell into make").toEqual([]);
+  });
+
+  it("both callers wait for Postgres through that one script", () => {
+    expect(scripts["db:ready"], "package.json must define db:ready").toBeDefined();
+    expect(scripts["dev:all"]).toContain("pnpm db:ready");
+    // `db:up` stays, and stays different: it starts the container and
+    // returns. Anything that then talks to the database wants `db:ready`.
+    expect(scripts["db:up"]).toContain("docker compose up");
+    expect(scripts["db:up"]).not.toContain("db:ready");
+  });
+});
+
 describe("package.json stays the implementation", () => {
   it("still defines the scripts the docs tell people to run", () => {
     // These names appear in the README, the wiki and the Makefile. Renaming one
@@ -139,10 +172,65 @@ describe("package.json stays the implementation", () => {
   });
 
   it("has no `dev` script pretending to start everything", () => {
-    // It used to, and it started the API alone. `make dev` is the one command
-    // that genuinely runs both surfaces; a `pnpm dev` beside it would be a
-    // second answer to the same question.
+    // It used to, and it started the API alone. `make dev` (API + web) and
+    // `pnpm dev:all` (API + mobile) are the sanctioned answers to "run more
+    // than one surface" — both wait for Postgres first, then run their pair
+    // in parallel, Ctrl-C stops both. A bare `pnpm dev` would still be a
+    // second, different answer to the same question, so it stays out until
+    // an owner decides otherwise.
     expect(scripts).not.toHaveProperty("dev");
     expect(repoRoot).toBeTruthy();
+  });
+});
+
+describe("every shell script the gate and the Makefile call is executable (L-9)", () => {
+  /**
+   * `tools/db-ready.sh` shipped mode 644. `pnpm db:ready` names an
+   * interpreter (`sh tools/db-ready.sh`), so it worked — but a `#!/bin/sh`
+   * script that cannot be run as `./tools/db-ready.sh` is a trap for the
+   * next caller, and the hooks in `.githooks/` have no interpreter in front
+   * of them at all: git execs those directly, and a non-executable
+   * `pre-commit` is a gate that silently does not run.
+   *
+   * Both modes are checked. The file system's is what a shell obeys here
+   * and now; git's index mode is what everyone else checks out, and the two
+   * can disagree — a `chmod +x` that is never staged fixes this machine and
+   * nobody else's.
+   */
+  function shellScripts(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(join(repoRoot, dir))) {
+      // `tools/e2e/node_modules` holds other people's scripts; their modes
+      // are not this repository's business.
+      if (entry === "node_modules" || entry === "dist") continue;
+      const relPath = `${dir}/${entry}`;
+      if (statSync(join(repoRoot, relPath)).isDirectory()) shellScripts(relPath, out);
+      else if (entry.endsWith(".sh")) out.push(relPath);
+    }
+    return out;
+  }
+
+  const scriptPaths = [...shellScripts("tools"), ...shellScripts(".githooks")];
+
+  it("finds the scripts it is supposed to be checking", () => {
+    expect(scriptPaths, "shell scripts under tools/ and .githooks/").toContain("tools/db-ready.sh");
+    expect(scriptPaths).toContain(".githooks/needs-visual.sh");
+    expect(scriptPaths.length, "*.sh files found").toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(scriptPaths)("%s is executable on disk", (relPath) => {
+    const executableBits = statSync(join(repoRoot, relPath)).mode & 0o111;
+    expect(executableBits, `${relPath} has no execute bit`).not.toBe(0);
+  });
+
+  it("records mode 100755 in git, so a fresh checkout gets the same thing", () => {
+    const indexed = execFileSync("git", ["ls-files", "-s", "--", ...scriptPaths], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    })
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.split(/\s+/, 1)[0] ?? "");
+    expect(indexed.length, "every script is tracked").toBe(scriptPaths.length);
+    expect([...new Set(indexed)], "git modes across those scripts").toEqual(["100755"]);
   });
 });
