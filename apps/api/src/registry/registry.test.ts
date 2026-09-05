@@ -221,6 +221,19 @@ describe("the widened form cannot skip validation", () => {
     await expect(widened.invoke({ text: "toner" }, unusedContext)).rejects.toThrow(/text/);
   });
 
+  /**
+   * `audit_log.entity_id` is a uuid. A natural key — a currency code, a tag
+   * name — must be refused here, naming the field, rather than reach Postgres
+   * as bad uuid syntax that no guard maps (22P02 surfaced as `internal`).
+   */
+  it("refuses a non-uuid entityId on get_audit_log, by name", () => {
+    const input = registry.get_audit_log.input;
+    expect(() => input.parse({ entity: "currencies", entityId: "PLN" })).toThrow(/entityId/);
+    expect(() =>
+      input.parse({ entity: "currencies", entityId: "0f2b7a5e-8d3c-4a1b-9e6f-1c2d3e4f5a6b" }),
+    ).not.toThrow();
+  });
+
   it("still accepts the structural filters beside it", () => {
     // The refusal above must be about `text` specifically, not about
     // `.strict()` having broken every caller of this operation.
@@ -445,7 +458,7 @@ describe("an audit spec names its table the way the database does", () => {
    */
   it("refuses a camelCase entity on get_audit_log and accepts the SQL name", async () => {
     const widened: AnyOperation<OperationContext> = registry.get_audit_log;
-    const entityId = "11111111-1111-1111-1111-000000000001";
+    const entityId = "11111111-1111-4111-8111-000000000001"; // RFC 4122 shaped: z.uuid() checks the version and variant nibbles
 
     await expect(
       widened.invoke({ entity: "accountGroups", entityId }, unusedContext),

@@ -32,7 +32,9 @@ export const getAuditLog = defineOperation({
     // instead, and the tool's JSON Schema carries the permitted names, so the
     // agent reads them rather than guessing.
     entity: z.enum(AUDIT_ENTITIES),
-    entityId: z.string().min(1),
+    // `audit_log.entity_id` is a uuid: a natural key (`PLN`, a currency code)
+    // must fail here, by name, rather than reach Postgres as bad uuid syntax.
+    entityId: z.uuid(),
   }),
   handler: (input, ctx: OperationContext) => listAuditLog(ctx.db, input.entity, input.entityId),
 });

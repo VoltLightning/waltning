@@ -18,8 +18,10 @@
  * a table that never existed — each is a validation error going in and a test
  * failure going out, rather than an empty history. It does **not** close the
  * larger class it resembles: `currencies` is a real table this list carries and
- * nothing audits it today, so `get_audit_log("currencies", …)` is accepted and
- * answers empty, exactly as a row with nothing recorded against it does. Only
+ * nothing audits it today. Its rows carry a natural key, and `entityId` is a
+ * uuid, so asking about a currency is a validation error on the id; a
+ * uuid-keyed table nothing audits yet answers empty, exactly as a row with
+ * nothing recorded against it does. Only
  * the operations that declare an `AuditSpec` write rows at all, and this list
  * knows nothing of them. Telling "no history" from "nothing is ever recorded
  * here" needs a different answer shape, and no caller has asked for one.
