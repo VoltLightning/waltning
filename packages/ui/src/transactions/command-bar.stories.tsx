@@ -53,13 +53,18 @@ export const Resolved: Story = {
   args: { value: "48.90 cash coffee yesterday", parse: RESOLVED },
 };
 
-/** D2's proposal at the display threshold — the category chip fills machine, exactly as `QuickAddComposer`'s own P2 chip would. */
+/**
+ * D2's proposal at the display threshold — the category chip fills machine,
+ * exactly as `QuickAddComposer`'s own P2 chip would, with the same trail
+ * caption and an Undo reachable by Tabbing to the chip and pressing Esc.
+ */
 export const WithCategoryProposal: Story = {
   args: {
     value: "48.90 cash coffee yesterday",
     parse: RESOLVED,
     categoryProposal: { categoryId: "cat-food", confidence: 1, basis: "exact", neighbours: [] },
     categoryAutoFilled: true,
+    onUndoCategory: noop,
   },
 };
 

@@ -9,7 +9,7 @@
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
-import { currencyCode } from "@waltning/core/money";
+import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAccountExecutor } from "../accounts/create-account.executor.ts";
@@ -1101,5 +1101,145 @@ describe("categorize_batch", () => {
     });
 
     expect(readTxn()?.categoryId).toBe(CATEGORY);
+  });
+});
+
+/**
+ * H1a — an archived category is not assignable, at both levels the rule has:
+ * the executor's own refusal (a good error, named), and the replica's own
+ * trigger (`transactions_category_not_archived_insert` / `_update`, the head
+ * migration), which holds when the code above it is wrong or absent.
+ *
+ * The defect this closes: D2's payee memory proposed a leaf a payee last sat
+ * on, `readPayeeHistory` did not exclude archived ones, the desk command bar
+ * auto-filled the id, rendered it as "Category?" because no picker offers an
+ * archived category, and Enter saved it.
+ */
+describe("an archived category", () => {
+  const ARCHIVED = id<"categories">("00000000-0000-4000-8000-0000000000a1");
+  const NEW_TXN = id<"transactions">("00000000-0000-4000-8000-0000000000a2");
+
+  beforeEach(() => {
+    // Inserted live, then retired — the only way a row can hold an archived
+    // category at all, and exactly how S07's own archive action leaves one.
+    stores.ledger.replica.db
+      .insert(categories)
+      .values({ id: ARCHIVED, name: "Retired", kind: "expense", isLeaf: true })
+      .run();
+    stores.ledger.replica.db
+      .update(categories)
+      .set({ archived: true })
+      .where(eq(categories.id, ARCHIVED))
+      .run();
+  });
+
+  it("create_transaction refuses it by name", () => {
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: createTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          id: NEW_TXN,
+          date: "2026-09-03",
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: "9",
+          currency: PLN,
+          payee: "Gym",
+          categoryId: ARCHIVED,
+        },
+      }),
+    ).toThrow(LocalRefusal);
+    expect(
+      stores.ledger.replica.db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.id, NEW_TXN))
+        .get(),
+      "nothing landed",
+    ).toBeUndefined();
+  });
+
+  it("update_transaction refuses a patch that moves onto it", () => {
+    const before = readTxn();
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: updateTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          id: TXN,
+          version: before?.version ?? 0,
+          patch: { categoryId: ARCHIVED },
+        },
+      }),
+    ).toThrow(LocalRefusal);
+    expect(readTxn()?.categoryId).toBeNull();
+  });
+
+  /**
+   * Broken once: the executor's refusal skipped entirely, writing straight at
+   * the table the way a future op with no such check would. SQLite refuses it,
+   * not the code — which is the whole point of the trigger existing beside the
+   * check rather than instead of it.
+   */
+  it("the replica itself refuses the insert, with no executor in the way", () => {
+    expect(() =>
+      stores.ledger.replica.db
+        .insert(transactions)
+        .values({
+          id: NEW_TXN,
+          date: accountingDate("2026-09-03"),
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: toMoney("9"),
+          currency: PLN,
+          fxRate: pivotPerUnit("1"),
+          payee: "Gym",
+          categoryId: ARCHIVED,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .run(),
+    ).toThrow(/archived/i);
+  });
+
+  it("the replica itself refuses an update onto it, with no executor in the way", () => {
+    expect(() =>
+      stores.ledger.replica.db
+        .update(transactions)
+        .set({ categoryId: ARCHIVED })
+        .where(eq(transactions.id, TXN))
+        .run(),
+    ).toThrow(/archived/i);
+    expect(readTxn()?.categoryId).toBeNull();
+  });
+
+  /**
+   * And the archiving itself stays legal — a category that already holds rows
+   * is exactly the case archiving exists for, and a guard refusing it would
+   * make any used category permanently un-retireable.
+   */
+  it("can still be archived under the rows it already holds", () => {
+    const LIVE = id<"categories">("00000000-0000-4000-8000-0000000000a3");
+    stores.ledger.replica.db
+      .insert(categories)
+      .values({ id: LIVE, name: "Groceries", kind: "expense", isLeaf: true })
+      .run();
+    writeLocally(stores.ledger, {
+      executor: categorizeBatchExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { transactionIds: [TXN], categoryId: LIVE },
+    });
+
+    stores.ledger.replica.db
+      .update(categories)
+      .set({ archived: true })
+      .where(eq(categories.id, LIVE))
+      .run();
+
+    expect(readTxn()?.categoryId, "the row keeps its history").toBe(LIVE);
   });
 });

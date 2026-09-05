@@ -36,8 +36,15 @@ export type AmountToken = {
  * whitespace, so any `,` or `.` found is always the decimal mark). The second
  * alternative is a bare fraction with no integer part — `,5` → `0.5` — which
  * S05's own examples include.
+ *
+ * C1: the leading run is `\d+`, not `\d{1,3}` \u2014 that cap silently dropped
+ * every digit past the third in an ungrouped amount (`1234.56` matched only
+ * `123`, and the rest never reached `unmatched` because it sat inside the
+ * amount token's own span). A grouped form still wins: `\d+` only ever
+ * consumes a contiguous digit run, so a real space still ends it and a
+ * correctly-grouped `1 234.56` matches exactly as before.
  */
-const NUMBER = /\d{1,3}(?:[ \u00a0]\d{3})*(?:[.,]\d+)?|[.,]\d+/g;
+const NUMBER = /\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?|[.,]\d+/g;
 
 /**
  * A currency token: one to three letters (covers `usd`, `pln`, `zł`) or a

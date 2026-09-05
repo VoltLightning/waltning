@@ -64,6 +64,35 @@ describe("no amount", () => {
   });
 });
 
+describe("C1 — thousands grouping is optional, never mandatory", () => {
+  it("a bare four-digit integer — '1000' is one number, not '100'", () => {
+    expect(findAmount("1000")?.amount).toBe("1000.00000000");
+  });
+
+  it("an ungrouped decimal past three integer digits — '1234.56'", () => {
+    expect(findAmount("1234.56")?.amount).toBe("1234.56000000");
+  });
+
+  it("a bare five-digit integer — '12345'", () => {
+    expect(findAmount("12345")?.amount).toBe("12345.00000000");
+  });
+
+  it("a correctly space-grouped amount still matches whole — '1 234.56'", () => {
+    const found = findAmount("1 234.56");
+    expect(found?.amount).toBe("1234.56000000");
+    expect(found?.span).toEqual([0, 8]);
+  });
+
+  it("two different punctuation marks never both group — '1.234,56' reads the first as the decimal mark, per the grammar's own rule that whitespace is the one thousands separator", () => {
+    // `.` is read as the decimal mark the instant it appears (the grammar's
+    // stated locale rule), so this is the number `1.234` — `,56` is left
+    // over, not folded in as a second thousands group.
+    const found = findAmount("1.234,56");
+    expect(found?.amount).toBe("1.23400000");
+    expect(found?.span).toEqual([0, 5]);
+  });
+});
+
 describe("the first-number rule", () => {
   it("'2 coffees 18' binds to 2, not 18 — a known, documented cost of a grammar with no notion of 'looks like a price'", () => {
     const found = findAmount("2 coffees 18");

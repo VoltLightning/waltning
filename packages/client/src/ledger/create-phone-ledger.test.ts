@@ -684,14 +684,24 @@ describe("phone ledger controller", () => {
    * counterparty and role all reach the write, not only amount and account.
    */
   it("carries income, category, date, note, business and counterparty through to the write", () => {
-    const { controller, createTransaction } = harness();
+    // H1a — the category has to be one the snapshot actually offers now: an
+    // id absent from it is archived or gone, and the controller refuses it
+    // rather than writing a row no picker could display.
+    const incomeCategory: PhoneCategory = {
+      id: id<"categories">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+      name: "Freelance",
+      kind: "income",
+    };
+    const { controller, createTransaction } = harness(undefined, {
+      categories: [incomeCategory],
+    });
     const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
 
     controller.createTransaction({
       type: "income",
       amount: "25",
       accountId,
-      categoryId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      categoryId: incomeCategory.id,
       date: "2026-07-01",
       note: "Freelance invoice",
       isBusiness: true,
@@ -917,6 +927,31 @@ describe("phone ledger controller", () => {
         message: expect.stringContaining("income"),
         messageKey: "transactions.categoryKindMismatch",
         params: { type: "income" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * H1a — the case that reached a saved row: D2's payee memory proposed a
+   * leaf a payee last sat on, the category had since been archived, and
+   * `snapshot.categories` (which excludes archived rows) had no match — so
+   * the kind check above simply found nothing to compare and let it through.
+   * Absent is now refused the same as wrong-kind, since neither is a category
+   * any picker would offer.
+   */
+  it("refuses a categoryId that is not among the categories offered (H1a — archived, or gone)", () => {
+    const { controller, createTransaction } = harness(undefined, { categories: [] });
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      categoryId: id<"categories">("77777777-7777-4777-8777-777777777777"),
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "categoryId",
+        message: expect.stringContaining("no longer available"),
+        messageKey: "transactions.categoryUnavailable",
       },
     ]);
     expect(createTransaction).not.toHaveBeenCalled();

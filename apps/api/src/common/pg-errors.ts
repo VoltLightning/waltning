@@ -73,6 +73,12 @@ export const SQLSTATE = {
   CATEGORY_KIND_MATCHES_TYPE: "WA017",
   /** C1 — a currency's `decimals` cannot be lowered under an existing row (`0011_transaction_scale_and_category_kind.sql`). */
   CURRENCY_DECIMALS_LOWERED: "WA018",
+  /**
+   * H1a — an archived category is not assignable
+   * (`0001_database_objects.sql`). Archiving is how a category leaves every
+   * picker, so a row pointing at one is a row nothing can display.
+   */
+  CATEGORY_ARCHIVED: "WA019",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -107,6 +113,13 @@ export const TRIGGER = {
   AMOUNT_SCALE: "transactions_amount_scale_matches_currency",
   CATEGORY_KIND_MATCHES_TYPE: "transactions_category_kind_matches_type",
   CURRENCY_DECIMALS_SAFE: "currencies_decimals_safe",
+  /**
+   * The *default* for WA019 — `transaction_lines_category_not_archived` shares
+   * the function and raises the same code, and `toDomainError` prefers the
+   * driver's own `constraint` when it reports one, exactly as it does for
+   * WA016's several raisers.
+   */
+  CATEGORY_NOT_ARCHIVED: "transactions_category_not_archived",
 } as const;
 
 /**
@@ -161,6 +174,11 @@ export const GUARDS: Record<GuardState, Guard> = {
   [SQLSTATE.CURRENCY_DECIMALS_LOWERED]: {
     code: "validation",
     constraint: TRIGGER.CURRENCY_DECIMALS_SAFE,
+  },
+
+  [SQLSTATE.CATEGORY_ARCHIVED]: {
+    code: "validation",
+    constraint: TRIGGER.CATEGORY_NOT_ARCHIVED,
   },
 };
 

@@ -37,6 +37,7 @@ const ACC_SHARED = "22222222-2222-2222-2222-222222222222";
 const ACC_PLN = "33333333-3333-3333-3333-333333333333";
 const CAT_GROUP = "44444444-4444-4444-4444-444444444444";
 const CAT_LEAF = "55555555-5555-5555-5555-555555555555";
+const CAT_ARCHIVED = "77777777-7777-7777-7777-777777777777";
 const SCHEME = "66666666-6666-6666-6666-666666666666";
 
 beforeAll(async () => {
@@ -298,6 +299,43 @@ describe("every other guard is identifiable", () => {
        VALUES ('2026-01-01', 'income', '${ACC_OWN}', 10, 'USD', 1, '${CAT_LEAF}')`,
     );
     expect(error.details?.constraint).toBe(TRIGGER.CATEGORY_KIND_MATCHES_TYPE);
+  });
+
+  /**
+   * H1a — `0001_database_objects.sql`. Broken once, here: an archived leaf is
+   * one no picker offers and no chip can name, so a row pointing at one is
+   * invisible in the composer that wrote it. D2's payee memory is what reached
+   * for it (history remembers a leaf across its archiving), and this is the
+   * guard that holds when the two client refusals above it do not.
+   */
+  it("WA019 · an archived category is not assignable", async () => {
+    await s.sql`
+      INSERT INTO categories (id, name, kind, is_leaf, parent_id, archived) VALUES
+        (${CAT_ARCHIVED}::uuid, 'Retired', 'expense', true, ${CAT_GROUP}::uuid, true)`;
+
+    const error = await refusal(
+      `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, category_id)
+       VALUES ('2026-01-01', 'expense', '${ACC_OWN}', 10, 'USD', 1, '${CAT_ARCHIVED}')`,
+    );
+    expect(error.code).toBe("validation");
+    expect(error.details?.constraint).toBe(TRIGGER.CATEGORY_NOT_ARCHIVED);
+  });
+
+  /**
+   * And the archiving itself stays legal — the rows a category already holds
+   * are history, and archiving rather than deleting is what keeps them
+   * readable. A guard that refused this would make a category with any
+   * transaction on it permanently un-retireable.
+   */
+  it("WA019 · archiving a category that already holds rows is still allowed", async () => {
+    await s.sql`
+      INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, category_id)
+      VALUES ('2026-01-01', 'expense', ${ACC_OWN}::uuid, 10, 'USD', 1, ${CAT_LEAF}::uuid)`;
+
+    await s.sql`UPDATE categories SET archived = true WHERE id = ${CAT_LEAF}::uuid`;
+
+    await s.sql`DELETE FROM transactions`;
+    await s.sql`UPDATE categories SET archived = false WHERE id = ${CAT_LEAF}::uuid`;
   });
 });
 

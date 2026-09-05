@@ -46,6 +46,7 @@
 --   WA012  business row into a shared account  → validation
 --   WA013  account currency change with rows   → validation
 --   WA014  account made shared with business   → validation
+--   WA019  archived category assigned         → validation
 --
 -- Only WA001 maps to something other than `validation`, and that is the whole
 -- point: it is the one whose handling differs.
@@ -235,6 +236,57 @@ END $$;
 CREATE TRIGGER categories_children_kind
   AFTER UPDATE OF kind ON categories
   FOR EACH ROW EXECUTE FUNCTION assert_children_kind();
+--> statement-breakpoint
+-- 2b ── An archived category is never assignable.
+--
+-- H1a. Archiving is how a category leaves the pickers: `listCategories` (and
+-- every sheet drawn from it) already drops archived rows, so nothing offers
+-- one and nothing can render its name. What still reached the row was D2's
+-- payee memory — a proposal read off *history*, which remembers the leaf a
+-- payee last sat on whether or not it has since been archived — so the desk
+-- command bar auto-filled an id it then displayed as "Category?" and Enter
+-- saved it: a transaction on a leaf no picker offers, invisible in the
+-- composer that wrote it.
+--
+-- `readPayeeHistory` now excludes archived categories and the client refuses
+-- one before the write (`transactions.categoryUnavailable`), the same
+-- layering `assert_category_kind_matches_type` has against its own client
+-- check. Neither is a guarantee; this is.
+--
+-- **Assignment only, never the archiving.** Archiving a category that already
+-- holds rows stays legal — that is the entire point of archiving rather than
+-- deleting, and §7's history does not rewrite itself. The trigger is on the
+-- rows that point at a category, fired by the write that would *newly* do so.
+CREATE OR REPLACE FUNCTION assert_category_not_archived()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  is_archived boolean;
+BEGIN
+  IF NEW.category_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT archived INTO is_archived FROM categories WHERE id = NEW.category_id;
+  -- The FK to `categories` already refuses an unknown id; a missing row here
+  -- means that check has not run yet in this same statement, the same call
+  -- `assert_category_is_leaf` makes above.
+  IF is_archived THEN
+    RAISE EXCEPTION
+      'category % is archived — an archived category is not assignable (H1a)',
+      NEW.category_id
+      USING ERRCODE = 'WA019';
+  END IF;
+
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER transactions_category_not_archived
+  BEFORE INSERT OR UPDATE OF category_id ON transactions
+  FOR EACH ROW EXECUTE FUNCTION assert_category_not_archived();
+--> statement-breakpoint
+CREATE TRIGGER transaction_lines_category_not_archived
+  BEFORE INSERT OR UPDATE OF category_id ON transaction_lines
+  FOR EACH ROW EXECUTE FUNCTION assert_category_not_archived();
 --> statement-breakpoint
 -- 3 ── Shared money is never business.
 --

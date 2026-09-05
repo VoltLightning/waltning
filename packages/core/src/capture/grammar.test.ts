@@ -61,6 +61,37 @@ describe("S05's examples", () => {
   });
 });
 
+describe("C1 — an ungrouped amount past three digits resolves whole", () => {
+  it("'1000 cash coffee'", () => {
+    const parsed = parseCapture("1000 cash coffee", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "1000.00000000", payee: "coffee" });
+  });
+
+  it("'1234.56 cash coffee'", () => {
+    const parsed = parseCapture("1234.56 cash coffee", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "1234.56000000", payee: "coffee" });
+  });
+
+  it("'12345 cash coffee'", () => {
+    const parsed = parseCapture("12345 cash coffee", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "12345.00000000", payee: "coffee" });
+  });
+
+  it("'1 234.56 cash coffee' — already grouped, still whole", () => {
+    const parsed = parseCapture("1 234.56 cash coffee", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "1234.56000000", payee: "coffee" });
+  });
+
+  it("'1.234,56 cash coffee' — two marks never both group: the first is the decimal mark", () => {
+    // The grammar's own locale rule (`amount.ts`'s `NUMBER` doc): whitespace is
+    // the one thousands separator, so a `.` or `,` is always the decimal mark.
+    // `1.234` is the first number and the amount; `,56` is a second number
+    // token the first-number rule discards, never a second thousands group.
+    const parsed = parseCapture("1.234,56 cash coffee", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "1.23400000", payee: "coffee" });
+  });
+});
+
 describe("failure reasons", () => {
   it("'lunch' has no amount", () => {
     const parsed = parseCapture("lunch", baseContext);

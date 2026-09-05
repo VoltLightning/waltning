@@ -8,10 +8,11 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseQuickAddRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { acceptProposedCategory } from "@waltning/client/transactions/accept-proposed-category";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
-import { PROPOSAL_DISPLAY_THRESHOLD, proposeCategory } from "@waltning/core/capture/payee-memory";
+import { proposeCategory } from "@waltning/core/capture/payee-memory";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
@@ -259,40 +260,30 @@ export default function QuickAdd() {
     [ledger, payeeFold],
   );
   /**
-   * H1-b — the proposal's own category kind, read off the replica the same
-   * way `pickedCategory`/`proposedCategory` already gate by `kind === type`
-   * inside `QuickAddComposer` (`transactions_category_shape`, §7's own
-   * rule: a category attaches to income or expense, never either
-   * interchangeably). `proposeCategory` itself carries no `kind` — the
-   * category tree is a client concern (`payee-memory.ts`'s own doc) — so
-   * this is the one lookup that answers it.
-   */
-  const proposedCategoryKind = categoryProposal
-    ? snapshot.categories.find((category) => category.id === categoryProposal.categoryId)?.kind
-    : undefined;
-  /**
-   * H1 — a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` **is** the
-   * draft's category the moment it fills, not only a suggestion the sheet
-   * has to confirm (S05 §8). `composerCategoryId` (a real pick) always wins;
-   * short of that, the effective category is the proposal's own id, exactly
-   * the pattern `effectiveAccountId`/`lastUsedAccountId` already keeps for
-   * the account chip.
+   * H1 — a proposal at or above the display threshold **is** the draft's
+   * category the moment it fills, not only a suggestion the sheet has to
+   * confirm (S05 §8). `composerCategoryId` (a real pick) always wins; short
+   * of that, the effective category is the proposal's own id, exactly the
+   * pattern `effectiveAccountId`/`lastUsedAccountId` already keeps for the
+   * account chip.
    *
-   * H1-b — and only while the proposal's own kind still matches
-   * `composerType`. Without this, switching Expense→Income after an expense
-   * proposal auto-filled left `effectiveCategoryId` naming the stale
-   * expense leaf while the chip itself rendered empty (`QuickAddComposer`'s
-   * own `pickedCategory` already filters by kind) — Save would have sent an
-   * income row carrying an expense category, invisibly. A type switch needs
-   * no separate "clear" action: this is derived fresh from `composerType`
-   * every render, so the mismatch alone is what turns it off.
+   * `acceptProposedCategory` (`packages/client`, shared with the desk
+   * command bar) is the H1-b membership-and-kind guard: it refuses a
+   * proposal whose category is not among `snapshot.categories` at all
+   * (H1a — archived, or since deleted, either way absent from that list) or
+   * whose kind disagrees with `composerType`. Without the kind half,
+   * switching Expense→Income after an expense proposal auto-filled left
+   * `effectiveCategoryId` naming the stale expense leaf while the chip
+   * itself rendered empty (`QuickAddComposer`'s own `pickedCategory` already
+   * filters by kind) — Save would have sent an income row carrying an
+   * expense category, invisibly. A type switch needs no separate "clear"
+   * action: this is derived fresh from `composerType` every render, so the
+   * mismatch alone is what turns it off.
    */
   const categoryAutoFilled =
     composerCategoryId === null &&
-    categoryProposal !== undefined &&
-    categoryProposal.confidence >= PROPOSAL_DISPLAY_THRESHOLD &&
     !categoryProposalDismissed &&
-    proposedCategoryKind === composerType;
+    acceptProposedCategory(categoryProposal, snapshot.categories, composerType);
   const effectiveCategoryId =
     composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
   const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);

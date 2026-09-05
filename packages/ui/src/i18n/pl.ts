@@ -116,6 +116,7 @@ export const pl: Messages = {
     category: "Kategoria",
     categorySuggested: "Sugerowana: {{name}}",
     categoryKindMismatch: "Ta kategoria nie pasuje do: {{type}}.",
+    categoryUnavailable: "Ta kategoria nie jest już dostępna.",
     noCategory: "Brak kategorii",
     more: "Więcej",
     date: "Data",
@@ -190,7 +191,11 @@ export const pl: Messages = {
 
     newCounterparty: "+ Nowa osoba lub firma",
 
-    commandBarPlaceholder: "48,90 gotówka kawa wczoraj",
+    // L2 — "cash" (unchanged), not "gotówka": nothing populates an account's
+    // Polish alias today (`en.ts`'s own comment on this same key), and a
+    // literal account named "Cash" resolves in any locale the same way the
+    // English example does.
+    commandBarPlaceholder: "48,90 cash kawa wczoraj",
     commandBarLabel: "Dodaj transakcję",
     commandBarCategoryPrompt: "Kategoria?",
     commandBarNoAmount: "Nie znaleziono kwoty — zacznij od liczby.",

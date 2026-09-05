@@ -238,6 +238,13 @@ function DeskCommandBar() {
   const t = useT();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
+  // L7 — read every render, deliberately: `quick-add-screen.tsx`'s own
+  // `today` read takes the identical shape, for the identical reason — a
+  // date that goes stale across midnight while the tab stays open is a worse
+  // defect than a cheap `Intl` call this component already re-renders on
+  // every keystroke of the bar itself. `deviceRuntime` (`packages/client`) is
+  // the isolated seam `Date`/`Intl` never appear outside of; nothing here
+  // reads either directly.
   const capture = deviceRuntime().capture();
   const today = capture.date;
   const lastUsedAccountId = useLastUsedAccount(
@@ -268,7 +275,7 @@ function DeskCommandBar() {
   );
   const parse = useCallback((text: string) => parseCapture(text, context), [context]);
 
-  const commandBar = useCommandBar(ledger, parse);
+  const commandBar = useCommandBar(ledger, parse, expenseCategories);
 
   const fieldErrors = useMemo(() => {
     if (commandBar.fieldErrors === undefined) return undefined;
@@ -282,8 +289,12 @@ function DeskCommandBar() {
   const commandBarRef = useRef<CommandBarHandle>(null);
   useEffect(() => subscribeCommandBarHotkey(() => commandBarRef.current?.focus()), []);
 
-  const hasAccounts = snapshot.accounts.length > 0;
-  if (!hasAccounts) return <CommandBarPlaceholder />;
+  // L6 — `capturable`, not merely "exists": an account whose currency has no
+  // rate yet (`needsRate`) cannot take a capture either, and the placeholder
+  // is the honest state for that ledger too — showing the real bar would
+  // only earn a `needsRate` refusal the instant Enter is pressed.
+  const hasCapturableAccount = snapshot.accounts.some((account) => account.capturable);
+  if (!hasCapturableAccount) return <CommandBarPlaceholder />;
 
   return (
     <CommandBar
@@ -298,6 +309,7 @@ function DeskCommandBar() {
         ? {}
         : { categoryProposal: commandBar.categoryProposal })}
       categoryAutoFilled={commandBar.categoryAutoFilled}
+      onUndoCategory={commandBar.undoCategory}
       {...(fieldErrors === undefined ? {} : { fieldErrors })}
       onSubmit={commandBar.submit}
       onDiscard={commandBar.discard}

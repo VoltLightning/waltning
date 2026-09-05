@@ -233,7 +233,8 @@ describe("DeskCommandBar (DESK2)", () => {
       fireEvent.change(input, { target: { value: "48.90 cash coffee yesterday" } });
       // D1 resolved it live — the chips render before Enter is ever pressed.
       expect(screen.getByText("Cash")).toBeDefined();
-      expect(screen.getByText("2026-09-02")).toBeDefined();
+      // L4 — the date chip is a reading of the line, not the ISO string.
+      expect(screen.getByText("Sep 2")).toBeDefined();
 
       fireEvent.keyDown(input, { key: "Enter" });
 

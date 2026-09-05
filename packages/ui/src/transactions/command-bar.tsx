@@ -18,16 +18,29 @@
  * deliberately out of this arc's scope.
  *
  * **The keyboard contract is the whole interaction** (`screens/S05-quick-add.md`
- * §7 Web): `Enter` saves, `Esc` discards, `Tab` walks the resolved chips.
+ * §7 Web): `Enter` saves, `Esc` discards (or undoes a highlighted D2 pick —
+ * M3/P2, below), `Tab` walks the resolved chips and — M1 — **leaves the bar**
+ * once the last one is reached, exactly like leaving any other field; `Shift
+ * +Tab` walks back the same way, and leaving from chip zero (or with nothing
+ * highlighted) is the ordinary backward tab out. Trapping focus inside a
+ * resolved line would be a WCAG 2.1.2 violation dressed as a feature.
  * `TextInput` hardcodes its own DOM `keydown` listener (`react-native-web`'s
  * own `TextInput`, which sets `supportedProps.onKeyDown` itself and would
  * silently drop one passed in as a prop) — `onSubmitEditing` is Enter's own
- * cross-platform event, and `onKeyPress` is where Esc and Tab surface
- * (`TextInputKeyPressEventData.key`, the one field RN promises here). Reverse
- * walking (`Shift+Tab`) is not read — `.shiftKey` is a web-only fact
- * `TextInputKeyPressEventData` never carries, unlike `View`'s raw DOM
- * `onKeyDown` (`threshold-slider.tsx`'s own escape hatch), which has no such
- * hardcoded handler to fight.
+ * cross-platform event, and `onKeyPress` is where Esc and Tab surface.
+ * `TextInputKeyPressEventData` only promises `.key`, but RNW hands
+ * `onKeyPress` the *real* browser `KeyboardEvent` as `.nativeEvent`
+ * (`react-native-web`'s own `TextInput`, `handleKeyDown` passing `e` straight
+ * through) — `.shiftKey` is genuinely there, and `ShiftableKeyPress` below
+ * reads it by *widening* rather than casting: RN's `{ key: string }` is
+ * assignable to a shape that adds one optional field, so nothing is asserted
+ * away and no `unknown` is spent to get at a fact the runtime does carry.
+ *
+ * **The resolved chips are `role="option"` in a `role="listbox"`**, `aria
+ * -selected` tracking the Tab-walked one — RN's own `Role` type has no
+ * `"listbox"` entry (only `"option"` is standard), so the container's role is
+ * the one thing here asserted past its type, on the value rather than the
+ * event.
  *
  * **`blurOnSubmit={false}`** — `TextInput`'s own default blurs on Enter
  * (`shouldBlurOnSubmit`, true for any single-line field), which would drop
@@ -42,6 +55,7 @@
 import type { CaptureParse } from "@waltning/core/capture/grammar";
 import type { CategoryProposal } from "@waltning/core/capture/payee-memory";
 import type { CurrencyCode } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 import {
   forwardRef,
   useCallback,
@@ -51,13 +65,25 @@ import {
   useRef,
   useState,
 } from "react";
-import { Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
+import { type Role, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { Amount } from "../fx/amount";
-import { useT } from "../i18n/provider";
+import { useLocale, useT } from "../i18n/provider";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
+
+/** RN's own `Role` type has no `"listbox"` entry (see the file doc). */
+const LISTBOX_ROLE = "listbox" as Role;
+
+/**
+ * M1 — what `onKeyPress` actually hands over on web: RN's own
+ * `TextInputKeyPressEventData` (`{ key: string }`) plus the `shiftKey` the
+ * real browser `KeyboardEvent` carries and RNW passes straight through. The
+ * field is optional because a native keyboard event has none, and the whole
+ * shape is a *supertype* of RN's — the widening is an assignment, not a cast.
+ */
+type ShiftableKeyPress = { readonly key: string; readonly shiftKey?: boolean };
 
 export type CommandBarAccount = {
   id: string;
@@ -81,6 +107,8 @@ export type CommandBarProps = {
   /** D2's own proposal — shown machine-filled at or above the display threshold, low-confidence otherwise. */
   categoryProposal?: CategoryProposal;
   categoryAutoFilled?: boolean;
+  /** M3/P2 — Esc while the category chip is highlighted calls this instead of `onDiscard`. Optional: a caller with nothing to undo (no proposal ever applies) still renders. */
+  onUndoCategory?: () => void;
   /** `create_transaction`'s own refusal, already resolved to plain text by the screen that owns both `packages/client` and `useT()` (`primitives/field-errors.ts`'s own doc). */
   fieldErrors?: FieldErrorMap;
   onSubmit: () => void;
@@ -90,9 +118,28 @@ export type CommandBarProps = {
 export type CommandBarHandle = { focus: () => void };
 
 const CHIP_COUNT = 3; // account, date, category — the three resolved chips Tab ever walks.
+const CATEGORY_CHIP_INDEX = 2;
 
-function formatDate(date: string, today: string, t: ReturnType<typeof useT>): string {
-  return date === today ? t("shell.today") : date;
+/**
+ * The date chip's own label — "Today", or a day and a month said the way the
+ * reader's language says it ("2 Sep", "2 wrz").
+ *
+ * **L4 — never the bare `YYYY-MM-DD`.** S05 §3's own sketch shows a short
+ * date, and the chips are a *reading* of the typed line: a line that said
+ * "yesterday" resolving to `2026-09-02` makes the reader do the arithmetic
+ * back. `Intl.DateTimeFormat` for the same reason `locales.ts`'s own
+ * `monthLabel` gives — a month name has no fixed separator to lose, unlike a
+ * money figure — and `timeZone: "UTC"` because an accounting date is a bare
+ * string with no zone in it, so anything else can shift it by a day.
+ */
+function formatDate(date: string, today: string, locale: string, t: ReturnType<typeof useT>) {
+  if (date === today) return t("shell.today");
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function CommandBar(
@@ -105,6 +152,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
     parse,
     categoryProposal,
     categoryAutoFilled = false,
+    onUndoCategory,
     fieldErrors,
     onSubmit,
     onDiscard,
@@ -112,6 +160,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   ref,
 ) {
   const t = useT();
+  const locale = useLocale();
   const styles = useStyles();
   const inputRef = useRef<TextInput>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
@@ -144,6 +193,35 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   const categoryLabel =
     pickedCategory?.name ?? (categoryAutoFilled ? proposedCategory?.name : undefined);
   const categoryMachineFilled = categoryAutoFilled && pickedCategory === undefined;
+  /**
+   * M3/P2 — "every machine-filled field states what produced it, in one
+   * line, with Undo." The marker glyph is the chip's own half of that (`Chip`
+   * primitive's `common.autoFilled`, matched); this caption is the line —
+   * `categories.fromHistory`, the same string `quick-add-composer.tsx`'s own
+   * trail row prints, naming the payee the proposal actually came from.
+   */
+  const categoryFromHistory =
+    categoryMachineFilled && parse?.ok === true
+      ? t("categories.fromHistory", { payee: parse.payee })
+      : undefined;
+
+  /**
+   * L1 — the figure past its own account's scale. `<Amount decimals={2}>`
+   * rounds half-up for *display* (`money.ts`'s own `toFixed`) regardless of
+   * what was actually typed — `48.905` renders `48,91`, a number nobody
+   * typed and Enter would refuse (`transactions.tooManyDecimals`). Naming the
+   * refusal here, before Enter, is what keeps the rounded preview from
+   * reading as the figure that would save.
+   */
+  const amountScaleCaption =
+    ok &&
+    selectedAccount !== undefined &&
+    money.dec(parse.amount).decimalPlaces() > selectedAccount.decimals
+      ? t("transactions.tooManyDecimals", {
+          currency: selectedAccount.currency,
+          decimals: String(selectedAccount.decimals),
+        })
+      : undefined;
 
   const partial = !ok && parse && !parse.ok ? parse.partial : undefined;
   const partialAccount =
@@ -168,23 +246,52 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   const handleSubmitEditing = useCallback(() => onSubmit(), [onSubmit]);
 
   // Esc and Tab — the two keys `onSubmitEditing` has no opinion about.
-  // `ok` is read from the render closure rather than threaded through a
-  // dependency: a stale closure here would walk stale chips for one
-  // keystroke, never call the wrong handler.
+  // `ok`/`highlight`/`categoryAutoFilled`/`onUndoCategory` are read from the
+  // render closure rather than threaded through a ref: a stale closure here
+  // would walk stale chips for one keystroke, never call the wrong handler.
   const handleKeyPress = useCallback(
     (event: TextInputKeyPressEvent) => {
       const key = event.nativeEvent.key;
       if (key === "Escape") {
+        // M3/P2 — Esc on the highlighted category chip undoes the applied
+        // proposal rather than discarding the whole typed line; every other
+        // position (or nothing highlighted) discards, as before.
+        if (highlight === CATEGORY_CHIP_INDEX && categoryAutoFilled && onUndoCategory) {
+          event.preventDefault();
+          onUndoCategory();
+          return;
+        }
         event.preventDefault();
         onDiscard();
         return;
       }
       if (key === "Tab" && ok) {
-        event.preventDefault();
-        setHighlight((current) => ((current ?? -1) + 1) % CHIP_COUNT);
+        // M1 — `TextInputKeyPressEventData` promises only `.key`; the raw
+        // browser event RNW hands `onKeyPress` (the file doc) carries
+        // `.shiftKey` too. Widened by *assignment*, never a cast: `{ key:
+        // string }` is assignable to a shape that adds one optional field, so
+        // the extra fact is read without discarding the type RN did give.
+        const nativeEvent: ShiftableKeyPress = event.nativeEvent;
+        if (nativeEvent.shiftKey === true) {
+          if (highlight === null || highlight === 0) return; // leave backward — nothing to walk to.
+          event.preventDefault();
+          setHighlight(highlight - 1);
+          return;
+        }
+        if (highlight === null) {
+          event.preventDefault();
+          setHighlight(0);
+          return;
+        }
+        if (highlight < CHIP_COUNT - 1) {
+          event.preventDefault();
+          setHighlight(highlight + 1);
+          return;
+        }
+        // Already on the last chip — leave the bar forward, browser default.
       }
     },
-    [ok, onDiscard],
+    [ok, highlight, categoryAutoFilled, onUndoCategory, onDiscard],
   );
 
   return (
@@ -203,7 +310,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
         autoCorrect={false}
       />
       {parse === null ? null : (
-        <View style={styles.preview}>
+        <View style={styles.preview} {...(ok ? { role: LISTBOX_ROLE } : {})}>
           {ok ? (
             <>
               <View style={styles.row}>
@@ -216,10 +323,13 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
                 />
                 <PreviewChip label={selectedAccount?.name ?? "?"} highlighted={highlight === 0} />
                 <PreviewChip
-                  label={formatDate(parse.date, today, t)}
+                  label={formatDate(parse.date, today, locale, t)}
                   highlighted={highlight === 1}
                 />
               </View>
+              {amountScaleCaption === undefined ? null : (
+                <Text style={styles.reason}>{amountScaleCaption}</Text>
+              )}
               <View style={styles.row}>
                 <Text style={styles.payee}>
                   {t("transactions.payee")}: {parse.payee === "" ? "—" : parse.payee}
@@ -231,6 +341,9 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
                   highlighted={highlight === 2}
                 />
               </View>
+              {categoryFromHistory === undefined ? null : (
+                <Text style={styles.trailCaption}>{categoryFromHistory}</Text>
+              )}
             </>
           ) : (
             <>
@@ -257,8 +370,14 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
       )}
       {fieldErrorLines.length === 0
         ? null
-        : fieldErrorLines.map((line) => (
-            <Text key={line} style={styles.fieldError}>
+        : fieldErrorLines.map((line, index) => (
+            // L3 — indexed, not keyed on the message text: two refusals can
+            // share the identical template (`tooManyDecimals` against
+            // `amountOriginal` and `fee` on the same account, say), and a
+            // duplicate `key` silently drops the second `<Text>` in React's
+            // reconciliation rather than rendering both.
+            // biome-ignore lint/suspicious/noArrayIndexKey: the list has no other stable identity — see above.
+            <Text key={`${index}-${line}`} style={styles.fieldError}>
               {line}
             </Text>
           ))}
@@ -303,7 +422,10 @@ type PreviewChipProps = {
  * component's own file doc), so the interactive semantics `<Chip>` carries
  * (radio role, a picker to open) would be a false affordance. `highlighted`
  * is the visual half of Tab's walk; it never moves DOM focus, which stays on
- * the text input throughout.
+ * the text input throughout — `role="option"` and `aria-selected` (M1) are
+ * what let a screen reader hear the walk despite that, the same way a
+ * roving-tabindex listbox announces a selection with no focus move of its
+ * own.
  */
 function PreviewChip({
   label,
@@ -311,16 +433,26 @@ function PreviewChip({
   machineFilled = false,
   highlighted = false,
 }: PreviewChipProps) {
+  const t = useT();
   const styles = useStyles();
   return (
     <View
+      role="option"
+      aria-selected={highlighted}
+      accessibilityLabel={
+        machineFilled ? t("common.autoFilledLabel", { field: label, value: label }) : label
+      }
       style={[
         styles.chip,
         machineFilled ? styles.chipMachine : null,
         highlighted ? styles.chipHighlighted : null,
       ]}
     >
-      <Text style={[styles.chipText, muted ? styles.chipTextMuted : null]}>{label}</Text>
+      <Text style={[styles.chipText, muted ? styles.chipTextMuted : null]}>
+        {label}
+        {/* Text, not tint alone (P5) — `Chip`'s own marker, matched. */}
+        {machineFilled ? <Text style={styles.chipMarker}>{t("common.autoFilled")}</Text> : null}
+      </Text>
     </View>
   );
 }
@@ -340,6 +472,7 @@ const useStyles = makeStyles((theme) => ({
   preview: { gap: space.xs, paddingHorizontal: space.x3 },
   row: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
   payee: { color: theme.textMuted, ...text.ui("bodySm") },
+  trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   reason: { color: theme.textMuted, ...text.ui("bodySm") },
   fieldError: { color: theme.dangerText, ...text.ui("caption"), paddingHorizontal: space.x3 },
   chip: {
@@ -359,4 +492,5 @@ const useStyles = makeStyles((theme) => ({
   },
   chipText: { color: theme.text, ...text.ui("bodySm", 600) },
   chipTextMuted: { color: theme.textMuted },
+  chipMarker: { color: theme.accentText, ...text.ui("caption") },
 }));

@@ -190,6 +190,14 @@ export const en = {
      * an auto-fill exists to prevent from ever reaching here.
      */
     categoryKindMismatch: "This category doesn't match {{type}}.",
+    /**
+     * H1a — the proposed (or previously picked) category is not among the
+     * ones offered any more: archived, or deleted since. The controller
+     * refuses this before the write, the same guarantee
+     * `assert_category_not_archived` mirrors in Postgres (`WA019`) and the
+     * replica's own triggers mirror on the phone.
+     */
+    categoryUnavailable: "This category is no longer available.",
     noCategory: "No category",
     more: "More",
     date: "Date",
@@ -313,7 +321,16 @@ export const en = {
     newCounterparty: "+ New person or company",
 
     /* ── DESK2 · the desk command bar, `screens/S05-quick-add.md` §3 web ── */
-    /** The bar's own placeholder — S05's worked example, one line resolving into chips as it is typed. */
+    /**
+     * The bar's own placeholder — S05's worked example, one line resolving
+     * into chips as it is typed. L2 — the word "cash" is deliberate, not
+     * cosmetic: it is a literal account name (`grammar.test.ts`'s own
+     * fixture, and this repo's seeded default), never an alias, because
+     * nothing populates `PhoneAccount.aliases` today (`names.ts`'s own
+     * `findName` takes them, but no data source fills them in) — a
+     * placeholder claiming an alias resolution the app cannot make would be
+     * worse than a plain one.
+     */
     commandBarPlaceholder: "48.90 cash coffee yesterday",
     /** The bar's accessible name — a single-line composer with no room for a visible label above it. */
     commandBarLabel: "Add a transaction",

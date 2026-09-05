@@ -60,5 +60,8 @@ export function resolveFieldErrorMessage(
       error.params?.["type"] === "income" ? t("transactions.income") : t("transactions.expense");
     return t("transactions.categoryKindMismatch", { type: kind });
   }
+  if (error.messageKey === "transactions.categoryUnavailable") {
+    return t("transactions.categoryUnavailable");
+  }
   return error.message;
 }

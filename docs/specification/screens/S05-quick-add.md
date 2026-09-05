@@ -107,24 +107,34 @@ and Enter to save. No keypad, no dock, no camera.
 ```
   48.90 cash coffee yesterday
   ─────────────────────────────────────────
-   48,90 zł   [Cash · PLN]  [10 Aug]
-   payee: coffee   [ Category? ]
+   48.90 PLN   Cash   Sep 2
+   Payee: coffee   Category?
 ```
 
 Parsing is **deterministic first**: first number is the amount, known account
 and category names bind to their chips, relative dates parse, the rest becomes
-the payee — D1's grammar, the one `screens/S05-quick-add.md` §3's own worked
-example resolves. D2's payee memory proposes the category the same way it does
-on the phone, machine-filled at or above `computations.md` §14's display
-threshold and left for the category chip to ask about below it.
+the payee — D1's grammar, the one this section's own worked example resolves.
+D2's payee memory proposes the category the same way it does on the phone,
+machine-filled at or above `computations.md` §14's display threshold and left
+for the category chip to ask about below it.
 
-**No model path.** When D1 cannot resolve a line — no amount found, an
-unmatched account, a currency that disagrees with the named account, or too
-much left over — the bar shows the reason beneath it and nothing else. No
-model call is spent guessing; retyping a clearer line is the whole recovery,
-and Enter on such a line is a no-op rather than a save attempt. A model
-fallback for the shape too ambiguous for the grammar remains a real
-possibility (§9 Q3), just not one this bar offers today.
+**A name the grammar does not recognise is payee text, not a refusal — with a
+last-used account to fall back on.** §9.2's own four-hour window supplies a
+default account the moment one exists, and an unrecognised token folds into
+the payee the same way "coffee" does in the headline example: `48.90 revolut
+coffee` resolves against the last-used account, payee `revolut coffee`, when
+that window is open. The refusal below only ever fires with **no** default
+account *and* no name the grammar recognises — the ordinary state is a filled
+account chip, not a stopped line.
+
+**No model path.** When D1 truly cannot resolve a line — no amount found, no
+account at all (no default, no recognised name), a currency that disagrees
+with the named account, or too much left over — the bar shows the reason
+beneath it and nothing else. No model call is spent guessing; retyping a
+clearer line is the whole recovery, and Enter on such a line is a no-op rather
+than a save attempt. §9 Q3 records the same decision: this arc builds only the
+grammar, and a model fallback for the shape too ambiguous for it is a future
+direction, not something this bar offers today.
 
 This is a genuine divergence rather than a reflow. The mobile design optimises
 for one thumb and no keyboard; the desktop has a keyboard and a person sitting
@@ -239,7 +249,7 @@ fact.
    **Window: four hours**, named `LAST_USED_WINDOW_MS` in
    `packages/client/src/transactions/last-capture.ts`.
 3. ~~**Web command-bar parsing is unspecified.**~~ **Decided: deterministic
-   grammar first, model as an explicit fallback.**
+   grammar first — no model path in this arc.**
 
    The grammar handles the common shape with no latency and no model call: the
    first number is the amount, a known account or category name binds to its
@@ -247,9 +257,10 @@ fact.
    become the payee. Chips resolve **live beneath the line**, so an ambiguity is
    visible before Enter rather than after.
 
-   **The fallback is offered, not taken automatically.** When the grammar cannot
-   resolve an amount — or leaves too much unmatched — the composer says so and
-   shows *interpret with model ⏎* rather than silently spending 2–5 s. That
-   removes the real cost of a hybrid, which is not two code paths but two
-   unpredictable latencies in one box: here the slow path is always a thing you
-   chose, and it renders the same `TrailRow` the voice path does (P2).
+   **This arc builds only the grammar.** A line it cannot resolve shows the
+   reason beneath it and nothing else — no *interpret with model* offer, no
+   2–5 s spent guessing, and Enter on such a line is a no-op rather than a save
+   attempt. A model fallback for the shape too ambiguous for the grammar is a
+   real future direction — the same hybrid shape voice capture already takes,
+   rendering `TrailRow` (P2) — but it is not part of what this bar does today,
+   and nothing here should be read as describing a composer that offers it.

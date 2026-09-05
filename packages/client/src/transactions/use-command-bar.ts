@@ -21,10 +21,12 @@
  *
  * **D2's category proposal is the phone's own call, not a second one.**
  * `quick-add-screen.tsx` folds the typed payee and runs it against
- * `listPayeeHistory()`, auto-applying at or above `PROPOSAL_DISPLAY_
- * THRESHOLD` (`computations.md` §14) — this hook makes the identical call, so
- * a payee typed here and a payee typed on the phone earn the same category
- * the same way.
+ * `listPayeeHistory()`; `acceptProposedCategory` (this domain's own shared
+ * guard) decides whether it auto-applies — a proposal must name a category
+ * among the ones offered (never archived, since that list already excludes
+ * them) and of the right kind, or the chip stays unfilled and asks. A payee
+ * typed here and a payee typed on the phone earn the same category the same
+ * way, refused the same way too.
  *
  * **No model path.** A line D1 cannot resolve stays a `CaptureParse` with
  * `ok: false` — this hook never spends a model call on it, and `submit` is a
@@ -35,14 +37,14 @@
 
 import type { CaptureParse } from "@waltning/core/capture/grammar";
 import { fold } from "@waltning/core/capture/names";
-import {
-  type CategoryProposal,
-  type PayeeHistoryRow,
-  PROPOSAL_DISPLAY_THRESHOLD,
-  proposeCategory,
-} from "@waltning/core/capture/payee-memory";
-import { useCallback, useMemo, useState } from "react";
+import type { CategoryProposal, PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
+import { proposeCategory } from "@waltning/core/capture/payee-memory";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FieldError } from "../transport/field-errors.ts";
+import {
+  type AcceptProposedCategoryCandidate,
+  acceptProposedCategory,
+} from "./accept-proposed-category.ts";
 
 /**
  * The user-owned subset of `create-phone-ledger.ts`'s own `QuickAddDraft`
@@ -88,16 +90,19 @@ export type CommandBarState = {
   parse: CaptureParse | null;
   /**
    * The draft's effective category — a real match from the grammar, or (D2)
-   * an at-or-above-threshold proposal applied on the draft's behalf. `null`
-   * either while nothing has resolved or while a proposal sits below
-   * `PROPOSAL_DISPLAY_THRESHOLD` — the same "suggestion, not a value" rule
-   * `quick-add-screen.tsx` keeps.
+   * an accepted proposal applied on the draft's behalf (`acceptProposedCategory`).
+   * `null` either while nothing has resolved, while a proposal sits below
+   * the display threshold, or while it names a category outside the ones
+   * offered — the same "suggestion, not a value" rule `quick-add-screen.tsx`
+   * keeps.
    */
   categoryId: string | null;
   /** D2's own proposal, for a caller to render machine-filled or low-confidence. `undefined` before a payee resolves. */
   categoryProposal: CategoryProposal | undefined;
   /** True only while `categoryId` is the proposal's own id, applied without a pick. */
   categoryAutoFilled: boolean;
+  /** Esc on the highlighted category chip (M3/P2) — dismisses an applied proposal without discarding the line. */
+  undoCategory: () => void;
   /** `create_transaction`'s own refusal, raw — a caller resolves `messageKey` through `useT()` and maps it onto fields; this hook cannot (`architecture/11`: `client` and `ui` are siblings). */
   fieldErrors: readonly FieldError[] | undefined;
   /** Enter — a no-op while `parse` is not `{ ok: true }` (D1's own refusal already says why under the bar). */
@@ -109,9 +114,15 @@ export type CommandBarState = {
 export function useCommandBar(
   controller: CommandBarController,
   parse: (text: string) => CaptureParse,
+  categories: readonly AcceptProposedCategoryCandidate[],
 ): CommandBarState {
   const [text, setTextState] = useState("");
   const [fieldErrors, setFieldErrors] = useState<readonly FieldError[] | undefined>(undefined);
+  // H1/M3 — the phone's own `categoryProposalDismissed`, moved here: Esc on
+  // a highlighted proposal is this bar's Undo (§8's P2), and the same reset
+  // rule holds — a *different* payee earns its own proposal a fresh chance
+  // rather than inheriting a dismissal that was never about it.
+  const [categoryProposalDismissed, setCategoryProposalDismissed] = useState(false);
 
   const setText = useCallback((next: string) => {
     setTextState(next);
@@ -134,15 +145,22 @@ export function useCommandBar(
     return proposeCategory(payeeFold, controller.listPayeeHistory()) ?? undefined;
   }, [controller, parsed, payeeFold]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: payeeFold is the trigger; the effect body reads no value from it.
+  useEffect(() => {
+    setCategoryProposalDismissed(false);
+  }, [payeeFold]);
+
   const categoryAutoFilled =
     parsed?.ok === true &&
     parsed.categoryId === null &&
-    categoryProposal !== undefined &&
-    categoryProposal.confidence >= PROPOSAL_DISPLAY_THRESHOLD;
+    !categoryProposalDismissed &&
+    acceptProposedCategory(categoryProposal, categories, "expense");
   const categoryId =
     parsed?.ok === true
       ? (parsed.categoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null))
       : null;
+
+  const undoCategory = useCallback(() => setCategoryProposalDismissed(true), []);
 
   const discard = useCallback(() => {
     setTextState("");
@@ -182,6 +200,7 @@ export function useCommandBar(
     categoryId,
     categoryProposal,
     categoryAutoFilled,
+    undoCategory,
     fieldErrors,
     submit,
     discard,

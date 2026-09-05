@@ -36,7 +36,7 @@ import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
-const { accounts, currencies, transactions } = schema;
+const { accounts, categories, currencies, transactions } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalTransactionRow = typeof transactions.$inferSelect;
@@ -91,6 +91,7 @@ export function insertTransaction(
   tx: ReplicaTx,
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
+  assertCategoryNotArchived(tx, input.categoryId);
   // R4 re-review — restored. L10 had dropped this call on the theory that
   // `create_transaction`'s own `validate` already ran it, pre-outbox, on this
   // exact `input`, so a second call here would check nothing new — true only
@@ -211,6 +212,47 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
     throw new LocalRefusal(
       "create_transaction: a business transaction cannot move into a shared account (SPEC.md §6.7)",
     );
+  }
+}
+
+/**
+ * H1a — a transaction may never carry an archived category.
+ *
+ * **The good error, between two guarantees.** Below it the replica's own
+ * `transactions_category_not_archived_insert` / `_update` triggers (the head
+ * migration) and, on the server, `assert_category_not_archived`
+ * (`0001_database_objects.sql`, SQLSTATE `WA019`) refuse the same write —
+ * both broken once, in `transaction-ops.test.ts` and `pg-errors.test.ts`. A
+ * trigger's message names no operation and no field; this one does, which is
+ * what an executor is for. **Exported** and called from
+ * `update-transaction.executor.ts` too — the same guarantee, checked wherever
+ * `category_id` can change.
+ *
+ * A client-side refusal exists a layer up as well
+ * (`create-phone-ledger.ts`'s own `categoryId === undefined` refusal, H1a),
+ * which is the one a person actually reads — the same three-deep layering
+ * `assertTransactionScale` has against `QuickAddForm`'s own amount check.
+ */
+export function assertCategoryNotArchived(
+  tx: ReplicaTx,
+  // `| null` past `CreateTransactionInput["categoryId"]`'s own type: only
+  // `update_transaction`'s patch can ever explicitly clear a category, and
+  // clearing one is never a category to check.
+  categoryId: CreateTransactionInput["categoryId"] | null,
+): void {
+  if (categoryId === null || categoryId === undefined) return;
+
+  const [row] = tx
+    .select({ archived: categories.archived })
+    .from(categories)
+    .where(eq(categories.id, categoryId))
+    .limit(1)
+    .all();
+  // The FK to `categories` already refuses an unknown id; a missing row here
+  // means that check has not run yet in this same statement (`assert_category_
+  // kind_matches_type`'s own Postgres comment makes the identical call).
+  if (row?.archived) {
+    throw new LocalRefusal(`create_transaction: category ${categoryId} is archived (H1a)`);
   }
 }
 

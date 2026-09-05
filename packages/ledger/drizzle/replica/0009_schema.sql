@@ -41,3 +41,46 @@ DROP TABLE `fx_rates`;--> statement-breakpoint
 ALTER TABLE `__new_fx_rates` RENAME TO `fx_rates`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE UNIQUE INDEX `fx_rates_pk` ON `fx_rates` (`base`,`quote`,`date`);
+--> statement-breakpoint
+-- H1a — an archived category is not assignable, the replica's own half of
+-- `0001_database_objects.sql`'s `assert_category_not_archived`.
+--
+-- `architecture/14` §14.6: the phone refuses at capture time what the server
+-- would refuse. The client refuses this before the write
+-- (`transactions.categoryUnavailable`) and the local executor refuses it again
+-- (`assertCategoryNotArchived`) — neither is a guarantee, and this file is
+-- where the replica's guarantees live. SQLite has no cross-table CHECK, so a
+-- trigger is the only shape available; two of them, because SQLite's
+-- `BEFORE UPDATE OF` cannot name a column list the way Postgres can, so the
+-- update half guards itself with a `WHEN` on the column actually moving.
+--
+-- Hand-written into the head migration rather than added as `0010`: every
+-- current database is disposable until first install (`architecture/08` item
+-- 1), so there is no installed chain to append to — and a new step would need
+-- a fixture for the version it left behind, dumped from a database nobody has.
+-- Once a build ships, this stops being true and a change here becomes a new
+-- step.
+--
+-- Archiving a category that already holds rows stays legal: the triggers are
+-- on `transactions`, fired by the write that would newly point at one.
+CREATE TRIGGER `transactions_category_not_archived_insert`
+BEFORE INSERT ON `transactions`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;--> statement-breakpoint
+CREATE TRIGGER `transactions_category_not_archived_update`
+BEFORE UPDATE ON `transactions`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+	AND (OLD.`category_id` IS NULL OR OLD.`category_id` <> NEW.`category_id`)
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;
