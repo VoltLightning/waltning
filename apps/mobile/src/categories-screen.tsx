@@ -38,9 +38,8 @@ import { GroundPanel } from "@waltning/ui/shell/card";
 import { Toast, UndoToast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 type ActionsState = {
   type: "actions";
@@ -374,35 +373,30 @@ export default function CategoriesScreen() {
 
   return (
     <GroundPanel>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <SearchField
-          value={search}
-          onChangeText={setSearch}
-          placeholder={t("common.search")}
-          onClear={handleClearSearch}
-          {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
-        />
-        <Toggle
-          label={t("categories.showArchived")}
-          value={showArchived}
-          onChange={setShowArchived}
-        />
-        <CollisionFinder
-          candidates={snapshot.categoryCollisions}
-          onReview={handleReviewCollision}
-        />
-        {uncategorized === null ? null : (
-          <View style={styles.uncategorized}>
-            <Text style={styles.uncategorizedName}>{uncategorized.name}</Text>
-            <Tag variant="neutral">
-              {uncategorized.usageCount === 1
-                ? t("categories.usageOne", { count: uncategorized.usageCount })
-                : t("categories.usageMany", { count: uncategorized.usageCount })}
-            </Tag>
-          </View>
-        )}
-        <CategoryTree nodes={rows} onOpenActions={handleOpenActions} />
-      </ScrollView>
+      <SearchField
+        value={search}
+        onChangeText={setSearch}
+        placeholder={t("common.search")}
+        onClear={handleClearSearch}
+        {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
+      />
+      <Toggle
+        label={t("categories.showArchived")}
+        value={showArchived}
+        onChange={setShowArchived}
+      />
+      <CollisionFinder candidates={snapshot.categoryCollisions} onReview={handleReviewCollision} />
+      {uncategorized === null ? null : (
+        <View style={styles.uncategorized}>
+          <Text style={styles.uncategorizedName}>{uncategorized.name}</Text>
+          <Tag variant="neutral">
+            {uncategorized.usageCount === 1
+              ? t("categories.usageOne", { count: uncategorized.usageCount })
+              : t("categories.usageMany", { count: uncategorized.usageCount })}
+          </Tag>
+        </View>
+      )}
+      <CategoryTree nodes={rows} onOpenActions={handleOpenActions} />
 
       <CategoryActionsSheet
         visible={sheet?.type === "actions"}
@@ -456,8 +450,6 @@ export default function CategoriesScreen() {
 }
 
 const useStyles = makeStyles((theme) => ({
-  scroll: { flex: 1 },
-  content: { gap: space.x4 },
   uncategorized: {
     flexDirection: "row",
     alignItems: "center",

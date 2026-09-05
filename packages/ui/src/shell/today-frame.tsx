@@ -50,5 +50,8 @@ export function TodayFrame({ appearanceAction, total, periodRow, body }: TodayFr
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, backgroundColor: theme.ground },
   heading: { color: theme.shellText, ...text.ui("displayTwo") },
-  body: { flex: 1, gap: space.x3 },
+  // No `flex: 1` — this is `GroundPanel`'s sole child, and `flex: 1` there
+  // gives it a `flexBasis` of `0`, which pins it to the viewport and defeats
+  // both the panel's own scroll and its bottom clearance (H1).
+  body: { gap: space.x3 },
 }));

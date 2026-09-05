@@ -98,7 +98,38 @@ Switching is free — no backfill, no confirmation, nothing written (`SPEC.md`
 outputs are always denominated in their jurisdiction's currency regardless of
 what this is set to.
 
-### 4.6 `<RateTable>`
+### 4.6 `<CurrencyGrid>`
+
+Choosing **one** currency out of a set small enough to show whole — account
+creation is the call site (`create-account-form.tsx`). A different question
+from `<CurrencyChip>` (§4.5): that is which of a few *pinned* currencies a
+header displays figures in, cycled one tap at a time; this is a form field
+that is set once, so the field shows every option rather than collapsing them
+behind a toggle or a `Select`.
+
+Anatomy, one tile: the **code**, the **symbol** beside it muted, the **name**
+below in one line. The code is what will appear on every figure the account
+holds afterwards, so the choice and its consequence read the same; the symbol
+is the glyph those figures will actually carry.
+
+Three columns on the phone, four at the desk breakpoint (`02-tokens` §2.10),
+equal widths, `role="radiogroup"` over `role="radio"` tiles — the same anatomy
+`AccountPicker`'s account grid and `CategorySheet`'s leaf grid already settled
+on. Selected takes the accent border and fill; disabled dims the whole grid.
+
+**Which control depends on what the currency is for, not just that it is
+one.** This grid is the choice when the whole set should be visible at once,
+weighed against every other — opening an account, where the currency is the
+one thing that never changes about it afterwards. A currency field inside a
+row-shaped form is a `Select`, the same as any other field in that row —
+`counterparty-form.tsx`'s settlement currency, someone else's own preference,
+not a decision this product is asking the person to weigh. A currency
+cycled from a small, already-pinned set is `<CurrencyChip>` (§4.5), the
+header's own display toggle. Three components, three different questions;
+none of them substitutes for this grid's own answer to *"pick one, from
+everything, deliberately."*
+
+### 4.7 `<RateTable>`
 
 The rate history for one pair, by date. Virtualized — 2,080 days per pair from
 2020-11, and growing daily.
@@ -115,7 +146,7 @@ because the common correction is a period rather than a day.
 empty row, because scrolling past a silent gap is how GEL held 11 days of 2,080
 without anyone noticing.
 
-### 4.7 `<RateEditor>`
+### 4.8 `<RateEditor>`
 
 Sets a manual rate for a pair over a **date or a date range** (`SPEC.md` §7.6,
 level 2). The range form is what makes a dead source recoverable by hand: RUB
@@ -145,7 +176,7 @@ overwriting it in bulk erases a decision.
 Writes `source = 'manual'`, which outranks every synced source for that pair and
 date, is never clobbered by a later sync, and writes to `audit_log`.
 
-### 4.8 `<SyncLog>`
+### 4.9 `<SyncLog>`
 
 Sync attempts, newest first: when, which source, outcome, days written.
 

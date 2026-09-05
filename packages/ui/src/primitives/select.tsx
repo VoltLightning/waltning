@@ -288,7 +288,13 @@ function PanelBlock({ reveal, search, children }: PanelBlockProps) {
           row is the signal that there is more, the way a list edge says it
           everywhere else. `maxHeight` is a bound, not an animation — the
           §2.7 ban is on height *moving*. */}
-      <ScrollView style={styles.panelScroll}>{children}</ScrollView>
+      {/* `nestedScrollEnabled` — `GroundPanel` is now the page scroller
+          everywhere `Select` opens, so this is a `ScrollView` inside a
+          `ScrollView` on Android, which without this prop swallows the
+          gesture into the outer one instead of scrolling the panel. */}
+      <ScrollView style={styles.panelScroll} nestedScrollEnabled>
+        {children}
+      </ScrollView>
     </Animated.View>
   );
 }

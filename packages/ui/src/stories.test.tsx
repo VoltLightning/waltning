@@ -28,6 +28,7 @@ import { render } from "@testing-library/react";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 import * as amount from "./fx/amount.stories";
+import * as currencyGrid from "./fx/currency-grid.stories";
 import * as button from "./primitives/button.stories";
 import * as chip from "./primitives/chip.stories";
 import * as shell from "./shell/shell.stories";
@@ -40,6 +41,7 @@ import * as errorState from "./states/error-state.stories";
 import * as matchWarning from "./states/match-warning.stories";
 import * as ruleHealthTag from "./states/rule-health-tag.stories";
 import * as skeleton from "./states/skeleton.stories";
+import * as startupFailed from "./states/startup-failed.stories";
 import * as thinkingIndicator from "./states/thinking-indicator.stories";
 import * as thresholdSlider from "./states/threshold-slider.stories";
 import * as toast from "./states/toast.stories";
@@ -58,12 +60,14 @@ const MODULES = {
   Button: button,
   Banner: banner,
   Chip: chip,
+  CurrencyGrid: currencyGrid,
   EmptyState: emptyState,
   ErrorState: errorState,
   MatchWarning: matchWarning,
   RuleHealthTag: ruleHealthTag,
   Shell: shell,
   Skeleton: skeleton,
+  StartupFailed: startupFailed,
   TabBar: tabBar,
   TabIcons: tabIcons,
   ThinkingIndicator: thinkingIndicator,

@@ -37,7 +37,7 @@ export const Manual: Story = {
   },
 };
 
-/** `04` §4.7's `RateEditor` — the one caller that types a rate directly. */
+/** `04` §4.8's `RateEditor` — the one caller that types a rate directly. */
 export const Editable: Story = {
   args: { editable: true, value: "4.2810", onChange: noop },
 };

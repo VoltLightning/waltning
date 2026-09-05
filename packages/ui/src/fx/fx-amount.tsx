@@ -66,7 +66,7 @@ export type FxAmountProps = {
   displayCurrency: string;
   decimals?: number;
   displayDecimals?: number;
-  /** Rate precision. 4dp throughout the design system (§4.6). */
+  /** Rate precision. 4dp throughout the design system (§4.7). */
   rateDecimals?: number;
   provenance?: FxProvenance;
 };

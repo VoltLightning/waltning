@@ -68,7 +68,7 @@ import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 /** `settle_debt`'s own field paths (`registry/inputs.ts`) — everything else lands at form level. */
 const SETTLE_KNOWN_PATHS = [
@@ -659,11 +659,16 @@ export default function CounterpartyDetail() {
           }}
         />
       ) : (
-        <ScrollView>
+        // Its own, gap-less `View` — the panel's own `gap` is the space
+        // between *blocks* (the header above, `Edit` below), not between one
+        // row and the next; a row abuts the one below it exactly as it did
+        // inside the plain `ScrollView` this replaced, which had no `gap` at
+        // all.
+        <View style={styles.historyRows}>
           {historyRows.map((row) => (
             <HistoryRow key={row.id} row={row} onPress={handleOpenRow} />
           ))}
-        </ScrollView>
+        </View>
       )}
 
       <Button label={t("common.edit")} onPress={handleEdit} variant="ghost" />
@@ -729,6 +734,8 @@ const useStyles = makeStyles((theme) => ({
     paddingTop: space.x4,
   },
   historyTitle: { color: theme.textMuted, ...text.ui("kicker") },
+  // No `gap` — rows abut, the same as the plain `ScrollView` this replaced.
+  historyRows: {},
   mergeRow: {
     flexDirection: "row",
     alignItems: "center",

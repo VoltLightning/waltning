@@ -1,5 +1,5 @@
 /**
- * `<RateEditor>` — `design-system/04` §4.7, `SPEC.md` §7.6 level 2.
+ * `<RateEditor>` — `design-system/04` §4.8, `SPEC.md` §7.6 level 2.
  *
  * *"Sets a manual rate for a pair over a date or a date range … Before
  * writing, it states exactly what it will do … Never silently overwrites

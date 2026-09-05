@@ -16,7 +16,7 @@ accumulated inventions.
 | **D6** | Charts + `Legend` + `PeriodPicker` | Unblocked — 5 segments + *other*, directly labelled; the line chart pairs hue with marker shape (§7) |
 | **D7** | `Calendar` + cells + both navigation modes (§6) | Virtualization is the hard part — ~2,100 days from 2020. Build it once for continuous and stepped |
 | **D8** | Debt — `BalanceLedger`, `SettleSheet`, `CounterpartyPicker`, `AgeingBar` (§5.5) | Depends on D0's money components. `BalanceLedger` owns the cash-flow-sign negation so no screen repeats it (§6.6) |
-| **D9** | FX administration — `RateTable`, `RateEditor`, `SyncLog` (§4.6–4.8) | `SyncLog`'s coverage view is the one that would have caught GEL at 0.5%. Worth building before the ledger fills, not after |
+| **D9** | FX administration — `RateTable`, `RateEditor`, `SyncLog` (§4.7–4.9) | `SyncLog`'s coverage view is the one that would have caught GEL at 0.5%. Worth building before the ledger fills, not after |
 | **D10** | Dashboard — `WidgetGrid`, `WidgetCard`, `LayoutPicker` (§5.7) | Needs D6's charts, since most widgets are charts |
 | **D11** | Tax and export — `SchemeTimeline`, `SchemeSelector`, `WorkbookBuilder`, `ManifestCard` (§5.8) | Last, and lowest frequency. `ManifestCard` reads its assertion from the export path rather than composing it |
 | **D12** | Accessibility pass | Measured contrast, targets, reduced-motion branches, live regions, labels |

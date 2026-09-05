@@ -1,5 +1,5 @@
 /**
- * `RateEditor` — `design-system/04` §4.7. States what it will overwrite
+ * `RateEditor` — `design-system/04` §4.8. States what it will overwrite
  * before writing; never silently replaces a manual entry.
  */
 
@@ -19,7 +19,7 @@ const meta = {
     // `fx_rates.rate` is units of the quote per one pivot (`SPEC.md` §4) —
     // `base = USD` (the pivot), `quote = RUB`, so this is RUB per USD, not
     // the other way round. ~96 is a placeholder in the neighbourhood of
-    // RUB's own last published rate before 2022-03-11 (`04` §4.7's own
+    // RUB's own last published rate before 2022-03-11 (`04` §4.8's own
     // worked example) — never a real quote (public repo, private ledger).
     rate: "96.1500",
     onRateChange: noop,

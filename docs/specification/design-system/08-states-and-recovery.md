@@ -220,3 +220,4 @@ Registered here so no screen invents them (working rule 1).
 | `RuleHealthTag` | S21 |
 | `EmptyState` variants | `first-run` · `filtered` · `range` |
 | `ErrorState` variants | `recoverable` · `terminal` · `partial` |
+| `StartupFailed` | The ledger could not open — `_layout.tsx`'s own replacement for the whole app, before any router exists. Shows the migrator's own sentence verbatim; no action, since nothing running inside a crashed session can relaunch it |

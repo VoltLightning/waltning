@@ -18,11 +18,9 @@ import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
-import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
 import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
@@ -157,7 +155,6 @@ export default function QuickAdd() {
   const capture = deviceRuntime().capture();
   const today = capture.date;
   const breakpoint = useBreakpoint();
-  const insets = useSafeArea();
   const styles = useStyles();
 
   /**
@@ -624,17 +621,12 @@ export default function QuickAdd() {
     );
   }
 
-  // Computed rather than in the stylesheet: the inset is per-device, the same
-  // reason `dock.tsx`'s own `clearance` is computed beside its `useStyles` call
-  // rather than folded into it.
-  const horizontalInsets = {
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
-  };
-
   return (
     <View style={styles.root}>
-      <View style={[styles.scroll, horizontalInsets]}>
+      {/* `clearBottom={false}` — this panel is not the screen's own bottom
+          edge, `Dock` below it is, and `Dock` already clears the home
+          indicator itself. */}
+      <GroundPanel clearBottom={false}>
         <QuickAddComposer
           raw={composerAmountRaw}
           type={composerType}
@@ -680,7 +672,7 @@ export default function QuickAdd() {
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
           onCancel={handleComposerCancel}
         />
-      </View>
+      </GroundPanel>
       <Dock
         mode="keypad"
         modes={modes}
@@ -717,9 +709,4 @@ export default function QuickAdd() {
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, backgroundColor: theme.ground },
-  // Only left/right/top are cleared here — the bottom inset belongs to
-  // `Dock`, the one component below that actually meets a home indicator
-  // (`dock.tsx`'s own comment: "each component clearing only the edge it
-  // actually touches").
-  scroll: { flex: 1, paddingTop: space.x5, gap: space.x4 },
 }));

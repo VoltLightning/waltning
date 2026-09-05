@@ -1,5 +1,5 @@
 /**
- * `RateTable` — `design-system/04` §4.6. Gaps render as explicit empty rows,
+ * `RateTable` — `design-system/04` §4.7. Gaps render as explicit empty rows,
  * never as absence.
  */
 
