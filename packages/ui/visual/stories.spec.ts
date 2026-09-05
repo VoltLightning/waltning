@@ -57,13 +57,41 @@ test("the build lists a plausible number of stories", () => {
  * `font-display: block`, so text is *invisible* until its face loads —
  * photograph too early and the baseline is a correct layout with no words in
  * it, which then passes forever.
+ *
+ * **A single `evaluate` awaiting the promise, not `waitForFunction` polling
+ * for it.** `waitForFunction`'s default polling strategy drives its predicate
+ * from `requestAnimationFrame` — which `open`'s frozen clock also fakes and
+ * pauses, so a poll that depends on it never runs a second time. `fonts.ready`
+ * resolves through the browser's own font-loading pipeline, not a page timer,
+ * so it settles correctly whether or not the clock is frozen.
  */
 async function settle(page: Page) {
-  await page.waitForFunction(() => document.fonts.status === "loaded");
   await page.evaluate(() => document.fonts.ready);
 }
 
-async function open(page: Page, id: string, theme: string) {
+/** The instant a screenshot's clock is pinned and paused at. Arbitrary; fixed. */
+const FROZEN_AT = new Date("2026-09-04T09:00:00Z");
+
+/**
+ * Navigate to a story, optionally with time pinned and paused first.
+ *
+ * **Never for `contrast`, only for the stories `NEEDS_FROZEN_CLOCK` names.**
+ * `pauseAt` the same instant `install` sets means the clock never advances
+ * from it — every timer on the page is frozen before it can tick. That is
+ * exactly what `ThinkingIndicator`'s beat needs and exactly what breaks a
+ * mount animation: a component whose entrance is a Reanimated
+ * `requestAnimationFrame` loop never gets the frames that carry it to rest,
+ * so it screenshots at the start of its own animation instead of the end.
+ * `contrast`'s own axe pass depends on real, ticking timers too —
+ * `addon-a11y` schedules its pass on one, and the retry loop that waits out a
+ * concurrent axe run schedules on another — so it always calls this with
+ * `freeze: false`.
+ */
+async function open(page: Page, id: string, theme: string, { freeze = false } = {}) {
+  if (freeze) {
+    await page.clock.install({ time: FROZEN_AT });
+    await page.clock.pauseAt(FROZEN_AT);
+  }
   await page.goto(`/iframe.html?id=${id}&globals=appearance:${theme}&viewMode=story`);
   await page.waitForSelector("#storybook-root > *", { state: "attached" });
   await settle(page);
@@ -83,10 +111,28 @@ async function screenshotTarget(page: Page) {
   return (await dialog.count()) > 0 ? dialog.first() : page.locator("#storybook-root");
 }
 
+/**
+ * `ThinkingIndicator` is the only story whose *content* is a function of
+ * elapsed real time — its dot steps on its own `setInterval` — so it is the
+ * only one that needs a frozen clock to read the same frame twice. Freezing
+ * every story instead sounded like the more thorough fix and measured worse:
+ * a real run showed 42 other baselines moving, and not into a different
+ * valid rendering of the same story — `Toast` and `UndoToast` came back
+ * blank, `ThresholdSlider`'s thumb sat at its pre-animation rest position
+ * rather than the value the story names. Those all mount with a Reanimated
+ * enter animation driven by `requestAnimationFrame`, which the frozen clock
+ * also fakes and pauses, so the story is screenshotted at frame zero of its
+ * own entrance rather than settled — a baseline that no longer shows what
+ * the component looks like. `ThinkingIndicator` has no such animation to
+ * freeze mid-flight, so scoping the fix to it gets the determinism without
+ * that cost.
+ */
+const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
+
 for (const story of STORIES) {
   for (const theme of THEMES) {
     test(`${story.title}/${story.name} · ${theme}`, async ({ page }) => {
-      await open(page, story.id, theme);
+      await open(page, story.id, theme, { freeze: NEEDS_FROZEN_CLOCK.test(story.title) });
       await expect(await screenshotTarget(page)).toHaveScreenshot(`${story.id}-${theme}.png`);
     });
   }

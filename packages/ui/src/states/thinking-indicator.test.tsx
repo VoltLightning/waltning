@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThinkingIndicator } from "./thinking-indicator";
 
 describe("ThinkingIndicator", () => {
@@ -51,12 +51,12 @@ describe("ThinkingIndicator", () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  it("renders three dots beside the thinking label", () => {
+  it("shows the dot beside the thinking label", () => {
     render(<ThinkingIndicator phase="thinking" elapsedMs={500} onCancel={vi.fn()} />);
-    expect(screen.getAllByTestId("thinking-dot")).toHaveLength(3);
+    expect(screen.getByTestId("thinking-dots")).toBeDefined();
   });
 
-  it("renders three dots beside the tool label too", () => {
+  it("shows the dot beside the tool label too", () => {
     render(
       <ThinkingIndicator
         phase="tool"
@@ -65,10 +65,10 @@ describe("ThinkingIndicator", () => {
         onCancel={vi.fn()}
       />,
     );
-    expect(screen.getAllByTestId("thinking-dot")).toHaveLength(3);
+    expect(screen.getByTestId("thinking-dots")).toBeDefined();
   });
 
-  it("shows no dots while streaming — the arriving text is its own sign of life", () => {
+  it("shows no dot while streaming — the arriving text is its own sign of life", () => {
     render(
       <ThinkingIndicator
         phase="streaming"
@@ -77,6 +77,60 @@ describe("ThinkingIndicator", () => {
         onCancel={vi.fn()}
       />,
     );
-    expect(screen.queryAllByTestId("thinking-dot")).toHaveLength(0);
+    expect(screen.queryByTestId("thinking-dots")).toBeNull();
+  });
+
+  describe("the dot beat", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("steps one, two, three, drop on a 250 ms beat and repeats", () => {
+      render(<ThinkingIndicator phase="thinking" elapsedMs={500} onCancel={vi.fn()} />);
+      const dots = () => screen.getByTestId("thinking-dots").textContent;
+
+      expect(dots()).toBe(".");
+      act(() => vi.advanceTimersByTime(250));
+      expect(dots()).toBe("..");
+      act(() => vi.advanceTimersByTime(250));
+      expect(dots()).toBe("...");
+      act(() => vi.advanceTimersByTime(250));
+      expect(dots()).toBe("");
+      act(() => vi.advanceTimersByTime(250));
+      expect(dots()).toBe(".");
+    });
+
+    it("clears the interval on unmount", () => {
+      const setSpy = vi.spyOn(globalThis, "setInterval");
+      const clearSpy = vi.spyOn(globalThis, "clearInterval");
+      const { unmount } = render(
+        <ThinkingIndicator phase="thinking" elapsedMs={500} onCancel={vi.fn()} />,
+      );
+      const id = setSpy.mock.results[0]?.value;
+      unmount();
+      expect(clearSpy).toHaveBeenCalledWith(id);
+    });
+
+    it("clears the interval when the phase becomes streaming", () => {
+      const setSpy = vi.spyOn(globalThis, "setInterval");
+      const clearSpy = vi.spyOn(globalThis, "clearInterval");
+      const { rerender } = render(
+        <ThinkingIndicator phase="thinking" elapsedMs={500} onCancel={vi.fn()} />,
+      );
+      const id = setSpy.mock.results[0]?.value;
+      rerender(
+        <ThinkingIndicator
+          phase="streaming"
+          elapsedMs={500}
+          streamingText="Found it"
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(clearSpy).toHaveBeenCalledWith(id);
+    });
   });
 });

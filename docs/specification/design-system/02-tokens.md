@@ -288,11 +288,9 @@ buttons and inputs all share the `sm` corner, differing by size and padding
 rather than by shape — so adjacency between a chip and a button reads as two
 sizes of one material. `md` is a card, `lg` a sheet, `xs` a glyph-scale box (a
 checkbox). `pill` survives only where roundness *is* the control: a radio is a
-circle everywhere in computing, a switch is a sliding capsule, the add button
-is the one object floating above the page, and `ThinkingIndicator`'s three
-loading dots are a fourth — each one a beat of a wait rather than a boundary,
-so the pill shape reads as a pulse rather than as a control. No control
-invents a radius between these.
+circle everywhere in computing, a switch is a sliding capsule, and the add
+button is the one object floating above the page. No control invents a radius
+between these.
 
 **Control metrics, the ones that drifted before they were written down:**
 
