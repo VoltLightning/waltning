@@ -74,8 +74,8 @@ describe("phone-alone preview presentation", () => {
     // The reset is two steps and the second one is the destructive word.
     expect(controls).toContain('label={t("preview.resetAction")}');
     expect(controls).toContain('label={t("preview.resetTitle")}');
-    expect(controls).toContain('title={t("preview.resetPrompt")}');
-    expect(controls).toContain('title={t("preview.appearanceFailed")}');
+    expect(controls).toContain('{t("preview.resetPrompt")}');
+    expect(controls).toContain('message={t("preview.appearanceFailed")}');
 
     // …and the words themselves exist, in both languages.
     expect(english).toContain(

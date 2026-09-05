@@ -64,6 +64,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 
 | Component | Notes |
 |---|---|
+| `Card` | Wraps `CounterpartyCard` + `BalanceLedger` — the hero position. Settle and Add transaction sit under the card, on the ground |
 | `CounterpartyCard` | Name, kind, settlement currency, monogram |
 | `BalanceLedger` | One row per currency. **Direction in words**, sign never alone |
 | `AgeingBar` | Companies only |

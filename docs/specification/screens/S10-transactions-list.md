@@ -33,7 +33,8 @@ Find the thing you remember.
 │                                                 │
 │  [Business ✕] [Feb 2026 ✕] [+ Filter]           │  ← active filters as chips
 │                                                 │
-│  1 284 transactions · −18 940,20 zł             │  ← running total for filter
+│  ┌ 1 284 transactions · −18 940,20 zł ────────┐  │  ← running total for filter
+│  └─────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────┤
 │  6 Aug                                          │
 │  Corner Café · Eating out        −48,90 zł      │
@@ -51,7 +52,9 @@ because clearing one filter and clearing six are different intentions.
 
 **The running total is the point of the filter bar.** *"What did I spend on the
 flat this year"* is a filter plus a total, and if the total is not on screen the
-filter has only narrowed a list.
+filter has only narrowed a list. On mobile the running total is the screen's
+hero figure and sits in a `Card`; the search field, filter chips and the row
+list stay on the ground.
 
 When the filtered set contains a capital event, the total **splits into two
 lines** — the full figure, and the figure without one-offs (§6.8). Both, always,
@@ -76,6 +79,7 @@ scrolling one.
 
 | Component | Notes |
 |---|---|
+| `Card` | Mobile only — wraps the running total, the screen's hero figure |
 | `FilterBar` | Account · category · scope · currency · date range · counterparty. Reports the count each filter excludes (§5.6) |
 | `SearchField` | Payee, note, amount, **and receipt contents** — merchant plus line descriptions. A match inside a receipt states which line matched, so the result is explicable rather than surprising |
 | `TransactionRow` / `TransferRow` | `BIZ` where business; `FxAmount` where foreign |

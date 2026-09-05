@@ -3,10 +3,10 @@
  *
  * A jointly-owned account is an ordinary account that belongs to a different
  * total (§6.7) — so this renders at the same weight as any of the register's
- * kind groups, and the one thing that sets it apart is a rule above it,
- * pulling the section away from the accounts that are only yours. A negative
- * balance in here gets no warning treatment; it is an ordinary fact about a
- * shared account, not a signal.
+ * kind groups (`Card`, the same as `KindGroup`), and the one thing that sets
+ * it apart is its own separate card, pulling the section away from the
+ * accounts that are only yours. A negative balance in here gets no warning
+ * treatment; it is an ordinary fact about a shared account, not a signal.
  *
  * **One subtotal per currency, never across two** (`money.sum` — the same
  * rule `create-phone-ledger.ts`'s per-currency subtotals hold for the whole
@@ -15,12 +15,12 @@
 
 import type * as money from "@waltning/core/money";
 import { useCallback } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { Amount } from "../fx/amount";
 import { useT } from "../i18n/provider";
-import { text } from "../theme/fonts.ts";
+import { Card } from "../shell/card";
 import { makeStyles } from "../theme/styles.ts";
-import { hairline, space } from "../tokens.ts";
+import { space } from "../tokens.ts";
 import { BalanceRow } from "./balance-row";
 import { subtotalsOf } from "./subtotals.ts";
 
@@ -51,26 +51,26 @@ export function SharedGroup({ accounts, onSelectAccount }: SharedGroupProps) {
 
   if (accounts.length === 0) return null;
 
+  const action = (
+    <View style={styles.subtotals}>
+      {subtotals.map((subtotal) => (
+        <Amount
+          key={subtotal.currency}
+          value={subtotal.balance}
+          currency={subtotal.currency}
+          decimals={subtotal.decimals}
+          size="small"
+        />
+      ))}
+    </View>
+  );
+
   return (
-    <View style={styles.root}>
-      <View style={styles.header}>
-        <Text style={styles.label}>{t("accounts.shared")}</Text>
-        <View style={styles.subtotals}>
-          {subtotals.map((subtotal) => (
-            <Amount
-              key={subtotal.currency}
-              value={subtotal.balance}
-              currency={subtotal.currency}
-              decimals={subtotal.decimals}
-              size="small"
-            />
-          ))}
-        </View>
-      </View>
+    <Card title={t("accounts.shared")} action={action}>
       {accounts.map((account) => (
         <SharedAccountRow key={account.id} account={account} onSelect={onSelectAccount} />
       ))}
-    </View>
+    </Card>
   );
 }
 
@@ -96,20 +96,6 @@ function SharedAccountRow({ account, onSelect }: SharedAccountRowProps) {
   );
 }
 
-const useStyles = makeStyles((theme) => ({
-  root: {
-    gap: space.md,
-    marginTop: space.xl,
-    paddingTop: space.xl,
-    borderTopWidth: hairline.width,
-    borderTopColor: theme.hairline,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.md,
-  },
-  label: { color: theme.textMuted, ...text.ui("kicker"), textTransform: "uppercase" },
+const useStyles = makeStyles(() => ({
   subtotals: { flexDirection: "row", flexWrap: "wrap", gap: space.lg },
 }));

@@ -46,12 +46,13 @@ tab bar → S10, S11, S12, S03.
 │  │ ◉  "forty-eight ninety, coffee" │ │  ▣   │   │
 │  └─────────────────────────────────┘ └──────┘   │
 │                                                 │
-│  RECENT                                         │
-│  Today      Coffee · Eating out      −48,90 zł  │
-│  Today      Salary · Employment   +9 200,00 zł  │
-│  Yesterday  Rewe · Groceries    62,40 € · 4,02  │  ← FxAmount, foreign
-│                                    251,04 zł    │
-│                                       Show all →│
+│  ┌ RECENT ───────────────────────────────────┐  │
+│  │ Today      Coffee · Eating out   −48,90 zł │  │
+│  │ Today      Salary · Employment +9 200,00 zł│  │
+│  │ Yesterday  Rewe · Groceries   62,40 € · 4,02│  │  ← FxAmount, foreign
+│  │                                  251,04 zł │  │
+│  │                                   Show all →│  │
+│  └─────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
 │                                          (＋)   │  ← floats, §2.9
 ┌ tab bar · 5 ───────────────────────────────────┐
@@ -118,6 +119,7 @@ happened*.
 | `PeriodPicker` | Opened by tapping the label or stat row — granularity, presets, arbitrary range (§7) |
 | `StatTile` | Period spend and net. **Period-scoped**; `DualTotal` above it is not |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
+| `Card` | Wraps Recent — a grouped list of rows, `title="Recent"` + `action="Show all"` |
 | `TransactionRow` | Recent; `TransferRow` for transfers; `BIZ` tag where business |
 | `BrandIcon` | `TransactionRow`'s own leading mark for a recognised merchant — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |

@@ -35,7 +35,7 @@ import { Amount } from "@waltning/ui/fx/amount";
 import { decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
-import { GroundPanel } from "@waltning/ui/shell/card";
+import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -328,9 +328,11 @@ export default function Debt() {
           accessibilityRole="progressbar"
           accessibilityLabel={t("counterparties.loadingDebts")}
         >
-          <View style={styles.totals}>
-            <Skeleton shape="row" label="" />
-          </View>
+          <Card>
+            <View style={styles.totals}>
+              <Skeleton shape="row" label="" />
+            </View>
+          </Card>
           <Skeleton shape="row" label="" />
           <Skeleton shape="row" label="" />
           <Skeleton shape="row" label="" />
@@ -378,36 +380,38 @@ export default function Debt() {
       <View style={styles.root}>
         {unsettledBanner}
         <SegmentControl segments={segments} value={segment} onChange={handleSegmentChange} />
-        <View style={styles.totals}>
-          {directionTotalsResult.rows.map((total) => (
-            <View key={total.currency} style={styles.totalRow}>
-              <Text style={styles.totalLabel}>
-                {t("counterparties.theyOweTotal")} · {total.currency}
-              </Text>
-              <Amount
-                value={total.theyOwe}
-                currency={total.currency}
-                decimals={total.decimals}
-                size="small"
-                kind="income"
-              />
-            </View>
-          ))}
-          {directionTotalsResult.rows.map((total) => (
-            <View key={`${total.currency}-you`} style={styles.totalRow}>
-              <Text style={styles.totalLabel}>
-                {t("counterparties.youOweTotal")} · {total.currency}
-              </Text>
-              <Amount
-                value={total.youOwe}
-                currency={total.currency}
-                decimals={total.decimals}
-                size="small"
-                kind="spend"
-              />
-            </View>
-          ))}
-        </View>
+        <Card>
+          <View style={styles.totals}>
+            {directionTotalsResult.rows.map((total) => (
+              <View key={total.currency} style={styles.totalRow}>
+                <Text style={styles.totalLabel}>
+                  {t("counterparties.theyOweTotal")} · {total.currency}
+                </Text>
+                <Amount
+                  value={total.theyOwe}
+                  currency={total.currency}
+                  decimals={total.decimals}
+                  size="small"
+                  kind="income"
+                />
+              </View>
+            ))}
+            {directionTotalsResult.rows.map((total) => (
+              <View key={`${total.currency}-you`} style={styles.totalRow}>
+                <Text style={styles.totalLabel}>
+                  {t("counterparties.youOweTotal")} · {total.currency}
+                </Text>
+                <Amount
+                  value={total.youOwe}
+                  currency={total.currency}
+                  decimals={total.decimals}
+                  size="small"
+                  kind="spend"
+                />
+              </View>
+            ))}
+          </View>
+        </Card>
         {visibleRows.length === 0 ? (
           <EmptyState
             variant="range"

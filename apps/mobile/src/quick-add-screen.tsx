@@ -19,7 +19,7 @@ import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
@@ -539,22 +539,20 @@ export default function QuickAdd() {
       <GroundPanel>
         {/* No title: the navigation header carries it, and the same
             string twice on one screen reads as two sections. */}
-        <Card>
-          <QuickAddForm
-            accounts={accounts}
-            categories={snapshot.categories}
-            counterparties={snapshot.counterparties}
-            today={today}
-            initialAmount={draft.amount}
-            accountId={deskAccountId}
-            onOpenAccountPicker={handleOpenDeskAccountPicker}
-            categoryId={categoryId}
-            onOpenCategoryPicker={handleOpenCategoryPicker}
-            {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
-            onCancel={handleDeskCancel}
-            onSave={handleDeskSave}
-          />
-        </Card>
+        <QuickAddForm
+          accounts={accounts}
+          categories={snapshot.categories}
+          counterparties={snapshot.counterparties}
+          today={today}
+          initialAmount={draft.amount}
+          accountId={deskAccountId}
+          onOpenAccountPicker={handleOpenDeskAccountPicker}
+          categoryId={categoryId}
+          onOpenCategoryPicker={handleOpenCategoryPicker}
+          {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
+          onCancel={handleDeskCancel}
+          onSave={handleDeskSave}
+        />
         <CategorySheet
           visible={categorySheet.open}
           kind={categorySheet.kind}

@@ -180,52 +180,52 @@ export default function SettingsRatesScreen() {
 
   return (
     <GroundPanel scroll="own">
-      <Card title={t("routes.rates")}>
-        {pivot === undefined ? null : (
-          <Select
-            label={t("fx.pairLabel", { base: pivot.code })}
-            placeholder={t("fx.pairPlaceholder")}
-            options={quoteOptions}
-            value={quote}
-            onChange={handleChangeQuote}
-          />
-        )}
+      {pivot === undefined ? null : (
+        <Select
+          label={t("fx.pairLabel", { base: pivot.code })}
+          placeholder={t("fx.pairPlaceholder")}
+          options={quoteOptions}
+          value={quote}
+          onChange={handleChangeQuote}
+        />
+      )}
 
-        <View style={styles.presetRow}>
-          <Button
-            label={t("fx.range30d")}
-            onPress={handlePreset30}
-            variant={preset === "30d" ? "primary" : "secondary"}
-            size="sm"
-          />
-          <Button
-            label={t("fx.range90d")}
-            onPress={handlePreset90}
-            variant={preset === "90d" ? "primary" : "secondary"}
-            size="sm"
-          />
-          <Button
-            label={t("fx.rangeYear")}
-            onPress={handlePresetYear}
-            variant={preset === "year" ? "primary" : "secondary"}
-            size="sm"
-          />
-        </View>
-        <View style={styles.customRow}>
-          <DateField
-            label={t("fx.rangeFrom")}
-            value={custom.from}
-            onChange={handleChangeCustomFrom}
-            today={today}
-          />
-          <DateField
-            label={t("fx.rangeTo")}
-            value={custom.to}
-            onChange={handleChangeCustomTo}
-            today={today}
-          />
-        </View>
+      <View style={styles.presetRow}>
+        <Button
+          label={t("fx.range30d")}
+          onPress={handlePreset30}
+          variant={preset === "30d" ? "primary" : "secondary"}
+          size="sm"
+        />
+        <Button
+          label={t("fx.range90d")}
+          onPress={handlePreset90}
+          variant={preset === "90d" ? "primary" : "secondary"}
+          size="sm"
+        />
+        <Button
+          label={t("fx.rangeYear")}
+          onPress={handlePresetYear}
+          variant={preset === "year" ? "primary" : "secondary"}
+          size="sm"
+        />
+      </View>
+      <View style={styles.customRow}>
+        <DateField
+          label={t("fx.rangeFrom")}
+          value={custom.from}
+          onChange={handleChangeCustomFrom}
+          today={today}
+        />
+        <DateField
+          label={t("fx.rangeTo")}
+          value={custom.to}
+          onChange={handleChangeCustomTo}
+          today={today}
+        />
+      </View>
 
+      <Card>
         {quote === null || range === null || pivot === undefined ? (
           <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
         ) : (
@@ -238,38 +238,38 @@ export default function SettingsRatesScreen() {
             onSelectRow={handleSelectRow}
           />
         )}
-
-        <View style={styles.actionsRow}>
-          <Button
-            label={t("fx.setRange")}
-            onPress={handleOpenRangeEditor}
-            variant="secondary"
-            disabled={quote === null || range === null}
-          />
-          <Button
-            label={t("fx.clearManual")}
-            onPress={handleClearManual}
-            variant="ghost"
-            disabled={quote === null || range === null}
-          />
-        </View>
-
-        {editorOpen && quote !== null && pivot !== undefined ? (
-          <RateEditor
-            base={pivot.code}
-            quote={quote}
-            from={editorRange.from}
-            to={editorRange.to}
-            rate={rate}
-            onRateChange={handleChangeRate}
-            existingRows={editorRows}
-            onSubmit={handleSubmitEditor}
-            onCancel={handleCloseEditor}
-          />
-        ) : null}
-
-        <Text style={styles.rerateNote}>{t("fx.rerateNotOffered")}</Text>
       </Card>
+
+      <View style={styles.actionsRow}>
+        <Button
+          label={t("fx.setRange")}
+          onPress={handleOpenRangeEditor}
+          variant="secondary"
+          disabled={quote === null || range === null}
+        />
+        <Button
+          label={t("fx.clearManual")}
+          onPress={handleClearManual}
+          variant="ghost"
+          disabled={quote === null || range === null}
+        />
+      </View>
+
+      {editorOpen && quote !== null && pivot !== undefined ? (
+        <RateEditor
+          base={pivot.code}
+          quote={quote}
+          from={editorRange.from}
+          to={editorRange.to}
+          rate={rate}
+          onRateChange={handleChangeRate}
+          existingRows={editorRows}
+          onSubmit={handleSubmitEditor}
+          onCancel={handleCloseEditor}
+        />
+      ) : null}
+
+      <Text style={styles.rerateNote}>{t("fx.rerateNotOffered")}</Text>
 
       <Card title={t("fx.coverageTitle")}>
         {shownCoverage.map((row) => (

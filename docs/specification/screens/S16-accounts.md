@@ -30,26 +30,32 @@ would make you learn a second habit for the screen you open least.
 ```
   🔍  Search accounts
 
-  BANK                             8 420,10 zł
-   BANK-A · PLN                    6 200,00 zł
-   BANK-A/BIZ · PLN        [BIZ]   2 220,10 zł
-  CASH                             1 040,00 zł
-   Cash · PLN                        840,00 zł
-   Cash · BYN              62,40 Br · 0,3121
-                                     19,48 zł
-  CLEARING                           340,00 zł  ⚠
-   Clearing · PLN                    340,00 zł
-  ─────────────────────────────────────────────
-  SHARED                           6 460,40 zł
-   Household · USD          1 800,00 $ · 3,59
-                                   6 460,40 zł
+  ┌ BANK                              8 420,10 zł ┐
+  │  BANK-A · PLN                     6 200,00 zł │
+  │  BANK-A/BIZ · PLN         [BIZ]   2 220,10 zł │
+  └─────────────────────────────────────────────────┘
+  ┌ CASH                              1 040,00 zł ┐
+  │  Cash · PLN                         840,00 zł │
+  │  Cash · BYN              62,40 Br · 0,3121    │
+  │                                     19,48 zł  │
+  └─────────────────────────────────────────────────┘
+  ┌ CLEARING                            340,00 zł ⚠┐
+  │  Clearing · PLN                    340,00 zł  │
+  └─────────────────────────────────────────────────┘
+  ┌ SHARED                            6 460,40 zł ┐
+  │  Household · USD          1 800,00 $ · 3,59   │
+  │                                   6 460,40 zł │
+  └─────────────────────────────────────────────────┘
 ```
 
-**`SharedGroup` is visually distinct but not diminished** — separated by a rule,
-subtotalled on its own, and rendered at the same weight. A jointly-owned account
-is an ordinary account that belongs to a different total (§6.7), and **a negative
-balance here gets no warning treatment**, because a shared account being
-overdrawn is a real fact.
+**`SharedGroup` is visually distinct but not diminished** — its own card,
+subtotalled on its own, and rendered at the same weight as every kind group. A
+jointly-owned account is an ordinary account that belongs to a different total
+(§6.7), and **a negative balance here gets no warning treatment**, because a
+shared account being overdrawn is a real fact.
+
+Each group — kind or `SharedGroup` — is a hero card of per-group balances; the
+search field above the groups stays on the ground.
 
 A clearing account with a non-zero balance carries an amber marker — that is the
 invariant this screen exists to surface (§6.4).
@@ -65,6 +71,7 @@ otherwise buried in an editor.
 
 | Component | Notes |
 |---|---|
+| `Card` | One per kind group and per `SharedGroup` — the group header is the card's title, balance rows sit inside |
 | `SearchField` | Name, kind, currency. Same placement as S06, S10, S12 |
 | `BalanceRow` | Account · kind · `FxAmount` for foreign |
 | `SharedGroup` | Own subtotal, distinct, not diminished |

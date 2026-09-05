@@ -1,133 +1,85 @@
 /**
- * `GroundPanel` — `design-system/05` §5.1. The page scroller for every
- * screen in `apps/mobile/src`.
+ * `Card` — `design-system/05` §5.1: groups related rows or holds one hero
+ * figure. Titles, single fields, chip rows, hints and buttons sit on the
+ * ground, never inside one — the rule
+ * `docs/specification/design-system/05-composites.md` states beside the
+ * material, and `tests/architecture.test.ts` enforces against every screen.
  *
- * **`TallContent`, over a fixed 390×600 frame.** The story canvas would
- * otherwise be exactly as tall as its own content, which is never taller
- * than the viewport it is measured against — the same reasoning
- * `FloatingAdd`'s own stories state for their fixed frame. Forty rows
- * overflow 600px comfortably; the `play` function scrolls to the end and the
- * baseline is captured there, so a regression that pins the panel to the
- * viewport (H1 — `flex: 1` on the panel's sole child, which gives it a
- * `flexBasis` of `0` and defeats both the scroll and the bottom clearance)
- * shows up as a screenshot that never moved, not only as a property nothing
- * looks at.
- *
- * **The geometry only exists in a real browser, but the throw is not
- * optional there.** jsdom has no layout, so `scrollHeight`/`clientHeight`
- * both read `0` and the play function returns early rather than asserting
- * `0 <= 0` and calling that coverage — the same split `stories.test.tsx`
- * states for colour contrast. In the visual suite's own Chromium, that same
- * `scrollHeight <= clientHeight` reading would mean the panel never scrolled
- * at all, and the function throws instead of returning. `visual/stories.spec.ts`
- * fails the story's own test on any play throw — a baseline alone was never
- * proof this passed, only a picture that happened to be taken after it did.
+ * The two stories below are the two shapes the rule allows. Nothing else is
+ * a card: not a whole screen, not a single field.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
+import { Amount } from "../fx/amount";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { hairline, space } from "../tokens.ts";
-import { GroundPanel } from "./card";
-
-const ROWS = Array.from({ length: 40 }, (_, index) => index);
-const LAST_ROW_TEST_ID = "tall-content-last-row";
-/** `space.x5` (22), the panel's own clearance with no device inset in a story — a little headroom for sub-pixel rounding. */
-const CLEARANCE_FLOOR = 18;
-
-function TallContent() {
-  const styles = useStyles();
-  return (
-    <GroundPanel>
-      {ROWS.map((row) => (
-        <Text
-          key={row}
-          {...(row === ROWS.length - 1 ? { testID: LAST_ROW_TEST_ID } : {})}
-          style={styles.row}
-        >
-          Row {row + 1}
-        </Text>
-      ))}
-    </GroundPanel>
-  );
-}
-
-function Frame({ children }: { children: React.ReactNode }) {
-  const styles = useStyles();
-  return <View style={styles.frame}>{children}</View>;
-}
+import { space } from "../tokens.ts";
+import { Card } from "./card";
 
 const meta = {
-  title: "Shell/GroundPanel",
-  component: TallContent,
-  decorators: [withFrame],
-  parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof TallContent>;
+  title: "Shell/Card",
+  component: Card,
+  args: { children: null },
+} satisfies Meta<typeof Card>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const TallContentStory: Story = {
-  name: "TallContent",
-  play: async ({ canvasElement }) => {
-    const scroll = canvasElement.querySelector('[data-testid="ground-panel-scroll"]');
-    if (!(scroll instanceof HTMLElement)) {
-      throw new Error("card.stories.tsx: no GroundPanel scroll container to scroll");
-    }
+const ROWS = [
+  { label: "Coffee · Eating out", value: "-48.90" },
+  { label: "Salary · Employment", value: "9200.00" },
+  { label: "Rewe · Groceries", value: "-251.04" },
+] as const;
 
-    // jsdom has no layout — `scrollHeight`/`clientHeight` both read `0`
-    // there, so there is nothing to scroll and nothing to assert. In a real
-    // browser (the visual suite) that same condition is the regression
-    // itself and must throw, never quietly return.
-    if (scroll.scrollHeight <= scroll.clientHeight) {
-      if (navigator.userAgent.includes("jsdom")) return;
-      throw new Error(
-        "card.stories.tsx: the panel did not scroll — scrollHeight <= clientHeight " +
-          "in a real browser",
-      );
-    }
-
-    scroll.scrollTop = scroll.scrollHeight;
-
-    const lastRow = canvasElement.querySelector(`[data-testid="${LAST_ROW_TEST_ID}"]`);
-    if (!(lastRow instanceof HTMLElement)) {
-      throw new Error("card.stories.tsx: no last row to assert against");
-    }
-
-    const viewport = scroll.getBoundingClientRect();
-    const row = lastRow.getBoundingClientRect();
-
-    if (row.bottom > viewport.bottom) {
-      throw new Error(
-        `card.stories.tsx: the last row's bottom (${row.bottom}) sits below the ` +
-          `scrolled viewport's own bottom (${viewport.bottom}) — the panel did not ` +
-          "reach the end of its content",
-      );
-    }
-    if (viewport.bottom - row.bottom < CLEARANCE_FLOOR) {
-      throw new Error(
-        `card.stories.tsx: only ${viewport.bottom - row.bottom}px separates the last ` +
-          `row from the viewport's bottom edge — expected at least the panel's own ` +
-          `clearance (${CLEARANCE_FLOOR}px)`,
-      );
-    }
-  },
+/**
+ * A titled group of related rows — `today-screen.tsx`'s Recent, `S16`'s
+ * per-kind account groups. `title` and `action` are the header; the rows are
+ * the body.
+ */
+export const GroupedRows: Story = {
+  render: GroupedRowsDemo,
 };
 
-function withFrame(Story: React.ComponentType) {
+function GroupedRowsDemo() {
+  const styles = useStyles();
   return (
-    <Frame>
-      <Story />
-    </Frame>
+    <Card title="Recent">
+      {ROWS.map((row) => (
+        <View key={row.label} style={styles.row}>
+          <Text style={styles.rowLabel}>{row.label}</Text>
+          <Amount value={money.toMoney(row.value)} currency="PLN" decimals={2} size="small" />
+        </View>
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * One hero figure and nothing else — `debt-screen.tsx`'s direction totals,
+ * `ledger-screen.tsx`'s running total. Never a form, never a whole screen: a
+ * card this shape holds exactly the number the screen is about.
+ */
+export const HeroFigure: Story = {
+  render: HeroFigureDemo,
+};
+
+function HeroFigureDemo() {
+  const styles = useStyles();
+  return (
+    <Card>
+      <View style={styles.hero}>
+        <Text style={styles.heroLabel}>they owe you</Text>
+        <Amount value={money.toMoney("1240.60")} currency="PLN" decimals={2} size="large" />
+      </View>
+    </Card>
   );
 }
 
 const useStyles = makeStyles((theme) => ({
-  frame: { width: 390, height: 600, backgroundColor: theme.ground },
-  row: {
-    paddingVertical: space.md,
-    borderBottomWidth: hairline.width,
-    borderBottomColor: theme.hairline,
-    color: theme.text,
-  },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  rowLabel: { color: theme.text, ...text.ui("body") },
+  hero: { gap: space.xs },
+  heroLabel: { color: theme.textMuted, ...text.ui("bodySm") },
 }));

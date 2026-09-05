@@ -408,6 +408,178 @@ describe("GroundPanel is the page scroller", () => {
   });
 });
 
+describe("a card groups rows or holds a figure — never a whole screen", () => {
+  /**
+   * `docs/specification/design-system/05-composites.md`'s `Card` row: a card
+   * groups related rows or holds one hero figure. Titles, single fields, chip
+   * rows, hints and buttons sit on the ground. A `<GroundPanel>` whose only
+   * *real* content is a single `<Card>` is a screen wrapped in one big card —
+   * exactly the shape the Hearth audit found on `account-editor-screen.tsx`,
+   * `counterparty-editor-screen.tsx`, the desk branch of `quick-add-screen.tsx`,
+   * and `settings-currencies-screen.tsx` (its pivot block, still inside the
+   * currency-list card). This check was run against those files, unconverted,
+   * to confirm it actually fires (four offenders) before they were changed to
+   * make it pass.
+   */
+  function groundPanelBodies(text: string): string[] {
+    const bodies: string[] = [];
+    const re = /<GroundPanel\b[^>]*>([\s\S]*?)<\/GroundPanel>/g;
+    for (const m of text.matchAll(re)) bodies.push(m[1] ?? "");
+    return bodies;
+  }
+
+  /** Strip JS/JSX comments so a commented-out sibling doesn't count as one. */
+  function stripComments(text: string): string {
+    return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  }
+
+  type Child = { name: string; raw: string };
+
+  /**
+   * Splits `jsx` into its top-level children — either a `{…}` expression
+   * (brace-depth aware, so a prop's own `{}` inside it doesn't end it early)
+   * or a tag, whose matching close is found by depth-counting further tags of
+   * the *same* name (a self-closing tag never nests). Not a real JSX parser —
+   * good enough for the shapes this repository's screens actually use, the
+   * same trade-off `importsOf` above makes for imports.
+   */
+  function topLevelChildren(jsx: string): Child[] {
+    const src = stripComments(jsx);
+    const children: Child[] = [];
+    let i = 0;
+    const n = src.length;
+    while (i < n) {
+      if (/\s/.test(src[i] ?? "")) {
+        i++;
+        continue;
+      }
+      if (src[i] === "{") {
+        let depth = 1;
+        let j = i + 1;
+        while (j < n && depth > 0) {
+          if (src[j] === "{") depth++;
+          else if (src[j] === "}") depth--;
+          j++;
+        }
+        children.push({ name: "{expr}", raw: src.slice(i, j) });
+        i = j;
+        continue;
+      }
+      if (src[i] === "<") {
+        const open = /^<([A-Za-z][\w.]*)\b[^>]*?(\/?)>/.exec(src.slice(i));
+        if (!open) {
+          i++;
+          continue;
+        }
+        const name = open[1] ?? "";
+        if (open[2] === "/") {
+          children.push({ name, raw: open[0] });
+          i += open[0].length;
+          continue;
+        }
+        let depth = 1;
+        const tag = new RegExp(`<\\/?${name}\\b[^>]*?(\\/?)>`, "g");
+        tag.lastIndex = i + open[0].length;
+        let end = -1;
+        for (let m = tag.exec(src); m !== null; m = tag.exec(src)) {
+          if (m[0].startsWith("</")) depth--;
+          else if (m[1] !== "/") depth++;
+          if (depth === 0) {
+            end = tag.lastIndex;
+            break;
+          }
+        }
+        if (end < 0) end = n; // unbalanced — consume the rest rather than loop forever
+        children.push({ name, raw: src.slice(i, end) });
+        i = end;
+        continue;
+      }
+      i++; // a stray text node
+    }
+    return children;
+  }
+
+  /** `Sheet`/`Picker`/`Dialog` suffixed components, and `Toast` — overlays, not page content. */
+  const isOverlayName = (name: string) => /(?:Sheet|Picker|Dialog)$/.test(name) || name === "Toast";
+
+  /**
+   * An inert `{…}` expression — a `{/* JSX comment *\/}` (comments are
+   * stripped by `topLevelChildren` already, but the brace pair they sat in
+   * survives, and an empty brace pair is not a sibling), or a
+   * `{cond ? <Toast/> : null}`-shaped one referencing only overlay components.
+   */
+  function isOverlayExpr(raw: string): boolean {
+    const inner = stripComments(raw.slice(1, -1)).trim();
+    if (inner.length === 0) return true;
+    const names = [...inner.matchAll(/<([A-Za-z][\w.]*)/g)].map((m) => m[1] ?? "");
+    return names.length > 0 && names.every(isOverlayName);
+  }
+
+  /** Real page content — an overlay sibling (bare or conditionally rendered) doesn't count. */
+  function isRealContent(child: Child): boolean {
+    if (child.name === "{expr}") return !isOverlayExpr(child.raw);
+    return !isOverlayName(child.name);
+  }
+
+  /**
+   * A loading placeholder — every leaf is `Skeleton`, nested only inside
+   * `View`s. `counterparty-detail-screen.tsx`'s loading state mirrors the
+   * hero card its populated state resolves to (hero figure + rows, no
+   * buttons); the mirror is not a second design decision to flag.
+   */
+  function isSkeletonMirror(raw: string): boolean {
+    const open = /^<([A-Za-z][\w.]*)\b[^>]*?(\/?)>/.exec(raw);
+    if (!open) return false;
+    const name = open[1] ?? "";
+    if (name === "Skeleton") return true;
+    if (name !== "View" || open[2] === "/") return false;
+    const inner = raw.slice(open[0].length, raw.length - `</${name}>`.length);
+    const kids = topLevelChildren(inner).filter((k) => k.name !== "{expr}");
+    return kids.length > 0 && kids.every((k) => isSkeletonMirror(k.raw));
+  }
+
+  /** A `<Card>` whose entire inner content is a skeleton mirror — see above. */
+  function isSkeletonCard(cardRaw: string): boolean {
+    const open = /^<Card\b[^>]*?(\/?)>/.exec(cardRaw);
+    if (!open || open[1] === "/") return false;
+    const inner = cardRaw.slice(open[0].length, cardRaw.length - "</Card>".length);
+    const kids = topLevelChildren(inner).filter((k) => k.name !== "{expr}");
+    return kids.length > 0 && kids.every((k) => isSkeletonMirror(k.raw));
+  }
+
+  /**
+   * `settings-screen.tsx` is the one deliberate exception (Table 1 of the
+   * Hearth audit calls it "explicitly blessed"): `(tabs)/_layout.tsx` hides
+   * the nav header for every tab root, so this tab's entire content is a
+   * settings-style list of buttons and the Card's `title` is the only place
+   * the screen name renders. Every other screen that reduces to one bare
+   * Card is the whole-screen-in-a-box this rule exists to ban.
+   */
+  const DOCUMENTED_EXCEPTIONS = new Set(["apps/mobile/src/settings-screen.tsx"]);
+
+  it("no screen's GroundPanel wraps the whole screen in one Card", () => {
+    const files = screenFiles();
+    expect(files.length, "screen files found").toBeGreaterThan(5);
+    const offenders: string[] = [];
+    for (const file of files) {
+      if (DOCUMENTED_EXCEPTIONS.has(rel(file))) continue;
+      const text = readFileSync(file, "utf8");
+      for (const body of groundPanelBodies(text)) {
+        const content = topLevelChildren(body).filter(isRealContent);
+        const only = content.length === 1 ? content[0] : undefined;
+        if (only && only.name === "Card" && !isSkeletonCard(only.raw)) {
+          offenders.push(rel(file));
+          break;
+        }
+      }
+    }
+    expect(
+      offenders,
+      "a Card groups related rows or holds one hero figure, never a whole screen — drop the wrapping Card and render its content on the ground",
+    ).toEqual([]);
+  });
+});
+
 /* ── §6 · Design conformance, at repository scope ────────────────────────── */
 
 describe("design conformance covers every ui folder", () => {

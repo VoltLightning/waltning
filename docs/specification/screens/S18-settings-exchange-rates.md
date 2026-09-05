@@ -28,10 +28,15 @@ Pair selector and date range above a `RateTable`. `SyncLog` beneath, carrying
 **coverage per currency** rather than only events. Web places them side by side;
 mobile stacks.
 
+The pair selector, presets, date range and action buttons sit on the ground;
+`RateTable` is the one grouped-rows card, and the per-currency coverage list is
+a second, separate card.
+
 ## 4. Components
 
 | Component | Notes |
 |---|---|
+| `Card` | Two — `RateTable` alone, and the per-currency coverage list. Everything else (pair select, presets, date range, action buttons, `RateEditor`) sits on the ground |
 | `RateTable` | Virtualized. Gaps render as **explicit empty rows**, never as absence |
 | `RateEditor` | Single date **or a range**; states what it will overwrite before writing |
 | `SyncLog` | `succeeded` · `failed` · **`rate_limited`** — the third is distinct, because retrying a rate limit is futile |

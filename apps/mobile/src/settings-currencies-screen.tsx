@@ -405,29 +405,29 @@ export default function SettingsCurrenciesScreen() {
             onViewRates={handleViewRates}
           />
         ))}
-
-        {pivotRow ? (
-          <View style={styles.pivotRow}>
-            <Text style={styles.pivotLabel}>{t("fx.pivotLabel", { code: pivotRow.code })}</Text>
-            {otherRows.length > 0 ? (
-              <Select
-                label={t("fx.pivotTarget")}
-                placeholder={t("fx.pivotTargetPlaceholder")}
-                options={pivotTargetOptions}
-                value={selectedPivotTarget}
-                onChange={handleChangePivotTarget}
-              />
-            ) : null}
-            <Button
-              label={t("fx.changePivot")}
-              onPress={handleOpenPivotConfirm}
-              variant="ghost"
-              size="sm"
-              disabled={selectedPivotTarget === null}
-            />
-          </View>
-        ) : null}
       </Card>
+
+      {pivotRow ? (
+        <View style={styles.pivotRow}>
+          <Text style={styles.pivotLabel}>{t("fx.pivotLabel", { code: pivotRow.code })}</Text>
+          {otherRows.length > 0 ? (
+            <Select
+              label={t("fx.pivotTarget")}
+              placeholder={t("fx.pivotTargetPlaceholder")}
+              options={pivotTargetOptions}
+              value={selectedPivotTarget}
+              onChange={handleChangePivotTarget}
+            />
+          ) : null}
+          <Button
+            label={t("fx.changePivot")}
+            onPress={handleOpenPivotConfirm}
+            variant="ghost"
+            size="sm"
+            disabled={selectedPivotTarget === null}
+          />
+        </View>
+      ) : null}
 
       <BottomSheet visible={addOpen} title={t("fx.addCurrency")} onDismiss={handleCloseAdd}>
         <TextField
