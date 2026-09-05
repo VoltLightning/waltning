@@ -19,11 +19,16 @@
  *
  * 1. **Every key names a real step**, and the chain refuses to be built when
  *    one does not — a fatal error at import, not a silent no-op.
- * 2. **No row is left at the column's default sentinel** once a step with a
- *    hook has run, while the column it derives from says otherwise. `''` in
- *    `name_folded` beside a non-empty `name` is exactly the state
- *    `counterparties_name_uq` would then index every such row into one
- *    another, so this is the constraint's precondition, not a nicety.
+ * 2. **Every filled row holds exactly the value the write path would have
+ *    written**, not merely something other than the column's default. "Not
+ *    the sentinel" passes on a backfill that fills every row with the same
+ *    wrong string; what the index over `name_folded` actually needs is that a
+ *    migrated row and the same name captured on the next screen agree, which
+ *    is `fold(name.trim())` — `create-counterparty.executor.ts`'s own
+ *    expression, trim included, since `fold()` does not trim on its own. A
+ *    row still at `''` beside a non-empty `name` is the state
+ *    `counterparties_name_uq` would index every such row into one another,
+ *    so this is the constraint's precondition, not a nicety.
  * 3. **A hook cannot be registered for a tag that does not exist** — the
  *    other direction of (1), proven by constructing one rather than by
  *    reading the code that would refuse it.
@@ -32,6 +37,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fold } from "@waltning/core/capture/names";
 import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -67,6 +73,15 @@ const FILLED_COLUMNS = [
     sentinel: "",
     /** The column the fill derives from — empty here means there was nothing to derive. */
     source: "name",
+    /**
+     * What the write path would have written for that source, exactly — the
+     * expression `create-counterparty.executor.ts` and
+     * `update-counterparty.executor.ts` both use. A backfill that agreed with
+     * the sentinel check and disagreed with this would give a migrated row a
+     * different value than the same name captured a screen later, and the
+     * unique index built over the column is precisely where that surfaces.
+     */
+    expected: (source: string) => fold(source.trim()),
   },
 ] as const;
 
@@ -122,7 +137,7 @@ describe("every backfill names a step that exists", () => {
   });
 });
 
-describe("a hook leaves no row at the column's default", () => {
+describe("a hook fills every row with the value the write path would have written", () => {
   /**
    * The real chain, run over a database seeded at the version just before the
    * step with the hook — the shape an installed app is in when the update
@@ -130,8 +145,8 @@ describe("a hook leaves no row at the column's default", () => {
    * under test is that the hook is *reached*.
    */
   it.each(FILLED_COLUMNS)(
-    "$tag fills $table.$column, leaving no row at its default",
-    ({ tag, table, column, sentinel, source }) => {
+    "$tag fills $table.$column exactly, on every row, archived included",
+    ({ tag, table, column, sentinel, source, expected }) => {
       const stepIndex = REPLICA_STEPS.findIndex((step) => step.tag === tag);
       expect(stepIndex, `${tag} is a generated replica file`).toBeGreaterThanOrEqual(0);
 
@@ -149,18 +164,31 @@ describe("a hook leaves no row at the column's default", () => {
         migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
       });
 
-      // Three names that must each come out different from the sentinel, and
-      // one already-archived row: the fill covers every row, not the live ones.
+      // Four names the fill has to get exactly right, not merely move off the
+      // sentinel: an ASCII one, one whose fold needs more than SQLite's
+      // ASCII-only `lower()`, one in decomposed form, and one carrying
+      // surrounding whitespace — `fold()` does not trim, so an untrimmed
+      // backfill and the trimmed value the write path stores differ by
+      // exactly the spaces, which is invisible to "not the sentinel".
       const when = 1_767_225_600;
       for (const [id, name] of [
         ["cp-a", "Anna Placeholder"],
         ["cp-b", "Łukasz Placeholder"],
         ["cp-c", "Józef Placeholder".normalize("NFD")],
+        ["cp-d", "  Marek Placeholder  "],
       ] as const) {
         ledger.replica.db.run(
           sql`insert into "counterparties" ("id", "name", "created_at", "updated_at") values (${id}, ${name}, ${when}, ${when})`,
         );
       }
+
+      // And one already archived, because the fill covers every row rather
+      // than the live ones: `counterparties_name_uq` is partial, so an
+      // archived row is outside the index — and still needs a real value, or
+      // unarchiving it later would restore a row the index cannot accept.
+      ledger.replica.db.run(
+        sql`insert into "counterparties" ("id", "name", "archived", "created_at", "updated_at") values ('cp-archived', 'Archived Placeholder', 1, ${when}, ${when})`,
+      );
 
       migrateReplica(ledger.replica, { fs: noopFs });
 
@@ -169,7 +197,7 @@ describe("a hook leaves no row at the column's default", () => {
       );
       ledger.close();
 
-      expect(rows.length, "rows to check").toBeGreaterThan(0);
+      expect(rows.length, "rows to check").toBe(5);
       const stranded = rows.filter(
         (row) => row.filled === sentinel && (row.source ?? "").trim() !== "",
       );
@@ -177,6 +205,14 @@ describe("a hook leaves no row at the column's default", () => {
         stranded,
         `${table}.${column} rows still at ${JSON.stringify(sentinel)} with a non-empty ${source}`,
       ).toEqual([]);
+
+      // The value itself, row by row — the property the sentinel check cannot
+      // see. Every row, archived included.
+      for (const row of rows) {
+        expect(row.filled, `${table}.${column} for ${JSON.stringify(row.source)}`).toBe(
+          expected(row.source ?? ""),
+        );
+      }
     },
   );
 });

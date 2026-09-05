@@ -9,15 +9,19 @@
  * only provably the same schema if something inspects them and says so.
  *
  * **Normalisation exists because SQLite itself is not byte-stable about a
- * table it did not just create.** A column-add migration (`ALTER TABLE …
- * RENAME TO __new_x`, then rebuild) leaves `sqlite_master.sql` carrying a
- * `__new_` prefix and whatever quoting style the rebuild used, even though
- * the resulting table is identical to one `CREATE TABLE`d fresh. This chain
- * has no such migration yet — every fixture here is a version-1 database
- * that never went through a rebuild — but the normalisation is written now,
- * against the day one exists, rather than the day the comparison starts
- * failing for a reason that has nothing to do with the schema actually
- * differing.
+ * table it did not just create.** A rebuild (`ALTER TABLE … RENAME TO
+ * __new_x`, then swap) leaves `sqlite_master.sql` carrying a `__new_` prefix
+ * inside the `CHECK`s that self-qualify their columns, and whatever quoting
+ * style the rebuild used, even though the resulting table is identical to one
+ * `CREATE TABLE`d fresh.
+ *
+ * **That is not hypothetical here: `0008_schema` is exactly such a rebuild**,
+ * copy-rename-drop over `transactions` to add
+ * `transactions_debt_amount_requires_currency`, and `replica-v8` is the
+ * fixture that crosses it. So the upgraded database's `sqlite_master` and a
+ * fresh install's differ in text and not in meaning, on that one table, on
+ * every run — which is what this normalisation is for, and what it is
+ * measured against.
  */
 
 import type Database from "better-sqlite3";

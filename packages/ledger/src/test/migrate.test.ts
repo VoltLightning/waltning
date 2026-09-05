@@ -24,11 +24,14 @@ import Database from "better-sqlite3";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stepsIn } from "../../tools/steps.ts";
 import { REPLICA_STEPS } from "../ddl.ts";
 import {
   advanceAppliedSeq,
   COPY_SUFFIX,
+  checksumOf,
   type LedgerFs,
+  MIGRATION_JOURNAL,
   type Migration,
   migrateOutbox,
   migrateReplica,
@@ -240,6 +243,24 @@ function insertCounterparty(
 }
 
 /**
+ * The message a call refuses with, or a failure if it did not refuse at all.
+ *
+ * `toThrow(/…/)` proves one substring; several of the journal's refusals are
+ * judged on *what else* they do not say (the duplicate-key error they used to
+ * bury the cause under) and on being identical twice running, and neither is
+ * a matcher.
+ */
+function refusalMessage(attempt: () => unknown): string {
+  try {
+    attempt();
+  } catch (error) {
+    // `catch` bindings are `unknown` because the language gives no choice.
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("expected a refusal, and nothing was thrown");
+}
+
+/**
  * One more version appended to `base`, which either creates a marker table or
  * dies trying — for proving what a failed step does and does not leave
  * behind, over the real chain sliced to wherever the test needs it rather
@@ -247,10 +268,16 @@ function insertCounterparty(
  */
 function withExtraStep(base: readonly Migration[], mode: "creates" | "throws"): Migration[] {
   const nextVersion = (base.at(-1)?.version ?? 0) + 1;
+  // A tag whose own four-digit prefix names its version, because `checkChain`
+  // insists on that for every chain, hand-built ones included — a step the
+  // journal keys on has to be identified the same way a generated one is.
+  const tag = `${String(nextVersion - 1).padStart(4, "0")}_extra`;
   return [
     ...base,
     {
       version: nextVersion,
+      tag,
+      checksum: checksumOf([`extra step that ${mode}`]),
       up: (tx) => {
         if (mode === "throws") throw new Error("killed mid-migration");
         tx.run(sql.raw('create table "v_extra_marker" ("a" integer)'));
@@ -275,9 +302,16 @@ describe("a fresh database", () => {
     );
 
     const names = inspect(join(dir, "fresh-replica.db"), tableNames);
-    expect(names, "the fifteen shared tables plus the replica's meta store").toHaveLength(16);
+    expect(
+      names,
+      "the fifteen shared tables, the replica's meta store, and the migrator's own journal",
+    ).toHaveLength(17);
     expect(names).toContain("transactions");
     expect(names).toContain("local_meta");
+    // Created by the migrator itself, not by any generated step — so it is on
+    // a fresh install too, and it is what every later launch reads to decide
+    // which steps have run (`MIGRATION_JOURNAL`).
+    expect(names).toContain(MIGRATION_JOURNAL);
     expect(names, "the outbox is the other file's table").not.toContain("outbox");
 
     expect(inspect(join(dir, "fresh-replica.db"), userVersion)).toBe(REPLICA_MIGRATIONS.length);
@@ -289,7 +323,11 @@ describe("a fresh database", () => {
     ledger.close();
 
     expect(result.applied).toEqual(OUTBOX_MIGRATIONS.map((m) => m.version));
-    expect(inspect(join(dir, "fresh-outbox.db"), tableNames)).toEqual(["outbox", "outbox_seq"]);
+    expect(inspect(join(dir, "fresh-outbox.db"), tableNames)).toEqual([
+      MIGRATION_JOURNAL,
+      "outbox",
+      "outbox_seq",
+    ]);
     expect(inspect(join(dir, "fresh-outbox.db"), userVersion)).toBe(OUTBOX_MIGRATIONS.length);
   });
 
@@ -338,15 +376,27 @@ describe("a migration that throws leaves nothing behind", () => {
     migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
     seedEntry(ledger, "e-1");
 
-    expect(() =>
-      migrateOutbox(ledger.outbox, {
-        fs: realFs,
-        migrations: withExtraStep(OUTBOX_MIGRATIONS, "throws"),
-      }),
-    ).toThrow("killed mid-migration");
-    ledger.close();
+    const failing = withExtraStep(OUTBOX_MIGRATIONS, "throws");
+    expect(() => migrateOutbox(ledger.outbox, { fs: realFs, migrations: failing })).toThrow(
+      "killed mid-migration",
+    );
 
     const path = join(dir, "rollback-outbox.db");
+
+    // H2 — and the copy went with it. The rollback was clean, so the file on
+    // disk is byte-for-byte what the copy was taken from, and keeping the copy
+    // would make the *next* launch report `refuseStaleCopy` rather than the
+    // reason the migration failed.
+    expect(existsSync(path + COPY_SUFFIX), "no copy is left behind by a clean rollback").toBe(
+      false,
+    );
+    expect(
+      () => migrateOutbox(ledger.outbox, { fs: realFs, migrations: failing }),
+      "so the second launch gives the same cause, not a leftover copy",
+    ).toThrow("killed mid-migration");
+
+    ledger.close();
+
     expect(
       inspect(path, userVersion),
       "still at the version before the failing step — the bump is inside the transaction",
@@ -369,15 +419,23 @@ describe("a migration that throws leaves nothing behind", () => {
     migrateReplica(ledger.replica, { fs: realFs, migrations: atV3 }).copy?.release();
     seedTransaction(ledger, "txn-1");
 
-    expect(() =>
-      migrateReplica(ledger.replica, {
-        fs: realFs,
-        migrations: withExtraStep(atV3, "throws"),
-      }),
-    ).toThrow("killed mid-migration");
-    ledger.close();
+    const failing = withExtraStep(atV3, "throws");
+    expect(() => migrateReplica(ledger.replica, { fs: realFs, migrations: failing })).toThrow(
+      "killed mid-migration",
+    );
 
     const path = join(dir, "rollback-replica-replica.db");
+
+    // H2, on the file where it costs the most: a replica that cannot migrate
+    // is the whole ledger, and a refusal naming a leftover copy tells its
+    // owner nothing about why.
+    expect(existsSync(path + COPY_SUFFIX)).toBe(false);
+    expect(() => migrateReplica(ledger.replica, { fs: realFs, migrations: failing })).toThrow(
+      "killed mid-migration",
+    );
+
+    ledger.close();
+
     expect(inspect(path, userVersion)).toBe(3);
     expect(
       inspect(path, transactionCount),
@@ -420,8 +478,18 @@ describe("the outbox is never dropped", () => {
     // migration count, so it does not need the real chain at all.
     ledger.outbox.db.run(sql.raw("pragma user_version = 500"));
     const chain: Migration[] = [
-      { version: 1, up: (tx) => tx.run(sql.raw('create table "v1" ("a" integer)')) },
-      { version: 501, up: (tx) => tx.run(sql.raw('create table "v501" ("a" integer)')) },
+      {
+        version: 1,
+        tag: "0000_v1",
+        checksum: checksumOf(['create table "v1" ("a" integer)']),
+        up: (tx) => tx.run(sql.raw('create table "v1" ("a" integer)')),
+      },
+      {
+        version: 501,
+        tag: "0500_v501",
+        checksum: checksumOf(['create table "v501" ("a" integer)']),
+        up: (tx) => tx.run(sql.raw('create table "v501" ("a" integer)')),
+      },
     ];
 
     expect(() => migrateOutbox(ledger.outbox, { fs: realFs, migrations: chain })).toThrow(
@@ -692,6 +760,169 @@ describe("`user_version` records which step ran, not how many", () => {
   });
 });
 
+/* ── the applied-steps journal ────────────────────────────── */
+
+/**
+ * **A number is not an identity, and neither is a filename.**
+ *
+ * `user_version` says how far a chain got. It does not say *which* chain, and
+ * this repository has already shipped one where the answer differs: the build
+ * on `main` before this branch had a single-version replica chain, so a
+ * database it wrote sits at `user_version = 1` with every table already
+ * present. Read against the chain here, `1` means "only `0000_schema` has
+ * run" — so the migrator ran `0001_database_objects` over a database that
+ * already had it, died on `local_meta`'s duplicate primary key, and left the
+ * pre-migration copy behind. Every launch after that reported the copy
+ * (`refuseStaleCopy`) instead of the cause.
+ *
+ * `__ledger_migrations` is what closes it: a row per step, keyed on the tag,
+ * carrying the checksum of the statements that ran. The three properties
+ * below are the three things it makes possible.
+ */
+describe("`__ledger_migrations`, the applied-steps journal", () => {
+  /**
+   * A database in the shape `main`'s build left: every table present, because
+   * every step's statements ran, but `user_version` stamped to that build's
+   * own single-version head and no journal, because that build had none.
+   *
+   * The steps are applied through `up` directly rather than through
+   * `migrateReplica`, which is exactly what makes this the pre-journal shape
+   * — the journal is `runInOneTransaction`'s to write, and nothing here goes
+   * near it.
+   */
+  function seedPreJournalReplica(ledger: Ledger, stampedVersion: number) {
+    for (const migration of REPLICA_MIGRATIONS) migration.up(ledger.replica.db);
+    ledger.replica.db.run(sql.raw(`pragma user_version = ${stampedVersion}`));
+  }
+
+  it("refuses a database written before the journal existed, and repeats the same cause", () => {
+    const ledger = openAt("pre-journal");
+    seedPreJournalReplica(ledger, 1);
+
+    const first = refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }));
+    expect(first).toMatch(new RegExp(MIGRATION_JOURNAL));
+    expect(first, "it names the file to delete, not only the problem").toContain(
+      join(dir, "pre-journal-replica.db"),
+    );
+    // And it is the migrator's own sentence, not the driver's. Without the
+    // journal this ran `0001_database_objects` over a database that already
+    // had every object it creates, and what reached the person holding the
+    // phone was `Failed to run the query 'CREATE TABLE …'` — a report of the
+    // symptom, from two layers below the decision that caused it.
+    expect(first).not.toMatch(/Failed to run the query/i);
+
+    // Nothing was written and no copy taken, so the next launch reaches the
+    // same refusal rather than reporting a leftover copy.
+    expect(existsSync(join(dir, "pre-journal-replica.db") + COPY_SUFFIX)).toBe(false);
+    expect(refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }))).toBe(first);
+
+    ledger.close();
+    expect(
+      inspect(join(dir, "pre-journal-replica.db"), userVersion),
+      "and the file is untouched, at the version it arrived at",
+    ).toBe(1);
+  });
+
+  /**
+   * The same refusal on the outbox, and it is the store where it matters
+   * most: its entries are the only copy of intent nobody has been told about
+   * (`architecture/08` §5), so a guess that runs a step twice is a guess made
+   * over unrecoverable rows.
+   */
+  it("refuses a pre-journal outbox too", () => {
+    const ledger = openAt("pre-journal-o");
+    for (const migration of OUTBOX_MIGRATIONS) migration.up(ledger.outbox.db);
+    ledger.outbox.db.run(sql.raw("pragma user_version = 1"));
+
+    expect(() => migrateOutbox(ledger.outbox, { fs: realFs })).toThrow(
+      new RegExp(`has no ${MIGRATION_JOURNAL} table`),
+    );
+    expect(existsSync(join(dir, "pre-journal-o-outbox.db") + COPY_SUFFIX)).toBe(false);
+    ledger.close();
+  });
+
+  /**
+   * The other half of identity. A generated file's statements are frozen once
+   * an installed database has run them — edit one and every device that ran
+   * the old version now disagrees with a fresh install about its own tables,
+   * silently, because the filename and the number both still match.
+   */
+  it("refuses a step whose statements changed after it was applied, naming the tag", () => {
+    const ledger = openAt("edited-step");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+
+    const edited = REPLICA_MIGRATIONS.map((migration) =>
+      migration.tag === "0007_schema"
+        ? { ...migration, checksum: checksumOf(["something else entirely"]) }
+        : migration,
+    );
+
+    const message = refusalMessage(() =>
+      migrateReplica(ledger.replica, { fs: realFs, migrations: edited }),
+    );
+    expect(message).toContain("0007_schema");
+    expect(message).toContain("is not the one that ran here");
+    expect(existsSync(join(dir, "edited-step-replica.db") + COPY_SUFFIX)).toBe(false);
+    ledger.close();
+  });
+
+  /**
+   * And the ordinary path: one row per step that ran, and a later launch
+   * under a longer chain adds only the rows for the steps it actually
+   * applied — never rewrites the ones already there.
+   */
+  it("records tag and checksum for each step, and only adds what a later launch runs", () => {
+    const ledger = openAt("journal-rows");
+    const short = REPLICA_MIGRATIONS.slice(0, -1);
+    migrateReplica(ledger.replica, { fs: realFs, migrations: short }).copy?.release();
+
+    const after = () =>
+      inspect(
+        join(dir, "journal-rows-replica.db"),
+        (db) =>
+          db.prepare(`select tag, checksum from "${MIGRATION_JOURNAL}" order by tag`).all() as {
+            tag: string;
+            checksum: string;
+          }[],
+      );
+
+    expect(after()).toEqual(short.map((m) => ({ tag: m.tag, checksum: m.checksum })));
+
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    ledger.close();
+
+    expect(after()).toEqual(REPLICA_MIGRATIONS.map((m) => ({ tag: m.tag, checksum: m.checksum })));
+  });
+
+  /**
+   * **The checksum has to survive `pnpm ledger:generate`**, or the guarantee
+   * above becomes a refusal every phone hits after any regeneration. The two
+   * committed representations of a step are the `.sql` files drizzle-kit
+   * writes and the `ddl.ts` embedded from them, and this reads both: the
+   * chain's checksums must equal the ones derived from the files on disk,
+   * through the same splitting rules the generator uses (`tools/steps.ts`,
+   * imported rather than reimplemented, so there is no second copy to drift).
+   *
+   * That makes both halves of L3 a red test rather than a convention: a
+   * `ddl.ts` edited by hand fails here, and so does a `.sql` changed without
+   * regenerating. Biome running over `ddl.ts` inside the generate script is
+   * what keeps the file byte-identical across runs, and it moves nothing
+   * inside the template literals this hashes.
+   */
+  it.each([
+    { store: "replica", dir: "../../drizzle/replica", chain: REPLICA_MIGRATIONS },
+    { store: "outbox", dir: "../../drizzle/outbox", chain: OUTBOX_MIGRATIONS },
+  ])("$store: every step's checksum is the one its own .sql file hashes to", (each) => {
+    const fromDisk = stepsIn(new URL(each.dir, import.meta.url));
+
+    expect(fromDisk.length, "vacuity guard").toBeGreaterThan(0);
+    expect(fromDisk.map((step) => step.tag)).toEqual(each.chain.map((m) => m.tag));
+    expect(fromDisk.map((step) => checksumOf(step.statements))).toEqual(
+      each.chain.map((m) => m.checksum),
+    );
+  });
+});
+
 /* ── the 0006_schema backfill, in isolation ──────────────────────────────── */
 
 describe("the `0006_schema` backfill", () => {
@@ -822,12 +1053,18 @@ describe("the pre-migration copy", () => {
    * **The rule is about pragmas that return rows, not about `run`.** Expo
    * SQLite leaves a result row active when a statement that produces one is
    * issued through anything but a full read, so every *result-bearing* pragma
-   * this module sends — `user_version` and `wal_checkpoint(truncate)` — goes
-   * through `all`, which consumes the row. A pragma *assignment* returns
-   * nothing at all, so `foreign_keys = OFF`/`ON` is `run`'s to send and always
-   * was: `migrateReplica` has issued exactly those two the whole time. What
-   * changed is that `migrateOutbox` now does too (both stores migrate with
-   * foreign keys off), which is why the count below is two rather than none.
+   * this module sends — `user_version`, `foreign_keys` read back before it is
+   * changed, and `wal_checkpoint(truncate)` — goes through `all`, which
+   * consumes the row. So do the journal's own two reads (does the table
+   * exist, and what does it hold), which are ordinary selects rather than
+   * pragmas and are counted here for the same reason: nothing on this
+   * connection may leave a row unread.
+   *
+   * A pragma *assignment* returns nothing at all, so `foreign_keys = OFF` and
+   * its restore are `run`'s to send and always were: `migrateReplica` has
+   * issued exactly those two the whole time. What changed is that
+   * `migrateOutbox` now does too (both stores migrate with foreign keys off),
+   * which is why the count below is two rather than none.
    */
   it("sends every result-bearing pragma through `all`, and only assignments through `run`", () => {
     const ledger = openAt("expo-pragmas");
@@ -845,14 +1082,20 @@ describe("the pre-migration copy", () => {
     });
 
     expect(get).not.toHaveBeenCalled();
-    expect(all, "`user_version` and the checkpoint, both read in full").toHaveBeenCalledTimes(2);
+    expect(
+      all,
+      "`user_version`, the journal's existence and contents, the checkpoint, and `foreign_keys` read back before it is changed",
+    ).toHaveBeenCalledTimes(5);
     expect(run, "the two `foreign_keys` assignments, which return no rows").toHaveBeenCalledTimes(
       2,
     );
-    // And they were the toggles: enforcement is back on afterwards, which is
-    // what `finally` in `runInOneTransaction` is there for.
+    // M2 — and the restore put back the value `open.ts` set for *this* store,
+    // not a constant `ON`. The outbox references nothing and is opened with
+    // foreign keys off deliberately; a migrator that ended with `= ON` handed
+    // every later statement on this connection a stricter database than the
+    // one that was configured.
     expect(ledger.outbox.db.all<{ foreign_keys: number }>(sql.raw("pragma foreign_keys"))).toEqual([
-      { foreign_keys: 1 },
+      { foreign_keys: 0 },
     ]);
 
     result.copy?.release();
@@ -1051,12 +1294,21 @@ describe("`applied_seq`, the replica's watermark", () => {
  * the old emitter's comment did.
  */
 describe("a constraint declared in the schema is present on the device", () => {
-  /** Every object of a kind, as the file itself reports them. */
+  /**
+   * Every object of a kind, as the file itself reports them — minus the
+   * migrator's own journal, which no schema module declares and none ever
+   * will: it is created by `migrate.ts` before the chain runs, so that the
+   * chain has somewhere to record itself. The census below is about drift
+   * between the schema modules and what ships; the journal belongs to neither
+   * side of that comparison, and the fresh-database tests above are where its
+   * presence is asserted instead.
+   */
   function objects(db: Database.Database, type: "index" | "table"): string[] {
     return db
       .prepare("select name from sqlite_master where type = ? and name not like 'sqlite_%'")
       .all(type)
       .map((row) => (row as { name: string }).name)
+      .filter((name) => name !== MIGRATION_JOURNAL)
       .sort();
   }
 
@@ -1205,9 +1457,9 @@ describe("a constraint declared in the schema is present on the device", () => {
    * A child row too (`ON DELETE CASCADE` on `transaction_lines.transaction_id`)
    * — the row a naive copy-rename-drop of `transactions`, run with foreign
    * keys still enforced, would cascade away even though nothing asked it to.
-   * `runInOneTransaction`'s `foreignKeysOff` is what this proves, over the
-   * real chain rather than a synthetic one: `0007_schema` is the rebuild that
-   * adds `transactions_debt_amount_requires_currency`.
+   * `runInOneTransaction`'s foreign-keys-off window is what this proves, over
+   * the real chain rather than a synthetic one: `0008_schema` is the rebuild
+   * that adds `transactions_debt_amount_requires_currency`.
    */
   it("keeps a child row through the transactions rebuild, and ships the new CHECK", () => {
     const ledger = openAt("rebuild-fk");
@@ -1297,6 +1549,23 @@ describe("opening the pair", () => {
     ).toEqual({ foreign_keys: 0 });
 
     expect(read(ledger.replica.db, "busy_timeout")).toEqual({ timeout: 5000 });
+
+    // M2 — and a migration on this connection leaves both exactly as they
+    // are. `runInOneTransaction` turns foreign keys off for the length of the
+    // transaction (a step may rebuild a table) and restores **the value it
+    // found**, not a constant `ON`: restoring `ON` unconditionally overrode
+    // `open.ts`'s deliberate `OFF` for the outbox, on every launch where a
+    // migration happened to run, and nothing said so.
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
+
+    expect(read(ledger.replica.db, "foreign_keys"), "the replica migrated, still ON").toEqual({
+      foreign_keys: 1,
+    });
+    expect(read(ledger.outbox.db, "foreign_keys"), "the outbox migrated, still OFF").toEqual({
+      foreign_keys: 0,
+    });
+
     ledger.close();
   });
 

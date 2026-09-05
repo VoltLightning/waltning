@@ -403,6 +403,77 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
     });
   });
 
+  /**
+   * M4 — **one row per account, never one per open leg.**
+   *
+   * `money.fifoOldestOpen` answers with one row or none; `find_unsettled` is
+   * its SQL twin and owes the same shape. Its `opens` CTE, though, produces a
+   * row for *every* leg whose running total has outrun what consumption has
+   * eaten — several, whenever more than one leg is still open — and only the
+   * first of them carries the remainder the contract means. "Split clearing"
+   * is the fixture with two: `+100, +60, −40`, so the 100 is open with 60 of
+   * its own left and the 60 is open whole.
+   *
+   * The two things this pins, which the single-open-leg fixtures cannot:
+   *
+   * - **Exactly one row per account** comes back, so the ordered
+   *   `DISTINCT ON (o.account_id)` is doing work rather than reading as
+   *   decoration. `sqlRows.find(…)` in the tests above would happily have
+   *   taken the first of several.
+   * - **The remainder is that leg's own share** — 60. Not 100, the leg's
+   *   whole amount; not 120, the account's balance, whose rest the second
+   *   open leg carries. `running_open − total_consumed` is what the query
+   *   computes, and on the *first* row past the threshold that is already
+   *   `least(running_open − consumed, abs(delta))`: every earlier open leg
+   *   was fully consumed (that is what "first past the threshold" means), so
+   *   the difference cannot exceed this leg's own magnitude. Writing the
+   *   `least(…)` would be a second, weaker statement of the same fact — and
+   *   one that would silently keep answering for rows `DISTINCT ON` is there
+   *   to discard.
+   */
+  it("§8 find_unsettled — one row per account, and its own share, with two legs open at once", async () => {
+    const splitClearing = ACCOUNTS[11];
+    const sqlRows = await findUnsettled(scratch.db);
+
+    const ids = sqlRows.map((row) => row.accountId);
+    expect(new Set(ids).size, "one row per clearing account, never one per open leg").toBe(
+      ids.length,
+    );
+
+    const sqlRow = sqlRows.find((row) => row.accountId === splitClearing.id);
+    const tsBalance = money.accountBalance(
+      money.toMoney(splitClearing.opening),
+      splitClearing.id,
+      legRows,
+    );
+    const tsOldest = money.fifoOldestOpen(clearingLegRowsFor(splitClearing.id));
+
+    expect(sqlRow).toEqual({
+      accountId: splitClearing.id,
+      balance: tsBalance,
+      oldestUnconsumedTransactionId: tsOldest?.id,
+      oldestDate: tsOldest?.date,
+      remainder: tsOldest?.remainder,
+    });
+    expect(sqlRow).toEqual({
+      accountId: splitClearing.id,
+      balance: "120.00000000",
+      oldestUnconsumedTransactionId: "20000000-0000-4000-8000-000000000024",
+      oldestDate: "2026-08-01",
+      remainder: "60.00000000",
+    });
+
+    // The vacuity guard for "two legs open at once": if only one were, the
+    // remainder would *be* the balance. It is 60 against 120, so a later leg
+    // is carrying the other 60 — and it is not the row that came back.
+    expect(
+      money
+        .dec(sqlRow?.remainder ?? "0")
+        .abs()
+        .lt(money.dec(tsBalance).abs()),
+    ).toBe(true);
+  });
+
   it("excludes soft-deleted rows on both sides", async () => {
     // `…009` is a 999 999.00000000 expense on Bank A, soft-deleted. If either
     // side included it, Bank A's balance would be off by that amount — not a

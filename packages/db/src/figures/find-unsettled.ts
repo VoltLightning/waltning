@@ -136,6 +136,13 @@ export async function findUnsettled(db: DbHandle): Promise<readonly FindUnsettle
       FROM signed_legs
       WHERE delta <> 0 AND sign(delta) = final_sign
     )
+    -- M4 — DISTINCT ON, because opens holds a row per open LEG and this
+    -- function owes a row per ACCOUNT. Every leg whose running total has
+    -- outrun consumption clears the WHERE below, which is several rows
+    -- whenever more than one leg is still open; money.fifoOldestOpen, the
+    -- twin this is proven equal to, answers with one row or none. Ordered by
+    -- (date, transaction_id NULLS FIRST) — the same tie-break the window and
+    -- fifoOldestOpen's own comparator use — so the row kept is the oldest.
     SELECT DISTINCT ON (o.account_id)
       o.account_id AS account_id,
       b.balance::numeric(20,8)::text AS balance,
@@ -145,6 +152,14 @@ export async function findUnsettled(db: DbHandle): Promise<readonly FindUnsettle
       -- running total reaches past what has already been consumed,
       -- signed like balance (every open leg shares final_sign, so this
       -- is exactly fifoOldestOpen's remainder, not its absolute value).
+      --
+      -- M4 — and no least(…, abs(delta)) is needed, because DISTINCT ON has
+      -- already reduced this to the FIRST row past the threshold: every
+      -- earlier open leg was fully consumed (that is what "first past the
+      -- threshold" means), so running_open - consumed cannot exceed this
+      -- leg's own magnitude. Writing the least() would be a second, weaker
+      -- statement of the same fact, and one that would quietly keep
+      -- answering for the rows DISTINCT ON exists to discard.
       ((o.running_open - coalesce(c.total_consumed, 0)) * sign(b.balance))::numeric(20,8)::text
         AS remainder
     FROM opens o

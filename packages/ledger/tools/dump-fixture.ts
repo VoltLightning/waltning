@@ -1,9 +1,27 @@
 /**
  * Seed a populated ledger through the journey harness, then dump both stores
- * to `fixtures/upgrade/`. Run with `pnpm --filter @waltning/ledger fixture:dump`.
+ * to `fixtures/upgrade/`. Run through `dump-fixture.cli.ts` — `pnpm --filter
+ * @waltning/ledger fixture:dump` — which is a separate file for one reason:
+ * this one must be importable without writing anything, so a caller after an
+ * older pair (below) does not also rewrite the head pair by having imported
+ * the module. `packages/ledger` may not name `process`, so "am I the entry
+ * point?" is not a question this file can ask itself.
  *
  * See `fixtures/upgrade/README.md` for what a fixture is and when a PR must
- * add a new one.
+ * add a new one. The short version: **dump the fixture before adding the
+ * migration**, because this tool writes whatever the chain's head is when it
+ * runs, and the pair worth committing is the one an installed app is *leaving
+ * behind*.
+ *
+ * **`dumpFixture`'s `through` options are the escape hatch for a fixture that
+ * should already exist and does not** — a chain cut short, so the seeded
+ * session stops at an older version and the dump names that version. They
+ * take a tag rather than a number, for the same reason the journal does: a
+ * tag names a file, a number names only a count. There is no environment
+ * variable and no `process.argv` behind them; a caller that wants an older
+ * pair passes the parameter. That is how `replica-v8` was produced, and it is
+ * why it is a real dump of a database that really sat at 8 rather than a v9
+ * dump with its `PRAGMA` line edited.
  *
  * **Every id, date and write order below is fixed, and that is the whole
  * point.** `fixture-dump.ts`'s `dumpDatabase` reads rows back in `rowid`
@@ -45,7 +63,7 @@ import {
   seedCurrency,
   seedRate,
 } from "../src/journeys/seed.ts";
-import { OUTBOX_MIGRATIONS, REPLICA_MIGRATIONS } from "../src/migrate.ts";
+import { type Migration, OUTBOX_MIGRATIONS, REPLICA_MIGRATIONS } from "../src/migrate.ts";
 import { ledgerSchema } from "../src/schema-map.ts";
 
 const {
@@ -93,8 +111,41 @@ function dumpFile(path: string): string {
   }
 }
 
-function main(): void {
-  const j = openJourney();
+/**
+ * The chain to seed against, cut at a tag — every step up to and including it.
+ *
+ * A tag this chain does not carry is a hard error rather than a silently
+ * uncut chain: "dump the fixture for v8" answered with a v9 dump is exactly
+ * the hand-edited fixture this parameter exists to stop producing.
+ */
+function chainThrough(chain: readonly Migration[], tag: string, store: string): Migration[] {
+  const cut = chain.findIndex((migration) => migration.tag === tag);
+  if (cut < 0) {
+    throw new Error(
+      `fixture:dump — "${tag}" names no step in the ${store} chain [${chain.map((m) => m.tag).join(", ")}]`,
+    );
+  }
+  return chain.slice(0, cut + 1);
+}
+
+export type DumpFixtureOptions = {
+  /** Cut the replica chain after this tag — the pair is dumped at that version. */
+  readonly replicaThrough?: string;
+  /** The same for the outbox, whose chain moves on its own schedule (§08 item 2). */
+  readonly outboxThrough?: string;
+};
+
+export function dumpFixture(options: DumpFixtureOptions = {}): void {
+  const replicaChain =
+    options.replicaThrough === undefined
+      ? REPLICA_MIGRATIONS
+      : chainThrough(REPLICA_MIGRATIONS, options.replicaThrough, "replica");
+  const outboxChain =
+    options.outboxThrough === undefined
+      ? OUTBOX_MIGRATIONS
+      : chainThrough(OUTBOX_MIGRATIONS, options.outboxThrough, "outbox");
+
+  const j = openJourney({ migrations: { replica: replicaChain, outbox: outboxChain } });
   try {
     seedCurrency(j, PIVOT, { isPivot: true });
     seedCurrency(j, "EUR");
@@ -267,8 +318,8 @@ function main(): void {
      * file still states its *own* store's version in its first line, which
      * `dumpDatabase` reads from the database rather than being told.
      */
-    const replicaVersion = REPLICA_MIGRATIONS.at(-1)?.version;
-    const outboxVersion = OUTBOX_MIGRATIONS.at(-1)?.version;
+    const replicaVersion = replicaChain.at(-1)?.version;
+    const outboxVersion = outboxChain.at(-1)?.version;
     if (replicaVersion === undefined || outboxVersion === undefined) {
       throw new Error("fixture:dump — a migration chain with no versions");
     }
@@ -287,5 +338,3 @@ function main(): void {
     j.close();
   }
 }
-
-main();

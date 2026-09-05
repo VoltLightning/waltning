@@ -8,13 +8,20 @@
  * here. Today that is `v8` — the ledger as it stood before `0008_schema`
  * rebuilt `transactions` — and `v9`, the current head.
  *
- * **Loading a fixture is two steps, deliberately not one.** `REPLICA_MIGRATIONS`
- * and `OUTBOX_MIGRATIONS` build the tables; the fixture's own SQL is only
- * ever `INSERT`s (`fixture-dump.ts`'s whole argument). Running the chain up
- * to the fixture's version and then executing the SQL is exactly what
+ * **Loading a fixture is two steps, deliberately not one.** `migrateReplica`
+ * and `migrateOutbox` build the tables; the fixture's own SQL is only ever
+ * `INSERT`s (`fixture-dump.ts`'s whole argument). Running the chain up to the
+ * fixture's version and then executing the SQL is exactly what
  * `createLocalLedgerSession` does to a real installed database — the same
  * migrator, the same two steps — which is what makes this a real upgrade
- * rather than a reconstruction of one.
+ * rather than a reconstruction of one, and what gives the loaded file the
+ * `__ledger_migrations` rows an installed app at that version would hold.
+ *
+ * **Each chain is cut at its own store's version (M1).** A pair is named by
+ * the replica's number in both filenames, but each file states its own
+ * store's version on its first line, and that is the one used: filtering the
+ * outbox chain by the replica's number selected every outbox step there has
+ * ever been, so no fixture could exercise an outbox migration at all.
  *
  * **What the "fresh equals upgraded" fingerprint proves, and where.** `v8` is
  * where it has teeth: that pair is loaded at a version below the chain's head,
@@ -34,8 +41,15 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { COPY_SUFFIX, OUTBOX_MIGRATIONS, REPLICA_MIGRATIONS } from "../migrate.ts";
-import type { LedgerPaths, SqliteOpener } from "../open.ts";
+import {
+  COPY_SUFFIX,
+  MIGRATION_JOURNAL,
+  migrateOutbox,
+  migrateReplica,
+  OUTBOX_MIGRATIONS,
+  REPLICA_MIGRATIONS,
+} from "../migrate.ts";
+import { type LedgerPaths, openLedger, type SqliteOpener } from "../open.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { createLocalLedgerSession, type LocalLedgerSessionOptions } from "../session.ts";
 import { nodeFs } from "../test/stores.ts";
@@ -74,12 +88,22 @@ function inspect<T>(path: string, read: (db: Database.Database) => T): T {
   }
 }
 
+/**
+ * Every table's row count — **except the migrator's own journal**, which is
+ * not the ledger's data and is *supposed* to gain a row for every step an
+ * upgrade runs. Counting it here would turn the property below ("no table
+ * lost a row") into an assertion that no migration happened, which is the
+ * opposite of what these fixtures exist to exercise. Its presence and shape
+ * are covered instead by the fingerprint comparison against a fresh install,
+ * and its contents by `test/migrate.test.ts`.
+ */
 function tableRowCounts(sqlite: Database.Database): Record<string, number> {
   const tables = sqlite
     .prepare(`select name from sqlite_master where type = 'table' and name not like 'sqlite_%'`)
     .all() as { name: string }[];
   const counts: Record<string, number> = {};
   for (const { name } of tables) {
+    if (name === MIGRATION_JOURNAL) continue;
     const [row] = sqlite.prepare(`select count(*) as n from "${name}"`).all() as { n: number }[];
     counts[name] = row?.n ?? 0;
   }
@@ -124,6 +148,30 @@ function maxOutboxSeqOf(sqlite: Database.Database): number {
 /* ── fixture discovery ────────────────────────────────────────────────────── */
 
 const FIXTURES_DIR = fileURLToPath(new URL("../../fixtures/upgrade/", import.meta.url));
+
+/**
+ * The version a fixture file states **about its own store**, off its first
+ * line — `dumpDatabase` writes `PRAGMA user_version = N;` there by reading it
+ * out of the database rather than being told.
+ *
+ * **M1.** Both chains used to be filtered by the number in the *filename*,
+ * which is the replica's version in both names by convention (this file's
+ * header, and `fixtures/upgrade/README.md`). The outbox's own chain ends at 2
+ * and every fixture's name carries a number far above that, so
+ * `version <= pair.version` selected the whole outbox chain every time: the
+ * outbox was always built to head, and no fixture could ever exercise an
+ * outbox migration however many were added. Each store's chain is filtered by
+ * its own store's number now, which is the only number that means anything
+ * about it.
+ */
+function statedVersion(path: string): number {
+  const [line] = readFileSync(path, "utf8").split("\n");
+  const stated = /^PRAGMA user_version = (\d+);$/.exec(line ?? "")?.[1];
+  if (stated === undefined) {
+    throw new Error(`${path} does not begin with its own \`PRAGMA user_version\` line`);
+  }
+  return Number(stated);
+}
 
 type FixturePair = { version: number; replicaPath: string; outboxPath: string };
 
@@ -184,9 +232,18 @@ type LoadedFixture = {
 };
 
 /**
- * Run the chain up to the fixture's version, then execute its SQL — the
- * "before" half of an upgrade. Nothing here calls `createLocalLedgerSession`;
- * that is each `it`'s job, so the fixture's own state is captured first.
+ * Run each store's chain up to the version **that store's own file states**,
+ * then execute its SQL — the "before" half of an upgrade. Nothing here calls
+ * `createLocalLedgerSession`; that is each `it`'s job, so the fixture's own
+ * state is captured first.
+ *
+ * **The chain runs through the real migrator, not through `up` directly.**
+ * `migrateReplica`/`migrateOutbox` are what create `__ledger_migrations` and
+ * record what they ran — so a database built here is the shape an installed
+ * app at that version actually has, journal included, rather than one missing
+ * the very record the next launch reads. Applying the steps by hand produced
+ * a file the session then refused, correctly, as written by a pre-journal
+ * build.
  */
 function loadFixture(pair: FixturePair): LoadedFixture {
   const { dir, paths } = newPaths("waltning-upgrade-fixture-");
@@ -194,25 +251,37 @@ function loadFixture(pair: FixturePair): LoadedFixture {
   const replicaSql = readFileSync(pair.replicaPath, "utf8");
   const outboxSql = readFileSync(pair.outboxPath, "utf8");
 
-  const replicaSteps = REPLICA_MIGRATIONS.filter((m) => m.version <= pair.version);
-  const outboxSteps = OUTBOX_MIGRATIONS.filter((m) => m.version <= pair.version);
-  if (replicaSteps.length === 0 || outboxSteps.length === 0) {
+  const replicaVersion = statedVersion(pair.replicaPath);
+  const outboxVersion = statedVersion(pair.outboxPath);
+  if (replicaVersion !== pair.version) {
     throw new Error(
-      `fixture v${pair.version} names a version this build's chain never passed through`,
+      `replica-v${pair.version}.sql states version ${replicaVersion} — a pair is named by the replica's own version, in both filenames`,
     );
   }
 
+  const replicaSteps = REPLICA_MIGRATIONS.filter((m) => m.version <= replicaVersion);
+  const outboxSteps = OUTBOX_MIGRATIONS.filter((m) => m.version <= outboxVersion);
+  if (replicaSteps.length === 0 || outboxSteps.length === 0) {
+    throw new Error(
+      `fixture v${pair.version} (replica ${replicaVersion}, outbox ${outboxVersion}) names a version this build's chain never passed through`,
+    );
+  }
+
+  const atVersion = openLedger(openWithBetterSqlite, paths);
+  try {
+    migrateReplica(atVersion.replica, { fs: nodeFs, migrations: replicaSteps }).copy?.release();
+    migrateOutbox(atVersion.outbox, { fs: nodeFs, migrations: outboxSteps }).copy?.release();
+  } finally {
+    atVersion.close();
+  }
+
   const replicaSqlite = new Database(paths.replica);
-  const replicaDb = drizzle(replicaSqlite, { schema });
-  for (const migration of replicaSteps) migration.up(replicaDb);
   replicaSqlite.exec(replicaSql);
   const replicaCountsBefore = tableRowCounts(replicaSqlite);
   const watermarkBefore = appliedSeqOf(replicaSqlite);
   replicaSqlite.close();
 
   const outboxSqlite = new Database(paths.outbox);
-  const outboxDb = drizzle(outboxSqlite, { schema });
-  for (const migration of outboxSteps) migration.up(outboxDb);
   outboxSqlite.exec(outboxSql);
   const outboxCountsBefore = tableRowCounts(outboxSqlite);
   const pendingBefore = outboxRows(outboxSqlite).filter((row) => row.seq > watermarkBefore);

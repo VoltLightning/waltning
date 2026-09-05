@@ -135,7 +135,7 @@ import {
   type LedgerDiagnostics,
   type LedgerStartupStage,
 } from "./diagnostics.ts";
-import { type LedgerFs, migrateOutbox, migrateReplica } from "./migrate.ts";
+import { type LedgerFs, type Migration, migrateOutbox, migrateReplica } from "./migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./open.ts";
 import { type LaunchRecovery, recoverOnLaunch } from "./recover.ts";
 import { ledgerRegistry } from "./registry.ts";
@@ -343,6 +343,23 @@ export type LocalLedgerSessionOptions<TRun> = {
    * rather than by any decision.
    */
   bootstrapCurrencies: readonly BootstrapCurrency[];
+  /**
+   * The two chains, when a caller needs a session over a database **below**
+   * this build's head. Defaults to this build's own; the app never sets it.
+   *
+   * The one caller is `tools/dump-fixture.ts`. `fixtures/upgrade/` is only
+   * worth anything if the databases in it actually sat at the version they
+   * name, and a session that always migrates to head can never leave one
+   * there — so the fixture for the version a branch *leaves behind* is dumped
+   * from a session whose replica chain stops one step short. The seam already
+   * exists one level down (`MigrateOptions.migrations`, which every migration
+   * test uses); this is the same seam, reachable from the one place that
+   * needs a whole session rather than a bare migrator.
+   */
+  migrations?: {
+    readonly replica?: readonly Migration[];
+    readonly outbox?: readonly Migration[];
+  };
   diagnostics?: LedgerDiagnostics;
 };
 
@@ -386,9 +403,15 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): StartResult<TRun
 
   try {
     stage = "migrate_outbox";
-    const outboxMigration = migrateOutbox(ledger.outbox, { fs: options.fs });
+    const outboxMigration = migrateOutbox(ledger.outbox, {
+      fs: options.fs,
+      ...(options.migrations?.outbox ? { migrations: options.migrations.outbox } : {}),
+    });
     stage = "migrate_replica";
-    const replicaMigration = migrateReplica(ledger.replica, { fs: options.fs });
+    const replicaMigration = migrateReplica(ledger.replica, {
+      fs: options.fs,
+      ...(options.migrations?.replica ? { migrations: options.migrations.replica } : {}),
+    });
 
     stage = "bootstrap_currency";
     // `onConflictDoNothing`, so a launch after someone has edited a currency

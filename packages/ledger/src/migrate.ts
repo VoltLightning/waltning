@@ -75,6 +75,30 @@
  * up until a file is inserted, renumbered or removed, at which point every
  * installed database's `user_version` would silently start naming a
  * different step than the one it actually ran.
+ *
+ * **And a file is not an identity either — `__ledger_migrations` is.** A number
+ * says how far a chain got; a filename says which step that was; neither says
+ * *which statements ran*. Both stores therefore carry a journal — `tag`,
+ * `checksum`, `applied_at`, one row per step, created by this module before the
+ * chain and written inside the same transaction as the step it records — and
+ * three refusals fall out of it:
+ *
+ * - **A database at `user_version >= 1` with no journal table** was written by
+ *   a build from before the journal existed, and this build cannot tell which
+ *   of its steps that build actually ran. It is refused, by name, with the
+ *   recovery spelled out. What made this the finding it is: a database from a
+ *   single-version build sits at `user_version = 1` with every table already
+ *   present, which this module used to read as *"only `0000_schema` ran"* — so
+ *   it ran `0001_database_objects` over a database that already had it, died
+ *   on `local_meta`'s duplicate key, left the pre-migration copy behind, and
+ *   every launch after reported the stale copy instead of the cause.
+ * - **A journaled tag whose checksum is not this build's.** The file was
+ *   edited after it shipped; a generated step's statements are immutable once
+ *   an installed database has run them, and the answer is a new step.
+ * - **Steps not journaled run, in order.** `user_version` stays as the fast
+ *   path — it is one header read and the journal agrees with it by
+ *   construction, both moving inside the same transaction — but what is
+ *   actually applied is decided by what the journal does not hold.
  */
 
 import { fold } from "@waltning/core/capture/names";
@@ -106,19 +130,30 @@ export type SqlRunner = SqlReader & {
 };
 
 /**
- * One step in a chain. `version` is what `PRAGMA user_version` becomes once
- * `up` has run, and `tag` is the generated file that version names.
+ * One step in a chain, and **its identity is `tag` plus `checksum`** — never
+ * `version` alone, and never the filename alone either.
+ *
+ * `version` is what `PRAGMA user_version` becomes once `up` has run; `tag` is
+ * the generated file that version names; `checksum` hashes the statements that
+ * file held when this build was made. A filename on its own answers "has a
+ * step called `0007_schema` run here?", which is the wrong question: two builds
+ * can carry the same filename with different statements inside it, and the
+ * journal exists to tell those two apart (`checksumOf`, `MIGRATION_JOURNAL`).
+ *
+ * Both are required, including on the hand-built chains tests supply
+ * (`migrations` in `MigrateOptions`). A step the journal cannot name is a step
+ * the journal cannot record, and a chain half of whose steps are invisible to
+ * it would be a journal that reports the wrong answer rather than no answer.
  *
  * `check` is the step's precondition, run against the database as it stands
  * **before** the pre-migration copy is taken and before any statement runs —
- * see `Backfill`. Both `tag` and `check` are optional because a test supplies
- * chains this module never generated (`migrations` in `MigrateOptions`), and
- * a hand-built step has neither a file nor a precondition.
+ * see `Backfill`. It stays optional: a step without a precondition has none.
  */
 export type Migration = {
   readonly version: number;
+  readonly tag: string;
+  readonly checksum: string;
   readonly up: (tx: SqlRunner) => void;
-  readonly tag?: string;
   readonly check?: (db: SqlReader) => void;
 };
 
@@ -326,16 +361,21 @@ export const OUTBOX_BACKFILLS: Readonly<Record<string, Backfill>> = {};
 /**
  * A generated file's own version: its four-digit prefix, plus one.
  *
- * **Identity, not position.** `0000_schema` is version 1 because a database
+ * **Naming, not position.** `0000_schema` is version 1 because a database
  * SQLite has just created is at 0 and has run nothing. Deriving the number
  * from the file's name rather than from its index in `REPLICA_STEPS` is what
- * makes `user_version = 7` mean *"`0006_schema` has run"* on every build that
- * ever ships, rather than *"seven steps had run, whichever seven that build
- * happened to carry"*. The two agree only for as long as no file is ever
- * inserted, renumbered or removed — and this branch renumbered one on its own
- * way here.
+ * makes `user_version = 7` mean *"`0006_schema` has run"* within this chain,
+ * rather than *"seven steps had run, whichever seven"*. The two agree only
+ * for as long as no file is ever inserted, renumbered or removed — and this
+ * branch renumbered one on its own way here.
+ *
+ * **It is still not an identity across builds**, which is the journal's job:
+ * a number is only meaningful against the chain that wrote it, and this
+ * repository has shipped a build whose whole replica chain was one version,
+ * where `user_version = 1` means *"everything ran"*. See
+ * `readAppliedTags`.
  */
-function versionOfTag(tag: string): number {
+export function versionOfTag(tag: string): number {
   const prefix = /^(\d{4})_/.exec(tag)?.[1];
   if (prefix === undefined) {
     throw new Error(
@@ -343,6 +383,39 @@ function versionOfTag(tag: string): number {
     );
   }
   return Number(prefix) + 1;
+}
+
+/**
+ * A change detector, in plain JS — FNV-1a, not `node:crypto`.
+ *
+ * This module ships to the phone (this file's own header, `open.ts`'s argument
+ * for the injected driver), and `node:crypto` is exactly the platform package
+ * it must not name. Nothing here needs collision resistance against an
+ * adversary: the only question asked of it is *"are these the same statements
+ * that ran on this device?"*, and an accidental collision between two versions
+ * of one generated file is not a failure mode that occurs.
+ */
+function fnv1a(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * A step's other half of identity: what its statements were.
+ *
+ * Newline-joined and hashed verbatim, so the value moves when a generated file
+ * moves and does not move when `ddl.ts` is reformatted — Biome touches the
+ * TypeScript around the template literals, never the SQL inside them, which is
+ * why `pnpm ledger:generate` is idempotent against the gate (its own script
+ * runs Biome over the file it writes) and why the checksum committed today is
+ * the checksum a rebuild produces tomorrow.
+ */
+export function checksumOf(statements: readonly string[]): string {
+  return fnv1a(statements.join("\n"));
 }
 
 /**
@@ -371,6 +444,12 @@ export function migrationsFromSteps(
     const migration = {
       version: versionOfTag(step.tag),
       tag: step.tag,
+      // The step's own statements, and nothing else: a backfill is code, not
+      // SQL this module can hash, and a hook added or changed after a step
+      // shipped is not the failure the checksum exists to catch. What it
+      // catches is a `.sql` file edited in place after an installed database
+      // already ran it.
+      checksum: checksumOf(step.statements),
       up: (tx: SqlRunner) => {
         for (const statement of step.statements) tx.run(sql.raw(statement));
         backfill?.fill(tx);
@@ -467,19 +546,154 @@ function readUserVersion<TRun, TSchema extends LedgerSchema>(
   return value;
 }
 
-/** The chain must ascend, or "the steps after `found`" is not a well-defined set. */
+/**
+ * The chain must ascend, or "the steps after `found`" is not a well-defined
+ * set — and every step's tag must be unique and must name its own version,
+ * or the journal is keyed on something that does not identify a step.
+ *
+ * The tag check is free for a generated chain (`migrationsFromSteps` derives
+ * the version *from* the tag), and it is the whole point for a hand-built one:
+ * a chain whose `tag` and `version` disagree would journal one step under
+ * another's name, which is the confusion this journal exists to end rather
+ * than to reproduce.
+ */
 function checkChain(migrations: readonly Migration[]): number {
   let previous = 0;
+  const seen = new Set<string>();
   for (const step of migrations) {
     if (!Number.isInteger(step.version) || step.version <= previous) {
       throw new Error(
         `migration versions must be integers ascending from 1 — ${step.version} follows ${previous}`,
       );
     }
+    if (seen.has(step.tag)) {
+      throw new Error(
+        `two steps in this chain both carry the tag "${step.tag}" — a tag is a step's identity in ${MIGRATION_JOURNAL}, so it cannot name two`,
+      );
+    }
+    if (versionOfTag(step.tag) !== step.version) {
+      throw new Error(
+        `step "${step.tag}" declares version ${step.version}, but its own four-digit prefix names ${versionOfTag(step.tag)} — a version names a file`,
+      );
+    }
+    if (step.checksum.length === 0) {
+      throw new Error(`step "${step.tag}" carries an empty checksum — see \`checksumOf\``);
+    }
+    seen.add(step.tag);
     previous = step.version;
   }
   if (previous === 0) throw new Error("a migration chain must have at least one version");
   return previous;
+}
+
+/* ── the journal ─────────────────────────────────────────────────────────── */
+
+/**
+ * The table that records which steps this file has actually run.
+ *
+ * **Created by the migrator, never by a generated step.** It has to exist
+ * before the first step of the chain can be recorded, including on a database
+ * SQLite made a moment ago — so it cannot itself be one of the things the
+ * chain builds, and it is deliberately absent from `schema-map.ts` and from
+ * both `drizzle/` snapshots. The double-underscore prefix says the same thing
+ * to anyone reading `sqlite_master`: this is the migrator's bookkeeping, not
+ * the ledger's data. `upgrade.journey.test.ts` and `test/migrate.test.ts` both
+ * exclude it from their table censuses for that reason.
+ */
+export const MIGRATION_JOURNAL = "__ledger_migrations";
+
+const JOURNAL_IDENT = sql.raw(`"${MIGRATION_JOURNAL}"`);
+
+/**
+ * `create table if not exists`, run inside the migration transaction just
+ * before the first step — so a migration that rolls back leaves no journal
+ * either, and "nothing happened" stays literally true.
+ */
+function createJournal(tx: SqlRunner): void {
+  tx.run(
+    sql.raw(
+      `create table if not exists "${MIGRATION_JOURNAL}" (` +
+        `"tag" text primary key not null, ` +
+        `"checksum" text not null, ` +
+        `"applied_at" text not null` +
+        `)`,
+    ),
+  );
+}
+
+function journalPresent<TRun, TSchema extends LedgerSchema>(
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+): boolean {
+  const [row] = db.all<{ n?: number }>(
+    sql`select count(*) as n from "sqlite_master" where "type" = 'table' and "name" = ${MIGRATION_JOURNAL}`,
+  );
+  return (row?.n ?? 0) > 0;
+}
+
+function readJournal<TRun, TSchema extends LedgerSchema>(
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+): ReadonlyMap<string, string> {
+  const rows = db.all<{ tag: string; checksum: string }>(
+    sql`select "tag", "checksum" from ${JOURNAL_IDENT}`,
+  );
+  return new Map(rows.map((row) => [row.tag, row.checksum]));
+}
+
+/** One row per step, written inside the step's own transaction. */
+function recordApplied(tx: SqlRunner, step: Migration, appliedAt: string): void {
+  tx.run(
+    sql`insert into ${JOURNAL_IDENT} ("tag", "checksum", "applied_at") values (${step.tag}, ${step.checksum}, ${appliedAt})`,
+  );
+}
+
+/**
+ * What this file has already run — and the two refusals that answer "I cannot
+ * tell" with a stop rather than a guess.
+ *
+ * **A database at zero has run nothing**, journal or no journal: SQLite has
+ * just created it, `refuseStaleCopy` has not been reached yet, and there is
+ * nothing on disk for a wrong answer to damage.
+ *
+ * **A database above zero with no journal is refused**, because the only thing
+ * that can be said about it is that some build wrote it and did not say what
+ * it ran. `user_version` alone is not enough to reconstruct that: this
+ * repository has already shipped a build whose whole chain was one version, so
+ * `user_version = 1` there means "everything ran" and here means "one step
+ * ran", and running the difference destroys the file. Nothing installed
+ * predates the journal in a form worth preserving, so the message says to
+ * delete the pair and let the app rebuild them.
+ *
+ * **A journaled tag whose checksum is not this build's is refused by name.** A
+ * generated `.sql` file's statements are frozen the moment an installed
+ * database has run them; changing one and shipping it means every device that
+ * already ran the old statements now silently disagrees with every fresh
+ * install about what its own tables are.
+ */
+function readAppliedTags<TRun, TSchema extends LedgerSchema>(
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+  migrations: readonly Migration[],
+  found: number,
+  store: string,
+  path: string,
+): ReadonlySet<string> {
+  if (found === 0) return new Set<string>();
+
+  if (!journalPresent(db)) {
+    throw new Error(
+      `${store} is at version ${found} and has no ${MIGRATION_JOURNAL} table — it was written by a build from before this migrator journaled what it ran, so which of this build's steps have already been applied cannot be known, and guessing runs a step twice over real rows. Nothing has been written. The recovery is to let the app rebuild both files from nothing: with the app closed, delete ${path}, ${path}-wal and ${path}-shm, and the same three files for the other store beside it — the replica and the outbox are only consistent as a pair — then start the app again`,
+    );
+  }
+
+  const journal = readJournal(db);
+  for (const step of migrations) {
+    const recorded = journal.get(step.tag);
+    if (recorded !== undefined && recorded !== step.checksum) {
+      throw new Error(
+        `${store} ran "${step.tag}" with checksum ${recorded}, and this build's "${step.tag}" hashes to ${step.checksum} — this build's \`${step.tag}\` is not the one that ran here. A generated migration file's statements are frozen once an installed database has run them; a change to what a step does is a new step, never an edit to an old one. Nothing has been written`,
+      );
+    }
+  }
+  return new Set(journal.keys());
 }
 
 /**
@@ -517,10 +731,16 @@ function takeCopy<TRun, TSchema extends LedgerSchema>(
  * transaction is open, so a step that rebuilds a table (this file's own
  * header) cannot ask for it from inside `steps`; asking here, before
  * `db.transaction` opens one, is the only place the pragma actually takes.
- * `finally` restores it whether the transaction committed or rolled back —
- * the setting is a connection property, not something a rollback undoes on
- * its own, and every other statement on this connection still needs foreign
- * keys enforced.
+ *
+ * **What `finally` restores is the value this connection arrived with, not
+ * `ON`.** The setting is a connection property, so a rollback does not undo
+ * it and something has to put it back — but putting back a *constant* is a
+ * different statement than putting back what was there. `open.ts` turns
+ * foreign keys **off** for the outbox deliberately (its payload is opaque
+ * JSON; it references nothing), and a migrator that ended with `= ON`
+ * unconditionally handed every later statement on that connection a stricter
+ * database than the one `open.ts` configured — silently, and only on the
+ * launches where a migration happened to run.
  *
  * **And `pragma foreign_key_check` runs before the version moves, because of
  * that.** A migration that ran with enforcement off is a migration whose
@@ -530,25 +750,48 @@ function takeCopy<TRun, TSchema extends LedgerSchema>(
  * makes a violation a rollback: the database ends at the version it started
  * at, with the rows it started with, and the copy on disk is still there.
  * Checking after the commit would only be able to report it.
+ *
+ * **Each step's journal row is written beside it, in the same transaction.**
+ * The table is created first (`createJournal`, `if not exists`), then every
+ * step runs and immediately records its own `tag` and `checksum` — so "the
+ * step ran" and "the journal says it ran" are one commit, and a kill between
+ * them is not a state this file can be in.
  */
 function runInOneTransaction<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
-  steps: readonly ((tx: SqlRunner) => void)[],
+  steps: readonly Migration[],
   toVersion: number,
   store: string,
 ): void {
+  const foreignKeysBefore = readForeignKeys(db);
   db.run(sql.raw("pragma foreign_keys = OFF"));
   try {
     db.transaction((tx) => {
-      for (const step of steps) step(tx);
+      createJournal(tx);
+      // One stamp for the batch: these steps ran as one transaction, so
+      // spreading them across several instants of a clock would be a
+      // precision the file does not have.
+      const appliedAt = new Date().toISOString();
+      for (const step of steps) {
+        step.up(tx);
+        recordApplied(tx, step, appliedAt);
+      }
       assertNoOrphans(tx, store);
       // Interpolated because `pragma` takes no bound parameters; the value came
       // from a chain this module validated as integers.
       tx.run(sql.raw(`pragma user_version = ${toVersion}`));
     });
   } finally {
-    db.run(sql.raw("pragma foreign_keys = ON"));
+    db.run(sql.raw(`pragma foreign_keys = ${foreignKeysBefore ? "ON" : "OFF"}`));
   }
+}
+
+/** `pragma foreign_keys` as this connection currently has it — one integer, 0 or 1. */
+function readForeignKeys<TRun, TSchema extends LedgerSchema>(
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+): boolean {
+  const [row] = db.all<{ foreign_keys?: number }>(sql.raw("pragma foreign_keys"));
+  return row?.foreign_keys === 1;
 }
 
 /**
@@ -620,6 +863,69 @@ function refuseStaleCopy(path: string, fs: LedgerFs): void {
 }
 
 /**
+ * Run the chain, and **do not let a failure leave the copy behind.**
+ *
+ * The copy's presence means one thing — *"the app has not opened cleanly since
+ * a migration"* — and `refuseStaleCopy` acts on it by refusing every later
+ * launch. A migration that threw and rolled back cleanly does not satisfy that
+ * sentence: nothing was written, `user_version` never moved, and the file on
+ * disk is byte-for-byte what the copy was taken from. Keeping the copy there
+ * meant the next launch reported `refuseStaleCopy` — *"a pre-migration copy
+ * from an earlier run is still at …"* — instead of the reason the migration
+ * failed, which is the one sentence the person holding the phone needs and the
+ * only one that is the same on every launch until it is fixed.
+ *
+ * So the copy is released when the rollback is provably clean, and the
+ * original error goes on untouched. When it is **not** provably clean — the
+ * version moved, or the database can no longer even be read for its version —
+ * the copy stays, because that is exactly the case it exists for, and the
+ * cause is chained into the message rather than replaced by it: a reader who
+ * gets the stale-copy refusal on the next launch has already been told, once,
+ * what actually went wrong.
+ */
+function runOrReleaseCopy<TRun, TSchema extends LedgerSchema>(
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+  steps: readonly Migration[],
+  toVersion: number,
+  store: string,
+  copy: PreMigrationCopy,
+  found: number,
+): void {
+  try {
+    runInOneTransaction(db, steps, toVersion, store);
+  } catch (error) {
+    const after = versionAfterFailure(db);
+
+    if (after === found) {
+      copy.release();
+      throw error;
+    }
+
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `the ${store} migration failed and did not roll back cleanly — it reports version ${after ?? "unreadable"}, not the ${found} it started at, so the pre-migration copy at ${copy.path} has been kept. The cause was: ${cause}`,
+      { cause: error },
+    );
+  }
+}
+
+/**
+ * `user_version` after a failed migration, or `null` when the database cannot
+ * be read at all — which is not the same answer and must not be reported as
+ * one. `catch` with no binding because the reason *this* read failed says
+ * nothing the failure being reported does not.
+ */
+function versionAfterFailure<TRun, TSchema extends LedgerSchema>(
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+): number | null {
+  try {
+    return readUserVersion(db);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * `found` must be a version this chain actually passed through, or "the steps
  * after it" is not well-defined. Zero is the exception: a database SQLite
  * just created.
@@ -679,10 +985,9 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
   const current = checkChain(migrations);
   const found = readUserVersion(store.db);
 
-  if (found === current) {
-    return { from: found, to: found, applied: [], copy: outstandingCopy(store.path, fs) };
-  }
-
+  // Ahead of this build is answered before the journal is consulted: a file a
+  // newer app wrote may hold a journal shape this build does not know, and
+  // "install the newer build" is the right sentence either way.
   if (found > current) {
     throw new Error(
       `outbox is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. The outbox is never dropped (architecture/08 §5): install the newer build, or export the entries from S30 before doing anything else`,
@@ -691,17 +996,18 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
 
   refuseUnknownVersion(found, migrations, "outbox");
 
-  const steps = migrations.filter((m) => m.version > found);
+  const applied = readAppliedTags(store.db, migrations, found, "outbox", store.path);
+  const steps = migrations.filter((m) => !applied.has(m.tag));
+
+  if (steps.length === 0) {
+    return { from: found, to: found, applied: [], copy: outstandingCopy(store.path, fs) };
+  }
+
   checkPreconditions(store.db, steps, found);
   refuseStaleCopy(store.path, fs);
 
   const copy = takeCopy(store.path, store.db, fs);
-  runInOneTransaction(
-    store.db,
-    steps.map((m) => m.up),
-    current,
-    "outbox",
-  );
+  runOrReleaseCopy(store.db, steps, current, "outbox", copy, found);
 
   return { from: found, to: current, applied: steps.map((m) => m.version), copy };
 }
@@ -710,15 +1016,18 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
  * Migrate the replica in place. Never dropped, never refetched — see this
  * file's header for why.
  *
- * Four outcomes:
+ * Five outcomes, and **which steps run is the journal's answer, not the
+ * version's** (this file's header):
  *
- * - **At current.** Nothing happens.
+ * - **Every tag journaled.** Nothing happens.
  * - **At zero.** A database SQLite just created. Every step runs; there is
  *   nothing to preserve and nothing missing to reason about.
- * - **Behind current, at a version this chain recognises.** The steps after
- *   `found` run, in one transaction, against the tables as they stand — rows
- *   intact. `refetchRequired` is `false`: nothing here ever drops the
+ * - **Behind current, journal intact.** The steps the journal does not hold
+ *   run, in order, in one transaction, against the tables as they stand —
+ *   rows intact. `refetchRequired` is `false`: nothing here ever drops the
  *   replica, so nothing here ever needs the rows back from a server.
+ * - **Above zero with no journal, or a journaled tag whose statements have
+ *   changed.** Refused by `readAppliedTags`, with nothing written.
  * - **Ahead of current.** A database written by a newer app. This build
  *   raises and writes nothing — the same rule `migrateOutbox` applies, for
  *   the same reason: a build that does not recognise a version must not
@@ -733,7 +1042,18 @@ export function migrateReplica<TRun, TSchema extends LedgerSchema>(
   const current = checkChain(migrations);
   const found = readUserVersion(store.db);
 
-  if (found === current) {
+  if (found > current) {
+    throw new Error(
+      `replica is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. Install the newer build before opening this file with an older one`,
+    );
+  }
+
+  refuseUnknownVersion(found, migrations, "replica");
+
+  const applied = readAppliedTags(store.db, migrations, found, "replica", store.path);
+  const steps = migrations.filter((m) => !applied.has(m.tag));
+
+  if (steps.length === 0) {
     return {
       from: found,
       to: found,
@@ -743,25 +1063,11 @@ export function migrateReplica<TRun, TSchema extends LedgerSchema>(
     };
   }
 
-  if (found > current) {
-    throw new Error(
-      `replica is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. Install the newer build before opening this file with an older one`,
-    );
-  }
-
-  refuseUnknownVersion(found, migrations, "replica");
-
-  const steps = found === 0 ? migrations : migrations.filter((m) => m.version > found);
   checkPreconditions(store.db, steps, found);
   refuseStaleCopy(store.path, fs);
 
   const copy = takeCopy(store.path, store.db, fs);
-  runInOneTransaction(
-    store.db,
-    steps.map((m) => m.up),
-    current,
-    "replica",
-  );
+  runOrReleaseCopy(store.db, steps, current, "replica", copy, found);
 
   return {
     from: found,

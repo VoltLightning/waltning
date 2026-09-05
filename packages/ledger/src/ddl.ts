@@ -8,6 +8,13 @@
  * schema modules declare, so a stale copy is a red test rather than a phone
  * that is quietly a version behind.
  *
+ * **Editing a step that has already shipped is worse than a stale copy.**
+ * `migrate.ts` hashes each step's statements and journals that checksum in
+ * `__ledger_migrations` on every device, so a change to an old file's
+ * contents makes every installed database refuse to open —
+ * *"this build's `0007_schema` is not the one that ran here"*. A change to
+ * what a step does is a **new** step.
+ *
  * This is what replaced a runtime emitter that walked drizzle's table objects
  * and rebuilt columns, affinities, `primary key` and `not null` by hand.
  * Everything else a table declared — foreign keys, `CHECK`s, indexes, partial

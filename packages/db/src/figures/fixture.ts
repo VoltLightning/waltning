@@ -187,6 +187,30 @@ export const ACCOUNTS = [
     openingDate: null as string | null,
     kind: "clearing",
   },
+  /**
+   * M4 — a clearing account with **two legs open at the same time**, where
+   * the oldest is a real transaction and is only *partly* unconsumed:
+   * `+100, +60, −40`. Both open legs survive `find-unsettled.ts`'s
+   * `running_open > total_consumed` filter, so the query's `opens` CTE
+   * produces two candidate rows for this one account — which is what makes
+   * `DISTINCT ON (o.account_id)` load-bearing rather than decoration, and
+   * what a fixture whose oldest open leg is the *only* open leg can never
+   * show.
+   *
+   * It also pins the remainder's definition. The answer is 60 — this leg's
+   * own unconsumed share — not 100 (the leg's whole amount) and not 120 (the
+   * account's balance, which the second open leg carries the rest of).
+   */
+  {
+    id: "00000000-0000-4000-8000-000000000013",
+    name: "Split clearing · PLN",
+    currency: "PLN",
+    ownership: "own",
+    isBusiness: false,
+    opening: "0",
+    openingDate: null as string | null,
+    kind: "clearing",
+  },
 ] as const;
 
 /**
@@ -529,6 +553,34 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     type: "expense",
     accountId: ACCOUNTS[10].id,
     amountOriginal: "150",
+    currency: "PLN",
+  },
+  // M4 — Split clearing: `+100, +60, −40`. The 40 consumes part of the 100,
+  // so the 100 stays open with 60 of its own left and the 60 stays open
+  // whole. Two rows clear the query's threshold; one row is the answer, and
+  // its remainder is 60.
+  {
+    id: "20000000-0000-4000-8000-000000000024",
+    date: "2026-08-01",
+    type: "income",
+    accountId: ACCOUNTS[11].id,
+    amountOriginal: "100",
+    currency: "PLN",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000025",
+    date: "2026-08-02",
+    type: "income",
+    accountId: ACCOUNTS[11].id,
+    amountOriginal: "60",
+    currency: "PLN",
+  },
+  {
+    id: "20000000-0000-4000-8000-000000000026",
+    date: "2026-08-03",
+    type: "expense",
+    accountId: ACCOUNTS[11].id,
+    amountOriginal: "40",
     currency: "PLN",
   },
 ];

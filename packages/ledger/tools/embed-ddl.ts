@@ -18,7 +18,13 @@
  * something older.
  *
  * Run through `pnpm --filter @waltning/ledger generate`, never on its own —
- * embedding without regenerating just re-writes yesterday's DDL.
+ * embedding without regenerating just re-writes yesterday's DDL. That script
+ * finishes by running Biome over the file this writes, so the committed
+ * `ddl.ts` is byte-identical to what a regeneration produces: `migrate.ts`
+ * checksums each step's statements out of this file and journals the result
+ * on every device, so a formatting pass that moved those bytes would read as
+ * *"this build's `0007_schema` is not the one that ran here"* on every
+ * installed phone.
  *
  * **Every generated file is its own step, in filename order — one `.sql` file,
  * one entry, nothing derived from its contents.** `REPLICA_STEPS` and
@@ -48,65 +54,9 @@
  * something a migration's rollback or commit restores on its own.
  */
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-
-/** drizzle-kit's separator. Statements, not lines: `CREATE TABLE` spans many. */
-const BREAKPOINT = "--> statement-breakpoint";
-
-/** The bookend pragma a rebuild file wraps itself in — meaningless where `migrate.ts` runs it (see this file's header) and stripped rather than shipped as a no-op. */
-const FOREIGN_KEYS_PRAGMA = /^PRAGMA\s+foreign_keys\s*=/i;
-
-/** One `.sql` file, `--> statement-breakpoint`-split, comments and trailing `;` stripped, foreign-key bookends dropped. */
-function statementsOf(text: string): string[] {
-  const statements: string[] = [];
-  for (const chunk of text.split(BREAKPOINT)) {
-    // Comment-only lines are stripped: the hand-written file explains itself
-    // at length, and none of that belongs in a bundle. A trailing `;` goes
-    // too — SQLite's `run` takes one statement and drizzle passes it through.
-    const statement = chunk
-      .split("\n")
-      .filter((line) => !line.trimStart().startsWith("--"))
-      .join("\n")
-      .trim()
-      .replace(/;$/, "");
-    if (statement.length > 0 && !FOREIGN_KEYS_PRAGMA.test(statement)) statements.push(statement);
-  }
-  return statements;
-}
-
-/**
- * Filename order, not `meta/_journal.json` order, deliberately: the journal
- * describes what drizzle-kit generated, and the hand-written
- * `0001_database_objects.sql` is listed there only because this repo puts it
- * there for `packages/db`'s benefit. Sorting the directory means a companion
- * file cannot be silently left out of the chain by a journal edit.
- */
-function filesIn(dir: URL): string[] {
-  const files = readdirSync(dir)
-    .filter((name) => name.endsWith(".sql"))
-    .sort();
-  if (files.length === 0) throw new Error(`no .sql files in ${fileURLToPath(dir)} — run generate`);
-  return files;
-}
-
-/** A generated file's own tag — `0006_schema.sql` becomes `0006_schema`, the key `migrate.ts`'s `*_BACKFILLS` looks a step's hand-written backfill up by. */
-function tagOf(file: string): string {
-  return file.replace(/\.sql$/, "");
-}
-
-export type Step = {
-  readonly tag: string;
-  readonly statements: readonly string[];
-};
-
-/** Every `.sql` in one migration directory, in filename order — one step per file, nothing derived from what a file contains. */
-function stepsIn(dir: URL): Step[] {
-  return filesIn(dir).map((file) => ({
-    tag: tagOf(file),
-    statements: statementsOf(readFileSync(new URL(file, `${dir.href}/`), "utf8")),
-  }));
-}
+import { type Step, stepsIn } from "./steps.ts";
 
 /**
  * One statement as a template literal.
@@ -139,6 +89,13 @@ const HEADER = `/**
  * database migrated from this file holds exactly the tables and columns those
  * schema modules declare, so a stale copy is a red test rather than a phone
  * that is quietly a version behind.
+ *
+ * **Editing a step that has already shipped is worse than a stale copy.**
+ * \`migrate.ts\` hashes each step's statements and journals that checksum in
+ * \`__ledger_migrations\` on every device, so a change to an old file's
+ * contents makes every installed database refuse to open —
+ * *"this build's \`0007_schema\` is not the one that ran here"*. A change to
+ * what a step does is a **new** step.
  *
  * This is what replaced a runtime emitter that walked drizzle's table objects
  * and rebuilt columns, affinities, \`primary key\` and \`not null\` by hand.

@@ -20,6 +20,7 @@ import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
 import { type Id, id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import { I18nProvider } from "@waltning/ui/i18n/provider";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
@@ -197,6 +198,32 @@ function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerPort {
     updateCurrency: vi.fn(),
     reset: () => undefined,
     ...overrides,
+  };
+}
+
+/**
+ * A real controller whose `settleDebt` refuses with `currencyMismatch`.
+ *
+ * The same shape as `unhydratedController` below and for the same reason: a
+ * real controller everywhere except the one answer a screen's branch is
+ * being tested against. This screen always sends `currency:
+ * account.currency`, so it cannot provoke this refusal itself — and where it
+ * comes from is `create-phone-ledger.test.ts`'s property, not this file's.
+ */
+function refusingSettle(port: PhoneLedgerPort): PhoneLedgerController {
+  const real = controllerOf(port);
+  return {
+    ...real,
+    settleDebt: () => ({
+      fieldErrors: [
+        {
+          path: "currency",
+          message: "This account only holds PLN — settle in that currency.",
+          messageKey: "settleDebt.currencyMismatch",
+          params: { accountCurrency: "PLN" },
+        },
+      ],
+    }),
   };
 }
 
@@ -767,6 +794,83 @@ describe("CounterpartyDetail (S13)", () => {
       sheet.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
     ).toBeDefined();
     expect(sheet.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+  });
+
+  /**
+   * L2 (#116)'s other half, which had no test until now: the key has to
+   * *resolve*, in whatever language the reader has.
+   *
+   * `settleDebt.currencyMismatch` is a pre-write refusal the controller
+   * raises for an account holding a currency other than the one being
+   * settled in (`create-phone-ledger.ts`), and it arrives here as a
+   * `messageKey` beside an English `message`. A branch missing from
+   * `resolveSettleFieldErrorMessage` does not fail: it prints that English
+   * `message` verbatim in every language, and `pl.ts`'s own translation of
+   * the same sentence is a string nothing can reach. So this asserts the
+   * Polish one renders — which is only true if the key went through
+   * `useT()` — and the English one beside it, since a resolver that dropped
+   * the interpolated `accountCurrency` would still pass a Polish-only check.
+   *
+   * The refusal is put in at the controller boundary rather than provoked
+   * through the sheet, because this screen sends `currency: account.currency`
+   * and so can never produce a mismatch itself; that the *controller* raises
+   * it for a mismatched draft is `create-phone-ledger.test.ts`'s property.
+   * What is under test here is only what this screen does with one.
+   */
+  describe("a `currencyMismatch` refusal reaching the screen", () => {
+    function renderWithRefusal(locale: "en" | "pl") {
+      const controller = refusingSettle(
+        basePort({
+          listCounterparties: () => [NINA_COUNTERPARTY],
+          listCounterpartyBalances: () => [NINA_ROW],
+          listAccounts: () => [CASH_PLN],
+        }),
+      );
+      render(
+        <I18nProvider locale={locale}>
+          <LedgerProvider controller={controller}>
+            <CounterpartyDetail />
+          </LedgerProvider>
+        </I18nProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: locale === "pl" ? "Rozlicz" : "Settle" }));
+      const sheet = within(
+        screen.getByLabelText(locale === "pl" ? "Rozliczenie z Nina" : "Settling with Nina"),
+      );
+      fireEvent.click(sheet.getByRole("button", { name: locale === "pl" ? "Na konto" : "Into" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+      fireEvent.click(
+        sheet.getByRole("button", { name: locale === "pl" ? "Kwota: 0" : "Amount: 0" }),
+      );
+      fireEvent.click(sheet.getByRole("button", { name: "5" }));
+      fireEvent.click(sheet.getByRole("button", { name: "0" }));
+      fireEvent.click(
+        sheet.getByRole("button", { name: locale === "pl" ? "Rozlicza: 0" : "Discharges: 0" }),
+      );
+      fireEvent.click(sheet.getByRole("button", { name: "5" }));
+      fireEvent.click(sheet.getByRole("button", { name: "0" }));
+      fireEvent.click(sheet.getByRole("button", { name: locale === "pl" ? "Rozlicz" : "Settle" }));
+      return sheet;
+    }
+
+    it("renders the English sentence, the account's currency interpolated", () => {
+      const sheet = renderWithRefusal("en");
+      expect(
+        sheet.getByText("This account only holds PLN — settle in that currency."),
+      ).toBeDefined();
+    });
+
+    it("renders the Polish one — the key resolved, never the English `message` passed through", () => {
+      const sheet = renderWithRefusal("pl");
+      expect(
+        sheet.getByText("To konto obsługuje tylko PLN — rozlicz w tej walucie."),
+      ).toBeDefined();
+      expect(
+        sheet.queryByText("This account only holds PLN — settle in that currency."),
+        "the English `message` the refusal carries must not reach a Polish reader",
+      ).toBeNull();
+    });
   });
 
   it("settles through the sheet — counterpartyId, the picked discharges, and the toast", () => {

@@ -70,7 +70,15 @@ export type Journey = {
   close: () => void;
 };
 
-export function openJourney(options?: { bootstrap?: readonly BootstrapCurrency[] }): Journey {
+export function openJourney(options?: {
+  bootstrap?: readonly BootstrapCurrency[];
+  /**
+   * A chain below this build's head, for the one caller that needs a session
+   * over an *older* database: `tools/dump-fixture.ts`, dumping the fixture for
+   * the version a branch leaves behind. See `LocalLedgerSessionOptions`.
+   */
+  migrations?: LocalLedgerSessionOptions<Run>["migrations"];
+}): Journey {
   const dir = mkdtempSync(join(tmpdir(), "waltning-journey-"));
   const paths: LedgerPaths = { replica: join(dir, "replica.db"), outbox: join(dir, "outbox.db") };
 
@@ -80,6 +88,7 @@ export function openJourney(options?: { bootstrap?: readonly BootstrapCurrency[]
     fs: nodeFs,
     removeDatabase: (path) => rmSync(path, { force: true }),
     bootstrapCurrencies: options?.bootstrap ?? [],
+    ...(options?.migrations ? { migrations: options.migrations } : {}),
   };
 
   let rawLedger: Ledger<Run, Schema> | undefined;

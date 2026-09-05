@@ -363,6 +363,30 @@ mean a later file inserted, renumbered or removed quietly changes what an
 installed database's number claims to have run, and the migrator would then run
 the wrong steps against real rows with no way to notice.
 
+**A version is a tag plus a checksum, and both stores journal it.** A number
+alone is only meaningful against the chain that wrote it — `user_version = 1`
+under a one-step chain means "everything ran" and under a nine-step chain means
+"one step ran" — and a filename alone does not say what was inside the file.
+So each store carries `__ledger_migrations`: one row per applied step, its tag
+and a checksum of that step's statements, a table the migrator creates itself
+before the chain rather than one a generated step builds, written inside the
+same transaction as the step it records. What runs on a launch is what the
+journal does not hold, in order; `user_version` is the fast path, moving in
+that same transaction.
+
+Three things are then refusals rather than guesses, each with nothing written
+and no pre-migration copy taken:
+
+- **Above version 0 with no journal.** The file was written before the journal
+  existed and cannot say what it ran; the recovery is to delete both files and
+  let the app rebuild them, which the refusal spells out by name.
+- **A journaled tag whose checksum is not this build's.** A generated
+  migration file's statements are frozen the moment an installed database has
+  run them — every device that ran the old ones would otherwise disagree
+  silently with a fresh install about its own tables. A change to what a step
+  does is a **new** step.
+- **A version this chain never passed through**, as before.
+
 **A step whose SQL cannot say everything carries a backfill**, registered under
 that same filename. Two hooks, at opposite ends of the migration on purpose: a
 `fill` inside the migration transaction, immediately after its own step's
@@ -383,7 +407,23 @@ transaction opens for a rebuild of a table other populated tables reference to
 be possible at all. `PRAGMA foreign_key_check`, run inside the same transaction
 before the version moves, is what pays for that: a migration that did leave an
 orphan rolls back rather than committing, and the database is left at the
-version and the rows it started with.
+version and the rows it started with. Afterwards the pragma goes back to **the
+value that connection was opened with**, which is on for the replica and off
+for the outbox — a store that references nothing, deliberately. Restoring a
+constant `ON` instead handed every later statement on the outbox's connection
+a stricter database than the one that was configured, on exactly the launches
+where a migration happened to run.
+
+**A migration that fails releases the copy, when it fails cleanly.** The copy's
+presence means one thing — the app has not opened cleanly since a migration —
+and a rollback that left the version unmoved and the file untouched does not
+satisfy it. Keeping the copy there made the next launch report the copy
+instead of the reason the migration failed, which is the sentence the person
+holding the phone needs and the only one that repeats identically until it is
+fixed. Where the rollback is *not* provably clean — the version moved, or the
+file can no longer be read — the copy stays, because that is the case it
+exists for, and the original cause is carried into the message rather than
+replaced by it.
 
 **A pre-migration copy that is still there blocks the next migration, and the
 way out is exactly two steps.** The copy's presence *is* the record that the app
