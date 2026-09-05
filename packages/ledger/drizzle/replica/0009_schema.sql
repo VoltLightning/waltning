@@ -7,6 +7,16 @@
 -- table via plain `ALTER TABLE … ADD COLUMN` (SQLite needs no rebuild for a
 -- nullable column), so by the time the rebuild's `SELECT` runs, `fx_rates`
 -- already carries all nine columns it copies.
+--
+-- `fx_rates_rate_bounds`, baked into `__new_fx_rates` below, has a
+-- hand-written companion: `migrate.ts`'s `REPLICA_BACKFILLS["0009_schema"]`
+-- is a check-only hook (no `fill` — there is nothing here to derive) that
+-- runs before this step's `INSERT … SELECT`, refuses by naming every
+-- `fx_rates` row this `CHECK` would reject, and says how to recover (delete
+-- or re-set the rate in S18) — because a rate a pre-bounds `change_pivot`
+-- minted outside the bound would otherwise fail the `INSERT … SELECT`
+-- itself, roll the whole step back, and repeat that same unexplained
+-- failure on every later launch.
 ALTER TABLE `fx_rates` ADD `displaced_rate` text;--> statement-breakpoint
 ALTER TABLE `fx_rates` ADD `displaced_source` text;--> statement-breakpoint
 ALTER TABLE `fx_rates` ADD `displaced_fetched_at` integer;--> statement-breakpoint

@@ -61,6 +61,6 @@ rewrite the head pair.)
 `transactions` for the debt columns, and it is the pair with teeth: loading it
 runs a real step against real rows, across a table rebuild, with two
 counterparties whose names fold to one (`Łukasz Placeholder` and `łukasz
-placeholder`, the second archived by the merge the fixture also carries). `v9`
+placeholder`, the second archived by the merge the fixture also carries). `v10`
 is the current head, so its upgrade is a no-op — what it catches is drift: a
 `fixture:dump` that stops producing what is committed here.

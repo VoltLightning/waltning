@@ -102,6 +102,7 @@
  */
 
 import { fold } from "@waltning/core/capture/names";
+import { RATE_MAX_EXCLUSIVE, RATE_MIN_EXCLUSIVE } from "@waltning/core/money";
 import { type SQL, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { OUTBOX_STEPS, REPLICA_STEPS } from "./ddl.ts";
@@ -276,10 +277,16 @@ export const COPY_SUFFIX = ".pre-migration";
  * Neither hook is handed the step's statements, and neither runs them: the
  * generated SQL is this module's to execute, verbatim, in the order
  * drizzle-kit emitted it.
+ *
+ * **`fill` is optional — a hook may carry only a `check`.** `0009_schema`'s
+ * backfill is exactly that: the step adds a `CHECK` no `ALTER TABLE` can
+ * express a repair for, so its hook only refuses a database the step cannot
+ * carry forward. There is no value to derive and nothing to write, so
+ * forcing a no-op `fill` on it would be a lie about what runs.
  */
 export type Backfill = {
   readonly check?: (db: SqlReader) => void;
-  readonly fill: (tx: SqlRunner) => void;
+  readonly fill?: (tx: SqlRunner) => void;
 };
 
 /**
@@ -316,6 +323,21 @@ export type Backfill = {
  * here may pick a winner: which of two counterparties survives is the owner's
  * decision, made in S15, never a migration's. So it names both rows and stops,
  * before anything is written and before a copy is taken.
+ *
+ * **`0009_schema` refuses a rate its own new `CHECK` cannot accept — and
+ * carries no `fill`.** The step bakes `fx_rates_rate_bounds` — `rate` strictly
+ * between `RATE_MIN_EXCLUSIVE` and `RATE_MAX_EXCLUSIVE` — into the rebuilt
+ * `fx_rates`, via the same `CREATE TABLE __new_fx_rates` / `INSERT … SELECT`
+ * shape `0006_schema`'s rebuild uses. Unlike that rebuild, there is nothing to
+ * *derive*: a rate already outside the bound is not a default this hook can
+ * repair, it is a value only S18 can replace. Before this hook existed, a
+ * replica holding one — minted by a pre-bounds `change_pivot`, which used to
+ * rebase without a ceiling — failed the `INSERT … SELECT` itself, rolled the
+ * whole migration back, and repeated the same failure, unexplained, on every
+ * later launch: the file on disk was untouched, but nothing said why or what
+ * to do about it. `check` runs first and says both: every offending row, by
+ * `base`/`quote`/`date`/`rate`, and that the fix is to delete or re-set the
+ * rate in S18 and relaunch.
  */
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0006_schema": {
@@ -351,6 +373,31 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
           sql`update "counterparties" set "name_folded" = ${fold(row.name.trim())} where "id" = ${row.id}`,
         );
       }
+    },
+  },
+  "0009_schema": {
+    check: (db) => {
+      const rows = db.all<{ base: string; quote: string; date: string; rate: string }>(
+        sql.raw(`select "base", "quote", "date", "rate" from "fx_rates"`),
+      );
+      // Mirrors the step's own `CHECK (cast(rate as real) > … and < …)`
+      // exactly, rather than `rateInBounds`'s `Decimal` comparison, because
+      // this hook exists to predict what that one constraint will do to this
+      // exact row — never to hold rates to a stricter bound than the step
+      // itself enforces.
+      const min = Number(RATE_MIN_EXCLUSIVE);
+      const max = Number(RATE_MAX_EXCLUSIVE);
+      const outOfBounds = rows.filter((row) => {
+        const value = Number(row.rate);
+        return !(value > min && value < max);
+      });
+      if (outOfBounds.length === 0) return;
+      const detail = outOfBounds
+        .map((row) => `${row.base}/${row.quote} on ${row.date}: ${row.rate}`)
+        .join("; ");
+      throw new Error(
+        `this upgrade adds fx_rates_rate_bounds (${RATE_MIN_EXCLUSIVE} < rate < ${RATE_MAX_EXCLUSIVE}), and ${outOfBounds.length} row(s) of "fx_rates" already fall outside it — ${detail}. Nothing has been written and no pre-migration copy taken. Open the previous build, delete or re-set each rate in S18, then upgrade again`,
+      );
     },
   },
 };
@@ -452,7 +499,7 @@ export function migrationsFromSteps(
       checksum: checksumOf(step.statements),
       up: (tx: SqlRunner) => {
         for (const statement of step.statements) tx.run(sql.raw(statement));
-        backfill?.fill(tx);
+        backfill?.fill?.(tx);
       },
     };
     // Spread rather than `check: backfill?.check`: under

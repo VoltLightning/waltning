@@ -246,6 +246,17 @@ function insertCounterparty(
  * `INSERT` regardless of which version the file is actually at. Only the
  * columns every version in this suite has are named here.
  */
+/** The two currencies `insertFxRate`'s foreign keys need, present from the schema's earliest version. */
+function seedCurrencies(ledger: Ledger) {
+  for (const code of ["PLN", "USD"] as const) {
+    ledger.replica.db
+      .insert(currencies)
+      .values({ code: currencyCode(code), name: "Placeholder" })
+      .onConflictDoNothing()
+      .run();
+  }
+}
+
 function insertFxRate(ledger: Ledger, base: string, quote: string, date: string, rate: string) {
   ledger.replica.db.run(
     sql`insert into "fx_rates" ("base", "quote", "date", "rate", "source") values (${base}, ${quote}, ${date}, ${rate}, 'manual')`,
@@ -1044,6 +1055,82 @@ describe("the `0006_schema` backfill", () => {
       "lukasz placeholder",
       "lukasz placeholder",
     ]);
+  });
+});
+
+/**
+ * `0009_schema`'s backfill — the check-only shape `Backfill.fill` had to
+ * become optional for. Before it existed, a replica holding a rate a
+ * pre-bounds `change_pivot` minted outside `fx_rates_rate_bounds` — the
+ * finding's own example is `5000000000000`, well past `RATE_MAX_EXCLUSIVE`
+ * — failed the step's own `INSERT … SELECT` into `__new_fx_rates`, rolled
+ * the whole migration back, and repeated that same unexplained failure on
+ * every later launch, with no repair path.
+ */
+describe("the `0009_schema` backfill", () => {
+  /** Where `0009_schema` sits in the generated chain — version 9 is everything before it. */
+  const stepIndex = REPLICA_STEPS.findIndex((step) => step.tag === "0009_schema");
+
+  it("refuses an out-of-bounds rate before the copy, naming the row, and repeats the same cause", () => {
+    const ledger = openAt("rate-bounds");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
+    }).copy?.release();
+
+    seedCurrencies(ledger);
+    insertFxRate(ledger, "PLN", "USD", "2026-03-01", "5000000000000");
+
+    const replicaPath = join(dir, "rate-bounds-replica.db");
+    const versionBefore = inspect(replicaPath, userVersion);
+    const outOfBounds = /fx_rates_rate_bounds/;
+
+    expect(() => migrateReplica(ledger.replica, { fs: realFs })).toThrow(outOfBounds);
+    expect(existsSync(`${replicaPath}${COPY_SUFFIX}`), "no copy was taken").toBe(false);
+    expect(inspect(replicaPath, userVersion), "the version did not move").toBe(versionBefore);
+
+    const first = refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }));
+    expect(first).toMatch(outOfBounds);
+    expect(first, "the offending row, by base/quote/date").toContain("PLN/USD on 2026-03-01");
+    expect(first).toContain("5000000000000");
+
+    const second = refusalMessage(() => migrateReplica(ledger.replica, { fs: realFs }));
+    expect(second, "the same launch reaches the same cause, every time").toBe(first);
+    expect(existsSync(`${replicaPath}${COPY_SUFFIX}`), "still no copy, on the second launch").toBe(
+      false,
+    );
+
+    ledger.close();
+  });
+
+  it("upgrades once the rate is deleted, and the journal records the step", () => {
+    const ledger = openAt("rate-bounds-fixed");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
+    }).copy?.release();
+
+    seedCurrencies(ledger);
+    insertFxRate(ledger, "PLN", "USD", "2026-03-01", "5000000000000");
+
+    const replicaPath = join(dir, "rate-bounds-fixed-replica.db");
+    expect(() => migrateReplica(ledger.replica, { fs: realFs })).toThrow(/fx_rates_rate_bounds/);
+
+    ledger.replica.db.run(
+      sql`delete from "fx_rates" where "base" = 'PLN' and "quote" = 'USD' and "date" = '2026-03-01'`,
+    );
+
+    const result = migrateReplica(ledger.replica, { fs: realFs });
+    result.copy?.release();
+    ledger.close();
+
+    expect(result.to).toBe(REPLICA_MIGRATIONS.length);
+    const journaled = inspect(replicaPath, (db) =>
+      db.prepare(`select "tag" from "${MIGRATION_JOURNAL}" where "tag" = ?`).get("0009_schema"),
+    );
+    expect(journaled, "the journal records 0009_schema as applied").toEqual({
+      tag: "0009_schema",
+    });
   });
 });
 

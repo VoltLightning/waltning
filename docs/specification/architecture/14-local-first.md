@@ -410,7 +410,11 @@ the same check and gives the same reason, instead of reporting a leftover copy
 and burying the cause. The example that exists today is the folded counterparty
 name: two live rows whose names fold to one cannot both survive the partial
 unique index, and which of them survives is the owner's decision in S15, so the
-migration names both rows and stops.
+migration names both rows and stops. A hook may carry only a `check` and no
+`fill` — a step that adds a `CHECK` with nothing for the migration itself to
+derive or repair (a rate already outside `fx_rates_rate_bounds`, fixable only
+in S18) refuses a database the step cannot rebuild, rather than pretending a
+no-op fill.
 
 **A migration runs with foreign keys off, and proves it left none broken.**
 SQLite has no `ALTER TABLE … ADD CONSTRAINT`, so a new `CHECK` is a

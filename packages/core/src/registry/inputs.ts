@@ -1023,11 +1023,12 @@ const MANUAL_RATE_RANGE_ISSUE = {
  *
  * **Belt and suspenders with `zUnitsPerPivot`'s own bounds.** Once
  * `RATE_MIN_EXCLUSIVE`/`RATE_MAX_EXCLUSIVE` (`zod.ts`, `money.ts`) refuse a
- * rate outside `(1e-12, 1e12)` at the field itself, no *in-bounds* rate can
- * reach `money.reciprocal`'s own throw — its flip only rounds to zero at or
- * past the same `1e12` those bounds already exclude. This refine still runs,
- * named for what it once caught alone before those bounds existed, so a
- * future loosening of them does not quietly reopen this exact throw.
+ * rate outside `(1e-12, 999999999999)` at the field itself, no *in-bounds*
+ * rate can reach `money.reciprocal`'s own throw — its flip only rounds to
+ * zero at or past the same `RATE_MAX_EXCLUSIVE` those bounds already
+ * exclude. This refine still runs, named for what it once caught alone
+ * before those bounds existed, so a future loosening of them does not
+ * quietly reopen this exact throw.
  */
 const rateReciprocates = (v: { rate: UnitsPerPivot }) => {
   try {

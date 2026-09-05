@@ -84,7 +84,8 @@ export const zFee = z
  * `Money` — a bug the type system would otherwise wave through, because
  * nothing about the brand says "positive".
  *
- * **H2 — and bounded, `1e-12 < rate < 1e12`.** Positive alone is not enough:
+ * **H2 — and bounded, `RATE_MIN_EXCLUSIVE < rate < RATE_MAX_EXCLUSIVE`
+ * (`1e-12 < rate < 999999999999`).** Positive alone is not enough:
  * `numeric(24,12)` cannot hold `1e12`, and `money.reciprocal` throws on
  * anything whose flip truncates to `0.000000000000` — a throw that used to
  * land inside `create_transaction`'s `apply`, *after* `writeLocally` had
@@ -111,7 +112,8 @@ export const zPivotPerUnit = z
  *
  * **Refused at zero or below**, same reason as `zPivotPerUnit`: a zero rate
  * makes `toPivotByDivision` divide by zero and return `Infinity` branded as
- * `Money`. **And bounded the same way (H2), `1e-12 < rate < 1e12`** — see
+ * `Money`. **And bounded the same way (H2), `RATE_MIN_EXCLUSIVE < rate <
+ * RATE_MAX_EXCLUSIVE` (`1e-12 < rate < 999999999999`)** — see
  * `zPivotPerUnit` above and `money.ts`'s `RATE_MIN_EXCLUSIVE`.
  */
 export const zUnitsPerPivot = z
