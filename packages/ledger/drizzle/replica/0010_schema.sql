@@ -139,3 +139,86 @@ INSERT INTO `__new_recurring_transactions`("id", "type", "account_id", "to_accou
 DROP TABLE `recurring_transactions`;--> statement-breakpoint
 ALTER TABLE `__new_recurring_transactions` RENAME TO `recurring_transactions`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;
+--> statement-breakpoint
+-- H1a — an archived category is not assignable, the replica's own half of
+-- `0001_database_objects.sql`'s `assert_category_not_archived`.
+--
+-- **Both tables that carry a `category_id`**, because the server guards both:
+-- `transaction_lines` holds §10.3's split, and a retired leaf on a line is the
+-- copy nobody sees — the parent row shows a category the reader recognises
+-- while the line beneath it points at one no picker offers.
+--
+-- `architecture/14` §14.6: the phone refuses at capture time what the server
+-- would refuse. The client refuses this before the write
+-- (`transactions.categoryUnavailable`) and the local executor refuses it again
+-- (`assertCategoryNotArchived`) — neither is a guarantee, and this file is
+-- where the replica's guarantees live. SQLite has no cross-table CHECK, so a
+-- trigger is the only shape available; two per table, because SQLite's
+-- `BEFORE UPDATE OF` cannot name a column list the way Postgres can, so each
+-- update half guards itself with a `WHEN` on the column actually moving.
+--
+-- **All four live at the end of the head migration, after the rebuilds
+-- above, and that placement is the guarantee.** SQLite drops a table's
+-- triggers with the table, so the copy-rename-drop rebuild `transactions`
+-- takes a few lines up would silently take
+-- `transactions_category_not_archived_insert`/`_update` with it if they had
+-- been created in an earlier step — no error, no missing table, just a
+-- guarantee that stopped firing. The `transaction_lines` pair is not rebuilt
+-- by anything here and would have survived either way; it stays with its
+-- siblings so the four read as one guarantee and a future rebuild has one
+-- block to move rather than two halves to notice.
+-- `migrate.test.ts`'s `sqlite_master` assertion is what fails if a later
+-- rebuild lands above these again.
+--
+-- Hand-written into the head migration rather than added as `0011`: every
+-- current database is disposable until first install (`architecture/08` item
+-- 1), so there is no installed chain to append to — and a new step would need
+-- a fixture for the version it left behind, dumped from a database nobody has.
+-- Once a build ships, this stops being true and a change here becomes a new
+-- step.
+--
+-- Archiving a category that already holds rows stays legal: the triggers are
+-- on the rows that point at a category, fired by the write that would newly
+-- do so — never on `categories` itself.
+CREATE TRIGGER `transactions_category_not_archived_insert`
+BEFORE INSERT ON `transactions`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;--> statement-breakpoint
+CREATE TRIGGER `transactions_category_not_archived_update`
+BEFORE UPDATE ON `transactions`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+	AND (OLD.`category_id` IS NULL OR OLD.`category_id` <> NEW.`category_id`)
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;--> statement-breakpoint
+CREATE TRIGGER `transaction_lines_category_not_archived_insert`
+BEFORE INSERT ON `transaction_lines`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;--> statement-breakpoint
+CREATE TRIGGER `transaction_lines_category_not_archived_update`
+BEFORE UPDATE ON `transaction_lines`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+	AND (OLD.`category_id` IS NULL OR OLD.`category_id` <> NEW.`category_id`)
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;
