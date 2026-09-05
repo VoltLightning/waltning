@@ -163,8 +163,10 @@ For the native route, `pnpm --filter @waltning/mobile dev` starts Expo Go alone
 (`apps/mobile/README.md` has the `a`/`i`/`w` shortcuts) — the native preview
 doesn't call the API, so there's normally nothing to run alongside it.
 `pnpm dev:all` is `make dev`'s pnpm-spelled sibling for this surface: the same
-pattern — Postgres first (`pnpm db:up`), then two processes together, Ctrl-C
-stops both — for the API and Expo Go instead of the API and the web app. One
+pattern — Postgres first, and waited for (`make db`, the same prerequisite
+every Makefile dev target uses — `pnpm db:up` alone only starts the
+container, it does not wait), then two processes together, Ctrl-C stops
+both — for the API and Expo Go instead of the API and the web app. One
 thing it can't do: under `pnpm --parallel`'s piped output Expo's keyboard
 shortcuts (`a`/`i`/`w`) don't work, so reach for `pnpm dev:android`,
 `pnpm dev:ios`, or `pnpm dev:web` when you need one of those interactively.
@@ -175,8 +177,14 @@ shortcuts (`a`/`i`/`w`) don't work, so reach for `pnpm dev:android`,
 make e2e             # spins up its own database, API, and web bundle
 make appliance-e2e   # the same suite, against the containers instead
 pnpm test            # the full suite, against a real Postgres
-pnpm verify          # the gate the pre-commit hook runs for you
+pnpm verify          # the full gate — format, types, tests, and the visual suite
+pnpm verify:fast     # the same, minus the visual suite (no Playwright)
 ```
+
+The pre-commit hook runs one or the other for you, never both and never
+neither: `pnpm verify:fast` when nothing staged can move a rendered pixel,
+`pnpm verify` when something can — `.githooks/needs-visual.sh` is what
+decides which. Run either by hand the same way it runs them.
 
 `make e2e` runs the Playwright suite. It needs only Postgres running
 (`pnpm db:up`) — from there it clones and seeds its own scratch database,

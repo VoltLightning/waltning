@@ -23,7 +23,6 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -32,6 +31,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { assertIsolated, createTempGitRepo, git, removeTempGitRepo } from "./git-fixture.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const NEEDS_VISUAL = ".githooks/needs-visual.sh";
@@ -161,20 +161,19 @@ describe("needs-visual.sh — only exit 1 skips; everything else runs the suite 
 });
 
 describe("the ui→core trace needs-visual.sh assumes (M-2)", () => {
-  const uiPkg: { dependencies?: Record<string, string> } = JSON.parse(
-    readFileSync(new URL("../packages/ui/package.json", import.meta.url), "utf8"),
-  );
+  const uiPkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } =
+    JSON.parse(readFileSync(new URL("../packages/ui/package.json", import.meta.url), "utf8"));
   const coreExports: Record<string, string> = JSON.parse(
     readFileSync(new URL("../packages/core/package.json", import.meta.url), "utf8"),
   ).exports;
 
-  it("packages/ui depends on exactly @waltning/core among workspace packages", () => {
-    const workspaceDeps = Object.keys(uiPkg.dependencies ?? {}).filter((name) =>
-      name.startsWith("@waltning/"),
+  it("packages/ui depends on exactly @waltning/core among workspace packages, dependencies or devDependencies (L-e)", () => {
+    const workspaceDeps = Object.keys({ ...uiPkg.dependencies, ...uiPkg.devDependencies }).filter(
+      (name) => name.startsWith("@waltning/"),
     );
     expect(
       workspaceDeps,
-      "packages/ui/package.json's @waltning/* dependencies changed — " +
+      "packages/ui/package.json's @waltning/* dependencies (or devDependencies) changed — " +
         ".githooks/needs-visual.sh assumes packages/core is the only one and " +
         "needs its trigger set updated if that is no longer true",
     ).toEqual(["@waltning/core"]);
@@ -197,13 +196,20 @@ describe("the ui→core trace needs-visual.sh assumes (M-2)", () => {
     return undefined;
   }
 
-  it("every @waltning/core subpath packages/ui imports resolves under packages/core/src/", () => {
+  it("every @waltning/core subpath packages/ui imports — from src/, .storybook/, or visual/ — resolves under packages/core/src/ (L-e)", () => {
     const IMPORT = /from\s+["']@waltning\/core\/([^"']+)["']/g;
-    const uiSrc = fileURLToPath(new URL("../packages/ui/src", import.meta.url));
+    // Not just src/: a story or the Storybook config itself importing
+    // money.ts for fixture data is exactly as capable of affecting a
+    // rendered pixel as anything under src/.
+    const roots = ["src", ".storybook", "visual"].map((dir) =>
+      fileURLToPath(new URL(`../packages/ui/${dir}`, import.meta.url)),
+    );
     const subpaths = new Set<string>();
-    for (const file of sourceFiles(uiSrc)) {
-      for (const match of readFileSync(file, "utf8").matchAll(IMPORT)) {
-        if (match[1]) subpaths.add(match[1]);
+    for (const root of roots) {
+      for (const file of sourceFiles(root)) {
+        for (const match of readFileSync(file, "utf8").matchAll(IMPORT)) {
+          if (match[1]) subpaths.add(match[1]);
+        }
       }
     }
 
@@ -231,74 +237,6 @@ describe("the ui→core trace needs-visual.sh assumes (M-2)", () => {
 describe("real staged state, not hand-written paths (H-2, M-1)", () => {
   const tmpDirs: string[] = [];
 
-  /**
-   * Every git call in this block goes through here, `-C dir` and all — never
-   * a bare `{ cwd: dir }`. `-C` is git resolving a path we pass as an
-   * argument, not a process-level cwd that a subprocess layer could fail to
-   * apply; the two should never differ, and if they ever did, `-C` is the
-   * one actually running these commands against `dir`.
-   *
-   * Every inherited `GIT_*` variable is stripped first. This is not
-   * defensive-for-no-reason: this exact file, on its first version, ran
-   * these git calls from inside `pnpm test` invoked by the pre-commit hook —
-   * and `git` sets `GIT_DIR` (and, mid-commit, `GIT_INDEX_FILE`) in the
-   * environment of every hook and everything the hook spawns, precisely so
-   * hook subprocesses share the commit-in-progress's repository and index.
-   * An explicit `GIT_DIR` env var overrides `-C` and cwd both — repository
-   * *discovery* never runs when `GIT_DIR` already says where the repository
-   * is — so without stripping it, `git -C <temp dir> init` still creates the
-   * temp `.git`, but every git call *after* it silently used the real
-   * repository's `GIT_DIR` instead, and `git commit` inside what looked like
-   * an isolated fixture committed into this worktree's real branch. It ran
-   * clean every time this suite was invoked directly from a shell — a shell
-   * has no `GIT_DIR` to inherit — which is exactly what made it invisible
-   * until the hook ran it.
-   *
-   * `GIT_CEILING_DIRECTORIES=dir` is the second, independent lock: even a
-   * `dir` that is not a git repository yet (before `git init` runs) cannot
-   * have git's repository *discovery* walk upward past it and find the real
-   * one — the exact shape a "temp repo" test must never risk.
-   */
-  function git(dir: string, args: string[]): string {
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
-    );
-    return execFileSync("git", ["-C", dir, ...args], {
-      encoding: "utf8",
-      env: { ...env, GIT_CEILING_DIRECTORIES: dir },
-    });
-  }
-
-  /**
-   * The hard stop before this helper ever returns a `dir` its caller will
-   * run `add`/`commit` against. If `-C dir rev-parse --show-toplevel` does
-   * not report back exactly `dir`, something about this environment makes
-   * "isolated temp repo" not mean what it says, and every test in this
-   * block must refuse to run rather than find out by writing to the real
-   * repository's history — which is exactly what happened the first time
-   * this file ran without this check.
-   */
-  function assertIsolated(dir: string): void {
-    const toplevel = realpathSync(git(dir, ["rev-parse", "--show-toplevel"]).trim());
-    const real = realpathSync(dir);
-    if (toplevel !== real) {
-      throw new Error(
-        `temp repo isolation failed: "git -C ${dir} rev-parse --show-toplevel" reported ` +
-          `${toplevel}, not ${real} — refusing to run git add/commit anywhere near this`,
-      );
-    }
-  }
-
-  function tempRepo(): string {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), "gate-hook-")));
-    tmpDirs.push(dir);
-    git(dir, ["init", "-q"]);
-    assertIsolated(dir);
-    git(dir, ["config", "user.email", "test@test.test"]);
-    git(dir, ["config", "user.name", "test"]);
-    return dir;
-  }
-
   function stagedPaths(dir: string): string[] {
     assertIsolated(dir);
     return git(dir, ["diff", "--cached", "--name-only", "--diff-filter=ACMRD", "--no-renames"])
@@ -309,12 +247,13 @@ describe("real staged state, not hand-written paths (H-2, M-1)", () => {
   afterEach(() => {
     while (tmpDirs.length) {
       const dir = tmpDirs.pop();
-      if (dir) rmSync(dir, { recursive: true, force: true });
+      if (dir) removeTempGitRepo(dir);
     }
   });
 
   it("H-2: a delete-only commit still stages the deleted path, and the suite is needed for a deleted ui file", () => {
-    const dir = tempRepo();
+    const dir = createTempGitRepo();
+    tmpDirs.push(dir);
     const target = join(dir, "packages", "ui", "src");
     mkdirSync(target, { recursive: true });
     writeFileSync(join(target, "component.tsx"), "export {};\n");
@@ -340,7 +279,8 @@ describe("real staged state, not hand-written paths (H-2, M-1)", () => {
   });
 
   it("M-1: moving a file out of packages/ui/ still stages the old path, and the suite is needed", () => {
-    const dir = tempRepo();
+    const dir = createTempGitRepo();
+    tmpDirs.push(dir);
     const uiSrc = join(dir, "packages", "ui", "src");
     const docs = join(dir, "docs");
     mkdirSync(uiSrc, { recursive: true });
@@ -364,6 +304,30 @@ describe("real staged state, not hand-written paths (H-2, M-1)", () => {
     const withRenameDetection = git(dir, ["diff", "--cached", "--name-only", "--diff-filter=ACMR"]);
     expect(withRenameDetection.split("\n").filter(Boolean)).toEqual(["docs/movable.tsx"]);
   });
+
+  it("L-d: deleting a secret-shaped file does not appear in the blocked-shape check's input", () => {
+    // Section 2 of the hook must not refuse a commit that only *removes* a
+    // `.env`/`.sqlite`/etc. file — that is cleanup, not the shape the check
+    // exists to catch. It computes its own `present` list with
+    // `--diff-filter=ACMR` (no `D`), separate from `$staged`; this proves
+    // the git plumbing that list depends on actually excludes a deletion.
+    const dir = createTempGitRepo();
+    tmpDirs.push(dir);
+    writeFileSync(join(dir, ".env"), "SECRET=x\n");
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-q", "-m", "init"]);
+
+    git(dir, ["rm", "-q", ".env"]);
+
+    const present = git(dir, [
+      "diff",
+      "--cached",
+      "--name-only",
+      "--diff-filter=ACMR",
+      "--no-renames",
+    ]);
+    expect(present.trim()).toBe("");
+  });
 });
 
 describe("package.json and the hook share one decision, with no environment override (M-4)", () => {
@@ -371,6 +335,15 @@ describe("package.json and the hook share one decision, with no environment over
   const scripts: Record<string, string> = JSON.parse(
     readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   ).scripts;
+
+  it("section 2's blocked-shape and CSV checks read $present, not $staged (L-d)", () => {
+    expect(hook).toMatch(
+      /present=\$\(git diff --cached --name-only --diff-filter=ACMR --no-renames\)/,
+    );
+    const section2 = hook.slice(hook.indexOf("── 2 ·"), hook.indexOf("── 3 ·"));
+    expect(section2).toContain("printf '%s\\n' \"$present\"");
+    expect(section2).not.toContain("printf '%s\\n' \"$staged\"");
+  });
 
   it("verify:fast is everything but Playwright; verify is verify:fast plus the visual suite", () => {
     expect(scripts["verify:fast"]).toBeDefined();
@@ -393,5 +366,16 @@ describe("package.json and the hook share one decision, with no environment over
     expect(hook).toMatch(/if\s+!\s+pnpm\s+verify;\s+then/);
     // The pattern the very first version hand-rolled must not reappear.
     expect(hook).not.toMatch(/packages\/\(ui\|core\)\//);
+  });
+
+  it("cites needs-visual.sh as the trigger set's source rather than restating it (L-b)", () => {
+    // The hook's own comment and its runtime skip message must both point at
+    // needs-visual.sh instead of each keeping their own copy of the trigger
+    // list — three places (this file included) is one too many to trust
+    // staying in sync by hand.
+    const printfLine = hook.split("\n").find((line) => line.includes("running pnpm verify:fast"));
+    expect(printfLine, "the hook's skip message").toBeDefined();
+    expect(printfLine).toContain(".githooks/needs-visual.sh");
+    expect(printfLine).not.toMatch(/packages\/ui\/|packages\/core\/src\//);
   });
 });

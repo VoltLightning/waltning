@@ -73,8 +73,18 @@ fi
 # ── 2 · Files that must never enter history, ignored or not ──────────────────
 #
 # The second layer, for shapes .gitignore does not cover.
+#
+# Scoped to paths that still exist (`--diff-filter=ACMR`, no `D`) — deleting
+# a `.env` or a `.sqlite` file is cleanup, not the shape this guards against,
+# and `$staged` includes deletions (H-2) precisely so the checks that *do*
+# want to see them still can. A `present` computed the same way `$staged` is,
+# minus `D`, is the fix rather than reusing `$staged` and filtering after:
+# the two lists agreeing on order and de-duplication is not something to
+# re-derive by hand in two places.
+present=$(git diff --cached --name-only --diff-filter=ACMR --no-renames)
+
 blocked=$(
-  printf '%s\n' "$staged" \
+  printf '%s\n' "$present" \
     | grep -Ei '(^|/)\.env$|\.(mmbak|sqlite|sqlite3|db|dump|age|xls|xlsx|ofx|qif|mt940|pem|crt|key|p8|p12|jks|keystore|mobileprovision)$' \
     | grep -vE '(^|/)\.env\.example$' \
     || true
@@ -86,7 +96,7 @@ fi
 # CSV is a bank-statement format here, so it is blocked everywhere except the
 # two places .gitignore already whitelists.
 blocked_csv=$(
-  printf '%s\n' "$staged" \
+  printf '%s\n' "$present" \
     | grep -Ei '\.csv$' \
     | grep -vE '^docs/|/fixtures/' \
     || true
@@ -162,9 +172,12 @@ fi
 # for Playwright on one anyway would train people to reach for --no-verify.
 #
 # `.githooks/needs-visual.sh` is the one place the trigger set is written —
-# everything under `packages/ui/`, `packages/core/src/`,
-# `packages/core/package.json`, and `pnpm-lock.yaml`. Its exit code is the
-# whole contract, and only one value means "skip":
+# read that file for the current list rather than this comment, which does
+# not restate it on purpose: a second copy here is exactly the kind of
+# duplication `.githooks/needs-visual.sh`'s own header exists to prevent, and
+# `tests/verify-visual-gate.test.ts` fails loudly the day this hook's skip
+# message below stops citing that file. Its exit code is the whole contract,
+# and only one value means "skip":
 #
 #   1     not needed — run `pnpm verify:fast` (check, typecheck, test; no
 #         Playwright).
@@ -190,7 +203,7 @@ set -e
 remedy="pnpm fix (formatting), pnpm db:up (if a test cannot reach Postgres), pnpm --filter @waltning/ui build-storybook (if Storybook itself failed to build), or pnpm test:visual:update (if it was a screenshot diff)."
 
 if [ "$decision" -eq 1 ]; then
-  printf "${DIM}  pre-commit: nothing under packages/ui/, packages/core/src/, packages/core/package.json, or pnpm-lock.yaml staged — running pnpm verify:fast (no Playwright)${OFF}\n"
+  printf "${DIM}  pre-commit: nothing in the visual trigger set (see .githooks/needs-visual.sh) staged — running pnpm verify:fast (no Playwright)${OFF}\n"
   if ! pnpm verify:fast; then
     fail "verify:fast failed." "$remedy"
   fi
