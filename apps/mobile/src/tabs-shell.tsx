@@ -21,7 +21,9 @@
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
+import { DEFAULT_DESK_SCOPE, parseDeskScope } from "@waltning/client/ledger/desk-scope";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import { useLeadCurrency } from "@waltning/client/ledger/use-lead-currency";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
@@ -49,7 +51,13 @@ import {
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, Text, View } from "react-native";
-import { displayCurrency, floatPosition, lastCapture, subscribeCommandBarHotkey } from "./platform";
+import {
+  deskScope,
+  displayCurrency,
+  floatPosition,
+  lastCapture,
+  subscribeCommandBarHotkey,
+} from "./platform";
 import { useTabBarItems } from "./use-tab-bar-items";
 
 function handleAdd() {
@@ -77,6 +85,11 @@ export function handleSelectType(type: "expense" | "transfer" | "income") {
 /** A drop is a device preference (§2.9): stored here, never a registry operation. */
 function handleFloatPosition(next: FloatPosition) {
   return floatPosition.set(next);
+}
+
+/** Same category as the drop above — a lens on the ledger, not a write to it. */
+function handleDeskScope(next: string) {
+  return deskScope.set(parseDeskScope(next) ?? DEFAULT_DESK_SCOPE);
 }
 
 function VisibleTabBar({ onLayout }: { onLayout: (event: LayoutChangeEvent) => void }) {
@@ -131,18 +144,6 @@ function DeskNavLink({ item, onSelect }: { item: TabBarItem; onSelect: (name: st
 }
 
 /**
- * The ledger's leading currency, read the same way `CurrencyTotals` reads it
- * on the phone (`today-screen.tsx`): the first subtotal, or nothing before
- * the first account exists.
- */
-function useLeadCurrency() {
-  const ledger = useLedgerController();
-  const snapshot = usePhoneLedger(ledger);
-  const [lead] = snapshot.subtotals;
-  return lead ?? null;
-}
-
-/**
  * `04` §4.5's real toggle, filling `DeskBand`'s own `currency` slot — DESK1
  * left it empty for a component E3/E6 had not built yet. `listCurrencySettings`
  * is an on-demand read (`create-phone-ledger.ts`'s own comment on the FX
@@ -161,41 +162,55 @@ function DeskCurrency() {
 
 /**
  * `DualTotal`'s C2 caller has not merged (`wave-3-shared.md` task 2's named
- * fallback): *mine* is the snapshot's own leading subtotal, *ours* is `null`
- * rather than a second figure nobody has computed yet. `null` before the
- * first account, matching `CurrencyTotals` returning nothing rather than a
- * fabricated zero balance in an invented currency.
+ * fallback): *mine* is the subtotal `useLeadCurrency` picked, *ours* is `null`
+ * rather than a second figure nobody has computed yet. The whole hero is
+ * absent only before the first account, matching `CurrencyTotals` returning
+ * nothing rather than a fabricated zero balance in an invented currency — a
+ * ledger that holds *something* always draws a figure, captioned when that
+ * something is not the currency asked for.
  *
  * `collapsed` picks `DualTotal`'s shape, not just its size: `"band"` on the
  * landing route, `"compact"` everywhere else — only the hero row changes
  * shape when the band collapses, per the design correction on #95.
  */
 function DeskHero({ collapsed }: { collapsed: boolean }) {
-  const lead = useLeadCurrency();
+  const t = useT();
+  const ledger = useLedgerController();
+  const display = useDisplayCurrency(displayCurrency);
+  const lead = useLeadCurrency(ledger, display.currency);
   if (lead === null) return null;
 
   return (
     <DualTotal
-      mine={lead.balance}
+      mine={lead.entry.balance}
       ours={null}
-      currency={lead.currency}
-      decimals={lead.decimals}
+      currency={lead.entry.currency}
+      decimals={lead.entry.decimals}
       size={collapsed ? "compact" : "band"}
+      caption={lead.fallback ? t("shell.noBalanceIn", { currency: lead.missing }) : undefined}
     />
   );
 }
 
 /**
- * Bound to state nothing reads yet — no screen filters on scope this arc, so
- * switching it changes nothing below the band. Named here rather than left
- * unbuilt: the control is part of `DESK1`'s card, and the read is `DESK4`'s.
+ * `DESK1`'s scope control, now read by `DESK4`'s dashboard.
+ *
+ * The value is a **device preference**, not `useState`: the control is in the
+ * band and the widgets are under `<TabSlot>`, so local state could only ever
+ * drive the band — which is exactly what it did, while two widget headers
+ * underneath claimed a different scope entirely.
+ *
+ * **Not every widget can honour every choice, and `S01` §3 already says so** —
+ * *"with a scope segment in the shell that a widget may or may not inherit,
+ * the frame has to be local."* So this states the intent, and each widget
+ * states the scope it actually applied in its own header.
  *
  * `tone="shell"` — the canvas's scope control is a dark inset on the band,
  * not the light control `SegmentControl` draws everywhere else it is used.
  */
 function DeskScope() {
   const t = useT();
-  const [scope, setScope] = useState("all");
+  const stored = useDevicePreference(deskScope);
   const segments = [
     { value: "all", label: t("shell.scopeAll") },
     { value: "mine", label: t("shell.scopeMine") },
@@ -203,7 +218,14 @@ function DeskScope() {
     { value: "business", label: t("shell.scopeBusiness") },
   ] as const;
 
-  return <SegmentControl segments={segments} value={scope} onChange={setScope} tone="shell" />;
+  return (
+    <SegmentControl
+      segments={segments}
+      value={stored.value ?? DEFAULT_DESK_SCOPE}
+      onChange={handleDeskScope}
+      tone="shell"
+    />
+  );
 }
 
 /**
@@ -318,16 +340,26 @@ function DeskCommandBar() {
 }
 
 function DeskLayer({ slot }: { slot: React.ReactNode }) {
+  const t = useT();
   const styles = useStyles();
   const { items, onSelect } = useTabBarItems();
   // §2.9's own split: everywhere but the landing route collapses to one row.
   const collapsed = !items.find((item) => item.name === "today")?.active;
+  // The landing route is one router tab and two screens: `S04 Today` under
+  // 1024, `S01 Dashboard` at and above it (`app/(tabs)/index.tsx`). The tab's
+  // own name stays `today` because that is what the router registered; only
+  // the word on the band changes, and only here, where the width is known.
+  const deskItems = items.map((item) =>
+    item.name === "today" ? { ...item, label: t("dashboard.title") } : item,
+  );
 
   return (
     <View style={styles.column}>
       <DeskBand
         brand={<Brand />}
-        nav={items.map((item) => <DeskNavLink key={item.name} item={item} onSelect={onSelect} />)}
+        nav={deskItems.map((item) => (
+          <DeskNavLink key={item.name} item={item} onSelect={onSelect} />
+        ))}
         commandBar={<DeskCommandBar />}
         currency={<DeskCurrency />}
         scope={<DeskScope />}

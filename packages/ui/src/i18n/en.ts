@@ -591,6 +591,43 @@ export const en = {
     collisionsTitle: "Possibly the same category",
     collisionsReview: "Review",
   },
+  /** `S01` — the desk dashboard, `DESK4`. */
+  dashboard: {
+    /** The desk's landing route — `DeskBand`'s nav says this, not "Today", at >=1024. */
+    title: "Dashboard",
+    balances: "Balances",
+    debt: "Debt",
+    spendByCategory: "Spend by category",
+    incomeVsExpense: "Income vs expense",
+    /** Figures a chart could not draw on one scale, listed unconverted beneath it. */
+    otherCurrencies: "Other currencies",
+    /** A bucket that has not finished — the current calendar month, part way through. */
+    monthToDate: "{{month}} · to date",
+    /** Balances, recent and debt answer as of a day rather than over a span. */
+    asOf: "As of {{date}}",
+    /** `S01`'s spend chart reads leaf categories directly, never a rollup (`computations.md` §6, R1). */
+    byLeafCategory: "by leaf category",
+    /** The chart's own top-N fold — the sixth-and-on category, summed (§7.2). */
+    other: "Other",
+    /** A line or transaction carrying no category — the null-`categoryId` row §6's split-lines fold can produce. */
+    uncategorized: "Uncategorized",
+    noBalances: "No accounts yet",
+    noRecent: "Nothing recorded yet",
+    noDebt: "Nobody owes, and you owe nobody",
+    noSpend: "Nothing spent this period",
+    /** M4 — a database with no active layout row at all, which the seed migration is supposed to make impossible. */
+    noLayout: "No dashboard layout",
+    noLayoutBody:
+      "This database has no active layout to draw. Reinstalling restores the default one.",
+    noActivity: "Nothing to show for this range",
+    /**
+     * The income-vs-expense chart's own header meta. `count` is the number of
+     * **complete** months; the current one is charted beside them and named
+     * separately, because a month-to-date bar under a header saying "last 6
+     * months" reads as a collapse every time a month turns over.
+     */
+    flowRange: "{{count}} months + this month to date",
+  },
   shell: {
     today: "Today",
     /**
@@ -616,6 +653,13 @@ export const en = {
      * it, which is the shape `DualTotal` uses to mean exactly that.
      */
     heldSeparately: "Held separately — not a total.",
+    /**
+     * `DeskBand`'s hero, when the ledger holds nothing in §7.0's display
+     * currency. The figure above it is a currency the ledger *does* hold, so
+     * this names the one it does not — the alternative was rendering no hero
+     * at all, which reads as an empty ledger rather than an empty currency.
+     */
+    noBalanceIn: "no balance in {{currency}}",
     accounts: "Accounts",
     recent: "Recent",
     ownCurrency: "Each balance is in its own account's currency — not a total.",

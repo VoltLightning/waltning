@@ -8,7 +8,7 @@
  * the choices.
  */
 
-import type { YearMonth } from "@waltning/core/date";
+import type { AccountingDate, YearMonth } from "@waltning/core/date";
 import { en, type Messages } from "./en.ts";
 import { pl } from "./pl.ts";
 
@@ -69,6 +69,26 @@ export function monthLabel(month: YearMonth, locale: Locale): string {
     year: "numeric",
     timeZone: "UTC",
   }).format(date);
+}
+
+/**
+ * One accounting date, named — "September 5, 2026", "5 września 2026".
+ *
+ * The same `Intl` argument `monthLabel` makes one line up, and the same
+ * `timeZone: "UTC"`: an accounting date is a **bare** date (§7.0a), so it must
+ * never be re-interpreted in the reader's own zone, which is exactly what
+ * parsing `2026-09-01` in a negative offset would do — it would render as
+ * 31 August. Splitting the string and rebuilding it through `Date.UTC` is the
+ * device `date.ts` already uses for the same reason.
+ */
+export function dayLabel(date: AccountingDate, locale: Locale): string {
+  const [year, mo, day] = date.split("-").map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, mo - 1, day)));
 }
 
 /** Whether a string is a language this app ships. */

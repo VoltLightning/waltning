@@ -38,10 +38,10 @@ import {
   mergeCounterpartiesInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { chunkIds } from "../chunk-ids.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
-import { chunkIds } from "./chunk-ids.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
 
 const {

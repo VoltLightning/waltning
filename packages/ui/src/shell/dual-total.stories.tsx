@@ -38,6 +38,31 @@ export const NoSharedAccount: Story = {
   args: { ours: null },
 };
 
+/**
+ * The display currency the toggle points at is one the ledger holds nothing
+ * in, so the hero falls back to a currency it does hold and says which one it
+ * is not. Rendering nothing here reads as an empty ledger.
+ */
+export const FallbackCurrency: Story = {
+  args: {
+    mine: money.toMoney("2100.00"),
+    ours: null,
+    currency: "EUR",
+    caption: "no balance in PLN",
+  },
+};
+
+/** The same fallback in `DeskBand`'s collapsed row, where the caption still has to fit. */
+export const FallbackCurrencyCompact: Story = {
+  args: {
+    mine: money.toMoney("2100.00"),
+    ours: null,
+    currency: "EUR",
+    size: "compact",
+    caption: "no balance in PLN",
+  },
+};
+
 function Stack() {
   const t = useT();
   const styles = useStyles();

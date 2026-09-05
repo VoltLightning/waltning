@@ -371,6 +371,18 @@ describe("every other guard is identifiable", () => {
     await s.sql`DELETE FROM transactions`;
     await s.sql`UPDATE categories SET archived = false WHERE id = ${CAT_LEAF}::uuid`;
   });
+
+  /**
+   * `DESK4` — the below-bound `dashboard_layouts_one_active` cannot state.
+   * The seed migration leaves exactly one active layout, so clearing it is
+   * the shape a real `set_active_layout` bug would take: the index is
+   * perfectly happy with zero, and `S01` would render an empty grid.
+   */
+  it("WA020 · exactly one dashboard layout is active", async () => {
+    const error = await refusal(`UPDATE dashboard_layouts SET is_active = false`);
+    expect(error.code).toBe("validation");
+    expect(error.details?.constraint).toBe(GUARDS[SQLSTATE.ONE_ACTIVE_LAYOUT].constraint);
+  });
 });
 
 describe("Postgres's own refusals", () => {

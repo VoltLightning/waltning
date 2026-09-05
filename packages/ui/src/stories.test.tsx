@@ -35,6 +35,7 @@ import * as shell from "./shell/shell.stories";
 import * as tabBar from "./shell/tab-bar.stories";
 import * as tabIcons from "./shell/tab-icons.stories";
 import * as todayFrame from "./shell/today-frame.stories";
+import * as unsettledBanner from "./shell/unsettled-banner.stories";
 import * as banner from "./states/banner.stories";
 import * as emptyState from "./states/empty-state.stories";
 import * as errorState from "./states/error-state.stories";
@@ -75,6 +76,7 @@ const MODULES = {
   Toast: toast,
   TodayFrame: todayFrame,
   UndoToast: undoToast,
+  UnsettledBanner: unsettledBanner,
 };
 
 /**

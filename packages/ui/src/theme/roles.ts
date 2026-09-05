@@ -108,6 +108,22 @@ export type Theme = {
   income: string;
   spend: string;
 
+  /**
+   * `S01`'s category chart — `tokens.ts`'s own doc: "the green ramp is the
+   * entire chart palette: magnitude reads as depth, so there is no second hue
+   * to reach for." Five shades, darkest (largest share) first; `chartOtherFill`
+   * is the sixth, for whatever a chart folds past its own top N.
+   *
+   * **Fixed across both themes, deliberately** — the same choice `shell`
+   * already makes (`tokens.ts`: "the shell stays sage in both themes") and
+   * `monogram.ts`'s own avatar ramp makes silently: a *categorical* ramp's job
+   * is telling five slices apart from each other, not from the page behind
+   * them, so the identical five values in both themes is the one designed
+   * chart palette this app has, not an oversight the way `#b3261e` was.
+   */
+  chartRamp: readonly string[];
+  chartOtherFill: string;
+
   /** P4's *asserted or aged*: a manual override, an estimated rate, a stale figure. */
   assertedFill: string;
   assertedText: string;
@@ -216,6 +232,9 @@ export const light: Theme = {
   income: color.income,
   spend: color.spend,
 
+  chartRamp: [color.green700, color.green600, color.green500, color.green400, color.green300],
+  chartOtherFill: color.green200,
+
   assertedFill: color.amber,
   assertedText: color.amberInk,
   assertedBorder: color.amberBorder,
@@ -268,6 +287,11 @@ export const dark: Theme = {
 
   income: darkColor.income,
   spend: darkColor.spend,
+
+  // Same five values as `light` — see the role's own doc for why this ramp is
+  // fixed across both themes rather than repainted like every other role.
+  chartRamp: [color.green700, color.green600, color.green500, color.green400, color.green300],
+  chartOtherFill: color.green200,
 
   assertedFill: darkColor.amber,
   assertedText: darkColor.amberInk,

@@ -4369,6 +4369,22 @@ presets prove insufficient. A layout engine is a lot of work to build before
 knowing which arrangements are actually wanted, and presets answer the question
 cheaply.
 
+**`DESK4` seeds the first of those rows** — one `Standing` layout, `is_active`
+and `is_preset`, with the five widgets the ledger alone can feed (`balances`,
+`recent`, `debt`, `spend_by_category`, `income_vs_expense`) — identically on
+the server and the replica, by migration rather than by a runtime default.
+`S01` reads it and does not rearrange it; `S24` is what adds the other three
+presets, the picker between them, and `set_active_layout`.
+
+**Exactly one layout is active — bounded above and below.** A partial unique
+index over `is_active` permits at most one, on both dialects. An index cannot
+refuse a count of *zero*, and zero is the state that leaves the dashboard with
+nothing to draw, so Postgres carries a deferred constraint trigger
+(`dashboard_layouts_exactly_one_active`, `WA020`) for the other half — the same
+pair `currencies.is_pivot` has, and for the same reason. SQLite has no deferred
+constraint trigger, so the replica holds the upper bound only and the reader
+orders its answer rather than trusting a bound it cannot enforce.
+
 ### 14.6 The React Native Web caveat
 
 One codebase for iOS and web is the right default, and Expo makes it nearly

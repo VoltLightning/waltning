@@ -1,7 +1,16 @@
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
-import type { CurrencyCode, Money, Period, PeriodSpendRow } from "@waltning/core/money";
+import type {
+  CurrencyCode,
+  IncomeExpenseBucket,
+  IncomeExpenseRow,
+  LedgerScope,
+  Money,
+  Period,
+  PeriodSpendRow,
+  SpendByCategoryRow,
+} from "@waltning/core/money";
 import type {
   AddCurrencyInput,
   ArchiveAccountInput,
@@ -129,6 +138,7 @@ import {
 import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
 import { updateCurrencyExecutor } from "./currencies/update-currency.executor.ts";
+import { type LocalDashboardLayout, readActiveLayout } from "./dashboard/read-active-layout.ts";
 import {
   describeLedgerError,
   emitLedgerDiagnostic,
@@ -152,9 +162,11 @@ import {
   type LocalTransactionRow,
 } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
+import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
 import { readPayeeHistory } from "./transactions/read-payee-history.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
+import { readSpendByCategory } from "./transactions/read-spend-by-category.ts";
 import { type LocalTransactionDetail, readTransaction } from "./transactions/read-transaction.ts";
 import {
   searchTransactions,
@@ -242,6 +254,15 @@ export type LocalLedgerSession = {
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
+  /** §6, per currency and category — `S01`'s donut. `scope` is the desk band's own segment. `DESK4`. */
+  readSpendByCategory: (period: Period, scope: LedgerScope) => readonly SpendByCategoryRow[];
+  /** §12, per bucket and currency — `S01`'s line chart. `buckets` and `scope` are screen state, same reasoning as `readPeriodSpend`. `DESK4`. */
+  readIncomeVsExpense: (
+    buckets: readonly IncomeExpenseBucket[],
+    scope: LedgerScope,
+  ) => readonly IncomeExpenseRow[];
+  /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
+  readActiveDashboardLayout: () => LocalDashboardLayout | null;
   /** §8, FIFO attribution included — C2's unsettled banner names a transaction. */
   listUnsettledClearing: () => readonly LocalUnsettledClearing[];
   /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
@@ -598,6 +619,11 @@ export function createLocalLedgerSession<TRun>(
     listDistinctCounterpartyPairs: () => readDistinctCounterpartyPairs(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
+    readSpendByCategory: (period, scope) =>
+      readSpendByCategory(requireOpen().replica.db, period, scope),
+    readIncomeVsExpense: (buckets, scope) =>
+      readIncomeVsExpense(requireOpen().replica.db, buckets, scope),
+    readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
     searchTransactions: (filter, cursor) =>

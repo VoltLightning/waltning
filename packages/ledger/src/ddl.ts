@@ -545,6 +545,23 @@ BEGIN
 END`,
     ],
   },
+  {
+    tag: "0011_dashboard_layout_seed",
+    statements: [
+      `INSERT INTO \`dashboard_layouts\` (\`id\`, \`name\`, \`is_active\`, \`is_preset\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d000', 'Standing', 1, 1, 0)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d001', '00000000-0000-4000-8000-00000000d000', 'balances', 'a1', 'm', 0)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d002', '00000000-0000-4000-8000-00000000d000', 'recent', 'a2', 'm', 1)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d003', '00000000-0000-4000-8000-00000000d000', 'debt', 'a3', 's', 2)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d004', '00000000-0000-4000-8000-00000000d000', 'spend_by_category', 'b1', 'm', 3)`,
+      `INSERT INTO \`dashboard_widgets\` (\`id\`, \`layout_id\`, \`kind\`, \`slot\`, \`size\`, \`sort\`) VALUES ('00000000-0000-4000-8000-00000000d005', '00000000-0000-4000-8000-00000000d000', 'income_vs_expense', 'b2', 'l', 4)`,
+    ],
+  },
+  {
+    tag: "0012_schema",
+    statements: [
+      `CREATE UNIQUE INDEX \`dashboard_layouts_one_active\` ON \`dashboard_layouts\` (\`is_active\`) WHERE "dashboard_layouts"."is_active" = 1`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

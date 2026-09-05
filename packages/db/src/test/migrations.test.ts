@@ -55,6 +55,51 @@ describe("migrations apply from empty", () => {
     }
   });
 
+  /** `DESK4` — `0014`'s seed, the row `get_active_layout` has on a fresh database. */
+  it("seeds one active default dashboard layout with its widgets", async () => {
+    const [layout] = await s.sql<{ id: string; name: string; is_active: boolean }[]>`
+      SELECT id, name, is_active FROM dashboard_layouts WHERE is_preset`;
+    if (!layout) throw new Error("the seeded preset layout is missing");
+    expect(layout.name).toBe("Standing");
+    expect(layout.is_active).toBe(true);
+
+    const widgets = await s.sql<{ kind: string }[]>`
+      SELECT kind FROM dashboard_widgets WHERE layout_id = ${layout.id} ORDER BY sort`;
+    expect(widgets.map((w) => w.kind)).toEqual([
+      "balances",
+      "recent",
+      "debt",
+      "spend_by_category",
+      "income_vs_expense",
+    ]);
+  });
+
+  /**
+   * L5 — the two seeds claim in prose, in both SQL headers, that they write
+   * "the identical row and ids". Until this test, nothing compared them: the
+   * server side was checked here, the replica side in
+   * `packages/ledger/src/test/dashboard.test.ts`, and a typo in one id would
+   * have passed both.
+   *
+   * Read from the two files rather than the two databases: the replica's
+   * SQLite is another package's fixture, and what is actually being asserted
+   * is that the two migrations agree — which is a property of their text.
+   */
+  it("seeds the same ids the replica's own migration seeds", () => {
+    const uuids = (url: URL): readonly string[] =>
+      [...readFileSync(url, "utf8").matchAll(/'([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})'/g)]
+        .map((match) => match[1] ?? "")
+        .sort();
+
+    const server = uuids(new URL("../../drizzle/0014_dashboard_layout_seed.sql", import.meta.url));
+    const replica = uuids(
+      new URL("../../../ledger/drizzle/replica/0011_dashboard_layout_seed.sql", import.meta.url),
+    );
+
+    expect(server.length, "the server seed names no ids").toBeGreaterThan(0);
+    expect(replica, "the replica seed's ids").toEqual(server);
+  });
+
   it("creates the tax_ledger view and the export role", async () => {
     const [view] = await s.sql<{ n: string }[]>`
       SELECT count(*)::text AS n FROM information_schema.views

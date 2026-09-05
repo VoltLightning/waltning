@@ -6,8 +6,9 @@
  * **Every fixture under `fixtures/upgrade/` is loaded.** The scan is
  * `readdirSync`, so a fixture a future PR adds joins this suite with no edit
  * here. Today that is `v8` — the ledger as it stood before `0008_schema`
- * rebuilt `transactions` — `v10`, the same shape one migration later
- * (`0010_schema`, `SPEC.md` §14.4b's brand columns) — and `v11`, the current
+ * rebuilt `transactions` — `v9`, `v10` (the shape before `0010_schema`,
+ * `SPEC.md` §14.4b's brand columns), `v11` (the shape before `DESK4`'s
+ * `0011_dashboard_layout_seed` and `0012_schema`), and `v13`, the current
  * head. This line names the current set by hand and goes stale the moment a
  * later PR adds a migration without updating it — it has gone stale before,
  * still naming `v9` as head after `v10` replaced it; the suite itself needs
@@ -28,16 +29,18 @@
  * outbox chain by the replica's number selected every outbox step there has
  * ever been, so no fixture could exercise an outbox migration at all.
  *
- * **What the "fresh equals upgraded" fingerprint proves, and where.** `v8`
- * and `v10` are where it has teeth: each pair is loaded at a version below
- * the chain's head, so the session's own migrator runs a real step
- * (`0008_schema` and `0010_schema` respectively, each a copy-rename-drop
- * rebuild) against real rows, and `schemaFingerprint` then compares the
- * result against a database built from empty by the whole chain. `v11` sits
- * at the head, so its upgrade is a no-op and the comparison there is two
- * identical builds — what that pair catches instead is drift: a
- * `fixture:dump` that no longer reproduces the committed `INSERT` column
- * lists.
+ * **What the "fresh equals upgraded" fingerprint proves, and where.** `v8`,
+ * `v10` and `v11` are where it has teeth: each pair is loaded at a version
+ * below the chain's head, so the session's own migrator runs a real step
+ * against real rows — `0008_schema` and `0010_schema`, each a copy-rename-drop
+ * rebuild, and from `v11` the pair `0011_dashboard_layout_seed` (a seed
+ * `INSERT` into a database that already holds data) plus `0012_schema` (the
+ * one-active index, which a second active layout would break against) — and
+ * `schemaFingerprint` then compares the result against a database built from
+ * empty by the whole chain. `v13` sits at the head, so its upgrade is a no-op
+ * and the comparison there is two identical builds — what that pair catches
+ * instead is drift: a `fixture:dump` that no longer reproduces the committed
+ * `INSERT` column lists.
  */
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -59,6 +62,7 @@ import {
   migrateReplica,
   OUTBOX_MIGRATIONS,
   REPLICA_MIGRATIONS,
+  versionOfTag,
 } from "../migrate.ts";
 import { type LedgerPaths, openLedger, type SqliteOpener } from "../open.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -186,6 +190,30 @@ function statedVersion(path: string): number {
     throw new Error(`${path} does not begin with its own \`PRAGMA user_version\` line`);
   }
   return Number(stated);
+}
+
+/**
+ * The step that writes the default dashboard layout — a fixture below it gains
+ * those rows, one at or above it already holds them.
+ *
+ * **L-3.** Resolved out of the chain rather than spelled out. Written as a
+ * literal, a renumber — the seed has already been renumbered twice, once per
+ * sibling branch that landed first — left `versionOfTag` computing a version
+ * for a file that no longer exists, and the expectations below would have
+ * quietly gone on comparing against it. `find` on the chain fails here
+ * instead, naming the tag it could not locate, at the first test that reads
+ * it.
+ */
+const DASHBOARD_SEED_TAG = seedTag("dashboard_layout_seed");
+
+function seedTag(suffix: string): string {
+  const step = REPLICA_MIGRATIONS.find((migration) => migration.tag.endsWith(suffix));
+  if (step === undefined) {
+    throw new Error(
+      `no replica migration ends with "${suffix}" — the step was renamed or dropped, and every expectation keyed on it is now guessing`,
+    );
+  }
+  return step.tag;
 }
 
 type FixturePair = { version: number; replicaPath: string; outboxPath: string };
@@ -358,13 +386,28 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
         const watermarkAfter = inspect(fixture.paths.replica, appliedSeqOf);
         const outboxAfter = inspect(fixture.paths.outbox, outboxRows);
 
-        // No table lost a row. `transactions` is the one exception, and by
-        // exactly the number of entries recovery replayed — everything Step 1
-        // wrote is still there, plus what recovery added on top.
+        // No table lost a row. `transactions` is one exception, by exactly the
+        // number of entries recovery replayed — everything Step 1 wrote is
+        // still there, plus what recovery added on top. `dashboard_layouts` /
+        // `dashboard_widgets` are the other exception, and only for a fixture
+        // that sits *below* `DESK4`'s `0011_dashboard_layout_seed` step: such
+        // a database gains exactly the default layout's one row and its five
+        // widgets on the way through it — the same seed a fresh install gets,
+        // never skipped for a database that is upgrading rather than new. A
+        // fixture dumped at or above that step already holds them, so it gains
+        // nothing; keying this on the step's own version rather than on "every
+        // fixture here" is what keeps the head pair honest as the head moves.
+        const DASHBOARD_SEED_ROWS: Record<string, number> = {
+          dashboard_layouts: 1,
+          dashboard_widgets: 5,
+        };
+        const seedsDashboard = pair.version < versionOfTag(DASHBOARD_SEED_TAG);
         for (const [table, before] of Object.entries(fixture.replicaCountsBefore)) {
           const after = replicaCountsAfter[table];
           const expected =
-            table === "transactions" ? before + fixture.pendingBefore.length : before;
+            table === "transactions"
+              ? before + fixture.pendingBefore.length
+              : before + (seedsDashboard ? (DASHBOARD_SEED_ROWS[table] ?? 0) : 0);
           expect(after, `${table}'s row count after the upgrade`).toBe(expected);
         }
         // `SPEC.md` §14.4b — `brand_aliases` is the first table the replica

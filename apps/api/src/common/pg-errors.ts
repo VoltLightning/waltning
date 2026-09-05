@@ -79,6 +79,13 @@ export const SQLSTATE = {
    * picker, so a row pointing at one is a row nothing can display.
    */
   CATEGORY_ARCHIVED: "WA019",
+  /**
+   * `S01`'s grid has exactly one active layout (`SPEC.md` §14.5,
+   * `0014_dashboard_layout_seed.sql`). The partial unique index bounds that
+   * count above; this is the below-bound it cannot state, the same pair
+   * `is_pivot` already has.
+   */
+  ONE_ACTIVE_LAYOUT: "WA020",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -128,6 +135,7 @@ export const TRIGGER = {
    * reason every other trigger is: a typo would look right in review.
    */
   LINES_CATEGORY_NOT_ARCHIVED: "transaction_lines_category_not_archived",
+  ONE_ACTIVE_LAYOUT: "dashboard_layouts_exactly_one_active",
 } as const;
 
 /**
@@ -187,6 +195,12 @@ export const GUARDS: Record<GuardState, Guard> = {
   [SQLSTATE.CATEGORY_ARCHIVED]: {
     code: "validation",
     constraint: TRIGGER.CATEGORY_NOT_ARCHIVED,
+  },
+  // Deferred, like the pivot's: `set_active_layout` clears the old row and
+  // sets the new one inside one transaction, and either order is legal.
+  [SQLSTATE.ONE_ACTIVE_LAYOUT]: {
+    code: "validation",
+    constraint: TRIGGER.ONE_ACTIVE_LAYOUT,
   },
 };
 

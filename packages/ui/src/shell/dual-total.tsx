@@ -33,6 +33,15 @@
  * (title and tag left, the total right, one row), applied to the pair this
  * component draws instead of a single total.
  *
+ * **`caption` is for a figure that is not the one the reader asked for.**
+ * `DeskBand`'s hero is §7.0's display currency; a ledger holding nothing in
+ * that currency has no such subtotal, and the band used to render *nothing* —
+ * the whole hero row vanished, which reads as "you have no money" rather than
+ * "not in this currency". So the band falls back to a currency the ledger
+ * actually holds, and `caption` is the line that says the figure above it is
+ * not the currency you picked. It sits beneath both shapes, in
+ * `shellTextMuted`, because a fallback nobody is told about is a wrong number.
+ *
  * **`lead` steps both figures down one size**, for the same reason
  * `CurrencyTotals` steps its own rest down: C2's hero is `money.netWorth`
  * *per currency* (mine/ours needs no FX — it is an ownership split within one
@@ -82,6 +91,12 @@ export type DualTotalProps = {
    * No effect at `size="band"` — see the file doc.
    */
   lead?: boolean;
+  /**
+   * A line beneath the figures naming what they are *not* — set only when the
+   * currency shown is a fallback for one the ledger does not hold. Absent
+   * whenever the figure is the one that was asked for; see the file doc.
+   */
+  caption?: string | undefined;
 };
 
 const MINE_SIZE = { lead: "hero", rest: "large" } as const;
@@ -94,6 +109,7 @@ export function DualTotal({
   decimals = 2,
   size = "shell",
   lead = true,
+  caption,
 }: DualTotalProps) {
   const t = useT();
   const styles = useStyles();
@@ -101,23 +117,26 @@ export function DualTotal({
 
   if (size === "compact") {
     return (
-      <View style={styles.compactBlock}>
-        <Amount
-          value={mine}
-          currency={currency}
-          decimals={decimals}
-          size="compact"
-          emphasis="shell"
-        />
-        {ours === null ? null : (
+      <View>
+        <View style={styles.compactBlock}>
           <Amount
-            value={ours}
+            value={mine}
             currency={currency}
             decimals={decimals}
-            size="small"
-            emphasis="shellMuted"
+            size="compact"
+            emphasis="shell"
           />
-        )}
+          {ours === null ? null : (
+            <Amount
+              value={ours}
+              currency={currency}
+              decimals={decimals}
+              size="small"
+              emphasis="shellMuted"
+            />
+          )}
+        </View>
+        {caption === undefined ? null : <Text style={styles.caption}>{caption}</Text>}
       </View>
     );
   }
@@ -146,6 +165,7 @@ export function DualTotal({
           />
         </View>
       )}
+      {caption === undefined ? null : <Text style={styles.caption}>{caption}</Text>}
     </View>
   );
 }
@@ -158,4 +178,5 @@ const useStyles = makeStyles((theme) => ({
     ...text.ui("kicker"),
     textTransform: "uppercase",
   },
+  caption: { color: theme.shellTextMuted, ...text.ui("caption") },
 }));

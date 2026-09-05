@@ -5,6 +5,7 @@ import { createAppearance } from "@waltning/client/appearance/create-appearance"
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
+import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
 import type { CurrencyCode } from "@waltning/core/money";
@@ -36,6 +37,22 @@ export const floatPosition = createDevicePreference<FloatPosition>(
     set: (value) => AsyncStorage.setItem(FLOAT_POSITION_KEY, value),
   },
   { parse: parseFloatPosition, serialize: serializeFloatPosition },
+  mobileDiagnostics,
+);
+
+const DESK_SCOPE_KEY = "waltning.deskScope";
+
+/**
+ * `S01` §3's scope segment — `DeskBand` writes it, `dashboard-screen.tsx`
+ * reads it. See the web half's own note: a device preference, never a
+ * registry write, and the only thing the band and the widgets under
+ * `<TabSlot>` can both reach.
+ */
+export const deskScope = createDeskScopePreference(
+  {
+    get: () => AsyncStorage.getItem(DESK_SCOPE_KEY),
+    set: (value) => AsyncStorage.setItem(DESK_SCOPE_KEY, value),
+  },
   mobileDiagnostics,
 );
 

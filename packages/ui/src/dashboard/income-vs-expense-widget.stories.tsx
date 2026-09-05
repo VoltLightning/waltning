@@ -1,0 +1,220 @@
+import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import * as money from "@waltning/core/money";
+import { IncomeVsExpenseWidget } from "./income-vs-expense-widget";
+
+/**
+ * **Bucket labels are the strings the screen actually passes.** They used to
+ * read `2026-06`, while `dashboard-screen.tsx` hands this `monthLabel(...)` —
+ * so the baselines never once showed the real text, and a long localised month
+ * name had never been laid out here. `Grudzień 2026` is in `Localised` for
+ * exactly that: it is the longest label this widget can be handed in either
+ * language it ships.
+ */
+const meta = {
+  title: "Dashboard/IncomeVsExpenseWidget",
+  component: IncomeVsExpenseWidget,
+  args: {
+    title: "Income vs expense",
+    currency: "PLN",
+    period: "5 months + this month to date",
+    scope: "Mine",
+    incomeLabel: "Income",
+    expenseLabel: "Expense",
+    emptyLabel: "Nothing to show for this range",
+    othersLabel: "Other currencies",
+    others: [],
+    bars: [
+      {
+        label: "June 2026",
+        income: money.toMoney("6500"),
+        expense: money.toMoney("4200"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "July 2026",
+        income: money.toMoney("6500"),
+        expense: money.toMoney("5100"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "August 2026",
+        income: money.toMoney("6800"),
+        expense: money.toMoney("3900"),
+        currency: "PLN",
+        decimals: 2,
+      },
+    ],
+  },
+} satisfies Meta<typeof IncomeVsExpenseWidget>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Populated: Story = {};
+
+/**
+ * H2 — the trailing range ends at the current month, which on the 2nd is a
+ * two-day figure standing beside whole ones. The partial bucket is hatched in
+ * the assertion tone and says "to date", so the short bar reads as incomplete
+ * rather than as a collapse — while keeping its series hue, so income and
+ * expense are still told apart in the one bucket where the reader is most
+ * likely to be looking.
+ */
+export const PartialCurrentMonth: Story = {
+  args: {
+    bars: [
+      {
+        label: "July 2026",
+        income: money.toMoney("6500"),
+        expense: money.toMoney("5100"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "August 2026",
+        income: money.toMoney("6800"),
+        expense: money.toMoney("3900"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "September 2026 · to date",
+        income: money.toMoney("310"),
+        expense: money.toMoney("520"),
+        currency: "PLN",
+        decimals: 2,
+        partial: true,
+      },
+    ],
+  },
+};
+
+/**
+ * **NEW-2 — the partial month is the *largest* bucket**, so both its bars run
+ * the full width of the track and the hatch has to reach the end of them. A
+ * fixed stripe count covered a fixed distance, which was enough for the short
+ * bar `PartialCurrentMonth` draws and not for this one: the mark stopped
+ * partway and the rest of the bar read as a second, unmarked segment. This is
+ * the case that story cannot show — a month that is both incomplete and the
+ * biggest thing in the range, which is what the first month of new work, or a
+ * January after a quiet December, actually looks like.
+ */
+export const PartialIsLargest: Story = {
+  args: {
+    bars: [
+      {
+        label: "July 2026",
+        income: money.toMoney("1200"),
+        expense: money.toMoney("900"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "August 2026",
+        income: money.toMoney("1500"),
+        expense: money.toMoney("1100"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "September 2026 · to date",
+        income: money.toMoney("18400"),
+        expense: money.toMoney("16900"),
+        currency: "PLN",
+        decimals: 2,
+        partial: true,
+      },
+    ],
+  },
+};
+
+/** H1 — one scale means one currency, so the rest are listed unconverted rather than dropped. */
+export const WithOtherCurrencies: Story = {
+  args: {
+    others: [
+      {
+        currency: "EUR",
+        decimals: 2,
+        figures: [
+          { value: money.toMoney("400.00"), kind: "income" },
+          { value: money.toMoney("260.00"), kind: "spend" },
+        ],
+      },
+      {
+        currency: "CHF",
+        decimals: 2,
+        figures: [
+          { value: money.toMoney("0.00"), kind: "income" },
+          { value: money.toMoney("85.00"), kind: "spend" },
+        ],
+      },
+    ],
+  },
+};
+
+/** L6 — the longest label either shipped language can produce, laid out for once. */
+export const Localised: Story = {
+  args: {
+    period: "5 miesięcy + bieżący do dziś",
+    scope: "Moje",
+    incomeLabel: "Przychody",
+    expenseLabel: "Wydatki",
+    bars: [
+      {
+        label: "listopad 2026",
+        income: money.toMoney("6500"),
+        expense: money.toMoney("5100"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "grudzień 2026 · do dziś",
+        income: money.toMoney("310"),
+        expense: money.toMoney("520"),
+        currency: "PLN",
+        decimals: 2,
+        partial: true,
+      },
+    ],
+  },
+};
+
+/**
+ * A zero bucket draws **no** bar — not a stub. The August row has no income
+ * at all, and the gap beside its `0.00` is the honest picture; a minimum width
+ * made it indistinguishable from the small-but-real July figure above it.
+ */
+export const ZeroBucket: Story = {
+  args: {
+    bars: [
+      {
+        label: "July 2026",
+        income: money.toMoney("120"),
+        expense: money.toMoney("5100"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "August 2026",
+        income: money.toMoney("0"),
+        expense: money.toMoney("3900"),
+        currency: "PLN",
+        decimals: 2,
+      },
+      {
+        label: "September 2026 · to date",
+        income: money.toMoney("0"),
+        expense: money.toMoney("0"),
+        currency: "PLN",
+        decimals: 2,
+        partial: true,
+      },
+    ],
+  },
+};
+
+export const Empty: Story = {
+  args: { bars: [] },
+};

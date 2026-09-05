@@ -50,7 +50,51 @@ vi.mock("expo-router", () => ({
 }));
 
 const { TabsShell, handleSelectType } = await import("./tabs-shell");
+const { displayCurrency } = await import("./platform");
 const { router } = await import("expo-router");
+
+const CHF = currencyCode("CHF");
+const EUR = currencyCode("EUR");
+const PLN = currencyCode("PLN");
+
+const BANK_B_EUR: PhoneAccount = {
+  id: id<"accounts">("55555555-5555-4555-8555-555555555555"),
+  name: "Bank B · EUR",
+  kind: "bank",
+  currency: EUR,
+  decimals: 2,
+  balance: toMoney("2100.00"),
+  groupId: null,
+  ownership: "own",
+  isBusiness: false,
+  archived: false,
+  expectedBalance: null,
+  openingBalance: toMoney("0"),
+  openingDate: null,
+  memo: "",
+  version: 1,
+};
+
+/** One EUR account and nothing else — the ledger M-B is about. */
+const EUR_ONLY: PhoneAccount[] = [BANK_B_EUR];
+
+/**
+ * Two held currencies, in the order `subtotalsOf` folds them: a `CHF` savings
+ * account opened first at `40.00`, and an `EUR` card at `-9 000.00` opened
+ * second. The two candidate rules disagree on this fixture on purpose — order
+ * says `CHF`, magnitude says `EUR` — so the assertion below pins which one the
+ * band actually follows.
+ */
+const TWO_CURRENCIES: PhoneAccount[] = [
+  {
+    ...BANK_B_EUR,
+    id: id<"accounts">("66666666-6666-4666-8666-666666666666"),
+    name: "Savings · CHF",
+    currency: CHF,
+    balance: toMoney("40.00"),
+  },
+  { ...BANK_B_EUR, name: "Card B · EUR", kind: "card", balance: toMoney("-9000.00") },
+];
 
 function fakeController(
   overrides: {
@@ -86,6 +130,9 @@ function fakeController(
       listPayeeHistory: () => [],
       listNetWorth: () => [],
       readPeriodSpend: () => [],
+      readSpendByCategory: () => [],
+      readIncomeVsExpense: () => [],
+      readActiveDashboardLayout: () => null,
       listUnsettledClearing: () => [],
       listCounterpartyBalances: () => [],
       listCounterpartyMerges: () => [],
@@ -158,8 +205,16 @@ function resizeTo(width: number) {
   window.dispatchEvent(new Event("resize"));
 }
 
-beforeEach(() => {
+/**
+ * `displayCurrency` is a module singleton, so a `set` in one test is still in
+ * force in the next one — the two hero tests below chose different currencies
+ * and only passed in the order they happen to be declared in. Reset to `PLN`,
+ * the seeded pivot, so every test starts from the same preference whether it
+ * names one or not.
+ */
+beforeEach(async () => {
   focused = "today";
+  await displayCurrency.set(PLN);
 });
 
 describe("TabsShell", () => {
@@ -185,6 +240,111 @@ describe("TabsShell", () => {
     expect(screen.getByText("Route content")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.getByText("Add — press N")).toBeDefined();
+  });
+
+  /**
+   * **M9.** The landing route is one router tab and two screens — `S04 Today`
+   * under 1024, `S01 Dashboard` at and above it. The band read `Today` above
+   * a Dashboard, because the nav label came straight from `useTabBarItems`,
+   * which has no idea how wide the window is.
+   */
+  it("labels the landing route Today on the phone and Dashboard on the desk", async () => {
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("Today")).toBeDefined();
+    expect(screen.queryByText("Dashboard")).toBeNull();
+
+    act(() => resizeTo(1440));
+
+    expect(screen.getByText("Dashboard")).toBeDefined();
+    expect(screen.queryByText("Today")).toBeNull();
+  });
+
+  /**
+   * **M-B.** The hero read §7.0's display currency and rendered *nothing* when
+   * the ledger held no subtotal in it — so a ledger entirely in EUR, with the
+   * pivot left at the seeded PLN, showed a desk band with no figure at all.
+   * That is indistinguishable from an empty ledger on the one screen whose
+   * job is to state your position.
+   *
+   * It falls back to a currency the ledger does hold, states that currency's
+   * code beside the figure, and captions what it is not.
+   */
+  it("falls back to a held currency when the display currency has no subtotal, and says so", async () => {
+    await displayCurrency.set(PLN);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController({ accounts: EUR_ONLY })}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("2 100.00"), "the held figure, not a vanished hero").toBeDefined();
+    expect(screen.getByText("EUR"), "and the code it is actually in").toBeDefined();
+    expect(screen.getByText("no balance in PLN"), "captioned as a fallback").toBeDefined();
+  });
+
+  /**
+   * **M-1.** Which held currency it falls back to is a decision, and the
+   * decision is the ledger's own order — `design-system/05` row 12's rule for
+   * `CurrencyTotals`, which the hero now shares. Ranking by magnitude would
+   * lead with the `EUR` card here, and that comparison cannot be made: the
+   * band has no rate between `CHF` and `EUR`, or the display currency would
+   * have been honoured in the first place.
+   */
+  it("falls back to the first held currency in ledger order, not the largest", async () => {
+    await displayCurrency.set(PLN);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController({ accounts: TWO_CURRENCIES })}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("CHF"), "the first subtotal the ledger folds").toBeDefined();
+    expect(
+      screen.queryByText("EUR"),
+      "not the larger figure, which nothing can compare",
+    ).toBeNull();
+    expect(screen.getByText("no balance in PLN")).toBeDefined();
+  });
+
+  /** The preference is honoured whenever the ledger can honour it — no caption then. */
+  it("leads with the display currency, uncaptioned, when the ledger holds it", async () => {
+    await displayCurrency.set(EUR);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController({ accounts: EUR_ONLY })}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("2 100.00")).toBeDefined();
+    expect(screen.queryByText(/no balance in/)).toBeNull();
+  });
+
+  /** No accounts at all is the one case with nothing to fall back to. */
+  it("renders no hero before the first account", async () => {
+    await displayCurrency.set(PLN);
+    resizeTo(1440);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.queryByText(/no balance in/)).toBeNull();
+    expect(screen.queryByText("mine")).toBeNull();
   });
 });
 

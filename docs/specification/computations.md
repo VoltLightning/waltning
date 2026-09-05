@@ -291,6 +291,36 @@ inside any category.
 (R1), so a group's figure is always the sum of its children and never has an own
 amount.
 
+**`DESK4` folds this SQL's own two branches into `money.spendByCategory`,
+against the phone's replica** — a `packages/core` fold, tested against the
+same trap this section names (a four-line transaction, split across three
+categories, must sum to its own total exactly once), the same way A1's
+class-F figures are written. It answers `S01`'s donut at leaf granularity —
+`S01`'s "5 segments + other" reads leaf categories directly, so the rollup
+rule above is not yet exercised by that widget, and the widget's own header
+says *by leaf category* rather than leaving the reader to assume a rollup.
+This SQL stays the authoritative, server-side definition; `E9` differentials
+`readSpendByCategory` against it.
+
+**That fold diverges from the SQL above in two stated ways.**
+
+- **Basis.** It sums `amount_original` and groups by currency, where this
+  section's SQL sums `l.amount * t.fx_rate` into the pivot. A phone-alone
+  ledger has no rate table (`#e3`), so there is no conversion available that
+  would not be invented. Every currency is reported at its own scale: `S01`
+  charts the display currency (§7.0) and lists the rest on their own rows,
+  unconverted.
+- **The shared boundary.** This section reports the shared-boundary net line
+  (§5) as its own named row inside the category breakdown. That row needs
+  `to_amount_pivot`, which is arc-full and class **S**, so the fold does not
+  produce it. What it offers instead is the whole shared side as a *scope*:
+  `S01`'s band segment selects `all`, `mine`, `shared` or `business`, the fold
+  filters on `accounts.ownership` and `transactions.is_business` accordingly,
+  and the widget header names the scope it applied. A shared row is therefore
+  visible under `Shared` and `All` rather than silently absent — but it is not
+  yet the single named boundary line this SQL defines, and `E9` is where the
+  two converge.
+
 ---
 
 ## 7 · Counterparty balances
@@ -443,6 +473,25 @@ Converted at each row's own date into `target.currency`. Over-target goes
 | `revenue_ytd` | `tax_ledger` filtered to `type = 'income' AND is_earnings` — the broad view includes business *expenses*, which are not reportable under ryczałt |
 | `income_vs_expense` | Per bucket of the chosen granularity: `Σ signed(t) where type='income'` and `Σ |signed(t)| where type='expense'`, both in display currency, **capital excluded** and transfers excluded entirely — a transfer is not income to one side and expense to the other |
 | `FX cost` | margin + fee, **as two lines** (§7.5) |
+
+**`DESK4` folds `income_vs_expense` as `money.incomeVsExpense`, against the
+phone's replica** — grouped by currency rather than converted to a display
+one (arc-phone excludes FX, the same reason `periodSpend`/§5's own phone
+reader does), bucketed by the caller's own `money.trailingMonthBuckets`, and
+scoped by the same `all`/`mine`/`shared`/`business` segment §6's fold takes.
+
+Two properties the chart depends on and this table leaves to the caller:
+
+- **Every bucket is emitted, for every currency the range holds** — zero
+  included. A series built from matched rows alone loses its empty months, and
+  a six-bucket chart drawing three bars says nothing about where the gap was.
+- **A bucket that has not finished is not comparable to one that has.** A
+  trailing range ending at the current month puts a month-to-date figure beside
+  whole ones; `S01` charts it, marks it in the assertion tone (P4), labels it
+  *to date*, and its header counts the complete months separately.
+
+This table's own definition stays authoritative; `E9` differentials
+`readIncomeVsExpense` against it once the server SQL exists.
 
 ```
 reference_rate = fx_rate ÷ to_fx_rate                                -- dest-currency units per source-currency unit

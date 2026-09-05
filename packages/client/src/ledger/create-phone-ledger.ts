@@ -622,6 +622,18 @@ export type PhoneLedgerPort = {
   ])[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /** §6, on demand — `S01`'s donut. `DESK4`. */
+  readSpendByCategory: (
+    period: money.Period,
+    scope: money.LedgerScope,
+  ) => readonly PhoneSpendByCategory[];
+  /** §12, on demand — `S01`'s line chart. `DESK4`. */
+  readIncomeVsExpense: (
+    buckets: readonly PhoneIncomeExpenseBucket[],
+    scope: money.LedgerScope,
+  ) => readonly PhoneIncomeExpenseRow[];
+  /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
+  readActiveDashboardLayout: () => PhoneDashboardLayout | null;
   listUnsettledClearing: () => readonly PhoneClearingAccount[];
   /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
   balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
@@ -748,6 +760,40 @@ export type PhoneNetWorth = {
 
 /** §5's base figure, per currency — C2's *spent* and *net* `StatTile`s. See `money.periodSpend`. */
 export type PhonePeriodSpend = money.PeriodSpendRow;
+
+/** §6's `spend_by_category`, per currency and category — `S01`'s donut. See `money.spendByCategory`. `DESK4`. */
+export type PhoneSpendByCategory = money.SpendByCategoryRow;
+
+/** One point on `S01`'s income-vs-expense line chart — the caller's own calendar-month partition. `DESK4`. */
+export type PhoneIncomeExpenseBucket = money.IncomeExpenseBucket;
+
+/** §12's `income_vs_expense`, per bucket and currency. See `money.incomeVsExpense`. `DESK4`. */
+export type PhoneIncomeExpenseRow = money.IncomeExpenseRow;
+
+/**
+ * `dashboard_widgets.size` — restated rather than imported from
+ * `@waltning/schema` (this file's own precedent: `TxnType` above is restated
+ * for the same reason — this package stays free of `@waltning/schema`).
+ */
+export type PhoneWidgetSize = "s" | "m" | "l";
+
+/** One row of `get_active_layout` — `S01` reads these in `sort` order. `DESK4`. */
+export type PhoneDashboardWidget = {
+  id: string;
+  kind: string;
+  slot: string;
+  size: PhoneWidgetSize;
+  /** Per-kind, so the shape is open by design — see `dashboard-widgets.pg.ts`'s own `WidgetConfig`. */
+  config: Record<string, unknown>;
+  sort: number;
+};
+
+/** `get_active_layout` — read but not rearranged this arc (S24 later). `DESK4`. */
+export type PhoneDashboardLayout = {
+  id: string;
+  name: string;
+  widgets: readonly PhoneDashboardWidget[];
+};
 
 /**
  * §8's unsettled clearing accounts, FIFO attribution included — C2's
@@ -1170,6 +1216,18 @@ export type PhoneLedgerController = {
    * `refresh()` recomputes for every subscriber on every write.
    */
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /** §6, on demand — `S01`'s donut. Same reasoning as `readPeriodSpend` above. `DESK4`. */
+  readSpendByCategory: (
+    period: money.Period,
+    scope: money.LedgerScope,
+  ) => readonly PhoneSpendByCategory[];
+  /** §12, on demand — `S01`'s line chart. Same reasoning as `readPeriodSpend` above. `DESK4`. */
+  readIncomeVsExpense: (
+    buckets: readonly PhoneIncomeExpenseBucket[],
+    scope: money.LedgerScope,
+  ) => readonly PhoneIncomeExpenseRow[];
+  /** `get_active_layout`, on demand — `S01`'s grid, read but not rearranged (S24 later). `DESK4`. */
+  readActiveDashboardLayout: () => PhoneDashboardLayout | null;
   /**
    * §7, on demand — S12's list. Same reasoning as `readPeriodSpend` above:
    * `today` is a value the caller already has (the same accounting date
@@ -1869,6 +1927,9 @@ export function createPhoneLedger(
     },
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
+    readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
+    readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
+    readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
     listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
