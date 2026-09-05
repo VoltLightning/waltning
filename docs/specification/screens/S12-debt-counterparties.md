@@ -58,8 +58,12 @@ transaction that needs allocating.
 **Direction is stated in words, never by sign alone** (P5). `+840` and `−120` on
 one screen mean opposite things and are too easy to misread.
 
-The direction-totals block is the screen's hero figure and sits in a `Card`;
-the segment control and the counterparty rows stay on the ground.
+The direction-totals block is a card of grouped rows — one *they owe you* and
+one *you owe* line per currency, which is a group, not a single hero figure.
+The segment control and the counterparty rows stay on the ground. **The card
+renders only when there is at least one direction total**; with nothing owed in
+either direction there is no group to draw, and an empty card is chrome around
+nothing.
 
 Each row shows the net in **their** settlement currency with the display-currency
 equivalent beneath — the first is what you discuss with them, the second is what
@@ -79,7 +83,7 @@ person, which is the whole reason the old account model failed.
 
 | Component | Notes |
 |---|---|
-| `Card` | Mobile — wraps the direction-totals block (they-owe / you-owe), the screen's hero figure |
+| `Card` | Wraps the direction-totals block — grouped rows (they-owe / you-owe per currency), not a hero figure. Rendered only when a direction total exists |
 | `CounterpartyRow` | Monogram on a ramp tint, derived deterministically from the name (Q10) |
 | `DebtDirectionTag` | `owes you` / `you owe` — text, not colour |
 | `AgeingBar` | **Companies only** (O15). A 60-days-overdue badge on a friend's share of dinner is absurd |

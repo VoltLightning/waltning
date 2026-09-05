@@ -101,8 +101,20 @@ export const en = {
     /** `BalanceRow`'s own tags — S16 §4: `BIZ` · clearing's amber marker. */
     tagBiz: "BIZ",
     tagUnsettled: "Unsettled",
-    /** `SharedGroup`'s heading — S16 §3, distinct but not diminished. */
+    /**
+     * The **mark** for shared ownership, wherever it is drawn as a `Tag` —
+     * `SharedGroup`'s card header (S16 §3) and `AccountPicker`'s rows.
+     */
     shared: "Shared",
+    /**
+     * `SharedGroup`'s card title, and deliberately not the word its tag
+     * carries. The card is a full-weight card among identical full-weight
+     * kind cards, so the distinction is drawn by *adding* marks — an accent
+     * edge and the `Shared` tag — and a title repeating the tag verbatim
+     * would be one mark spent twice, saying nothing the tag had not.
+     * S16 §6's own phrase for these accounts.
+     */
+    sharedHeading: "Jointly owned",
     /**
      * The archived toggle. `archivedShow` is the collapsed button, before
      * `loadArchived()` has ever run — the count is not known yet, which is

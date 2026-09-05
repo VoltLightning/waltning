@@ -2,11 +2,17 @@
  * `<SharedGroup>` — S16 §3, §4: *"visually distinct but not diminished."*
  *
  * A jointly-owned account is an ordinary account that belongs to a different
- * total (§6.7) — so this renders at the same weight as any of the register's
- * kind groups (`Card`, the same as `KindGroup`), and the one thing that sets
- * it apart is its own separate card, pulling the section away from the
- * accounts that are only yours. A negative balance in here gets no warning
- * treatment; it is an ordinary fact about a shared account, not a signal.
+ * total (§6.7) — so this renders at the same size, weight and subtotal
+ * treatment as any of the register's kind groups (`Card`, the same as
+ * `KindGroup`), and is set apart by two marks *added* rather than by anything
+ * taken away: a 2 px `accent` left edge (`edge="accent"`) and a `Shared` tag
+ * beside the title — which is why the title is *Jointly owned* rather than
+ * *Shared* a second time; a title repeating its own tag spends one mark
+ * twice. Its own card alone is not the distinction — that is what every
+ * kind group has — which is why one card among identical cards needed a mark
+ * before "visually distinct" was true of the render rather than only of the
+ * spec. A negative balance in here gets no warning treatment; it is an
+ * ordinary fact about a shared account, not a signal.
  *
  * **One subtotal per currency, never across two** (`money.sum` — the same
  * rule `create-phone-ledger.ts`'s per-currency subtotals hold for the whole
@@ -66,7 +72,12 @@ export function SharedGroup({ accounts, onSelectAccount }: SharedGroupProps) {
   );
 
   return (
-    <Card title={t("accounts.shared")} action={action}>
+    <Card
+      title={t("accounts.sharedHeading")}
+      tag={t("accounts.shared")}
+      action={action}
+      edge="accent"
+    >
       {accounts.map((account) => (
         <SharedAccountRow key={account.id} account={account} onSelect={onSelectAccount} />
       ))}

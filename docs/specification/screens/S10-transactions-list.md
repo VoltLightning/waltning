@@ -33,14 +33,14 @@ Find the thing you remember.
 │                                                 │
 │  [Business ✕] [Feb 2026 ✕] [+ Filter]           │  ← active filters as chips
 │                                                 │
-│  ┌ 1 284 transactions · −18 940,20 zł ────────┐  │  ← running total for filter
-│  └─────────────────────────────────────────────┘  │
+│  ┌ 1 284 transactions · −18 940,20 zł ───────┐  │  ← running total for filter
+│  └───────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────┤
 │  6 Aug                                          │
 │  Corner Café · Eating out        −48,90 zł      │
 │  Salary · Employment          +9 200,00 zł      │
 │  5 Aug                                          │
-│  Rewe · Groceries          62,40 € · 4,0231     │
+│  Shop A · Groceries        62,40 € · 4,0231     │
 │                                251,04 zł        │
 │  Cash → BANK-A            −500,00 → +500,00 zł  │  ← TransferRow, one row
 └─────────────────────────────────────────────────┘

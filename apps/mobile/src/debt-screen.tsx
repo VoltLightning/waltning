@@ -380,38 +380,46 @@ export default function Debt() {
       <View style={styles.root}>
         {unsettledBanner}
         <SegmentControl segments={segments} value={segment} onChange={handleSegmentChange} />
-        <Card>
-          <View style={styles.totals}>
-            {directionTotalsResult.rows.map((total) => (
-              <View key={total.currency} style={styles.totalRow}>
-                <Text style={styles.totalLabel}>
-                  {t("counterparties.theyOweTotal")} · {total.currency}
-                </Text>
-                <Amount
-                  value={total.theyOwe}
-                  currency={total.currency}
-                  decimals={total.decimals}
-                  size="small"
-                  kind="income"
-                />
-              </View>
-            ))}
-            {directionTotalsResult.rows.map((total) => (
-              <View key={`${total.currency}-you`} style={styles.totalRow}>
-                <Text style={styles.totalLabel}>
-                  {t("counterparties.youOweTotal")} · {total.currency}
-                </Text>
-                <Amount
-                  value={total.youOwe}
-                  currency={total.currency}
-                  decimals={total.decimals}
-                  size="small"
-                  kind="spend"
-                />
-              </View>
-            ))}
-          </View>
-        </Card>
+        {/*
+          The card is the group of direction totals, so with no totals there
+          is no group to draw — everything settled, or nothing owed yet, and
+          an empty card would be chrome around nothing. The rows below say
+          what the state is; this block only ever states figures.
+        */}
+        {directionTotalsResult.rows.length === 0 ? null : (
+          <Card>
+            <View style={styles.totals} testID="debt-direction-totals">
+              {directionTotalsResult.rows.map((total) => (
+                <View key={total.currency} style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>
+                    {t("counterparties.theyOweTotal")} · {total.currency}
+                  </Text>
+                  <Amount
+                    value={total.theyOwe}
+                    currency={total.currency}
+                    decimals={total.decimals}
+                    size="small"
+                    kind="income"
+                  />
+                </View>
+              ))}
+              {directionTotalsResult.rows.map((total) => (
+                <View key={`${total.currency}-you`} style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>
+                    {t("counterparties.youOweTotal")} · {total.currency}
+                  </Text>
+                  <Amount
+                    value={total.youOwe}
+                    currency={total.currency}
+                    decimals={total.decimals}
+                    size="small"
+                    kind="spend"
+                  />
+                </View>
+              ))}
+            </View>
+          </Card>
+        )}
         {visibleRows.length === 0 ? (
           <EmptyState
             variant="range"

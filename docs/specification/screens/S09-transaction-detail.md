@@ -90,7 +90,7 @@ readable receipt, which is the one thing a phone genuinely cannot give you.
 
 | Component | Notes |
 |---|---|
-| `Card` | Wraps `fields` and `breakdown` — the two boxed groups of §3. The hero figure and its FX basis sit bare on the ground |
+| `Card` | §3 draws four boxes — `fields`, `receipt`, `breakdown`, `history`. Two are cards today: `fields` and `breakdown`; the receipt and history boxes have nothing to render on the phone yet — no receipts, no audit log — and become cards when they do. The hero figure and its FX basis sit bare on the ground, never in a card |
 | `FxAmount` | Full basis, all four provenance variants |
 | `BrandIcon` | Beside the hero's account line, not a row inside `FieldsCard` — that card draws every field through one generic labelled row, and singling out Payee for an icon would be the special case it exists to avoid. Same catalogue and never-blank fallback as S04/S10 (§14.4b) |
 | `AuditHistory` | Renders a **diff**, not a sentence. Marks `agent`, `import`, `migration` actors distinctly (§5.6). **A `conflict_detected` row is a write the server *refused*, not one it applied**, and renders as its own kind — the rejected value struck through beside the value that stood. Rendering it as an ordinary diff would say a change happened when none did, on the one screen you consult precisely because you already distrust the row. Read-only: putting a discarded value back is an ordinary edit you make deliberately (S35 §8) |

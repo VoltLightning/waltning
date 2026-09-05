@@ -46,16 +46,16 @@ tab bar → S10, S11, S12, S03.
 │  │ ◉  "forty-eight ninety, coffee" │ │  ▣   │   │
 │  └─────────────────────────────────┘ └──────┘   │
 │                                                 │
-│  ┌ RECENT ───────────────────────────────────┐  │
-│  │ Today      Coffee · Eating out   −48,90 zł │  │
-│  │ Today      Salary · Employment +9 200,00 zł│  │
-│  │ Yesterday  Rewe · Groceries   62,40 € · 4,02│  │  ← FxAmount, foreign
-│  │                                  251,04 zł │  │
-│  │                                   Show all →│  │
-│  └─────────────────────────────────────────────┘  │
+│  ┌ Recent ───────────────────────────────────┐  │
+│  │ Today     Coffee · Eating out   −48,90 zł │  │
+│  │ Today     Salary · Employment +9 200,00 zł│  │
+│  │ Yesterday Shop A · Food    62,40 € · 4,02 │  │  ← FxAmount, foreign
+│  │                                 251,04 zł │  │
+│  │                                Show all → │  │
+│  └───────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
 │                                          (＋)   │  ← floats, §2.9
-┌ tab bar · 5 ───────────────────────────────────┐
+┌ tab bar · 5 ────────────────────────────────────┐
 │  Today   Ledger   Calendar   Debt   Settings    │
 └─────────────────────────────────────────────────┘
 ```

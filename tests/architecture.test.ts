@@ -410,16 +410,25 @@ describe("GroundPanel is the page scroller", () => {
 
 describe("a card groups rows or holds a figure — never a whole screen", () => {
   /**
-   * `docs/specification/design-system/05-composites.md`'s `Card` row: a card
-   * groups related rows or holds one hero figure. Titles, single fields, chip
-   * rows, hints and buttons sit on the ground. A `<GroundPanel>` whose only
-   * *real* content is a single `<Card>` is a screen wrapped in one big card —
-   * exactly the shape the Hearth audit found on `account-editor-screen.tsx`,
-   * `counterparty-editor-screen.tsx`, the desk branch of `quick-add-screen.tsx`,
-   * and `settings-currencies-screen.tsx` (its pivot block, still inside the
-   * currency-list card). This check was run against those files, unconverted,
-   * to confirm it actually fires (four offenders) before they were changed to
-   * make it pass.
+   * `docs/specification/design-system/05-composites.md`'s `Card` row, verbatim:
+   *
+   * > A card groups related rows or holds one hero figure. Titles, single
+   * > fields, chip rows, hints and buttons sit on the ground. Never a whole
+   * > screen, never a single control.
+   *
+   * A `<GroundPanel>` whose only *real* content is a single `<Card>` is a
+   * screen wrapped in one big card — exactly the shape the Hearth audit found
+   * on `account-editor-screen.tsx`, `counterparty-editor-screen.tsx`, the desk
+   * branch of `quick-add-screen.tsx`, and `settings-currencies-screen.tsx`
+   * (its pivot block, still inside the currency-list card).
+   *
+   * **"Only content" is read through the wrappers, not around them.** A
+   * `<View>` or a fragment holding one `<Card>` renders exactly what the bare
+   * `<Card>` renders, and `{loading ? <Card/> : <Card/>}` is two screens each
+   * of which is one card — so the check unwraps single `View`/fragment
+   * wrappers and looks inside `{cond ? … : …}` / `{cond && …}` expressions,
+   * checking every branch. Without that, wrapping the offending card in a
+   * `<View>` was a one-line way past the rule.
    */
   function groundPanelBodies(text: string): string[] {
     const bodies: string[] = [];
@@ -435,13 +444,25 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
 
   type Child = { name: string; raw: string };
 
+  /** The text between a non-self-closing element's own tags. */
+  function innerOf(child: Child): string {
+    if (child.name === FRAGMENT)
+      return child.raw.slice("<>".length, child.raw.length - "</>".length);
+    const open = /^<[A-Za-z][\w.]*\b[^>]*?>/.exec(child.raw);
+    if (!open) return "";
+    return child.raw.slice(open[0].length, child.raw.length - `</${child.name}>`.length);
+  }
+
+  const FRAGMENT = "<>";
+  const EXPRESSION = "{expr}";
+
   /**
-   * Splits `jsx` into its top-level children — either a `{…}` expression
-   * (brace-depth aware, so a prop's own `{}` inside it doesn't end it early)
-   * or a tag, whose matching close is found by depth-counting further tags of
-   * the *same* name (a self-closing tag never nests). Not a real JSX parser —
-   * good enough for the shapes this repository's screens actually use, the
-   * same trade-off `importsOf` above makes for imports.
+   * Splits `jsx` into its top-level children — a `{…}` expression (brace-depth
+   * aware, so a prop's own `{}` inside it doesn't end it early), a fragment, or
+   * a tag, whose matching close is found by depth-counting further tags of the
+   * *same* name (a self-closing tag never nests). Not a real JSX parser — good
+   * enough for the shapes this repository's screens actually use, the same
+   * trade-off `importsOf` above makes for imports.
    */
   function topLevelChildren(jsx: string): Child[] {
     const src = stripComments(jsx);
@@ -461,7 +482,23 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
           else if (src[j] === "}") depth--;
           j++;
         }
-        children.push({ name: "{expr}", raw: src.slice(i, j) });
+        children.push({ name: EXPRESSION, raw: src.slice(i, j) });
+        i = j;
+        continue;
+      }
+      if (src[i] === "<" && src[i + 1] === ">") {
+        let depth = 1;
+        let j = i + 2;
+        while (j < n && depth > 0) {
+          if (src.startsWith("</>", j)) {
+            depth--;
+            j += 3;
+          } else if (src.startsWith("<>", j)) {
+            depth++;
+            j += 2;
+          } else j++;
+        }
+        children.push({ name: FRAGMENT, raw: src.slice(i, j) });
         i = j;
         continue;
       }
@@ -502,72 +539,124 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   /** `Sheet`/`Picker`/`Dialog` suffixed components, and `Toast` — overlays, not page content. */
   const isOverlayName = (name: string) => /(?:Sheet|Picker|Dialog)$/.test(name) || name === "Toast";
 
+  /** Every component name mentioned anywhere inside a chunk of JSX. */
+  const namesIn = (raw: string) =>
+    [...stripComments(raw).matchAll(/<([A-Za-z][\w.]*)/g)].map((m) => m[1] ?? "");
+
   /**
-   * An inert `{…}` expression — a `{/* JSX comment *\/}` (comments are
-   * stripped by `topLevelChildren` already, but the brace pair they sat in
-   * survives, and an empty brace pair is not a sibling), or a
-   * `{cond ? <Toast/> : null}`-shaped one referencing only overlay components.
+   * An inert `{…}` expression — an empty brace pair (all that survives a
+   * stripped `{/* JSX comment *\/}`), or a `{cond ? <Toast/> : null}`-shaped
+   * one referencing only overlay components.
    */
   function isOverlayExpr(raw: string): boolean {
     const inner = stripComments(raw.slice(1, -1)).trim();
     if (inner.length === 0) return true;
-    const names = [...inner.matchAll(/<([A-Za-z][\w.]*)/g)].map((m) => m[1] ?? "");
+    const names = namesIn(inner);
     return names.length > 0 && names.every(isOverlayName);
   }
 
   /** Real page content — an overlay sibling (bare or conditionally rendered) doesn't count. */
   function isRealContent(child: Child): boolean {
-    if (child.name === "{expr}") return !isOverlayExpr(child.raw);
+    if (child.name === EXPRESSION) return !isOverlayExpr(child.raw);
     return !isOverlayName(child.name);
   }
 
   /**
-   * A loading placeholder — every leaf is `Skeleton`, nested only inside
-   * `View`s. `counterparty-detail-screen.tsx`'s loading state mirrors the
-   * hero card its populated state resolves to (hero figure + rows, no
-   * buttons); the mirror is not a second design decision to flag.
+   * What a panel (or a wrapper inside one) can actually render, one entry per
+   * branch. A `View`/fragment around exactly one thing renders that thing, and
+   * a conditional renders one of its branches — so both are followed through
+   * rather than counted as content of their own. Anything with two or more
+   * real children is a screen with siblings and yields nothing: the rule is
+   * only about a panel that *is* one card.
    */
-  function isSkeletonMirror(raw: string): boolean {
-    const open = /^<([A-Za-z][\w.]*)\b[^>]*?(\/?)>/.exec(raw);
-    if (!open) return false;
-    const name = open[1] ?? "";
-    if (name === "Skeleton") return true;
-    if (name !== "View" || open[2] === "/") return false;
-    const inner = raw.slice(open[0].length, raw.length - `</${name}>`.length);
-    const kids = topLevelChildren(inner).filter((k) => k.name !== "{expr}");
-    return kids.length > 0 && kids.every((k) => isSkeletonMirror(k.raw));
+  function soleContents(jsx: string): Child[] {
+    const content = topLevelChildren(jsx).filter(isRealContent);
+    const only = content.length === 1 ? content[0] : undefined;
+    if (!only) return [];
+    if (only.name === EXPRESSION) {
+      // Each JSX element at the top level of the expression is one branch of
+      // a ternary or a `&&`; `{rows.map(…)}` yields its row element, which is
+      // not a `Card` and so is simply not an offender.
+      return topLevelChildren(only.raw.slice(1, -1)).flatMap((branch) =>
+        branch.name === EXPRESSION ? [] : resolve(branch),
+      );
+    }
+    return resolve(only);
   }
 
-  /** A `<Card>` whose entire inner content is a skeleton mirror — see above. */
-  function isSkeletonCard(cardRaw: string): boolean {
-    const open = /^<Card\b[^>]*?(\/?)>/.exec(cardRaw);
-    if (!open || open[1] === "/") return false;
-    const inner = cardRaw.slice(open[0].length, cardRaw.length - "</Card>".length);
-    const kids = topLevelChildren(inner).filter((k) => k.name !== "{expr}");
-    return kids.length > 0 && kids.every((k) => isSkeletonMirror(k.raw));
+  function resolve(child: Child): Child[] {
+    if (child.name === "View" || child.name === FRAGMENT) return soleContents(innerOf(child));
+    return [child];
   }
 
   /**
-   * `settings-screen.tsx` is the one deliberate exception (Table 1 of the
-   * Hearth audit calls it "explicitly blessed"): `(tabs)/_layout.tsx` hides
-   * the nav header for every tab root, so this tab's entire content is a
-   * settings-style list of buttons and the Card's `title` is the only place
-   * the screen name renders. Every other screen that reduces to one bare
-   * Card is the whole-screen-in-a-box this rule exists to ban.
+   * A loading placeholder — **every** leaf inside the card is a `Skeleton`,
+   * nested only inside `View`s, including the leaves inside `{…}` expressions
+   * (a `{loading ? <Skeleton/> : <Row/>}` inside the card is not a skeleton
+   * mirror, and reading only the plain children would have called it one).
+   * `counterparty-detail-screen.tsx`'s loading state mirrors the card its
+   * populated state resolves to; the mirror is not a second design decision.
    */
-  const DOCUMENTED_EXCEPTIONS = new Set(["apps/mobile/src/settings-screen.tsx"]);
+  function isSkeletonCard(card: Child): boolean {
+    const names = namesIn(innerOf(card));
+    return (
+      names.length > 0 &&
+      names.includes("Skeleton") &&
+      names.every((name) => name === "Skeleton" || name === "View")
+    );
+  }
+
+  /**
+   * The screens a tab route renders — read from `app/(tabs)/*.tsx`, not
+   * listed. `(tabs)/_layout.tsx` hides the navigation header for every tab
+   * root, so a tab root has nowhere but a card's own `title` to put the
+   * screen's name: `05-composites` §5.1 states the exception as a principle,
+   * *"a tab root without a navigation header may carry its menu list in a
+   * titled card"*, and this derives it rather than naming a file. A route
+   * file that grows a header, or a menu card that grows something other than
+   * buttons, loses the exemption the same day.
+   */
+  function tabRootScreens(): Set<string> {
+    const roots = new Set<string>();
+    for (const app of appRoots()) {
+      const dir = join(app, "app", "(tabs)");
+      if (!existsSync(dir)) continue;
+      for (const name of readdirSync(dir)) {
+        if (!/\.tsx$/.test(name) || name === "_layout.tsx") continue;
+        for (const spec of importsOf(join(dir, name))) {
+          if (!spec.startsWith(".")) continue;
+          const target = join(dir, `${spec}.tsx`);
+          if (existsSync(target)) roots.add(target);
+        }
+      }
+    }
+    return roots;
+  }
+
+  /** A menu list: every real child of the card is a `Button`. */
+  function isMenuCard(card: Child): boolean {
+    const children = topLevelChildren(innerOf(card));
+    const names = children.flatMap((child) =>
+      child.name === EXPRESSION ? namesIn(child.raw) : [child.name],
+    );
+    return names.length > 0 && names.every((name) => name === "Button");
+  }
 
   it("no screen's GroundPanel wraps the whole screen in one Card", () => {
     const files = screenFiles();
     expect(files.length, "screen files found").toBeGreaterThan(5);
+    const tabRoots = tabRootScreens();
     const offenders: string[] = [];
     for (const file of files) {
-      if (DOCUMENTED_EXCEPTIONS.has(rel(file))) continue;
       const text = readFileSync(file, "utf8");
       for (const body of groundPanelBodies(text)) {
-        const content = topLevelChildren(body).filter(isRealContent);
-        const only = content.length === 1 ? content[0] : undefined;
-        if (only && only.name === "Card" && !isSkeletonCard(only.raw)) {
+        const only = soleContents(body).find(
+          (child) =>
+            child.name === "Card" &&
+            !isSkeletonCard(child) &&
+            !(tabRoots.has(file) && isMenuCard(child)),
+        );
+        if (only) {
           offenders.push(rel(file));
           break;
         }
@@ -575,8 +664,45 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     }
     expect(
       offenders,
-      "a Card groups related rows or holds one hero figure, never a whole screen — drop the wrapping Card and render its content on the ground",
+      "A card groups related rows or holds one hero figure. Titles, single fields, chip rows, hints and buttons sit on the ground. Never a whole screen, never a single control. (`design-system/05` §5.1 — drop the wrapping Card and render its content on the ground.)",
     ).toEqual([]);
+  });
+
+  /**
+   * **Broken once, on both evasions of the first version.** That check counted
+   * a `GroundPanel`'s immediate children, so a `<View>` around the offending
+   * card, or a ternary choosing between two of them, passed while rendering
+   * exactly the banned screen. Each shape below is the real
+   * `account-editor-screen.tsx` offender, wrapped.
+   */
+  it("catches a Card hidden behind a View wrapper and behind a conditional", () => {
+    const wrapped = `<GroundPanel>
+      <View style={styles.root}>
+        <Card title="Account"><AccountEditor /></Card>
+      </View>
+    </GroundPanel>`;
+    const ternary = `<GroundPanel>
+      {loaded ? <Card><AccountEditor /></Card> : <Card><Skeleton shape="row" label="" /><Row /></Card>}
+    </GroundPanel>`;
+    const fine = `<GroundPanel>
+      <View style={styles.root}>
+        <Card title="Recent"><Rows /></Card>
+        <Button label="Show all" onPress={handleShowAll} />
+      </View>
+    </GroundPanel>`;
+    const skeletonMirror = `<GroundPanel>
+      <Card><View><Skeleton shape="row" label="" /></View>{rows.map(() => <Skeleton shape="row" label="" />)}</Card>
+    </GroundPanel>`;
+
+    const soleCards = (source: string) =>
+      groundPanelBodies(source)
+        .flatMap(soleContents)
+        .filter((child) => child.name === "Card" && !isSkeletonCard(child));
+
+    expect(soleCards(wrapped)).toHaveLength(1);
+    expect(soleCards(ternary)).toHaveLength(2);
+    expect(soleCards(fine)).toHaveLength(0);
+    expect(soleCards(skeletonMirror)).toHaveLength(0);
   });
 });
 

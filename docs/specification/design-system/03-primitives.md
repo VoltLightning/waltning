@@ -18,6 +18,12 @@ disabled · **loading** (spinner replaces label, width held).
 Accept/Skip and the diff card's Approve/Decline are both primary + secondary —
 that asymmetry is the affordance.
 
+**Rule:** the `primary` sits on the **right** of a button row, the secondary
+to its left — `[ Decline ] [ Approve ]` (`05-composites` §5.3),
+`[ Cancel ] [ Set rate ]` (`04-money-and-fx-components` §4), `[ Add
+transaction ] [ Settle ]` (`screens/S13` §3). One order everywhere, so the
+affirmative action is always in the same place under the thumb.
+
 ### 3.2 `IconButton`
 
 32 / 40 / 44. **44 minimum for any touch target** (§10). Requires `aria-label`.

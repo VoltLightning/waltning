@@ -282,6 +282,31 @@ describe("Debt (S12)", () => {
   });
 
   /**
+   * `05-composites` §5.1 — the card groups the direction totals, so with no
+   * totals there is no group and no card. Everything settled (or nothing owed
+   * yet) used to render the card's chrome around nothing at all.
+   */
+  it("renders no direction-totals card when nothing is owed in either direction", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+    // The totals block and the card that holds it render together — one
+    // conditional wraps both, so the block's absence is the card's absence.
+    expect(screen.queryByTestId("debt-direction-totals")).toBeNull();
+    // The screen still says what the state is — the empty state does that,
+    // on the ground, which is the point of not drawing an empty card.
+    expect(screen.getByText("All settled")).toBeDefined();
+  });
+
+  /**
    * M2 — `money.directionTotals` throws on two rows naming the same currency
    * at two different `decimals` (an invariant violation), and that throw
    * runs inside a `useMemo` above every guard on this screen. It must render

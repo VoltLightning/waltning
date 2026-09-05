@@ -2,10 +2,25 @@
  * `<Card>` and `<GroundPanel>` — `design-system/05` §5.
  *
  * `Card`: `surface`, `radius-md`, a one-pixel `border` and **no shadow**, with
- * an optional title and one action. **One** action, not a row of them — a card
- * with three affordances in its header is a card whose content has stopped
- * being the point. A card groups related rows or holds a hero figure — which
- * screens want one, and how many, is a design decision made per screen.
+ * an optional title, an optional tag beside it, and one action.
+ *
+ * **A card groups related rows or holds one hero figure. Titles, single
+ * fields, chip rows, hints and buttons sit on the ground. Never a whole
+ * screen, never a single control.** That is `design-system/05` §5.1's rule
+ * verbatim, and `tests/architecture.test.ts` enforces it against every screen
+ * in the repository.
+ *
+ * **The header is part of the card**, not something sitting on the ground
+ * inside it: `title`, `tag` and `action` are the card's own slots, and the
+ * rule's "titles sit on the ground" is about a screen's title, not a card's.
+ * `action` takes **one** action or one figure — a card with three affordances
+ * in its header is a card whose content has stopped being the point.
+ *
+ * `edge="accent"` draws a 2 px left edge for a card that has to read as
+ * distinct without reading as lesser (`SharedGroup`, S16 §3: *"visually
+ * distinct but not diminished"*). Distinction is drawn by adding a mark,
+ * never by taking size or weight away — which is why the shared group is a
+ * full-weight card with an edge and a tag rather than a quieter one.
  *
  * `GroundPanel`: the `radius-lg` surface that lifts over the shell. It is the
  * page body, and the reason the shell's dark band reads as behind rather than
@@ -57,25 +72,39 @@
 
 import { ScrollView, Text, View } from "react-native";
 import { useSafeArea } from "../primitives/safe-area";
+import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline, radius, space } from "../tokens.ts";
 
 export type CardProps = {
   title?: string;
-  /** One action, in the header. Rendered as given — usually a `Button`. */
+  /**
+   * A `Tag` beside the title — the mark that makes one card distinct from its
+   * siblings without making it smaller. Text, never tint alone (P5).
+   */
+  tag?: string;
+  /**
+   * **One** action or one figure, in the header. Rendered as given — usually a
+   * `Button`, or the per-currency subtotals a grouped-rows card is totalling.
+   */
   action?: React.ReactNode;
+  /** `"accent"` — a 2 px left edge. `SharedGroup`'s "distinct, not diminished". */
+  edge?: "accent";
   children: React.ReactNode;
 };
 
-export function Card({ title, action, children }: CardProps) {
+export function Card({ title, tag, action, edge, children }: CardProps) {
   const styles = useStyles();
 
   return (
-    <View style={styles.card}>
-      {title || action ? (
+    <View style={edge === "accent" ? [styles.card, styles.accentEdge] : styles.card}>
+      {title || tag || action ? (
         <View style={styles.header}>
-          {title ? <Text style={styles.title}>{title}</Text> : null}
+          <View style={styles.heading}>
+            {title ? <Text style={styles.title}>{title}</Text> : null}
+            {tag ? <Tag>{tag}</Tag> : null}
+          </View>
           {action}
         </View>
       ) : null}
@@ -156,6 +185,12 @@ const useStyles = makeStyles((theme) => ({
     borderWidth: theme.elevation.card.borderWidth,
     borderColor: theme.elevation.card.borderColor,
   },
+  /**
+   * `accent`, not a heavier border on all four sides: an edge is a mark on one
+   * side, and a card whose whole outline changed would read as a different
+   * kind of surface rather than as this one, marked.
+   */
+  accentEdge: { borderLeftWidth: 2, borderLeftColor: theme.accent },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -165,6 +200,7 @@ const useStyles = makeStyles((theme) => ({
     borderBottomColor: theme.hairline,
     paddingBottom: space.xl,
   },
+  heading: { flexDirection: "row", alignItems: "center", gap: space.x3, flexShrink: 1 },
   title: { color: theme.text, ...text.ui("displayThree") },
   // Background and radius only — the padding and the inter-child gap that
   // used to live here now live on whichever style actually carries the

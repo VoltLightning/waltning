@@ -225,10 +225,16 @@ export default function SettingsRatesScreen() {
         />
       </View>
 
-      <Card>
-        {quote === null || range === null || pivot === undefined ? (
-          <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
-        ) : (
+      {/*
+        S18 §3 — the card is the table, and with no quote currency there is no
+        table to card. The hint that says so is a hint: it renders on the
+        ground, beside the controls it is about, rather than inside an empty
+        card whose chrome would claim a group exists.
+      */}
+      {quote === null || range === null || pivot === undefined ? (
+        <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
+      ) : (
+        <Card>
           <RateTable
             base={pivot.code}
             quote={quote}
@@ -237,8 +243,8 @@ export default function SettingsRatesScreen() {
             rows={rows}
             onSelectRow={handleSelectRow}
           />
-        )}
-      </Card>
+        </Card>
+      )}
 
       <View style={styles.actionsRow}>
         <Button

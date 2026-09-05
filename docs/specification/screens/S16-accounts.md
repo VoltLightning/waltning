@@ -30,32 +30,38 @@ would make you learn a second habit for the screen you open least.
 ```
   🔍  Search accounts
 
-  ┌ BANK                              8 420,10 zł ┐
-  │  BANK-A · PLN                     6 200,00 zł │
-  │  BANK-A/BIZ · PLN         [BIZ]   2 220,10 zł │
-  └─────────────────────────────────────────────────┘
-  ┌ CASH                              1 040,00 zł ┐
-  │  Cash · PLN                         840,00 zł │
-  │  Cash · BYN              62,40 Br · 0,3121    │
-  │                                     19,48 zł  │
-  └─────────────────────────────────────────────────┘
-  ┌ CLEARING                            340,00 zł ⚠┐
-  │  Clearing · PLN                    340,00 zł  │
-  └─────────────────────────────────────────────────┘
-  ┌ SHARED                            6 460,40 zł ┐
-  │  Household · USD          1 800,00 $ · 3,59   │
-  │                                   6 460,40 zł │
-  └─────────────────────────────────────────────────┘
+  ┌ Bank ──────────────────────────── 8 420,10 zł ┐
+  │ BANK-A · PLN                      6 200,00 zł │
+  │ BANK-A/BIZ · PLN         [BIZ]    2 220,10 zł │
+  └───────────────────────────────────────────────┘
+  ┌ Cash ──────────────────────────── 1 040,00 zł ┐
+  │ Cash · PLN                          840,00 zł │
+  │ Cash · BYN              62,40 Br · 0,3121     │
+  │                                      19,48 zł │
+  └───────────────────────────────────────────────┘
+  ┌ Clearing ────────────────────────── 340,00 zł ┐
+  │ Clearing · PLN  [UNSETTLED]         340,00 zł │
+  └───────────────────────────────────────────────┘
+  ┌ Jointly owned  [SHARED] ───────── 6 460,40 zł ┐
+  ┃ Household · USD          1 800,00 $ · 3,59    │
+  ┃                                   6 460,40 zł │
+  └───────────────────────────────────────────────┘
 ```
 
-**`SharedGroup` is visually distinct but not diminished** — its own card,
-subtotalled on its own, and rendered at the same weight as every kind group. A
-jointly-owned account is an ordinary account that belongs to a different total
-(§6.7), and **a negative balance here gets no warning treatment**, because a
-shared account being overdrawn is a real fact.
+**`SharedGroup` is visually distinct but not diminished** — its own card, at
+the same size, weight and subtotal treatment as every kind group, marked by a
+2 px `accent` left edge and a `Shared` tag beside its title. Distinction is
+drawn by adding a mark, never by taking size or weight away. The title is
+*Jointly owned* and the tag is *Shared*: a title repeating its own tag spends
+one of the two marks twice and says nothing the tag had not. A jointly-owned
+account is an ordinary account that belongs to a different total (§6.7), and
+**a negative balance here gets no warning treatment**, because a shared account
+being overdrawn is a real fact.
 
-Each group — kind or `SharedGroup` — is a hero card of per-group balances; the
-search field above the groups stays on the ground.
+Each group — kind or `SharedGroup` — is a card of grouped rows: the group name
+is the card's title, its per-currency subtotals the card's one header figure,
+and the balance rows the body. The search field above the groups stays on the
+ground.
 
 A clearing account with a non-zero balance carries an amber marker — that is the
 invariant this screen exists to surface (§6.4).
@@ -71,10 +77,10 @@ otherwise buried in an editor.
 
 | Component | Notes |
 |---|---|
-| `Card` | One per kind group and per `SharedGroup` — the group header is the card's title, balance rows sit inside |
+| `Card` | One per kind group and per `SharedGroup` — grouped rows, not a hero figure. The group name is the title, the per-currency subtotals the header figure, the balance rows the body. `SharedGroup`'s is titled *Jointly owned* and carries `edge="accent"` and a `Shared` tag |
 | `SearchField` | Name, kind, currency. Same placement as S06, S10, S12 |
 | `BalanceRow` | Account · kind · `FxAmount` for foreign |
-| `SharedGroup` | Own subtotal, distinct, not diminished |
+| `SharedGroup` | Own subtotal, distinct, not diminished — accent left edge and a `Shared` tag, at full weight |
 | `FxAmount` | Every foreign balance carries its basis (P1) |
 | `Tag` | `BIZ` · `archived` · clearing's amber marker |
 | `EmptyState(first-run)` | **On the screen itself**, not only in the wizard |

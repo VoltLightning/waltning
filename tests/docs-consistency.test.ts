@@ -298,3 +298,98 @@ describe("journeys and invariants", () => {
     expect(problems, "journey/invariant files with no resolvable spec citation").toEqual([]);
   });
 });
+
+describe("screen wireframes are drawn, not sketched", () => {
+  /**
+   * **A `§3` wireframe is the spec's statement of where a card is** — the
+   * `Card` row of `design-system/05-composites.md` says so out loud: "a box
+   * there is a card, a bare figure or field there is on the ground". A box
+   * whose bottom is wider than its top is not a box, and a reader cannot
+   * tell whether the ragged edge means something.
+   *
+   * The check is deliberately narrow. A box **opens** with a `┌` that has a
+   * `┐` later on the same line, and **closes** with a `└` that has a `┘`
+   * later on the same line; open and close pair by the column they start in,
+   * so two boxes drawn side by side (`S04` §3's voice and scan tiles) pair
+   * correctly rather than by nesting order. A lone `└` with no `┘` after it
+   * is a tree branch, not a corner — `S22` §3's scheme timeline draws two of
+   * them — and is not a box at all.
+   *
+   * Width is counted in code points, which is what makes the drawing line up
+   * in a monospaced editor for every character these wireframes actually use.
+   */
+  type OpenBox = { line: number; width: number };
+
+  function boxProblems(file: string, text: string): string[] {
+    const problems: string[] = [];
+    const open = new Map<number, OpenBox>();
+    let inFence = false;
+
+    const closeFence = () => {
+      for (const [col, box] of open) {
+        problems.push(`${file}:${box.line} col ${col}: box opened and never closed`);
+      }
+      open.clear();
+    };
+
+    text.split("\n").forEach((line, index) => {
+      if (/^\s*```/.test(line)) {
+        if (inFence) closeFence();
+        inFence = !inFence;
+        return;
+      }
+      if (!inFence) return;
+      const chars = [...line];
+      for (let col = 0; col < chars.length; col++) {
+        const corner = chars[col];
+        if (corner !== "┌" && corner !== "└") continue;
+        const end = chars.indexOf(corner === "┌" ? "┐" : "┘", col);
+        if (end < 0) continue; // a tree branch, not a corner — see above
+        const width = end - col + 1;
+        if (corner === "┌") {
+          open.set(col, { line: index + 1, width });
+        } else {
+          const opened = open.get(col);
+          if (opened === undefined) {
+            problems.push(`${file}:${index + 1} col ${col}: box closed that was never opened`);
+          } else if (opened.width !== width) {
+            problems.push(
+              `${file}: box at col ${col} opened :${opened.line} ${opened.width} wide, closed :${
+                index + 1
+              } ${width} wide`,
+            );
+          }
+          open.delete(col);
+        }
+        col = end;
+      }
+    });
+    if (inFence) closeFence();
+    closeFence();
+    return problems;
+  }
+
+  it("finds a box whose top and bottom disagree, and a box left open", () => {
+    // Broken once, on the two shapes the screens actually got wrong: a
+    // bottom edge two characters longer than its top (`S16` §3's kind
+    // groups), and a box opened at the end of a wireframe with no bottom at
+    // all (`S30` §3's last status card).
+    expect(
+      boxProblems("X.md", "```\n  ┌ Bank ──────┐\n  │  BANK-A    │\n  └─────────────┘\n```"),
+    ).toEqual(["X.md: box at col 2 opened :2 14 wide, closed :4 15 wide"]);
+    expect(boxProblems("X.md", "```\n  ┌ Storage ─┐\n```")).toEqual([
+      "X.md:2 col 2: box opened and never closed",
+    ]);
+    // Side-by-side boxes pair by column, not by nesting order.
+    expect(boxProblems("X.md", "```\n┌ a ─┐ ┌ b ─┐\n└────┘ └────┘\n```")).toEqual([]);
+    // A `└` with no `┘` after it is a tree branch (`S22` §3), not a corner.
+    expect(boxProblems("X.md", "```\n│  └ PL · skala      └ PL · ryczałt  │\n```")).toEqual([]);
+  });
+
+  it("has every wireframe box closed at the width it opened", () => {
+    const problems = screenFiles.flatMap((file) =>
+      boxProblems(file, read(join(specRoot, "screens", file))),
+    );
+    expect(problems, "screen wireframes whose boxes do not line up").toEqual([]);
+  });
+});

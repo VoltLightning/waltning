@@ -79,6 +79,7 @@ export const pl: Messages = {
     tagBiz: "BIZ",
     tagUnsettled: "Otwarte",
     shared: "Wspólne",
+    sharedHeading: "Konta wspólne",
     archivedShow: "Zarchiwizowane",
     archivedCount: "Zarchiwizowane ({{count}})",
     archive: "Archiwizuj",

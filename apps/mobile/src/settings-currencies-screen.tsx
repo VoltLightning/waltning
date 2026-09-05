@@ -392,20 +392,31 @@ export default function SettingsCurrenciesScreen() {
 
   return (
     <GroundPanel>
-      <Card title={t("routes.currencies")} action={addAction}>
-        {otherRows.map((row) => (
-          <CurrencyRow
-            key={row.code}
-            row={row}
-            coverage={coverageByCode.get(row.code)}
-            onTogglePinned={handleTogglePinned}
-            onChangeSource={handleChangeSource}
-            onArchive={handleArchive}
-            onEdit={handleOpenEdit}
-            onViewRates={handleViewRates}
-          />
-        ))}
-      </Card>
+      {/*
+        The card is the group of currency rows, so with no rows there is no
+        group — and a titled card holding nothing is chrome claiming a list
+        exists. Only the pivot is set up in that state; *Add currency* is the
+        one thing to do about it, and it is a button, so it sits on the
+        ground (`design-system/05` §5.1).
+      */}
+      {otherRows.length > 0 ? (
+        <Card title={t("routes.currencies")} action={addAction}>
+          {otherRows.map((row) => (
+            <CurrencyRow
+              key={row.code}
+              row={row}
+              coverage={coverageByCode.get(row.code)}
+              onTogglePinned={handleTogglePinned}
+              onChangeSource={handleChangeSource}
+              onArchive={handleArchive}
+              onEdit={handleOpenEdit}
+              onViewRates={handleViewRates}
+            />
+          ))}
+        </Card>
+      ) : (
+        addAction
+      )}
 
       {pivotRow ? (
         <View style={styles.pivotRow}>

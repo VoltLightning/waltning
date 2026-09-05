@@ -30,13 +30,15 @@ mobile stacks.
 
 The pair selector, presets, date range and action buttons sit on the ground;
 `RateTable` is the one grouped-rows card, and the per-currency coverage list is
-a second, separate card.
+a second, separate card. **With no quote currency to compare against the pivot
+there is no table, so there is no card** — the hint saying so is a hint, and
+renders on the ground where every other hint on this screen does.
 
 ## 4. Components
 
 | Component | Notes |
 |---|---|
-| `Card` | Two — `RateTable` alone, and the per-currency coverage list. Everything else (pair select, presets, date range, action buttons, `RateEditor`) sits on the ground |
+| `Card` | Two — `RateTable` alone (only when there is a pair to table), and the per-currency coverage list. Everything else — pair select, presets, date range, action buttons, `RateEditor`, and the no-quote hint — sits on the ground |
 | `RateTable` | Virtualized. Gaps render as **explicit empty rows**, never as absence |
 | `RateEditor` | Single date **or a range**; states what it will overwrite before writing |
 | `SyncLog` | `succeeded` · `failed` · **`rate_limited`** — the third is distinct, because retrying a rate limit is futile |

@@ -30,13 +30,13 @@ type Story = StoryObj<typeof meta>;
 const ROWS = [
   { label: "Coffee · Eating out", value: "-48.90" },
   { label: "Salary · Employment", value: "9200.00" },
-  { label: "Rewe · Groceries", value: "-251.04" },
+  { label: "Shop A · Groceries", value: "-251.04" },
 ] as const;
 
 /**
- * A titled group of related rows — `today-screen.tsx`'s Recent, `S16`'s
- * per-kind account groups. `title` and `action` are the header; the rows are
- * the body.
+ * A titled group of related rows — `today-screen.tsx`'s Recent, S16's per-kind
+ * account groups, S12's direction totals. `title`, `tag` and `action` are the
+ * header, and the header is part of the card; the rows are the body.
  */
 export const GroupedRows: Story = {
   render: GroupedRowsDemo,
@@ -57,13 +57,38 @@ function GroupedRowsDemo() {
 }
 
 /**
- * One hero figure and nothing else — `debt-screen.tsx`'s direction totals,
- * `ledger-screen.tsx`'s running total. Never a form, never a whole screen: a
- * card this shape holds exactly the number the screen is about.
+ * One hero figure and nothing else — `ledger-screen.tsx`'s running total for
+ * the current filter. Never a form, never a whole screen: a card this shape
+ * holds exactly the number the screen is about, and nothing to read past it.
  */
 export const HeroFigure: Story = {
   render: HeroFigureDemo,
 };
+
+/**
+ * The same card, marked. `edge="accent"` plus a tag beside the title is how
+ * `SharedGroup` reads as distinct without reading as lesser (S16 §3,
+ * *"visually distinct but not diminished"*) — the size, weight and subtotal
+ * treatment are unchanged from `GroupedRows` above, and only marks are added.
+ */
+export const Distinct: Story = {
+  render: DistinctDemo,
+};
+
+function DistinctDemo() {
+  const styles = useStyles();
+  const subtotal = (
+    <Amount value={money.toMoney("6460.40")} currency="PLN" decimals={2} size="small" />
+  );
+  return (
+    <Card title="Jointly owned" tag="Shared" action={subtotal} edge="accent">
+      <View style={styles.row}>
+        <Text style={styles.rowLabel}>Household · USD</Text>
+        <Amount value={money.toMoney("1800.00")} currency="USD" decimals={2} size="small" />
+      </View>
+    </Card>
+  );
+}
 
 function HeroFigureDemo() {
   const styles = useStyles();
