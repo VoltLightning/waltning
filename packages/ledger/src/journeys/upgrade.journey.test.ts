@@ -362,7 +362,7 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
         // number of entries recovery replayed — everything Step 1 wrote is
         // still there, plus what recovery added on top. `dashboard_layouts` /
         // `dashboard_widgets` are the other exception: every fixture here
-        // predates `DESK4`'s `0010_dashboard_layout_seed` step, so every one
+        // predates `DESK4`'s `0011_dashboard_layout_seed` step, so every one
         // of them gains exactly the default layout's one row and its five
         // widgets on the way through it — the same seed a fresh install gets,
         // never skipped for a database that is upgrading rather than new.

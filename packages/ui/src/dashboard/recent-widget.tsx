@@ -17,7 +17,7 @@ import { useInteraction } from "../primitives/interaction.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, hairline, space, touchTarget } from "../tokens.ts";
-import { WidgetCard } from "./widget-card";
+import { WidgetCard, type WidgetFrame } from "./widget-card";
 
 export type RecentWidgetRow = {
   id: string;
@@ -30,9 +30,8 @@ export type RecentWidgetRow = {
   kind: AmountKind;
 };
 
-export type RecentWidgetProps = {
+export type RecentWidgetProps = WidgetFrame & {
   title: string;
-  meta: string;
   rows: readonly RecentWidgetRow[];
   emptyLabel: string;
   loading?: boolean | undefined;
@@ -76,7 +75,9 @@ function Row({ row, onPress }: { row: RecentWidgetRow; onPress?: (id: string) =>
 
 export function RecentWidget({
   title,
-  meta,
+  currency,
+  period,
+  scope,
   rows,
   emptyLabel,
   loading,
@@ -86,7 +87,14 @@ export function RecentWidget({
   const styles = useStyles();
 
   return (
-    <WidgetCard title={title} meta={meta} loading={loading} error={error}>
+    <WidgetCard
+      title={title}
+      currency={currency}
+      period={period}
+      scope={scope}
+      loading={loading}
+      error={error}
+    >
       {rows.length === 0 ? (
         <Text style={styles.empty}>{emptyLabel}</Text>
       ) : (

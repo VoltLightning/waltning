@@ -493,6 +493,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
   const GROCERIES = "cat-groceries";
   const DINING = "cat-dining";
   const TRANSPORT = "cat-transport";
+  const DISCOUNT = "cat-discount";
 
   it("attributes a plain expense row to its own category", () => {
     const rows: money.SpendByCategoryTransactionRow[] = [
@@ -501,13 +502,14 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("100"),
       },
     ];
-    expect(money.spendByCategory(rows, [], period)).toEqual([
+    expect(money.spendByCategory(rows, [], period, "mine")).toEqual([
       { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "100.00000000" },
     ]);
   });
@@ -528,6 +530,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-12"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: null,
@@ -540,7 +543,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
       { transactionId: "t-split", categoryId: GROCERIES, amount: m("30") },
       { transactionId: "t-split", categoryId: TRANSPORT, amount: m("20") },
     ];
-    const result = money.spendByCategory(rows, lines, period);
+    const result = money.spendByCategory(rows, lines, period, "mine");
     const total = result.reduce((sum, row) => money.add(sum, row.amount), money.ZERO);
     expect(total).toBe("100.00000000");
     expect(result).toEqual([
@@ -557,6 +560,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-12"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         // A stale/leftover category on the parent row itself — must be
@@ -569,7 +573,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
     const lines: money.SpendByCategoryLineRow[] = [
       { transactionId: "t-mixed", categoryId: DINING, amount: m("40") },
     ];
-    expect(money.spendByCategory(rows, lines, period)).toEqual([
+    expect(money.spendByCategory(rows, lines, period, "mine")).toEqual([
       { currency: PLN, decimals: 2, categoryId: DINING, amount: "40.00000000" },
     ]);
   });
@@ -581,6 +585,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-12"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: null,
@@ -590,7 +595,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
     const lines: money.SpendByCategoryLineRow[] = [
       { transactionId: "t-uncat", categoryId: null, amount: m("15") },
     ];
-    expect(money.spendByCategory(rows, lines, period)).toEqual([
+    expect(money.spendByCategory(rows, lines, period, "mine")).toEqual([
       { currency: PLN, decimals: 2, categoryId: null, amount: "15.00000000" },
     ]);
   });
@@ -602,6 +607,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "income",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: GROCERIES,
@@ -612,6 +618,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "transfer",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: null,
@@ -622,6 +629,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-05"),
         ownership: "shared",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: GROCERIES,
@@ -632,13 +640,14 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-07-31"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("500"),
       },
     ];
-    expect(money.spendByCategory(rows, [], period)).toEqual([]);
+    expect(money.spendByCategory(rows, [], period, "mine")).toEqual([]);
   });
 
   it("never sums two currencies into one row", () => {
@@ -648,6 +657,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         categoryId: GROCERIES,
@@ -658,20 +668,127 @@ describe("spendByCategory — §6 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-06"),
         ownership: "own",
+        isBusiness: false,
         currency: USD,
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("40"),
       },
     ];
-    expect(money.spendByCategory(rows, [], period)).toEqual([
+    expect(money.spendByCategory(rows, [], period, "mine")).toEqual([
       { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "100.00000000" },
       { currency: USD, decimals: 2, categoryId: GROCERIES, amount: "40.00000000" },
     ]);
   });
 
   it("is empty over no rows", () => {
-    expect(money.spendByCategory([], [], period)).toEqual([]);
+    expect(money.spendByCategory([], [], period, "mine")).toEqual([]);
+  });
+
+  /**
+   * L3 — the half-open period's **exclusive** end. Every earlier case pinned
+   * the inclusive start (a 31 July row is out of an August period); nothing
+   * asked whether 1 September was out of it, which is the boundary a `<=`
+   * would break and a `<` holds.
+   */
+  it("excludes a row dated on the period's own end — the range is half-open", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t-end",
+        type: "expense",
+        date: accountingDate("2026-09-01"),
+        ownership: "own",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("100"),
+      },
+    ];
+    expect(money.spendByCategory(rows, [], period, "mine")).toEqual([]);
+  });
+
+  /**
+   * L2 — `transaction_lines.amount` has no positivity CHECK, only
+   * `transaction_lines_sum_matches`, so a legal split can carry a discount
+   * line. The fold reports the negative bucket as a fact rather than
+   * absorbing it: the categories that were charged keep their own figures,
+   * and the sum is still the transaction's own amount exactly once.
+   */
+  it("reports a negative line as its own bucket, never folded into the others", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t-discount",
+        type: "expense",
+        date: accountingDate("2026-08-12"),
+        ownership: "own",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        categoryId: null,
+        amountOriginal: m("100"),
+      },
+    ];
+    const lines: money.SpendByCategoryLineRow[] = [
+      { transactionId: "t-discount", categoryId: GROCERIES, amount: m("60") },
+      { transactionId: "t-discount", categoryId: DINING, amount: m("50") },
+      { transactionId: "t-discount", categoryId: TRANSPORT, amount: m("20") },
+      { transactionId: "t-discount", categoryId: DISCOUNT, amount: m("-30") },
+    ];
+    const result = money.spendByCategory(rows, lines, period, "mine");
+    expect(result.reduce((sum, row) => money.add(sum, row.amount), money.ZERO)).toBe(
+      "100.00000000",
+    );
+    expect(result.find((row) => row.categoryId === DISCOUNT)?.amount).toBe("-30.00000000");
+    expect(result.find((row) => row.categoryId === GROCERIES)?.amount).toBe("60.00000000");
+  });
+
+  /** The scope segment, all four values, over one own/shared/business fixture. */
+  it("answers each scope over the same rows", () => {
+    const rows: money.SpendByCategoryTransactionRow[] = [
+      {
+        id: "t-own",
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amountOriginal: m("10"),
+      },
+      {
+        id: "t-business",
+        type: "expense",
+        date: accountingDate("2026-08-06"),
+        ownership: "own",
+        isBusiness: true,
+        currency: PLN,
+        decimals: 2,
+        categoryId: DINING,
+        amountOriginal: m("20"),
+      },
+      {
+        id: "t-shared",
+        type: "expense",
+        date: accountingDate("2026-08-07"),
+        ownership: "shared",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        categoryId: TRANSPORT,
+        amountOriginal: m("40"),
+      },
+    ];
+    const totalOf = (scope: money.LedgerScope) =>
+      money
+        .spendByCategory(rows, [], period, scope)
+        .reduce((sum, row) => money.add(sum, row.amount), money.ZERO);
+
+    expect(totalOf("all")).toBe("70.00000000");
+    expect(totalOf("mine")).toBe("30.00000000");
+    expect(totalOf("shared")).toBe("40.00000000");
+    expect(totalOf("business")).toBe("20.00000000");
   });
 });
 
@@ -689,6 +806,7 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("100"),
@@ -698,6 +816,7 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "income",
         date: accountingDate("2026-08-10"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("30"),
@@ -707,13 +826,14 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-07-15"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("60"),
         isCapital: false,
       },
     ];
-    expect(money.incomeVsExpense(rows, buckets)).toEqual([
+    expect(money.incomeVsExpense(rows, buckets, "mine")).toEqual([
       {
         label: "2026-07",
         currency: PLN,
@@ -737,6 +857,7 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("100000"),
@@ -746,13 +867,24 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-06"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("50"),
         isCapital: false,
       },
     ];
-    expect(money.incomeVsExpense(rows, buckets)).toEqual([
+    // Two buckets in, two buckets out: July holds nothing but is still a
+    // month, and a chart that drew one bar under a two-month header would be
+    // reporting a gap it had no way to show. See "fills every bucket" below.
+    expect(money.incomeVsExpense(rows, buckets, "mine")).toEqual([
+      {
+        label: "2026-07",
+        currency: PLN,
+        decimals: 2,
+        income: "0.00000000",
+        expense: "0.00000000",
+      },
       {
         label: "2026-08",
         currency: PLN,
@@ -769,6 +901,7 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "transfer",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("500"),
@@ -778,6 +911,7 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-05"),
         ownership: "shared",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("500"),
@@ -787,13 +921,14 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-06-01"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("500"),
         isCapital: false,
       },
     ];
-    expect(money.incomeVsExpense(rows, buckets)).toEqual([]);
+    expect(money.incomeVsExpense(rows, buckets, "mine")).toEqual([]);
   });
 
   it("never sums two currencies into one row, within a bucket", () => {
@@ -802,6 +937,7 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-05"),
         ownership: "own",
+        isBusiness: false,
         currency: PLN,
         decimals: 2,
         amountOriginal: m("100"),
@@ -811,13 +947,16 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
         type: "expense",
         date: accountingDate("2026-08-06"),
         ownership: "own",
+        isBusiness: false,
         currency: USD,
         decimals: 2,
         amountOriginal: m("40"),
         isCapital: false,
       },
     ];
-    expect(money.incomeVsExpense(rows, buckets)).toEqual([
+    expect(money.incomeVsExpense(rows, buckets, "mine")).toEqual([
+      { label: "2026-07", currency: PLN, decimals: 2, income: "0.00000000", expense: "0.00000000" },
+      { label: "2026-07", currency: USD, decimals: 2, income: "0.00000000", expense: "0.00000000" },
       {
         label: "2026-08",
         currency: PLN,
@@ -836,7 +975,90 @@ describe("incomeVsExpense — §12 (DESK4)", () => {
   });
 
   it("is empty over no rows", () => {
-    expect(money.incomeVsExpense([], buckets)).toEqual([]);
+    expect(money.incomeVsExpense([], buckets, "mine")).toEqual([]);
+  });
+
+  /**
+   * M1 — the empty bucket. Built from matched rows alone, a six-month chart
+   * with activity in three months drew three bars: the gap was invisible and
+   * the spacing lied about where the months were.
+   */
+  it("fills every bucket, for every currency the range holds", () => {
+    const rows: money.IncomeExpenseTransactionRow[] = [
+      {
+        type: "income",
+        date: accountingDate("2026-08-10"),
+        ownership: "own",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("30"),
+        isCapital: false,
+      },
+    ];
+    expect(money.incomeVsExpense(rows, buckets, "mine").map((row) => row.label)).toEqual([
+      "2026-07",
+      "2026-08",
+    ]);
+  });
+
+  /** L3 — the exclusive end, the flow fold's own half of the boundary case. */
+  it("excludes a row dated on the last bucket's own end", () => {
+    const rows: money.IncomeExpenseTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-09-01"),
+        ownership: "own",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("100"),
+        isCapital: false,
+      },
+    ];
+    expect(money.incomeVsExpense(rows, buckets, "mine")).toEqual([]);
+  });
+
+  it("answers each scope over the same rows", () => {
+    const rows: money.IncomeExpenseTransactionRow[] = [
+      {
+        type: "expense",
+        date: accountingDate("2026-08-05"),
+        ownership: "own",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("10"),
+        isCapital: false,
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-08-06"),
+        ownership: "own",
+        isBusiness: true,
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("20"),
+        isCapital: false,
+      },
+      {
+        type: "expense",
+        date: accountingDate("2026-08-07"),
+        ownership: "shared",
+        isBusiness: false,
+        currency: PLN,
+        decimals: 2,
+        amountOriginal: m("40"),
+        isCapital: false,
+      },
+    ];
+    const augustExpense = (scope: money.LedgerScope) =>
+      money.incomeVsExpense(rows, buckets, scope).find((row) => row.label === "2026-08")?.expense;
+
+    expect(augustExpense("all")).toBe("70.00000000");
+    expect(augustExpense("mine")).toBe("30.00000000");
+    expect(augustExpense("shared")).toBe("40.00000000");
+    expect(augustExpense("business")).toBe("20.00000000");
   });
 });
 

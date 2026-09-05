@@ -20,7 +20,7 @@ import { useMemo } from "react";
 import type { PhoneLedgerController, PhoneSpendByCategory } from "./create-phone-ledger.ts";
 
 /**
- * Memoised on `[ledger, period, revision]` — `revision` is
+ * Memoised on `[ledger, period, scope, revision]` — `revision` is
  * `PhoneLedgerSnapshot`'s own counter, bumped by every `refresh()`, so this
  * recomputes exactly when a write could have changed the answer, and never
  * merely because the screen re-rendered for an unrelated reason.
@@ -28,10 +28,14 @@ import type { PhoneLedgerController, PhoneSpendByCategory } from "./create-phone
 export function useSpendByCategory(
   ledger: PhoneLedgerController,
   period: money.Period,
+  scope: money.LedgerScope,
   revision: number,
 ): readonly PhoneSpendByCategory[] {
   // `revision` is not read in the body — it is the invalidation signal
   // itself, the same pattern `useCounterpartyHistory`'s own `revision` uses.
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision invalidates this memo by identity, not by being read.
-  return useMemo(() => ledger.readSpendByCategory(period), [ledger, period, revision]);
+  return useMemo(
+    () => ledger.readSpendByCategory(period, scope),
+    [ledger, period, scope, revision],
+  );
 }

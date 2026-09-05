@@ -46,7 +46,11 @@ export type ClientStateUpdate =
   | "appearance_hydrate"
   | "device_preference_hydrate"
   | "device_preference_write"
-  | "counterparty_direction_totals";
+  | "counterparty_direction_totals"
+  /** `S01` found no active `dashboard_layouts` row — `SPEC.md` §14.5's seed is absent. */
+  | "dashboard_active_layout"
+  /** A layout named a widget kind this build has no renderer for; it was dropped. */
+  | "dashboard_unknown_widget_kind";
 
 type ClientLifecycle<Scope extends string, Name extends object> =
   | ({ scope: Scope; phase: "start" } & Name)

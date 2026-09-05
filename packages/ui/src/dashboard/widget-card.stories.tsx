@@ -18,7 +18,9 @@ const meta = {
   component: WidgetCard,
   args: {
     title: "Balances",
-    meta: "Now · Mine",
+    currency: "PLN",
+    period: "As of September 5, 2026",
+    scope: "Mine",
     children: <ExampleBody />,
   },
 } satisfies Meta<typeof WidgetCard>;

@@ -22,7 +22,7 @@ import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
 vi.mock("expo-router", () => ({
@@ -33,8 +33,29 @@ vi.mock("expo-router", () => ({
 }));
 
 import Dashboard from "./dashboard-screen";
+import { deskScope, displayCurrency } from "./platform";
 
 const PLN = currencyCode("PLN");
+const CHF = currencyCode("CHF");
+
+/** A dormant foreign account — the fixture H1 is about, and the one no test had. */
+const DORMANT_CHF: PhoneAccount = {
+  id: id<"accounts">("44444444-4444-4444-8444-444444444444"),
+  name: "Savings · CHF",
+  kind: "bank",
+  currency: CHF,
+  decimals: 2,
+  balance: toMoney("500.00"),
+  groupId: null,
+  ownership: "own",
+  isBusiness: false,
+  archived: false,
+  expectedBalance: null,
+  openingBalance: toMoney("0"),
+  openingDate: null,
+  memo: "",
+  version: 1,
+};
 
 const ACCOUNT: PhoneAccount = {
   id: id<"accounts">("11111111-1111-4111-8111-111111111111"),
@@ -225,6 +246,18 @@ function withLedger(controller: ReturnType<typeof fakeController>) {
 
 beforeEach(() => {
   router.push.mockClear();
+  // §7.0's own toggle, set the way a real install's `initializeFromPinned`
+  // sets it. Without this the screen would lead with the build-time pivot
+  // seed, which is exactly the point: the lead currency is a preference now,
+  // not whatever `netWorth` happened to sort first.
+  void displayCurrency.set(PLN);
+  void deskScope.set("all");
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-09-04T12:00:00Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Dashboard (S01)", () => {
@@ -257,11 +290,17 @@ describe("Dashboard (S01)", () => {
     expect(screen.queryByText("Income vs expense")).toBeNull();
   });
 
-  it("renders no widgets while the layout has not resolved (an empty, never-migrated database)", () => {
+  /**
+   * M4 — a blank page was the old answer, and `EmptyState`/`ErrorState` was
+   * not reached at all. A database with no active layout is a failure, not a
+   * quiet nothing: the seed migration exists precisely so this cannot happen.
+   */
+  it("says so when no layout is active, rather than rendering a blank grid", () => {
     withLedger(fakeController({ layout: null }));
 
     expect(screen.queryByText("Balances")).toBeNull();
     expect(screen.queryByText("Debt")).toBeNull();
+    expect(screen.getByText("No dashboard layout")).toBeTruthy();
   });
 
   it("shows the first-run empty state with no accounts, replacing the whole grid (S01 §6)", () => {
@@ -282,5 +321,119 @@ describe("Dashboard (S01)", () => {
     );
 
     expect(screen.getByText("100.00")).toBeTruthy();
+  });
+
+  /**
+   * **H1.** A single dormant `CHF` account used to decide the whole
+   * dashboard: `netWorth` sorts alphabetically, `CHF` sorts before `PLN`, and
+   * both chart widgets silently dropped every PLN figure — a month with forty
+   * transactions rendered "Nothing spent this period" under a header that
+   * named no currency at all.
+   *
+   * The lead is §7.0's display currency now, the header says which, and the
+   * other currency is listed on its own row rather than deciding anything.
+   */
+  it("leads with the display currency, not the alphabetically first one", () => {
+    withLedger(
+      fakeController({
+        accounts: [ACCOUNT, DORMANT_CHF],
+        spendByCategory: () => [
+          { currency: CHF, decimals: 2, categoryId: null, amount: toMoney("85.00") },
+          { currency: PLN, decimals: 2, categoryId: "cat-groceries", amount: toMoney("620.00") },
+        ],
+      }),
+    );
+
+    expect(
+      screen.getByText("PLN · September 2026 · by leaf category · All"),
+      "the spend widget names its own currency, period and scope",
+    ).toBeTruthy();
+    expect(screen.getByText("620.00"), "the PLN figure is charted").toBeTruthy();
+    expect(screen.getAllByText("Other currencies").length).toBeGreaterThan(0);
+    expect(screen.getByText("85.00"), "and the CHF figure is listed, not dropped").toBeTruthy();
+    expect(screen.queryByText("Nothing spent this period")).toBeNull();
+  });
+
+  /**
+   * **M2.** `WidgetCard`'s own doc claims every widget states its period and
+   * scope; three of five stated neither, and one printed the application's
+   * name where a period belongs. The three parts are required props now, so
+   * this asserts the line each of the five actually renders.
+   */
+  it("states currency, period and scope in every widget header", () => {
+    withLedger(fakeController({}));
+
+    const asOf = "PLN · As of September 4, 2026 · All";
+    expect(screen.getAllByText(asOf), "balances, recent and debt").toHaveLength(3);
+    expect(screen.getByText("PLN · September 2026 · by leaf category · All")).toBeTruthy();
+    expect(screen.getByText("PLN · 5 months + this month to date · All")).toBeTruthy();
+    expect(screen.queryByText(/Waltning/)).toBeNull();
+  });
+
+  /**
+   * **H2.** On the 2nd of the month the last bucket is a two-day figure
+   * standing beside five whole ones — steady income read as a collapse, every
+   * month, with nothing on the widget saying the bar was not comparable.
+   */
+  it("names the current month partial, on the 2nd", () => {
+    vi.setSystemTime(new Date("2026-09-02T12:00:00Z"));
+    withLedger(
+      fakeController({
+        incomeVsExpense: () => [
+          {
+            label: "2026-08",
+            currency: PLN,
+            decimals: 2,
+            income: toMoney("8000.00"),
+            expense: toMoney("6000.00"),
+          },
+          {
+            label: "2026-09",
+            currency: PLN,
+            decimals: 2,
+            income: toMoney("300.00"),
+            expense: toMoney("500.00"),
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByText("PLN · 5 months + this month to date · All")).toBeTruthy();
+    expect(screen.getByText("September 2026 · to date")).toBeTruthy();
+    expect(screen.getByText("August 2026"), "a complete month keeps its plain name").toBeTruthy();
+  });
+
+  /**
+   * **M3.** The band's scope control drove nothing: it said `All` while two
+   * widget headers said `Mine` and the folds filtered `own` regardless.
+   */
+  it("passes the band's stored scope to the folds, and states it", () => {
+    void deskScope.set("business");
+    const spendByCategory = vi.fn(() => []);
+    withLedger(fakeController({ spendByCategory }));
+
+    expect(spendByCategory).toHaveBeenCalledWith(expect.anything(), "business");
+    expect(screen.getByText("PLN · September 2026 · by leaf category · Business")).toBeTruthy();
+  });
+
+  /**
+   * **M4.** A layout naming a kind this build cannot draw was dropped without
+   * a trace; the rest of the grid still renders, but the drop is reported.
+   */
+  it("drops a widget kind it cannot draw, and keeps the rest", () => {
+    withLedger(
+      fakeController({
+        layout: {
+          id: "layout-1",
+          name: "Standing",
+          widgets: [
+            { id: "w1", kind: "balances", slot: "a1", size: "m", config: {}, sort: 0 },
+            { id: "w2", kind: "fx_status", slot: "a2", size: "s", config: {}, sort: 1 },
+          ],
+        },
+      }),
+    );
+
+    expect(screen.getByText("Balances")).toBeTruthy();
   });
 });

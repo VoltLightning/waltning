@@ -330,6 +330,19 @@ function withExtraStep(base: readonly Migration[], mode: "creates" | "throws"): 
   ];
 }
 
+/**
+ * The version the replica chain **ends at** — the last file's own number + 1,
+ * which is not the number of files.
+ *
+ * `versionOfTag`'s own error message says it outright: *"a version names a
+ * file, never a position in the chain."* The two agreed for as long as every
+ * four-digit prefix was used, and `REPLICA_MIGRATIONS.length` quietly stood in
+ * for the version. They stopped agreeing when `0010` was left to a sibling
+ * branch and `DESK4`'s seed took `0011`, which is exactly the substitution
+ * this constant removes.
+ */
+const REPLICA_VERSION = REPLICA_MIGRATIONS[REPLICA_MIGRATIONS.length - 1]?.version ?? 0;
+
 /* ── a fresh database ────────────────────────────────────────────────────── */
 
 describe("a fresh database", () => {
@@ -339,7 +352,7 @@ describe("a fresh database", () => {
     ledger.close();
 
     expect(result.from).toBe(0);
-    expect(result.to).toBe(REPLICA_MIGRATIONS.length);
+    expect(result.to).toBe(REPLICA_VERSION);
     expect(result.applied).toEqual(REPLICA_MIGRATIONS.map((m) => m.version));
     expect(result.refetchRequired, "nothing is ever dropped, so nothing is ever refetched").toBe(
       false,
@@ -358,7 +371,7 @@ describe("a fresh database", () => {
     expect(names).toContain(MIGRATION_JOURNAL);
     expect(names, "the outbox is the other file's table").not.toContain("outbox");
 
-    expect(inspect(join(dir, "fresh-replica.db"), userVersion)).toBe(REPLICA_MIGRATIONS.length);
+    expect(inspect(join(dir, "fresh-replica.db"), userVersion)).toBe(REPLICA_VERSION);
   });
 
   it("migrates the outbox, and only the outbox, into the second file", () => {
@@ -385,8 +398,8 @@ describe("a fresh database", () => {
     const second = migrateReplica(ledger.replica, { fs: realFs });
     ledger.close();
 
-    expect(second.from).toBe(REPLICA_MIGRATIONS.length);
-    expect(second.to).toBe(REPLICA_MIGRATIONS.length);
+    expect(second.from).toBe(REPLICA_VERSION);
+    expect(second.to).toBe(REPLICA_VERSION);
     expect(second.applied, "no step ran again").toEqual([]);
     expect(second.copy, "and nothing was copied, because nothing was written").toBeNull();
   });
@@ -712,7 +725,7 @@ describe("a populated replica upgrades to current without losing anything", () =
     ledger.close();
 
     expect(outboxResult.to).toBe(OUTBOX_MIGRATIONS.length);
-    expect(replicaResult.to).toBe(REPLICA_MIGRATIONS.length);
+    expect(replicaResult.to).toBe(REPLICA_VERSION);
 
     const replicaPath = join(dir, "populated-replica.db");
     const outboxPath = join(dir, "populated-outbox.db");
@@ -1165,7 +1178,7 @@ describe("the `0009_schema` backfill", () => {
     result.copy?.release();
     ledger.close();
 
-    expect(result.to).toBe(REPLICA_MIGRATIONS.length);
+    expect(result.to).toBe(REPLICA_VERSION);
     const journaled = inspect(replicaPath, (db) =>
       db.prepare(`select "tag" from "${MIGRATION_JOURNAL}" where "tag" = ?`).get("0009_schema"),
     );

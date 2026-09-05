@@ -6,14 +6,21 @@
  * (branch A). **Never a `LEFT JOIN`** — see `money.ts`'s own doc for why a
  * transaction with lines is queried through them exclusively.
  *
- * Both queries filter `type = 'expense'` and the date range in SQL, the same
- * split `read-period-spend.ts` makes — ownership stays a fold-side check
- * (`row.ownership !== "own"`), not a `WHERE`, so the shape matches its
- * sibling reader exactly.
+ * The transaction query filters `type = 'expense'` and the date range in SQL,
+ * the same split `read-period-spend.ts` makes — scope stays a fold-side check
+ * (`money.inScope`), not a `WHERE`, so the shape matches its sibling reader
+ * exactly and one fold decides what *mine*, *shared* and *business* mean.
+ *
+ * **The line query is driven by the ids the first query already found**
+ * (`inArray`), not by a second join back through `transactions`. The replica
+ * indexes neither `transactions.date` nor `transaction_lines.transaction_id`,
+ * so the join shape re-scanned `transactions` to re-derive a set this function
+ * is already holding. One period's expenses is a list of tens, so the `IN` is
+ * small and the second scan is gone.
  */
 
 import * as money from "@waltning/core/money";
-import { and, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
@@ -22,20 +29,15 @@ const { accounts, currencies, transactionLines, transactions } = ledgerSchema;
 export function readSpendByCategory<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   period: money.Period,
+  scope: money.LedgerScope,
 ): readonly money.SpendByCategoryRow[] {
-  const dateInPeriod = and(
-    isNull(transactions.deletedAt),
-    eq(transactions.type, "expense"),
-    gte(transactions.date, period.start),
-    lt(transactions.date, period.end),
-  );
-
   const transactionRows = db
     .select({
       id: transactions.id,
       type: transactions.type,
       date: transactions.date,
       ownership: accounts.ownership,
+      isBusiness: transactions.isBusiness,
       currency: transactions.currency,
       decimals: currencies.decimals,
       categoryId: transactions.categoryId,
@@ -44,19 +46,29 @@ export function readSpendByCategory<TRun, TSchema extends typeof ledgerSchema>(
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
     .innerJoin(currencies, eq(transactions.currency, currencies.code))
-    .where(dateInPeriod)
+    .where(
+      and(
+        isNull(transactions.deletedAt),
+        eq(transactions.type, "expense"),
+        gte(transactions.date, period.start),
+        lt(transactions.date, period.end),
+      ),
+    )
     .all();
 
-  const lineRows = db
-    .select({
-      transactionId: transactionLines.transactionId,
-      categoryId: transactionLines.categoryId,
-      amount: transactionLines.amount,
-    })
-    .from(transactionLines)
-    .innerJoin(transactions, eq(transactionLines.transactionId, transactions.id))
-    .where(dateInPeriod)
-    .all();
+  const ids = transactionRows.map((row) => row.id);
+  const lineRows =
+    ids.length === 0
+      ? []
+      : db
+          .select({
+            transactionId: transactionLines.transactionId,
+            categoryId: transactionLines.categoryId,
+            amount: transactionLines.amount,
+          })
+          .from(transactionLines)
+          .where(inArray(transactionLines.transactionId, ids))
+          .all();
 
-  return money.spendByCategory(transactionRows, lineRows, period);
+  return money.spendByCategory(transactionRows, lineRows, period, scope);
 }

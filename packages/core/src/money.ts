@@ -173,6 +173,8 @@ export const sum = (xs: Money[]): Money =>
 
 export const eq = (a: Money, b: Money): boolean => dec(a).eq(b);
 export const isZero = (a: Money): boolean => dec(a).isZero();
+/** Strictly above zero — the question a chart asks before giving a figure width. */
+export const isPositive = (a: Money): boolean => dec(a).greaterThan(0);
 export const cmp = (a: Money, b: Money): -1 | 0 | 1 => dec(a).cmp(b) as -1 | 0 | 1;
 
 /**
@@ -672,11 +674,43 @@ export const periodSpend = (
  * fixture waiting for it rather than a blank page.
  */
 
+/**
+ * The dashboard's scope segment (`S01` §3, `DESK1`'s `SegmentControl`) as a
+ * fold parameter.
+ *
+ * The four values are not one axis: *mine* and *shared* read the **account's**
+ * `ownership`, while *business* reads the **transaction's** own `is_business`
+ * — a business row lives in an own account by constraint
+ * (`transactions_business_not_shared`), so the two are compatible rather than
+ * alternatives. Written as one union anyway because it is one control: a
+ * screen that had to know which field each choice reads would be the place the
+ * next divergence appears.
+ */
+export type LedgerScope = "all" | "mine" | "shared" | "business";
+
+/** Whether one row is inside `scope`. Exhaustive by construction — a fifth scope fails to compile here first. */
+export const inScope = (
+  row: { readonly ownership: "own" | "shared"; readonly isBusiness: boolean },
+  scope: LedgerScope,
+): boolean => {
+  switch (scope) {
+    case "all":
+      return true;
+    case "mine":
+      return row.ownership === "own";
+    case "shared":
+      return row.ownership === "shared";
+    case "business":
+      return row.isBusiness;
+  }
+};
+
 export type SpendByCategoryTransactionRow = {
   id: string;
   type: TxnType;
   date: AccountingDate;
   ownership: "own" | "shared";
+  isBusiness: boolean;
   currency: CurrencyCode;
   decimals: number;
   /** The transaction's own category — read only for a row with no lines. */
@@ -707,10 +741,17 @@ export type SpendByCategoryRow = {
  * the same two arrays instead, for the identical reason: nothing here ever
  * joins a transaction to its lines and falls back on one row.
  *
- * **Expense only, own accounts, within `period`** — spend-by-category is a
+ * **Expense only, within `period`, inside `scope`** — spend-by-category is a
  * *spend* figure (§12); income has no category breakdown on this screen.
  * Transfers carry no category by constraint (§6) and are excluded by the
  * same `type` filter.
+ *
+ * **`scope` is the caller's, not a hardcoded `own`.** §6's own SQL reports the
+ * shared boundary as its own named row rather than dropping it; that row needs
+ * `to_amount_pivot` and is arc-full (class S), so what this fold offers
+ * instead is the *whole* shared side under `scope = "shared"` — visible, and
+ * named as such in `S01`'s header, rather than silently absent under a scope
+ * control that said `All`.
  *
  * **Grouped by currency, never summed across them** — the same reason
  * `periodSpend` above does: arc-phone has no pivot column and no display
@@ -720,10 +761,11 @@ export const spendByCategory = (
   transactions: readonly SpendByCategoryTransactionRow[],
   lines: readonly SpendByCategoryLineRow[],
   period: Period,
+  scope: LedgerScope,
 ): readonly SpendByCategoryRow[] => {
   const eligible = new Map<string, SpendByCategoryTransactionRow>();
   for (const row of transactions) {
-    if (row.ownership !== "own") continue;
+    if (!inScope(row, scope)) continue;
     if (row.type !== "expense") continue;
     if (!inPeriod(row.date, period)) continue;
     eligible.set(row.id, row);
@@ -803,6 +845,7 @@ export type IncomeExpenseTransactionRow = {
   type: TxnType;
   date: AccountingDate;
   ownership: "own" | "shared";
+  isBusiness: boolean;
   currency: CurrencyCode;
   decimals: number;
   amountOriginal: Money;
@@ -821,6 +864,14 @@ export type IncomeExpenseBucket = Period & { label: string };
  * never import `@waltning/ledger` (`create-phone-ledger.ts`'s own repeated
  * note), and a second, hand-copied version of this loop is the drift a shared
  * function exists to refuse.
+ *
+ * **The last bucket is a whole calendar month whether or not it has happened
+ * yet.** Ending at the current month gives a month-to-date figure standing
+ * beside complete ones, which reads as a collapse on the 2nd of every month;
+ * ending at the previous one hides today. Neither is this function's decision
+ * — it partitions time — so the caller that passes today's month is the caller
+ * that must say so on screen (`dashboard-screen.tsx` marks that bucket
+ * partial, in the assertion tone, and names it in the header).
  */
 export const trailingMonthBuckets = (
   endMonth: YearMonth,
@@ -857,10 +908,20 @@ export type IncomeExpenseRow = {
  * A row is credited to at most one bucket — `buckets` is the caller's own
  * partition of time (`readIncomeVsExpense`'s calendar months), never
  * overlapping — so the search below stops at the first match.
+ *
+ * **Every bucket gets a row for every currency the range holds, zero
+ * included.** A chart drawn from matched rows alone silently loses its empty
+ * months: six buckets with activity in three of them drew three bars under a
+ * header that said six, and a month with genuinely no activity was
+ * indistinguishable from a month that was never charted. Emitting the zero is
+ * what makes the gap visible as a gap. A currency that appears nowhere in the
+ * range still produces nothing at all — the caller's own empty state — so this
+ * fabricates a bucket, never a currency.
  */
 export const incomeVsExpense = (
   rows: readonly IncomeExpenseTransactionRow[],
   buckets: readonly IncomeExpenseBucket[],
+  scope: LedgerScope,
 ): readonly IncomeExpenseRow[] => {
   type Bucket = {
     label: string;
@@ -870,14 +931,17 @@ export const incomeVsExpense = (
     expense: Decimal;
   };
   const totals = new Map<string, Bucket>();
+  /** Every currency the range holds at all, and the decimals its first row declared. */
+  const currencies = new Map<CurrencyCode, number>();
 
   for (const row of rows) {
-    if (row.ownership !== "own") continue;
+    if (!inScope(row, scope)) continue;
     if (row.type !== "income" && row.type !== "expense") continue;
     if (row.isCapital) continue;
     const bucketPeriod = buckets.find((candidate) => inPeriod(row.date, candidate));
     if (!bucketPeriod) continue;
 
+    if (!currencies.has(row.currency)) currencies.set(row.currency, row.decimals);
     const key = `${bucketPeriod.label}::${row.currency}`;
     const found = totals.get(key) ?? {
       label: bucketPeriod.label,
@@ -892,17 +956,19 @@ export const incomeVsExpense = (
     totals.set(key, found);
   }
 
+  const ordered = [...currencies.entries()].sort(([a], [b]) => a.localeCompare(b));
+
   return buckets.flatMap((bucketPeriod) =>
-    [...totals.values()]
-      .filter((entry) => entry.label === bucketPeriod.label)
-      .sort((a, b) => a.currency.localeCompare(b.currency))
-      .map(({ label, currency, decimals, income, expense }) => ({
-        label,
+    ordered.map(([currency, decimals]) => {
+      const entry = totals.get(`${bucketPeriod.label}::${currency}`);
+      return {
+        label: bucketPeriod.label,
         currency,
         decimals,
-        income: toMoney(income),
-        expense: toMoney(expense),
-      })),
+        income: toMoney(entry?.income ?? dec(0)),
+        expense: toMoney(entry?.expense ?? dec(0)),
+      };
+    }),
   );
 };
 

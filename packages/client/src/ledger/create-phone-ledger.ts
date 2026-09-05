@@ -623,10 +623,14 @@ export type PhoneLedgerPort = {
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   /** §6, on demand — `S01`'s donut. `DESK4`. */
-  readSpendByCategory: (period: money.Period) => readonly PhoneSpendByCategory[];
+  readSpendByCategory: (
+    period: money.Period,
+    scope: money.LedgerScope,
+  ) => readonly PhoneSpendByCategory[];
   /** §12, on demand — `S01`'s line chart. `DESK4`. */
   readIncomeVsExpense: (
     buckets: readonly PhoneIncomeExpenseBucket[],
+    scope: money.LedgerScope,
   ) => readonly PhoneIncomeExpenseRow[];
   /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
   readActiveDashboardLayout: () => PhoneDashboardLayout | null;
@@ -1213,10 +1217,14 @@ export type PhoneLedgerController = {
    */
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   /** §6, on demand — `S01`'s donut. Same reasoning as `readPeriodSpend` above. `DESK4`. */
-  readSpendByCategory: (period: money.Period) => readonly PhoneSpendByCategory[];
+  readSpendByCategory: (
+    period: money.Period,
+    scope: money.LedgerScope,
+  ) => readonly PhoneSpendByCategory[];
   /** §12, on demand — `S01`'s line chart. Same reasoning as `readPeriodSpend` above. `DESK4`. */
   readIncomeVsExpense: (
     buckets: readonly PhoneIncomeExpenseBucket[],
+    scope: money.LedgerScope,
   ) => readonly PhoneIncomeExpenseRow[];
   /** `get_active_layout`, on demand — `S01`'s grid, read but not rearranged (S24 later). `DESK4`. */
   readActiveDashboardLayout: () => PhoneDashboardLayout | null;
@@ -1919,8 +1927,8 @@ export function createPhoneLedger(
     },
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
-    readSpendByCategory: (period) => port.readSpendByCategory(period),
-    readIncomeVsExpense: (buckets) => port.readIncomeVsExpense(buckets),
+    readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
+    readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
     listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),

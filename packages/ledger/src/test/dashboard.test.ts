@@ -36,6 +36,27 @@ describe("readActiveLayout — DESK4", () => {
     ]);
     expect(layout?.widgets.map((w) => w.size)).toEqual(["m", "m", "s", "m", "l"]);
   });
+
+  /**
+   * M5 — the replica had no bound on `is_active` at all: `packages/db` has
+   * carried `dashboard_layouts_one_active` since `0000`, and this side had
+   * neither the index nor a trigger, while three doc comments claimed `null`
+   * was reachable "only on an empty, never-migrated database". `0011`'s
+   * migration adds the index; this is it refusing.
+   */
+  it("refuses a second active layout", () => {
+    stores = scratchStores();
+    expect(() =>
+      stores.ledger.replica.db
+        .insert(ledgerSchema.dashboardLayouts)
+        .values({
+          id: id<"dashboardLayouts">("00000000-0000-4000-8000-00000000d0ff"),
+          name: "Second",
+          isActive: true,
+        })
+        .run(),
+    ).toThrow(/UNIQUE/i);
+  });
 });
 
 describe("readSpendByCategory — DESK4", () => {
@@ -117,7 +138,7 @@ describe("readSpendByCategory — DESK4", () => {
       ])
       .run();
 
-    const result = readSpendByCategory(db, period);
+    const result = readSpendByCategory(db, period, "mine");
     const total = result.reduce((sum, row) => money.add(sum, row.amount), money.ZERO);
     expect(total).toBe("100.00000000");
     expect(result).toHaveLength(3);
@@ -169,7 +190,7 @@ describe("readIncomeVsExpense — DESK4", () => {
       .run();
 
     const buckets = money.trailingMonthBuckets(yearMonth("2026-08"), 1);
-    const result = readIncomeVsExpense(db, buckets);
+    const result = readIncomeVsExpense(db, buckets, "mine");
     expect(result).toEqual([
       {
         label: "2026-08",

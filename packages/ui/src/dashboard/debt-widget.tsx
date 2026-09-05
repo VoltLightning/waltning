@@ -11,11 +11,10 @@ import { Amount } from "../fx/amount";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline, space } from "../tokens.ts";
-import { WidgetCard } from "./widget-card";
+import { WidgetCard, type WidgetFrame } from "./widget-card";
 
-export type DebtWidgetProps = {
+export type DebtWidgetProps = WidgetFrame & {
   title: string;
-  meta: string;
   totals: readonly money.DirectionTotalRow[];
   theyOweLabel: string;
   youOweLabel: string;
@@ -26,7 +25,9 @@ export type DebtWidgetProps = {
 
 export function DebtWidget({
   title,
-  meta,
+  currency,
+  period,
+  scope,
   totals,
   theyOweLabel,
   youOweLabel,
@@ -37,7 +38,14 @@ export function DebtWidget({
   const styles = useStyles();
 
   return (
-    <WidgetCard title={title} meta={meta} loading={loading} error={error}>
+    <WidgetCard
+      title={title}
+      currency={currency}
+      period={period}
+      scope={scope}
+      loading={loading}
+      error={error}
+    >
       {totals.length === 0 ? (
         <Text style={styles.empty}>{emptyLabel}</Text>
       ) : (

@@ -93,7 +93,7 @@ describe("useIncomeVsExpense", () => {
     { label: "2026-08", start: accountingDate("2026-08-01"), end: accountingDate("2026-09-01") },
   ];
 
-  it("reads through the controller and memoises on [ledger, buckets, revision]", () => {
+  it("reads through the controller and memoises on [ledger, buckets, scope, revision]", () => {
     const read = vi.fn(() => [
       {
         label: "2026-08",
@@ -104,7 +104,7 @@ describe("useIncomeVsExpense", () => {
       },
     ]);
     const ledger = fakeController(read);
-    const { result, rerender } = renderHook(() => useIncomeVsExpense(ledger, buckets, 0));
+    const { result, rerender } = renderHook(() => useIncomeVsExpense(ledger, buckets, "mine", 0));
 
     expect(result.current).toEqual([
       {
@@ -125,7 +125,7 @@ describe("useIncomeVsExpense", () => {
     const read = vi.fn(() => []);
     const ledger = fakeController(read);
     const { rerender } = renderHook(
-      ({ revision }: { revision: number }) => useIncomeVsExpense(ledger, buckets, revision),
+      ({ revision }: { revision: number }) => useIncomeVsExpense(ledger, buckets, "mine", revision),
       {
         initialProps: { revision: 0 },
       },

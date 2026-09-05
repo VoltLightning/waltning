@@ -20,6 +20,7 @@ import { createAppearance } from "@waltning/client/appearance/create-appearance"
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
+import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
 import type { CurrencyCode } from "@waltning/core/money";
@@ -55,6 +56,24 @@ export const floatPosition = createDevicePreference<FloatPosition>(
 export const PREVIEW_RESET_ENABLED = previewResetEnabled(
   __DEV__,
   process.env["EXPO_PUBLIC_ENABLE_PREVIEW_RESET"],
+);
+
+const DESK_SCOPE_KEY = "waltning.deskScope";
+
+/**
+ * `S01` §3's scope segment — `DeskBand` writes it, `dashboard-screen.tsx`
+ * reads it. A device preference for exactly the reason §7.0's display
+ * currency is one: choosing what you are looking at moves nothing in the
+ * ledger, so it is neither a registry operation nor an outbox entry. It is
+ * also the only way the two can share it — the control is in the band and the
+ * widgets are under `<TabSlot>`, with the router between them.
+ */
+export const deskScope = createDeskScopePreference(
+  {
+    get: () => AsyncStorage.getItem(DESK_SCOPE_KEY),
+    set: (value) => AsyncStorage.setItem(DESK_SCOPE_KEY, value),
+  },
+  mobileDiagnostics,
 );
 
 const LAST_CAPTURE_KEY = "waltning.lastCapture";

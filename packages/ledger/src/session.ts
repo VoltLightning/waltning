@@ -5,6 +5,7 @@ import type {
   CurrencyCode,
   IncomeExpenseBucket,
   IncomeExpenseRow,
+  LedgerScope,
   Money,
   Period,
   PeriodSpendRow,
@@ -253,10 +254,13 @@ export type LocalLedgerSession = {
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
-  /** §6, per currency and category — `S01`'s donut. `DESK4`. */
-  readSpendByCategory: (period: Period) => readonly SpendByCategoryRow[];
-  /** §12, per bucket and currency — `S01`'s line chart. `buckets` is screen state, same reasoning as `readPeriodSpend`. `DESK4`. */
-  readIncomeVsExpense: (buckets: readonly IncomeExpenseBucket[]) => readonly IncomeExpenseRow[];
+  /** §6, per currency and category — `S01`'s donut. `scope` is the desk band's own segment. `DESK4`. */
+  readSpendByCategory: (period: Period, scope: LedgerScope) => readonly SpendByCategoryRow[];
+  /** §12, per bucket and currency — `S01`'s line chart. `buckets` and `scope` are screen state, same reasoning as `readPeriodSpend`. `DESK4`. */
+  readIncomeVsExpense: (
+    buckets: readonly IncomeExpenseBucket[],
+    scope: LedgerScope,
+  ) => readonly IncomeExpenseRow[];
   /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
   readActiveDashboardLayout: () => LocalDashboardLayout | null;
   /** §8, FIFO attribution included — C2's unsettled banner names a transaction. */
@@ -615,8 +619,10 @@ export function createLocalLedgerSession<TRun>(
     listDistinctCounterpartyPairs: () => readDistinctCounterpartyPairs(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
-    readSpendByCategory: (period) => readSpendByCategory(requireOpen().replica.db, period),
-    readIncomeVsExpense: (buckets) => readIncomeVsExpense(requireOpen().replica.db, buckets),
+    readSpendByCategory: (period, scope) =>
+      readSpendByCategory(requireOpen().replica.db, period, scope),
+    readIncomeVsExpense: (buckets, scope) =>
+      readIncomeVsExpense(requireOpen().replica.db, buckets, scope),
     readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),

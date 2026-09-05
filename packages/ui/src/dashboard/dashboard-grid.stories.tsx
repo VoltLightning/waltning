@@ -8,7 +8,7 @@ import { WidgetCard } from "./widget-card";
 function Tile({ label }: { label: string }) {
   const styles = useStyles();
   return (
-    <WidgetCard title={label} meta="Now · Mine">
+    <WidgetCard title={label} currency="PLN" period="As of September 5, 2026" scope="Mine">
       <Text style={styles.body}>{label}</Text>
     </WidgetCard>
   );

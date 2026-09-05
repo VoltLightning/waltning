@@ -7,7 +7,9 @@ const meta = {
   component: DebtWidget,
   args: {
     title: "Debt",
-    meta: "Now",
+    currency: "PLN",
+    period: "As of September 5, 2026",
+    scope: "All",
     theyOweLabel: "they owe you",
     youOweLabel: "you owe",
     emptyLabel: "Nobody owes, and you owe nobody",

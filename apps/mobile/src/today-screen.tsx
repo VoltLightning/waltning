@@ -3,9 +3,10 @@ import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phon
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { accountingDate, shiftMonth, type YearMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
-import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
+import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card } from "@waltning/ui/shell/card";
@@ -13,7 +14,7 @@ import { DualTotal } from "@waltning/ui/shell/dual-total";
 import { PeriodHeader } from "@waltning/ui/shell/period-header";
 import { StatTile } from "@waltning/ui/shell/stat-tile";
 import { TodayFrame } from "@waltning/ui/shell/today-frame";
-import { Banner } from "@waltning/ui/states/banner";
+import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Toast } from "@waltning/ui/states/toast";
@@ -205,6 +206,7 @@ export default function Today() {
     ? periodSpendRows.find((row) => row.currency === leadNetWorth.currency)
     : undefined;
 
+  const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
   const unsettled = snapshot.unsettledClearing[0];
   // S04 §3, Shared: "Tapping the unsettled banner goes straight to the
   // unallocated transaction, not to a list." Falls back to the filtered
@@ -273,76 +275,11 @@ export default function Today() {
   // clearing account does not stack a second alert; it folds into this one's
   // text as a count. `Open` still lands on the first (`unsettled` above),
   // the same account the message names.
-  const unsettledMore = snapshot.unsettledClearing.length - 1;
-  // §8's third field is what lets this name a transaction rather than a
-  // number — used only once a payee is actually on hand; an unpayeed leg
-  // (or a fixture that never set one) falls back to naming the account,
-  // exactly as before this card.
-  const unsettledPayee = unsettled?.oldestUnconsumedPayee;
-  // H2 — the oldest unconsumed entry can be the account's own opening
-  // balance rather than a transaction; that entry never has a payee, so it
-  // gets its own message instead of falling back to the generic one.
-  const unsettledIsOpening = unsettled != null && unsettled.oldestUnconsumedTransactionId === null;
-  const unsettledRemainder =
-    unsettled?.oldestUnconsumedRemainder ?? unsettled?.balance ?? money.ZERO;
-  // H3 — more than one entry can still be open at once; the oldest one's own
-  // remainder can be less than the whole account balance, and showing the
-  // balance beside its payee would overstate what that leg accounts for.
-  const unsettledRemainderDiffers =
-    unsettled != null &&
-    unsettled.oldestUnconsumedRemainder != null &&
-    !money.eq(unsettled.oldestUnconsumedRemainder, unsettled.balance);
-  const unsettledNamedKey = unsettledRemainderDiffers
-    ? unsettledMore > 0
-      ? "shell.unsettledNamedDiffersMore"
-      : "shell.unsettledNamedDiffers"
-    : unsettledMore > 0
-      ? "shell.unsettledNamedMore"
-      : "shell.unsettledNamed";
-  const unsettledBanner = unsettled ? (
-    <Banner
-      tone="warn"
-      message={
-        unsettledIsOpening
-          ? t(unsettledMore > 0 ? "shell.unsettledOpeningMore" : "shell.unsettledOpening", {
-              remainder: money.forDisplay(
-                unsettledRemainder,
-                unsettled.decimals,
-                decimalMark(locale),
-              ),
-              currency: unsettled.currency,
-              count: unsettledMore,
-            })
-          : unsettledPayee
-            ? t(unsettledNamedKey, {
-                remainder: money.forDisplay(
-                  unsettledRemainder,
-                  unsettled.decimals,
-                  decimalMark(locale),
-                ),
-                amount: money.forDisplay(
-                  unsettled.balance,
-                  unsettled.decimals,
-                  decimalMark(locale),
-                ),
-                currency: unsettled.currency,
-                payee: unsettledPayee,
-                count: unsettledMore,
-              })
-            : t(unsettledMore > 0 ? "shell.unsettledMore" : "shell.unsettled", {
-                amount: money.forDisplay(
-                  unsettled.balance,
-                  unsettled.decimals,
-                  decimalMark(locale),
-                ),
-                currency: unsettled.currency,
-                account: unsettled.name,
-                count: unsettledMore,
-              })
-      }
-      action={{ label: t("shell.unsettledOpen"), onPress: handleOpenUnsettled }}
-    />
-  ) : null;
+  //
+  // The derivation and the wording moved out at `S01`'s third use — the model
+  // is `packages/client`'s, the words are `packages/ui`'s, and this screen
+  // keeps only the route `Open` lands on, which is the app's own.
+  const unsettledBanner = <UnsettledBanner model={unsettledModel} onOpen={handleOpenUnsettled} />;
 
   // Error > empty > populated. An error keeps the hero (`snapshot`'s other
   // fields are untouched by a failed refresh, S04 §6) and replaces only the

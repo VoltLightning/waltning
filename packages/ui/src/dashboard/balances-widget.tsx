@@ -20,7 +20,7 @@ import { Amount } from "../fx/amount";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline, space } from "../tokens.ts";
-import { WidgetCard } from "./widget-card";
+import { WidgetCard, type WidgetFrame } from "./widget-card";
 
 export type BalancesWidgetRow = {
   id: string;
@@ -30,9 +30,8 @@ export type BalancesWidgetRow = {
   decimals: number;
 };
 
-export type BalancesWidgetProps = {
+export type BalancesWidgetProps = WidgetFrame & {
   title: string;
-  meta: string;
   rows: readonly BalancesWidgetRow[];
   emptyLabel: string;
   loading?: boolean | undefined;
@@ -41,7 +40,9 @@ export type BalancesWidgetProps = {
 
 export function BalancesWidget({
   title,
-  meta,
+  currency,
+  period,
+  scope,
   rows,
   emptyLabel,
   loading,
@@ -50,7 +51,14 @@ export function BalancesWidget({
   const styles = useStyles();
 
   return (
-    <WidgetCard title={title} meta={meta} loading={loading} error={error}>
+    <WidgetCard
+      title={title}
+      currency={currency}
+      period={period}
+      scope={scope}
+      loading={loading}
+      error={error}
+    >
       {rows.length === 0 ? (
         <Text style={styles.empty}>{emptyLabel}</Text>
       ) : (

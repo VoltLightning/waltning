@@ -29,13 +29,14 @@ import { clientFailure, emitClientDiagnostic } from "@waltning/client/diagnostic
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import * as money from "@waltning/core/money";
 import { CounterpartyRow } from "@waltning/ui/counterparties/counterparty-row";
 import { Amount } from "@waltning/ui/fx/amount";
-import { decimalMark } from "@waltning/ui/i18n/locales";
-import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useT } from "@waltning/ui/i18n/provider";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -110,7 +111,6 @@ function matchesDirectionSegment(row: DebtRow, segment: DirectionSegment): boole
 
 export default function Debt() {
   const t = useT();
-  const locale = useLocale();
   const styles = useStyles();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
@@ -191,29 +191,8 @@ export default function Debt() {
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
   }, [rows, segment]);
 
+  const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
   const unsettled = snapshot.unsettledClearing[0];
-  const unsettledMore = snapshot.unsettledClearing.length - 1;
-  const unsettledPayee = unsettled?.oldestUnconsumedPayee;
-  // H2 — the oldest unconsumed entry can be the account's own opening
-  // balance rather than a transaction; that entry never has a payee, so it
-  // gets its own message instead of falling back to the generic one.
-  const unsettledIsOpening = unsettled != null && unsettled.oldestUnconsumedTransactionId === null;
-  const unsettledRemainder =
-    unsettled?.oldestUnconsumedRemainder ?? unsettled?.balance ?? money.ZERO;
-  // H3 — more than one entry can still be open at once; the oldest one's own
-  // remainder can be less than the whole account balance, and showing the
-  // balance beside its payee would overstate what that leg accounts for.
-  const unsettledRemainderDiffers =
-    unsettled != null &&
-    unsettled.oldestUnconsumedRemainder != null &&
-    !money.eq(unsettled.oldestUnconsumedRemainder, unsettled.balance);
-  const unsettledNamedKey = unsettledRemainderDiffers
-    ? unsettledMore > 0
-      ? "shell.unsettledNamedDiffersMore"
-      : "shell.unsettledNamedDiffers"
-    : unsettledMore > 0
-      ? "shell.unsettledNamedMore"
-      : "shell.unsettledNamed";
   const handleOpenUnsettled = useCallback(() => {
     if (!unsettled) return;
     if (unsettled.oldestUnconsumedTransactionId) {
@@ -225,50 +204,16 @@ export default function Debt() {
     }
     router.push({ pathname: "/ledger", params: { account: unsettled.accountId } });
   }, [unsettled]);
-  const unsettledBanner = unsettled ? (
-    <Banner
-      tone="warn"
-      message={
-        unsettledIsOpening
-          ? t(unsettledMore > 0 ? "shell.unsettledOpeningMore" : "shell.unsettledOpening", {
-              remainder: money.forDisplay(
-                unsettledRemainder,
-                unsettled.decimals,
-                decimalMark(locale),
-              ),
-              currency: unsettled.currency,
-              count: unsettledMore,
-            })
-          : unsettledPayee
-            ? t(unsettledNamedKey, {
-                remainder: money.forDisplay(
-                  unsettledRemainder,
-                  unsettled.decimals,
-                  decimalMark(locale),
-                ),
-                amount: money.forDisplay(
-                  unsettled.balance,
-                  unsettled.decimals,
-                  decimalMark(locale),
-                ),
-                currency: unsettled.currency,
-                payee: unsettledPayee,
-                count: unsettledMore,
-              })
-            : t(unsettledMore > 0 ? "shell.unsettledMore" : "shell.unsettled", {
-                amount: money.forDisplay(
-                  unsettled.balance,
-                  unsettled.decimals,
-                  decimalMark(locale),
-                ),
-                currency: unsettled.currency,
-                account: unsettled.name,
-                count: unsettledMore,
-              })
-      }
-      action={{ label: t("counterparties.allocate"), onPress: handleOpenUnsettled }}
+  // The derivation and the wording live in `packages/client` /
+  // `packages/ui` since `S01`'s third use; S12's own verb is *Allocate*, not
+  // *Open*, which is the one thing this screen still says for itself.
+  const unsettledBanner = (
+    <UnsettledBanner
+      model={unsettledModel}
+      onOpen={handleOpenUnsettled}
+      actionLabel={t("counterparties.allocate")}
     />
-  ) : null;
+  );
 
   const segments = useMemo(
     (): readonly [Segment, Segment, Segment] => [

@@ -189,6 +189,30 @@ describe("TabsShell", () => {
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.getByText("Add — press N")).toBeDefined();
   });
+
+  /**
+   * **M9.** The landing route is one router tab and two screens — `S04 Today`
+   * under 1024, `S01 Dashboard` at and above it. The band read `Today` above
+   * a Dashboard, because the nav label came straight from `useTabBarItems`,
+   * which has no idea how wide the window is.
+   */
+  it("labels the landing route Today on the phone and Dashboard on the desk", async () => {
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("Today")).toBeDefined();
+    expect(screen.queryByText("Dashboard")).toBeNull();
+
+    act(() => resizeTo(1440));
+
+    expect(screen.getByText("Dashboard")).toBeDefined();
+    expect(screen.queryByText("Today")).toBeNull();
+  });
 });
 
 const CASH: PhoneAccount = {
