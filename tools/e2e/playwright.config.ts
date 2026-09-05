@@ -5,15 +5,14 @@
  * — see `src/smoke.ts`'s own header for why a check that depends on a
  * process someone remembered to start cannot be the gate.
  *
- * **No `webServer` block, deliberately.** `packages/ui/playwright.config.ts`
- * starts its own preview server because the thing under test — a Storybook
- * build — has no other reason to be running. Here the thing under test is
- * the whole stack: Expo web (`pnpm dev:web`) and the API
- * (`pnpm --filter @waltning/api dev`, pointed at `setup/database.ts`'s
- * scratch database — its own header has the exact command), both started by
- * a person, on purpose, before this file's `globalSetup` even runs. Wiring a
- * `webServer` here would make this look automated when the on-demand
- * contract is exactly that it is not.
+ * **No `webServer` block.** `packages/ui/playwright.config.ts` starts its own
+ * preview server because the thing under test — a Storybook build — has no
+ * other reason to be running. Here the thing under test is the whole stack:
+ * Expo web and the API, both pointed at a database that does not exist until
+ * `globalSetup` creates it — so `globalSetup` (`setup/global.ts`) starts and
+ * stops both itself, in the one order that works. `setup/global.ts`'s own
+ * header has the full sequencing; `setup/servers.ts` is what actually spawns,
+ * waits for, and stops each process.
  *
  * **L4 — a duplicate `<Stack.Screen name="account/new">` registration in
  * `apps/mobile/app/_layout.tsx` crashed Expo web on load**, which left tier
@@ -26,7 +25,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "specs",
-  globalSetup: "./setup/database.ts",
+  globalSetup: "./setup/global.ts",
 
   /**
    * One worker. Every spec after `00-smoke` writes through the same real
@@ -46,7 +45,17 @@ export default defineConfig({
   reporter: [["list"]],
 
   use: {
-    /** Metro in development, Caddy in the appliance — `smoke.ts`'s own `WEB` constant, restated for Playwright's `baseURL`. */
+    /**
+     * Metro in development, Caddy in the appliance — `smoke.ts`'s own `WEB`
+     * constant, restated for Playwright's `baseURL`.
+     *
+     * Read at test time, not baked in at config-parse time: each worker is a
+     * forked process that re-imports this file for itself, and forks happen
+     * only after `globalSetup` (`setup/global.ts`) has already set
+     * `E2E_WEB_URL` in this process's own environment — which `fork()`
+     * copies into the worker's. By the time this line runs in a worker, the
+     * web bundle it names is already answering.
+     */
     baseURL: process.env["E2E_WEB_URL"] ?? "http://localhost:8081",
     ...devices["Desktop Chrome"],
     /**
