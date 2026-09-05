@@ -169,8 +169,9 @@ pnpm verify          # the gate the pre-commit hook runs for you
 
 `make e2e` runs the Playwright suite. It needs only Postgres running
 (`pnpm db:up`) — from there it clones and seeds its own scratch database,
-starts its own API and web bundle on ports it probes for itself, drives
-ten journeys through a real browser, and tears everything down again.
+starts its own API and web bundle on ports it probes for itself, runs
+five API probes and five journeys through a real browser, and tears
+everything down again.
 Nothing else needs to already be running, and nothing it does touches your
 own development ledger.
 

@@ -92,8 +92,9 @@ graph LR
 `make e2e` runs the automated suite — nothing above needs to be running
 first, except Postgres (`pnpm db:up`), which it clones its own scratch
 database from. It starts its own API and Expo web bundle on their own
-ports, drives ten specs through the real browser build (accounts, capture,
-transfer, debt, rates — the same journeys tier 1 covers headless), then
+ports, probes the API five ways, drives five journeys through the real
+browser build (first run, capture, transfer, debt, rates — the same ones
+tier 1 covers headless), then
 tears all three down. `make appliance-e2e` runs the same suite against the
 appliance instead of a fresh local stack.
 

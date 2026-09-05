@@ -330,9 +330,24 @@ function stopper(child: ChildProcess): () => Promise<void> {
         try {
           process.kill(-pid, "SIGTERM");
         } catch {
-          // ESRCH — the whole group is already gone.
+          // ESRCH — the whole group is already gone, and that is the proof:
+          // resolve now rather than on the schedule, and never queue a
+          // SIGKILL against a pid the kernel may already have recycled.
+          resolve();
+          return;
         }
-        setTimeout(() => {
+        const poll = setInterval(() => {
+          try {
+            process.kill(-pid, 0);
+          } catch {
+            // ESRCH — the last member of the group has exited.
+            clearInterval(poll);
+            clearTimeout(hardKill);
+            resolve();
+          }
+        }, 100);
+        const hardKill = setTimeout(() => {
+          clearInterval(poll);
           try {
             process.kill(-pid, "SIGKILL");
           } catch {
