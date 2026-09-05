@@ -295,13 +295,17 @@ export const COPY_SUFFIX = ".pre-migration";
  *   to be proven by a `FILLED_COLUMNS` row, since the class of defect there
  *   is a column silently left at its default.
  * - `objects` runs **last** and creates *database objects* — triggers today,
- *   a view tomorrow. This is the replica's answer to `packages/db`'s
- *   `0001_database_objects.sql`, and it is a separate hook from `fill` for
- *   the same reason that file is separate from `0000_schema.sql`: what it
- *   creates has no column to inspect afterwards, so "every filled column
- *   holds what the write path would have written" is not the property that
- *   proves it. What proves an object is a test that breaks the guarantee it
- *   enforces and watches it refuse.
+ *   a view tomorrow. It plays `packages/db`'s `0001_database_objects.sql`'s
+ *   part, and deliberately not in a file: the replica has hand-written `.sql`
+ *   steps of its own (`0001_database_objects.sql`,
+ *   `0011_dashboard_layout_seed.sql`), but a step's statements are frozen by
+ *   its checksum once run, and an object dropped by a later rebuild of its
+ *   table has to be created by something that can move. It is a separate hook
+ *   from `fill` for the same reason that file is separate from
+ *   `0000_schema.sql`: what it creates has no column to inspect afterwards,
+ *   so "every filled column holds what the write path would have written" is
+ *   not the property that proves it. What proves an object is a test that
+ *   breaks the guarantee it enforces and watches it refuse.
  *
  * `objects` runs after `fill` so a fill is not judged by a trigger written
  * for the *write path*: a backfill derives values the database already
@@ -364,35 +368,44 @@ export type Backfill = {
  * rate in S18 and relaunch.
  *
  * **One home, and it is here: every hand-written replica trigger lives in the
- * head's `objects` hook, and a rebuild of `transactions` moves the hook.**
- * All six of them — H1a's four `*_category_not_archived_*` and WA017's two
+ * `objects` hook of the last step that rebuilds `transactions`, and it moves
+ * when that step does.** All six of them — H1a's four
+ * `*_category_not_archived_*` and WA017's two
  * `transactions_category_kind_matches_type_*` — are created by
  * `REPLICA_BACKFILLS["0010_schema"].objects` below, and nothing else in this
  * package writes a trigger.
  *
- * Two reasons, and they compound.
+ * **Not for want of a hand-written `.sql`.** `drizzle/replica` holds two —
+ * `0001_database_objects.sql` and `0011_dashboard_layout_seed.sql` — so the
+ * slot `packages/db`'s `0001_database_objects.sql` occupies does exist here.
+ * A trigger still cannot live in one, and the reason is what a step *is*: a
+ * step's statements are frozen by its checksum the moment an installed
+ * database has run them (`checksumOf`, and `readAppliedTags`'s refusal by
+ * name), so the file cannot be edited afterwards to put back a trigger a
+ * later step
+ * dropped — the edit is a new step by definition, and a new step is a new
+ * rebuild's problem all over again. A trigger has to be created by something
+ * that can *move*, and a hook keyed by step tag is exactly that: it is
+ * deliberately outside the checksum (see `migrationsFromSteps`), so
+ * re-pointing this key at the step that rebuilds `transactions` next is a
+ * code change and not a migration change.
  *
- * *A generated file cannot hold one.* This hook is the replica's only
- * hand-written-SQL slot — there is no `0001_database_objects.sql` beside the
- * generated chain the way `packages/db` has one, because `tools/steps.ts`
- * reads every `.sql` in `drizzle/replica` as a step and drizzle-kit owns the
- * filenames in there. A trigger written into a generated file survives
- * exactly until the next `pnpm ledger:generate` rewrites it — drizzle-kit
- * cannot emit a trigger at all, so it cannot re-emit one it never knew about,
- * and the loss would be silent: the phone would migrate cleanly to the same
- * version with the guarantee gone. Here it is code, in the file the migrator
- * reads, and `backfills.test.ts` refuses a key that names no step.
- *
- * *And an earlier step cannot hold one either.* SQLite has no `ALTER TABLE …
- * ALTER COLUMN`, so drizzle-kit expresses almost every table change as
- * copy-rename-drop — and `DROP TABLE` takes that table's triggers with it,
+ * *That a later rebuild drops it is not hypothetical.* SQLite has no `ALTER
+ * TABLE … ALTER COLUMN`, so drizzle-kit expresses almost every table change
+ * as copy-rename-drop — and `DROP TABLE` takes that table's triggers with it,
  * silently. The WA017 pair spent one commit on `0009_schema`, where it was
  * created and then dropped again eleven lines into `0010_schema`'s
  * `transactions` rebuild: a fresh install reached the head with the guarantee
  * gone and nothing red. The H1a four spent one commit at the tail of
- * `0010_schema.sql` itself, which is the same trap one rebuild later. So the
- * hook rides the last step that rebuilds `transactions`, and moves to
- * whatever step rebuilds it next.
+ * `0010_schema.sql` itself, which is the same trap one rebuild later.
+ *
+ * *And a generated file cannot hold one at all.* `pnpm ledger:generate`
+ * rewrites `000N_schema.sql` from the schema, and drizzle-kit cannot emit a
+ * trigger — so it cannot re-emit one it never knew about, and the loss would
+ * be silent: the phone would migrate cleanly to the same version with the
+ * guarantee gone. `backfills.test.ts` refuses a `CREATE TRIGGER` anywhere in
+ * `REPLICA_STEPS` — generated file or hand-written one — so the rule cannot
+ * be broken back the way it was.
  *
  * `migrate.test.ts` censuses all six off `sqlite_master` **after the whole
  * chain has run** — not after the hook's own step, which is the one question
@@ -406,19 +419,19 @@ export type Backfill = {
  * gives a trigger to speak through, and the two engines' refusals should be
  * greppable as one thing.
  *
- * **`IF NOT EXISTS`, because a database can reach this step already holding
- * them** (L5, round 3). The two triggers spent one commit inside
- * `0009_schema.sql`, and another on `0009_schema`'s own hook, before moving
- * here, so a device migrated by either build arrives at the step with both
- * already created — and a bare
- * `CREATE TRIGGER` would abort the transaction on the duplicate name, roll
- * the whole step back, and repeat identically on every launch after. That is
- * a real shape for an unreleased head being carried across a rebuild, and it
- * is the one kind of failure a migration must never have: one with no way
- * forward from the phone. It also makes the hook honestly idempotent, which
- * is what an `objects` hook has to be — it re-runs whenever its step does,
- * and unlike a `fill` it writes no value a later read could reconcile.
- * `backfills.test.ts` runs it twice and expects no throw.
+ * **`IF NOT EXISTS`, because an `objects` hook has to be idempotent.** It is
+ * code, not a statement the journal hashes, so nothing about a step's tag or
+ * checksum promises it runs exactly once against a given database — it runs
+ * whenever its step does, and unlike a `fill` it writes no value a later read
+ * could reconcile. A bare `CREATE TRIGGER` meeting a name already there would
+ * abort the transaction, roll the whole step back, and repeat identically on
+ * every launch after: the one kind of failure a migration must never have,
+ * one with no way forward from the phone. `IF NOT EXISTS` costs a clause and
+ * removes the failure mode entirely, so it is defence in depth rather than a
+ * fix for any device known to be in that state — no shipped build ever
+ * created these, and the disposable-until-first-install ruling is what lets
+ * the head be edited instead. `backfills.test.ts` runs the hook twice and
+ * expects no throw.
  */
 const CATEGORY_KIND_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_category_kind_matches_type_insert\`
@@ -460,9 +473,9 @@ END`,
  * rows that point at a category, on the write that would newly do so, never on
  * `categories` itself.
  *
- * `IF NOT EXISTS` for the reason the WA017 pair above carries it: these four
- * spent one commit at the tail of `0010_schema.sql`, so a device migrated by
- * that build reaches this step already holding them.
+ * `IF NOT EXISTS` for the reason the WA017 pair above carries it: an
+ * `objects` hook re-runs whenever its step does, so it must be idempotent on
+ * its own terms rather than on the journal's.
  */
 const CATEGORY_NOT_ARCHIVED_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_category_not_archived_insert\`
@@ -583,16 +596,19 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
      * with a real message: `assertCategoryNotArchived` for the first,
      * `categorize-batch.executor.ts`'s own `WHERE` for the second.
      *
-     * **On `0010_schema`, and on whatever the head becomes next.**
-     * `0010_schema` rebuilds `transactions` copy-rename-drop to add
-     * `brand_key`/`brand_source` (§14.4b), and SQLite drops a table's triggers
-     * with the table. A hook one step earlier created two triggers the very
-     * next step deleted; four more written into the tail of `0010_schema.sql`
-     * would go the same way one rebuild later, and a generated file cannot
-     * hold them at all. This key moves with the last step that rebuilds
-     * `transactions`; the file doc above states that as the rule, and
-     * `migrate.test.ts` and `backfills.test.ts` both ask `sqlite_master`
-     * after the *whole* chain so the next rebuild cannot repeat it quietly.
+     * **On `0010_schema` because that is the last step that rebuilds
+     * `transactions` — not because it is the head.** It is not the head:
+     * `0011_dashboard_layout_seed` and `0012_schema` run after it and neither
+     * touches this table. What matters is the rebuild. `0010_schema` rebuilds
+     * `transactions` copy-rename-drop to add `brand_key`/`brand_source`
+     * (§14.4b), and SQLite drops a table's triggers with the table — so a
+     * hook one step earlier created two triggers the very next step deleted,
+     * and four more written into the tail of `0010_schema.sql` would go the
+     * same way one rebuild later. This key moves when, and only when, a later
+     * step rebuilds `transactions`; the file doc above states that as the
+     * rule, and `migrate.test.ts` and `backfills.test.ts` both ask
+     * `sqlite_master` after the *whole* chain so the next rebuild cannot
+     * repeat it quietly.
      */
     objects: (tx) => {
       for (const statement of CATEGORY_NOT_ARCHIVED_TRIGGERS) tx.run(sql.raw(statement));

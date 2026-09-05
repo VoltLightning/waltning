@@ -37,8 +37,9 @@
  * ever had a bug that let a mismatched row through, the `UPDATE` itself would
  * abort at the database rather than writing a row Postgres would refuse to
  * accept back. Like every hand-written replica trigger it is created by
- * `migrate.ts`'s `REPLICA_BACKFILLS` `objects` hook on the chain's head, not
- * by a generated `.sql` — see that constant's own doc.
+ * `migrate.ts`'s `REPLICA_BACKFILLS` `objects` hook on the last step that
+ * rebuilds `transactions`, not by a migration step's own statements — see
+ * that constant's own doc.
  */
 
 import { type CategorizeBatchInput, categorizeBatchInput } from "@waltning/core/registry/inputs";

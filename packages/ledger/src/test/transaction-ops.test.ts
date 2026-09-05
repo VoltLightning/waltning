@@ -1216,8 +1216,8 @@ describe("categorize_batch", () => {
      * thing that can refuse it is `transactions_category_kind_matches_type_
      * update` — created, like every hand-written replica trigger, by
      * `migrate.ts`'s `REPLICA_BACKFILLS["0010_schema"].objects` hook on the
-     * chain's head, never by a generated `.sql` — the backstop this
-     * executor's own doc comment names.
+     * last step that rebuilds `transactions`, never by a migration step's own
+     * statements — the backstop this executor's own doc comment names.
      */
     it("the replica's own trigger refuses a raw UPDATE the executor never ran (C2 layer 3)", () => {
       expect(() =>
@@ -1260,8 +1260,9 @@ describe("categorize_batch", () => {
  * H1a — an archived category is not assignable, at both levels the rule has:
  * the executor's own refusal (a good error, named), and the replica's own
  * triggers (`transactions_category_not_archived_insert` / `_update` and
- * `transaction_lines_category_not_archived_insert` / `_update`, the head
- * migration), which hold when the code above them is wrong or absent.
+ * `transaction_lines_category_not_archived_insert` / `_update`, created by
+ * `migrate.ts`'s `objects` hook on the last step that rebuilds
+ * `transactions`), which hold when the code above them is wrong or absent.
  *
  * **Both tables, and all four operations that can move a `category_id`** —
  * `create_transaction`, `update_transaction`, `set_transaction_lines` and

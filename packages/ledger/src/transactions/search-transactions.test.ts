@@ -526,8 +526,16 @@ describe("searchTransactions — countOnly", () => {
 
   /**
    * A `text` filter still cannot be decided in SQL, so its own query reads
-   * rows — but only the three columns `matchesText` folds by *name*. The
-   * money fold is what count-only drops, everywhere.
+   * rows — but only the columns `matchesText` folds by *name*. The money
+   * fold is what count-only drops, everywhere.
+   *
+   * **Two statements, not one.** H2 put a transaction's own line
+   * descriptions among the four columns §13 searches, and they live on
+   * `transaction_lines`; the count reads them through the same correlated
+   * subquery the page does (`lineDescriptionsBy`), because a count that
+   * folded three of the four columns would silently disagree with the figure
+   * it is subtracted from. The structural count above is still one
+   * statement — it folds nothing.
    */
   it("a text filter counts by folding names, still without folding money", () => {
     insertExpense({ payee: "Żabka", note: "poranna kawa" });
@@ -542,7 +550,9 @@ describe("searchTransactions — countOnly", () => {
 
     expect(counted.total.count).toBe(1);
     expect(counted.total.currencies).toEqual([]);
-    expect(statements).toHaveLength(1);
+    // The candidate rows, then their line descriptions — and nothing else.
+    expect(statements).toHaveLength(2);
+    expect(statements.some((sql) => /"transaction_lines"/i.test(sql))).toBe(true);
     // `amount_original` *is* selected here — §13 matches an amount token
     // exactly — but nothing sums it: no currency total comes back.
     expect(statements.some((sql) => /"to_amount"/i.test(sql))).toBe(false);

@@ -225,8 +225,9 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
  * retired leaf.
  *
  * **The good error, between two guarantees.** Below it the replica's own four
- * `*_category_not_archived_insert` / `_update` triggers (the head migration,
- * two per table) and, on the server, `assert_category_not_archived`
+ * `*_category_not_archived_insert` / `_update` triggers (`migrate.ts`'s
+ * `objects` hook on the last step that rebuilds `transactions`, two per
+ * table) and, on the server, `assert_category_not_archived`
  * (`0001_database_objects.sql`, SQLSTATE `WA019`, likewise on both tables)
  * refuse the same write — all broken once, in `transaction-ops.test.ts` and
  * `pg-errors.test.ts`. A trigger's message names no operation and no field;

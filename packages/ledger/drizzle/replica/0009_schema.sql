@@ -18,13 +18,22 @@
 -- unexplained failure on every later launch.
 --
 -- This step carries no `fill` and no `objects` — only that `check`, and no
--- trigger. Every hand-written replica trigger lives in the head's `objects`
--- hook (`migrate.ts`'s `REPLICA_BACKFILLS["0010_schema"].objects`), and a
--- rebuild of `transactions` moves the hook: SQLite drops a table's triggers
--- with the table, and `0010_schema` rebuilds `transactions` copy-rename-drop,
--- so a trigger created here would be deleted one step later. It is SQL no
--- generated file can hold either way — drizzle-kit regenerates this file and
--- cannot emit a trigger, so one written here would vanish on the next `pnpm
+-- trigger. Every hand-written replica trigger lives in the `objects` hook of
+-- the last step that rebuilds `transactions` (`migrate.ts`'s
+-- `REPLICA_BACKFILLS["0010_schema"].objects`), and the hook moves when that
+-- step does.
+--
+-- Not because there is nowhere hand-written to put one: `drizzle/replica`
+-- holds `0001_database_objects.sql` and `0011_dashboard_layout_seed.sql`, so
+-- the slot exists. A step is the wrong home for a different reason. Its
+-- statements are frozen by its checksum the moment an installed database has
+-- run them, so the file cannot be edited later to put back a trigger a
+-- rebuild dropped — and `0010_schema` rebuilds `transactions`
+-- copy-rename-drop, which takes that table's triggers with it, so a trigger
+-- created here would be deleted one step later. What re-creates it has to be
+-- able to *move*, which is what a hook keyed by step tag is. And a generated
+-- file cannot hold one at all: drizzle-kit regenerates this file and cannot
+-- emit a trigger, so one written here would vanish on the next `pnpm
 -- ledger:generate` without a single test going red.
 ALTER TABLE `fx_rates` ADD `displaced_rate` text;--> statement-breakpoint
 ALTER TABLE `fx_rates` ADD `displaced_source` text;--> statement-breakpoint

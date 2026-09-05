@@ -10,9 +10,9 @@
  * `currencies` is not among them), but the replica does carry triggers: six
  * of them — H1a's four `*_category_not_archived_*` and WA017's two
  * `transactions_category_kind_matches_type_*` — all created from one home,
- * `migrate.ts`'s `REPLICA_BACKFILLS` `objects` hook on the chain's head. So a
- * scale trigger is writable in the same slot, and the
- * reason there is none is what it would and would not buy. SQLite's
+ * `migrate.ts`'s `REPLICA_BACKFILLS` `objects` hook on the last step that
+ * rebuilds `transactions`. So a scale trigger is writable in the same slot,
+ * and the reason there is none is what it would and would not buy. SQLite's
  * `RAISE(ABORT, …)` takes a string literal and nothing else — it cannot name
  * the offending currency, its declared scale, or the figure — so a trigger
  * here could only ever be a *backstop* beneath this function, never a

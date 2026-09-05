@@ -341,12 +341,18 @@ process owns the file and every credential in it. There is no adversary a role
 would exclude.
 
 **A cross-table rule the replica can mirror becomes a trigger, and every
-hand-written replica trigger lives in one home: the `objects` hook on the
-migration chain's head (`packages/ledger/src/migrate.ts`'s
-`REPLICA_BACKFILLS`), which moves to whatever step rebuilds its table next** —
-because drizzle-kit regenerates the `.sql` files and cannot emit a trigger, and
-SQLite drops a table's triggers with the table. Six of them today: H1a's four
-`*_category_not_archived_*` and WA017's two
+hand-written replica trigger lives in one home: the `objects` hook on the last
+step that rebuilds its table (`packages/ledger/src/migrate.ts`'s
+`REPLICA_BACKFILLS`), which moves when that step does.** Not the chain's head,
+and not for want of a hand-written `.sql` — `drizzle/replica` holds two of
+those. A migration step is the wrong home because its statements are frozen by
+its checksum once an installed database has run them, so the file cannot be
+edited afterwards to re-create a trigger a later rebuild dropped, and SQLite
+drops a table's triggers with the table. What re-creates it must be able to
+move, which a hook keyed by step tag is and a `.sql` file is not. A *generated*
+file is worse still: drizzle-kit rewrites it and cannot emit a trigger, so one
+written there vanishes on the next regeneration with nothing red. Six triggers
+today: H1a's four `*_category_not_archived_*` and WA017's two
 `transactions_category_kind_matches_type_*`, each joining to `categories`,
 which no `CHECK` can do (`ddl.ts` states every `CHECK` this schema can enforce
 alone).

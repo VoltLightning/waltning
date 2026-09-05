@@ -1727,9 +1727,10 @@ describe("a constraint declared in the schema is present on the device", () => {
    * partial rather than systematic.
    *
    * So there is one home and this is the census of it: every hand-written
-   * replica trigger is created by `REPLICA_BACKFILLS["0010_schema"].objects`,
-   * the head's hook, and the hook moves to whatever step rebuilds
-   * `transactions` next.
+   * replica trigger is created by `REPLICA_BACKFILLS["0010_schema"].objects`
+   * — the hook on the last step that *rebuilds* `transactions`, which is not
+   * the chain's head (`0011_dashboard_layout_seed` and `0012_schema` run
+   * after it) — and the hook moves when a later step rebuilds that table.
    *
    * The behavioural tests (`transaction-ops.test.ts`) provoke each refusal,
    * which is the better assertion — but each of them opens a store on a
@@ -1747,7 +1748,7 @@ describe("a constraint declared in the schema is present on the device", () => {
 
     expect(
       inspect(join(dir, "triggers-replica.db"), (db) => objects(db, "trigger")),
-      "a later rebuild of either table must take the head's `objects` hook with it",
+      "a later rebuild of either table must take the `objects` hook with it",
     ).toEqual([
       "transaction_lines_category_not_archived_insert",
       "transaction_lines_category_not_archived_update",

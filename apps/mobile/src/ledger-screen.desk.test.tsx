@@ -15,8 +15,9 @@ import {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { basePort } from "@waltning/client/ledger/test-port";
 import { id } from "@waltning/core/id";
-import { currencyCode, toMoney } from "@waltning/core/money";
+import { currencyCode } from "@waltning/core/money";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -111,7 +112,7 @@ const ARCHIVED_SHARED_ACCOUNT = {
 };
 
 function fakeController(search: FakeSearch, overrides: Partial<PhoneLedgerPort> = {}) {
-  const port: PhoneLedgerPort = {
+  const port: PhoneLedgerPort = basePort({
     // The real port honours `includeArchived`; the fake must too, or H4's
     // whole shape (a row whose account is only in the archived list)
     // cannot be set up at all.
@@ -119,9 +120,6 @@ function fakeController(search: FakeSearch, overrides: Partial<PhoneLedgerPort> 
       (options?.includeArchived === true
         ? [LIVE_ACCOUNT, ARCHIVED_SHARED_ACCOUNT]
         : [LIVE_ACCOUNT]) as never,
-    listCurrencies: () => [],
-    listGroups: () => [],
-    listRecent: () => [],
     listCategories: () => [{ id: EATING_OUT, name: "Eating out", kind: "expense" } as never],
     listCategoryTree: () => [
       {
@@ -133,58 +131,9 @@ function fakeController(search: FakeSearch, overrides: Partial<PhoneLedgerPort> 
         sort: 0,
       },
     ],
-    listCounterparties: () => [],
-    listPayeeHistory: () => [],
-    listNetWorth: () => [],
-    readPeriodSpend: () => [],
-    listUnsettledClearing: () => [],
-    listCounterpartyBalances: () => [],
-    listCounterpartyMerges: () => [],
-    listDistinctCounterpartyPairs: () => [],
-    balanceAsOf: () => toMoney("0"),
     searchTransactions: search,
-    createAccount: () => undefined,
-    createTransaction: () => undefined,
-    createCategory: () => undefined,
-    categorizeBatch: () => undefined,
-    getTransaction: () => null,
-    updateTransaction: () => undefined,
-    deleteTransaction: () => undefined,
-    setTransactionLines: () => undefined,
-    updateAccount: () => undefined,
-    archiveAccount: () => undefined,
-    reconcileAccount: () => undefined,
-    createGroup: () => undefined,
-    readRate: () => null,
-    readCrossRate: () => null,
-    listCurrencySettings: () => [],
-    readCoverage: () => [],
-    listFxRates: () => [],
-    addCurrency: () => undefined,
-    archiveCurrency: () => undefined,
-    setRateSource: () => undefined,
-    setPinned: () => undefined,
-    changePivot: () => ({ droppedDates: 0 }),
-    setManualRate: () => ({ written: 0, replacedManual: 0 }),
-    clearManualRate: () => ({ deleted: 0 }),
-    updateCurrency: vi.fn(),
-    createCounterparty: () => undefined,
-    updateCounterparty: () => undefined,
-    mergeCounterparties: () => undefined,
-    unmergeCounterparties: () => undefined,
-    recordDistinctCounterparties: () => undefined,
-    settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
-    listFullCategoryTree: () => [],
-    listCategoryUsage: () => new Map(),
-    readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
-    renameCategory: () => undefined,
-    reparentCategory: () => undefined,
-    convertLeafGroup: () => undefined,
-    mergeCategories: () => undefined,
-    archiveCategory: () => undefined,
-    reset: () => undefined,
     ...overrides,
-  };
+  });
   return createPhoneLedger(port, {
     capture: () => ({
       date: TODAY,

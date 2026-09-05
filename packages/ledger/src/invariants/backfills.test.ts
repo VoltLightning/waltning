@@ -139,13 +139,16 @@ describe("every backfill names a step that exists", () => {
   /**
    * `0009_schema` is exactly this shape: a `check` that refuses a rate its own
    * new `CHECK` cannot accept, and nothing to *derive*, so no `fill`.
-   * `0010_schema` is the other shape — an `objects` hook alone, creating the
-   * two category-kind triggers that are the replica's own
-   * `0001_database_objects.sql` (L8, round 2). Proven two ways — the type
-   * accepts a hook with no `fill`, and the real registry carries two — so a
-   * future `Backfill` edit that makes `fill` required again fails here
-   * first, at compile time, rather than as a mystery type error inside
-   * `migrate.ts`.
+   * `0010_schema` is the other shape — an `objects` hook alone, creating all
+   * **six** of the replica's hand-written triggers. The hook rather than a
+   * `.sql` file because a step's statements are frozen by its checksum once
+   * an installed database has run them, so nothing in the chain can
+   * re-create a trigger a later rebuild of `transactions` dropped; a hook
+   * keyed by step tag can move to whatever step rebuilds it next. Proven two
+   * ways — the type accepts a hook with no `fill`, and the real registry
+   * carries two — so a future `Backfill` edit that makes `fill` required
+   * again fails here first, at compile time, rather than as a mystery type
+   * error inside `migrate.ts`.
    */
   it("allows a hook with only a check and no fill", () => {
     const checkOnly: Backfill = { check: () => {} };
@@ -156,7 +159,7 @@ describe("every backfill names a step that exists", () => {
     ).toBeUndefined();
     expect(
       REPLICA_BACKFILLS["0010_schema"]?.objects,
-      "0010_schema creates the WA017 triggers a generated file cannot hold",
+      "0010_schema creates all six triggers no migration step can hold",
     ).toBeDefined();
   });
 });
@@ -231,14 +234,15 @@ describe("every objects hook creates something the chain would not otherwise hav
   });
 
   /**
-   * And it can run against a database that already holds what it creates
-   * (L5, round 3). An `objects` hook re-runs whenever its step does, and a
-   * device can reach the step with the objects already present — the two
-   * triggers spent one commit inside the generated `.sql` before moving into
-   * this hook, and H1a's four the same way out of the tail of
-   * `0010_schema.sql`. A bare `CREATE TRIGGER` would abort on the duplicate
-   * name, roll the step back, and fail identically on every launch after: a
-   * migration with no way forward from the phone.
+   * And it can run against a database that already holds what it creates.
+   * This is the hook's own idempotence, owed to nobody's migration history:
+   * an `objects` hook is code rather than a hashed statement, so the journal
+   * promises nothing about how many times it runs against a given database —
+   * it runs whenever its step does. A bare `CREATE TRIGGER` meeting a name
+   * already there would abort on the duplicate, roll the step back, and fail
+   * identically on every launch after: a migration with no way forward from
+   * the phone. `IF NOT EXISTS` removes that mode outright, which is defence
+   * in depth and not a repair for any device known to be in that state.
    */
   it.each(tagsWithObjects)("$tag's objects hook is idempotent", ({ tag }) => {
     const paths = {
@@ -296,8 +300,9 @@ describe("every objects hook creates something the chain would not otherwise hav
    * commit at the tail of `0010_schema.sql`, a generated file, where the next
    * `pnpm ledger:generate` or the next rebuild of `transactions` would have
    * removed them just as quietly. Every hand-written replica trigger is
-   * created by the head's `objects` hook now, so this is the list of every
-   * trigger the replica has.
+   * created by the `objects` hook on the last step that rebuilds
+   * `transactions` now — `0010_schema`, which is no longer the chain's head —
+   * so this is the list of every trigger the replica has.
    *
    * Run the real chain to the end, and ask for the six names. After the
    * whole chain, never after the hook's own step, which is precisely the
@@ -315,6 +320,29 @@ describe("every objects hook creates something the chain would not otherwise hav
     ]) {
       expect(names.has(trigger), `${trigger} survived the chain`).toBe(true);
     }
+  });
+
+  /**
+   * And the converse, which is the half that keeps the rule from being
+   * re-broken: **no migration step may write a trigger at all** — not the
+   * generated `.sql` files, not the hand-written ones
+   * (`0001_database_objects.sql`, `0011_dashboard_layout_seed.sql`), which
+   * this test does not distinguish between on purpose.
+   *
+   * A step's statements are frozen by its checksum the moment an installed
+   * database has run them, so a trigger written into one can never be
+   * re-created from the chain after a later rebuild of its table drops it;
+   * and a generated file loses it on the next `pnpm ledger:generate` besides.
+   * The test above says the six triggers survive; this one says there is no
+   * seventh living somewhere that cannot move.
+   */
+  it("no migration step creates a trigger — every one of them lives in a hook", () => {
+    const offenders = REPLICA_STEPS.flatMap((step) =>
+      step.statements
+        .filter((statement) => /^\s*CREATE\s+TRIGGER/i.test(statement))
+        .map((statement) => `${step.tag}: ${statement.slice(0, 80)}`),
+    );
+    expect(offenders, "a trigger in a step cannot be moved when its table is rebuilt").toEqual([]);
   });
 });
 

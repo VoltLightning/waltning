@@ -32,17 +32,34 @@
 -- it reads correctly on its own.)
 --
 -- **No trigger is written into this file, and none may be. Every
--- hand-written replica trigger lives in the head's `objects` hook
--- (`migrate.ts`'s `REPLICA_BACKFILLS["0010_schema"].objects`); a rebuild of
--- `transactions` moves the hook.** Two reasons, and they compound. This file
--- is drizzle-kit output, so a trigger written here survives exactly until the
--- next `pnpm ledger:generate` — drizzle-kit cannot emit a trigger, so it
--- cannot re-emit one it never knew about, and the loss would be silent. And
--- the `transactions` rebuild below drops that table's triggers *with the
--- table*, so a trigger created in any earlier step is already gone by the
--- time the chain reaches its head. The hook runs after this step's
--- statements, which is after the rename, so its six triggers — H1a's four
--- `*_category_not_archived_*` and WA017's two
+-- hand-written replica trigger lives in the `objects` hook of the last step
+-- that rebuilds `transactions` (`migrate.ts`'s
+-- `REPLICA_BACKFILLS["0010_schema"].objects`), and the hook moves when that
+-- step does.** That is this file today — not because it is the head, which it
+-- is not (`0011_dashboard_layout_seed` and `0012_schema` run after it and
+-- neither touches this table), but because the rebuild below is the last one
+-- `transactions` gets.
+--
+-- Two reasons a step cannot hold one, and they compound. A step's statements
+-- are frozen by its checksum once an installed database has run them, so this
+-- file cannot be edited later to re-create a trigger a subsequent rebuild
+-- dropped — the thing that re-creates it has to be able to move, and a hook
+-- keyed by step tag is exactly that. (The alternative is not "a hand-written
+-- `.sql`": `drizzle/replica` has two of those, `0001_database_objects.sql`
+-- and `0011_dashboard_layout_seed.sql`, and they are frozen the same way.)
+-- And this file in particular is drizzle-kit output, so a trigger written
+-- here survives exactly until the next `pnpm ledger:generate` — drizzle-kit
+-- cannot emit a trigger, so it cannot re-emit one it never knew about, and
+-- the loss would be silent.
+--
+-- **This file's own statements were edited after it landed on `main`, which
+-- changed its checksum.** That is licensed only by the ruling that the
+-- replica chain is disposable until the first install — no shipped database
+-- has run any of it — and it is the one thing `readAppliedTags`'s
+-- checksum refusal exists to stop once that stops being true.
+--
+-- The hook runs after this step's statements, which is after the rename, so
+-- its six triggers — H1a's four `*_category_not_archived_*` and WA017's two
 -- `transactions_category_kind_matches_type_*` — are the ones a fresh install
 -- ends with. `src/test/migrate.test.ts` censuses all six off `sqlite_master`
 -- after the whole chain and `src/invariants/backfills.test.ts` asks for them
