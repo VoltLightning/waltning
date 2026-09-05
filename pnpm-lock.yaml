@@ -179,6 +179,9 @@ importers:
       '@waltning/api':
         specifier: workspace:*
         version: link:../api
+      '@waltning/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
 
   packages/client:
     dependencies:

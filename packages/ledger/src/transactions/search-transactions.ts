@@ -1,11 +1,10 @@
-import { parseAmount } from "@waltning/core/capture/amount";
 import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
 import { id as brandId, type Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
-import { and, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
@@ -92,15 +91,46 @@ export type TransactionSearchPage = {
 export const SEARCH_PAGE_SIZE = 50;
 
 /**
+ * Digits, optionally a decimal fraction to `numeric(20,8)`'s eight places,
+ * and nothing else — whitespace already stripped as thousands grouping.
+ */
+const SEARCH_AMOUNT = /^\d+(?:[.,]\d{1,8})?$/;
+
+/**
+ * The **whole** query read as an amount, or `null`.
+ *
+ * §13's rule is that an amount *token* matches `amount_original` exactly, and
+ * a search box is a query rather than free text: it names an amount only when
+ * there is nothing else in it. Deliberately its own grammar and not
+ * `@waltning/core/capture/amount`'s `findAmount`, which answers a different
+ * question — quick-add reads the *first number inside* a phrase, on purpose
+ * (`"2 coffees 18"` binds to `2`), and it groups thousands in threes, so
+ * `"1500"` reads there as `150`. Borrowing it here made a payee-and-year
+ * search like `"Shop A 2024"` silently also match every row costing
+ * `2 024,00`, and a bare `"1500"` match `150,00`. Two readers because there
+ * are two questions; capture's grammar is free to change without moving what
+ * a search box means.
+ *
+ * Space and no-break space are grouping and are dropped; a comma or point is
+ * the decimal mark (`money.ts` takes a point), so `"1 500,00"` and `"1500.00"`
+ * are the same amount. Compared as money downstream, never as digits: a
+ * substring match let `489` find `1 489,00` and fold it into the running
+ * total. `489` is not `48,90`; only `48,90` is.
+ */
+function parseSearchAmount(text: string): Money | null {
+  const ungrouped = text.trim().replace(/[ \u00a0]/g, "");
+  if (!SEARCH_AMOUNT.test(ungrouped)) return null;
+  return money.toMoney(ungrouped.replace(",", "."));
+}
+
+/**
  * Whether `row` matches the folded `needle` — payee, note, one of the
  * transaction's own line descriptions, or the source leg's amount
  * **exactly** (§13: "Trigram … over `payee`, `note`, `receipts.merchant` and
  * `transaction_lines.description`" — the phone has no receipts table to
  * search yet, but the lines it holds are exactly this list's fourth column,
- * and H2 found them missing). The amount token is read the way capture reads
- * one (`findAmount` — `48,90` and `48.90` are the same value), and compared
- * as money, never as digits: a substring match let `489` find `1 489,00` and
- * put it in the running total. `489` is not `48,90`; only `48,90` is.
+ * and H2 found them missing). The amount is read by `parseSearchAmount`
+ * above, and compared as money.
  */
 function matchesText(
   row: { payee: string; note: string; amountOriginal: Money },
@@ -220,10 +250,10 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   const structuralWhere = and(...structuralConditions.filter((c): c is SQL => c !== undefined));
 
   const needle = filter.text !== undefined ? fold(filter.text.trim()) : "";
-  // M6 — the whole trimmed query must parse as an amount, not merely contain
-  // one: `parseAmount("Rossmann 2024")` is `null`, where `findAmount` would
-  // have read `2024` out of the middle of a payee-and-year search.
-  const needleAmount = filter.text === undefined ? null : parseAmount(filter.text);
+  // M6 — the whole query must *be* an amount, not merely contain one:
+  // `parseSearchAmount("Shop A 2024")` is `null`, where capture's `findAmount`
+  // would have read `2024` out of the middle of a payee-and-year search.
+  const needleAmount = filter.text === undefined ? null : parseSearchAmount(filter.text);
 
   const rowsQuery = () =>
     db
@@ -345,6 +375,17 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   // `rowsQuery()`'s join set (built for display, not for search) never
   // carries it — this is a second, narrow query rather than a wider join
   // that would multiply every multi-line transaction's row.
+  //
+  // L — the lines are selected by a **correlated subquery over the same
+  // `structuralWhere`**, not by `inArray` over the ids just read. The two
+  // return the same rows, and the difference is what happens when there are
+  // many of them: `rows` is deliberately unbounded here (the text filter
+  // cannot be pushed into SQL, so every structurally-matching row is read),
+  // so `inArray` binds one SQL parameter per row and SQLite refuses past
+  // `SQLITE_MAX_VARIABLE_NUMBER` — "too many SQL variables", thrown at
+  // exactly the ledger sizes this list is meant to grow into, and only when
+  // a text filter is active. Restating the predicate costs the planner one
+  // more pass over an index it has already used and binds nothing.
   const linesByTransaction = new Map<Id<"transactions">, string[]>();
   if (rows.length > 0) {
     const lineRows = db
@@ -354,9 +395,15 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
       })
       .from(transactionLines)
       .where(
-        inArray(
-          transactionLines.transactionId,
-          rows.map((row) => row.id),
+        exists(
+          // The projection is `transactions.id` rather than a raw `sql`1``:
+          // `EXISTS` ignores what a subquery selects, and a real column keeps
+          // the builder typed where a raw fragment would be `SQL<unknown>`.
+          db
+            .select({ matched: transactions.id })
+            .from(transactions)
+            .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+            .where(and(eq(transactions.id, transactionLines.transactionId), structuralWhere)),
         ),
       )
       .all();

@@ -101,25 +101,60 @@ describe("searchTransactions — text", () => {
   });
 
   /**
-   * M6 — `findAmount` reads the first number anywhere in the text, which
-   * used to let a payee-and-year query also filter by whatever amount
-   * "2024" happened to equal. `parseAmount` requires the whole trimmed query
-   * to be the amount, so a query with any other word in it is text-only.
+   * M6 — a query naming a payee is text-only, even when a number sits in it.
+   *
+   * `@waltning/core/capture/amount`'s `findAmount` reads the first number
+   * *inside* free text, which is right for quick-add and wrong here: it let a
+   * payee-and-year query silently also filter by amount. `parseSearchAmount`
+   * (`search-transactions.ts`) requires the whole query to be the amount.
    */
   it("does not read an amount out of a query that also names a payee (§13, M6)", () => {
-    // `202` — not `2024` — deliberately: the capture grammar groups digits in
-    // threes (`findAmount`'s own doc), so a bare, ungrouped "2024" parses as
-    // "202" plus a stray "4". Seeding the row at exactly that truncated
-    // value is what makes this a real regression test rather than one that
-    // passes by coincidence either way: the pre-M6 `findAmount`-based read
-    // would have matched this row by amount even though neither its payee
-    // nor its note contains "rossmann 2024".
-    insertExpense({ payee: "Rossmann", amountOriginal: money.toMoney("202") });
-    insertExpense({ payee: "Other Shop", amountOriginal: money.toMoney("999") });
+    // The row is seeded at exactly the number sitting in the query, which is
+    // what makes this a real regression test: nothing here matches on text
+    // ("shop a 2024" is not a substring of the payee "Shop A", which is the
+    // whole point of a *substring* match), so the only way this row could
+    // come back is an amount clause reading "2024" out of the middle of the
+    // query — which is what capture's `findAmount` did before M6.
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("2024") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("999") });
 
-    const result = searchTransactions(stores.ledger.replica.db, { text: "Rossmann 2024" });
+    expect(searchTransactions(stores.ledger.replica.db, { text: "Shop A 2024" }).rows).toHaveLength(
+      0,
+    );
 
-    expect(result.rows).toHaveLength(0);
+    // And the bare amount still matches, so the clause was narrowed, not lost.
+    expect(
+      searchTransactions(stores.ledger.replica.db, { text: "2024" }).rows.map((row) => row.payee),
+    ).toEqual(["Shop A"]);
+  });
+
+  /**
+   * `parseSearchAmount`'s own grammar, which is deliberately **not** capture's.
+   *
+   * `findAmount` groups thousands in threes (`\d{1,3}(?: \d{3})*`), so a bare
+   * ungrouped "1500" parses there as `150` and "12345" as `123`. Reading a
+   * search box through that grammar meant typing an amount with no separator
+   * — the ordinary way to type one — returned rows worth a tenth or a
+   * hundredth of what was asked for. A search query is not a captured phrase;
+   * it gets its own reader, and these four are what it must answer.
+   */
+  it("reads an ungrouped amount whole — 1500 is not 150 (§13)", () => {
+    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("1500") });
+    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("150") });
+    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("2024") });
+    insertExpense({ payee: "Shop D", amountOriginal: money.toMoney("12345") });
+
+    const payees = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+
+    expect(payees("1500")).toEqual(["Shop A"]);
+    expect(payees("2024")).toEqual(["Shop C"]);
+    expect(payees("12345")).toEqual(["Shop D"]);
+    // Grouping is whitespace and the decimal mark is a comma or a point, so
+    // the separated spelling of the same amount finds the same row.
+    expect(payees("1 500,00")).toEqual(["Shop A"]);
+    expect(payees("1\u00a0500,00")).toEqual(["Shop A"]);
+    expect(payees("1500.00")).toEqual(["Shop A"]);
   });
 
   it("never lets a purely alphabetic query match on amount alone", () => {

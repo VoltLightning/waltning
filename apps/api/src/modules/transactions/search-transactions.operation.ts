@@ -11,10 +11,18 @@
  * watermark; this operation does not, which is why it is offline-eligible for
  * the read and the decision about *coverage* belongs to the caller.
  *
- * **`text` is accepted, not yet applied** — see `SearchTransactionsFilter`'s
- * own doc in `transactions.service.ts`: §13's trigram match needs `pg_trgm`
- * and a GIN index, which is a migration, and this fix round holds no
- * migrations (another branch owns the next migration numbers).
+ * **`text` is not an input here, and the schema is `.strict()`.** §13's
+ * trigram match needs `pg_trgm` and a GIN index — a migration, and this
+ * branch holds none — so there is nothing server-side for a `text` to do.
+ * Accepting it and ignoring it would be the worst of the three options: a
+ * caller filtering on "toner" would get back every row in the date range,
+ * correctly shaped, silently unfiltered, and the running total beside it
+ * would be the total of the wrong set. A plain `z.object()` is no better,
+ * because it *strips* unknown keys rather than refusing them, which is the
+ * same silence one layer earlier. `.strict()` makes `text` a validation
+ * error that names the field, so the caller learns the filter is not
+ * available instead of trusting an answer to a question the server never
+ * asked. It goes back in with the migration that makes it real.
  */
 
 import { zAccountingDate, zId } from "@waltning/core/zod";
@@ -34,32 +42,33 @@ export const searchTransactionsOperation = defineOperation({
     "signed: expenses and the source leg of a transfer are negative, income is positive. Filter " +
     "by accountIds, categoryIds, scope (all/mine/shared/business), a from/to date range, or a " +
     "counterparty. Page with the returned cursor rather than an offset. Soft-deleted " +
-    "transactions are never included. text is accepted but not yet matched server-side.",
-  input: z.object({
-    text: z.string().optional(),
-    accountIds: z.array(zId<"accounts">()).optional(),
-    categoryIds: z.array(zId<"categories">()).optional(),
-    scope: z.enum(["all", "mine", "shared", "business"]).default("all"),
-    from: zAccountingDate.optional(),
-    to: zAccountingDate.optional(),
-    counterpartyId: zId<"counterparties">().optional(),
-    counterpartyRole: z.enum(["debt", "contribution", "reference"]).optional(),
-    // Bounded so no caller can ask for the whole ledger by accident; the Pi has
-    // 4 GB and the phone renders this into a list.
-    limit: z.number().int().min(1).max(200).default(50),
-    cursor: z
-      // Branded at the boundary. A cursor is echoed back from a previous
-      // response, so it reads as internal — and arrives in a request body like
-      // everything else, which means a caller can send anything at all.
-      .object({ date: zAccountingDate, id: zId<"transactions">() })
-      .nullable()
-      .default(null),
-  }),
+    "transactions are never included. There is no free-text filter yet: sending one is an " +
+    "error rather than an ignored field, so a text search is never answered with unfiltered rows.",
+  input: z
+    .object({
+      accountIds: z.array(zId<"accounts">()).optional(),
+      categoryIds: z.array(zId<"categories">()).optional(),
+      scope: z.enum(["all", "mine", "shared", "business"]).default("all"),
+      from: zAccountingDate.optional(),
+      to: zAccountingDate.optional(),
+      counterpartyId: zId<"counterparties">().optional(),
+      counterpartyRole: z.enum(["debt", "contribution", "reference"]).optional(),
+      // Bounded so no caller can ask for the whole ledger by accident; the Pi has
+      // 4 GB and the phone renders this into a list.
+      limit: z.number().int().min(1).max(200).default(50),
+      cursor: z
+        // Branded at the boundary. A cursor is echoed back from a previous
+        // response, so it reads as internal — and arrives in a request body like
+        // everything else, which means a caller can send anything at all.
+        .object({ date: zAccountingDate, id: zId<"transactions">() })
+        .nullable()
+        .default(null),
+    })
+    .strict(),
   handler: (input, ctx: OperationContext): Promise<TransactionPage> =>
     searchTransactions(
       ctx.db,
       {
-        text: input.text,
         accountIds: input.accountIds,
         categoryIds: input.categoryIds,
         scope: input.scope,

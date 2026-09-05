@@ -49,16 +49,22 @@ export type TransactionPage = {
 /** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
 export type SearchScope = "all" | "mine" | "shared" | "business";
 
+/**
+ * The structural filters, and **no `text`**.
+ *
+ * §13's free-text match is a trigram search: `pg_trgm` plus a GIN index over
+ * `payee`, `note`, `receipts.merchant` and `transaction_lines.description`.
+ * That is a migration, and this branch holds none. Until it lands, `text` is
+ * not a field here and not a field on `search_transactions`'s input — a
+ * caller that sends one gets a validation error naming it, rather than a
+ * full page of structurally-filtered rows that quietly ignored the only
+ * filter the caller cared about. The phone's own `TransactionSearchFilter`
+ * keeps its `text`, because offline it genuinely applies one
+ * (`@waltning/ledger`'s `search-transactions.ts`, fold-and-substring); the
+ * two filters differing here is the honest description of what each side can
+ * actually do.
+ */
 export type SearchTransactionsFilter = {
-  /**
-   * **Not yet applied.** §13's trigram match needs `pg_trgm` and a GIN index
-   * — a migration, and this fix round's own ruling is no migrations here
-   * (another branch holds the next migration numbers). Accepted on the
-   * input so the shape already matches the phone's `TransactionSearchFilter`
-   * and the field is not silently dropped at validation; every other filter
-   * below is a plain structural `WHERE` and needs no schema change.
-   */
-  text?: string | undefined;
   accountIds?: readonly Id<"accounts">[] | undefined;
   categoryIds?: readonly Id<"categories">[] | undefined;
   scope?: SearchScope | undefined;

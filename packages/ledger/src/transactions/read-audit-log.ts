@@ -12,7 +12,7 @@
  *
  * **The result is a status, never a bare empty array.** `[]` for "no rows
  * yet" and `[]` for "this can never have rows" are the same value for two
- * different facts, and a caller (`AuditHistory`, once D5 builds it) needs to
+ * different facts, and a caller (`AuditHistory`, once one is built) needs to
  * tell them apart to render "not available on this device" rather than a
  * silent empty list. So this answers `{ status: "unavailable_on_device" }`
  * every time — never a nullish stand-in for "didn't work" — with
@@ -28,32 +28,34 @@
  * *row* is branded against) omits them by construction. A first version of
  * this file typed `entity: IdTable`, which quietly made S18's own audited
  * manual-rate trail unaskable — `getAuditLog("fx_rates", …)` would not have
- * compiled. `string` is the honest width; the check below is what keeps it
- * from being *unchecked* width.
+ * compiled. `string` is the honest width.
  *
- * **`entity` is validated against the schema, not trusted.** At run time
- * this checks the name against the *real* table names `ledgerSchema` holds
- * — `getTableName()` on each table, the SQL identifier an audit row
- * actually carries (`account_groups`, not `accountGroups`) — never a second
- * list copied by hand and left to drift from it. `entityId` is checked
- * non-blank for the same reason: an argument this function ignored would be
- * a nullish "didn't work" one layer further out, where nobody is looking
- * for it.
+ * **The check is on the argument's shape, not on a table list.** A second
+ * version checked `entity` against the *replica's* tables (`getTableName()`
+ * over `ledgerSchema`) and threw for anything else — which made this
+ * function answer the wrong question. `audit_log.entity` names rows on the
+ * **server**, where `receipts`, `tax_*` and the agent tables all exist and
+ * are all audited; the replica's thirteen-table subset is a fact about what
+ * this device caches, not about what an audit trail may name. So
+ * `get_audit_log("receipts", …)` is a perfectly well-formed question with a
+ * real server-side answer, and the honest reply from the phone is the same
+ * `unavailable_on_device` every other entity gets — not a throw claiming the
+ * caller asked for something that does not exist. What is left is a shape
+ * check: `entity` and `entityId` must be non-blank strings, because a blank
+ * one is a caller bug rather than a question, and an argument this function
+ * ignored would be a nullish "didn't work" one layer further out.
+ *
+ * **`entity` carries the SQL table name, not the camelCase property** —
+ * `account_groups`, never `accountGroups`. That is what an executor's
+ * `AuditSpec.entity` actually writes into `audit_log.entity`
+ * (`create-counterparty.operation.ts`'s `entity: "counterparties"`), so it
+ * is the only spelling a lookup here could ever match. Pinned over the whole
+ * registry by `apps/api/src/registry/registry.test.ts` rather than restated
+ * as a list this file would have to keep in step.
  */
 
 import type { JsonValue } from "@waltning/core/json";
 import type { Actor } from "@waltning/schema/enums";
-import { getTableName } from "drizzle-orm";
-import { ledgerSchema } from "../schema-map.ts";
-
-/**
- * The real SQL table names this ledger actually holds, derived from the
- * schema map rather than restated — the set `entity` is checked against
- * below.
- */
-const AUDITED_ENTITIES: ReadonlySet<string> = new Set(
-  Object.values(ledgerSchema).map((table) => getTableName(table)),
-);
 
 /**
  * One `audit_log` row, field-for-field (`SPEC.md` §6.2).
@@ -81,13 +83,14 @@ export type AuditLogResult =
   | { status: "ok"; rows: readonly LocalAuditEntry[] };
 
 /**
- * Always `{ status: "unavailable_on_device" }` — see this file's own doc
- * above. Throws on an `entity` this ledger's schema does not name, or a
- * blank `entityId`: an argument is checked, then answered, never ignored.
+ * Always `{ status: "unavailable_on_device" }` — for every entity, including
+ * the server-only ones, see this file's own doc above. Throws only on a blank
+ * `entity` or `entityId`: an argument is checked for being a question at all,
+ * then answered, never ignored.
  */
 export function readAuditLog(entity: string, entityId: string): AuditLogResult {
-  if (!AUDITED_ENTITIES.has(entity)) {
-    throw new Error(`get_audit_log: "${entity}" is not a table this ledger's schema holds`);
+  if (entity.trim() === "") {
+    throw new Error("get_audit_log: entity must not be blank");
   }
   if (entityId.trim() === "") {
     throw new Error(`get_audit_log: entityId must not be blank (entity: "${entity}")`);

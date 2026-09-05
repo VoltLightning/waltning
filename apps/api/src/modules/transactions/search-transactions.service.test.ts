@@ -1,10 +1,12 @@
 /**
- * `search_transactions`'s structural filters, server side —
- * `SearchTransactionsFilter`'s own doc: `text` is accepted, not yet applied
- * (§13's trigram needs `pg_trgm` and a GIN index, a migration this fix
- * round holds none of); every other filter is a plain `WHERE` and is
- * exercised here, mirroring `@waltning/ledger`'s `search-transactions.ts`
- * structural conditions.
+ * `search_transactions`'s structural filters, server side.
+ *
+ * There is no `text` filter to exercise: §13's trigram match needs `pg_trgm`
+ * and a GIN index, a migration this branch holds none of, so `text` is not on
+ * the input at all and a caller sending one is refused
+ * (`registry.test.ts` pins that). Every filter that *does* exist is a plain
+ * `WHERE` and is exercised here, mirroring `@waltning/ledger`'s
+ * `search-transactions.ts` structural conditions.
  */
 
 import { accountingDate } from "@waltning/core/date";

@@ -14,6 +14,8 @@
 
 import { type AnyOperation, defineOperation } from "@waltning/core/registry/operation";
 import { toolSchemas } from "@waltning/core/registry/tools";
+import * as dbSchema from "@waltning/db/schema";
+import { getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { routerFromRegistry } from "../trpc/from-registry.ts";
@@ -193,6 +195,30 @@ describe("the widened form cannot skip validation", () => {
     await expect(widened.invoke("garbage", unusedContext)).rejects.toThrow();
   });
 
+  /**
+   * A filter the server cannot apply must be a **refusal**, not a shrug.
+   *
+   * §13's free-text search is a trigram index this branch does not build, so
+   * `search_transactions` has no `text` input. The failure mode worth naming
+   * is not the missing feature — it is a plain `z.object()`, which strips an
+   * unknown key silently: a caller searching for "toner" would then receive
+   * a correctly-shaped page of *every* row in range, and a running total
+   * (S10 §3) computed over the wrong set. `.strict()` turns that into an
+   * error that names the field.
+   */
+  it("refuses a text filter rather than answering with unfiltered rows", async () => {
+    const widened: AnyOperation<OperationContext> = registry.search_transactions;
+    await expect(widened.invoke({ text: "toner" }, unusedContext)).rejects.toThrow(/text/);
+  });
+
+  it("still accepts the structural filters beside it", () => {
+    // The refusal above must be about `text` specifically, not about
+    // `.strict()` having broken every caller of this operation.
+    expect(() =>
+      registry.search_transactions.input.parse({ scope: "business", limit: 10 }),
+    ).not.toThrow();
+  });
+
   it("applies schema defaults on the way through", async () => {
     // The agent calls with `{}`. Defaults must arrive from the schema, not
     // from a handler, or the two callers diverge on the first optional field.
@@ -342,5 +368,59 @@ describe("offline eligibility", () => {
     // both create the same person and one drain fails on a constraint after
     // transactions are already attached.
     expect(registry["create_counterparty"]?.offlineEligible).toBe(false);
+  });
+});
+
+/**
+ * `audit_log.entity` carries the **SQL** table name.
+ *
+ * The registry writes the audit row on a handler's behalf
+ * (`registry/operation.ts`), copying `AuditSpec.entity` straight into
+ * `audit_log.entity` — so whatever a declaration spells there is what every
+ * later reader must ask for. Drizzle gives two spellings of the same table:
+ * the camelCase TypeScript property (`accountGroups`) and the SQL identifier
+ * the row is actually stored under (`account_groups`). They are equally easy
+ * to type and only one of them can ever match, which is exactly the kind of
+ * divergence that reads as an empty audit trail rather than as an error —
+ * `get_audit_log("accountGroups", …)` would return no rows for a row that has
+ * a full history.
+ *
+ * `@waltning/ledger`'s `read-audit-log.ts` states the convention in prose;
+ * this is what holds every declaration to it.
+ */
+describe("an audit spec names its table the way the database does", () => {
+  // Narrowed with drizzle's own `is()` rather than a hand-written type
+  // predicate: the schema module exports more than tables (enums, helpers),
+  // so a `value is Table` annotation is not assignable to that union — `is()`
+  // is the runtime check *and* the narrowing, which is what it is for.
+  const sqlTableNames = new Set<string>();
+  for (const value of Object.values(dbSchema)) {
+    if (is(value, Table)) sqlTableNames.add(getTableName(value));
+  }
+
+  const auditEntities = Object.values(registry)
+    .map((op) => op.audit?.entity)
+    .filter((entity): entity is string => entity !== undefined);
+
+  it("has a schema and at least one audited operation to check", () => {
+    // Both guards exist because every assertion below is vacuously true over
+    // an empty set — a test that passes when the registry is empty proves
+    // nothing about the registry.
+    expect(sqlTableNames.size).toBeGreaterThan(10);
+    expect(auditEntities.length).toBeGreaterThan(0);
+  });
+
+  it("spells every entity as the SQL table name, not the camelCase property", () => {
+    for (const entity of auditEntities) {
+      expect(sqlTableNames.has(entity), `audit entity "${entity}"`).toBe(true);
+      expect(entity, `audit entity "${entity}"`).toMatch(/^[a-z][a-z0-9_]*$/);
+    }
+  });
+
+  it("would reject the camelCase spelling — the check has teeth", () => {
+    // The divergence this exists to catch, shown failing: `account_groups` is
+    // a table, `accountGroups` is a property name that names no row anywhere.
+    expect(sqlTableNames.has("account_groups")).toBe(true);
+    expect(sqlTableNames.has("accountGroups")).toBe(false);
   });
 });
