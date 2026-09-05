@@ -89,21 +89,34 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   }
 
   /**
-   * `SPEC.md` §14.4b, round 1's M4. `resolveBrandPatch` is the single place
-   * this decision is made — see its own doc for the four cases (explicit
-   * assign, explicit clear to a sticky `"none"`, re-match, or leave alone).
-   * Called only when the patch actually touches `brandKey` or `payee`;
-   * `undefined` means neither column is written.
+   * `SPEC.md` §14.4b. `resolveBrandPatch` is the single place this decision is
+   * made — see its own doc for the four cases (explicit assign, explicit clear
+   * to a sticky `"none"`, re-match, or leave alone). It is called only when
+   * the patch actually asserts a `brandKey` or *changes* the payee; an
+   * `undefined` return means neither column is written.
+   *
+   * **`!== undefined`, not `"brandKey" in`.** A caller that spreads an
+   * optional field builds `{ brandKey: undefined }`, and `in` reports that as
+   * a touch — so an edit to some unrelated field would re-resolve a column
+   * the writer never named. §14.4b's clear is `brandKey: null`, explicitly;
+   * `undefined` is "this patch has no opinion", the same reading every other
+   * optional field in the patch gets.
+   *
+   * **The payee gate compares values, not presence.** §14.4b: *"re-runs the
+   * match when `payee` changes"*. A patch that re-sends the payee it already
+   * read — what a form does when it submits every field — must leave a `NULL`
+   * source alone rather than resolving it afresh, or "never matched" would
+   * quietly become "matched" on an edit to some unrelated field.
    */
-  const patchTouchesBrand = "brandKey" in input.patch;
-  const patchTouchesPayee = input.patch.payee !== undefined;
+  const assertedBrandKey = input.patch.brandKey;
+  const brandKeyTouched = assertedBrandKey !== undefined;
+  const payeeChanged = input.patch.payee !== undefined && input.patch.payee !== current.payee;
   const brandFields =
-    patchTouchesBrand || patchTouchesPayee
+    brandKeyTouched || payeeChanged
       ? (resolveBrandPatch(
           { brandKey: current.brandKey, brandSource: current.brandSource },
           input.patch.payee ?? current.payee,
-          patchTouchesBrand,
-          input.patch.brandKey,
+          assertedBrandKey,
         ) ?? {})
       : {};
 

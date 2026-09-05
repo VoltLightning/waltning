@@ -15,17 +15,18 @@
  * evidence and is never normalised away."* This module reads `payee` and
  * returns a `key`; nothing here writes back to the field it read.
  *
- * **"Normalised", precisely — round 1's L6.** `fold` (`capture/names.ts`)
- * lower-cases and maps only the Polish diacritics this product's other
- * language needs (`ąćęłńóśźż`); it is *not* a general Unicode diacritic
- * strip, so `"Café"` folds to `"café"`, not `"cafe"`. That is fine for a
- * two-entry, ASCII-and-Polish catalogue and stops being fine the day a
- * third alias needs a diacritic outside that set — a real, named limit
- * rather than a general claim this file used to make. Internal whitespace
- * *is* collapsed here, locally (`normaliseSpace`, below) — not inside
- * `fold` itself, which several other callers (`capture/`) depend on staying
- * exactly as narrow as it is — so `"YouTube  Premium"` (a doubled space) and
- * `"YouTube Premium"` fold to the same key.
+ * **"Normalised", precisely.** `fold` (`capture/names.ts`) lower-cases and
+ * maps only the Polish diacritics this product's other language needs
+ * (`ąćęłńóśźż`); it is *not* a general Unicode diacritic strip, so `"Café"`
+ * folds to `"café"`, not `"cafe"`. That is fine for a two-entry,
+ * ASCII-and-Polish catalogue and stops being fine the day a third alias needs
+ * a diacritic outside that set — a real, named limit, pinned by
+ * `match.test.ts` asserting `fold`'s own output rather than only that the
+ * catalogue misses. Internal whitespace *is* collapsed here, locally
+ * (`normaliseSpace`, below) — not inside `fold` itself, which several other
+ * callers (`capture/`) depend on staying exactly as narrow as it is — so
+ * `"YouTube  Premium"` (a doubled space) and `"YouTube Premium"` fold to the
+ * same key.
  */
 
 import { fold } from "../capture/names.ts";
@@ -87,39 +88,42 @@ export function resolveBrand(payee: string, assertedKey: string | undefined): Re
 export type CurrentBrand = { brandKey: string | null; brandSource: BrandSource | null };
 
 /**
- * `update_transaction`'s own brand resolution — round 1's M4. A wrong
- * catalogue match used to be uncorrectable: clearing `brandKey` with `null`
- * fell straight back through `resolveBrand`, which re-matched the same
- * payee and put the same key right back. `brand_source: "none"` is the fix
- * — a *deliberate* "no brand", distinct from `null`/`null` (never matched at
- * all) and, like `"manual"`, sticky against a later payee edit.
+ * `update_transaction`'s own brand resolution. A patch differs from a fresh
+ * create in three ways `resolveBrand` has no expression for: the row already
+ * has a value, `brandKey: null` is an explicit *clear* rather than "nothing
+ * asserted", and a clear has to stay cleared. `brand_source: "none"` is what
+ * makes the last one possible — a *deliberate* "no brand", distinct from
+ * `null`/`null` (never matched at all) and, like `"manual"`, sticky against a
+ * later payee edit. Without it a clear falls back to "let the payee decide",
+ * the payee still folds to the same alias, and the wrong mark returns on the
+ * next write — correctable only by editing evidence §14.4b says is never
+ * normalised away.
  *
- * Called only when the patch touches `brandKey` or `payee` (the caller's own
- * gate — an unrelated field change must not recompute or rewrite either
- * column); `undefined` means "leave both columns alone."
+ * The caller calls this only when the patch asserts a `brandKey` or *changes*
+ * the payee (`update-transaction.executor.ts`'s own gate — an unrelated field
+ * change must not recompute or rewrite either column). `undefined` back means
+ * "leave both columns alone."
  *
- * - `brandKeyTouched` and `brandKeyValue` is `null` → explicit clear:
- *   `{ null, "none" }`. The payee is not consulted, now or on a later edit.
- * - `brandKeyTouched` and `brandKeyValue` is a string → `manual`, the same
- *   catalogue-validated assertion `resolveBrand` gives a fresh row.
- * - Otherwise (only `payee` changed) → re-matched **only** while the current
- *   source is `null` or `"auto"`; `"manual"` and `"none"` are both sticky,
- *   by the same rule for a different reason each — a person's own choice,
- *   and a person's own choice to have none.
+ * - `brandKeyValue` is `null` → explicit clear: `{ null, "none" }`. The payee
+ *   is not consulted, now or on a later edit.
+ * - `brandKeyValue` is a string → `manual`, the same catalogue-validated
+ *   assertion `resolveBrand` gives a fresh row.
+ * - `brandKeyValue` is `undefined` (the patch has no opinion, so only `payee`
+ *   changed) → re-matched **only** while the current source is `null` or
+ *   `"auto"`; `"manual"` and `"none"` are both sticky, by the same rule for a
+ *   different reason each — a person's own choice, and a person's own choice
+ *   to have none.
  */
 export function resolveBrandPatch(
   current: CurrentBrand,
   payee: string,
-  brandKeyTouched: boolean,
   brandKeyValue: string | null | undefined,
 ): ResolvedBrand | undefined {
-  if (brandKeyTouched) {
-    if (brandKeyValue === null) {
-      return { brandKey: null, brandSource: "none" };
-    }
-    if (brandKeyValue !== undefined) {
-      return { brandKey: brandKeyValue, brandSource: "manual" };
-    }
+  if (brandKeyValue === null) {
+    return { brandKey: null, brandSource: "none" };
+  }
+  if (brandKeyValue !== undefined) {
+    return { brandKey: brandKeyValue, brandSource: "manual" };
   }
   if (current.brandSource === null || current.brandSource === "auto") {
     return resolveBrand(payee, undefined);

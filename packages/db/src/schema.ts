@@ -534,8 +534,8 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   // catalogue is versioned code, the same reason `service`
   // (`recurring_transactions`, §14.4a) carries no CHECK against it either.
   //
-  // Round 1's M4 — a `NULL` key pairs with `brand_source` `NULL` (never
-  // matched) or `'none'` (a deliberate, sticky "no brand" — a cleared
+  // A `NULL` key pairs with `brand_source` `NULL` (never matched) or
+  // `'none'` (a deliberate, sticky "no brand" — a cleared
   // catalogue match); a non-`NULL` key pairs only with `'auto'` or
   // `'manual'`, never `'none'`, which by definition names a row with no key.
   //
@@ -578,8 +578,9 @@ export const recurringTransactions = pgTable(
 
 /**
  * `SPEC.md` §14.4b — the durable record `@waltning/core/brands/catalog`
- * bootstraps into (`packages/db/src/seed/run.ts`), the same shape
- * `currencies` already gives reference data (`architecture/14` §14.6).
+ * bootstraps into (`packages/db/src/seed/brand-aliases.ts`), the same shape
+ * `currencies` already gives reference data (`architecture/14` §14.6: `ON
+ * CONFLICT DO NOTHING`, so a re-seed never restores an edited row).
  */
 export const brandAliases = pgTable("brand_aliases", brandAliasesColumns(), (t) => [
   check("brand_aliases_alias_not_blank", sql`length(btrim(${t.alias})) > 0`),

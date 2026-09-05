@@ -107,7 +107,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | Operation | Auto | Notes |
 |---|---|---|
 | `create_transaction` | ❌ | The core write. One payment event, one row (§6.10). Optional `brandKey` (§14.4b) — catalogue-validated; absent, the executor matches `payee` against the bundled catalogue offline and sets `brand_source: auto` itself, never the caller |
-| `update_transaction` | ✅ | Field-level; `is_business` flips are audited (§13.1). A patched `payee` re-runs the §14.4b brand match **only while `brand_source` is `NULL` or `auto`** — `manual` and `none` are both sticky. A patched `brandKey` always wins: a key is sourced `manual`, and `null` is a deliberate clear, written as `brand_key NULL` with `brand_source: none` so the same payee cannot put the wrong mark straight back |
+| `update_transaction` | ✅ | Field-level; `is_business` flips are audited (§13.1). A patched `payee` re-runs the §14.4b brand match only when it **changes** the value the row holds, and **only while `brand_source` is `NULL` or `auto`** — `manual` and `none` are both sticky. A patched `brandKey` always wins: a key is sourced `manual`, and `null` is a deliberate clear, written as `brand_key NULL` with `brand_source: none` so the same payee cannot put the wrong mark straight back |
 | `delete_transaction` | ❌ | Soft. Never auto — deletion is the one thing you cannot un-notice |
 | `set_transaction_lines` | ✅ | The optional breakdown (§10.3) |
 | `categorize_batch` | ✅ | The bulk path; one `DiffCard` states the affected count |

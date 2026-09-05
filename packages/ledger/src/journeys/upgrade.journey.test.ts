@@ -9,9 +9,9 @@
  * rebuilt `transactions` — `v10`, the same shape one migration later
  * (`0010_schema`, `SPEC.md` §14.4b's brand columns) — and `v11`, the current
  * head. This line names the current set by hand and goes stale the moment a
- * later PR adds a migration without updating it (round 1's L3 — it had
- * already gone stale once, still naming `v9` as head after `v10` replaced
- * it); the suite itself needs no such edit, only this comment does.
+ * later PR adds a migration without updating it — it has gone stale before,
+ * still naming `v9` as head after `v10` replaced it; the suite itself needs
+ * no such edit, only this comment does.
  *
  * **Loading a fixture is two steps, deliberately not one.** `migrateReplica`
  * and `migrateOutbox` build the tables; the fixture's own SQL is only ever

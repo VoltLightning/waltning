@@ -11,7 +11,7 @@ describe("isValidBrandKey", () => {
 
   it("refuses a key the catalogue does not carry", () => {
     // Invented — never a real merchant not already in the catalogue
-    // (CLAUDE.md: placeholders only, round 1's L8).
+    // (CLAUDE.md: placeholders only).
     expect(isValidBrandKey("waltco")).toBe(false);
     expect(isValidBrandKey("")).toBe(false);
   });
@@ -40,7 +40,7 @@ describe("BRAND_CATALOG shape", () => {
     }
   });
 
-  /** Round 1's L11 — a `find` (`brandCatalogEntry`) silently returns the first match, so a duplicate `key` would shadow its twin with no error anywhere else. */
+  /** `brandCatalogEntry` is a `find`, so it silently returns the first match — a duplicate `key` would shadow its twin with no error anywhere else. */
   it("no two entries share a key", () => {
     const seen = new Set<string>();
     for (const entry of BRAND_CATALOG) {
@@ -80,13 +80,14 @@ describe("BRAND_CATALOG shape", () => {
 });
 
 /**
- * Round 1's M3 — the contrast guarantee `catalog.ts`'s own comment on the
- * YouTube entry claims ("that fails WCAG AA … darkened just enough to clear
- * 4.5:1") was proved once, by hand, for one entry, and enforced afterwards
- * only by `BrandIcon`'s own Storybook stories — which exist per catalogue
- * entry today but do not exist *because* of the catalogue, so a new entry
- * with no matching story ships unchecked. This makes it a property of
- * `BRAND_CATALOG` itself.
+ * The contrast guarantee `catalog.ts`'s own comment on the YouTube entry
+ * makes ("that fails WCAG AA … darkened just enough to clear 4.5:1"), as a
+ * property of `BRAND_CATALOG` itself rather than of any one entry. The visual
+ * suite's axe-core pass sees only what a story renders, and
+ * `brand-icon.stories.tsx` hand-writes one story per entry — stories that
+ * exist per catalogue entry but not *because* of the catalogue, so an entry
+ * added without a story would ship its accent unchecked. This is the
+ * enforcement; the stories are a second look at what it already refuses.
  *
  * **WCAG relative luminance, computed here rather than imported** — `core`'s
  * dependency floor is decimal.js and zod (`tests/architecture.test.ts`), and
@@ -96,12 +97,11 @@ describe("BRAND_CATALOG shape", () => {
  * direction the architecture test enforces, for a formula short enough to
  * not be worth the cross-package coupling.
  */
-describe("BRAND_CATALOG accent contrast (M3)", () => {
+describe("BRAND_CATALOG accent contrast", () => {
   // `packages/ui/src/theme/roles.ts` — `textOnAccent` is `#ffffff` in both
-  // the light and the dark theme (verified by the adversarial review this
-  // test answers), so both are named explicitly rather than assuming one
-  // covers the other; a future theme that splits them would need this test
-  // updated by hand, which is the point of citing the file here.
+  // the light and the dark theme, so both are named explicitly rather than
+  // assuming one covers the other; a future theme that splits them needs
+  // this test updated by hand, which is the point of citing the file here.
   const TEXT_ON_ACCENT_LIGHT = "#ffffff";
   const TEXT_ON_ACCENT_DARK = "#ffffff";
   /** WCAG AA, normal (non-large) text — `design-system/10`. */

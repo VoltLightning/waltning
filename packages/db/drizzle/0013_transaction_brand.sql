@@ -1,19 +1,15 @@
 -- `SPEC.md` §14.4b — a transaction (and a recurring rule) may carry a
 -- Waltning-owned brand key, plus the shared `brand_aliases` reference table
--- the bundled catalogue bootstraps into (`packages/db/src/seed/run.ts`).
--- Both new columns are nullable and default to NULL on every existing row,
--- so `*_brand_shape`'s "both null, or both set" holds for the whole table
--- with nothing to repair — no `NOT VALID` dance is needed here, unlike
--- `0011`/`0012`'s tightened numeric CHECKs.
+-- the bundled catalogue bootstraps into
+-- (`packages/db/src/seed/brand-aliases.ts`). Both new columns are nullable
+-- and default to NULL on every existing row, so `*_brand_shape`'s "both
+-- null, or both set" holds for the whole table with nothing to repair — no
+-- `NOT VALID` dance is needed here, unlike `0011`/`0012`'s tightened numeric
+-- CHECKs.
 --
--- Round 1's M4 — edited in place under the owner's own ruling: this
--- migration has not been installed anywhere yet ("every database is
--- disposable until first install"), so the enum and the two CHECKs below
--- carry the corrected three-value `brand_source` shape from the start,
--- rather than a second migration re-shaping what this one just created.
--- `brand_source` gained `'none'` for a *deliberate* "no brand" (a cleared
--- catalogue match), distinct from `NULL`/`NULL` (never matched at all); the
--- CHECKs' `brand_source is not null and` before each `in (...)` is
+-- **`brand_source` has three values.** `'none'` is a *deliberate* "no brand"
+-- (a cleared catalogue match), distinct from `NULL`/`NULL` (never matched at
+-- all); the CHECKs' `brand_source is not null and` before each `in (...)` is
 -- load-bearing, not decoration — see their own comment below.
 CREATE TYPE "public"."brand_source" AS ENUM('auto', 'manual', 'none');--> statement-breakpoint
 CREATE TABLE "brand_aliases" (

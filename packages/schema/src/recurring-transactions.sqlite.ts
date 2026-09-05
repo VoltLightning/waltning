@@ -43,10 +43,10 @@ export const recurringTransactionsColumns = () => ({
 });
 
 /**
- * Round 1's M1 — `recurring_transactions_brand_shape` was missing here
- * entirely: SQLite had the two columns (a bare `ALTER TABLE … ADD`,
- * `0010_schema.sql`) with nothing enforcing their pairing, while Postgres
- * refused it from the start (`packages/db/src/schema.ts`). §14.4b names no
+ * `recurring_transactions_brand_shape` — the same pairing
+ * `packages/db/src/schema.ts` enforces on Postgres. SQLite has no `ALTER
+ * TABLE … ADD CONSTRAINT`, so it is `0010_schema.sql`'s copy-rename-drop
+ * rebuild that ships it rather than two bare columns. §14.4b names no
  * engine exception, and `architecture/14` §14.6 requires the phone to refuse
  * at capture time what the server would refuse — even though no executor
  * writes this table yet this arc, the guarantee is stated where the columns

@@ -1,28 +1,35 @@
 -- `SPEC.md` §14.4b — a transaction (and a recurring rule) may carry a
 -- Waltning-owned brand key, plus the shared `brand_aliases` reference table
--- the bundled catalogue bootstraps into (`packages/db/src/seed/run.ts`).
--- Both new columns are nullable and default to NULL on every existing row,
--- so `*_brand_shape`'s "both null, or both set" holds for the whole table
--- with nothing to repair — no `NOT VALID` dance is needed here, unlike
--- `0011`/`0012`'s tightened numeric CHECKs.
+-- the bundled catalogue bootstraps into
+-- (`packages/db/src/seed/brand-aliases.ts`). Both new columns are nullable
+-- and default to NULL on every existing row, so `*_brand_shape`'s "both
+-- null, or both set" holds for the whole table with nothing to repair — no
+-- `NOT VALID` dance is needed here, unlike `0011`/`0012`'s tightened numeric
+-- CHECKs.
 --
--- Round 1's M1/M4 — edited in place under the owner's own ruling: nothing
--- has been installed from this file yet ("every database is disposable
--- until first install"), so both fixes below fold into this migration
--- rather than adding a new one after it.
+-- **Both tables are rebuilt, not altered.** SQLite has no `ALTER TABLE …
+-- ADD CONSTRAINT`, so a bare `ADD COLUMN` would ship the two columns with
+-- nothing enforcing their pairing while Postgres refused the same row —
+-- §14.4b names no engine exception, and `architecture/14` §14.6 requires the
+-- phone to refuse at capture time what the server would refuse. Both tables
+-- therefore take the copy-rename-drop rebuild, carrying the identical CHECK.
 --
---   M1 — `recurring_transactions_brand_shape` was missing entirely on
---   SQLite (a bare `ALTER TABLE … ADD` with nothing enforcing the pairing,
---   while Postgres refused it from the start). It is now the same
---   copy-rename-drop rebuild `transactions` already needed, carrying the
---   identical CHECK.
+-- **`brand_source` has three values.** `'none'` is a *deliberate* "no brand"
+-- (a cleared catalogue match), distinct from `NULL`/`NULL` (never matched at
+-- all). Both CHECKs below carry the three-value shape: `brand_key IS NULL`
+-- pairs with `brand_source IS NULL OR = 'none'`; `brand_key IS NOT NULL`
+-- pairs only with `brand_source IN ('auto', 'manual')`.
 --
---   M4 — `brand_source` gained a third value, `'none'`, for a *deliberate*
---   "no brand" (a cleared catalogue match) distinct from `NULL`/`NULL`
---   (never matched at all). Both CHECKs below use the three-value shape:
---   `brand_key IS NULL` pairs with `brand_source IS NULL OR = 'none'`;
---   `brand_key IS NOT NULL` pairs only with `brand_source IN ('auto',
---   'manual')`.
+-- **One `PRAGMA foreign_keys` window spans both rebuilds.** `transactions`
+-- has a foreign key into `recurring_transactions` and `transaction_lines`/
+-- `transaction_tags` cascade from `transactions`, so a `DROP TABLE` with
+-- foreign keys enforced silently empties a child table and leaves the
+-- database referentially perfect — a failure that looks like health. The
+-- pragma turns off before the first `CREATE TABLE __new_…` and back on only
+-- after the last `RENAME TO`. (The migrator sets the same pragma on the
+-- connection before it opens its transaction, since SQLite treats the
+-- statement as a no-op inside one; this file states the window it needs so
+-- it reads correctly on its own.)
 CREATE TABLE `brand_aliases` (
 	`alias` text PRIMARY KEY NOT NULL,
 	`brand_key` text NOT NULL,
@@ -94,7 +101,6 @@ CREATE TABLE `__new_transactions` (
 INSERT INTO `__new_transactions`("id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at") SELECT "id", "date", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "counterparty_role", "debt_currency", "debt_amount", "amount_original", "currency", "fx_rate", "fx_rate_estimated", "to_amount", "to_currency", "to_fx_rate", "payee", "note", "is_business", "is_capital", "recurring_id", "occurrence_date", "fee", "counterparty_tax_id", "document_ref", "ksef_id", "ryczalt_rate", "ryczalt_activity", "tax_fx_rate", "tax_fx_date", "tax_fx_source", "source", "external_id", "created_at", "updated_at", "version", "deleted_at" FROM `transactions`;--> statement-breakpoint
 DROP TABLE `transactions`;--> statement-breakpoint
 ALTER TABLE `__new_transactions` RENAME TO `transactions`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE INDEX `transactions_category_idx` ON `transactions` (`category_id`);--> statement-breakpoint
 CREATE INDEX `transactions_counterparty_idx` ON `transactions` (`counterparty_id`);--> statement-breakpoint
 CREATE TABLE `__new_recurring_transactions` (
@@ -131,4 +137,5 @@ CREATE TABLE `__new_recurring_transactions` (
 -- `recurring_transactions` (pre-this-migration) does not have them either.
 INSERT INTO `__new_recurring_transactions`("id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version") SELECT "id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version" FROM `recurring_transactions`;--> statement-breakpoint
 DROP TABLE `recurring_transactions`;--> statement-breakpoint
-ALTER TABLE `__new_recurring_transactions` RENAME TO `recurring_transactions`;
+ALTER TABLE `__new_recurring_transactions` RENAME TO `recurring_transactions`;--> statement-breakpoint
+PRAGMA foreign_keys=ON;

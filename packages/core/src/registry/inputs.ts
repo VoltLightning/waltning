@@ -786,7 +786,7 @@ const transactionPatch = z
     isBusiness: z.boolean().optional(),
     isCapital: z.boolean().optional(),
     /**
-     * `SPEC.md` §14.4b — round 1's M4. Nullable — `null` is an explicit
+     * `SPEC.md` §14.4b. Nullable — `null` is an explicit
      * clear, which the executor (`resolveBrandPatch`,
      * `@waltning/core/brands/match`) writes as `{ brandKey: null,
      * brandSource: "none" }` and treats as **sticky**: a wrong catalogue

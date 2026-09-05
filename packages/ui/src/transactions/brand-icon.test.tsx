@@ -26,7 +26,7 @@ describe("BrandIcon", () => {
 
   it("falls back even for a key this build's catalogue no longer carries", () => {
     // Invented — never a real merchant not already in the catalogue
-    // (CLAUDE.md: placeholders only, round 1's L8).
+    // (CLAUDE.md: placeholders only).
     render(<BrandIcon brandKey="waltco" payee="Waltco" />);
     expect(screen.getByText("W")).toBeDefined();
   });
@@ -34,5 +34,27 @@ describe("BrandIcon", () => {
   it("the fallback for a blank payee is never blank either", () => {
     render(<BrandIcon brandKey={null} payee="" />);
     expect(screen.getByText("?")).toBeDefined();
+  });
+
+  /**
+   * The badge is decorative: the row around it already announces the payee.
+   * Only the web attribute is assertable here — `accessibilityElementsHidden`
+   * (iOS) and `importantForAccessibility` (Android) are native props
+   * react-native-web does not render into the DOM — so this pins the one of
+   * the three a test can see, and `brand-icon.tsx` names why the other two
+   * are there.
+   */
+  it("is hidden from the accessibility tree — aria-hidden on the web target", () => {
+    const { container } = render(<BrandIcon brandKey="orlen" payee="ORLEN" />);
+    const badge = container.querySelector("[aria-hidden]");
+    expect(badge, "the recognised badge carries aria-hidden").not.toBeNull();
+    expect(badge?.textContent).toBe("O");
+  });
+
+  it("the monogram fallback is hidden the same way — the payee text says who it is", () => {
+    const { container } = render(<BrandIcon brandKey={null} payee="Corner Café" />);
+    const badge = container.querySelector("[aria-hidden]");
+    expect(badge, "the fallback badge carries aria-hidden too").not.toBeNull();
+    expect(badge?.textContent).toBe("C");
   });
 });

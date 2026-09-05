@@ -96,7 +96,7 @@ export const WIDGET_SIZE = ["s", "m", "l"] as const;
  * this one has no core-side brand to pin it against either, the same gap
  * that note records.
  *
- * Three values as of round 1's M4: `auto` (matched from the payee offline),
+ * Three values: `auto` (matched from the payee offline),
  * `manual` (asserted by the caller), `none` (a deliberate, sticky "no
  * brand" — see `@waltning/core/brands/match`'s `resolveBrandPatch`).
  */

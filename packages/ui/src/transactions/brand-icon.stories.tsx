@@ -22,10 +22,9 @@ export const Unrecognised: Story = {
 };
 
 /**
- * Round 1's L10 — the two-character mark ("YT"), not the default one-
- * character "O", because a two-glyph mark in a 20px box is the case that
- * could overflow `numberOfLines={1}` and was the one size/mark combination
- * with no baseline pinning it.
+ * The two-character mark ("YT"), not the default one-character "O": a
+ * two-glyph mark in a 20px box is the case that could overflow
+ * `numberOfLines={1}`, so it is the size/mark combination worth a baseline.
  */
 export const WidgetSize: Story = {
   args: { brandKey: "youtube", payee: "YouTube", size: 20 },

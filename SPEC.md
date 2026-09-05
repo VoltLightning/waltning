@@ -4243,11 +4243,15 @@ That third value is what makes a wrong match correctable at all — without it
 a clear falls back to "let the payee decide", the payee still folds to the
 same alias, and the wrong mark returns on the next write, correctable only by
 editing evidence. So the re-match rule is: `update_transaction` re-runs the
-match when `payee` changes **and only while `brand_source` is `NULL` or
-`auto`**. `manual` and `none` are both sticky — a person's own choice of mark, and a person's own
-choice of no mark, are never quietly re-derived out from under them, the same
-way a subscription's `service` is a proposal and never an override in §14.4a.
-A patch that sets `brandKey` to a key always wins and is sourced `manual`.
+match when `payee` **changes** — compared against the value the row already
+holds, not merely present in the patch, so a full-object submit that re-sends
+an unchanged payee resolves nothing — **and only while `brand_source` is
+`NULL` or `auto`**. `manual` and `none` are both sticky: a person's own choice
+of mark, and a person's own choice of no mark, are never quietly re-derived
+out from under them, the same way a subscription's `service` is a proposal and
+never an override in §14.4a. A patch that sets `brandKey` to a key always wins
+and is sourced `manual`; `brandKey` absent — or present as `undefined`, which
+is what spreading an optional field produces — asserts nothing at all.
 
 **The key is Waltning-owned, versioned code — the same reasoning §14.4a
 gives `service` for skipping a `CHECK` against the catalogue.** A small
@@ -4259,20 +4263,23 @@ diacritic-insensitive for the Polish set `ąćęłńóśźż` that function maps
 a general Unicode strip, so `Café` folds to `café` and not `cafe`) and looked
 up exactly against the catalogue's own folded aliases. That reach is a named
 limit rather than a general claim: it covers an ASCII-and-Polish catalogue and
-stops covering the day an alias needs a diacritic outside that set. No substring match, no network, no logo CDN
-— the identical reasoning §14.4a states for its own icons. A `brand_key`
-asserted by a caller is validated against this same catalogue at the
-contract boundary (`create_transaction`'s and `update_transaction`'s Zod
-schemas) — absent, or a member of it, is the whole of "a valid pair".
+stops covering the day an alias needs a diacritic outside that set. No
+substring match, no network, no logo CDN — the identical reasoning §14.4a
+states for its own icons. A `brand_key` asserted by a caller is validated
+against this same catalogue at the contract boundary (`create_transaction`'s
+and `update_transaction`'s Zod schemas) — absent, or a member of it, is the
+whole of "a valid pair".
 
 **`brand_aliases` is the durable, shared record of the same catalogue** —
 one row per normalised alias, primary-keyed on the alias itself, which is
 what makes "one non-blank alias wins" a property of the key rather than a
 check layered on top. It is bootstrapped from the bundled catalogue under
 §14.6's rule for reference data — `ON CONFLICT DO NOTHING`, never restored
-over an edit, so a hand-pointed alias survives every later `db:seed` — nothing writes to it beyond that seed this arc, since no rule engine
-or admin surface exists yet to add an alias of its own; it exists so one
-does not have to invent a table the day it does.
+over an edit, so a hand-pointed alias survives every later `db:seed`, the
+same insert `currencies` gets from the same seed. Nothing writes to it beyond
+that seed this arc, since no rule engine or admin surface exists yet to add
+an alias of its own; it exists so one does not have to invent a table the day
+it does.
 
 **Nothing reads it either, today.** The offline matcher
 (`brands/match.ts`) resolves a payee against `BRAND_CATALOG`'s own in-memory
@@ -4296,10 +4303,12 @@ wiring lands on without another transaction-facing change. Renders on S04's
 Recent list, S09's hero (beside the account line — `FieldsCard` draws every
 field through one generic row and singling out Payee for an icon would be
 the special case that component exists to avoid), S10's ledger, and S13's
-counterparty history (the same `TransactionRow`); a screen
-that has not been updated to pass `brandKey` draws no icon at all rather than
-a fallback monogram on every row, which would read as "recognised nothing"
-on a screen that never asked.
+counterparty history (the same `TransactionRow`); a screen that has not been
+updated to pass `brandKey` draws no icon at all rather than a fallback
+monogram on every row, which would read as "recognised nothing" on a screen
+that never asked. The badge is decorative on all three targets — hidden from
+the accessibility tree rather than labelled, because the payee text beside it
+already says who this is.
 
 ### 14.5 Dashboard layout
 

@@ -30,8 +30,8 @@ afterAll(async () => {
 
 describe("recurring_transactions_brand_shape", () => {
   /**
-   * Round 1's M4 — this is the exact case the "`brand_source is not null
-   * and` is load-bearing" comment (`packages/db/src/schema.ts`) exists for:
+   * The exact case the "`brand_source is not null and` is load-bearing"
+   * comment (`packages/db/src/schema.ts`) exists for:
    * a CHECK that evaluates to `NULL` (not `false`) is admitted, not
    * refused, so a `brand_key` with no `brand_source` at all is the row a
    * naive three-value CHECK would let straight through.
@@ -58,7 +58,7 @@ describe("recurring_transactions_brand_shape", () => {
     ).rejects.toThrow(/recurring_transactions_brand_shape/);
   });
 
-  /** A `brand_key` paired with `'none'` is refused too — `'none'` names a row with no key, by definition. */
+  /** A `brand_key` paired with `'none'` is refused as well — `'none'` names a row with no key, by definition. */
   it("refuses a brand_key paired with 'none'", async () => {
     await expect(
       s.sql`insert into recurring_transactions

@@ -2,9 +2,11 @@ import { pgKit as k } from "./kit.ts";
 
 /**
  * `SPEC.md` §14.4b — the durable record of `@waltning/core/brands/catalog`'s
- * bundled aliases, bootstrapped the same way `currencies` is
- * (`architecture/14` §14.6: *"reference data is bootstrapped, never
- * restored"*, `ON CONFLICT DO NOTHING`). Nothing writes here beyond that seed
+ * bundled aliases, bootstrapped the same way `currencies` is: both seeds
+ * insert `ON CONFLICT DO NOTHING` (`packages/db/src/seed/brand-aliases.ts`
+ * and `seed/currencies.ts`), so `architecture/14` §14.6's *"reference data is
+ * bootstrapped, never restored"* is what the code does and not only what this
+ * comment says. Nothing writes here beyond that seed
  * this arc — no `create_brand_alias` operation exists — so this table is
  * ready for a future admin/rule write path without being one itself yet.
  *

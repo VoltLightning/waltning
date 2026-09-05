@@ -286,7 +286,7 @@ describe("brand recognition (§14.4b)", () => {
           amountOriginal: "10",
           currency: PLN,
           // Invented — never a real merchant not already in the catalogue
-          // (CLAUDE.md: placeholders only, round 1's L8).
+          // (CLAUDE.md: placeholders only).
           payee: "Waltco",
           brandKey: "waltco",
         },
@@ -305,6 +305,70 @@ describe("brand recognition (§14.4b)", () => {
     const after = readTxn();
     expect(after?.brandKey).toBe("orlen");
     expect(after?.brandSource).toBe("auto");
+  });
+
+  /**
+   * §14.4b re-runs the match *"when `payee` changes"* — a patch that re-sends
+   * the payee it already read, which is what a form doing a full-object
+   * submit does, is not a change and must resolve nothing.
+   *
+   * The row is set up in the one state where the two readings differ: a
+   * payee that folds to a catalogue alias with both brand columns `NULL` —
+   * what a row synced from a build whose catalogue was narrower looks like.
+   * A presence-based gate re-matches it into `orlen`/`auto` on an unrelated
+   * edit; a value-based one leaves it exactly as the writer left it.
+   */
+  it("a patch re-sending the same payee does not re-match — the gate is a change, not presence", () => {
+    const created = readTxn();
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({ payee: "ORLEN", brandKey: null, brandSource: null })
+      .where(eq(transactions.id, TXN))
+      .run();
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: created?.version ?? 0,
+        patch: { payee: "ORLEN", note: "an unrelated edit" },
+      },
+    });
+    const after = readTxn();
+    expect(after?.note).toBe("an unrelated edit");
+    expect(after?.brandKey, "the payee did not change, so nothing was resolved").toBeNull();
+    expect(after?.brandSource).toBeNull();
+  });
+
+  /**
+   * `{ brandKey: undefined }` is what a caller spreading an optional field
+   * builds. It asserts nothing — reading it as "the patch touches brandKey"
+   * would make an unrelated edit re-resolve a column the writer never named.
+   */
+  it("an undefined brandKey is not a touch — the same row is left alone", () => {
+    const created = readTxn();
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({ payee: "ORLEN", brandKey: null, brandSource: null })
+      .where(eq(transactions.id, TXN))
+      .run();
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: created?.version ?? 0,
+        patch: { brandKey: undefined, note: "still unrelated" },
+      },
+    });
+    const after = readTxn();
+    expect(after?.note).toBe("still unrelated");
+    expect(after?.brandKey).toBeNull();
+    expect(after?.brandSource).toBeNull();
   });
 
   it("re-matches a patched payee when the row carries an 'auto' match already", () => {
@@ -358,11 +422,10 @@ describe("brand recognition (§14.4b)", () => {
   });
 
   /**
-   * Round 1's M4 — a wrong catalogue match used to be uncorrectable:
-   * clearing `brandKey` with `null` fell straight back through the same
-   * match against a payee that still folds to a catalogue alias. `"none"`
-   * is the fix, and it is sticky — the whole point of clearing a match is
-   * that it does not come straight back.
+   * §14.4b's clear. `brandKey: null` writes `brand_source 'none'` rather
+   * than falling back through the match, because the payee still folds to a
+   * catalogue alias and the whole point of clearing a wrong match is that it
+   * does not come straight back on the next write.
    */
   it("clearing brandKey with null is a deliberate, sticky 'no brand' — it does not re-match", () => {
     const before = readTxn();

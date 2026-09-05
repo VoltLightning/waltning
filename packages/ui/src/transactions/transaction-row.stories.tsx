@@ -50,7 +50,7 @@ export const UnrecognisedBrand: Story = {
 
 /**
  * The column. This is the story that shows whether the figures line up —
- * and, per round 1's M5, whether the *identity* column does too: every
+ * and whether the *identity* column does too: every
  * shipped caller (`ledger-screen.tsx`, `today-screen.tsx` through
  * `TransactionList`, `counterparty-detail-screen.tsx`) passes `brandKey` for
  * every row it reads, `null` included — a read never omits the field, it

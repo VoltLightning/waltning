@@ -1517,13 +1517,12 @@ describe("a constraint declared in the schema is present on the device", () => {
   });
 
   /**
-   * Round 1's M1 — `recurring_transactions_brand_shape` on the device.
-   * `SPEC.md` §14.4b names no engine exception and `architecture/14` §14.6
-   * requires the phone to refuse at capture time what the server would
-   * refuse, but SQLite got the two columns through a bare `ALTER TABLE …
-   * ADD` (no `ADD CONSTRAINT` exists there) and so got no CHECK at all,
-   * while Postgres refused the same row from the start. `0010_schema`
-   * rebuilds the table for it; this is the break that proves the rebuild
+   * `recurring_transactions_brand_shape` on the device. `SPEC.md` §14.4b
+   * names no engine exception and `architecture/14` §14.6 requires the phone
+   * to refuse at capture time what the server would refuse — but SQLite has
+   * no `ALTER TABLE … ADD CONSTRAINT`, so the pairing is only enforced
+   * because `0010_schema` rebuilds the table copy-rename-drop rather than
+   * adding two bare columns. This is the break that proves the rebuild
    * shipped, against the real chain and the real file.
    *
    * Raw SQL rather than the query builder, for `seedTransaction`'s own
@@ -1571,10 +1570,10 @@ describe("a constraint declared in the schema is present on the device", () => {
 
   /**
    * `ddl.ts` is output: it is only correct as long as somebody ran `pnpm
-   * ledger:generate` after touching a table. A fourteenth shared table added to
-   * `packages/schema` without regenerating would compile, query cleanly against
-   * a scratch database drizzle built from the same objects, and be missing from
-   * the phone. Comparing the migrated file against the schema modules the
+   * ledger:generate` after touching a table. A seventeenth shared table added
+   * to `packages/schema` without regenerating would compile, query cleanly
+   * against a scratch database drizzle built from the same objects, and be
+   * missing from the phone. Comparing the migrated file against the schema modules the
    * generator reads is what turns that from silent into red.
    *
    * It compares **against the schema, not against the `.sql` on disk**. The
@@ -1644,10 +1643,11 @@ describe("a constraint declared in the schema is present on the device", () => {
    * -1)` stops one short of whichever migration is currently last, and the
    * chain's last step has been a `transactions` rebuild since `0008_schema`
    * (which added `transactions_debt_amount_requires_currency`, the CHECK this
-   * test still asserts by name below) — most recently `0010_schema`
-   * (round 1's L2: this comment named `0008_schema` specifically, which
-   * silently stopped being the last step the moment `0010_schema` landed,
-   * and nothing here flagged the drift).
+   * test still asserts by name below) — most recently `0010_schema`. The
+   * `slice` deliberately carries no migration number: pinning one is how this
+   * test would silently retarget the day a later rebuild lands, which is
+   * exactly what happened to the sentence above when `0010_schema` replaced
+   * `0008_schema` as the last step.
    */
   it("keeps a child row through the transactions rebuild, and ships the new CHECK", () => {
     const ledger = openAt("rebuild-fk");

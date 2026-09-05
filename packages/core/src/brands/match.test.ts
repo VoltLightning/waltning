@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fold } from "../capture/names.ts";
 import { type CurrentBrand, matchBrand, resolveBrand, resolveBrandPatch } from "./match.ts";
 
 describe("matchBrand", () => {
@@ -12,7 +13,7 @@ describe("matchBrand", () => {
     expect(matchBrand("YouTube Premium")).toBe("youtube");
   });
 
-  /** Round 1's L6 — internal whitespace is collapsed before the fold, so a doubled space does not defeat an otherwise exact match. */
+  /** Internal whitespace is collapsed before the fold, so a doubled space does not defeat an otherwise exact match. */
   it("collapses internal whitespace before matching", () => {
     expect(matchBrand("YouTube  Premium")).toBe("youtube");
     expect(matchBrand("YouTube   Premium")).toBe("youtube");
@@ -31,8 +32,15 @@ describe("matchBrand", () => {
     expect(matchBrand("   ")).toBeUndefined();
   });
 
-  /** Round 1's L6 — `fold` only maps Polish diacritics, so a non-Polish accent like French "é" survives it. Named here so the limit is a test, not a surprise. */
+  /**
+   * `fold` maps only the Polish set, so a non-Polish accent like French "é"
+   * survives it. Asserted on `fold`'s *own output*, not only on `matchBrand`
+   * missing: neither "café" nor "cafe" is a catalogue alias, so a matcher
+   * that did strip the accent would return `undefined` here too and the test
+   * would pass while the documented limit had silently moved.
+   */
   it("does not strip a non-Polish diacritic — a named limit, not a bug", () => {
+    expect(fold("Café")).toBe("café");
     expect(matchBrand("Café")).toBeUndefined();
   });
 });
@@ -60,7 +68,7 @@ describe("resolveBrand", () => {
   });
 });
 
-/** Round 1's M4 — every transition `update_transaction` can produce. */
+/** Every transition `update_transaction` can produce. */
 describe("resolveBrandPatch", () => {
   const NEVER_MATCHED: CurrentBrand = { brandKey: null, brandSource: null };
   const AUTO: CurrentBrand = { brandKey: "orlen", brandSource: "auto" };
@@ -69,7 +77,7 @@ describe("resolveBrandPatch", () => {
 
   it("an explicit brandKey always wins, sourced manual", () => {
     for (const current of [NEVER_MATCHED, AUTO, MANUAL, NONE]) {
-      expect(resolveBrandPatch(current, "anything", true, "youtube")).toEqual({
+      expect(resolveBrandPatch(current, "anything", "youtube")).toEqual({
         brandKey: "youtube",
         brandSource: "manual",
       });
@@ -78,7 +86,7 @@ describe("resolveBrandPatch", () => {
 
   it("an explicit null clears to a sticky 'none', regardless of the payee", () => {
     for (const current of [NEVER_MATCHED, AUTO, MANUAL, NONE]) {
-      expect(resolveBrandPatch(current, "ORLEN", true, null)).toEqual({
+      expect(resolveBrandPatch(current, "ORLEN", null)).toEqual({
         brandKey: null,
         brandSource: "none",
       });
@@ -86,31 +94,45 @@ describe("resolveBrandPatch", () => {
   });
 
   it("re-matches a changed payee when the current source is null (never matched)", () => {
-    expect(resolveBrandPatch(NEVER_MATCHED, "ORLEN", false, undefined)).toEqual({
+    expect(resolveBrandPatch(NEVER_MATCHED, "ORLEN", undefined)).toEqual({
       brandKey: "orlen",
       brandSource: "auto",
     });
   });
 
   it("re-matches a changed payee when the current source is 'auto'", () => {
-    expect(resolveBrandPatch(AUTO, "YouTube", false, undefined)).toEqual({
+    expect(resolveBrandPatch(AUTO, "YouTube", undefined)).toEqual({
       brandKey: "youtube",
       brandSource: "auto",
     });
   });
 
   it("re-matching to nothing clears both fields to null, not 'none'", () => {
-    expect(resolveBrandPatch(AUTO, "Corner Café", false, undefined)).toEqual({
+    expect(resolveBrandPatch(AUTO, "Corner Café", undefined)).toEqual({
       brandKey: null,
       brandSource: null,
     });
   });
 
   it("never re-matches when the current source is 'manual' — sticky", () => {
-    expect(resolveBrandPatch(MANUAL, "ORLEN", false, undefined)).toBeUndefined();
+    expect(resolveBrandPatch(MANUAL, "ORLEN", undefined)).toBeUndefined();
   });
 
   it("never re-matches when the current source is 'none' — sticky", () => {
-    expect(resolveBrandPatch(NONE, "ORLEN", false, undefined)).toBeUndefined();
+    expect(resolveBrandPatch(NONE, "ORLEN", undefined)).toBeUndefined();
+  });
+
+  /**
+   * `{ brandKey: undefined }` is "this patch has no opinion", never a clear —
+   * a caller spreading an optional field builds exactly that object, and
+   * reading it as an assertion would write `manual`/`undefined` into a column
+   * pair the CHECK exists to keep honest.
+   */
+  it("an undefined brandKey is no assertion at all — the payee decides", () => {
+    expect(resolveBrandPatch(NEVER_MATCHED, "ORLEN", undefined)).toEqual({
+      brandKey: "orlen",
+      brandSource: "auto",
+    });
+    expect(resolveBrandPatch(MANUAL, "ORLEN", undefined)).toBeUndefined();
   });
 });

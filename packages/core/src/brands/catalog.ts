@@ -33,16 +33,14 @@
  * cannot import schema; see `registry/inputs.ts`'s own note on
  * `ACCOUNT_KIND`).
  *
- * **Three values, not two — round 1's M4.** `"auto"` (matched from the payee
- * offline, at write time — the value this file called `"catalog"` through
- * round 0) and `"manual"` (asserted by the caller) both pair with a non-null
- * `brand_key`. `"none"` is the third state this round adds: a *deliberate*
- * "no brand", written when a person clears a wrong catalogue match — paired
- * with a `null` key, and — unlike a row that was simply never matched, which
- * is `null`/`null` — sticky against a later payee edit, the same way
- * `"manual"` already was. Without it, clearing a match that a payee still
- * folds to had no way to stay cleared (`match.ts`'s own doc on
- * `resolveBrand`).
+ * **Three values, not two.** `"auto"` (matched from the payee offline, at
+ * write time) and `"manual"` (asserted by the caller) both pair with a
+ * non-null `brand_key`. `"none"` is a *deliberate* "no brand", written when a
+ * person clears a wrong catalogue match — paired with a `null` key, and —
+ * unlike a row that was simply never matched, which is `null`/`null` — sticky
+ * against a later payee edit, the same way `"manual"` is. Without it,
+ * clearing a match that a payee still folds to has no way to stay cleared
+ * (`match.ts`'s own doc on `resolveBrandPatch`).
  */
 export const BRAND_SOURCE = ["auto", "manual", "none"] as const;
 export type BrandSource = (typeof BRAND_SOURCE)[number];
@@ -50,7 +48,7 @@ export type BrandSource = (typeof BRAND_SOURCE)[number];
 export type BrandCatalogEntry = {
   /** Waltning-owned, stable, lower-case, `[a-z0-9_]+`. Never renamed once shipped — `create_transaction`'s own `brand_key` values are permanent. */
   key: string;
-  /** Display name — what `BrandIcon`'s accessibility label and any future editor show. */
+  /** Display name — what a future brand editor shows. Not `BrandIcon`'s accessible name: the badge is decorative and hidden from the accessibility tree, since the payee beside it already says who this is. */
   name: string;
   /**
    * Payee text this brand is recognised from, already folded
@@ -77,10 +75,13 @@ export const BRAND_CATALOG: readonly BrandCatalogEntry[] = [
     key: "youtube",
     name: "YouTube",
     aliases: ["youtube", "youtube premium"],
-    // Not the brand's own #FF0000 — that fails WCAG AA (3.99:1) against the
-    // white mark `BrandIcon` sets on it (`design-system/10`'s contrast gate,
-    // caught by the visual suite's own axe-core pass). Darkened just enough
-    // to clear 4.5:1 while staying recognisably the same red.
+    // Not the brand's own #FF0000 — that fails WCAG AA (4.00:1) against the
+    // white mark `BrandIcon` sets on it (`design-system/10`'s contrast gate).
+    // Darkened just enough to clear 4.5:1 while staying recognisably the same
+    // red. The enforcement is `catalog.test.ts`'s own contrast assertion,
+    // which computes the ratio for *every* entry against `textOnAccent` in
+    // both themes — not the visual suite's axe-core pass, which sees only
+    // what a story happens to render.
     accent: "#CC0000",
     mark: "YT",
   },

@@ -77,19 +77,25 @@ export function BrandIcon({ brandKey, payee, size = 24 }: BrandIconProps) {
 }
 
 /**
- * Round 1's L9 — this badge is never its own accessible stop. It used to
- * carry `accessibilityLabel={entry.name}` (or `payee`), which duplicated
- * whatever the row around it already announces — `TransactionRow` labels
- * its own tappable row with the payee, so a screen reader read "ORLEN,
- * ORLEN" — and gave a blank payee's `?` fallback no label at all, since
- * `payee || undefined` is `undefined` for `""`. Hidden from the
- * accessibility tree entirely, on both platforms, is the fix for both: the
- * mark is decorative everywhere it is used today (S04/S09/S10, S13), and
- * the payee text beside it already carries the words a screen reader needs.
+ * This badge is never its own accessible stop. The mark is decorative
+ * everywhere it appears today (S04, S09, S10, S13) and the payee text beside
+ * it already carries the words a screen reader needs — an `accessibilityLabel`
+ * here would make the row announce "ORLEN, ORLEN", and would leave a blank
+ * payee's `?` fallback with nothing to announce at all.
+ *
+ * **All three targets, because all three ship.** iOS reads
+ * `accessibilityElementsHidden` and Android reads
+ * `importantForAccessibility` — the pair `toast.tsx`'s status mark carries,
+ * with `"no-hide-descendants"` rather than its `"no"` because this badge has
+ * a `<Text>` child that would otherwise stay exposed on its own — and the web
+ * (react-native-web) reads `aria-hidden`, the attribute `button.tsx`'s
+ * spinner uses. A badge carrying only one of the three is hidden on one
+ * platform and announced twice on the others.
  */
 const DECORATIVE = {
-  accessible: false,
+  accessibilityElementsHidden: true,
   importantForAccessibility: "no-hide-descendants",
+  "aria-hidden": true,
 } as const;
 
 const useStyles = makeStyles(() => ({

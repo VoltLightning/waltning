@@ -1,7 +1,8 @@
 /**
- * Round 1's M2 — the seed must never restore an edited alias, the same
- * `currencies` guarantee `architecture/14` §14.6 states and this file's own
- * comment now actually matches (an earlier version upserted instead).
+ * `architecture/14` §14.6 — *"reference data is bootstrapped, never
+ * restored"*. The same guarantee `currencies.test.ts` proves for the currency
+ * seed, against real Postgres: edit a row the way a person would, re-run the
+ * seed over it, and the edit is still there.
  */
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
