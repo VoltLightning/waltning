@@ -116,7 +116,7 @@ const TWENTY: AccountPickerAccount[] = [
     groupId: null,
     balance: toMoney("340"),
   },
-  ...Array.from({ length: 13 }, (_, i) => ({
+  ...Array.from({ length: 12 }, (_, i) => ({
     id: `acc-extra-${i}`,
     name: `Household ${i + 1} · PLN`,
     currency: "PLN",
@@ -174,7 +174,28 @@ export const WithLastUsed: Story = {
   },
 };
 
-/** No rate held for BYN — shown, muted, and it says why rather than disappearing (S05). */
+/**
+ * No rate held for BYN — shown, muted, and it says why rather than
+ * disappearing (S05). `TWENTY`'s own BYN tile sits in the CASH group, below
+ * the list's `maxHeight` scroll cut, so its baseline was indistinguishable
+ * from `TwentyAccounts`; this fixture is four accounts total — no scroll cut
+ * to clear — so the tile and its "needs a rate" caption land inside the
+ * captured frame regardless of which group it sits in.
+ */
+const UNCAPTURABLE: AccountPickerAccount[] = [
+  {
+    id: "acc-cash-byn",
+    name: "Cash · BYN",
+    currency: "BYN",
+    decimals: 2,
+    kind: "cash",
+    capturable: false,
+    ownership: "own",
+    groupId: "grp-cash",
+  },
+  ...FEW,
+];
+
 export const Uncapturable: Story = {
-  args: { accounts: TWENTY, groups: GROUPS },
+  args: { accounts: UNCAPTURABLE, groups: GROUPS },
 };

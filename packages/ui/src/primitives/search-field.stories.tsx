@@ -3,6 +3,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { userEvent, waitFor, within } from "storybook/test";
 import { SearchField } from "./search-field";
 
 function noop() {}
@@ -26,4 +27,28 @@ export const WithText: Story = {
 /** The live-region line — visible, not only announced. */
 export const WithResults: Story = {
   args: { value: "coffee", onClear: noop, resultCount: 4 },
+};
+
+/**
+ * H2's fix: the ring encloses the whole field — `[icon][input][×]` — not
+ * only the searchbox that receives focus.
+ */
+export const Focused: Story = {
+  args: { value: "coffee", onClear: noop },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const searchbox = await canvas.findByRole("searchbox", { name: "Search" });
+    await userEvent.click(searchbox);
+    // `focused` is React state on the wrapper (`useInteraction`), set from
+    // the input's own `onFocus` — one render tick behind the click's own DOM
+    // focus, which lands the instant `userEvent.click` resolves. Screenshotting
+    // on that instant catches the browser's own native ring on the input
+    // alone, before the wrapper's ring has painted.
+    const wrapper = searchbox.parentElement;
+    await waitFor(() => {
+      if (wrapper === null || getComputedStyle(wrapper).outlineStyle === "none") {
+        throw new Error("field wrapper has not taken the focus ring yet");
+      }
+    });
+  },
 };

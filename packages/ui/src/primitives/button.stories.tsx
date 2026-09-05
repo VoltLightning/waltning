@@ -21,12 +21,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Primary: Story = {};
+export const Primary: Story = { args: { variant: "primary" } };
 export const Secondary: Story = { args: { variant: "secondary" } };
 export const Ghost: Story = { args: { variant: "ghost" } };
 export const Danger: Story = { args: { variant: "danger", label: "Delete" } };
 
-export const Disabled: Story = { args: { disabled: true } };
+/**
+ * `primary`, so the baseline shows the disabled treatment of the solid fill —
+ * the variant most likely to be disabled in the app (a submit button waiting
+ * on a required field), and the one whose contrast loss is easiest to miss.
+ */
+export const Disabled: Story = { args: { disabled: true, variant: "primary" } };
 
 /**
  * **Pressing it calls `onPress` once.** The floor of the component, and the
@@ -34,7 +39,7 @@ export const Disabled: Story = { args: { disabled: true } };
  * inspecting what it rendered.
  */
 export const Pressed: Story = {
-  args: { onPress: fn() },
+  args: { onPress: fn(), variant: "primary" },
   play: async ({ args, canvasElement }) => {
     await userEvent.click(await within(canvasElement).findByText("Save"));
     await expect(args.onPress).toHaveBeenCalledTimes(1);
@@ -47,7 +52,7 @@ export const Pressed: Story = {
  * it was guarding happens twice.
  */
 export const DisabledDoesNotFire: Story = {
-  args: { disabled: true, onPress: fn() },
+  args: { disabled: true, onPress: fn(), variant: "primary" },
   play: async ({ args, canvasElement }) => {
     await userEvent.click(await within(canvasElement).findByText("Save"));
     await expect(args.onPress).not.toHaveBeenCalled();
@@ -58,8 +63,11 @@ export const DisabledDoesNotFire: Story = {
  * **The spinner replaces the label and the width does not change** — stated in
  * `ButtonProps`, and a claim only a render can check. A button that resizes
  * when pressed moves everything beside it.
+ *
+ * `primary`, so the baseline shows the loading treatment of the solid fill —
+ * the variant a submit action actually uses while it waits on a write.
  */
-export const Loading: Story = { args: { loading: true } };
+export const Loading: Story = { args: { loading: true, variant: "primary" } };
 
 const VARIANTS: readonly ButtonVariant[] = ["primary", "secondary", "ghost", "danger"];
 
@@ -69,6 +77,7 @@ const VARIANTS: readonly ButtonVariant[] = ["primary", "secondary", "ghost", "da
  * once.
  */
 export const AllVariants: Story = {
+  args: { variant: "primary" },
   render: AllVariantsDemo,
 };
 
@@ -88,6 +97,7 @@ function AllVariantsDemo() {
  * than a preference, and the row is where an off-by-one shows.
  */
 export const Sizes: Story = {
+  args: { variant: "primary" },
   render: SizesDemo,
 };
 
@@ -95,9 +105,9 @@ function SizesDemo() {
   const styles = useStyles();
   return (
     <View style={styles.row}>
-      <Button label="sm" onPress={noop} size="sm" />
-      <Button label="md" onPress={noop} size="md" />
-      <Button label="lg" onPress={noop} size="lg" />
+      <Button label="sm" onPress={noop} size="sm" variant="primary" />
+      <Button label="md" onPress={noop} size="md" variant="primary" />
+      <Button label="lg" onPress={noop} size="lg" variant="primary" />
     </View>
   );
 }

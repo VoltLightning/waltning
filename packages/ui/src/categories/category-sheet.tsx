@@ -636,8 +636,17 @@ const useStyles = makeStyles((theme) => ({
   },
   /** ≥ 0.85 — a confirmed match, the same accent green every other pick uses. */
   proposalConfident: { borderColor: theme.accentFillBorder, backgroundColor: theme.accentFill },
-  /** < 0.85 — P4's amber: asserted rather than observed. */
-  proposalLow: { borderColor: theme.assertedBorder, backgroundColor: theme.assertedFill },
+  /**
+   * < 0.85 — P4's amber marks the proposal itself (the caption's amber text,
+   * and the confidence `Tag`'s own `warn` fill, `assertedFill`). The container
+   * took that same token for its own background, so the "60%" badge sat on a
+   * fill indistinguishable from its own. `subtleFill` (`#f1ebe0`) turned out to
+   * be close enough to `assertedFill` (`#f4ecdf`) — both warm creams in this
+   * palette — that the badge was still nearly invisible; `surface` (white)
+   * is the container fill everywhere else a `Tag` sits on a card, and gives
+   * the badge the contrast the amber border alone does not.
+   */
+  proposalLow: { borderColor: theme.assertedBorder, backgroundColor: theme.surface },
   proposalHovered: { backgroundColor: theme.hoverFill },
   proposalKicker: { color: theme.assertedText, ...text.ui("kicker") },
   proposalKickerConfident: { color: theme.accentText },

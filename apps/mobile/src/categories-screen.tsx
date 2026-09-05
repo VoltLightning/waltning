@@ -22,6 +22,7 @@ import type {
 import { useCategoryReferenceCounts } from "@waltning/client/ledger/use-category-reference-counts";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import type { FieldError } from "@waltning/client/transport/field-errors";
 import { id as brandId } from "@waltning/core/id";
 import { CategoryActionsSheet } from "@waltning/ui/categories/category-actions-sheet";
 import { CategoryTree, type CategoryTreeNode } from "@waltning/ui/categories/category-tree";
@@ -139,9 +140,23 @@ export default function CategoriesScreen() {
   // one `fieldErrors` entry) — `couldNotSave` only guards the shape, never
   // shown in practice.
   const couldNotSave = t("common.couldNotSave");
+  // Resolves a known `messageKey` through `useT()` first — `packages/client`
+  // is not a component and cannot call it itself — falling back to the raw
+  // `message` for a refusal that carries no key. Same shape
+  // `account-editor-screen.tsx`'s `resolveFieldErrorMessage` uses.
   const messageOf = useCallback(
-    (fieldErrors: readonly { message: string }[]) => fieldErrors[0]?.message ?? couldNotSave,
-    [couldNotSave],
+    (fieldErrors: readonly FieldError[]) => {
+      const error = fieldErrors[0];
+      if (error === undefined) return couldNotSave;
+      if (error.messageKey === "categories.moveAcrossKindsExpense") {
+        return t("categories.moveAcrossKindsExpense", { name: error.params?.["name"] ?? "" });
+      }
+      if (error.messageKey === "categories.moveAcrossKindsIncome") {
+        return t("categories.moveAcrossKindsIncome", { name: error.params?.["name"] ?? "" });
+      }
+      return error.message;
+    },
+    [couldNotSave, t],
   );
 
   const nodes: readonly CategoryTreeNode[] = useMemo(

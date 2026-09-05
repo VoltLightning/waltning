@@ -32,6 +32,6 @@ export const Default: Story = {};
 export const Refused: Story = {
   args: {
     categoryName: "Salary",
-    error: '"Food" is a expense group — refused across kinds',
+    error: "Food belongs to the expense side — a category cannot move across kinds",
   },
 };

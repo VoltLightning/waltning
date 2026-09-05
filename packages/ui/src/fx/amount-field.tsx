@@ -52,8 +52,13 @@ export type AmountFieldFieldProps = {
 export type AmountFieldHeroProps = {
   variant: "hero";
   label: string;
-  /** Same "not yet known" rule as the field variant — see there. */
-  currency?: string;
+  /**
+   * Same "not yet known" rule as the field variant — see there. `|
+   * undefined` (rather than plain `currency?: string`) so a story can state
+   * "explicitly no currency" against `exactOptionalPropertyTypes` — a story
+   * that omits the key instead has meta's own default leak through.
+   */
+  currency?: string | undefined;
   /**
    * The raw string a `Keypad` edits (`"48,90"`) — the canonical comma,
    * regardless of locale. Rendered through the locale's own decimal mark;
@@ -202,7 +207,17 @@ function EditableAmountField({
   return (
     <View style={styles.block}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.field, focused ? styles.focused : null, error ? styles.invalid : null]}>
+      <View
+        style={[
+          styles.field,
+          error ? styles.invalid : null,
+          // §2.6: the ring goes on the field — `[input][affix]` — not the
+          // `TextInput` alone, the same rule `search-field.tsx`'s fix states.
+          // An errored field's ring is the danger colour instead of the
+          // ordinary one.
+          focused ? (error ? styles.focusedError : styles.focused) : null,
+        ]}
+      >
         <TextInput
           accessibilityLabel={label}
           // `decimal-pad` rather than `numeric`: it offers the separator and not
@@ -246,11 +261,31 @@ const useStyles = makeStyles((theme) => ({
     // the column of rendered ones beside it.
     textAlign: "right",
     fontVariant: [...tabularNums],
+    // Suppresses the browser's own native focus ring on this `TextInput` —
+    // without it, focusing the field draws that ring here, on the actual
+    // focused DOM node, bisecting the field instead of enclosing it. The
+    // real ring is `focused`/`focusedError` above, on the wrapper. **Both
+    // properties are required** — see `search-field.tsx`'s own fix: Chromium's
+    // default `outline-style: auto` renders its own native ring at its own
+    // width regardless of an author `outlineWidth: 0`.
+    outlineWidth: 0,
+    outlineStyle: "solid",
   },
   affix: { color: theme.textMuted, ...text.ui("caption") },
+  // **`outlineStyle` is required, not decorative** — see `search-field.tsx`'s
+  // own fix: this `View` never receives real DOM focus, so without naming a
+  // style `outline-style` stays at its CSS-initial `none` and neither ring
+  // ever paints regardless of width or colour.
   focused: {
     outlineWidth: focus.width,
+    outlineStyle: "solid",
     outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
+  focusedError: {
+    outlineWidth: focus.width,
+    outlineStyle: "solid",
+    outlineColor: theme.dangerBorder,
     outlineOffset: focus.offset,
   },
   invalid: { borderColor: theme.dangerBorder },

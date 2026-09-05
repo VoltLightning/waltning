@@ -5,7 +5,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
-import { userEvent, within } from "storybook/test";
+import { userEvent, waitFor, within } from "storybook/test";
 import { AccountRegister, type AccountRegisterAccount } from "./account-register";
 
 function noop() {}
@@ -83,7 +83,25 @@ export const WithShared: Story = { args: { accounts: SHARED } };
 export const WithArchived: Story = {
   args: { accounts: POPULATED, archivedAccounts: ARCHIVED },
   play: async ({ canvasElement }) => {
-    await userEvent.click(await within(canvasElement).findByText("Archived"));
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: "Archived" });
+    await userEvent.click(toggle);
+    await canvas.findByText("Old · PLN");
+    // The row mounts the instant `archivedOpen` flips and carries no
+    // opacity or transform of its own — `ArchivedToggle`'s own comment: a
+    // whole-row fade failed `axe`'s contrast check here. What is still
+    // settling is the *toggle button's* own `usePressScale` (`press-scale.ts`)
+    // easing its `scale` back to 1 after release, on the `Animated.View`
+    // that wraps it (`button.tsx`) — a screenshot taken mid-settle catches
+    // the button a hair smaller than its resting size.
+    const wrapper = toggle.parentElement;
+    await waitFor(() => {
+      if (wrapper === null) throw new Error("button has no Animated.View wrapper");
+      const { transform } = getComputedStyle(wrapper);
+      if (transform !== "none" && transform !== "matrix(1, 0, 0, 1, 0, 0)") {
+        throw new Error("press-scale still settling");
+      }
+    });
   },
 };
 

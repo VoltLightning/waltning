@@ -123,8 +123,18 @@ export function TextField({
         style={[
           styles.input,
           hovered && !disabled && !focused ? styles.inputHovered : null,
-          focused ? styles.inputFocused : null,
-          error === undefined ? null : styles.inputError,
+          // An errored field's ring is the danger colour whether focused or
+          // not (`design-system/03` §3.7) — `inputError` alone carries that
+          // for the resting border, and `inputErrorFocused` carries it for
+          // the ring too, so the danger border is never swamped by the
+          // ordinary green focus ring.
+          error === undefined
+            ? focused
+              ? styles.inputFocused
+              : null
+            : focused
+              ? styles.inputErrorFocused
+              : styles.inputError,
           disabled ? styles.inputDisabled : null,
         ]}
       />
@@ -160,13 +170,27 @@ const useStyles = makeStyles((theme) => ({
     ...text.ui("body"),
   },
   inputHovered: { borderColor: theme.borderStrong },
+  // This `TextInput` is the whole interactive element (unlike `search-field`'s
+  // wrapper), so it does receive real DOM focus — but that only gets it
+  // Chromium's own `outline-style: auto`, which renders the UA's own ring at
+  // the UA's own width and offset, ignoring an author `outlineWidth`/
+  // `outlineOffset` entirely. Naming `outlineStyle: "solid"` is what hands
+  // rendering to those author values instead of the browser's.
   inputFocused: {
     borderColor: theme.borderStrong,
     outlineWidth: focus.width,
+    outlineStyle: "solid",
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
   inputError: { borderColor: theme.dangerBorder },
+  inputErrorFocused: {
+    borderColor: theme.dangerBorder,
+    outlineWidth: focus.width,
+    outlineStyle: "solid",
+    outlineColor: theme.dangerBorder,
+    outlineOffset: focus.offset,
+  },
   inputDisabled: { opacity: 0.45 },
   meta: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
   spacer: { flex: 1 },

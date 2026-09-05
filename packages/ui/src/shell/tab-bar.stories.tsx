@@ -6,7 +6,13 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { TabBar } from "./tab-bar";
-import { CalendarTabIcon, DebtTabIcon, LedgerTabIcon, TodayTabIcon } from "./tab-icons";
+import {
+  CalendarTabIcon,
+  DebtTabIcon,
+  LedgerTabIcon,
+  SettingsTabIcon,
+  TodayTabIcon,
+} from "./tab-icons";
 
 function noop() {}
 
@@ -37,7 +43,7 @@ export const FiveTabs: Story = {
       { name: "ledger", label: "Ledger", icon: <LedgerTabIcon active />, active: true },
       { name: "calendar", label: "Calendar", icon: <CalendarTabIcon />, active: false },
       { name: "debt", label: "Debt", icon: <DebtTabIcon />, active: false },
-      { name: "settings", label: "Settings", icon: <TodayTabIcon />, active: false },
+      { name: "settings", label: "Settings", icon: <SettingsTabIcon />, active: false },
     ],
   },
 };

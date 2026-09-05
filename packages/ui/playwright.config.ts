@@ -59,26 +59,44 @@ export default defineConfig({
   expect: {
     toHaveScreenshot: {
       /**
-       * The two knobs do different jobs, and getting the split wrong makes the
-       * suite pass on a real change — which it did, once, before this comment.
+       * `threshold` is pixelmatch's own per-pixel cutoff, not a fraction of
+       * the frame: a pixel counts as "different" once its YIQ colour delta
+       * exceeds `35215 × threshold²`. At the previous `0.2` that cutoff is
+       * 1,408 — so a `#f4ecdf` → `#ffffff` fill (delta 190) or a full
+       * pre-#77 → post-#77 accent repoint (delta 397) both register as the
+       * *same* pixel, and `maxDiffPixels` never sees them: 73 of this PR's
+       * own 129 re-captured baselines scored **zero** differing pixels
+       * against `threshold: 0.2`. Anti-aliasing is not what `0.2` was
+       * protecting — pixelmatch already excludes anti-aliased edges from the
+       * count on its own (`antialiased()`, `packages/utils/third_party/pixelmatch.js`),
+       * regardless of `threshold` — so loosening it bought nothing but
+       * blindness to colour.
        *
-       * **`threshold` is per-pixel colour distance.** Playwright's default of
-       * `0.2` is far too coarse for a palette: repointing dark `surface` from
-       * `#10251a` to `#1a3326` moves each channel by about ten, lands well
-       * inside `0.2`, and every affected pixel is scored *identical*. The whole
-       * suite passed a deliberate palette break. `0.02` registers it.
+       * **`threshold: 0.02`** (delta cutoff ≈14) is tight enough to catch
+       * both examples above and loose enough to survive real font
+       * anti-aliasing noise between runs on one machine: of this PR's own 129
+       * re-captured baselines, 34 are pixel-for-pixel identical at this
+       * threshold — the same source re-encoded, nothing to see — and none of
+       * the rest differ by more than 4 pixels unless something in the frame
+       * actually changed. The smallest *real* change in that same set (a
+       * fixture's account count going from 21 to 20 — one digit) differs by
+       * 38; the largest (a sheet gaining a whole counterparty row) differs by
+       * over 240,000.
        *
-       * **`maxDiffPixelRatio` is how many pixels may differ at all**, and it
-       * absorbs the thing `threshold` must not: text anti-aliasing, where a few
-       * edge pixels differ enormously between runs on the same machine. Those
-       * are numerous enough to notice and far fewer than 1% of the frame.
+       * **`maxDiffPixels: 50`** sits just above that measured noise ceiling
+       * (4) and below almost every real defect this PR's own re-captures
+       * contain — the one exception being single-character text edits like
+       * the digit above, which `stories.test.tsx`'s own render assertions
+       * already cover; this suite's job is layout and colour, not counting
+       * characters.
        *
-       * So: strict about *how different* a pixel may be, forgiving about *how
-       * many* may be. A colour change repaints a region and fails on count; a
-       * subpixel wobble does not.
+       * Per-story exceptions, if a story's own text genuinely flickers
+       * sub-pixel between runs, belong on that story's own `toHaveScreenshot`
+       * call in `visual/stories.spec.ts` — never here, which is every story
+       * at once.
        */
       threshold: 0.02,
-      maxDiffPixelRatio: 0.01,
+      maxDiffPixels: 50,
       /** The spinner in `Button/Loading` never stops on its own. */
       animations: "disabled",
       caret: "hide",
@@ -115,6 +133,17 @@ export default defineConfig({
     /**
      * Pinned, because a screenshot is a function of viewport. Storybook's
      * default frame would otherwise decide the baselines.
+     *
+     * **This pin was dead.** `projects[0]` used to spread
+     * `...devices["Desktop Chrome"]` a second time into its own `use`, which
+     * carries `devices["Desktop Chrome"]`'s own 1280×720 viewport — a
+     * project's `use` is merged *over* this top-level one, not under it, so
+     * every baseline actually rendered at 1280×720 regardless of what this
+     * object said. 76 of this suite's baselines are exactly 1280×720; the
+     * other 108 distinct frame sizes are `#storybook-root` sized to its
+     * story's own content, which is why they varied at all. The fix is to
+     * let every project inherit this `use` unspread, since there is exactly
+     * one project and nothing left for it to override.
      */
     viewport: { width: 900, height: 600 },
     /**
@@ -124,7 +153,7 @@ export default defineConfig({
     deviceScaleFactor: 1,
   },
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{ name: "chromium" }],
 
   webServer: {
     command: `npx vite preview --outDir storybook-static --port ${PORT} --strictPort`,

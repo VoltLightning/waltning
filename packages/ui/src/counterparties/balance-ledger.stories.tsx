@@ -43,7 +43,7 @@ export const IncompleteFold: Story = {
 
 export const AllSettled: Story = {
   args: {
-    rows: [{ currency: "EUR", balance: toMoney("0.00000000") }],
+    rows: [],
     settlementCurrency: "EUR",
     settlementNet: toMoney("0.00000000"),
   },

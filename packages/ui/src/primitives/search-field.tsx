@@ -132,9 +132,20 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.surface,
     paddingHorizontal: space.x2,
   },
+  // §2.6: the ring goes on the interactive element, which here is the whole
+  // field — `[icon][input][×]` — not the `TextInput` alone. The input keeps
+  // its own `outlineWidth: 0` below so the browser's native focus ring never
+  // draws on the actual focused DOM node underneath this one.
+  //
+  // **`outlineStyle` is required, not decorative.** This `View` never
+  // receives real DOM focus itself — only a focusable element gets the
+  // browser's own `outline-style: auto` for free — so without naming a style
+  // here, `outline-style` stays at its CSS-initial `none` and the outline
+  // never paints, no matter what `outlineWidth`/`outlineColor` say.
   focused: {
     borderColor: theme.borderStrong,
     outlineWidth: focus.width,
+    outlineStyle: "solid",
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
@@ -155,7 +166,23 @@ const useStyles = makeStyles((theme) => ({
     right: 1,
     bottom: 0,
   },
-  input: { flex: 1, color: theme.text, minHeight: touchTarget.min, ...text.ui("body") },
+  // Suppresses the browser's own native focus ring on this `TextInput` —
+  // without it, focusing the field draws that ring *here*, on the actual DOM
+  // node that receives focus, bisecting the field instead of enclosing it.
+  // The real ring is `focused` above, on the wrapper. **Both properties are
+  // required**: Chromium's default `outline-style: auto` renders its own
+  // native ring at its own width regardless of an author `outlineWidth: 0`
+  // — `auto` defers the whole rendering, width included, to the UA. Naming
+  // an actual style (`"solid"`, RN-web's type has no `"none"`) is what makes
+  // the explicit zero width win.
+  input: {
+    flex: 1,
+    color: theme.text,
+    minHeight: touchTarget.min,
+    outlineWidth: 0,
+    outlineStyle: "solid",
+    ...text.ui("body"),
+  },
   clear: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   /** The ×, drawn: two bars crossed — `select.tsx`'s token cross, same construction. */
   clearCross: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },

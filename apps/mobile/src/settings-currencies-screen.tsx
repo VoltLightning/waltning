@@ -442,7 +442,7 @@ export default function SettingsCurrenciesScreen() {
           value={draft.symbol}
           onChangeText={handleChangeSymbol}
         />
-        <Button label={t("common.save")} onPress={handleSaveDraft} />
+        <Button label={t("common.save")} onPress={handleSaveDraft} variant="primary" />
       </BottomSheet>
 
       <BottomSheet
@@ -474,7 +474,7 @@ export default function SettingsCurrenciesScreen() {
               value={String(editDraft.decimals)}
               onChange={handleChangeEditDecimals}
             />
-            <Button label={t("common.save")} onPress={handleSaveEdit} />
+            <Button label={t("common.save")} onPress={handleSaveEdit} variant="primary" />
           </>
         ) : null}
       </BottomSheet>
