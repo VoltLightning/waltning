@@ -35,6 +35,8 @@ const WEEKDAYS: readonly { word: string; index: number }[] = [
 ];
 
 const ISO_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+/** The same shape, global — `isoDateSpans` scans, `ISO_DATE` claims the first. */
+const ISO_DATE_ALL = /\b\d{4}-\d{2}-\d{2}\b/g;
 const DAY_MONTH = /\b(\d{1,2})\.(\d{1,2})\b/;
 
 /** The weekday a bare date falls on — pure calendar math on its own Y/M/D, never a clock read. */
@@ -116,4 +118,38 @@ export function findDate(
   }
 
   return null;
+}
+
+/**
+ * L2 — every `YYYY-MM-DD` token in the text, as spans.
+ *
+ * `findAmount` runs before this module does (`grammar.ts` resolves the amount
+ * first), and a leading ISO date offers it a four-digit number: `2026-08-10
+ * 48.90 cash coffee` bound `2026` as the amount, the date span then overlapped
+ * a claim already made, and the line silently landed on *today* for `2026 PLN`.
+ * The amount scanner skips these spans instead, so the first number left is
+ * the one a person typed as money.
+ *
+ * **Exactly what `findDate` above would claim, by making the same call.** The
+ * two must never disagree about which token is a date: a span `findAmount`
+ * skipped and `findDate` then refused would lose the line its amount for
+ * nothing, and a span `findAmount` ate would lose it the date. `accountingDate`
+ * is a *shape* check (its own doc — calendar validity belongs to
+ * `zod.ts#zAccountingDate`, at the contract edge), so `9999-99-99` is a date to
+ * both of them and a date to neither on save.
+ */
+export function isoDateSpans(text: string): [number, number][] {
+  const spans: [number, number][] = [];
+  ISO_DATE_ALL.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: the idiomatic `exec` loop.
+  while ((match = ISO_DATE_ALL.exec(text))) {
+    try {
+      accountingDate(match[0]);
+      spans.push([match.index, match.index + match[0].length]);
+    } catch {
+      // The same fall-through `findDate` takes on a token it cannot read.
+    }
+  }
+  return spans;
 }

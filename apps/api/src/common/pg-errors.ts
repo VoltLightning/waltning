@@ -114,12 +114,20 @@ export const TRIGGER = {
   CATEGORY_KIND_MATCHES_TYPE: "transactions_category_kind_matches_type",
   CURRENCY_DECIMALS_SAFE: "currencies_decimals_safe",
   /**
-   * The *default* for WA019 — `transaction_lines_category_not_archived` shares
-   * the function and raises the same code, and `toDomainError` prefers the
-   * driver's own `constraint` when it reports one, exactly as it does for
-   * WA016's several raisers.
+   * The *default* for WA019 — `transaction_lines_category_not_archived` (below)
+   * shares the function and raises the same code, so every WA019 raise sets
+   * `CONSTRAINT = TG_TABLE_NAME || '_category_not_archived'` and
+   * `toDomainError` prefers the driver's own, exactly as it does for WA016's
+   * several raisers. The default is what a raise with none would mean.
    */
   CATEGORY_NOT_ARCHIVED: "transactions_category_not_archived",
+  /**
+   * The other WA019 raiser — §10.3's split lines carry their own `category_id`,
+   * and a client that cannot tell the two apart cannot say *which* figure to
+   * fix. Named here rather than spelled out at the call site for the same
+   * reason every other trigger is: a typo would look right in review.
+   */
+  LINES_CATEGORY_NOT_ARCHIVED: "transaction_lines_category_not_archived",
 } as const;
 
 /**

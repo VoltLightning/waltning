@@ -271,10 +271,18 @@ BEGIN
   -- means that check has not run yet in this same statement, the same call
   -- `assert_category_is_leaf` makes above.
   IF is_archived THEN
+    -- L7 — `CONSTRAINT` names the raiser, because two triggers share this one
+    -- function: without it both refusals arrive carrying no constraint at all
+    -- and `pg-errors.ts` falls back to its WA019 default, so a line's
+    -- refusal is indistinguishable from a transaction's. `TG_TABLE_NAME`
+    -- rather than a literal — the trigger names are `<table>_category_not_
+    -- archived` on both tables, so the function stays one function.
     RAISE EXCEPTION
       'category % is archived — an archived category is not assignable (H1a)',
       NEW.category_id
-      USING ERRCODE = 'WA019';
+      USING ERRCODE = 'WA019',
+            CONSTRAINT = TG_TABLE_NAME || '_category_not_archived',
+            COLUMN = 'category_id';
   END IF;
 
   RETURN NEW;

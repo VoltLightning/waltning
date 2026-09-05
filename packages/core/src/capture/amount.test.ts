@@ -93,6 +93,49 @@ describe("C1 — thousands grouping is optional, never mandatory", () => {
   });
 });
 
+describe("L1 — a grouping chain starts from a 1–3 digit head, and only from one", () => {
+  it("'1234 567 cash' reads 1234 and leaves 567 outside the amount's own span", () => {
+    // The defect this closes: `\d+(?:[ ]\d{3})*` welded the two into
+    // `1234567`, a figure a thousand times either of the numbers typed, with
+    // nothing left over for the reader to notice.
+    const found = findAmount("1234 567 cash");
+    expect(found?.amount).toBe("1234.00000000");
+    expect(found?.span).toEqual([0, 4]);
+  });
+
+  it("'1000 2000 cash' takes the first number only — the second is payee text, not a second thousands group", () => {
+    const found = findAmount("1000 2000 cash");
+    expect(found?.amount).toBe("1000.00000000");
+    expect(found?.span).toEqual([0, 4]);
+  });
+
+  it("a real three-group chain still matches whole — '1 234 567'", () => {
+    const found = findAmount("1 234 567");
+    expect(found?.amount).toBe("1234567.00000000");
+    expect(found?.span).toEqual([0, 9]);
+  });
+});
+
+describe("L2 — an ISO date's digits are never the amount", () => {
+  it("a leading '2026-08-10' is skipped and the money after it is found", () => {
+    const found = findAmount("2026-08-10 48.90 cash coffee");
+    expect(found?.amount).toBe("48.90000000");
+    expect(found?.span).toEqual([11, 16]);
+  });
+
+  it("mid-line too — the minus rule alone would have read the year off '2026'", () => {
+    const found = findAmount("coffee 2026-08-10 48.90 cash");
+    expect(found?.amount).toBe("48.90000000");
+  });
+
+  it("a date-shaped token is a date to both readers or to neither — '9999-99-99' has no amount in it", () => {
+    // `isoDateSpans` makes `findDate`'s own `accountingDate` call, so the two
+    // can never disagree about which token is a date. Calendar validity is
+    // `zod.ts#zAccountingDate`'s, at the contract edge — not this grammar's.
+    expect(findAmount("9999-99-99")).toBeNull();
+  });
+});
+
 describe("the first-number rule", () => {
   it("'2 coffees 18' binds to 2, not 18 — a known, documented cost of a grammar with no notion of 'looks like a price'", () => {
     const found = findAmount("2 coffees 18");

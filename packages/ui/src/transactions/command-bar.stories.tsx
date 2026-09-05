@@ -56,7 +56,8 @@ export const Resolved: Story = {
 /**
  * D2's proposal at the display threshold — the category chip fills machine,
  * exactly as `QuickAddComposer`'s own P2 chip would, with the same trail
- * caption and an Undo reachable by Tabbing to the chip and pressing Esc.
+ * caption and, beside it, §8's P2 Undo: a ghost button (Esc on the highlighted
+ * chip is the keyboard's route to the same call).
  */
 export const WithCategoryProposal: Story = {
   args: {

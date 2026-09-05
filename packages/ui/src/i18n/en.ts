@@ -344,6 +344,16 @@ export const en = {
     commandBarCurrencyMismatch: "That currency doesn't match the named account.",
     /** D1's `too_much_unmatched` refusal. */
     commandBarTooMuchUnmatched: "Too much left over to make sense of — try a shorter line.",
+    /**
+     * L3 — the one rule about numbers a typed line cannot state for itself.
+     * `amount.ts`'s grammar has exactly one thousands separator (whitespace)
+     * and reads any `,` or `.` as the decimal mark, which is not the
+     * convention half of Europe types; `1.234,56` resolves to `1.234` and
+     * nothing on screen said it would. S05 §3 carries the same sentence.
+     */
+    commandBarHint: "Spaces group thousands; comma or point is the decimal mark.",
+    /** The resolved chips' own group — a `listbox` the bar's `combobox` controls, named because a bare group announces nothing. */
+    commandBarChipsLabel: "Resolved fields",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {

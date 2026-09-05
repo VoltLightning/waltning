@@ -92,6 +92,55 @@ describe("C1 — an ungrouped amount past three digits resolves whole", () => {
   });
 });
 
+describe("L1 — a second number is payee text, never a second thousands group", () => {
+  it("'1234 567 cash' — 567 stays outside the amount, visible in the payee and in `unmatched`", () => {
+    const parsed = parseCapture("1234 567 cash", baseContext);
+    expect(parsed).toMatchObject({
+      ok: true,
+      amount: "1234.00000000",
+      accountId: "acc-cash",
+      payee: "567",
+    });
+    expect(parsed.unmatched).toEqual(["567"]);
+  });
+
+  it("'1000 2000 cash' — the first number is the amount, the second is the payee (S05 §3's stated rule)", () => {
+    const parsed = parseCapture("1000 2000 cash", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "1000.00000000", payee: "2000" });
+  });
+
+  it("'1 234 567 cash coffee' — a real grouping chain is still one figure", () => {
+    const parsed = parseCapture("1 234 567 cash coffee", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "1234567.00000000", payee: "coffee" });
+  });
+});
+
+describe("L2 — a line that leads with an ISO date resolves both the date and the amount", () => {
+  it("'2026-08-10 48.90 cash coffee'", () => {
+    const parsed = parseCapture("2026-08-10 48.90 cash coffee", baseContext);
+    expect(parsed).toMatchObject({
+      ok: true,
+      amount: "48.90000000",
+      accountId: "acc-cash",
+      date: "2026-08-10",
+      payee: "coffee",
+    });
+    // The whole date token is consumed — none of it leaks into `unmatched`,
+    // which otherwise carries every token the payee was built from.
+    expect(parsed.unmatched).toEqual(["coffee"]);
+  });
+
+  it("mid-line, after the payee — '48.90 cash coffee 2026-08-10' was already right and stays right", () => {
+    const parsed = parseCapture("48.90 cash coffee 2026-08-10", baseContext);
+    expect(parsed).toMatchObject({ ok: true, amount: "48.90000000", date: "2026-08-10" });
+  });
+
+  it("a date-shaped token is read as a date by both halves, so the line has no amount left", () => {
+    const parsed = parseCapture("9999-99-99 cash coffee", baseContext);
+    expect(parsed).toMatchObject({ ok: false, reason: "no_amount" });
+  });
+});
+
 describe("failure reasons", () => {
   it("'lunch' has no amount", () => {
     const parsed = parseCapture("lunch", baseContext);

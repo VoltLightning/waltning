@@ -14,6 +14,17 @@
  * affected-row count *is* the check: fewer rows than ids named means one of
  * them was missing, deleted, or not income/expense, and the whole batch is
  * refused rather than applied partially.
+ *
+ * **M2 — the category itself is checked before the bulk write, not by it.**
+ * H1a says an archived category is never newly assigned, and this operation
+ * assigns one category to N rows at once. The replica's own
+ * `transactions_category_not_archived_update` trigger would abort the
+ * statement, but a trigger names no operation and no field, and the abort
+ * would arrive from inside an `UPDATE … WHERE id IN (…)` with nothing on
+ * screen to attach it to. `assertCategoryNotArchived`
+ * (`create-transaction.executor.ts` — the same function `create_transaction`
+ * and `update_transaction` go through) runs first, so the refusal names
+ * `categorize_batch` and `category_id`, and no row is touched.
  */
 
 import { type CategorizeBatchInput, categorizeBatchInput } from "@waltning/core/registry/inputs";
@@ -21,7 +32,10 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
-import type { LocalTransactionRow } from "./create-transaction.executor.ts";
+import {
+  assertCategoryNotArchived,
+  type LocalTransactionRow,
+} from "./create-transaction.executor.ts";
 
 const { transactions } = schema;
 
@@ -44,6 +58,9 @@ export const categorizeBatchExecutor = defineLocalExecutor<
 });
 
 function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactionRow[] {
+  // M2 — before the `UPDATE`, so no row is touched by a batch that cannot stand.
+  assertCategoryNotArchived(tx, input.categoryId, "categorize_batch: category_id");
+
   const updated = tx
     .update(transactions)
     .set({

@@ -15,6 +15,15 @@
  * of any one line, so it is checked here — where both the lines and the
  * transaction's `amount_original` are in hand — rather than in the input
  * schema, which never sees the transaction row.
+ *
+ * **A line's own category obeys H1a too.** `transaction_lines.category_id` is
+ * a second place a retired leaf can be assigned, and the one the parent row
+ * hides: the transaction shows a category the reader recognises while a line
+ * beneath it points at one no picker offers. `assertCategoryNotArchived`
+ * (`create-transaction.executor.ts`, the same function the parent's own
+ * `category_id` goes through) runs per line, above the replica's
+ * `transaction_lines_category_not_archived_*` triggers and the server's
+ * `assert_category_not_archived` on the same table.
  */
 
 import * as money from "@waltning/core/money";
@@ -27,7 +36,10 @@ import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
-import type { LocalTransactionRow } from "./create-transaction.executor.ts";
+import {
+  assertCategoryNotArchived,
+  type LocalTransactionRow,
+} from "./create-transaction.executor.ts";
 
 const { transactionLines, transactions } = schema;
 
@@ -108,12 +120,22 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
   // payment, not the photograph, so each line's own scale is checked against
   // its *parent* transaction's currency — the sum check above proves the
   // total is exact, never that any one line individually is.
+  //
+  // H1a, on the same pass: a line may no more point at an archived category
+  // than its parent may. Every line is checked before any row is written —
+  // the whole set replaces the old one, so a refusal on line three must not
+  // arrive with lines one and two already deleted.
   for (const line of input.lines) {
     assertMoneyScale(
       tx,
       line.amount,
       current.currency,
       `set_transaction_lines: transaction_lines[${line.id}].amount`,
+    );
+    assertCategoryNotArchived(
+      tx,
+      line.categoryId ?? null,
+      `set_transaction_lines: transaction_lines[${line.id}].category_id`,
     );
   }
 

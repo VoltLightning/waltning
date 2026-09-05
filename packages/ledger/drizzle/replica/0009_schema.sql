@@ -45,6 +45,11 @@ CREATE UNIQUE INDEX `fx_rates_pk` ON `fx_rates` (`base`,`quote`,`date`);
 -- H1a — an archived category is not assignable, the replica's own half of
 -- `0001_database_objects.sql`'s `assert_category_not_archived`.
 --
+-- **Both tables that carry a `category_id`**, because the server guards both:
+-- `transaction_lines` holds §10.3's split, and a retired leaf on a line is the
+-- copy nobody sees — the parent row shows a category the reader recognises
+-- while the line beneath it points at one no picker offers.
+--
 -- `architecture/14` §14.6: the phone refuses at capture time what the server
 -- would refuse. The client refuses this before the write
 -- (`transactions.categoryUnavailable`) and the local executor refuses it again
@@ -62,7 +67,8 @@ CREATE UNIQUE INDEX `fx_rates_pk` ON `fx_rates` (`base`,`quote`,`date`);
 -- step.
 --
 -- Archiving a category that already holds rows stays legal: the triggers are
--- on `transactions`, fired by the write that would newly point at one.
+-- on the rows that point at a category, fired by the write that would newly
+-- do so — never on `categories` itself.
 CREATE TRIGGER `transactions_category_not_archived_insert`
 BEFORE INSERT ON `transactions`
 FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
@@ -75,6 +81,27 @@ BEGIN
 END;--> statement-breakpoint
 CREATE TRIGGER `transactions_category_not_archived_update`
 BEFORE UPDATE ON `transactions`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+	AND (OLD.`category_id` IS NULL OR OLD.`category_id` <> NEW.`category_id`)
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;--> statement-breakpoint
+CREATE TRIGGER `transaction_lines_category_not_archived_insert`
+BEFORE INSERT ON `transaction_lines`
+FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM `categories`
+		WHERE `categories`.`id` = NEW.`category_id` AND `categories`.`archived` = 1
+	);
+END;--> statement-breakpoint
+CREATE TRIGGER `transaction_lines_category_not_archived_update`
+BEFORE UPDATE ON `transaction_lines`
 FOR EACH ROW WHEN NEW.`category_id` IS NOT NULL
 	AND (OLD.`category_id` IS NULL OR OLD.`category_id` <> NEW.`category_id`)
 BEGIN

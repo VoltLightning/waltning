@@ -137,20 +137,20 @@ it("Enter saves — the keyboard contract's own S05 example", () => {
   render(
     <CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED, onSubmit })} />,
   );
-  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+  fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
   expect(onSubmit).toHaveBeenCalledOnce();
 });
 
 it("Esc discards", () => {
   const onDiscard = vi.fn();
   render(<CommandBar {...props({ value: "coffee", parse: REFUSED, onDiscard })} />);
-  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+  fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
   expect(onDiscard).toHaveBeenCalledOnce();
 });
 
 it("M1 — Tab walks the resolved chips, then leaves the bar like any other field", () => {
   render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
-  const input = screen.getByRole("textbox");
+  const input = screen.getByRole("combobox");
   const options = screen.getAllByRole("option");
   expect(options).toHaveLength(3);
   expect(options.map((option) => option.getAttribute("aria-selected"))).toEqual([
@@ -176,7 +176,7 @@ it("M1 — Tab walks the resolved chips, then leaves the bar like any other fiel
 
 it("M1 — Shift+Tab walks backward, and leaves the bar from the first chip", () => {
   render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
-  const input = screen.getByRole("textbox");
+  const input = screen.getByRole("combobox");
   fireEvent.keyDown(input, { key: "Tab" }); // → chip 0
   fireEvent.keyDown(input, { key: "Tab" }); // → chip 1
 
@@ -192,7 +192,7 @@ it("M1 — Shift+Tab walks backward, and leaves the bar from the first chip", ()
 
 it("M1 — Shift+Tab with nothing highlighted is the browser's own backward tab", () => {
   render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
-  const input = screen.getByRole("textbox");
+  const input = screen.getByRole("combobox");
   expect(fireEvent.keyDown(input, { key: "Tab", shiftKey: true })).toBe(true);
 });
 
@@ -211,7 +211,7 @@ it("M3/P2 — Esc on the highlighted category chip undoes the applied proposal, 
       })}
     />,
   );
-  const input = screen.getByRole("textbox");
+  const input = screen.getByRole("combobox");
   fireEvent.keyDown(input, { key: "Tab" }); // account
   fireEvent.keyDown(input, { key: "Tab" }); // date
   fireEvent.keyDown(input, { key: "Tab" }); // category — index 2
@@ -235,10 +235,120 @@ it("M3/P2 — the auto-filled category states its own provenance, in one line", 
   expect(screen.getByText("From your history: coffee")).toBeDefined();
 });
 
+/**
+ * M3 — the whole announcement, read off RNW's own DOM output rather than off
+ * the props that produced it. DOM focus never leaves the input during a Tab
+ * walk, so `aria-activedescendant` is the only thing telling a screen reader
+ * which chip the highlight is on; a border alone said nothing.
+ */
+it("M3 — the input is a combobox naming its list, and the walked chip by id", () => {
+  render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
+  const input = screen.getByRole("combobox");
+  const listbox = screen.getByRole("listbox");
+
+  expect(input.getAttribute("aria-expanded")).toBe("true");
+  expect(input.getAttribute("aria-controls")).toBe(listbox.getAttribute("id"));
+  expect(listbox.getAttribute("id")).toBeTruthy();
+  // Nothing walked yet — there is no active descendant to name.
+  expect(input.getAttribute("aria-activedescendant")).toBeNull();
+
+  const options = screen.getAllByRole("option");
+  expect(options).toHaveLength(3);
+  for (const option of options) expect(option.getAttribute("id")).toBeTruthy();
+
+  fireEvent.keyDown(input, { key: "Tab" });
+  expect(input.getAttribute("aria-activedescendant")).toBe(options[0]?.getAttribute("id"));
+  fireEvent.keyDown(input, { key: "Tab" });
+  expect(input.getAttribute("aria-activedescendant")).toBe(options[1]?.getAttribute("id"));
+});
+
+it("M3 — an unresolved line is a combobox with nothing to expand into", () => {
+  render(<CommandBar {...props({ value: "coffee", parse: REFUSED })} />);
+  const input = screen.getByRole("combobox");
+  expect(input.getAttribute("aria-expanded")).toBe("false");
+  expect(input.getAttribute("aria-controls")).toBeNull();
+  expect(screen.queryByRole("listbox")).toBeNull();
+});
+
+it("M3 — the listbox contains options and nothing else", () => {
+  render(
+    <CommandBar
+      {...props({
+        value: "48.90 cash coffee yesterday",
+        parse: RESOLVED,
+        categoryProposal: { categoryId: "cat-food", confidence: 1, basis: "exact", neighbours: [] },
+        categoryAutoFilled: true,
+      })}
+    />,
+  );
+  const listbox = screen.getByRole("listbox");
+  // Every direct child is an option; the amount, the payee line and the
+  // provenance caption all live outside it.
+  const children = Array.from(listbox.children);
+  expect(children).toHaveLength(3);
+  for (const child of children) expect(child.getAttribute("role")).toBe("option");
+  expect(listbox.textContent).not.toContain("48.90");
+  expect(listbox.textContent).not.toContain("Payee");
+  expect(listbox.textContent).not.toContain("From your history");
+});
+
+it("M3 — the partial branch's chip is not an option, because there is no list around it", () => {
+  render(<CommandBar {...props({ value: "48.90 taxi", parse: PARTIAL })} />);
+  expect(screen.queryByRole("listbox")).toBeNull();
+  expect(screen.queryAllByRole("option")).toHaveLength(0);
+});
+
+it("L3 — the bar states the one rule about numbers a typed line cannot state for itself", () => {
+  render(<CommandBar {...props()} />);
+  expect(
+    screen.getByText("Spaces group thousands; comma or point is the decimal mark."),
+  ).toBeDefined();
+});
+
+it("L4 — the machine-filled chip's accessible name says which field was filled, not the value twice", () => {
+  render(
+    <CommandBar
+      {...props({
+        value: "48.90 cash coffee yesterday",
+        parse: RESOLVED,
+        categoryProposal: { categoryId: "cat-food", confidence: 1, basis: "exact", neighbours: [] },
+        categoryAutoFilled: true,
+      })}
+    />,
+  );
+  const chip = screen.getAllByRole("option")[2];
+  expect(chip?.getAttribute("aria-label")).toBe("Category: Food, filled automatically");
+});
+
+it("L5 — the provenance line carries an Undo, and pressing it undoes the proposal", () => {
+  const onUndoCategory = vi.fn();
+  const onDiscard = vi.fn();
+  render(
+    <CommandBar
+      {...props({
+        value: "48.90 cash coffee yesterday",
+        parse: RESOLVED,
+        categoryProposal: { categoryId: "cat-food", confidence: 1, basis: "exact", neighbours: [] },
+        categoryAutoFilled: true,
+        onUndoCategory,
+        onDiscard,
+      })}
+    />,
+  );
+  fireEvent.click(screen.getByText("Undo"));
+  expect(onUndoCategory).toHaveBeenCalledOnce();
+  expect(onDiscard).not.toHaveBeenCalled();
+});
+
+it("L5 — no proposal, no Undo: there is nothing to undo", () => {
+  render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
+  expect(screen.queryByText("Undo")).toBeNull();
+});
+
 it("exposes focus() through its ref — the platform hotkey's own reach", () => {
   const ref = createRef<CommandBarHandle>();
   render(<CommandBar {...props()} ref={ref} />);
-  const input = screen.getByRole("textbox") as unknown as TextInput;
+  const input = screen.getByRole("combobox") as unknown as TextInput;
   const spy = vi.spyOn(input, "focus");
   ref.current?.focus();
   expect(spy).toHaveBeenCalledOnce();

@@ -322,6 +322,40 @@ describe("every other guard is identifiable", () => {
   });
 
   /**
+   * L7 — the *other* WA019 raiser, and the reason the raise names its own
+   * constraint. `transaction_lines` shares `assert_category_not_archived`
+   * with `transactions`; before the `CONSTRAINT = TG_TABLE_NAME || …` on the
+   * raise, both refusals reached the client carrying no constraint at all and
+   * fell back to the map's `transactions_…` default, so a client could not
+   * tell a split line's refusal from its parent's — which is exactly the
+   * figure it would have to point at to be fixed.
+   */
+  it("WA019 · a split line's own archived category is a distinguishable refusal", async () => {
+    const txn = "88888888-8888-8888-8888-888888888888";
+    // Idempotent: the transactions case above inserts the same fixture, and a
+    // test that only passes in file order is not a test of anything.
+    await s.sql`
+      INSERT INTO categories (id, name, kind, is_leaf, parent_id, archived) VALUES
+        (${CAT_ARCHIVED}::uuid, 'Retired', 'expense', true, ${CAT_GROUP}::uuid, true)
+      ON CONFLICT (id) DO NOTHING`;
+    await s.sql`
+      INSERT INTO transactions (id, date, type, account_id, amount_original, currency, fx_rate)
+      VALUES (${txn}::uuid, '2026-01-01', 'expense', ${ACC_OWN}::uuid, 10, 'USD', 1)`;
+
+    const error = await refusal(
+      `INSERT INTO transaction_lines (transaction_id, description, amount, category_id)
+       VALUES ('${txn}', 'coffee', 10, '${CAT_ARCHIVED}')`,
+    );
+    expect(error.code).toBe("validation");
+    expect(error.details?.constraint).toBe(TRIGGER.LINES_CATEGORY_NOT_ARCHIVED);
+    expect(error.details?.column).toBe("category_id");
+    // The two names differ — that is the whole point of naming them.
+    expect(TRIGGER.LINES_CATEGORY_NOT_ARCHIVED).not.toBe(TRIGGER.CATEGORY_NOT_ARCHIVED);
+
+    await s.sql`DELETE FROM transactions WHERE id = ${txn}::uuid`;
+  });
+
+  /**
    * And the archiving itself stays legal — the rows a category already holds
    * are history, and archiving rather than deleting is what keeps them
    * readable. A guard that refused this would make a category with any

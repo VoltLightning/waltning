@@ -112,4 +112,74 @@ describe("subscribeCommandBarHotkey", () => {
     keydown({ key: "n" });
     expect(onTrigger).not.toHaveBeenCalled();
   });
+
+  /**
+   * L6 — the three cases a bare letter shortcut has to decide and this one
+   * had not. Each is a rule now because it is a test.
+   */
+  it("ignores an autorepeat — holding 'n' down is one intention, not forty", () => {
+    const onTrigger = vi.fn();
+    const unsubscribe = subscribeCommandBarHotkey(onTrigger);
+    keydown({ key: "n" });
+    keydown({ key: "n", repeat: true });
+    keydown({ key: "n", repeat: true });
+    expect(onTrigger).toHaveBeenCalledOnce();
+    unsubscribe();
+  });
+
+  it("ignores a keystroke while an IME is composing — 'isComposing'", () => {
+    const onTrigger = vi.fn();
+    const unsubscribe = subscribeCommandBarHotkey(onTrigger);
+    keydown({ key: "n", isComposing: true });
+    expect(onTrigger).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it("ignores the 229 keyCode browsers send mid-composition, where `isComposing` is still false", () => {
+    const onTrigger = vi.fn();
+    const unsubscribe = subscribeCommandBarHotkey(onTrigger);
+    keydown({ key: "n", keyCode: 229 });
+    expect(onTrigger).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it("ignores it while a sheet is open — a dialog's focus trap is not something a shortcut may leave", () => {
+    const onTrigger = vi.fn();
+    const unsubscribe = subscribeCommandBarHotkey(onTrigger);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.appendChild(dialog);
+
+    const event = keydown({ key: "n" });
+    expect(onTrigger).not.toHaveBeenCalled();
+    // And the key is left to the sheet, not swallowed.
+    expect(event.defaultPrevented).toBe(false);
+
+    // Deliberately wider than "focus is inside the dialog": RNW's own focus
+    // trap parks focus on a bracket *outside* the `[role="dialog"]` node, so
+    // an `activeElement` test would let this through with a sheet open.
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    keydown({ key: "n", target: outside });
+    expect(onTrigger).not.toHaveBeenCalled();
+
+    dialog.remove();
+    outside.remove();
+    unsubscribe();
+  });
+
+  it("fires again once the sheet closes — the dialog role only exists while a Modal is visible", () => {
+    const onTrigger = vi.fn();
+    const unsubscribe = subscribeCommandBarHotkey(onTrigger);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.appendChild(dialog);
+    keydown({ key: "n" });
+    expect(onTrigger).not.toHaveBeenCalled();
+
+    dialog.remove();
+    keydown({ key: "n" });
+    expect(onTrigger).toHaveBeenCalledOnce();
+    unsubscribe();
+  });
 });

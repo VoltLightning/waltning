@@ -1803,9 +1803,12 @@ holds transactions is exactly what archiving is for. What is refused is a
 *new* assignment: no picker offers an archived category, so a row that
 acquired one would sit on a leaf its own composer could not display.
 `assert_category_not_archived` enforces this on `transactions` and
-`transaction_lines` (SQLSTATE `WA019`), the replica carries the same trigger,
-and the derived reads that feed a suggestion — payee memory's history among
-them — exclude archived categories rather than proposing one.
+`transaction_lines` (SQLSTATE `WA019`, each raise naming its own table so the
+two refusals are told apart), the replica carries the same guard on both
+tables, every operation that can move a `category_id` — `create_transaction`,
+`update_transaction`, `set_transaction_lines`, `categorize_batch` — refuses it
+by name first, and the derived reads that feed a suggestion — payee memory's
+history among them — exclude archived categories rather than proposing one.
 
 ### 6.10 One transaction per payment event
 

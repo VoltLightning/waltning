@@ -104,7 +104,16 @@ describe("useCommandBar", () => {
     ["12345 cash coffee", "12345.00000000"],
     ["1 234.56 cash coffee", "1234.56000000"],
     ["1.234,56 cash coffee", "1.23400000"],
-  ])("C1 — %s saves %s, whole and untruncated", (line, amount) => {
+    // L1 — a four-digit head never starts a thousands chain: this is 1234
+    // with `567` in the payee, not 1 234 567.
+    ["1234 567 cash", "1234.00000000"],
+    // L1 — the first number is the amount, the second is payee text (S05 §3).
+    ["1000 2000 cash", "1000.00000000"],
+    // L1 — a real chain is still one figure.
+    ["1 234 567 cash coffee", "1234567.00000000"],
+    // L2 — a leading ISO date is a date, and the money after it is the amount.
+    ["2026-08-10 48.90 cash coffee", "48.90000000"],
+  ])("C1/L1/L2 — %s saves %s, whole and untruncated", (line, amount) => {
     const controller = fakeController();
     const { result } = renderHook(() => useCommandBar(controller, parse, CATEGORIES));
 

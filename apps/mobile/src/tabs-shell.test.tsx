@@ -229,7 +229,7 @@ describe("DeskCommandBar (DESK2)", () => {
         </LedgerProvider>,
       );
 
-      const input = screen.getByRole("textbox");
+      const input = screen.getByRole("combobox");
       fireEvent.change(input, { target: { value: "48.90 cash coffee yesterday" } });
       // D1 resolved it live — the chips render before Enter is ever pressed.
       expect(screen.getByText("Cash")).toBeDefined();
@@ -263,7 +263,7 @@ describe("DeskCommandBar (DESK2)", () => {
       </LedgerProvider>,
     );
 
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("combobox");
     fireEvent.change(input, { target: { value: "coffee" } });
     expect(screen.getByText("No amount found — start the line with a number.")).toBeDefined();
 

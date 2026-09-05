@@ -423,6 +423,27 @@ BEGIN
 		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`archived\` = 1
 	);
 END`,
+      `CREATE TRIGGER \`transaction_lines_category_not_archived_insert\`
+BEFORE INSERT ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`archived\` = 1
+	);
+END`,
+      `CREATE TRIGGER \`transaction_lines_category_not_archived_update\`
+BEFORE UPDATE ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+	AND (OLD.\`category_id\` IS NULL OR OLD.\`category_id\` <> NEW.\`category_id\`)
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`archived\` = 1
+	);
+END`,
     ],
   },
   {

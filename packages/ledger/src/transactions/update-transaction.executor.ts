@@ -94,7 +94,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   // carries, checked whenever this patch actually touches `categoryId`; an
   // untouched category is not this write's to re-litigate.
   if ("categoryId" in input.patch) {
-    assertCategoryNotArchived(tx, merged.categoryId);
+    assertCategoryNotArchived(tx, merged.categoryId, "update_transaction: category_id");
   }
 
   /**

@@ -1107,8 +1107,15 @@ describe("categorize_batch", () => {
 /**
  * H1a — an archived category is not assignable, at both levels the rule has:
  * the executor's own refusal (a good error, named), and the replica's own
- * trigger (`transactions_category_not_archived_insert` / `_update`, the head
- * migration), which holds when the code above it is wrong or absent.
+ * triggers (`transactions_category_not_archived_insert` / `_update` and
+ * `transaction_lines_category_not_archived_insert` / `_update`, the head
+ * migration), which hold when the code above them is wrong or absent.
+ *
+ * **Both tables, and all four operations that can move a `category_id`** —
+ * `create_transaction`, `update_transaction`, `set_transaction_lines` and
+ * `categorize_batch`. A rule enforced on one of the two tables that carry the
+ * column is a rule with a hole in it, and `transaction_lines` is the half the
+ * parent row hides.
  *
  * The defect this closes: D2's payee memory proposed a leaf a payee last sat
  * on, `readPayeeHistory` did not exclude archived ones, the desk command bar
@@ -1241,5 +1248,121 @@ describe("an archived category", () => {
       .run();
 
     expect(readTxn()?.categoryId, "the row keeps its history").toBe(LIVE);
+  });
+
+  /**
+   * M1 — a split line carries its own `category_id`, and it is the copy the
+   * parent row hides: the transaction shows a category the reader recognises
+   * while the line beneath it points at a leaf no picker offers.
+   */
+  it("set_transaction_lines refuses a line that carries it, naming the operation and the field", () => {
+    const readLines = () =>
+      stores.ledger.replica.db
+        .select()
+        .from(transactionLines)
+        .where(eq(transactionLines.transactionId, TXN))
+        .all();
+    const LIVE_LINE = id<"transactionLines">("00000000-0000-4000-8000-0000000000b0");
+    const LINE = id<"transactionLines">("00000000-0000-4000-8000-0000000000b1");
+
+    // A set already on the row, so the assertion below says something: this
+    // operation replaces wholesale, and a refusal arriving after the delete
+    // would leave the transaction with no breakdown at all.
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: readTxn()?.version ?? 0,
+        lines: [{ id: LIVE_LINE, description: "Espresso", amount: "18" }],
+      },
+    });
+    expect(readLines()).toHaveLength(1);
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          transactionId: TXN,
+          version: readTxn()?.version ?? 0,
+          lines: [{ id: LINE, description: "Espresso", amount: "18", categoryId: ARCHIVED }],
+        },
+      }),
+    ).toThrow(/set_transaction_lines.*category_id.*archived/s);
+
+    const after = readLines();
+    expect(after, "the old set survived — the refusal arrived before the delete").toHaveLength(1);
+    expect(after[0]?.id).toBe(LIVE_LINE);
+  });
+
+  /**
+   * Broken once, on the other table: no executor in the way, the write aimed
+   * straight at `transaction_lines` the way a future op with no such check
+   * would. SQLite refuses it.
+   */
+  it("the replica itself refuses a line insert onto it", () => {
+    expect(() =>
+      stores.ledger.replica.db
+        .insert(transactionLines)
+        .values({
+          id: id<"transactionLines">("00000000-0000-4000-8000-0000000000b2"),
+          transactionId: TXN,
+          description: "Espresso",
+          amount: toMoney("18"),
+          sort: 0,
+          categoryId: ARCHIVED,
+        })
+        .run(),
+    ).toThrow(/archived/i);
+  });
+
+  it("the replica itself refuses a line update onto it", () => {
+    const LINE = id<"transactionLines">("00000000-0000-4000-8000-0000000000b3");
+    stores.ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: LINE,
+        transactionId: TXN,
+        description: "Espresso",
+        amount: toMoney("18"),
+        sort: 0,
+      })
+      .run();
+
+    expect(() =>
+      stores.ledger.replica.db
+        .update(transactionLines)
+        .set({ categoryId: ARCHIVED })
+        .where(eq(transactionLines.id, LINE))
+        .run(),
+    ).toThrow(/archived/i);
+    expect(
+      stores.ledger.replica.db
+        .select()
+        .from(transactionLines)
+        .where(eq(transactionLines.id, LINE))
+        .get()?.categoryId,
+    ).toBeNull();
+  });
+
+  /**
+   * M2 — the bulk path. The trigger below would abort the `UPDATE` anyway;
+   * what the executor adds is a refusal that names `categorize_batch` and
+   * `category_id` rather than one arriving from inside a statement touching
+   * N rows at once.
+   */
+  it("categorize_batch refuses before the bulk write, naming the operation and the field", () => {
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: categorizeBatchExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { transactionIds: [TXN], categoryId: ARCHIVED },
+      }),
+    ).toThrow(/categorize_batch.*category_id.*archived/s);
+    expect(readTxn()?.categoryId, "no row was touched").toBeNull();
   });
 });

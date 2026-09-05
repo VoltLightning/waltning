@@ -107,8 +107,9 @@ and Enter to save. No keypad, no dock, no camera.
 ```
   48.90 cash coffee yesterday
   ─────────────────────────────────────────
-   48.90 PLN   Cash   Sep 2
-   Payee: coffee   Category?
+   Spaces group thousands; comma or point is the decimal mark.
+   48.90 PLN   Payee: coffee
+   [ Cash ]  [ Sep 2 ]  [ Category? ]
 ```
 
 Parsing is **deterministic first**: first number is the amount, known account
@@ -117,6 +118,24 @@ the payee — D1's grammar, the one this section's own worked example resolves.
 D2's payee memory proposes the category the same way it does on the phone,
 machine-filled at or above `computations.md` §14's display threshold and left
 for the category chip to ask about below it.
+
+**The bar states its one non-obvious rule about numbers, standing:** *spaces
+group thousands; comma or point is the decimal mark*. That is not the
+convention half of Europe types — `1.234,56` resolves to `1.234` — and it is
+the one thing a typed line cannot say for itself before the figure is already
+wrong. The rest of the grammar announces itself in the chips as it resolves.
+
+**A second number is payee text, not a second thousands group.** The
+first-number rule is the whole rule: `1234 567 cash` is 1 234 złoty with `567`
+in the payee, never one million. A grouping chain only ever starts from a one-
+to three-digit head, because no real thousands separator follows a fourth
+digit.
+
+**The three resolved chips are one list.** The account, the date and the
+category sit together in a `listbox` the input owns as a `combobox` — Tab walks
+it, `aria-activedescendant` names the chip reached, and DOM focus stays in the
+input throughout. The amount, the payee and the captions are outside that list:
+they are readings, not choices.
 
 **A name the grammar does not recognise is payee text, not a refusal — with a
 last-used account to fall back on.** §9.2's own four-hour window supplies a
@@ -205,7 +224,11 @@ fact.
 ## 8. Rules this screen must obey
 
 - **P2** — every machine-filled field states what produced it, in one line, with
-  Undo. The draft is never a black box.
+  Undo. The draft is never a black box. On the desk command bar that Undo is a
+  control: a ghost button on the provenance line beside *From your history:
+  <payee>*, plus `Esc` while the category chip is the one Tab has reached. The
+  keyboard route alone would not satisfy this rule — an Undo reachable only by
+  a key nothing on screen names is not one.
 - **P1** — if the draft's currency differs from the display currency, the
   converted figure shows with its rate; if the date has no rate,
   `fx_rate_estimated` is set and rendered amber.

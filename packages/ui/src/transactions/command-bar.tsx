@@ -19,7 +19,8 @@
  *
  * **The keyboard contract is the whole interaction** (`screens/S05-quick-add.md`
  * §7 Web): `Enter` saves, `Esc` discards (or undoes a highlighted D2 pick —
- * M3/P2, below), `Tab` walks the resolved chips and — M1 — **leaves the bar**
+ * M3/P2, below, the keyboard's route to the same call the visible **Undo** on
+ * the provenance line makes), `Tab` walks the resolved chips and — M1 — **leaves the bar**
  * once the last one is reached, exactly like leaving any other field; `Shift
  * +Tab` walks back the same way, and leaving from chip zero (or with nothing
  * highlighted) is the ordinary backward tab out. Trapping focus inside a
@@ -36,11 +37,24 @@
  * assignable to a shape that adds one optional field, so nothing is asserted
  * away and no `unknown` is spent to get at a fact the runtime does carry.
  *
- * **The resolved chips are `role="option"` in a `role="listbox"`**, `aria
- * -selected` tracking the Tab-walked one — RN's own `Role` type has no
- * `"listbox"` entry (only `"option"` is standard), so the container's role is
- * the one thing here asserted past its type, on the value rather than the
- * event.
+ * **M3 — the walk is announced, not merely outlined.** DOM focus never leaves
+ * the text input, so a highlight that is only a border is invisible to a
+ * screen reader. The input is the `combobox` (`aria-expanded` once chips
+ * exist, `aria-controls` naming the list, `aria-activedescendant` naming the
+ * chip Tab has reached) and the three resolved chips are `role="option"`
+ * inside one `role="listbox"`, each with an `id` for that pointer to name —
+ * the standard shape for a listbox whose focus never moves. RN's own `Role`
+ * type has no `"listbox"` entry (only `"option"` is standard) and RN declares
+ * no `aria-controls`/`aria-activedescendant`, so those are the values asserted
+ * past their types here, named once each with the reason beside them; RNW
+ * forwards all three verbatim (`forwardedProps`).
+ *
+ * **The listbox holds options and nothing else.** `<Amount>`, the payee line
+ * and the two captions sit outside it: a listbox containing text nodes that
+ * are not options makes the option count a lie, and a reader stepping the
+ * list would hear the amount announced as a choice. The partial branch's
+ * account chip is not in a listbox at all, so it carries no `role` — an
+ * `option` with no list around it is worse than a plain box.
  *
  * **`blurOnSubmit={false}`** — `TextInput`'s own default blurs on Enter
  * (`shouldBlurOnSubmit`, true for any single-line field), which would drop
@@ -60,6 +74,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -68,6 +83,7 @@ import {
 import { type Role, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { useLocale, useT } from "../i18n/provider";
+import { Button } from "../primitives/button";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -75,6 +91,18 @@ import { focus, radius, space, touchTarget } from "../tokens.ts";
 
 /** RN's own `Role` type has no `"listbox"` entry (see the file doc). */
 const LISTBOX_ROLE = "listbox" as Role;
+
+/**
+ * The two ARIA attributes RN declares no prop for and RNW forwards anyway
+ * (`react-native-web`'s own `forwardedProps` lists both). Spread onto the
+ * input rather than written inline so the widening is named once, here, with
+ * the reason — and so a native build, where they mean nothing and RN drops
+ * unknown props, reads the same source.
+ */
+type WebComboboxAria = {
+  "aria-controls"?: string;
+  "aria-activedescendant"?: string;
+};
 
 /**
  * M1 — what `onKeyPress` actually hands over on web: RN's own
@@ -164,6 +192,13 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   const styles = useStyles();
   const inputRef = useRef<TextInput>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
+  // M3 — `aria-activedescendant` names a chip by id, so the ids have to be
+  // unique per rendered bar rather than per file. `useId` is React's own
+  // answer to exactly that; the chips derive theirs from it by index, which
+  // is the same index `highlight` already holds.
+  const bar = useId();
+  const listboxId = `${bar}-chips`;
+  const chipId = (index: number) => `${bar}-chip-${index}`;
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
 
@@ -294,6 +329,11 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
     [ok, highlight, categoryAutoFilled, onUndoCategory, onDiscard],
   );
 
+  const combobox: WebComboboxAria = {
+    ...(ok ? { "aria-controls": listboxId } : {}),
+    ...(ok && highlight !== null ? { "aria-activedescendant": chipId(highlight) } : {}),
+  };
+
   return (
     <View style={styles.root}>
       <TextInput
@@ -305,12 +345,20 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
         blurOnSubmit={false}
         placeholder={t("transactions.commandBarPlaceholder")}
         accessibilityLabel={t("transactions.commandBarLabel")}
+        // M3 — the input is the combobox; the chips are the list it controls.
+        // `aria-expanded` is false until a line resolves, because until then
+        // there is no list to expand into.
+        role="combobox"
+        aria-expanded={ok}
+        {...combobox}
         style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
       />
+      {/* L3 — the grammar's one non-obvious rule, said before it costs anyone a figure. */}
+      <Text style={styles.hint}>{t("transactions.commandBarHint")}</Text>
       {parse === null ? null : (
-        <View style={styles.preview} {...(ok ? { role: LISTBOX_ROLE } : {})}>
+        <View style={styles.preview}>
           {ok ? (
             <>
               <View style={styles.row}>
@@ -321,28 +369,61 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
                   size="body"
                   kind="spend"
                 />
-                <PreviewChip label={selectedAccount?.name ?? "?"} highlighted={highlight === 0} />
-                <PreviewChip
-                  label={formatDate(parse.date, today, locale, t)}
-                  highlighted={highlight === 1}
-                />
+                <Text style={styles.payee}>
+                  {t("transactions.payee")}: {parse.payee === "" ? "—" : parse.payee}
+                </Text>
               </View>
               {amountScaleCaption === undefined ? null : (
                 <Text style={styles.reason}>{amountScaleCaption}</Text>
               )}
-              <View style={styles.row}>
-                <Text style={styles.payee}>
-                  {t("transactions.payee")}: {parse.payee === "" ? "—" : parse.payee}
-                </Text>
+              {/* M3 — options and nothing else. */}
+              <View
+                style={styles.row}
+                role={LISTBOX_ROLE}
+                id={listboxId}
+                aria-label={t("transactions.commandBarChipsLabel")}
+              >
                 <PreviewChip
+                  id={chipId(0)}
+                  option
+                  label={selectedAccount?.name ?? "?"}
+                  highlighted={highlight === 0}
+                />
+                <PreviewChip
+                  id={chipId(1)}
+                  option
+                  label={formatDate(parse.date, today, locale, t)}
+                  highlighted={highlight === 1}
+                />
+                <PreviewChip
+                  id={chipId(CATEGORY_CHIP_INDEX)}
+                  option
                   label={categoryLabel ?? t("transactions.commandBarCategoryPrompt")}
                   muted={categoryLabel === undefined}
                   machineFilled={categoryMachineFilled}
-                  highlighted={highlight === 2}
+                  // L4 — the field's own name, not the value repeated twice.
+                  // `common.autoFilledLabel` is "{{field}}: {{value}}, filled
+                  // automatically"; "Food: Food, filled automatically" named
+                  // nothing a reader could act on.
+                  field={t("transactions.category")}
+                  highlighted={highlight === CATEGORY_CHIP_INDEX}
                 />
               </View>
               {categoryFromHistory === undefined ? null : (
-                <Text style={styles.trailCaption}>{categoryFromHistory}</Text>
+                <View style={styles.row}>
+                  <Text style={styles.trailCaption}>{categoryFromHistory}</Text>
+                  {/* L5 — §8's P2 asks for Undo, and Esc on a chip nobody
+                      can see is not one. The control is the Undo; Esc on the
+                      highlighted chip is the keyboard's way to the same call. */}
+                  {onUndoCategory === undefined ? null : (
+                    <Button
+                      label={t("states.undo")}
+                      onPress={onUndoCategory}
+                      variant="ghost"
+                      size="sm"
+                    />
+                  )}
+                </View>
               )}
             </>
           ) : (
@@ -412,8 +493,19 @@ function reasonKey(
 
 type PreviewChipProps = {
   label: string;
+  /**
+   * M3 — `role="option"` and `aria-selected`, set only by a caller that puts
+   * this chip inside the `listbox`. The partial branch's account chip stands
+   * alone, and an `option` with no list around it announces a choice that
+   * does not exist.
+   */
+  option?: boolean;
+  /** The chip's own DOM id — what the input's `aria-activedescendant` names. Only meaningful with `option`. */
+  id?: string;
   muted?: boolean;
   machineFilled?: boolean;
+  /** L4 — the field this chip *is*, for `common.autoFilledLabel`'s `{{field}}`. Required in practice wherever `machineFilled` is set. */
+  field?: string;
   highlighted?: boolean;
 };
 
@@ -422,25 +514,28 @@ type PreviewChipProps = {
  * component's own file doc), so the interactive semantics `<Chip>` carries
  * (radio role, a picker to open) would be a false affordance. `highlighted`
  * is the visual half of Tab's walk; it never moves DOM focus, which stays on
- * the text input throughout — `role="option"` and `aria-selected` (M1) are
- * what let a screen reader hear the walk despite that, the same way a
- * roving-tabindex listbox announces a selection with no focus move of its
- * own.
+ * the text input throughout — `role="option"`, `aria-selected` and the `id`
+ * the input's `aria-activedescendant` names (M1/M3) are what let a screen
+ * reader hear the walk despite that, the same way a roving-tabindex listbox
+ * announces a selection with no focus move of its own.
  */
 function PreviewChip({
   label,
+  option = false,
+  id,
   muted = false,
   machineFilled = false,
+  field,
   highlighted = false,
 }: PreviewChipProps) {
   const t = useT();
   const styles = useStyles();
   return (
     <View
-      role="option"
-      aria-selected={highlighted}
+      {...(option ? { role: "option" as Role, "aria-selected": highlighted } : {})}
+      {...(id === undefined ? {} : { id })}
       accessibilityLabel={
-        machineFilled ? t("common.autoFilledLabel", { field: label, value: label }) : label
+        machineFilled ? t("common.autoFilledLabel", { field: field ?? label, value: label }) : label
       }
       style={[
         styles.chip,
@@ -470,6 +565,7 @@ const useStyles = makeStyles((theme) => ({
     ...text.ui("body"),
   },
   preview: { gap: space.xs, paddingHorizontal: space.x3 },
+  hint: { color: theme.textMuted, ...text.ui("caption"), paddingHorizontal: space.x3 },
   row: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
   payee: { color: theme.textMuted, ...text.ui("bodySm") },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },

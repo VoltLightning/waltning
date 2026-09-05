@@ -202,6 +202,8 @@ export const pl: Messages = {
     commandBarNoAccount: "Nie dopasowano konta — podaj nazwę, aby kontynuować.",
     commandBarCurrencyMismatch: "Ta waluta nie pasuje do wskazanego konta.",
     commandBarTooMuchUnmatched: "Zbyt wiele niezrozumiałych słów — spróbuj krótszej linii.",
+    commandBarHint: "Spacje grupują tysiące; przecinek lub kropka to znak dziesiętny.",
+    commandBarChipsLabel: "Rozpoznane pola",
   },
   counterparties: {
     settlingWith: "Rozliczenie z {{name}}",

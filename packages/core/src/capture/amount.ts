@@ -14,6 +14,7 @@
  */
 
 import { type Money, toMoney } from "../money.ts";
+import { isoDateSpans } from "./dates.ts";
 
 export type AmountToken = {
   amount: Money;
@@ -33,18 +34,32 @@ export type AmountToken = {
 /**
  * Digits, an optional decimal fraction, and thousands grouped by a plain or
  * no-break space (never a comma — the grammar's one thousands separator is
- * whitespace, so any `,` or `.` found is always the decimal mark). The second
+ * whitespace, so any `,` or `.` found is always the decimal mark). The last
  * alternative is a bare fraction with no integer part — `,5` → `0.5` — which
  * S05's own examples include.
  *
- * C1: the leading run is `\d+`, not `\d{1,3}` \u2014 that cap silently dropped
- * every digit past the third in an ungrouped amount (`1234.56` matched only
- * `123`, and the rest never reached `unmatched` because it sat inside the
- * amount token's own span). A grouped form still wins: `\d+` only ever
- * consumes a contiguous digit run, so a real space still ends it and a
- * correctly-grouped `1 234.56` matches exactly as before.
+ * **A grouping chain starts from a 1–3 digit head, and only from one** (L1).
+ * C1's fix made the leading run `\d+` so an ungrouped `1234.56` would stop
+ * losing its fourth digit — but `\d+(?:[ ]\d{3})*` then reads *any* digit run
+ * followed by a space and three digits as one grouped figure, so `1234 567
+ * cash` became `1234567`: two numbers a person typed, silently welded into an
+ * amount a thousand times either of them. No real thousands separator ever
+ * follows a four-digit head, so the chain alternative caps its head at three
+ * and requires at least one group; an ungrouped run falls to the second
+ * alternative, which consumes a contiguous digit run and stops at the space.
+ *
+ * `1 234.56` still matches whole (the chain wins, the decimal group is shared
+ * by both alternatives), `1234.56` matches whole, and `1234 567` matches
+ * `1234` — leaving `567` where the reader can see it, as payee text and in
+ * `unmatched`, rather than inside the amount's own span.
+ *
+ * **The first number is the amount; every later one is payee text.** That is
+ * S05 §3's stated rule, applied unchanged to a second *number* rather than a
+ * second thousands group: `1000 2000 cash` saves 1000 with payee `2000`. The
+ * grammar has no concept of which number looks like a price (the file doc
+ * above), so refusing the line would refuse `2 coffees 18` too.
  */
-const NUMBER = /\d+(?:[ \u00a0]\d{3})*(?:[.,]\d+)?|[.,]\d+/g;
+const NUMBER = /(?:\d{1,3}(?:[ \u00a0]\d{3})+|\d+)(?:[.,]\d+)?|[.,]\d+/g;
 
 /**
  * A currency token: one to three letters (covers `usd`, `pln`, `zł`) or a
@@ -77,6 +92,10 @@ function findCurrencyToken(
 }
 
 export function findAmount(text: string): AmountToken | null {
+  // L2 — computed once, before the scan: a `YYYY-MM-DD` token is a date this
+  // grammar already knows how to read, and its year is not an amount.
+  const dateSpans = isoDateSpans(text);
+
   NUMBER.lastIndex = 0;
   let match: RegExpExecArray | null;
   // biome-ignore lint/suspicious/noAssignInExpressions: the idiomatic `exec` loop.
@@ -88,6 +107,10 @@ export function findAmount(text: string): AmountToken | null {
     // "-18" is refused outright (`"negative is not a capture"`, Task 1) —
     // skip past it and keep scanning rather than reading off the minus sign.
     if (start > 0 && text[start - 1] === "-") continue;
+
+    // L2 — inside an ISO date. `findDate` claims the whole token later; the
+    // year, month and day inside it are never the money on the line.
+    if (dateSpans.some(([from, to]) => start < to && from < end)) continue;
 
     const amount = toMoney(toDecimalString(raw));
     const { currency, span: currencySpan } = findCurrencyToken(text, end);
