@@ -132,10 +132,19 @@ to three-digit head, because no real thousands separator follows a fourth
 digit.
 
 **The three resolved chips are one list.** The account, the date and the
-category sit together in a `listbox` the input owns as a `combobox` — Tab walks
-it, `aria-activedescendant` names the chip reached, and DOM focus stays in the
-input throughout. The amount, the payee and the captions are outside that list:
-they are readings, not choices.
+category sit together in a `listbox` the input owns as a `combobox` — Up, Down
+and Tab all walk it, `aria-activedescendant` names the chip reached, and DOM
+focus stays in the input throughout. The arrows cycle, because they belong to
+the list; Tab leaves the bar past the last chip, because it belongs to the
+page. The amount, the payee and the captions are outside that list: they are
+readings, not choices. The hint above is the input's own `aria-describedby`,
+not loose text beside it.
+
+**The list is read, never chosen from.** `aria-selected` marks the chip the
+walk has reached and nothing else — no key, tap or click changes what a chip
+says, and correcting a field means retyping the line. That is the one place
+this list departs from an ordinary combobox, where Enter would commit the
+active option; here Enter saves the transaction.
 
 **A name the grammar does not recognise is payee text, not a refusal — with a
 last-used account to fall back on.** §9.2's own four-hour window supplies a
@@ -146,10 +155,18 @@ that window is open. The refusal below only ever fires with **no** default
 account *and* no name the grammar recognises — the ordinary state is a filled
 account chip, not a stopped line.
 
+**A date that names no real day is refused, never quietly replaced by today.**
+`2026-02-31` matches the `YYYY-MM-DD` shape and is not a day. The grammar asks
+the same calendar question the contract edge asks (`zAccountingDate`), so a
+date the bar binds is a date the save will take; a shaped token that names no
+real day stops the line and says so. Its digits are never read as money
+either — a line whose only token is such a value has no amount, and refuses
+for that reason instead.
+
 **No model path.** When D1 truly cannot resolve a line — no amount found, no
-account at all (no default, no recognised name), a currency that disagrees
-with the named account, or too much left over — the bar shows the reason
-beneath it and nothing else. No model call is spent guessing; retyping a
+account at all (no default, no recognised name), a date that is not a real
+calendar day, a currency that disagrees with the named account, or too much
+left over — the bar shows the reason beneath it and nothing else. No model call is spent guessing; retyping a
 clearer line is the whole recovery, and Enter on such a line is a no-op rather
 than a save attempt. §9 Q3 records the same decision: this arc builds only the
 grammar, and a model fallback for the shape too ambiguous for it is a future
@@ -213,8 +230,11 @@ on Save. `✕` discards with a confirm **only if a machine filled something** �
 discarding your own typing is cheap to redo; discarding a transcription is not.
 
 ### Web
-`N` opens the composer from anywhere. Enter saves, Escape discards, Tab moves
-through resolved chips. No mouse required.
+`N` opens the composer from anywhere. Enter saves, Escape discards (or undoes a
+machine-filled category, when that chip is the one the walk has reached). Up
+and Down move through the resolved chips and cycle; Tab moves through them too
+and then leaves the bar, the way Tab leaves any other field. No mouse required,
+and no way to get stuck.
 
 ### Shared
 **Nothing is written until Save.** Voice and OCR fill a draft; they do not

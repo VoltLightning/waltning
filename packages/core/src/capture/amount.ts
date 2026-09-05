@@ -93,7 +93,9 @@ function findCurrencyToken(
 
 export function findAmount(text: string): AmountToken | null {
   // L2 — computed once, before the scan: a `YYYY-MM-DD` token is a date this
-  // grammar already knows how to read, and its year is not an amount.
+  // grammar already knows how to read, and its year is not an amount. Every
+  // *shaped* token, real day or not (`isoDateSpans`' own doc) — `2026-02-31`
+  // is not a date, and its leading `2026` is still not money.
   const dateSpans = isoDateSpans(text);
 
   NUMBER.lastIndex = 0;
@@ -108,9 +110,11 @@ export function findAmount(text: string): AmountToken | null {
     // skip past it and keep scanning rather than reading off the minus sign.
     if (start > 0 && text[start - 1] === "-") continue;
 
-    // L2 — inside an ISO date. `findDate` claims the whole token later; the
-    // year, month and day inside it are never the money on the line.
-    if (dateSpans.some(([from, to]) => start < to && from < end)) continue;
+    // L2 — inside an ISO date. `findDate` claims the whole token later (or
+    // `grammar.ts` refuses the line as `no_date`, for a shaped token that
+    // names no real day); the year, month and day inside it are never the
+    // money on the line.
+    if (dateSpans.some(({ span: [from, to] }) => start < to && from < end)) continue;
 
     const amount = toMoney(toDecimalString(raw));
     const { currency, span: currencySpan } = findCurrencyToken(text, end);

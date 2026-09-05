@@ -83,8 +83,32 @@ export function mapFieldErrors(
  */
 export function fieldErrorsFromZod(error: unknown): readonly FieldError[] | null {
   if (!(error instanceof ZodError)) return null;
-  return error.issues.map((issue) => ({
-    path: issue.path.map(String).join("."),
-    message: issue.message,
-  }));
+  return error.issues.map((issue) => {
+    const path = issue.path.map(String).join(".");
+    return {
+      path,
+      message: issue.message,
+      ...(isCalendarDateIssue(path, issue.code) ? { messageKey: "transactions.badDate" } : {}),
+    };
+  });
+}
+
+/**
+ * L-b — `zAccountingDate`'s calendar refusal, and only that one, given a
+ * catalogue key.
+ *
+ * Every other issue keeps Zod's English literal, which the `messageKey` doc
+ * above records as the spec's problem rather than this contract's. This one
+ * is different because of *where a date is typed*: the command bar's input is
+ * free text, so `2026-02-31` is a line a person will actually send, and a
+ * refusal in a language they do not read is a refusal they cannot act on.
+ *
+ * Matched on the issue's own `code`, never on its message text. `zod.ts`
+ * builds `zAccountingDate` as a shape `regex` followed by a `refine`, so the
+ * calendar half is the `custom`-coded issue and the shape half is not — a
+ * distinction the string would only tell us about by being compared to a
+ * literal copied out of another package.
+ */
+function isCalendarDateIssue(path: string, code: string): boolean {
+  return path === "date" && code === "custom";
 }

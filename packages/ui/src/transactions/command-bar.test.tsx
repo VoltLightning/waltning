@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { CaptureParse } from "@waltning/core/capture/grammar";
-import { accountingDate } from "@waltning/core/date";
+import { type AccountingDate, accountingDate } from "@waltning/core/date";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { createRef } from "react";
 import type { TextInput } from "react-native";
@@ -148,29 +148,43 @@ it("Esc discards", () => {
   expect(onDiscard).toHaveBeenCalledOnce();
 });
 
+/**
+ * L-f — the walk's own state, read the way a screen reader reads it: which
+ * option carries `aria-selected`, and nothing more. `null` while no walk has
+ * begun; the assertion that *exactly one* option ever carries it is the half
+ * that would catch a highlight left behind on a stale chip.
+ */
+function walkedTo(): number | null {
+  const marked = screen
+    .getAllByRole("option")
+    .map((option, index) => (option.getAttribute("aria-selected") === "true" ? index : null))
+    .filter((index): index is number => index !== null);
+  expect(marked.length, "at most one option is ever marked").toBeLessThan(2);
+  return marked[0] ?? null;
+}
+
 it("M1 — Tab walks the resolved chips, then leaves the bar like any other field", () => {
   render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
   const input = screen.getByRole("combobox");
-  const options = screen.getAllByRole("option");
-  expect(options).toHaveLength(3);
-  expect(options.map((option) => option.getAttribute("aria-selected"))).toEqual([
-    "false",
-    "false",
-    "false",
-  ]);
+  expect(screen.getAllByRole("option")).toHaveLength(3);
+  // L-f — before the walk begins nothing is selected, and no option says so
+  // in the negative either: these options cannot be chosen (`LISTBOX_ROLE`'s
+  // own note), so `aria-selected="false"` would announce a state that has no
+  // meaning here.
+  expect(
+    screen.getAllByRole("option").map((option) => option.getAttribute("aria-selected")),
+  ).toEqual([null, null, null]);
+  expect(walkedTo()).toBeNull();
 
   // First three Tabs walk chip 0, 1, 2 — each one cancelled (focus stays).
   for (let i = 0; i < 3; i++) {
     const event = fireEvent.keyDown(input, { key: "Tab" });
     expect(event).toBe(false);
-    const selected = screen
-      .getAllByRole("option")
-      .map((option) => option.getAttribute("aria-selected"));
-    expect(selected.filter((value) => value === "true")).toEqual(["true"]);
-    expect(selected[i]).toBe("true");
+    expect(walkedTo()).toBe(i);
   }
 
-  // The fourth Tab, already on the last chip, is the browser's own — never cancelled.
+  // The fourth Tab, already on the last chip, is the browser's own — never
+  // cancelled. **Tab does not wrap; the arrows do** (`handleKeyPress`).
   expect(fireEvent.keyDown(input, { key: "Tab" })).toBe(true);
 });
 
@@ -182,12 +196,56 @@ it("M1 — Shift+Tab walks backward, and leaves the bar from the first chip", ()
 
   const back = fireEvent.keyDown(input, { key: "Tab", shiftKey: true });
   expect(back).toBe(false); // → chip 0, cancelled
-  expect(
-    screen.getAllByRole("option").map((option) => option.getAttribute("aria-selected")),
-  ).toEqual(["true", "false", "false"]);
+  expect(walkedTo()).toBe(0);
 
   // Shift+Tab from chip 0 is the browser's own backward tab — never cancelled.
   expect(fireEvent.keyDown(input, { key: "Tab", shiftKey: true })).toBe(true);
+});
+
+it("L-f — Down walks the options forward and wraps, the combobox pattern's own key", () => {
+  render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
+  const input = screen.getByRole("combobox");
+
+  for (const expected of [0, 1, 2, 0]) {
+    // Cancelled every time: Down must not also move the caret in the text.
+    expect(fireEvent.keyDown(input, { key: "ArrowDown" })).toBe(false);
+    expect(walkedTo()).toBe(expected);
+  }
+});
+
+it("L-f — Up walks backward, starting from the last option, and wraps", () => {
+  render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
+  const input = screen.getByRole("combobox");
+
+  for (const expected of [2, 1, 0, 2]) {
+    expect(fireEvent.keyDown(input, { key: "ArrowUp" })).toBe(false);
+    expect(walkedTo()).toBe(expected);
+  }
+});
+
+it("L-f — the arrows follow into aria-activedescendant, and Tab and the arrows share one walk", () => {
+  render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
+  const input = screen.getByRole("combobox");
+
+  fireEvent.keyDown(input, { key: "ArrowDown" }); // → chip 0
+  fireEvent.keyDown(input, { key: "Tab" }); // → chip 1, the same walk
+  expect(walkedTo()).toBe(1);
+  const active = input.getAttribute("aria-activedescendant");
+  expect(active).toBe(screen.getAllByRole("option")[1]?.getAttribute("id"));
+
+  fireEvent.keyDown(input, { key: "ArrowUp" }); // → chip 0
+  expect(input.getAttribute("aria-activedescendant")).toBe(
+    screen.getAllByRole("option")[0]?.getAttribute("id"),
+  );
+});
+
+it("L-f — with no line resolved the arrows stay the caret keys", () => {
+  render(<CommandBar {...props({ value: "coffee", parse: REFUSED })} />);
+  const input = screen.getByRole("combobox");
+  // Not cancelled: there is no list to walk, so Down belongs to the text.
+  expect(fireEvent.keyDown(input, { key: "ArrowDown" })).toBe(true);
+  expect(fireEvent.keyDown(input, { key: "ArrowUp" })).toBe(true);
+  expect(screen.queryAllByRole("option")).toHaveLength(0);
 });
 
 it("M1 — Shift+Tab with nothing highlighted is the browser's own backward tab", () => {
@@ -352,4 +410,54 @@ it("exposes focus() through its ref — the platform hotkey's own reach", () => 
   const spy = vi.spyOn(input, "focus");
   ref.current?.focus();
   expect(spy).toHaveBeenCalledOnce();
+});
+
+it("L-d — the hint is the input's own description, not loose text beside it", () => {
+  render(<CommandBar {...props()} />);
+  const input = screen.getByRole("combobox");
+  const describedBy = input.getAttribute("aria-describedby");
+  expect(describedBy).toBeTruthy();
+
+  const hint = screen.getByText("Spaces group thousands; comma or point is the decimal mark.");
+  expect(hint.getAttribute("id")).toBe(describedBy);
+});
+
+it("L-d — the description holds on an empty bar and on a resolved one alike", () => {
+  const { rerender } = render(<CommandBar {...props()} />);
+  const empty = screen.getByRole("combobox").getAttribute("aria-describedby");
+  rerender(<CommandBar {...props({ value: "48.90 cash coffee", parse: RESOLVED })} />);
+  // The rule is about typing, so it is described before there is anything to
+  // resolve — unlike `aria-controls`, which only exists once a list does.
+  expect(screen.getByRole("combobox").getAttribute("aria-describedby")).toBe(empty);
+});
+
+it("L-b — a date that names no real day is refused by name, not dated today", () => {
+  const noDate: CaptureParse = {
+    ok: false,
+    reason: "no_date",
+    partial: { amount: toMoney("48.90"), accountId: "acc-cash" },
+    unmatched: [],
+  };
+  render(<CommandBar {...props({ value: "48.90 cash coffee 2026-02-31", parse: noDate })} />);
+  expect(
+    screen.getByText("That date isn't a real day — check the month and the day."),
+  ).toBeDefined();
+  // Nothing resolved, so nothing is announced as a choice.
+  expect(screen.queryAllByRole("option")).toHaveLength(0);
+});
+
+it("L-b — a date the chip cannot format renders as the bare string rather than throwing", () => {
+  // Unreachable through the grammar (`no_date` above catches it first) and
+  // written down anyway: `Intl.DateTimeFormat` raises on an invalid `Date`,
+  // and this runs in a render body — a throw here takes the whole bar with it.
+  const unformattable: CaptureParse = {
+    ...RESOLVED,
+    // The brand is asserted rather than earned: `accountingDate` throws on
+    // this by design, and the value this test exists for is precisely one
+    // that got past a boundary. Asserting the brand on a `string` is the
+    // narrowest way to stand one here — no `unknown`, no `any`.
+    date: "not-a-date" as AccountingDate,
+  };
+  render(<CommandBar {...props({ value: "48.90 cash coffee", parse: unformattable })} />);
+  expect(screen.getByText("not-a-date")).toBeDefined();
 });

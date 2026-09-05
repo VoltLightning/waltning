@@ -63,5 +63,12 @@ export function resolveFieldErrorMessage(
   if (error.messageKey === "transactions.categoryUnavailable") {
     return t("transactions.categoryUnavailable");
   }
+  // L-b — `zAccountingDate`'s calendar refusal. Zod produces an English
+  // literal and nothing else could translate it: the schema is `packages/core`
+  // and cannot reach a catalogue, so the controller tags the issue with a key
+  // (`create-phone-ledger.ts`) and this is where the key becomes a sentence.
+  if (error.messageKey === "transactions.badDate") {
+    return t("transactions.badDate");
+  }
   return error.message;
 }

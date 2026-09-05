@@ -12,7 +12,7 @@
 import type { AccountingDate } from "../date.ts";
 import type { Money } from "../money.ts";
 import { findAmount } from "./amount.ts";
-import { findDate } from "./dates.ts";
+import { findDate, isoDateSpans } from "./dates.ts";
 import { findName, fold } from "./names.ts";
 
 export type CaptureContext = {
@@ -48,7 +48,7 @@ export type CaptureParse =
     }
   | {
       ok: false;
-      reason: "no_amount" | "no_account" | "currency_mismatch" | "too_much_unmatched";
+      reason: "no_amount" | "no_account" | "no_date" | "currency_mismatch" | "too_much_unmatched";
       partial: CapturedFields;
       unmatched: readonly string[];
     };
@@ -138,6 +138,31 @@ export function parseCapture(text: string, context: CaptureContext): CapturePars
   const categoryMatch = findName(text, context.categories, consumed);
   if (categoryMatch) consumed.push(categoryMatch.span);
   const categoryId = categoryMatch?.value.id ?? null;
+
+  /**
+   * L-b — a `YYYY-MM-DD` token that names no real day (`2026-02-31`) is
+   * refused here, by name, rather than dated today behind the reader's back.
+   *
+   * It cannot be read as anything else either: `findAmount` skips every
+   * date-shaped span (`isoDateSpans`' own doc), so the `2026` on its front is
+   * never money, and `findDate` will not bind it because
+   * `zod.ts#zAccountingDate` would refuse it on save. Silence would leave a
+   * line that says February 31st saving against *today*, which is the one
+   * outcome nobody typed.
+   *
+   * **Checked here, after the amount and the account, so `partial` is worth
+   * having.** A line whose *only* token is such a value never reaches this
+   * point — with its digits skipped there is no amount, so `no_amount` above
+   * has already answered it, which is the truer reason for that line.
+   */
+  if (isoDateSpans(text).some((candidate) => !candidate.real)) {
+    return {
+      ok: false,
+      reason: "no_date",
+      partial: { amount: amountToken.amount, accountId, categoryId },
+      unmatched: remainingTokens(tokens, consumed),
+    };
+  }
 
   let date = context.today;
   const dateMatch = findDate(text, context.today, context.locale);

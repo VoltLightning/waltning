@@ -89,7 +89,23 @@ import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
 
-/** RN's own `Role` type has no `"listbox"` entry (see the file doc). */
+/**
+ * RN's own `Role` type has no `"listbox"` entry (see the file doc).
+ *
+ * **L-f — the one deviation from the APG combobox pattern that remains, and
+ * it is deliberate.** Up, Down and Tab all move the active option now, so the
+ * walk itself is the pattern's; what is not is that **the options cannot be
+ * chosen.** In a real combobox `Enter` commits the active option and the
+ * value of the field becomes it. Here `Enter` saves the transaction, `Escape`
+ * discards the line (or undoes a machine-filled category), and no key, tap or
+ * click changes what a chip says — the chips are a *reading* of the typed
+ * line, and correcting a field means retyping it (this component's own file
+ * doc: no picker, by design, in this arc). `aria-selected` therefore marks
+ * the option the walk has reached and never a committed choice, which is why
+ * it sits on exactly one option at a time and on none before the walk starts.
+ * A reader who arrows to the end learns what the line resolved to, which is
+ * the whole purpose of the list; nothing offers to change it.
+ */
 const LISTBOX_ROLE = "listbox" as Role;
 
 /**
@@ -102,6 +118,8 @@ const LISTBOX_ROLE = "listbox" as Role;
 type WebComboboxAria = {
   "aria-controls"?: string;
   "aria-activedescendant"?: string;
+  /** L-d — the hint under the bar, named by the field it is about rather than left as loose text beside it. */
+  "aria-describedby"?: string;
 };
 
 /**
@@ -162,12 +180,26 @@ const CATEGORY_CHIP_INDEX = 2;
  */
 function formatDate(date: string, today: string, locale: string, t: ReturnType<typeof useT>) {
   if (date === today) return t("shell.today");
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  const [year, month, day] = date.split("-").map(Number);
+  const at =
+    year === undefined || month === undefined || day === undefined
+      ? new Date(Number.NaN)
+      : new Date(Date.UTC(year, month - 1, day));
+  // **The bare string is the fallback, never a throw.** `Intl.DateTimeFormat`
+  // raises `RangeError` on an invalid `Date`, and this runs in a render body:
+  // a chip that cannot say "2 Sep" must still say *something*, and the string
+  // it was handed is the only honest thing left to say. The grammar refuses a
+  // date-shaped token that names no real day before it ever reaches a chip
+  // (`grammar.ts`'s `no_date`), so nothing today takes this branch — which is
+  // exactly why it is written down rather than assumed: a render that throws
+  // takes the whole bar with it, and the next caller of this component need
+  // not carry the grammar's guarantee to be safe.
+  if (Number.isNaN(at.getTime())) return date;
   return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, day)));
+  }).format(at);
 }
 
 export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function CommandBar(
@@ -198,6 +230,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   // is the same index `highlight` already holds.
   const bar = useId();
   const listboxId = `${bar}-chips`;
+  const hintId = `${bar}-hint`;
   const chipId = (index: number) => `${bar}-chip-${index}`;
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
@@ -227,7 +260,21 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   // `PROPOSAL_DISPLAY_THRESHOLD`.
   const categoryLabel =
     pickedCategory?.name ?? (categoryAutoFilled ? proposedCategory?.name : undefined);
-  const categoryMachineFilled = categoryAutoFilled && pickedCategory === undefined;
+  /**
+   * L-e — machine-filled *and* the name of the field it filled, as one value.
+   *
+   * The accent border, the `·auto` marker and `common.autoFilledLabel`'s
+   * `{{field}}` are three renderings of a single fact, and while they were
+   * two independent props (`machineFilled` and an optional `field`) a caller
+   * could set the border without the name and the label fell back to
+   * repeating the value — *"Food: Food, filled automatically"*, which is what
+   * L4 found. Absent means not machine-filled; present carries what the
+   * announcement needs, so the two can no longer be set apart.
+   */
+  const categoryMachineFilled =
+    categoryAutoFilled && pickedCategory === undefined
+      ? { field: t("transactions.category") }
+      : undefined;
   /**
    * M3/P2 — "every machine-filled field states what produced it, in one
    * line, with Undo." The marker glyph is the chip's own half of that (`Chip`
@@ -236,7 +283,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
    * trail row prints, naming the payee the proposal actually came from.
    */
   const categoryFromHistory =
-    categoryMachineFilled && parse?.ok === true
+    categoryMachineFilled !== undefined && parse?.ok === true
       ? t("categories.fromHistory", { payee: parse.payee })
       : undefined;
 
@@ -280,13 +327,38 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   // is the one event RN promises fires for it instead).
   const handleSubmitEditing = useCallback(() => onSubmit(), [onSubmit]);
 
-  // Esc and Tab — the two keys `onSubmitEditing` has no opinion about.
+  // Esc, Tab and the arrows — the keys `onSubmitEditing` has no opinion about.
   // `ok`/`highlight`/`categoryAutoFilled`/`onUndoCategory` are read from the
   // render closure rather than threaded through a ref: a stale closure here
   // would walk stale chips for one keystroke, never call the wrong handler.
   const handleKeyPress = useCallback(
     (event: TextInputKeyPressEvent) => {
       const key = event.nativeEvent.key;
+      /**
+       * L-f — Up and Down move the active option, which is the combobox
+       * pattern's own answer for a list whose focus never leaves the input.
+       *
+       * **They wrap; Tab does not.** That is the division of labour, not an
+       * inconsistency: the arrows belong to the list — APG's own listbox
+       * navigation cycles, and a reader stepping three chips to see what the
+       * line resolved to should not fall out of the field for pressing Down
+       * once too often. Tab belongs to the page, and a Tab that refused to
+       * leave would be the keyboard trap M1 removed. So the arrows always
+       * cycle and Tab always eventually leaves.
+       *
+       * Only while a line resolves (`ok`): with no chips there is nothing to
+       * walk, and the caret keys have to stay the caret keys. `preventDefault`
+       * is what stops Down from also moving the cursor in the text.
+       */
+      if ((key === "ArrowDown" || key === "ArrowUp") && ok) {
+        event.preventDefault();
+        const step = key === "ArrowDown" ? 1 : -1;
+        // Down from nothing lands on the first chip, Up from nothing on the
+        // last — the two ends a reader means by "start walking".
+        const from = highlight ?? (step === 1 ? -1 : 0);
+        setHighlight((from + step + CHIP_COUNT) % CHIP_COUNT);
+        return;
+      }
       if (key === "Escape") {
         // M3/P2 — Esc on the highlighted category chip undoes the applied
         // proposal rather than discarding the whole typed line; every other
@@ -330,6 +402,9 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   );
 
   const combobox: WebComboboxAria = {
+    // L-d — always: the hint is about the field whether or not a line has
+    // resolved, and it is the one rule a reader needs *before* typing.
+    "aria-describedby": hintId,
     ...(ok ? { "aria-controls": listboxId } : {}),
     ...(ok && highlight !== null ? { "aria-activedescendant": chipId(highlight) } : {}),
   };
@@ -355,8 +430,14 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
         autoCapitalize="none"
         autoCorrect={false}
       />
-      {/* L3 — the grammar's one non-obvious rule, said before it costs anyone a figure. */}
-      <Text style={styles.hint}>{t("transactions.commandBarHint")}</Text>
+      {/* L3 — the grammar's one non-obvious rule, said before it costs anyone
+          a figure. L-d — `id`, because the input names it through
+          `aria-describedby`: a caption sitting under a field is a caption a
+          screen reader never reaches, and this one has to be heard *before*
+          the figure is already wrong. */}
+      <Text id={hintId} style={styles.hint}>
+        {t("transactions.commandBarHint")}
+      </Text>
       {parse === null ? null : (
         <View style={styles.preview}>
           {ok ? (
@@ -400,12 +481,16 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
                   option
                   label={categoryLabel ?? t("transactions.commandBarCategoryPrompt")}
                   muted={categoryLabel === undefined}
-                  machineFilled={categoryMachineFilled}
-                  // L4 — the field's own name, not the value repeated twice.
-                  // `common.autoFilledLabel` is "{{field}}: {{value}}, filled
-                  // automatically"; "Food: Food, filled automatically" named
-                  // nothing a reader could act on.
-                  field={t("transactions.category")}
+                  // L4/L-e — machine-filled carries the field's own name, not
+                  // the value repeated twice. `common.autoFilledLabel` is
+                  // "{{field}}: {{value}}, filled automatically"; "Food: Food,
+                  // filled automatically" named nothing a reader could act on,
+                  // and the shape now makes the pair inseparable. Spread
+                  // rather than passed as `undefined` — `exactOptionalPropertyTypes`,
+                  // the same idiom `id` above takes.
+                  {...(categoryMachineFilled === undefined
+                    ? {}
+                    : { machineFilled: categoryMachineFilled })}
                   highlighted={highlight === CATEGORY_CHIP_INDEX}
                 />
               </View>
@@ -477,6 +562,7 @@ function reasonKey(
 ):
   | "transactions.commandBarNoAmount"
   | "transactions.commandBarNoAccount"
+  | "transactions.commandBarNoDate"
   | "transactions.commandBarCurrencyMismatch"
   | "transactions.commandBarTooMuchUnmatched" {
   switch (reason) {
@@ -484,6 +570,8 @@ function reasonKey(
       return "transactions.commandBarNoAmount";
     case "no_account":
       return "transactions.commandBarNoAccount";
+    case "no_date":
+      return "transactions.commandBarNoDate";
     case "currency_mismatch":
       return "transactions.commandBarCurrencyMismatch";
     case "too_much_unmatched":
@@ -503,9 +591,15 @@ type PreviewChipProps = {
   /** The chip's own DOM id — what the input's `aria-activedescendant` names. Only meaningful with `option`. */
   id?: string;
   muted?: boolean;
-  machineFilled?: boolean;
-  /** L4 — the field this chip *is*, for `common.autoFilledLabel`'s `{{field}}`. Required in practice wherever `machineFilled` is set. */
-  field?: string;
+  /**
+   * L-e — set exactly when this chip's value was filled by the machine, and
+   * carrying the name of the field it filled (`common.autoFilledLabel`'s
+   * `{{field}}`). One prop rather than a `machineFilled` boolean beside an
+   * optional `field`, because the border, the marker and the announcement are
+   * one fact: a `field` that could be omitted was omitted, and the label fell
+   * back to repeating the value.
+   */
+  machineFilled?: { field: string };
   highlighted?: boolean;
 };
 
@@ -524,18 +618,27 @@ function PreviewChip({
   option = false,
   id,
   muted = false,
-  machineFilled = false,
-  field,
+  machineFilled,
   highlighted = false,
 }: PreviewChipProps) {
   const t = useT();
   const styles = useStyles();
   return (
     <View
-      {...(option ? { role: "option" as Role, "aria-selected": highlighted } : {})}
+      // L-f — `aria-selected` marks the option the walk has reached, and
+      // nothing else. Writing `aria-selected="false"` onto the other two
+      // would announce a selection state for chips this list can never select
+      // (`LISTBOX_ROLE`'s own note: the options are not choosable), so an
+      // unwalked option carries the attribute not at all — the shape APG's own
+      // combobox examples take, where exactly one option is marked and only
+      // once a walk has begun.
+      {...(option ? { role: "option" as Role } : {})}
+      {...(option && highlighted ? { "aria-selected": true } : {})}
       {...(id === undefined ? {} : { id })}
       accessibilityLabel={
-        machineFilled ? t("common.autoFilledLabel", { field: field ?? label, value: label }) : label
+        machineFilled
+          ? t("common.autoFilledLabel", { field: machineFilled.field, value: label })
+          : label
       }
       style={[
         styles.chip,
@@ -546,7 +649,9 @@ function PreviewChip({
       <Text style={[styles.chipText, muted ? styles.chipTextMuted : null]}>
         {label}
         {/* Text, not tint alone (P5) — `Chip`'s own marker, matched. */}
-        {machineFilled ? <Text style={styles.chipMarker}>{t("common.autoFilled")}</Text> : null}
+        {machineFilled === undefined ? null : (
+          <Text style={styles.chipMarker}>{t("common.autoFilled")}</Text>
+        )}
       </Text>
     </View>
   );

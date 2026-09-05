@@ -128,11 +128,14 @@ describe("L2 — an ISO date's digits are never the amount", () => {
     expect(found?.amount).toBe("48.90000000");
   });
 
-  it("a date-shaped token is a date to both readers or to neither — '9999-99-99' has no amount in it", () => {
-    // `isoDateSpans` makes `findDate`'s own `accountingDate` call, so the two
-    // can never disagree about which token is a date. Calendar validity is
-    // `zod.ts#zAccountingDate`'s, at the contract edge — not this grammar's.
+  it("a date-*shaped* token holds no money, real day or not — '9999-99-99'", () => {
+    // L-b — the scanner skips every `YYYY-MM-DD` span, including one that
+    // names no real day. `9999` on the front of a date is not the amount on
+    // the line whether or not the 99th of September exists; `findDate`
+    // refuses to bind it and `grammar.ts` refuses the line rather than
+    // mining the token for a year.
     expect(findAmount("9999-99-99")).toBeNull();
+    expect(findAmount("2026-02-31")).toBeNull();
   });
 });
 

@@ -202,6 +202,19 @@ export const en = {
     more: "More",
     date: "Date",
     invalidDate: "Not a valid date (YYYY-MM-DD).",
+    /**
+     * L-b — `zAccountingDate`'s calendar refusal, in the reader's language.
+     *
+     * Zod's own issue text is an English literal by construction
+     * (`transport/field-errors.ts`'s own note on `messageKey`), which is fine
+     * for a field nobody types freehand and not fine for the command bar,
+     * where the whole input *is* free text. Separate from `invalidDate`
+     * above, which `DateField` shows *while* a date is being typed — there,
+     * "not finished yet" and "not real" are the same thing to the person
+     * mid-edit; here the line was already sent and came back refused, so the
+     * sentence names the calendar rather than the format.
+     */
+    badDate: "That date isn't a real calendar day.",
     business: "Business",
     counterparty: "Counterparty",
     noCounterparty: "No counterparty",
@@ -340,6 +353,13 @@ export const en = {
     commandBarNoAmount: "No amount found — start the line with a number.",
     /** D1's `no_account` refusal. */
     commandBarNoAccount: "No account matched — name one to continue.",
+    /**
+     * D1's `no_date` refusal — a `YYYY-MM-DD` token that names no real day
+     * (`grammar.ts`, `capture/dates.ts`). Said rather than swallowed: the
+     * alternative is dating the row *today* and saving it, which is the one
+     * outcome nobody typed.
+     */
+    commandBarNoDate: "That date isn't a real day — check the month and the day.",
     /** D1's `currency_mismatch` refusal. */
     commandBarCurrencyMismatch: "That currency doesn't match the named account.",
     /** D1's `too_much_unmatched` refusal. */

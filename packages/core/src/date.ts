@@ -59,6 +59,34 @@ export function accountingDate(value: string): AccountingDate {
 export const isAccountingDate = (value: string): value is AccountingDate => SHAPE.test(value);
 
 /**
+ * A real Gregorian day, not merely the `YYYY-MM-DD` shape.
+ *
+ * `Date.UTC` rolls `2026-02-30` forward into March rather than refusing it, so
+ * a value that survives the round trip unchanged was a real day and one that
+ * does not was never on a calendar. No clock is read — every number comes from
+ * the string itself, which is `addDays`'s own distinction (calendar arithmetic,
+ * not clock arithmetic) applied to a question rather than to a shift.
+ *
+ * **Exported because more than one boundary asks it, and they must not
+ * disagree.** `zod.ts#zAccountingDate` is the contract edge (M3); the capture
+ * grammar (`capture/dates.ts`) is the *reading* edge, where a person types a
+ * line and `2026-02-31` has to stop being a date before the amount scanner
+ * and the date binder can agree about which token is one. Two copies of this
+ * round trip could drift, and a drift here is a line that loses its amount to
+ * a date nothing will accept.
+ */
+export function isRealCalendarDate(value: string): boolean {
+  if (!SHAPE.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const rolled = new Date(Date.UTC(year, month - 1, day));
+  return (
+    rolled.getUTCFullYear() === year &&
+    rolled.getUTCMonth() === month - 1 &&
+    rolled.getUTCDate() === day
+  );
+}
+
+/**
  * Today, in a named zone.
  *
  * **The zone is required**, and that is the whole point of the signature. The

@@ -141,6 +141,49 @@ describe("L2 — a line that leads with an ISO date resolves both the date and t
   });
 });
 
+/**
+ * L-b — a `YYYY-MM-DD` token that names no real day.
+ *
+ * Both reasons are reachable and each is the truer one for its line: with the
+ * date's digits skipped, a line that is *only* such a token has no amount at
+ * all (`no_amount`), while a line that resolved an amount and an account has
+ * exactly one thing wrong with it, and it is the date.
+ */
+describe("L-b — a calendar-invalid date is refused, never quietly dated today", () => {
+  it("'48.90 cash coffee 2026-02-31' refuses no_date and keeps what it did resolve", () => {
+    const parsed = parseCapture("48.90 cash coffee 2026-02-31", baseContext);
+    expect(parsed).toMatchObject({
+      ok: false,
+      reason: "no_date",
+      partial: { amount: "48.90000000", accountId: "acc-cash" },
+    });
+  });
+
+  it.each(["2026-02-30", "2026-13-01", "2026-00-01", "2023-02-29", "9999-99-99"])(
+    "%s is refused rather than bound",
+    (bad) => {
+      expect(parseCapture(`48.90 cash coffee ${bad}`, baseContext)).toMatchObject({
+        ok: false,
+        reason: "no_date",
+      });
+    },
+  );
+
+  it("a leap day that IS real still resolves — the check is the calendar, not a blanket suspicion", () => {
+    expect(parseCapture("48.90 cash coffee 2024-02-29", baseContext)).toMatchObject({
+      ok: true,
+      date: "2024-02-29",
+    });
+  });
+
+  it("a line whose only token is such a value has no amount either — no_amount answers it first", () => {
+    expect(parseCapture("2026-02-31", baseContext)).toMatchObject({
+      ok: false,
+      reason: "no_amount",
+    });
+  });
+});
+
 describe("failure reasons", () => {
   it("'lunch' has no amount", () => {
     const parsed = parseCapture("lunch", baseContext);

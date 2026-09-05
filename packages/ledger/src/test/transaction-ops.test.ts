@@ -1265,9 +1265,8 @@ describe("an archived category", () => {
     const LIVE_LINE = id<"transactionLines">("00000000-0000-4000-8000-0000000000b0");
     const LINE = id<"transactionLines">("00000000-0000-4000-8000-0000000000b1");
 
-    // A set already on the row, so the assertion below says something: this
-    // operation replaces wholesale, and a refusal arriving after the delete
-    // would leave the transaction with no breakdown at all.
+    // A set already on the row, so the refusal below has something to
+    // preserve. Note what this alone does *not* prove — see the next test.
     writeLocally(stores.ledger, {
       executor: setTransactionLinesExecutor,
       registry: ledgerRegistry,
@@ -1294,8 +1293,76 @@ describe("an archived category", () => {
     ).toThrow(/set_transaction_lines.*category_id.*archived/s);
 
     const after = readLines();
-    expect(after, "the old set survived — the refusal arrived before the delete").toHaveLength(1);
+    expect(after, "the old set is still there, whole").toHaveLength(1);
     expect(after[0]?.id).toBe(LIVE_LINE);
+  });
+
+  /**
+   * L-a — the ordering itself, which the test above cannot see.
+   *
+   * `writeLocally` wraps `apply` in one SQLite transaction, so a delete that
+   * *did* run before the refusal would be rolled back and the table would read
+   * back identical either way: the assertion above passes whether the check
+   * sits before the delete or after it, which makes it an assertion about
+   * atomicity, not about order. Both are worth having and they are not the
+   * same guarantee — atomicity is `write.ts`'s and holds for every op; this
+   * ordering is `replaceLines`' own, and it is the one a future edit can
+   * break by moving a line.
+   *
+   * So the read happens **inside the transaction the refusal is thrown out
+   * of**, before the rollback: a delete that had already run would be visible
+   * to its own transaction as an empty table, rolled back or not. `apply` is
+   * called directly, with a handle this test opened, because that is the only
+   * way to be standing inside that transaction when the throw goes past.
+   */
+  it("set_transaction_lines refuses before it deletes — read from inside the failing transaction", () => {
+    const LIVE_LINE = id<"transactionLines">("00000000-0000-4000-8000-0000000000c0");
+    const LINE = id<"transactionLines">("00000000-0000-4000-8000-0000000000c1");
+
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: readTxn()?.version ?? 0,
+        lines: [{ id: LIVE_LINE, description: "Espresso", amount: "18" }],
+      },
+    });
+
+    // Counted, not remembered in a `let`: the refusal unwinds past the read,
+    // so whatever it saw has to already be somewhere the assertion can reach.
+    const seenDuringRefusal: number[] = [];
+    expect(() =>
+      stores.ledger.replica.db.transaction((tx) => {
+        try {
+          setTransactionLinesExecutor.apply(
+            {
+              transactionId: TXN,
+              version: readTxn()?.version ?? 0,
+              // `apply` takes the schema's *output*, so the money is already
+              // `Money` here — `writeLocally` above is what parses a string
+              // into one, and this call deliberately steps around it.
+              lines: [
+                { id: LINE, description: "Espresso", amount: toMoney("18"), categoryId: ARCHIVED },
+              ],
+            },
+            tx,
+            capture,
+          );
+        } finally {
+          seenDuringRefusal.push(
+            tx.select().from(transactionLines).where(eq(transactionLines.transactionId, TXN)).all()
+              .length,
+          );
+        }
+      }),
+    ).toThrow(/set_transaction_lines.*category_id.*archived/s);
+
+    expect(
+      seenDuringRefusal,
+      "the old set was still on the table when the refusal was thrown — the check runs above the delete",
+    ).toEqual([1]);
   });
 
   /**

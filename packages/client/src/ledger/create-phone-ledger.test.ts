@@ -872,6 +872,41 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * L-b — a date that names no real day is refused here, and the refusal
+   * arrives with a catalogue key rather than only Zod's English literal.
+   *
+   * The command bar's grammar refuses `2026-02-31` before it ever gets this
+   * far (`capture/grammar.ts`'s `no_date`), which is where it *should* be
+   * caught; this is the layer beneath, reached by any caller that names a
+   * date directly, and it must refuse rather than write a day that is not on
+   * a calendar.
+   */
+  it("refuses a calendar-invalid date, in a language the screen can render", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      date: "2026-02-31",
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "date", message: expect.any(String), messageKey: "transactions.badDate" },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("a real leap day is not refused — the check is the calendar, not the shape twice", () => {
+    const { controller } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      date: "2024-02-29",
+    });
+    expect(result).not.toHaveProperty("fieldErrors");
+  });
+
+  /**
    * H2 — `createTransactionInput` cannot know the account's currency, only
    * the controller has both in view. PLN holds 2 decimal places here; a
    * third digit is refused on `amountOriginal` before the write, never
