@@ -4380,7 +4380,7 @@ presets, the picker between them, and `set_active_layout`.
 index over `is_active` permits at most one, on both dialects. An index cannot
 refuse a count of *zero*, and zero is the state that leaves the dashboard with
 nothing to draw, so Postgres carries a deferred constraint trigger
-(`dashboard_layouts_exactly_one_active`, `WA019`) for the other half — the same
+(`dashboard_layouts_exactly_one_active`, `WA020`) for the other half — the same
 pair `currencies.is_pivot` has, and for the same reason. SQLite has no deferred
 constraint trigger, so the replica holds the upper bound only and the reader
 orders its answer rather than trusting a bound it cannot enforce.

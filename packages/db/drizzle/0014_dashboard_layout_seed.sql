@@ -53,7 +53,7 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF (SELECT count(*) FROM dashboard_layouts WHERE is_active) <> 1 THEN
     RAISE EXCEPTION 'exactly one dashboard layout must be active (SPEC.md §14.5)'
-      USING ERRCODE = 'WA019';
+      USING ERRCODE = 'WA020';
   END IF;
   RETURN NULL;
 END $$;

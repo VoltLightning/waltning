@@ -143,7 +143,14 @@ describe("useLeadCurrency", () => {
     });
   });
 
-  it("falls back to the largest holding by absolute total, not the first account's", () => {
+  /**
+   * **M-1.** Ledger order, not magnitude — `design-system/05` row 12 refuses a
+   * cross-currency ranking outright, and this hero has no rates to rank with.
+   * The fixture makes the two rules disagree on purpose: `CHF 40.00` is first
+   * and far the smaller, `EUR -9 000.00` is second and far the larger, so a
+   * magnitude rule would return `EUR` and only order returns `CHF`.
+   */
+  it("falls back to the first holding in ledger order, whatever its size", () => {
     const ledger = fakeController(() => [
       account({ currency: CHF, balance: money.toMoney("40.00") }),
       account({
@@ -157,25 +164,30 @@ describe("useLeadCurrency", () => {
     const { result } = renderHook(() => useLeadCurrency(ledger, PLN));
 
     expect(result.current).toEqual({
-      entry: { currency: EUR, decimals: 2, balance: money.toMoney("-9000.00") },
+      entry: { currency: CHF, decimals: 2, balance: money.toMoney("40.00") },
       fallback: true,
       missing: PLN,
     });
   });
 
-  it("keeps ledger order when two holdings are the same size", () => {
+  /**
+   * Order is the accounts', not the currency codes' — the same fixture with
+   * the alphabetically-later code opened first still leads with that one, so
+   * nothing sorts behind the fold's back.
+   */
+  it("takes the order the accounts arrive in, not the alphabet's", () => {
     const ledger = fakeController(() => [
-      account({ currency: CHF, balance: money.toMoney("500.00") }),
+      account({ currency: EUR, balance: money.toMoney("500.00") }),
       account({
         id: id<"accounts">("66666666-6666-4666-8666-666666666666"),
-        name: "Bank B · EUR",
-        currency: EUR,
-        balance: money.toMoney("-500.00"),
+        name: "Bank B · CHF",
+        currency: CHF,
+        balance: money.toMoney("500.00"),
       }),
     ]);
     const { result } = renderHook(() => useLeadCurrency(ledger, PLN));
 
-    expect(result.current).toMatchObject({ entry: { currency: CHF }, fallback: true });
+    expect(result.current).toMatchObject({ entry: { currency: EUR }, fallback: true });
   });
 
   it("is null before the first account — nothing to fall back to", () => {

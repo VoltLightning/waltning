@@ -74,8 +74,25 @@ export type IncomeVsExpenseWidgetProps = WidgetFrame & {
   error?: string | undefined;
 };
 
+/**
+ * The hatch's own geometry, declared once and read by both the stylesheet and
+ * the stripe count. Writing `hairline.width * 2 + space.xs` beside a
+ * `hatchStripe` whose width is `hairline.width * 2` and a `hatch` whose gap is
+ * `space.xs` is the same three numbers in two places: change the stripe and
+ * the count keeps computing the old pitch, and the hatch silently under- or
+ * over-draws with nothing failing.
+ */
+const HATCH_STRIPE_WIDTH = hairline.width * 2;
+const HATCH_GAP = space.xs;
 /** One stripe plus the gap after it — the distance from a stripe's left edge to the next one's. */
-const HATCH_PITCH = hairline.width * 2 + space.xs;
+const HATCH_PITCH = HATCH_STRIPE_WIDTH + HATCH_GAP;
+/**
+ * The narrowest a fill is ever painted (`fill.minWidth` below) — the width
+ * `Hatch` assumes until it is measured, so a bar is marked from its first
+ * frame and in any renderer that never lays out.
+ */
+const BAR_MIN_WIDTH = space.xs;
+const HATCH_MIN_STRIPES = Math.ceil(BAR_MIN_WIDTH / HATCH_PITCH);
 
 /**
  * The `assertedFill` hatching laid over a partial bucket's fill. Stripes are
@@ -93,22 +110,27 @@ const HATCH_PITCH = hairline.width * 2 + space.xs;
  * element its own width (it is absolutely positioned to fill the bar, so that
  * *is* the bar's width) and the stripe count follows from it.
  *
- * Zero stripes before the first layout pass: the fill is painted in its series
- * hue either way, so the un-hatched frame is the bar without its mark, never a
- * gap in the chart.
+ * **Before the first layout pass it draws the minimum bar's worth of stripes**
+ * rather than none. `onLayout` is a real renderer's callback: jsdom never
+ * fires it, so a zero default meant the mark existed only where a browser had
+ * measured the bar — the partial bucket was unmarked in every headless render
+ * and in every unit test, which is precisely where a regression would have to
+ * be caught. `BAR_MIN_WIDTH` is the narrowest fill this widget paints, so the
+ * default is the honest floor: at least one stripe, never a gap in the chart,
+ * and the measured count replaces it the moment a layout arrives.
  */
 function Hatch() {
   const styles = useStyles();
-  const [width, setWidth] = useState(0);
+  const [width, setWidth] = useState<number | null>(null);
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
   }, []);
-  const stripes = useMemo(
-    () => Array.from({ length: Math.ceil(width / HATCH_PITCH) }, (_, i) => `stripe-${i}`),
-    [width],
-  );
+  const stripes = useMemo(() => {
+    const count = width === null ? HATCH_MIN_STRIPES : Math.ceil(width / HATCH_PITCH);
+    return Array.from({ length: count }, (_, i) => `stripe-${i}`);
+  }, [width]);
   return (
-    <View style={styles.hatch} onLayout={handleLayout}>
+    <View testID="partial-hatch" style={styles.hatch} onLayout={handleLayout}>
       {stripes.map((key) => (
         <View key={key} style={styles.hatchStripe} />
       ))}
@@ -274,7 +296,7 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: radius.xs,
     overflow: "hidden",
   },
-  fill: { minWidth: space.xs, overflow: "hidden" },
+  fill: { minWidth: BAR_MIN_WIDTH, overflow: "hidden" },
   incomeFill: { backgroundColor: theme.income },
   expenseFill: { backgroundColor: theme.spend },
   /**
@@ -288,8 +310,8 @@ const useStyles = makeStyles((theme) => ({
     bottom: 0,
     left: 0,
     flexDirection: "row",
-    gap: space.xs,
+    gap: HATCH_GAP,
   },
-  hatchStripe: { width: hairline.width * 2, backgroundColor: theme.assertedFill },
+  hatchStripe: { width: HATCH_STRIPE_WIDTH, backgroundColor: theme.assertedFill },
   empty: { color: theme.textMuted, ...text.ui("body") },
 }));

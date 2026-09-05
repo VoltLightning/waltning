@@ -79,11 +79,11 @@ const BANK_B_EUR: PhoneAccount = {
 const EUR_ONLY: PhoneAccount[] = [BANK_B_EUR];
 
 /**
- * Two held currencies, in the order `subtotalsOf` folds them: a dormant `CHF`
- * savings account opened first, and the `EUR` card everything actually runs
- * through, in the red. The fallback must lead with `EUR` — the larger absolute
- * position — not with whichever account happens to have been opened first, and
- * not by preferring the positive figure.
+ * Two held currencies, in the order `subtotalsOf` folds them: a `CHF` savings
+ * account opened first at `40.00`, and an `EUR` card at `-9 000.00` opened
+ * second. The two candidate rules disagree on this fixture on purpose — order
+ * says `CHF`, magnitude says `EUR` — so the assertion below pins which one the
+ * band actually follows.
  */
 const TWO_CURRENCIES: PhoneAccount[] = [
   {
@@ -292,25 +292,28 @@ describe("TabsShell", () => {
   });
 
   /**
-   * **NEW-5.** Which held currency it falls back to is a decision, and the
-   * decision is the largest absolute position — not `subtotals[0]`, which is
-   * the order the accounts were opened in. Here the dormant `Savings · CHF`
-   * comes first and the `EUR` card everything runs through comes second and is
-   * in the red, so both halves of the rule are exercised at once: insertion
-   * order does not win, and neither does the positive figure.
+   * **M-1.** Which held currency it falls back to is a decision, and the
+   * decision is the ledger's own order — `design-system/05` row 12's rule for
+   * `CurrencyTotals`, which the hero now shares. Ranking by magnitude would
+   * lead with the `EUR` card here, and that comparison cannot be made: the
+   * band has no rate between `CHF` and `EUR`, or the display currency would
+   * have been honoured in the first place.
    */
-  it("falls back to the largest held currency by absolute total, not the first account's", async () => {
+  it("falls back to the first held currency in ledger order, not the largest", async () => {
     await displayCurrency.set(PLN);
     resizeTo(1440);
     render(
-      <LedgerProvider controller={fakeController(TWO_CURRENCIES)}>
+      <LedgerProvider controller={fakeController({ accounts: TWO_CURRENCIES })}>
         <TabsShell slot={<Text>Route content</Text>} />
       </LedgerProvider>,
     );
     await settleLayout();
 
-    expect(screen.getByText("EUR"), "the larger position, though it is a debt").toBeDefined();
-    expect(screen.queryByText("CHF"), "not the account opened first").toBeNull();
+    expect(screen.getByText("CHF"), "the first subtotal the ledger folds").toBeDefined();
+    expect(
+      screen.queryByText("EUR"),
+      "not the larger figure, which nothing can compare",
+    ).toBeNull();
     expect(screen.getByText("no balance in PLN")).toBeDefined();
   });
 

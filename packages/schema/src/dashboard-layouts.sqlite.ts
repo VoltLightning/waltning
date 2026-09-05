@@ -14,7 +14,7 @@ import { sqliteKit as k } from "./kit.ts";
  * same second row.
  *
  * The *below*-bound stays Postgres's alone — "at least one active layout" is
- * a deferred constraint trigger (`WA019`), and SQLite has no deferred
+ * a deferred constraint trigger (`WA020`), and SQLite has no deferred
  * constraints to state it with. This index closes the above-bound, which is
  * the half that decides which layout a phone draws.
  *

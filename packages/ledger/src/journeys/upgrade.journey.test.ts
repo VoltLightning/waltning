@@ -192,8 +192,29 @@ function statedVersion(path: string): number {
   return Number(stated);
 }
 
-/** The step that writes the default dashboard layout — a fixture below it gains those rows, one at or above it already holds them. */
-const DASHBOARD_SEED_TAG = "0011_dashboard_layout_seed";
+/**
+ * The step that writes the default dashboard layout — a fixture below it gains
+ * those rows, one at or above it already holds them.
+ *
+ * **L-3.** Resolved out of the chain rather than spelled out. Written as a
+ * literal, a renumber — the seed has already been renumbered twice, once per
+ * sibling branch that landed first — left `versionOfTag` computing a version
+ * for a file that no longer exists, and the expectations below would have
+ * quietly gone on comparing against it. `find` on the chain fails here
+ * instead, naming the tag it could not locate, at the first test that reads
+ * it.
+ */
+const DASHBOARD_SEED_TAG = seedTag("dashboard_layout_seed");
+
+function seedTag(suffix: string): string {
+  const step = REPLICA_MIGRATIONS.find((migration) => migration.tag.endsWith(suffix));
+  if (step === undefined) {
+    throw new Error(
+      `no replica migration ends with "${suffix}" — the step was renamed or dropped, and every expectation keyed on it is now guessing`,
+    );
+  }
+  return step.tag;
+}
 
 type FixturePair = { version: number; replicaPath: string; outboxPath: string };
 
