@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e7986c03-5ce1-493c-b2e0-478bfec41ab0",
-  "prevId": "c59b1a19-d8ea-483a-9ae5-a5b41ad053ae",
+  "id": "dd0ed616-e4fe-4404-b4be-abbdcd0d297d",
+  "prevId": "e7986c03-5ce1-493c-b2e0-478bfec41ab0",
   "tables": {
     "account_groups": {
       "name": "account_groups",
@@ -1729,7 +1729,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "transactions_debt_amount_requires_currency": {
+          "name": "transactions_debt_amount_requires_currency",
+          "value": "\"transactions\".\"debt_amount\" IS NULL OR \"transactions\".\"debt_currency\" IS NOT NULL"
+        }
+      }
     },
     "local_meta": {
       "name": "local_meta",

@@ -215,6 +215,15 @@ export const outbox = sqliteTable(
      * transport message, and S30 would offer a retry where the answer was
      * *reopen the period*. This one is written on the transition into `blocked`
      * and not touched again for as long as that state lasts.
+     *
+     * **`blocked` is not the only state that writes it.** A `deferred` entry
+     * carries a reason here too, with `state` left at `pending` — the whole
+     * point of a deferral is that the entry is still queued and will be tried
+     * again (see `disposition` above). So this column's presence says "there is
+     * something to tell the person about this entry", never "this entry is
+     * blocked"; `state` and `disposition` together are what say which. Reading
+     * a non-null `blocked_reason` as a block is how a deferral would come to be
+     * rendered as a dead end in S30.
      */
     blockedReason: text("blocked_reason"),
 

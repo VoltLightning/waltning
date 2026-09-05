@@ -290,6 +290,19 @@ export function SettleSheet({
   // refusal a person cannot see is a refusal that never happened.
   const counterpartyError = fieldErrors?.byField["counterpartyId"]?.[0];
 
+  /**
+   * L2 (#116) — `settle_debt`'s `currency` is a real input path, so
+   * `mapFieldErrors` files a refusal on it under `byField`; but this sheet has
+   * no `currency` control of its own (the currency follows the balance being
+   * settled, through `discharges.currency`), so nothing was rendering it and
+   * `settleDebt.currencyMismatch` — the controller's own pre-write refusal for
+   * an account that holds another currency — was a string no reader could ever
+   * reach. Shown with the form-level messages, which is where a refusal about
+   * the pair *account + currency* belongs anyway.
+   */
+  const currencyErrors = fieldErrors?.byField["currency"] ?? [];
+  const formLevelMessages = [...(fieldErrors?.formLevel ?? []), ...currencyErrors];
+
   // C1 — the same guard `TransferComposer`'s own `fromNeedsRate` states: the
   // controller refuses `settle_debt` on `accountId` before the write once the
   // picked account holds no rate (§14.6), so this sheet declines proactively
@@ -466,9 +479,9 @@ export function SettleSheet({
 
         {keypad}
 
-        {fieldErrors && fieldErrors.formLevel.length > 0 ? (
+        {formLevelMessages.length > 0 ? (
           <View style={styles.formLevel} accessibilityRole="alert">
-            {fieldErrors.formLevel.map((message) => (
+            {formLevelMessages.map((message) => (
               <Text key={message} style={styles.formLevelMessage}>
                 {message}
               </Text>

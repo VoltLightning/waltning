@@ -18,14 +18,14 @@
  * `index("outbox_pending_by_seq")` and the phone did not have it.
  *
  * **One step per generated file, in filename order, statements verbatim.**
- * `migrate.ts` turns `REPLICA_STEPS[i]` / `OUTBOX_STEPS[i]` into
- * `REPLICA_MIGRATIONS` / `OUTBOX_MIGRATIONS`' version `i + 1`, and runs
- * the step's statements — itself, or handed off whole to a hand-written
- * backfill keyed by the step's own `tag` when one exists
- * (`REPLICA_BACKFILLS` / `OUTBOX_BACKFILLS`, both in `migrate.ts`) — the
- * SQL a schema step cannot itself express, such as filling a new column
- * from existing rows before a statement later in the same step validates
- * it. This module does not know which tags have one.
+ * `migrate.ts` turns each step into `REPLICA_MIGRATIONS` /
+ * `OUTBOX_MIGRATIONS`' version — the file's own four-digit prefix plus one,
+ * so `0006_schema` is version 7 whatever else the chain holds — and runs
+ * its statements, then the hand-written backfill registered under the step's
+ * `tag`, if there is one (`REPLICA_BACKFILLS` / `OUTBOX_BACKFILLS`, both
+ * in `migrate.ts`): the SQL a schema step cannot itself express, such as
+ * filling a new column from the rows that already exist. This module does not
+ * know which tags have one.
  */
 
 /** One step per file in `drizzle/replica`, filename order — the fifteen shared tables, `local_meta` and its one row, and every schema change since. */
@@ -286,9 +286,7 @@ export const REPLICA_STEPS: readonly {
   {
     tag: "0006_schema",
     statements: [
-      `DROP INDEX \`counterparties_name_uq\``,
       `ALTER TABLE \`counterparties\` ADD \`name_folded\` text DEFAULT '' NOT NULL`,
-      `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
       `CREATE TABLE \`__new_counterparty_merges\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`winner_id\` text NOT NULL,
@@ -309,6 +307,13 @@ export const REPLICA_STEPS: readonly {
   },
   {
     tag: "0007_schema",
+    statements: [
+      `DROP INDEX \`counterparties_name_uq\``,
+      `CREATE UNIQUE INDEX \`counterparties_name_uq\` ON \`counterparties\` (\`name_folded\`) WHERE not "counterparties"."archived"`,
+    ],
+  },
+  {
+    tag: "0008_schema",
     statements: [
       `CREATE TABLE \`__new_transactions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
@@ -402,6 +407,9 @@ export const OUTBOX_STEPS: readonly {
   },
   {
     tag: "0001_schema",
-    statements: [`ALTER TABLE \`outbox\` ADD \`blocked_disposition\` text`],
+    statements: [
+      `ALTER TABLE \`outbox\` ADD \`disposition\` text`,
+      `CREATE INDEX \`outbox_deferred\` ON \`outbox\` (\`disposition\`) WHERE "outbox"."disposition" = 'deferred'`,
+    ],
   },
 ];

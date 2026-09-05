@@ -527,7 +527,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     id: "20000000-0000-4000-8000-000000000023",
     date: "2026-08-01",
     type: "expense",
-    accountId: ACCOUNTS[8].id,
+    accountId: ACCOUNTS[10].id,
     amountOriginal: "150",
     currency: "PLN",
   },

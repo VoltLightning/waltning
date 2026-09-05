@@ -256,6 +256,17 @@ function main(): void {
     j.raw().replica.db.update(transactions).set({ createdAt: STAMP, updatedAt: STAMP }).run();
     j.raw().replica.db.update(counterpartyMerges).set({ mergedAt: STAMP }).run();
 
+    /**
+     * **A pair is named by the replica's version, both files.**
+     *
+     * The two chains have their own numbers and always will — the replica
+     * gains a version whenever a table changes, the outbox almost never
+     * does (§08 item 2) — so `outbox-v9.sql` does not mean "the outbox at
+     * version 9"; it means "the outbox as it stood in the build whose
+     * replica was at 9". One installed app, one snapshot, one name. Each
+     * file still states its *own* store's version in its first line, which
+     * `dumpDatabase` reads from the database rather than being told.
+     */
     const replicaVersion = REPLICA_MIGRATIONS.at(-1)?.version;
     const outboxVersion = OUTBOX_MIGRATIONS.at(-1)?.version;
     if (replicaVersion === undefined || outboxVersion === undefined) {
@@ -266,12 +277,12 @@ function main(): void {
     const outboxSql = dumpFile(j.paths.outbox);
 
     const dir = new URL("../fixtures/upgrade/", import.meta.url);
-    const replicaOut = new URL(`replica-v${replicaVersion}.sql`, dir);
-    const outboxOut = new URL(`outbox-v${outboxVersion}.sql`, dir);
-    writeFileSync(replicaOut, replicaSql);
-    writeFileSync(outboxOut, outboxSql);
+    writeFileSync(new URL(`replica-v${replicaVersion}.sql`, dir), replicaSql);
+    writeFileSync(new URL(`outbox-v${replicaVersion}.sql`, dir), outboxSql);
 
-    console.log(`wrote replica-v${replicaVersion}.sql and outbox-v${outboxVersion}.sql`);
+    console.log(
+      `wrote replica-v${replicaVersion}.sql (replica at ${replicaVersion}) and outbox-v${replicaVersion}.sql (outbox at ${outboxVersion})`,
+    );
   } finally {
     j.close();
   }

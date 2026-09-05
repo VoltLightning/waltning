@@ -3,10 +3,10 @@
  * ends with the schema a fresh install has.
  * Findings: R2 C1-r3, R2 C2-r3, R3 C1-r4, R3 C2-r4, R3 H1-r4, R3 M2-r4, R3 M3-r4.
  *
- * **Every fixture under `fixtures/upgrade/` is loaded, not just `v1`.** The
- * chain on this branch is one version long, so today that is one pair — but
- * the scan is `readdirSync`, and a fixture a future PR adds for version 2
- * joins this suite with no edit here.
+ * **Every fixture under `fixtures/upgrade/` is loaded.** The scan is
+ * `readdirSync`, so a fixture a future PR adds joins this suite with no edit
+ * here. Today that is `v8` — the ledger as it stood before `0008_schema`
+ * rebuilt `transactions` — and `v9`, the current head.
  *
  * **Loading a fixture is two steps, deliberately not one.** `REPLICA_MIGRATIONS`
  * and `OUTBOX_MIGRATIONS` build the tables; the fixture's own SQL is only
@@ -16,17 +16,15 @@
  * migrator, the same two steps — which is what makes this a real upgrade
  * rather than a reconstruction of one.
  *
- * **What the "fresh equals upgraded" fingerprint proves today, honestly.**
- * With one chain version on this branch, every fixture is loaded *at* that
- * same version and `fresh` (`beforeAll`, below) is built by running that
- * same one-step chain from empty — so `schemaFingerprint` is comparing two
- * databases built by the identical migration, not a chain that actually ran
- * a fixture through a later step. This assertion gains real teeth only once
- * a second chain version exists and a fixture is upgraded across it; until
- * then, the signal that a fixture has drifted from what `dump-fixture.ts`
- * would produce today is the committed `INSERT` column lists themselves —
- * `pnpm --filter @waltning/ledger fixture:dump` regenerating a diff is what
- * actually catches drift, not this comparison.
+ * **What the "fresh equals upgraded" fingerprint proves, and where.** `v8` is
+ * where it has teeth: that pair is loaded at a version below the chain's head,
+ * so the session's own migrator runs a real step (`0008_schema`, a
+ * copy-rename-drop rebuild of `transactions`) against real rows, and
+ * `schemaFingerprint` then compares the result against a database built from
+ * empty by the whole chain. `v9` sits at the head, so its upgrade is a no-op
+ * and the comparison there is two identical builds — what that pair catches
+ * instead is drift: a `fixture:dump` that no longer reproduces the committed
+ * `INSERT` column lists.
  */
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -266,8 +264,8 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
     const fixture = loadFixture(pair);
     try {
       // The upgrade + recovery — `createLocalLedgerSession` migrates both
-      // files (a no-op here: the fixture is already at this chain's only
-      // version) and then runs `recoverOnLaunch`, which is what applies the
+      // files (every step this fixture's version is behind the chain head,
+      // in place) and then runs `recoverOnLaunch`, which is what applies the
       // pending entry Step 1 left above the watermark.
       const session = createLocalLedgerSession(sessionOptionsFor(fixture.paths));
       try {
@@ -293,9 +291,9 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
         // entry's state would move, and nothing here was left `sending`.
         expect(outboxCountsAfter).toEqual(fixture.outboxCountsBefore);
 
-        // The watermark is not reset — a forward schema migration at the
-        // chain's current version "keeps `local_meta` untouched" (`migrate.ts`),
-        // so it starts exactly where the fixture left it. It does not *stay*
+        // The watermark is not reset — a forward schema migration "keeps
+        // `local_meta` untouched" (`migrate.ts`), so it starts exactly where
+        // the fixture left it, however many steps ran. It does not *stay*
         // there: recovery replays everything above it, and the watermark
         // catches up by precisely that many entries — the replay this
         // fixture exists to exercise, not a no-op.
@@ -327,11 +325,13 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
   /**
    * R2 C2-r3 / R3 C2-r4's teeth: a fixture carrying `Łukasz Placeholder` and
    * `łukasz placeholder` — two rows the ASCII-only fold does not see as one —
-   * is exactly the database a future migration that *does* fold names has to
-   * cross without leaving a copy behind and the app unopened. On this branch
-   * there is no such migration, so this passes trivially — the assertion is
-   * here so the day a folded-name column lands, this file is what catches an
-   * upgrade that takes the copy and then refuses (or hangs) on the collision.
+   * is exactly the database a migration that *does* fold names has to cross
+   * without leaving a copy behind and the app unopened. Both fixtures carry
+   * the pair with one row archived by the merge they also carry, which is the
+   * case `migrate.ts`'s `0006_schema` precondition must *allow*
+   * (`counterparties_name_uq` is partial); the case it must refuse — both rows
+   * live — is `test/migrate.test.ts`'s, since no fixture can sit at a version
+   * below the one that folds them and still be dumped by the current tool.
    */
   it("leaves no `.pre-migration` copy behind once the session has opened", () => {
     const fixture = loadFixture(pair);

@@ -25,9 +25,10 @@
  * `OUTBOX_STEPS` are the whole output for each directory: no splitting a
  * rebuild file away from a plain one, no classifying a step by whether it
  * contains `__new_`, no synthesising the indexes a rebuild's `DROP TABLE`
- * took with it. `migrate.ts` turns `REPLICA_STEPS[i]` into
- * `REPLICA_MIGRATIONS`' version `i + 1` and runs its statements, verbatim
- * unless a hand-written backfill claims the step — drizzle-kit already
+ * took with it. `migrate.ts` turns each step into the version its own
+ * filename names — `0006_schema` is version 7, from the prefix and never
+ * from the position — and runs its statements verbatim, then whatever
+ * hand-written backfill is registered for that tag. drizzle-kit already
  * emits everything a rebuild needs, indexes included
  * (`prepareSQLiteRecreateTable` ends with `prepareCreateIndexesJson`), so
  * there is nothing left here to reconstruct. A round that tried to (H1's
@@ -149,14 +150,14 @@ const HEADER = `/**
  * \`index("outbox_pending_by_seq")\` and the phone did not have it.
  *
  * **One step per generated file, in filename order, statements verbatim.**
- * \`migrate.ts\` turns \`REPLICA_STEPS[i]\` / \`OUTBOX_STEPS[i]\` into
- * \`REPLICA_MIGRATIONS\` / \`OUTBOX_MIGRATIONS\`' version \`i + 1\`, and runs
- * the step's statements — itself, or handed off whole to a hand-written
- * backfill keyed by the step's own \`tag\` when one exists
- * (\`REPLICA_BACKFILLS\` / \`OUTBOX_BACKFILLS\`, both in \`migrate.ts\`) — the
- * SQL a schema step cannot itself express, such as filling a new column
- * from existing rows before a statement later in the same step validates
- * it. This module does not know which tags have one.
+ * \`migrate.ts\` turns each step into \`REPLICA_MIGRATIONS\` /
+ * \`OUTBOX_MIGRATIONS\`' version — the file's own four-digit prefix plus one,
+ * so \`0006_schema\` is version 7 whatever else the chain holds — and runs
+ * its statements, then the hand-written backfill registered under the step's
+ * \`tag\`, if there is one (\`REPLICA_BACKFILLS\` / \`OUTBOX_BACKFILLS\`, both
+ * in \`migrate.ts\`): the SQL a schema step cannot itself express, such as
+ * filling a new column from the rows that already exist. This module does not
+ * know which tags have one.
  */
 `;
 

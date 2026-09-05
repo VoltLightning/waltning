@@ -262,8 +262,22 @@ intention:
    counts.** `PRAGMA user_version` for the replica migrates it **in place** —
    one version per generated migration file (`packages/ledger/tools/embed-ddl.ts`),
    applied in filename order, each version's statements run in one
-   transaction after a pre-migration copy, and a step that cannot be
-   expressed in SQL alone carries a hand-written backfill. The replica is now
+   transaction after a pre-migration copy. **A version names a file, not a
+   position**: it is the file's own four-digit prefix plus one, so
+   `user_version = 7` means "`0006_schema` has run" on every build that ever
+   ships, and a chain that later gains, renumbers or drops a file does not
+   silently redefine what an installed database's number meant. A step that
+   cannot be expressed in SQL alone carries a hand-written **backfill**,
+   registered under that same filename: a `fill` that runs inside the
+   migration transaction immediately after its own step's statements, and
+   optionally a `check` that runs **before the pre-migration copy is taken**,
+   so a migration that cannot succeed against a particular database refuses
+   while that file is still untouched and gives the same reason on every
+   launch after. Because a step may rebuild a table, the whole migration runs
+   with foreign keys off; `PRAGMA foreign_key_check` inside the same
+   transaction, before the version moves, is what pays for the enforcement
+   given up — an orphan rolls the migration back rather than committing. The
+   replica is now
    the whole ledger, not a window (`14-local-first.md`), so it is never a
    database this module drops to recover a version mismatch — the outbox
    below never was, for the same reason, and now neither is the replica. A

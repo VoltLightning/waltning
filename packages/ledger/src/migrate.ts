@@ -50,20 +50,31 @@
  * migration transaction opens — proven by hand against `better-sqlite3`: a
  * child row survives a parent drop+recreate only when `foreign_keys` was
  * turned off before the transaction opened, deferred or not.
- * `runInOneTransaction` does exactly that for the replica, unconditionally —
- * any pending step might be a rebuild, and toggling costs nothing on a step
- * that is not one.
+ * `runInOneTransaction` does exactly that, for **both** stores and
+ * unconditionally — any pending step might be a rebuild, toggling costs
+ * nothing on a step that is not one, and the outbox is not exempt from the
+ * possibility on the grounds of having no foreign keys today. What pays for
+ * the enforcement given up is `pragma foreign_key_check`, run inside the same
+ * transaction before `user_version` moves, so a migration that did leave an
+ * orphan rolls back rather than commits.
  *
  * **A step that cannot be expressed in SQL alone carries a hand-written
  * backfill.** `REPLICA_BACKFILLS` / `OUTBOX_BACKFILLS`, keyed by the same
- * tag `ddl.ts`'s `REPLICA_STEPS` / `OUTBOX_STEPS` carry, run inside the same
- * migration transaction as their step — the counterparties `name_folded`
- * backfill below is the one that exists today. **Not simply "after" the
- * step's own statements** — a backfill is handed the statements and runs
- * every one of them itself, because at least one of them (a `CREATE UNIQUE
- * INDEX` over the very column being backfilled) validates existing rows
- * eagerly and must not run until the backfill has already touched them.
- * `REPLICA_BACKFILLS`'s own header has the detail.
+ * tag `ddl.ts`'s `REPLICA_STEPS` / `OUTBOX_STEPS` carry — the counterparties
+ * `name_folded` backfill below is the one that exists today. A backfill is
+ * two plain hooks around its own step, and neither one touches the step's
+ * statements: `fill` runs inside the migration transaction immediately
+ * **after** them, and `check` runs **before** anything at all — before the
+ * pre-migration copy is taken, so a migration that cannot succeed refuses
+ * while the file on disk is still untouched and says so again, identically,
+ * on the next launch.
+ *
+ * **A version names a file, not a position in the array.** `REPLICA_STEPS[i]`
+ * becomes version `0006_schema` → 7, from the generated file's own four-digit
+ * prefix — never `i + 1`. The two agree today and would keep agreeing right
+ * up until a file is inserted, renumbered or removed, at which point every
+ * installed database's `user_version` would silently start naming a
+ * different step than the one it actually ran.
  */
 
 import { fold } from "@waltning/core/capture/names";
@@ -86,15 +97,29 @@ import type { LedgerSchema, OutboxStore, ReplicaDb, ReplicaStore } from "./open.
  * type here would force every caller to thread `TRun` and `TSchema` through
  * to answer questions no migration or backfill asks.
  */
-export type SqlRunner = {
-  readonly run: (query: SQL) => void;
+export type SqlReader = {
   readonly all: <T>(query: SQL) => T[];
 };
 
-/** One step in a chain. `version` is what `PRAGMA user_version` becomes once `up` has run. */
+export type SqlRunner = SqlReader & {
+  readonly run: (query: SQL) => void;
+};
+
+/**
+ * One step in a chain. `version` is what `PRAGMA user_version` becomes once
+ * `up` has run, and `tag` is the generated file that version names.
+ *
+ * `check` is the step's precondition, run against the database as it stands
+ * **before** the pre-migration copy is taken and before any statement runs —
+ * see `Backfill`. Both `tag` and `check` are optional because a test supplies
+ * chains this module never generated (`migrations` in `MigrateOptions`), and
+ * a hand-built step has neither a file nor a precondition.
+ */
 export type Migration = {
   readonly version: number;
   readonly up: (tx: SqlRunner) => void;
+  readonly tag?: string;
+  readonly check?: (db: SqlReader) => void;
 };
 
 /**
@@ -197,94 +222,173 @@ export const COPY_SUFFIX = ".pre-migration";
  */
 
 /**
- * Every hand-written backfill a replica step needs, keyed by the step's own
- * tag (`ddl.ts`'s `REPLICA_STEPS[i].tag`) — the SQL a schema step cannot
- * itself express. Given a step's own statements, in order, and expected to
- * run every one of them — not appended after, see below for why.
- * `test/migrate.test.ts` asserts every key here names a real step tag: a
- * rename or a removed step must not leave a hook nothing ever runs.
+ * A step's hand-written companion: what its `.sql` file cannot say.
  *
- * **A backfill runs the step's statements itself, interleaved with its own
- * SQL, rather than after all of them.** The obvious design — run the
- * step's statements verbatim, then the backfill — is wrong for
- * `"0006_schema"` specifically, and provably so: that step's own
- * `CREATE UNIQUE INDEX … (name_folded) WHERE not archived` validates every
- * existing row *at the moment it runs*, and on a table with more than one
- * active counterparty, every one of them still holds `name_folded = ''`
- * (the `ADD COLUMN`'s default) until something fills it in — so the index
- * creation itself fails before a trailing backfill ever gets to run,
- * regardless of what that backfill would have set the column to. The fix
- * has to run the fold *before* that one statement, not after all of them,
- * so this hook owns its step's execution end to end.
+ * Two hooks, and the split is the whole design — they run at opposite ends of
+ * the migration, on purpose.
+ *
+ * - **`check`** runs against the database as it stands, **before the
+ *   pre-migration copy is taken and before any statement runs.** A step that
+ *   cannot succeed against this particular database has to say so while the
+ *   file is still untouched: refusing after the copy leaves a copy behind, and
+ *   the next launch would then report *that* (`refuseStaleCopy`) rather than
+ *   the real cause, which is the one thing the person holding the phone needs
+ *   to read. Read-only, and it takes a `SqlReader` rather than a `SqlRunner`
+ *   so that is a type rather than a convention.
+ * - **`fill`** runs inside the migration transaction, immediately **after**
+ *   its own step's statements, and rolls back with them.
+ *
+ * Neither hook is handed the step's statements, and neither runs them: the
+ * generated SQL is this module's to execute, verbatim, in the order
+ * drizzle-kit emitted it.
+ */
+export type Backfill = {
+  readonly check?: (db: SqlReader) => void;
+  readonly fill: (tx: SqlRunner) => void;
+};
+
+/**
+ * Every hand-written backfill a replica step needs, keyed by the step's own
+ * tag (`ddl.ts`'s `REPLICA_STEPS[i].tag`).
+ *
+ * A key naming no step is a hard error at chain-construction time
+ * (`migrationsFromSteps`), not a hook that quietly never runs: a renamed or
+ * removed generated file must take its companion with it, and the cost of not
+ * noticing is a column silently left at its default.
+ * `src/invariants/backfills.test.ts` holds this to it from the other side.
  *
  * **`0006_schema` fills `counterparties.name_folded`.** The column carries a
  * `DEFAULT ''` (`packages/schema/src/counterparties.sqlite.ts`) precisely so
- * the `ADD COLUMN NOT NULL` step runs on a table that already has rows —
- * `''` is what every existing row gets from the `ALTER TABLE` alone. This
- * hook finds the one statement that needs every row's `name_folded` correct
- * before it can run — matched by what it says (`CREATE UNIQUE INDEX` naming
- * `name_folded`), not by its position in the array, so a drizzle-kit
- * regenerate that reorders the step's other statements cannot silently put
- * this back in the wrong place — backfills every row with `fold(name)`
- * immediately before it, then continues.
+ * the `ADD COLUMN NOT NULL` that step performs runs on a table that already
+ * has rows — `''` is what every existing row gets from the `ALTER TABLE`
+ * alone, and `''` is what a value-carrying column must not be left at. The
+ * fill runs straight after that step; the statement that finally depends on
+ * it — `0007_schema`'s `CREATE UNIQUE INDEX … (name_folded) WHERE not
+ * archived`, which validates every existing row the moment it runs — is a
+ * later step still, so the ordering needs nothing cleverer than "after".
+ *
+ * **`fold(name.trim())`, not `fold(name)`.** That is what
+ * `create-counterparty.executor.ts` and `update-counterparty.executor.ts`
+ * write, and `fold()` does not trim on its own. A backfill that folded the
+ * untrimmed name would give a migrated row a different value than the same
+ * name captured on the next screen — and the index built over the column is
+ * exactly where that difference would surface.
+ *
+ * **`check` refuses a collision this fill would create.** Two live rows whose
+ * folded names agree — `ŁUKASZ`/`łukasz`, the pair SQLite's ASCII-only
+ * `lower()` never saw as one — are legal in the database being upgraded and
+ * illegal the instant `0007_schema`'s partial unique index exists. Nothing
+ * here may pick a winner: which of two counterparties survives is the owner's
+ * decision, made in S15, never a migration's. So it names both rows and stops,
+ * before anything is written and before a copy is taken.
  */
-export const REPLICA_BACKFILLS: Readonly<
-  Record<string, (tx: SqlRunner, statements: readonly string[]) => void>
-> = {
-  "0006_schema": (tx, statements) => {
-    const needsFoldedNamesFirst = (statement: string) =>
-      /create\s+unique\s+index/i.test(statement) && /name_folded/i.test(statement);
-
-    for (const statement of statements) {
-      if (needsFoldedNamesFirst(statement)) {
-        const rows = tx.all<{ id: string; name: string }>(
-          sql.raw(`select "id", "name" from "counterparties"`),
-        );
-        for (const row of rows) {
-          tx.run(
-            sql`update "counterparties" set "name_folded" = ${fold(row.name)} where "id" = ${row.id}`,
-          );
-        }
+export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
+  "0006_schema": {
+    check: (db) => {
+      const rows = db.all<{ id: string; name: string }>(
+        sql.raw(`select "id", "name" from "counterparties" where not "archived"`),
+      );
+      const byFold = new Map<string, { id: string; name: string }[]>();
+      for (const row of rows) {
+        const key = fold(row.name.trim());
+        const group = byFold.get(key);
+        if (group) group.push(row);
+        else byFold.set(key, [row]);
       }
-      tx.run(sql.raw(statement));
-    }
+      const collisions = [...byFold].filter(([, group]) => group.length > 1);
+      if (collisions.length === 0) return;
+      const detail = collisions
+        .map(
+          ([folded, group]) =>
+            `"${folded}" ← ${group.map((row) => `${row.id} ${JSON.stringify(row.name)}`).join(" and ")}`,
+        )
+        .join("; ");
+      throw new Error(
+        `this upgrade folds counterparty names, and ${collisions.length} group(s) of live counterparties fold to one name — ${detail}. Nothing has been written and no pre-migration copy taken. Open the previous build, merge or archive all but one row of each group in S15, then upgrade again`,
+      );
+    },
+    fill: (tx) => {
+      const rows = tx.all<{ id: string; name: string }>(
+        sql.raw(`select "id", "name" from "counterparties"`),
+      );
+      for (const row of rows) {
+        tx.run(
+          sql`update "counterparties" set "name_folded" = ${fold(row.name.trim())} where "id" = ${row.id}`,
+        );
+      }
+    },
   },
 };
 
 /** No outbox step needs a backfill today — its table shape barely changes (§08 item 2), and none of the changes it has had were unexpressable in SQL alone. */
-export const OUTBOX_BACKFILLS: Readonly<
-  Record<string, (tx: SqlRunner, statements: readonly string[]) => void>
-> = {};
+export const OUTBOX_BACKFILLS: Readonly<Record<string, Backfill>> = {};
 
 /**
- * Turn one directory's generated steps into a migration chain: version
- * `i + 1` for step `i`. A step with no registered backfill runs its
- * statements verbatim, in order; a step with one hands its statements to
- * the backfill instead, which is then responsible for running every one of
- * them (see `REPLICA_BACKFILLS`'s own header for why "run them, then
- * backfill" is not always correct).
+ * A generated file's own version: its four-digit prefix, plus one.
+ *
+ * **Identity, not position.** `0000_schema` is version 1 because a database
+ * SQLite has just created is at 0 and has run nothing. Deriving the number
+ * from the file's name rather than from its index in `REPLICA_STEPS` is what
+ * makes `user_version = 7` mean *"`0006_schema` has run"* on every build that
+ * ever ships, rather than *"seven steps had run, whichever seven that build
+ * happened to carry"*. The two agree only for as long as no file is ever
+ * inserted, renumbered or removed — and this branch renumbered one on its own
+ * way here.
  */
-function migrationsFromSteps(
+function versionOfTag(tag: string): number {
+  const prefix = /^(\d{4})_/.exec(tag)?.[1];
+  if (prefix === undefined) {
+    throw new Error(
+      `migration file "${tag}" has no four-digit prefix — a version names a file, never a position in the chain`,
+    );
+  }
+  return Number(prefix) + 1;
+}
+
+/**
+ * Turn one directory's generated steps into a migration chain.
+ *
+ * Each step becomes the version its own filename names (`versionOfTag`), runs
+ * its statements verbatim in order, and then its registered `fill`, if it has
+ * one. `checkChain` is what rejects the result should those versions not
+ * ascend.
+ */
+export function migrationsFromSteps(
   steps: readonly { readonly tag: string; readonly statements: readonly string[] }[],
-  backfills: Readonly<Record<string, (tx: SqlRunner, statements: readonly string[]) => void>>,
+  backfills: Readonly<Record<string, Backfill>>,
+  store: string,
 ): readonly Migration[] {
-  return steps.map((step, i) => ({
-    version: i + 1,
-    up: (tx: SqlRunner) => {
-      const backfill = backfills[step.tag];
-      if (backfill) {
-        backfill(tx, step.statements);
-      } else {
+  const tags = new Set(steps.map((step) => step.tag));
+  for (const key of Object.keys(backfills)) {
+    if (!tags.has(key)) {
+      throw new Error(
+        `${store}: a backfill is registered under "${key}", which names no generated migration file [${[...tags].join(", ")}] — a renamed or removed step must take its backfill with it`,
+      );
+    }
+  }
+  return steps.map((step) => {
+    const backfill = backfills[step.tag];
+    const migration = {
+      version: versionOfTag(step.tag),
+      tag: step.tag,
+      up: (tx: SqlRunner) => {
         for (const statement of step.statements) tx.run(sql.raw(statement));
-      }
-    },
-  }));
+        backfill?.fill(tx);
+      },
+    };
+    // Spread rather than `check: backfill?.check`: under
+    // `exactOptionalPropertyTypes` an optional property and one explicitly set
+    // to `undefined` are different types, and the honest shape is "a step
+    // without a precondition has no `check`", not "has one that is undefined".
+    return backfill?.check ? { ...migration, check: backfill.check } : migration;
+  });
 }
 
 /** The replica's chain — one version per file in `drizzle/replica`, in the order `embed-ddl.ts` generated them. */
 export const REPLICA_MIGRATIONS: readonly Migration[] = migrationsFromSteps(
   REPLICA_STEPS,
   REPLICA_BACKFILLS,
+  "replica",
 );
 
 /**
@@ -296,6 +400,7 @@ export const REPLICA_MIGRATIONS: readonly Migration[] = migrationsFromSteps(
 export const OUTBOX_MIGRATIONS: readonly Migration[] = migrationsFromSteps(
   OUTBOX_STEPS,
   OUTBOX_BACKFILLS,
+  "outbox",
 );
 
 /* ── the watermark ───────────────────────────────────────────────────────── */
@@ -407,32 +512,67 @@ function takeCopy<TRun, TSchema extends LedgerSchema>(
  * any point leaves the pair consistent — the case §08 item 6 names, because
  * migrations run at launch and launch is when iOS kills things.
  *
- * **`foreignKeysOff`, toggled outside the transaction, around it.** SQLite
- * treats `PRAGMA foreign_keys` as a no-op once a transaction is open, so a
- * step that rebuilds a table (this file's own header) cannot ask for it from
- * inside `steps`; asking here, before `db.transaction` opens one, is the
- * only place the pragma actually takes. `finally` restores it whether the
- * transaction committed or rolled back — the setting is a connection
- * property, not something the rollback undoes on its own, and every other
- * statement on this connection still needs foreign keys enforced.
+ * **Foreign keys are off for the length of it, toggled outside the
+ * transaction.** SQLite treats `PRAGMA foreign_keys` as a no-op once a
+ * transaction is open, so a step that rebuilds a table (this file's own
+ * header) cannot ask for it from inside `steps`; asking here, before
+ * `db.transaction` opens one, is the only place the pragma actually takes.
+ * `finally` restores it whether the transaction committed or rolled back —
+ * the setting is a connection property, not something a rollback undoes on
+ * its own, and every other statement on this connection still needs foreign
+ * keys enforced.
+ *
+ * **And `pragma foreign_key_check` runs before the version moves, because of
+ * that.** A migration that ran with enforcement off is a migration whose
+ * every `DROP TABLE`/`RENAME` went unchecked — the one window in this
+ * codebase where an orphan row can be created without a single statement
+ * failing. Checking inside the transaction, before `user_version` is set,
+ * makes a violation a rollback: the database ends at the version it started
+ * at, with the rows it started with, and the copy on disk is still there.
+ * Checking after the commit would only be able to report it.
  */
 function runInOneTransaction<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
   steps: readonly ((tx: SqlRunner) => void)[],
   toVersion: number,
-  { foreignKeysOff = false }: { foreignKeysOff?: boolean } = {},
+  store: string,
 ): void {
-  if (foreignKeysOff) db.run(sql.raw("pragma foreign_keys = OFF"));
+  db.run(sql.raw("pragma foreign_keys = OFF"));
   try {
     db.transaction((tx) => {
       for (const step of steps) step(tx);
+      assertNoOrphans(tx, store);
       // Interpolated because `pragma` takes no bound parameters; the value came
       // from a chain this module validated as integers.
       tx.run(sql.raw(`pragma user_version = ${toVersion}`));
     });
   } finally {
-    if (foreignKeysOff) db.run(sql.raw("pragma foreign_keys = ON"));
+    db.run(sql.raw("pragma foreign_keys = ON"));
   }
+}
+
+/**
+ * Every foreign key in the file, checked at once — what enforcement would have
+ * refused statement by statement, had it been on.
+ *
+ * `pragma foreign_key_check` reports rather than throws, and reports every
+ * violation rather than the first, so the message can name how many and where.
+ * It reads `(table, rowid, parent, fkid)`; `rowid` is included because on a
+ * `WITHOUT ROWID` table it is null and the pair `(table, fkid)` is all there
+ * is to go on.
+ */
+function assertNoOrphans(tx: SqlRunner, store: string): void {
+  const violations = tx.all<{ table?: string; rowid?: number | null; parent?: string }>(
+    sql.raw("pragma foreign_key_check"),
+  );
+  if (violations.length === 0) return;
+  const detail = violations
+    .slice(0, 5)
+    .map((row) => `${row.table ?? "?"} rowid ${row.rowid ?? "—"} → ${row.parent ?? "?"}`)
+    .join("; ");
+  throw new Error(
+    `the ${store} migration ran with foreign keys off and left ${violations.length} orphan row(s) — ${detail}${violations.length > 5 ? "; …" : ""}. Rolled back: the database is untouched, at the version it was already at`,
+  );
 }
 
 /**
@@ -461,12 +601,20 @@ function outstandingCopy(path: string, fs: LedgerFs): PreMigrationCopy | null {
  * after a migration, cannot migrate again until someone resolves the copy. That
  * is the trade — a stuck app that can be recovered from a file on disk, against
  * a smooth one that has quietly thrown that file away.
+ *
+ * **So the message carries the way out, in full.** A refusal that leaves the
+ * reader to guess is a refusal that gets answered by deleting whichever file
+ * looks less important, and one of the two is the ledger. There are exactly
+ * two answers and the message spells both: go back (put the copy in the
+ * database's place) or go forward (keep the database, drop the copy). Either
+ * way the next launch migrates. `architecture/14` §14.6 states the same two
+ * steps, for a reader who has the spec rather than the log.
  */
 function refuseStaleCopy(path: string, fs: LedgerFs): void {
   const copyPath = `${path}${COPY_SUFFIX}`;
   if (fs.exists(copyPath)) {
     throw new Error(
-      `a pre-migration copy from an earlier run is still at ${copyPath} — the app has not opened cleanly since that migration. Restore from it, or release it, before migrating again`,
+      `a pre-migration copy from an earlier run is still at ${copyPath} — the app has not opened cleanly since that migration, so ${path} is under suspicion and this run will not overwrite the copy. Two ways out, and the app migrates again on the next launch either way. To go back to the state before that migration: with the app closed, delete ${path}, ${path}-wal and ${path}-shm, then rename ${copyPath} to ${path}. To keep the current file and go forward: delete ${copyPath}`,
     );
   }
 }
@@ -486,6 +634,29 @@ function refuseUnknownVersion(
       `${store} is at version ${found}, which is not in this build's chain [${migrations.map((m) => m.version).join(", ")}] — a missing migration is an error, never a reset`,
     );
   }
+}
+
+/**
+ * Every pending step's precondition, run against the database as it stands —
+ * **before the copy, before the first statement, before anything.**
+ *
+ * A step that cannot succeed here has to refuse while the file is untouched:
+ * that is what makes the next launch report the same cause rather than
+ * `refuseStaleCopy`'s "a copy is still there", because no copy was ever taken.
+ * See `Backfill`.
+ *
+ * **Skipped entirely on a database at version 0.** A precondition is a claim
+ * about existing rows, and a database SQLite has just created has neither rows
+ * nor the tables to hold them — `0006_schema`'s check would be querying a
+ * `counterparties` table that `0000_schema` has not created yet.
+ */
+function checkPreconditions<TRun, TSchema extends LedgerSchema>(
+  db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
+  steps: readonly Migration[],
+  found: number,
+): void {
+  if (found === 0) return;
+  for (const step of steps) step.check?.(db);
 }
 
 /* ── the two migrators ───────────────────────────────────────────────────── */
@@ -519,14 +690,17 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
   }
 
   refuseUnknownVersion(found, migrations, "outbox");
-  refuseStaleCopy(store.path, fs);
 
   const steps = migrations.filter((m) => m.version > found);
+  checkPreconditions(store.db, steps, found);
+  refuseStaleCopy(store.path, fs);
+
   const copy = takeCopy(store.path, store.db, fs);
   runInOneTransaction(
     store.db,
     steps.map((m) => m.up),
     current,
+    "outbox",
   );
 
   return { from: found, to: current, applied: steps.map((m) => m.version), copy };
@@ -576,15 +750,17 @@ export function migrateReplica<TRun, TSchema extends LedgerSchema>(
   }
 
   refuseUnknownVersion(found, migrations, "replica");
-  refuseStaleCopy(store.path, fs);
 
   const steps = found === 0 ? migrations : migrations.filter((m) => m.version > found);
+  checkPreconditions(store.db, steps, found);
+  refuseStaleCopy(store.path, fs);
+
   const copy = takeCopy(store.path, store.db, fs);
   runInOneTransaction(
     store.db,
     steps.map((m) => m.up),
     current,
-    { foreignKeysOff: true },
+    "replica",
   );
 
   return {

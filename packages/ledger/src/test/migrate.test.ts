@@ -24,7 +24,7 @@ import Database from "better-sqlite3";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { OUTBOX_STEPS, REPLICA_STEPS } from "../ddl.ts";
+import { REPLICA_STEPS } from "../ddl.ts";
 import {
   advanceAppliedSeq,
   COPY_SUFFIX,
@@ -32,9 +32,7 @@ import {
   type Migration,
   migrateOutbox,
   migrateReplica,
-  OUTBOX_BACKFILLS,
   OUTBOX_MIGRATIONS,
-  REPLICA_BACKFILLS,
   REPLICA_MIGRATIONS,
   readAppliedSeq,
 } from "../migrate.ts";
@@ -661,79 +659,184 @@ describe("a populated replica upgrades to current without losing anything", () =
   });
 });
 
-/* ── every backfill hook names a real step ───────────────────────────────── */
+/* ── a version names a file, not a position ──────────────────────────────── */
 
-describe("every *_BACKFILLS key names a real step", () => {
-  it("REPLICA_BACKFILLS", () => {
-    const tags = new Set(REPLICA_STEPS.map((s) => s.tag));
-    expect(Object.keys(REPLICA_BACKFILLS).length, "vacuity guard").toBeGreaterThan(0);
-    for (const key of Object.keys(REPLICA_BACKFILLS)) {
-      expect(tags.has(key), `REPLICA_BACKFILLS["${key}"] names no REPLICA_STEPS tag`).toBe(true);
+describe("`user_version` records which step ran, not how many", () => {
+  it("gives every generated file the version its own four-digit prefix names", () => {
+    for (const migration of [...REPLICA_MIGRATIONS, ...OUTBOX_MIGRATIONS]) {
+      const tag = migration.tag;
+      expect(tag, "a generated chain's step carries its own file's tag").toBeDefined();
+      expect(migration.version, `${tag}'s version`).toBe(Number(tag?.slice(0, 4)) + 1);
     }
   });
 
-  it("OUTBOX_BACKFILLS", () => {
-    const tags = new Set(OUTBOX_STEPS.map((s) => s.tag));
-    for (const key of Object.keys(OUTBOX_BACKFILLS)) {
-      expect(tags.has(key), `OUTBOX_BACKFILLS["${key}"] names no OUTBOX_STEPS tag`).toBe(true);
-    }
+  /**
+   * The property the number exists for: a database written by an older build
+   * opens under a longer chain and runs exactly the steps it has not run —
+   * never all of them, never none.
+   */
+  it("opens a database at an older version under a longer chain, running only what is missing", () => {
+    const ledger = openAt("older-version");
+    const short = REPLICA_MIGRATIONS.slice(0, -1);
+    const shortHead = short.at(-1)?.version;
+    const head = REPLICA_MIGRATIONS.at(-1)?.version;
+    migrateReplica(ledger.replica, { fs: realFs, migrations: short }).copy?.release();
+    expect(inspect(join(dir, "older-version-replica.db"), userVersion)).toBe(shortHead);
+
+    const result = migrateReplica(ledger.replica, { fs: realFs });
+    ledger.close();
+
+    expect(result.from).toBe(shortHead);
+    expect(result.to).toBe(head);
+    expect(result.applied, "only the one step it had not run").toEqual([head]);
   });
 });
 
 /* ── the 0006_schema backfill, in isolation ──────────────────────────────── */
 
 describe("the `0006_schema` backfill", () => {
+  /** Where `0006_schema` sits in the generated chain — the step the fill belongs to. */
+  const stepIndex = REPLICA_STEPS.findIndex((step) => step.tag === "0006_schema");
+
   /**
-   * The `SqlRunner` handed to `up`, exercised directly rather than through
-   * `migrateReplica` — this is the hook itself, run against a table whose
-   * `name_folded` column is still every row's `''` default, the way
-   * `ALTER TABLE … ADD name_folded text DEFAULT ''` leaves it.
+   * The step's own `up`, run against a populated table: its statements, then
+   * its fill, which is the whole shape under test. The `ALTER TABLE` that adds
+   * `name_folded text DEFAULT ''` leaves every existing row at `''`, and
+   * nothing may still be at `''` once `up` returns.
    */
-  it("fills every row's name_folded from '' via fold(name)", () => {
+  it("fills every row's name_folded from '' via fold(name.trim())", () => {
     const ledger = openAt("backfill-hook");
     migrateReplica(ledger.replica, {
       fs: realFs,
-      migrations: REPLICA_MIGRATIONS.slice(0, 5),
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
     }).copy?.release();
 
     insertCounterparty(ledger, "cp-1", "Anna Kowalska");
     insertCounterparty(ledger, "cp-2", "Łukasz");
     insertCounterparty(ledger, "cp-3", "Józef".normalize("NFD"));
 
-    const step = REPLICA_STEPS[6];
-    expect(step?.tag).toBe("0006_schema");
-    const backfill = REPLICA_BACKFILLS["0006_schema"];
-    expect(backfill).toBeDefined();
+    // The trim is the executors' own — `create-counterparty.executor.ts`
+    // folds `name.trim()` — so a migrated row has to land on the value a
+    // freshly captured one would.
+    insertCounterparty(ledger, "cp-4", "  Maria Nowak  ");
 
-    // biome-ignore lint/style/noNonNullAssertion: asserted defined immediately above
-    ledger.replica.db.transaction((tx) => backfill!(tx, step?.statements ?? []));
+    const step = REPLICA_MIGRATIONS[stepIndex];
+    expect(step?.tag).toBe("0006_schema");
+
+    ledger.replica.db.transaction((tx) => {
+      step?.up(tx);
+    });
     ledger.close();
 
     const path = join(dir, "backfill-hook-replica.db");
     const rows = inspect(path, (db) =>
       db.prepare('select "id", "name", "name_folded" from "counterparties"').all(),
     ) as { id: string; name: string; name_folded: string }[];
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     for (const row of rows) {
-      expect(row.name_folded).toBe(fold(row.name));
+      expect(row.name_folded).toBe(fold(row.name.trim()));
       expect(row.name_folded, "no row keeps the default").not.toBe("");
     }
+  });
+
+  /**
+   * The precondition, through the real migrator. Two live counterparties the
+   * fold unifies cannot both survive `0007_schema`'s partial unique index, and
+   * choosing between them is S15's decision, never a migration's.
+   *
+   * Two properties make that refusal usable, and neither is visible from the
+   * message alone: **nothing was written** — no copy taken, the version
+   * unmoved — and **the next launch says the same thing**, rather than the
+   * "a copy is still there" a refusal taken after the copy would report from
+   * then on, which names the wrong cause and buries this one.
+   */
+  it("refuses a fold collision between two live rows before the copy, and repeats the same cause", () => {
+    const ledger = openAt("fold-collision");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
+    }).copy?.release();
+
+    insertCounterparty(ledger, "cp-upper", "ŁUKASZ PLACEHOLDER");
+    insertCounterparty(ledger, "cp-lower", "łukasz placeholder");
+
+    const replicaPath = join(dir, "fold-collision-replica.db");
+    const versionBefore = inspect(replicaPath, userVersion);
+    const collision = /fold to one name/;
+
+    expect(() => migrateReplica(ledger.replica, { fs: realFs })).toThrow(collision);
+    expect(existsSync(`${replicaPath}${COPY_SUFFIX}`), "no copy was taken").toBe(false);
+    expect(inspect(replicaPath, userVersion), "the version did not move").toBe(versionBefore);
+
+    let second = "";
+    try {
+      migrateReplica(ledger.replica, { fs: realFs });
+    } catch (error) {
+      // `catch` bindings are `unknown` — the language gives no choice.
+      second = error instanceof Error ? error.message : String(error);
+    }
+    ledger.close();
+
+    expect(second).toMatch(collision);
+    expect(second, "both rows, by id").toContain("cp-upper");
+    expect(second).toContain("cp-lower");
+    expect(second, "not the copy — there isn't one").not.toMatch(/pre-migration copy from an/);
+  });
+
+  /**
+   * The same two spellings with one of them archived: legal before the upgrade
+   * and legal after it, because `counterparties_name_uq` is partial (`where
+   * not archived`). A check that refused this would turn a merge's own outcome
+   * — S15 archives the loser — into an unupgradeable database.
+   */
+  it("allows the collision when one of the two rows is archived", () => {
+    const ledger = openAt("fold-archived");
+    migrateReplica(ledger.replica, {
+      fs: realFs,
+      migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
+    }).copy?.release();
+
+    insertCounterparty(ledger, "cp-live", "Łukasz Placeholder");
+    insertCounterparty(ledger, "cp-archived", "łukasz placeholder");
+    ledger.replica.db.run(
+      sql`update "counterparties" set "archived" = 1 where "id" = 'cp-archived'`,
+    );
+
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    ledger.close();
+
+    const rows = inspect(join(dir, "fold-archived-replica.db"), (db) =>
+      db.prepare('select "id", "name_folded" from "counterparties" order by "id"').all(),
+    ) as { id: string; name_folded: string }[];
+    expect(rows.map((row) => row.name_folded)).toEqual([
+      "lukasz placeholder",
+      "lukasz placeholder",
+    ]);
   });
 });
 
 /* ── the pre-migration copy ──────────────────────────────────────────────── */
 
 describe("the pre-migration copy", () => {
-  it("fully consumes result-bearing pragmas before copying under Expo SQLite", () => {
+  /**
+   * **The rule is about pragmas that return rows, not about `run`.** Expo
+   * SQLite leaves a result row active when a statement that produces one is
+   * issued through anything but a full read, so every *result-bearing* pragma
+   * this module sends — `user_version` and `wal_checkpoint(truncate)` — goes
+   * through `all`, which consumes the row. A pragma *assignment* returns
+   * nothing at all, so `foreign_keys = OFF`/`ON` is `run`'s to send and always
+   * was: `migrateReplica` has issued exactly those two the whole time. What
+   * changed is that `migrateOutbox` now does too (both stores migrate with
+   * foreign keys off), which is why the count below is two rather than none.
+   */
+  it("sends every result-bearing pragma through `all`, and only assignments through `run`", () => {
     const ledger = openAt("expo-pragmas");
     migrateOutbox(ledger.outbox, { fs: realFs }).copy?.release();
 
     const get = vi.spyOn(ledger.outbox.db, "get").mockImplementation(() => {
       throw new Error("Expo SQLite would leave the first result row active");
     });
-    const run = vi.spyOn(ledger.outbox.db, "run").mockImplementation(() => {
-      throw new Error("Expo SQLite would leave the checkpoint result row active");
-    });
+    const run = vi.spyOn(ledger.outbox.db, "run");
     const all = vi.spyOn(ledger.outbox.db, "all");
 
     const result = migrateOutbox(ledger.outbox, {
@@ -742,8 +845,16 @@ describe("the pre-migration copy", () => {
     });
 
     expect(get).not.toHaveBeenCalled();
-    expect(run).not.toHaveBeenCalled();
-    expect(all).toHaveBeenCalledTimes(2);
+    expect(all, "`user_version` and the checkpoint, both read in full").toHaveBeenCalledTimes(2);
+    expect(run, "the two `foreign_keys` assignments, which return no rows").toHaveBeenCalledTimes(
+      2,
+    );
+    // And they were the toggles: enforcement is back on afterwards, which is
+    // what `finally` in `runInOneTransaction` is there for.
+    expect(ledger.outbox.db.all<{ foreign_keys: number }>(sql.raw("pragma foreign_keys"))).toEqual([
+      { foreign_keys: 1 },
+    ]);
+
     result.copy?.release();
     ledger.close();
   });

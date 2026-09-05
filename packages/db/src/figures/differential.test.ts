@@ -376,7 +376,7 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
    * `-150.00000000` balance the banner then contradicted.
    */
   it("§8 find_unsettled — remainder keeps a negative balance's own sign", async () => {
-    const negativeClearing = ACCOUNTS[8];
+    const negativeClearing = ACCOUNTS[10];
     const sqlRows = await findUnsettled(scratch.db);
     const sqlRow = sqlRows.find((r) => r.accountId === negativeClearing.id);
 
