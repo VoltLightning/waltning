@@ -8,22 +8,22 @@
  * quotes and `carried_forward` chains and all, mechanically reproducible from
  * one seed so a failing date can be reported and revisited.
  *
- * **No `"derived"` row.** The brief this generator was written against names
- * a fourth source, `derived`, alongside `nbp`, `carried_forward` and
- * `manual` — but `FX_SOURCE` (`@waltning/schema/enums`) lists only
- * `nbp | ecb | nbrb | nbg | manual | carried_forward` on this branch, and
- * SQLite's `fx_rates.source` column has no `CHECK` to catch a wider literal
- * (`journeys/seed.ts`'s own header makes the same point about `seedRate`).
- * Writing `"derived"` here would let this generator produce a source no
- * reader could ever have. When R1's rebase adds `derived` to the enum, this
- * generator gains its two rows then — not before.
+ * **Two `"derived"` rows.** `FX_SOURCE` (`@waltning/schema/enums`) lists
+ * `derived` alongside `nbp`, `carried_forward` and `manual` — `change_pivot`
+ * stamps every rebased cross with it — so this generator produces two of
+ * them, adjacent, at a fixed position distinct from the one `manual` row.
+ * `findOrigin` (`currencies/read-rate.ts`) treats `derived` as an origin
+ * exactly like a real quote (only `carried_forward` is excluded), and a lone
+ * `derived` day can only ever prove that much; a back-to-back pair is what
+ * puts a second `derived` row *behind* the origin, which is the walk this
+ * fixture exists to cover.
  */
 
 import { type AccountingDate, accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import type { FxSource } from "@waltning/schema/enums";
 
-/** The three sources this generator can produce — see the file header on why not four. */
-export type RateSource = Extract<FxSource, "nbp" | "manual" | "carried_forward">;
+/** The four sources this generator can produce. */
+export type RateSource = Extract<FxSource, "nbp" | "manual" | "carried_forward" | "derived">;
 
 export type RateRow = {
   date: AccountingDate;
@@ -84,10 +84,11 @@ function isWeekday(date: AccountingDate): boolean {
  * Generate a table for one pair, over `days` consecutive dates starting at
  * `RATE_TABLE_START`.
  *
- * **Deterministic for a seed.** The one manual row and the one hole sit at
- * fixed relative positions (the manual row before the hole, the hole running
- * to the end of the range) so every seed's table has the same shape; only
- * which weekdays land a real quote — the 0.8 draw — varies with the seed.
+ * **Deterministic for a seed.** The one manual row, the two `derived` rows,
+ * and the one hole sit at fixed relative positions (the manual row and the
+ * `derived` pair both before the hole, the hole running to the end of the
+ * range) so every seed's table has the same shape; only which weekdays land
+ * a real quote — the 0.8 draw — varies with the seed.
  */
 export function generateRateTable(seed: number, days: number): RateRow[] {
   const rng = mulberry32(seed);
@@ -95,6 +96,15 @@ export function generateRateTable(seed: number, days: number): RateRow[] {
 
   const holeStart = Math.max(0, days - HOLE_DAYS);
   const manualDay = Math.floor(holeStart / 2);
+  // Two adjacent days, well clear of `manualDay`. The pair is here to cover
+  // the *walk across two adjacent `derived` rows* — `findOrigin`
+  // (`currencies/read-rate.ts`) stops at the first non-`carried_forward` row
+  // it meets, so a lone `derived` day only ever exercises "the origin is
+  // derived", never "the row before the origin is derived too". How many
+  // `derived` rows `change_pivot` happens to mint on a given date is not the
+  // question; this generator is a fixture for the reader, not a model of the
+  // writer.
+  const derivedDay = Math.floor(holeStart / 4);
 
   let lastReal: { date: AccountingDate; rate: string } | undefined;
 
@@ -114,6 +124,15 @@ export function generateRateTable(seed: number, days: number): RateRow[] {
       // A manual row is an origin, exactly like a real quote — `findOrigin`
       // (`currencies/read-rate.ts`) walks back past `carried_forward` rows
       // only, so the next gap carries forward from this one too.
+      lastReal = { date, rate };
+      continue;
+    }
+
+    if (i === derivedDay || i === derivedDay + 1) {
+      const rate = draw();
+      rows.push({ date, source: "derived", rate });
+      // Same origin treatment as `manual`/`nbp` above — `derived` is never
+      // excluded by `findOrigin`'s own walk-back, only `carried_forward` is.
       lastReal = { date, rate };
       continue;
     }

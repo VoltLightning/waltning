@@ -34,7 +34,38 @@ import {
 import { advanceAppliedSeq, readAppliedSeq } from "./migrate.ts";
 import type { Ledger, LedgerSchema } from "./open.ts";
 import { outbox } from "./outbox.ts";
-import type { LocalTx } from "./write.ts";
+import type { Capture, LocalTx } from "./write.ts";
+
+/**
+ * The `Capture` an entry was written under, rebuilt from its own columns.
+ *
+ * **M1 — replay's clock is the entry's, never this launch's.** An executor
+ * that derives a date from the capture (`set_manual_rate`'s `to <= today`)
+ * must derive the *same* date on a replay a week later, on a phone that has
+ * since flown two zones east. `captured_tz`, `captured_offset_minutes` and
+ * `captured_at` are exactly those three facts, recorded beside the intent at
+ * enqueue for this reason; nothing here reads `new Date()`.
+ *
+ * **L1 — `captured_offset_minutes` is what makes that date reconstruction
+ * correct, not merely deterministic.** `write.ts`'s `captureDate` derives the
+ * day from `at` shifted by `offsetMinutes`, read in UTC, never from a
+ * tz-database lookup against `capturedTz` — a lookup would ask *today's*
+ * rules what the zone meant back then, and the database that answers that is
+ * revised. `capturedTz` still travels here (and to every executor `Capture`
+ * reaches) for what only the zone can answer — S30's *"you changed
+ * timezone"* drift check — never for the date itself.
+ */
+function captureOf(entry: {
+  capturedTz: string;
+  capturedOffsetMinutes: number;
+  capturedAt: Date;
+}): Capture {
+  return {
+    timeZone: entry.capturedTz,
+    offsetMinutes: entry.capturedOffsetMinutes,
+    at: entry.capturedAt,
+  };
+}
 
 /** Why replay stopped short, for S30 to render. */
 export type ReplayHalt = {
@@ -131,6 +162,13 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
       seq: outbox.seq,
       operation: outbox.operation,
       payload: outbox.payload,
+      // M1 — an executor derives "today" from where and when the capture
+      // happened (`LocalExecutor.apply`), and those three facts are recorded
+      // on the entry itself precisely so a replay is not left guessing them
+      // from the clock of whatever launch happens to be running it.
+      capturedTz: outbox.capturedTz,
+      capturedOffsetMinutes: outbox.capturedOffsetMinutes,
+      capturedAt: outbox.capturedAt,
     })
     .from(outbox)
     .where(or(and(gt(outbox.seq, applied), notRefused), eq(outbox.disposition, "deferred")))
@@ -165,7 +203,7 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
 
     try {
       ledger.replica.db.transaction((tx) => {
-        executor.invoke(entry.payload, tx);
+        executor.invoke(entry.payload, tx, captureOf(entry));
         advanceAppliedSeq(tx, entry.seq);
       });
     } catch (error) {

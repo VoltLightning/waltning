@@ -1,19 +1,17 @@
 /**
  * Proves: CLAUDE.md's "break it once to prove it fires", and SPEC.md §6.5
  * ("Integrity constraints" — "Enforced in the database, not merely the
- * application", naming nine of these thirteen CHECKs by name and SQL).
+ * application"), which names every CHECK below by name and SQL.
  *
  * Two claims, both about every CHECK constraint Postgres actually holds
- * today, read live from `pg_constraint` rather than assumed from
- * `schema.ts` or from §6.5's own list. Four of the thirteen are absent from
- * §6.5, for two different reasons: `transactions_counterparty_role_shape`
- * and `transactions_occurrence_shape` are declared in `schema.ts`'s own
- * `check(...)` calls but simply not named in §6.5's SQL block, while
- * `transactions_debt_shape` and `transactions_tax_fx_shape` postdate both —
- * they live only in the hand-written `0001_database_objects.sql` (from
- * `0004_business_logic_columns.sql`, folded in), missing from `schema.ts`
- * *and* §6.5. A list built by reading either alone would silently omit some
- * of the thirteen.
+ * today, read live from `pg_constraint` rather than assumed from `schema.ts`
+ * or from §6.5's own list. Reading either alone would be a list of one
+ * writer's intentions: some of these CHECKs are declared in `schema.ts`'s own
+ * `check(...)` calls, and some live only in the hand-written
+ * `0001_database_objects.sql` (`transactions_debt_shape`,
+ * `transactions_tax_fx_shape`, folded in from
+ * `0004_business_logic_columns.sql`) because Drizzle cannot state them.
+ * `pg_constraint` is the union, and the only place it exists.
  *
  * Findings: none — the rule is CLAUDE.md's, not a review finding.
  *
@@ -76,8 +74,11 @@ async function insertRow(overrides: Row): Promise<unknown> {
  * constraint, not a tangle of them.
  */
 const CHECKS: Record<string, () => Promise<unknown>> = {
-  // Negative and not an adjustment.
-  transactions_amount_positive: () => insertRow({ amount_original: "-1.00" }),
+  // L2 — zero, on a non-adjustment row. `-1.00` broke the *old* `>= 0`
+  // constraint too, so it proved nothing about the tightening: a violating
+  // insert has to violate the CHECK as currently declared, and `> 0` is the
+  // clause under test. An adjustment may still reconcile to zero.
+  transactions_amount_positive: () => insertRow({ amount_original: "0.00" }),
   // to_account_id set on a non-transfer.
   transactions_transfer_shape: () => insertRow({ to_account_id: TO_ACCOUNT.id }),
   // A transfer into the account it left.
@@ -134,6 +135,8 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   transactions_fee_positive: () => insertRow({ fee: "0.00" }),
   // A tax FX rate with no tax FX date.
   transactions_tax_fx_shape: () => insertRow({ tax_fx_rate: "1" }),
+  // A zero FX rate — `amount_pivot = amount_original × fx_rate` refuses one.
+  transactions_fx_rate_positive: () => insertRow({ fx_rate: "0" }),
 };
 
 describe("every CHECK on transactions is VALID", () => {

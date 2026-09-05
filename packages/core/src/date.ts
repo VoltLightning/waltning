@@ -23,7 +23,14 @@ declare const DATE: unique symbol;
 /** A bare calendar date, `YYYY-MM-DD`, in no timezone. */
 export type AccountingDate = string & { readonly [DATE]: "AccountingDate" };
 
-/** Shape only. A real calendar check happens where a date is chosen, not here. */
+/**
+ * Shape only, deliberately — this parser is also used by callers that already
+ * know their own arithmetic is on a real day (`addDays`, `shiftMonth`), where
+ * a second calendar check would be redundant. **M3:** the calendar itself is
+ * checked at the contract edge instead, by `zod.ts#zAccountingDate` (month
+ * 1–12, day within the month, leap years) — the one place a hand-typed or
+ * wire-carried date is chosen and has not yet been shown to be real.
+ */
 const SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -75,6 +82,29 @@ export function todayIn(timeZone: string, now = new Date()): AccountingDate {
 }
 
 /**
+ * The local calendar date `at` fell on, given the UTC offset in force at that
+ * instant — a fixed shift, never a tz-database lookup.
+ *
+ * **L1 — `todayIn`'s hazard, reconstructed for replay.** `todayIn` asks the
+ * *current* tz database what a *named zone* meant at `now`; that answer can
+ * change after the fact, because the database is revised when a jurisdiction
+ * changes its own DST rule. A capture recorded today and replayed after such a
+ * revision would then compute a different day than the one the person actually
+ * saw, from the very same `(timeZone, at)` pair. `capturedOffsetMinutes`
+ * (`outbox.ts`) exists exactly because it is the one fact that never needs
+ * re-deriving: it *is* what the clock read, recorded once, at capture. Adding
+ * it to `at` and reading the day in UTC reproduces the local wall-clock date
+ * with no database in the loop to be revised out from under it.
+ */
+export function todayAtOffset(at: Date, offsetMinutes: number): AccountingDate {
+  const shifted = new Date(at.getTime() + offsetMinutes * 60_000);
+  const year = shifted.getUTCFullYear();
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(shifted.getUTCDate()).padStart(2, "0");
+  return accountingDate(`${year}-${month}-${day}`);
+}
+
+/**
  * Add (or, for a negative `n`, subtract) whole days to a bare accounting
  * date. Used by the capture grammar (`capture/dates.ts`) to turn "yesterday"
  * and a weekday name into a date, without touching a clock.
@@ -101,6 +131,16 @@ export function addDays(date: AccountingDate, n: number): AccountingDate {
  * uses, not a subtraction of two instants that would need a timezone this
  * file does not have. `money.ts`'s `ageInDays` is this, named for §7's
  * ageing — a company's debt is *old* as of `today`, never *overdue*.
+ *
+ * **L3 — this function's real domain is years ≥ 0100.** `Date.UTC` folds a
+ * two-digit year (0–99) into 1900+year rather than leaving it alone, which
+ * would silently mis-count a date in that range by roughly nineteen
+ * centuries; this file stays shape-only (M3's own comment above says why)
+ * and takes no year floor itself. `zAccountingDate` (`zod.ts`) is what
+ * guarantees one: `isRealCalendarDate`'s round trip through the same
+ * `Date.UTC` fails for any year below `0100`, since the folded year never
+ * reads back as the year that went in — so every `AccountingDate` that
+ * reached this function through the contract edge is already ≥ 0100.
  */
 export function daysBetween(a: AccountingDate, b: AccountingDate): number {
   const [ay, am, ad] = a.split("-").map(Number) as [number, number, number];

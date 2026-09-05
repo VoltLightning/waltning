@@ -148,6 +148,7 @@ export default function SettingsRatesScreen() {
         to: editorRange.to,
         rate,
         overwriteManual,
+        today,
       });
       if ("fieldErrors" in result) {
         toastTokenRef.current += 1;
@@ -156,7 +157,7 @@ export default function SettingsRatesScreen() {
       }
       setEditorOpen(false);
     },
-    [ledger, quote, pivot, editorRange, rate, t],
+    [ledger, quote, pivot, editorRange, rate, t, today],
   );
 
   const handleClearManual = useCallback(() => {

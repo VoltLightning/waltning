@@ -135,6 +135,41 @@ describe("every backfill names a step that exists", () => {
       /names no generated migration file/,
     );
   });
+
+  /**
+   * `0009_schema` is exactly this shape: a `check` that refuses a rate its own
+   * new `CHECK` cannot accept, and nothing to derive, so no `fill`. Proven two
+   * ways — the type accepts it, and the real registry carries one — so a
+   * future `Backfill` edit that makes `fill` required again fails here first,
+   * at compile time, rather than as a mystery type error inside `migrate.ts`.
+   */
+  it("allows a hook with only a check and no fill", () => {
+    const checkOnly: Backfill = { check: () => {} };
+    expect(checkOnly.fill).toBeUndefined();
+    expect(
+      REPLICA_BACKFILLS["0009_schema"]?.fill,
+      "0009_schema itself is check-only",
+    ).toBeUndefined();
+  });
+});
+
+describe("every backfill with a fill is proven by a FILLED_COLUMNS row", () => {
+  /**
+   * The completeness this table's coverage depends on: before `fill` was
+   * optional, every key in `REPLICA_BACKFILLS` had one, so "iterate
+   * `FILLED_COLUMNS`" and "iterate every backfill" were the same set by
+   * construction. `0009_schema` breaks that — it is a real key with no `fill`
+   * — so what used to be implicit is asserted directly: a key that *does*
+   * carry a `fill` still needs a row here, and a check-only key is skipped
+   * rather than silently expected to have one.
+   */
+  it("names every REPLICA_BACKFILLS key that has a fill, and none that doesn't", () => {
+    const filledTags = new Set<string>(FILLED_COLUMNS.map((c) => c.tag));
+    for (const [tag, backfill] of Object.entries(REPLICA_BACKFILLS)) {
+      if (backfill.fill === undefined) continue; // check-only — nothing to fill, nothing to prove here
+      expect(filledTags.has(tag), `${tag} has a fill and needs a FILLED_COLUMNS entry`).toBe(true);
+    }
+  });
 });
 
 describe("a hook fills every row with the value the write path would have written", () => {

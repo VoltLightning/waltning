@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
+import { zAccountingDate, zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
 
 describe("zMoney", () => {
   it("accepts the largest numeric(20,8) magnitude", () => {
@@ -74,9 +74,25 @@ describe("zUnitsPerPivot", () => {
     );
   });
 
-  it("accepts the smallest positive rate", () => {
-    expect(zUnitsPerPivot.parse("0.000000000001")).toBe("0.000000000001");
+  // H2 — bounded, not merely positive: each bound keeps the far side of
+  // `money.reciprocal` storable (`money.ts`'s own note). `1e-12` flips to
+  // exactly `1e12`, which `numeric(24,12)` cannot hold; anything past `1e12`
+  // flips to a stored zero every `rate > 0` CHECK accepts.
+  it("accepts the smallest rate strictly inside the bounds", () => {
+    expect(zUnitsPerPivot.parse("0.000000000002")).toBe("0.000000000002");
   });
+
+  it.each(["0.000000000001", "1000000000000", "10000000000000"])(
+    "refuses %s — outside the interval a reciprocal is guaranteed to stay in",
+    (value) => {
+      const result = zUnitsPerPivot.safeParse(value);
+
+      expect(result.success).toBe(false);
+      expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+        "strictly between",
+      );
+    },
+  );
 });
 
 describe("zPivotPerUnit", () => {
@@ -92,7 +108,37 @@ describe("zPivotPerUnit", () => {
     );
   });
 
-  it("accepts the smallest positive rate", () => {
-    expect(zPivotPerUnit.parse("0.000000000001")).toBe("0.000000000001");
+  it("accepts the smallest rate strictly inside the bounds", () => {
+    expect(zPivotPerUnit.parse("0.000000000002")).toBe("0.000000000002");
   });
+
+  it.each(["0.000000000001", "1000000000000", "10000000000000"])(
+    "refuses %s — outside the interval a reciprocal is guaranteed to stay in",
+    (value) => {
+      const result = zPivotPerUnit.safeParse(value);
+
+      expect(result.success).toBe(false);
+      expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+        "strictly between",
+      );
+    },
+  );
+});
+
+describe("zAccountingDate — M3, a real calendar day, not only the shape", () => {
+  it("accepts an ordinary date and a leap day", () => {
+    expect(zAccountingDate.parse("2026-03-12")).toBe("2026-03-12");
+    expect(zAccountingDate.parse("2024-02-29")).toBe("2024-02-29");
+  });
+
+  it.each(["2026-02-31", "2026-02-30", "2026-04-31", "2026-13-01", "2026-00-01", "2023-02-29"])(
+    "refuses %s — the shape matches and the day is not real",
+    (value) => {
+      const result = zAccountingDate.safeParse(value);
+      expect(result.success).toBe(false);
+      expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+        "not a real calendar date",
+      );
+    },
+  );
 });

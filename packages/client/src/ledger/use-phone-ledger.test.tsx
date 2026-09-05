@@ -93,7 +93,7 @@ describe("usePhoneLedger", () => {
         archiveCurrency: () => undefined,
         setRateSource: () => undefined,
         setPinned: () => undefined,
-        changePivot: () => undefined,
+        changePivot: () => ({ droppedDates: 0 }),
         setManualRate: () => ({ written: 0, replacedManual: 0 }),
         clearManualRate: () => ({ deleted: 0 }),
         updateCurrency: vi.fn(),

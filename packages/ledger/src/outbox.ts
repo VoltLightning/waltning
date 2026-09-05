@@ -254,10 +254,17 @@ export const outbox = sqliteTable(
     sentAt: integer("sent_at", { mode: "timestamp" }),
 
     /**
-     * When the person captured it. **Display only.**
+     * When the person captured it. **Display only** for ordering and conflict
+     * resolution — never used for either, since §14.2 is explicit that a
+     * write does not race a wall clock.
      *
-     * Never used for ordering, never used to resolve a conflict — §14.2 is
-     * explicit that a write does not race a wall clock.
+     * **L1 — not display-only for replay's own date derivation.** A queued
+     * write whose operation derives an accounting date from the capture
+     * (`set_manual_rate`'s `today`) has that date rebuilt on replay from this
+     * column shifted by `capturedOffsetMinutes`, read in UTC
+     * (`write.ts#captureDate`) — never from `capturedTz` looked up against
+     * the tz database, which `capturedOffsetMinutes`'s own doc below explains
+     * does not survive a rule revision.
      */
     capturedAt: integer("captured_at", { mode: "timestamp" })
       .notNull()

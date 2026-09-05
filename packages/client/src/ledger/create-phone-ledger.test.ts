@@ -345,7 +345,7 @@ function harness(
     archiveCurrency: vi.fn(),
     setRateSource: vi.fn(),
     setPinned: vi.fn(),
-    changePivot: vi.fn(),
+    changePivot: vi.fn(() => ({ droppedDates: 0 })),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
     updateCurrency: vi.fn(),
@@ -544,7 +544,7 @@ describe("phone ledger controller", () => {
       archiveCurrency: vi.fn(),
       setRateSource: vi.fn(),
       setPinned: vi.fn(),
-      changePivot: vi.fn(),
+      changePivot: vi.fn(() => ({ droppedDates: 0 })),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       updateCurrency: vi.fn(),
@@ -628,7 +628,7 @@ describe("phone ledger controller", () => {
       archiveCurrency: vi.fn(),
       setRateSource: vi.fn(),
       setPinned: vi.fn(),
-      changePivot: vi.fn(),
+      changePivot: vi.fn(() => ({ droppedDates: 0 })),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       updateCurrency: vi.fn(),
@@ -1096,7 +1096,7 @@ describe("phone ledger controller", () => {
       archiveCurrency: vi.fn(),
       setRateSource: vi.fn(),
       setPinned: vi.fn(),
-      changePivot: vi.fn(),
+      changePivot: vi.fn(() => ({ droppedDates: 0 })),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       updateCurrency: vi.fn(),
@@ -1546,8 +1546,22 @@ describe("phone ledger controller — FX (E3)", () => {
     expect(listener).not.toHaveBeenCalled();
 
     const result = controller.changePivot({ code: "USD" });
-    expect(result).toEqual({ code: currencyCode("USD") });
+    expect(result).toEqual({ code: currencyCode("USD"), droppedDates: 0 });
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  // M2 — §7.0's *"dropped rather than left mis-quoted"* has to reach a
+  // screen, and nothing but the port's own return value carries it: a
+  // rewrite that kept one date in twenty-eight is otherwise byte-identical,
+  // from up here, to one that kept them all.
+  it("changePivot: the executor's droppedDates count reaches the caller", () => {
+    const { controller, port } = harness();
+    (port.changePivot as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({
+      droppedDates: 27,
+    }));
+
+    const result = controller.changePivot({ code: "USD" });
+    expect(result).toEqual({ code: currencyCode("USD"), droppedDates: 27 });
   });
 
   // C1 — the executor's other refusal gets its own text too, never the
@@ -1571,7 +1585,13 @@ describe("phone ledger controller — FX (E3)", () => {
     const { controller, port } = harness();
     const listener = vi.fn();
     controller.subscribe(listener);
-    const range = { base: "USD", quote: "PLN", from: "2026-01-01", to: "2026-01-03" };
+    const range = {
+      base: "USD",
+      quote: "PLN",
+      from: "2026-01-01",
+      to: "2026-01-03",
+      today: "2026-06-01",
+    };
 
     (port.setManualRate as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
       throw new Error("set_manual_rate: a manual rate already exists for 2026-01-01");
@@ -1687,7 +1707,7 @@ describe("phone ledger controller — createCategory", () => {
       archiveCurrency: vi.fn(),
       setRateSource: vi.fn(),
       setPinned: vi.fn(),
-      changePivot: vi.fn(),
+      changePivot: vi.fn(() => ({ droppedDates: 0 })),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       updateCurrency: vi.fn(),
@@ -1889,7 +1909,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       archiveCurrency: vi.fn(),
       setRateSource: vi.fn(),
       setPinned: vi.fn(),
-      changePivot: vi.fn(),
+      changePivot: vi.fn(() => ({ droppedDates: 0 })),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       updateCurrency: vi.fn(),
@@ -2243,7 +2263,7 @@ describe("phone ledger controller — counterparties and settlement", () => {
       archiveCurrency: vi.fn(),
       setRateSource: vi.fn(),
       setPinned: vi.fn(),
-      changePivot: vi.fn(),
+      changePivot: vi.fn(() => ({ droppedDates: 0 })),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       updateCurrency: vi.fn(),
@@ -3044,7 +3064,7 @@ describe("phone ledger controller — listCounterpartyBalances (§6.6)", () => {
       archiveCurrency: vi.fn(),
       setRateSource: vi.fn(),
       setPinned: vi.fn(),
-      changePivot: vi.fn(),
+      changePivot: vi.fn(() => ({ droppedDates: 0 })),
       setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
       clearManualRate: vi.fn(() => ({ deleted: 0 })),
       updateCurrency: vi.fn(),

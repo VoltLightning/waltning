@@ -370,6 +370,15 @@ export default function SettingsCurrenciesScreen() {
       setToast(fieldError ? resolvePivotErrorMessage(t, fieldError) : t("fx.pivotChangeRefused"));
       return;
     }
+    // M2 — §7.0's *"dropped rather than left mis-quoted"*, said out loud. The
+    // rewrite silently loses every date it cannot re-derive against the new
+    // pivot, and a run that kept one date in twenty-eight used to look
+    // exactly like one that kept them all. Not an error — the operation
+    // succeeded — so a toast, not a field error.
+    if (result.droppedDates > 0) {
+      toastTokenRef.current += 1;
+      setToast(t("fx.pivotChangeDroppedDates", { count: result.droppedDates }));
+    }
     // M7 — the chosen target just became the pivot: clearing it here is what
     // lets `selectedPivotTarget` fall back to `otherRows[0]` on the next
     // render, rather than resending a code the executor now refuses as

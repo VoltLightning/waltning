@@ -378,6 +378,32 @@ export const REPLICA_STEPS: readonly {
       `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
     ],
   },
+  {
+    tag: "0009_schema",
+    statements: [
+      `ALTER TABLE \`fx_rates\` ADD \`displaced_rate\` text`,
+      `ALTER TABLE \`fx_rates\` ADD \`displaced_source\` text`,
+      `ALTER TABLE \`fx_rates\` ADD \`displaced_fetched_at\` integer`,
+      `CREATE TABLE \`__new_fx_rates\` (
+	\`base\` text NOT NULL,
+	\`quote\` text NOT NULL,
+	\`date\` text NOT NULL,
+	\`rate\` text NOT NULL,
+	\`source\` text NOT NULL,
+	\`fetched_at\` integer,
+	\`displaced_rate\` text,
+	\`displaced_source\` text,
+	\`displaced_fetched_at\` integer,
+	FOREIGN KEY (\`base\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`quote\`) REFERENCES \`currencies\`(\`code\`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "fx_rates_rate_bounds" CHECK(cast("__new_fx_rates"."rate" as real) > 0.000000000001 and cast("__new_fx_rates"."rate" as real) < 999999999999)
+)`,
+      `INSERT INTO \`__new_fx_rates\`("base", "quote", "date", "rate", "source", "fetched_at", "displaced_rate", "displaced_source", "displaced_fetched_at") SELECT "base", "quote", "date", "rate", "source", "fetched_at", "displaced_rate", "displaced_source", "displaced_fetched_at" FROM \`fx_rates\``,
+      `DROP TABLE \`fx_rates\``,
+      `ALTER TABLE \`__new_fx_rates\` RENAME TO \`fx_rates\``,
+      `CREATE UNIQUE INDEX \`fx_rates_pk\` ON \`fx_rates\` (\`base\`,\`quote\`,\`date\`)`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

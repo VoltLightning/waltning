@@ -21,11 +21,12 @@ import { z } from "zod";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
 import { recoverOnLaunch } from "../recover.ts";
+import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
 
-const { accounts, currencies, outbox, transactions } = schema;
+const { accounts, currencies, fxRates, outbox, transactions } = schema;
 
 type Tx = LocalTx<Database.RunResult, typeof schema>;
 
@@ -811,5 +812,64 @@ describe("LaunchRecovery.deferred counts every outstanding deferral", () => {
     // Entry 1 is genuinely deferred, entry 2 is halted rather than
     // deferred — the count names only the former.
     expect(recovery.deferred).toBe(1);
+  });
+});
+
+/**
+ * L1 — `captureOf` used to hand `set_manual_rate` a `Capture` whose date an
+ * executor derives via `todayIn(capturedTz, capturedAt)` — a *current*
+ * tz-database lookup for a zone, which `outbox.ts`'s own `captured_offset_
+ * minutes` doc says is exactly the fact that does **not** survive a rule
+ * revision. `captured_offset_minutes` does, so replay must derive the day
+ * from `capturedAt` shifted by it, read in UTC — never a zone lookup.
+ *
+ * Same shape as `write.test.ts`'s "accepts a range ending on the capture's
+ * own day, in the capture's own zone": 23:30 UTC is already the 12th in
+ * Warsaw (`+60`), so a `to` of the 12th must replay without refusing, even
+ * though the stored `capturedAt` instant is still the 11th in UTC.
+ */
+describe("L1 — replay derives the accounting date from capturedAt + offset, not a tz lookup", () => {
+  it("replays a set_manual_rate entry captured at 23:30 local, with `to` its own local date", () => {
+    s.ledger.replica.db
+      .update(currencies)
+      .set({ isPivot: true })
+      .where(eq(currencies.code, currencyCode("PLN")))
+      .run();
+    s.ledger.replica.db
+      .insert(currencies)
+      .values({ code: currencyCode("USD"), name: "Placeholder" })
+      .run();
+
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values({
+        seq: 1,
+        operation: "set_manual_rate",
+        opVersion: 1,
+        payload: {
+          base: "PLN",
+          quote: "USD",
+          from: "2026-03-12",
+          to: "2026-03-12",
+          rate: "0.250000000000",
+        },
+        deps: [],
+        capturedTz: "Europe/Warsaw",
+        capturedOffsetMinutes: 60,
+        // 23:30 UTC on the 11th — already the 12th in Warsaw. `today` is
+        // omitted from the payload, exactly as a pre-M1 build queued it, so
+        // replay must derive it from `capturedAt` + the offset above.
+        capturedAt: new Date("2026-03-11T23:30:00Z"),
+      })
+      .run();
+
+    const recovery = recoverOnLaunch(s.ledger, ledgerRegistry);
+
+    expect(recovery.halted).toBeNull();
+    expect(recovery.replayed).toHaveLength(1);
+    const written = s.ledger.replica.db.select().from(fxRates).all();
+    expect(written).toHaveLength(1);
+    expect(written[0]?.date).toBe(accountingDate("2026-03-12"));
+    expect(written[0]?.source).toBe("manual");
   });
 });

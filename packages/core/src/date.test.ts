@@ -14,6 +14,7 @@ import {
   daysBetween,
   isAccountingDate,
   shiftMonth,
+  todayAtOffset,
   todayIn,
   yearMonth,
 } from "./date.ts";
@@ -68,6 +69,37 @@ describe("today is a local calendar day, not a UTC instant", () => {
 
   it("returns something the type accepts", () => {
     expect(isAccountingDate(todayIn("UTC"))).toBe(true);
+  });
+});
+
+describe("todayAtOffset — L1's fixed-offset twin of todayIn, no tz database", () => {
+  /**
+   * The same C28 shape `todayIn` above proves, reconstructed from a stored
+   * offset instead of a zone name — the reconstruction `write.ts#captureDate`
+   * uses for replay, which must not depend on the tz database's *current*
+   * rules for a zone answering what an *earlier* instant meant.
+   */
+  it("differs from the UTC day when the offset is ahead", () => {
+    const justAfterLocalMidnight = new Date("2026-03-12T23:30:00.000Z");
+    // Warsaw, +60 — the same instant `todayIn("Europe/Warsaw", …)` reads.
+    expect(todayAtOffset(justAfterLocalMidnight, 60)).toBe("2026-03-13");
+  });
+
+  it("differs when the offset is behind", () => {
+    const at0200Utc = new Date("2026-03-12T02:00:00.000Z");
+    // New York, -300 (EST, before its own DST start) — the same instant
+    // `todayIn("America/New_York", …)` reads.
+    expect(todayAtOffset(at0200Utc, -300)).toBe("2026-03-11");
+  });
+
+  it("agrees with todayIn for the zone whose current offset it is given", () => {
+    const at = new Date("2026-07-15T21:00:00.000Z");
+    // Warsaw is +120 in July (CEST) — the offset a live capture would record.
+    expect(todayAtOffset(at, 120)).toBe(todayIn("Europe/Warsaw", at));
+  });
+
+  it("a zero offset is UTC's own calendar day", () => {
+    expect(todayAtOffset(new Date("2026-03-12T23:30:00.000Z"), 0)).toBe("2026-03-12");
   });
 });
 

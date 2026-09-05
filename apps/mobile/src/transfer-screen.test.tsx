@@ -15,7 +15,7 @@ import {
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { accountingDate, addDays, todayIn } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode, pivotPerUnit, toMoney, unitsPerPivot } from "@waltning/core/money";
+import { crossRate, currencyCode, toMoney, unitsPerPivot } from "@waltning/core/money";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
@@ -161,7 +161,7 @@ function fakeController(
     setTransactionLines: () => undefined,
     readRate: vi.fn(() => null),
     // S31 §9's own worked example: 3.8100 PLN per USD, `readCrossRate`'s
-    // pivot-per-unit direction — multiply the USD leg by this to reach PLN.
+    // triangulated direction (M1) — multiply the USD leg by this to reach PLN.
     // USD→EUR is a second, distinct reference (H1's re-prefill tests, and
     // H2/L5's own re-derivation ones); GBP holds nothing, matching
     // offline-with-no-rate (S31 §6).
@@ -179,7 +179,7 @@ function fakeController(
             asOf: accountingDate("2026-08-12"),
             carriedDays: 0,
           };
-          return { rate: pivotPerUnit("3.8100"), legs: { from: leg, to: leg } };
+          return { rate: crossRate("3.8100"), legs: { from: leg, to: leg } };
         }
         if (from === USD && to === EUR) {
           const leg = {
@@ -188,7 +188,7 @@ function fakeController(
             asOf: accountingDate("2026-08-12"),
             carriedDays: 0,
           };
-          return { rate: pivotPerUnit("0.9200"), legs: { from: leg, to: leg } };
+          return { rate: crossRate("0.9200"), legs: { from: leg, to: leg } };
         }
         return null;
       }),
@@ -198,7 +198,7 @@ function fakeController(
     archiveCurrency: vi.fn(),
     setRateSource: vi.fn(),
     setPinned: vi.fn(),
-    changePivot: vi.fn(),
+    changePivot: vi.fn(() => ({ droppedDates: 0 })),
     setManualRate: vi.fn(() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: vi.fn(() => ({ deleted: 0 })),
     createCounterparty: vi.fn(),
@@ -351,7 +351,7 @@ describe("Transfer — the phone path", () => {
             asOf: today,
             carriedDays: 0,
           };
-          return { rate: pivotPerUnit("3.8100"), legs: { from: leg, to: leg } };
+          return { rate: crossRate("3.8100"), legs: { from: leg, to: leg } };
         }
         return null;
       },

@@ -8,7 +8,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
-import { pivotPerUnit, toMoney } from "@waltning/core/money";
+import { crossRate, toMoney } from "@waltning/core/money";
 import { SettleSheet } from "./settle-sheet";
 
 function noop() {}
@@ -30,7 +30,7 @@ const meta = {
     accountId: "acc-cash-pln",
     onOpenAccountPicker: noop,
     referenceRate: {
-      rate: pivotPerUnit("4.3120"),
+      rate: crossRate("4.3120"),
       source: "nbp",
       date: "2026-08-10",
       carriedDays: 0,

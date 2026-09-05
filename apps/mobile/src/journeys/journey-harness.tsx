@@ -135,6 +135,7 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
     to: today,
     rate: "4.00",
     overwriteManual: true,
+    today,
   });
   if ("fieldErrors" in rate) {
     throw new Error(`journey fixture: rate refused — ${JSON.stringify(rate.fieldErrors)}`);

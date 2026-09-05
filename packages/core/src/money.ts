@@ -243,6 +243,70 @@ export const unitsPerPivot = (v: string | number | Decimal): UnitsPerPivot =>
   dec(v).toFixed(12) as UnitsPerPivot;
 
 /**
+ * The open interval every stored rate lives in —
+ * `1e-12 < rate < 999999999999`.
+ *
+ * **Each bound exists to make the far side of `reciprocal` storable**, and a
+ * rate is `numeric(24,12)`: twelve digits before the point and twelve after,
+ * so `1e-12` is the smallest value that scale can represent and
+ * `999999999999` (twelve nines) is the largest integer part precision can
+ * hold:
+ *
+ * - **Above `1e-12`**, because `1 / 1e-12` is exactly `1e12` — the flip of the
+ *   floor overflows the column it would be written to.
+ * - **Below `999999999999`, not `1e12`.** `1e12` has thirteen integer
+ *   digits — one past what `numeric(24,12)` can store at all — so a rate
+ *   that reaches it never reaches the CHECK: Postgres refuses the write with
+ *   its own generic *"numeric field overflow"* first, and `fx_rates_rate_bounds`
+ *   never gets to be the name in the error. `999999999999` is the type's own
+ *   ceiling, one step inside its range rather than one step past it, so a
+ *   rate the column *can* hold but this interval refuses (`999999999999.5`,
+ *   say) is refused by the CHECK itself — the failure this bound exists to
+ *   produce, not an unrelated one standing in for it.
+ *
+ * **Not "closed under the flip", which would be a stronger claim and false.**
+ * Twelve-place truncation folds the top of the interval onto its excluded
+ * floor: `1 / 999999999998` rounds to exactly `1e-12` (`money.test.ts` pins
+ * it). What holds is the pair of guarantees above — the flip of an in-bounds
+ * rate is never zero and never past `1e12` — and that is enough precisely
+ * because a rate is flipped **once, at a boundary**, never chained.
+ *
+ * Enforced three times, deliberately: `zUnitsPerPivot`/`zPivotPerUnit`
+ * (`zod.ts`) refuse an out-of-bounds rate at the contract edge, before any
+ * outbox entry exists; `fx_rates_rate_bounds` holds it in Postgres and on the
+ * replica when the code is wrong; and `change_pivot` — which mints rates by
+ * division rather than parsing them — drops and counts a date whose rebased
+ * rate would land outside.
+ */
+export const RATE_MIN_EXCLUSIVE = "0.000000000001";
+export const RATE_MAX_EXCLUSIVE = "999999999999";
+
+/** Whether a rate lies strictly inside `RATE_MIN_EXCLUSIVE`…`RATE_MAX_EXCLUSIVE`. */
+export const rateInBounds = (v: Rate | string | number | Decimal): boolean => {
+  const d = dec(v);
+  return d.gt(RATE_MIN_EXCLUSIVE) && d.lt(RATE_MAX_EXCLUSIVE);
+};
+
+declare const CROSS: unique symbol;
+
+/**
+ * A triangulated rate between two arbitrary, non-pivot currencies —
+ * `readCrossRate`'s own answer (M1).
+ *
+ * **Not `PivotPerUnit`, on purpose, though the two share a shape.**
+ * `PivotPerUnit` multiplies a currency's own amount by its rate *against the
+ * pivot*; a `CrossRate` multiplies an amount in `from` by a rate that has
+ * already been triangulated through the pivot to land in `to` — a different
+ * pair, a different meaning, and a value `toPivot` must never accept as if it
+ * were the former (`rate.type-test.ts`).
+ */
+export type CrossRate = string & { readonly [CROSS]: "CrossRate" };
+
+/** Parse a triangulated cross rate — `readCrossRate`'s own constructor. */
+export const crossRate = (v: string | number | Decimal): CrossRate =>
+  dec(v).toFixed(12) as CrossRate;
+
+/**
  * Cross between the two directions.
  *
  * **The only legal way across**, and deliberately a named function rather than
@@ -254,11 +318,25 @@ export const unitsPerPivot = (v: string | number | Decimal): UnitsPerPivot =>
  * flipping back cannot recover what truncation removed — 4.0231 returns as
  * 4.023099999996. Invisible on a screen and cumulative in a pipeline;
  * `money.test.ts` pins it.
+ *
+ * **L3 — refuses a result that rounds to zero at twelve places.** `rate`
+ * itself carries a `> 0` CHECK on every table that stores one
+ * (`fx_rates_rate_positive`, `transactions_fx_rate_positive`), so this is the
+ * one place a rate that is technically positive but astronomically large
+ * (a hyperinflated currency's units-per-pivot, say) can still cross into a
+ * stored zero — silently, since `0.000000000000` is a value those CHECKs
+ * accept from the *other* side of the flip. Refusing here, at the only
+ * sanctioned crossing, is cheaper than a CHECK on every column a reciprocal
+ * could ever land in.
  */
 export function reciprocal(rate: PivotPerUnit): UnitsPerPivot;
 export function reciprocal(rate: UnitsPerPivot): PivotPerUnit;
 export function reciprocal(rate: Rate): Rate {
-  return new Decimal(1).dividedBy(rate).toFixed(12) as Rate;
+  const result = new Decimal(1).dividedBy(rate).toFixed(12);
+  if (dec(result).isZero()) {
+    throw new Error(`money.reciprocal: 1 / ${rate} rounds to zero at twelve places`);
+  }
+  return result as Rate;
 }
 
 /**
@@ -335,6 +413,13 @@ export const margin = ({
   toFxRate,
 }: MarginInput): MarginResult => {
   const amountPivot = dec(amountOriginal).times(fxRate);
+  // H4 — `marginPct` divides by this. `amountOriginal` is refused at zero by
+  // the contract now (`createTransactionInput`'s own refinement, adjustments
+  // excepted), but this function has no way to see that refusal was ever
+  // run, and a `NaN`/`Infinity` margin is a worse failure than a named throw.
+  if (amountPivot.isZero()) {
+    throw new Error("money.margin: amountPivot is zero — the margin ratio is undefined");
+  }
   const toAmountPivot = dec(toAmount).times(toFxRate);
   const marginPivot = amountPivot.minus(toAmountPivot);
   return {

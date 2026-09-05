@@ -184,6 +184,21 @@ export const fxRates = pgTable("fx_rates", fxRatesColumns(), (t) => [
     columns: [t.base, t.quote, t.date],
   }),
   check("fx_rates_rate_positive", sql`${t.rate} > 0`),
+  // H2 — positive is not enough, because a rate is crossed. `money.reciprocal`
+  // is the one sanctioned flip between units-per-pivot and pivot-per-unit, and
+  // it throws on a rate whose flip truncates to `0.000000000000` — a throw
+  // that lands inside `create_transaction`'s `apply`, *after* the outbox entry
+  // has already committed, leaving an entry no replay can ever apply. Each
+  // bound makes the far side of that flip storable: above `1e-12` so the flip
+  // fits `numeric(24,12)`, below `999999999999` — the type's own largest
+  // integer part, not `1e12` itself, which is one digit past what
+  // `numeric(24,12)` can even store and so overflows before this CHECK ever
+  // runs (`money.ts`'s `RATE_MAX_EXCLUSIVE` carries the argument in full) —
+  // so it does not truncate to a zero `fx_rates_rate_positive` would then
+  // accept. `zUnitsPerPivot` refuses the same range at the contract edge;
+  // this is the half that holds when the code is wrong — `change_pivot`
+  // mints rates by division and parses none of them.
+  check("fx_rates_rate_bounds", sql`${t.rate} > 0.000000000001 and ${t.rate} < 999999999999`),
   check("fx_rates_distinct", sql`${t.base} <> ${t.quote}`),
 ]);
 
@@ -438,7 +453,32 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
 
   // Adjustments carry their own sign: reconciling an account DOWNWARD is the
   // ordinary use, and every other type takes direction from `type` (§7.2).
-  check("transactions_amount_positive", sql`${t.amountOriginal} >= 0 or ${t.type} = 'adjustment'`),
+  // H4 — strictly positive, zero included in the refusal: `money.margin`
+  // divides by `amount_pivot = amount_original × fx_rate`, and a zero
+  // income/expense/transfer amount is not a payment event to begin with
+  // (§6.10). An adjustment may still reconcile to an unchanged balance.
+  //
+  // M1 — the migration that tightened this from `>= 0` adds
+  // `transactions_amount_positive` back `NOT VALID`: existing zero-amount
+  // rows are grandfathered, new ones are refused immediately.
+  // `drizzle-kit generate` cannot express `NOT VALID`, so a regeneration of
+  // that migration must have it hand-added back. Named by constraint rather
+  // than by migration file — the file is renumbered whenever a branch lands
+  // ahead of it, and a comment naming a number is wrong the day it does.
+  check("transactions_amount_positive", sql`${t.amountOriginal} > 0 or ${t.type} = 'adjustment'`),
+  // L3 — the CHECK above justifies itself by naming `fx_rate` in
+  // `amount_pivot = amount_original × fx_rate`, but until now nothing
+  // enforced `fx_rate` itself: `fx_rates.rate` has `fx_rates_rate_positive`
+  // (above), and the reciprocal crossing at the write boundary
+  // (`create-transaction.executor.ts`, `money.reciprocal`) refuses a result
+  // that rounds to zero at twelve places (`money.ts`), but neither stops a
+  // zero from landing here through a caller-asserted rate (§7.6 level 1),
+  // which is never derived and so never passes through `reciprocal` at all.
+  // `IS NULL OR` even though the column is `NOT NULL` — the same shape
+  // `fx_rates_rate_positive` and every other nullable-safe CHECK in this
+  // file use, so the constraint reads the same regardless of whether the
+  // column ever becomes optional.
+  check("transactions_fx_rate_positive", sql`${t.fxRate} is null or ${t.fxRate} > 0`),
   check(
     "transactions_transfer_shape",
     sql`(${t.type} = 'transfer') = (${t.toAccountId} is not null)`,

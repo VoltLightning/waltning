@@ -1163,8 +1163,10 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 **`actor`** — `user` · `agent` · `import` · `migration`
 **`import_row_status`** — `pending` · `ready` · `needs_review` · `duplicate` ·
 `imported` · `skipped`
-**`fx_source`** — `nbp` · `ecb` · `nbrb` · `nbg` · `manual` · `carried_forward`
-(§7.6; `manual` outranks every synced source for the same pair and date)
+**`fx_source`** — `nbp` · `ecb` · `nbrb` · `nbg` · `manual` · `carried_forward` ·
+`derived` (§7.6; `manual` outranks every synced source for the same pair and
+date, and `derived` marks a rate triangulated by a pivot change rather than
+published by anyone)
 
 ### 6.4 The clearing accounts
 
@@ -1187,22 +1189,58 @@ unallocated group expense. That becomes a dashboard warning and an agent tool
 Enforced in the database, not merely the application:
 
 ```sql
-transactions_amount_positive     amount_original >= 0
-transactions_transfer_shape      (type = 'transfer') = (to_account_id IS NOT NULL)
-transactions_transfer_distinct   to_account_id IS NULL OR to_account_id <> account_id
-transactions_category_shape      type IN ('income','expense') OR category_id IS NULL
-transactions_to_amount_shape     (type = 'transfer') = (to_amount IS NOT NULL)
-transactions_to_amount_positive  to_amount IS NULL OR to_amount > 0
-transactions_to_currency_shape   (type = 'transfer') = (to_currency IS NOT NULL)
-transactions_to_fx_rate_shape    (type = 'transfer') = (to_fx_rate IS NOT NULL)
-transactions_fee_positive        fee IS NULL OR fee > 0
-categories_no_self_parent        id <> parent_id
-categories_earnings_income_only  kind = 'income' OR is_earnings = false
-accounts_shared_not_business     ownership = 'own' OR is_business = false
-currencies_decimals_sane         decimals BETWEEN 0 AND 8
-fx_rates_rate_positive           rate > 0
-fx_rates_distinct                base <> quote
+transactions_amount_positive          amount_original > 0 OR type = 'adjustment'
+transactions_transfer_shape           (type = 'transfer') = (to_account_id IS NOT NULL)
+transactions_transfer_distinct        to_account_id IS NULL OR to_account_id <> account_id
+transactions_category_shape           type IN ('income','expense') OR category_id IS NULL
+transactions_to_amount_shape          (type = 'transfer') = (to_amount IS NOT NULL)
+transactions_to_amount_positive       to_amount IS NULL OR to_amount > 0
+transactions_to_currency_shape        (type = 'transfer') = (to_currency IS NOT NULL)
+transactions_to_fx_rate_shape         (type = 'transfer') = (to_fx_rate IS NOT NULL)
+transactions_fx_rate_positive         fx_rate IS NULL OR fx_rate > 0
+transactions_fee_positive             fee IS NULL OR fee > 0
+transactions_counterparty_role_shape  (counterparty_id IS NOT NULL) = (counterparty_role IS NOT NULL)
+transactions_occurrence_shape         (recurring_id IS NULL) = (occurrence_date IS NULL)
+transactions_debt_shape               (debt_currency IS NULL) = (debt_amount IS NULL)
+transactions_tax_fx_shape             (tax_fx_rate IS NULL) = (tax_fx_date IS NULL)
+categories_no_self_parent             id <> parent_id
+categories_earnings_income_only       kind = 'income' OR is_earnings = false
+accounts_shared_not_business          ownership = 'own' OR is_business = false
+currencies_decimals_sane              decimals BETWEEN 0 AND 8
+fx_rates_rate_positive                rate > 0
+fx_rates_rate_bounds                  rate > 0.000000000001 AND rate < 999999999999
+fx_rates_distinct                     base <> quote
 ```
+
+**`transactions_amount_positive` refuses zero, not only a negative.** A
+zero-amount income, expense or transfer is not a payment event (§6.10), and
+§7.5's margin divides by `amount_pivot = amount_original × fx_rate`. An
+adjustment is exempt: reconciling to an unchanged balance is a real outcome,
+and an adjustment carries its own sign either way (§7.2). Because a database
+already holding zero-amount rows cannot be repaired without inventing a figure
+nobody recorded, the tightened constraint is added `NOT VALID` — every new or
+updated row is refused immediately, and the existing rows are grandfathered
+until the owner resolves them and validates it by hand.
+
+**`fx_rates_rate_bounds` is not a second `rate > 0`.** A rate is crossed
+exactly once, at the write boundary, between the units-per-pivot `fx_rates`
+stores and the pivot-per-unit `transactions.fx_rate` holds (§4). Each bound
+keeps the far side of that crossing storable: above `1e-12`, because
+`1 / 1e-12` is exactly `1e12` and `numeric(24,12)` cannot hold it; below
+`999999999999` — the type's own largest integer part, not `1e12` itself,
+which is one digit past what `numeric(24,12)` can even store, so a rate that
+reaches it never reaches this constraint at all: Postgres refuses the write
+with its own generic "numeric field overflow" first. Moving the ceiling one
+step inside the column's range is what makes the CHECK itself the thing that
+fires — on a rate the column can hold but this interval refuses, past the
+ceiling the flip truncates to `0.000000000000` — a value `rate > 0` accepts,
+since the zero arrives from the far side of the crossing, where no
+constraint was looking. Every rate parsed at a contract boundary is refused
+outside the same interval, and the pivot change, which mints rates by
+division rather than parsing them, drops any date whose rebased rate would
+land outside it. The interval is not *closed* under the flip and does not need
+to be — twelve-place rounding folds its top onto its excluded floor — because
+a rate is crossed once, at a boundary, and never chained.
 
 The two `to_*` shape constraints matter more than they look. `to_amount` was
 already guarded; `to_currency` and `to_fx_rate` were not, so a transfer could be
@@ -2065,17 +2103,63 @@ can always be traced to its origin:
    (§7.7).
 
 `fx_rates.source` carries the provenance: `nbp`, `ecb`, `nbrb`, `nbg`,
-`manual`, or `carried_forward`. A manual entry always outranks a synced one for
-the same pair and date, is never overwritten by a later sync, and writes to
-`audit_log`. Reports can be filtered to show which figures rest on overrides —
-useful when a period is being reconciled and you need to know what was asserted
-rather than observed.
+`manual`, `carried_forward`, or `derived`. A manual entry always outranks a
+synced one for the same pair and date, is never overwritten by a later sync,
+and writes to `audit_log`. Reports can be filtered to show which figures rest
+on overrides — useful when a period is being reconciled and you need to know
+what was asserted rather than observed.
+
+**`source` carries provenance and nothing else.** How stale a figure is, is a
+separate fact, and it is measured at read time by walking `carried_forward`
+rows back to the real quote they copy and counting the days (§7.7's ten-day
+cap). Stamping an otherwise-real row `carried_forward` to signal that it was
+computed from something stale destroys both readings at once: the row stops
+naming who published it, and the pair it belongs to becomes unreadable
+whenever no real row stands behind it. Provenance is written; staleness is
+derived.
+
+#### Changing the pivot
+
+Re-basing the whole rate table onto a new pivot (§7.0) is a rewrite, one date
+at a time, and it obeys the same separation:
+
+- **A date is re-based when the bridge — the old pivot's own rate against the
+  new one, for that date — is a real published quote or `derived`.** A
+  `derived` bridge was itself triangulated from two quotes published on that
+  same date by an earlier pivot change, so it is exactly as fresh for that
+  date as a provider's own quote — a second pivot change may re-base off it
+  the same way the first re-based off a real one. A bridge that is
+  `carried_forward` holds no rate of its own, only a copy of an earlier
+  day's, and dividing every other quote on the date by that copy produces
+  figures nobody can date. Only a carried or missing bridge drops the whole
+  date, counted and reported rather than swallowed. Carry-forward then
+  answers for that date at read time, from whichever earlier date did
+  re-base, with the true age.
+- **A cross re-based onto the new pivot is `derived`.** Both quotes were
+  published on that date, so the figure is fresh for it, and `derived` names
+  what actually produced it — a triangulation, not a provider who never quoted
+  this pair. A cross computed from a `manual` leg is `derived` too: the person
+  asserted their own pair, not this one. A leg whose own row is
+  `carried_forward` is dropped rather than re-based, because its origin's date
+  has already produced (or been dropped with) the `derived` row carry-forward
+  will reach.
+- **The reciprocal — the new pivot against the old — keeps the bridge's own
+  source.** `manual` stays `manual`: the reciprocal of an assertion is the
+  same assertion read the other way round, not a computation. A provider's
+  source stays that provider's, for the same reason.
+- **Every cross the rewrite leaves must share its date with the reciprocal
+  that date's bridge produced.** A cross with no same-date reciprocal names a
+  date the bridge rule above should have dropped whole but did not — the
+  operation asserts this before committing rather than trusting the rules
+  above to have held.
 
 #### When no rate exists at all
 
 Carry-forward is capped at ten days (§7.7), so a dead source eventually leaves
 genuine holes. **A missing rate must never cost you the transaction.** The row
-is written with the nearest available rate and
+is written with the nearest available rate — nearest in calendar days on
+either side of the row's own date, ties going to the rate already in effect on
+it rather than one that only takes effect later — and
 `fx_rate_estimated = true`, which:
 
 - keeps every aggregate working, with no nullable `amount_pivot` to handle;
@@ -3748,6 +3832,16 @@ costs 1 MB — and is unnecessary, because the replica carries each row's
 remain for their one legitimate use: pricing a *new* capture. Changing display
 currency is an online settings action that bumps the replica epoch.
 
+**"Last-known" is, per pair: the last real-source row, and every
+`carried_forward` row after it — never a carried row mirrored alone.** A
+carried row with no real-source row behind it in the replica is exactly the
+orphan `readNearestRate` (§7.6/§7.7) refuses to serve, so a sync that mirrored
+only the newest row for a pair could hand a weekend-carried phone a copy with
+nothing to trace to — `capturable` would read `true` from a real row the
+replica once held, while `readNearestRate` had nothing left to find. Mirroring
+the trailing carried run alongside its origin keeps `capturable` and
+`readNearestRate` answering the same question from the same rows.
+
 #### Replication, not caching
 
 The replica syncs by `(updated_at, id)` cursor and **includes soft-deleted rows**,
@@ -3797,11 +3891,17 @@ that freeze into `GENERATED` columns and are not re-derivable afterwards:
   and nothing to stamp them later, so it was permanently unfilable under a scheme
   whose failure direction is under-declared revenue (C5).
 
-Server-side resolution collapses all four. `fx_rate_estimated` is then set by the
-**server**, if and only if no published rate existed for that date at drain
-time — the only moment the question can be answered correctly. Clearing it when a
-published rate is substituted is a correction of provenance, not a model
-rewriting your data, so §11.2's gate does not apply and it is automatic.
+Server-side resolution collapses all four. `fx_rate_estimated` is set by
+whichever side values the row: the **server**, at drain, if and only if no
+published rate exists for that date; or the **phone**, at capture, when it
+must price the row from a quote not in effect on the row's own date — §7.6's
+*"when no rate exists at all"*, the carry-forward cap exhausted or nothing
+held for the pair on either side of that date. A weekend or holiday carried
+forward within the cap is not an estimate on either side: §7.6's table lists
+it as the ordinary answer for that date, not a fallback. Clearing the flag
+when a published rate is substituted is a correction of provenance, not a
+model rewriting your data, so §11.2's gate does not apply and it is
+automatic.
 
 Offline, a cross-currency transfer leaves the destination amount **empty**, with
 the stale reference shown only as a hint. An unedited destination amount is then
@@ -3818,14 +3918,20 @@ the correction arrives on the ordinary path rather than as an offer attached to
 some other operation.
 
 The phone therefore writes a **provisional** rate — exactly `1` for a
-same-currency capture, which is not an estimate; the last-known rate for the
-pair otherwise, flipped once from `fx_rates.rate`'s units-per-pivot to the
-pivot-per-unit this column holds. Who *decides* is unaffected: the phone never
-sends that number as an assertion, the server resolves the real rate at commit
-from the row's own date, and **`fx_rate_estimated` is set by the server at drain
-and by nothing else**. A provisional figure no reader can identify as
-provisional would be the same defect wearing a different name, so the line that
-matters is that the phone's number never leaves the phone.
+same-currency capture, which is not an estimate; otherwise the rate nearest
+the row's own date that the replica holds (§7.6/§7.7: carry-forward first,
+the nearest real-source row on either side only when carry-forward has
+nothing), flipped once from `fx_rates.rate`'s units-per-pivot to the
+pivot-per-unit this column holds. Who *decides* is unaffected: the phone
+never sends that number as an assertion, and the server still resolves the
+real rate at commit from the row's own date, replacing whatever the phone
+wrote. **`fx_rate_estimated` is set by whichever side values the row** — the
+phone, at capture, only when it had to reach past carry-forward for a quote
+not in effect on the row's date; the server, at drain, when it re-resolves
+from the row's own date and finds no published rate. A provisional figure no
+reader can identify as provisional would be the same defect wearing a
+different name, so the line that matters is that the phone's number never
+leaves the phone.
 
 #### Validate at entry, not at sync
 

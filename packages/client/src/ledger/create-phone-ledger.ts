@@ -528,8 +528,8 @@ export type PhoneRate = {
 /**
  * E5 — a reference rate between two arbitrary currencies, as of a date —
  * `readCrossRate`'s answer. The pivot (§7.0) never reaches this type: `rate`
- * is already triangulated, pivot-per-unit for this specific pair, the same
- * direction `TransferAmount`'s own `referenceRate` prop and `margin`'s
+ * is already triangulated for this specific pair, the same direction
+ * `TransferAmount`'s own `referenceRate` prop and `margin`'s
  * `fxRate`/`toFxRate` take.
  *
  * H2 — `legs`, not a flattened `source`/`asOf`/`carriedDays`: those three
@@ -538,9 +538,15 @@ export type PhoneRate = {
  * leg's own provenance travels here whole; `crossRateProvenance`
  * (`ledger/cross-rate-provenance.ts`) is where a screen turns the two into
  * one honest display fact.
+ *
+ * **M1 — `CrossRate`, not `PivotPerUnit`.** The two share a shape but not a
+ * meaning (`money.ts`'s own note on the brand); a caller that needs a
+ * `PivotPerUnit` (`margin`'s `fxRate`/`toFxRate`, a stamped `toFxRate`) must
+ * cross at the boundary — `money.pivotPerUnit(money.dec(1).dividedBy(rate))`,
+ * the reciprocal, same as `transfer-composer.tsx` already does.
  */
 export type PhoneCrossRate = {
-  rate: money.PivotPerUnit;
+  rate: money.CrossRate;
   legs: { from: PhoneRate; to: PhoneRate };
 };
 
@@ -654,8 +660,16 @@ export type PhoneLedgerPort = {
   archiveCurrency: (input: ArchiveCurrencyInput, capture: PhoneCapture) => void;
   setRateSource: (input: SetRateSourceInput, capture: PhoneCapture) => void;
   setPinned: (input: SetPinnedInput, capture: PhoneCapture) => void;
-  /** §7.0 — refused by the executor while any transaction exists (S29a). */
-  changePivot: (input: ChangePivotInput, capture: PhoneCapture) => void;
+  /**
+   * §7.0 — refused by the executor while any transaction exists (S29a).
+   *
+   * **M2 — `droppedDates` is a return value, not a detail.** The rewrite drops
+   * every date it cannot re-derive against the new pivot (§7.0's *"dropped
+   * rather than left mis-quoted"*), and a run that dropped every date but one
+   * used to look exactly like a run that dropped none. Carried through the
+   * port so the screen can say so.
+   */
+  changePivot: (input: ChangePivotInput, capture: PhoneCapture) => { droppedDates: number };
   setManualRate: (
     input: SetManualRateInput,
     capture: PhoneCapture,
@@ -1041,6 +1055,8 @@ export type SetManualRateDraft = {
   to: string;
   rate: string;
   overwriteManual?: boolean;
+  /** H1 — the device's own date; the schema has no zone to compute one itself. */
+  today: string;
 };
 
 export type ClearManualRateDraft = { base: string; quote: string; from: string; to: string };
@@ -1246,9 +1262,10 @@ export type PhoneLedgerController = {
   setPinned: (
     draft: SetPinnedDraft,
   ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  /** M2 — `droppedDates` rides alongside the code; S17's own toast reads it. */
   changePivot: (
     draft: ChangePivotDraft,
-  ) => { code: CurrencyCode } | { fieldErrors: readonly FieldError[] };
+  ) => { code: CurrencyCode; droppedDates: number } | { fieldErrors: readonly FieldError[] };
   setManualRate: (
     draft: SetManualRateDraft,
   ) => { written: number; replacedManual: number } | { fieldErrors: readonly FieldError[] };
@@ -3503,8 +3520,9 @@ export function createPhoneLedger(
             { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
           );
         }
+        let droppedDates: number;
         try {
-          port.changePivot(parsed.data, runtime.capture());
+          droppedDates = port.changePivot(parsed.data, runtime.capture()).droppedDates;
         } catch (writeError) {
           const fieldError = changePivotRefusal(writeError);
           return finish(
@@ -3517,7 +3535,7 @@ export function createPhoneLedger(
         return finish(
           diagnostics,
           { scope: "client_action", action: "change_pivot" },
-          { code: parsed.data.code },
+          { code: parsed.data.code, droppedDates },
         );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
@@ -3543,6 +3561,7 @@ export function createPhoneLedger(
           to: draft.to,
           rate: draft.rate,
           overwriteManual: draft.overwriteManual,
+          today: draft.today,
         });
         if (!parsed.success) {
           return finish(

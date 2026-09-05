@@ -142,6 +142,66 @@ describe("the two rates are reciprocals, and the types know it (H21)", () => {
     expect(Math.abs(Number(back) - Number(stored))).toBeLessThan(1e-9);
   });
 
+  // L3 — a rate astronomically large but still technically positive (past
+  // the `> 0` CHECK on the table it came from) can still flip into a stored
+  // zero once truncated to twelve places. Refused here, at the one
+  // sanctioned crossing, rather than landing silently past every CHECK on
+  // the far side.
+  it("L3 — refuses a reciprocal that rounds to zero at twelve places", () => {
+    const astronomical = money.unitsPerPivot("10000000000000"); // 1e13
+    expect(() => money.reciprocal(astronomical)).toThrow(/rounds to zero/);
+  });
+
+  /**
+   * H2 — what the rate bounds actually buy, stated exactly. **Each bound
+   * guarantees the far side of the flip is storable**: above `1e-12`, the
+   * reciprocal stays under `1e12` and so fits `numeric(24,12)`; below
+   * `999999999999` (the type's own largest integer part, not `1e12` itself —
+   * `money.ts`'s own note on why the ceiling sits one step inside the
+   * column's range), the reciprocal stays above zero at twelve places and so
+   * does not trip `reciprocal`'s own throw. That is the whole claim — and it
+   * is *not* the stronger "the interval is closed under the flip", which
+   * twelve-place truncation makes false at the top: `1 / 999999999998`
+   * rounds to exactly `1e-12`, the excluded floor. Flipping once, at a
+   * boundary, is what makes that harmless; chaining flips is what this file
+   * has always refused.
+   */
+  describe("H2 — the rate bounds, and exactly what they guarantee", () => {
+    it("refuses both endpoints, and accepts everything strictly between", () => {
+      expect(money.rateInBounds(money.RATE_MIN_EXCLUSIVE)).toBe(false);
+      expect(money.rateInBounds(money.RATE_MAX_EXCLUSIVE)).toBe(false);
+      expect(money.rateInBounds("0.000000000002")).toBe(true);
+      expect(money.rateInBounds("999999999998")).toBe(true);
+      expect(money.rateInBounds("1")).toBe(true);
+    });
+
+    it.each(["0.000000000002", "0.0001", "1", "3.7556", "999999999998"])(
+      "%s flips without throwing, to a value that is neither zero nor past the ceiling",
+      (value) => {
+        const rate = money.unitsPerPivot(value);
+        expect(money.rateInBounds(rate)).toBe(true);
+        const flipped = money.reciprocal(rate);
+        expect(money.dec(flipped).isZero()).toBe(false);
+        expect(money.dec(flipped).lt(money.RATE_MAX_EXCLUSIVE)).toBe(true);
+      },
+    );
+
+    // The endpoints themselves, and why each is excluded rather than allowed.
+    it("1e-12 would flip to exactly 1e12 — past the ceiling numeric(24,12) itself allows", () => {
+      const flipped = money.reciprocal(money.unitsPerPivot(money.RATE_MIN_EXCLUSIVE));
+      expect(money.dec(flipped).gte(money.RATE_MAX_EXCLUSIVE)).toBe(true);
+    });
+
+    // And the truncation the *weaker* claim above exists to admit: a rate
+    // just inside the ceiling flips onto the floor, which is in `numeric`'s
+    // range and out of this interval's.
+    it("a rate just under the ceiling flips onto the excluded floor, not past it", () => {
+      const flipped = money.reciprocal(money.unitsPerPivot("999999999998"));
+      expect(flipped).toBe(money.RATE_MIN_EXCLUSIVE);
+      expect(money.rateInBounds(flipped)).toBe(false);
+    });
+  });
+
   /**
    * The failure H21 actually was: the wrong direction applied, silently, to a
    * figure that still looks like money. At 3.81 the two answers differ by
@@ -284,6 +344,19 @@ describe("§4a / §7.5 — FX margin on a transfer", () => {
     });
     expect(result.marginPivot).toBe("0.00000000");
     expect(result.realizedRate).toBe("1.00000000");
+  });
+
+  // H4 — `marginPct` divides by `amountPivot`; zero must refuse, not `NaN`
+  // or `Infinity` reaching a screen that renders it as a percentage.
+  it("refuses a zero amountPivot by name, rather than dividing by it", () => {
+    expect(() =>
+      money.margin({
+        amountOriginal: money.toMoney("0.00"),
+        fxRate: money.pivotPerUnit("1"),
+        toAmount: money.toMoney("0.00"),
+        toFxRate: money.pivotPerUnit("1"),
+      }),
+    ).toThrow(/amountPivot is zero/);
   });
 });
 

@@ -1,26 +1,51 @@
 /**
- * `readRate` and `readCoverage` — §4/§7.7, against the replica.
+ * `readRate`, `readNearestRate` and `readCoverage` — §4/§7.7, against the
+ * replica.
  *
- * A rate is read the same way `create-transaction.executor.ts`'s
- * `lastKnownRate` reads one, generalised over an arbitrary `date` rather than
- * "the most recent held" and made to answer the carry-forward question §7.7
- * asks: how many days is this rate being carried forward from, and is that
- * still inside the ten-day cap?
+ * H1 — `readRate` answers the carry-forward question §7.7 asks (how many
+ * days is this rate being carried forward from, and is that still inside the
+ * ten-day cap?) for an arbitrary `date` — a *read-side* question, for S18 and
+ * reference figures.
+ *
+ * C1/C2 — `create-transaction.executor.ts` prices a capture through
+ * `readNearestRate` instead, which asks that same carry-forward question
+ * *first* — `SPEC.md` §7.6's weekend/holiday row, *"carry forward the last
+ * published rate"*, and §7.7's *"the reporting jurisdiction values at the
+ * preceding business day"* — and falls back to the nearest real-source row on
+ * either side of `date` only when carry-forward has nothing: no row
+ * at-or-before `date`, the carry past the ten-day cap, or an orphaned
+ * carried row with no locatable origin. That fallback is §7.6's own
+ * *"when no rate exists at all"* sentence, not the general rule — a capture
+ * is never refused for being far from the nearest held rate, only for the
+ * pair having no rate at all.
  *
  * **`fx_rates` is stored one way only**, `(base = pivot, quote = X)`, in
- * units-per-pivot (§4) — both callers state `base` and `quote` explicitly
- * rather than trusting the invariant, the same defence `lastKnownRate`
- * argues for.
+ * units-per-pivot (§4) — every caller states `base` and `quote` explicitly
+ * rather than trusting the invariant.
  */
 
 import { type AccountingDate, daysBetween } from "@waltning/core/date";
-import type { CurrencyCode, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
-import { dec, pivotPerUnit, unitsPerPivot } from "@waltning/core/money";
+import type { CrossRate, CurrencyCode, UnitsPerPivot } from "@waltning/core/money";
+import { crossRate, dec, unitsPerPivot } from "@waltning/core/money";
 import { and, asc, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
-import type { ReplicaDb } from "../open.ts";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { ledgerSchema } from "../schema-map.ts";
 
 const { currencies, fxRates } = ledgerSchema;
+
+/**
+ * H1 — the replica or a transaction against it, whichever the caller holds.
+ * `ReplicaDb`'s own brand (`open.ts`) exists to keep the replica and outbox
+ * handles apart at the top level; a `LocalTx` running *inside* an executor's
+ * `apply` is already known to be a replica transaction; `open.ts`'s own
+ * cross-cutting helpers (`migrateReplica`) take the same unbranded type for
+ * the same reason.
+ */
+type Queryable<TRun, TSchema extends typeof ledgerSchema> = BaseSQLiteDatabase<
+  "sync",
+  TRun,
+  TSchema
+>;
 
 /**
  * The server's own carried-forward marker (`packages/db/src/fx/sources.ts`'s
@@ -50,11 +75,11 @@ export type LocalRate = {
  * not chain).
  */
 function findOrigin<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   { base, quote, asOf }: { base: CurrencyCode; quote: CurrencyCode; asOf: AccountingDate },
-): { date: AccountingDate; source: string } | undefined {
+): { date: AccountingDate; source: string; rate: UnitsPerPivot } | undefined {
   const [real] = db
-    .select({ date: fxRates.date, source: fxRates.source })
+    .select({ date: fxRates.date, source: fxRates.source, rate: fxRates.rate })
     .from(fxRates)
     .where(
       and(
@@ -92,7 +117,7 @@ function findOrigin<TRun, TSchema extends typeof ledgerSchema>(
  * and measures — and reports — from *that* row instead.
  */
 export function readRate<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   { base, quote, date }: { base: CurrencyCode; quote: CurrencyCode; date: AccountingDate },
 ): LocalRate | undefined {
   const [row] = db
@@ -105,7 +130,7 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
 
   if (!row) return undefined;
 
-  let origin: { date: AccountingDate; source: string } = row;
+  let origin: { date: AccountingDate; source: string; rate: UnitsPerPivot } = row;
   if (row.source === CARRIED_FORWARD) {
     const real = findOrigin(db, { base, quote, asOf: row.date });
     // No locatable origin (C2) — `change_pivot` can drop the bridge row a
@@ -118,7 +143,146 @@ export function readRate<TRun, TSchema extends typeof ledgerSchema>(
   const carriedDays = daysBetween(origin.date, date);
   if (carriedDays > MAX_CARRY_DAYS) return undefined;
 
-  return { rate: row.rate, source: origin.source, asOf: origin.date, carriedDays };
+  // H3 — the origin's own rate, never the carried copy's (`row.rate`). A
+  // `carried_forward` row's stored `rate` is a snapshot taken when it was
+  // written; if the origin was corrected afterwards (`set_manual_rate`), the
+  // snapshot is stale and the origin's current value is the true answer.
+  return { rate: origin.rate, source: origin.source, asOf: origin.date, carriedDays };
+}
+
+export type NearestRate = {
+  rate: UnitsPerPivot;
+  source: string;
+  /** The rate row's own date — never `date` itself unless they coincide. */
+  asOf: AccountingDate;
+  /**
+   * L4 — `|daysBetween(asOf, date)|`, `0` on an exact real-source hit for
+   * `date`. Always non-negative: `asOf` can land on either side of `date`
+   * (H1), and this is the distance, never the signed offset.
+   * `fxRateEstimated` on the transaction is a bare boolean; nothing above
+   * `packages/ledger` can otherwise tell a rate estimated by one day from
+   * one estimated by 2,342 — this is that distance, carried through so a
+   * future diagnostic (S18/S30) can surface it without a second query.
+   */
+  daysAway: number;
+  /**
+   * H2 — true when this rate is the one **in effect** on `date`: an exact
+   * real-source row, or a `carried_forward` row tracing to a real origin
+   * within the ten-day cap (step 1 below, `readRate`'s own answer, §7.6's
+   * weekend/holiday row). False when step 2 supplied it instead — the
+   * nearest real-source row on either side, reached only because
+   * carry-forward had nothing (§7.6's *"when no rate exists at all"*).
+   *
+   * `create-transaction.executor.ts` reads this directly into
+   * `fx_rate_estimated`: a weekend or next-day capture priced by step 1 is
+   * not an estimate, even though `asOf !== date`; only a row step 2 had to
+   * reach for is.
+   */
+  inEffect: boolean;
+};
+
+/**
+ * C1/C2 — the rate for `(base, quote)` **nearest** `date`, uncapped. The
+ * write path's own lookup, never `readRate`'s: `readRate`'s ten-day cap is a
+ * *read-side* rule (S18, reference figures) and must not gate a capture — a
+ * capture more than ten days from the nearest held rate still has to save,
+ * with `fx_rate_estimated` set, per `SPEC.md` §7.6 and `architecture/01`/`06`
+ * ("a missing rate must never cost you the transaction").
+ *
+ * **The round-4 correction: carry-forward wins before any distance is ever
+ * compared.** §7.6's table gives *weekend or holiday* its own row — *"carry
+ * forward the last published rate"* — and §7.7 has the reporting
+ * jurisdiction valuing at *the preceding business day*. Neither is a
+ * distance comparison, and the *"nearest in calendar days on either side"*
+ * sentence sits only under §7.6's **next** heading, *"when no rate exists at
+ * all"* — the dead-source fallback, not the ordinary rule. So this now
+ * answers in two steps, never one comparison:
+ *
+ * 1. **`readRate`'s own answer.** A row at-or-before `date` whose origin is
+ *    real and within the ten-day cap — an exact real-source row, a
+ *    `carried_forward` row that traces to a real origin, or a real row
+ *    itself, all at-or-before `date`. When `readRate` has an answer, *that
+ *    answer is the nearest rate*: a carried Sunday's rate is Friday's,
+ *    whatever real quote happens to sit fewer calendar days away on the
+ *    other side. `NearestRate.inEffect` is `true` here.
+ * 2. **Only when step 1 has nothing** — no row at-or-before `date` at all,
+ *    the carry past the ten-day cap, or an orphaned carried row with no
+ *    locatable origin — the nearest **real-source** row on either side of
+ *    `date` by `daysBetween`, ties to before. This is §7.6's *"when no rate
+ *    exists at all"* fallback, and `NearestRate.inEffect` is `false`.
+ *
+ * **Still the same refusal as `readCurrencies.capturable`, exactly** — both
+ * answer "does this pair have at least one real-source row", `capturable`
+ * date-blind and this one nearest `date`. Step 2 compares two *real-source*
+ * candidates rather than picking the nearest row of any source and walking a
+ * loser back to its origin, so a `carried_forward` row — orphaned or not —
+ * is never the thing step 2 compares or returns. A pair `capturable` marks
+ * `true` always has a real-source row here too, on some date.
+ */
+export function readNearestRate<TRun, TSchema extends typeof ledgerSchema>(
+  db: Queryable<TRun, TSchema>,
+  { base, quote, date }: { base: CurrencyCode; quote: CurrencyCode; date: AccountingDate },
+): NearestRate | undefined {
+  // Step 1 — carry-forward first (§7.6's weekend/holiday row, §7.7's
+  // "preceding business day"). `readRate` already walks a carried row back
+  // to a real origin and caps the result at ten days; when it answers, that
+  // answer is the rate in effect on `date`, not merely the closest one.
+  const carried = readRate(db, { base, quote, date });
+  if (carried) {
+    return {
+      rate: carried.rate,
+      source: carried.source,
+      asOf: carried.asOf,
+      daysAway: carried.carriedDays,
+      inEffect: true,
+    };
+  }
+
+  // Step 2 — §7.6's "when no rate exists at all": step 1 found nothing to
+  // carry forward, so compare the nearest real-source row on either side of
+  // `date`, ties to before. `before` re-runs the same real-source walk
+  // `readRate` used internally (it necessarily failed there too — no row
+  // at-or-before `date`, the cap, or an unlocatable origin), and `after` is
+  // the nearest real-source row strictly at-or-after `date`.
+  const before = findOrigin(db, { base, quote, asOf: date });
+
+  const [after] = db
+    .select({ rate: fxRates.rate, source: fxRates.source, date: fxRates.date })
+    .from(fxRates)
+    .where(
+      and(
+        eq(fxRates.base, base),
+        eq(fxRates.quote, quote),
+        gte(fxRates.date, date),
+        ne(fxRates.source, CARRIED_FORWARD),
+      ),
+    )
+    .orderBy(asc(fxRates.date))
+    .limit(1)
+    .all();
+
+  // H1 — compare distances rather than always preferring `before`: a row 26
+  // days after `date` is nearer than one from 2020. Tie (equal distance on
+  // both sides) goes to `before`. Both candidates are already real-source
+  // rows, so the winner needs no further walk to an origin.
+  const origin =
+    before && after
+      ? daysBetween(before.date, date) <= daysBetween(date, after.date)
+        ? before
+        : after
+      : (before ?? after);
+  if (!origin) return undefined;
+
+  return {
+    rate: origin.rate,
+    source: origin.source,
+    asOf: origin.date,
+    // `daysBetween` is signed (positive when its second date is later); the
+    // origin can land on either side of `date`, so this is the distance,
+    // never the signed offset.
+    daysAway: Math.abs(daysBetween(origin.date, date)),
+    inEffect: false,
+  };
 }
 
 export type LocalCoverage = {
@@ -158,6 +322,12 @@ export type LocalCoverage = {
    * `CoverageTag` reads this instead when `days === 0`: a currency with only
    * future rows has held rates set, just none due yet — a different state
    * from *no rates yet*, and worth saying so rather than reading identically.
+   *
+   * **H3 — `set_manual_rate` refusing a future `to` does not empty this.**
+   * That refusal governs one operation. Future-dated rows still reach the
+   * replica from a build that predates it, from arc 2's sync, from
+   * `change_pivot` copying whatever dates it rebased, and from a device
+   * whose clock sits behind dates the replica already holds.
    */
   futureRows: number;
 };
@@ -177,7 +347,7 @@ export type LocalCoverage = {
  * caller rather than computing one.
  */
 export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   today: AccountingDate,
 ): readonly LocalCoverage[] {
   const currencyRows = db
@@ -214,10 +384,11 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
     // `carried_forward` (H4, S17 §8: *last quote date*, not last held row).
     // `realDays` counts the same real rows (M3) — the decision variable for
     // *complete*, never `days`, which a dead source carried to today fills
-    // without a fresh quote. Every count but `futureN` is scoped `date <=
-    // today` in the `case` itself (M4) rather than the `where` — L7 needs
-    // `futureN`'s complementary count from the very same aggregate, still
-    // one query per currency.
+    // without a fresh quote. Every count is scoped `date <= today` in the
+    // `case` itself (M4) rather than the `where`, so a row past today (which
+    // `set_manual_rate` refuses to write, L2) cannot inflate a figure that
+    // only counts through today — L7 needs `futureN`'s complementary count
+    // from the very same aggregate, still one query per currency.
     const [agg] = db
       .select({
         n: sql<number>`count(case when ${fxRates.date} <= ${today} then 1 else null end)`,
@@ -298,7 +469,7 @@ export type LocalRateRow = {
  * 90 d · a year) pays for once, on demand, not per frame.
  */
 export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   {
     base,
     quote,
@@ -340,13 +511,19 @@ export function listFxRates<TRun, TSchema extends typeof ledgerSchema>(
 
 export type LocalCrossRate = {
   /**
-   * **Pivot-per-unit, for this pair — multiply an amount in `from` by this to
+   * **Triangulated, for this pair — multiply an amount in `from` by this to
    * reach `to`.** Not `fx_rates`' own stored direction: the pivot (§7.0) is
    * invisible past this function, and a caller triangulating through it by
    * hand is exactly what `readCrossRate` exists to spare every screen from
    * writing once each.
+   *
+   * **M1 — `CrossRate`, not `PivotPerUnit`.** The two share a shape but not a
+   * meaning: `PivotPerUnit` multiplies a currency's own amount by its rate
+   * *against the pivot*, and this value does not go to the pivot at all — it
+   * lands in `to`. `money.toPivot` refuses a `CrossRate` at compile time
+   * (`rate.type-test.ts`) precisely so the two cannot be swapped.
    */
-  rate: PivotPerUnit;
+  rate: CrossRate;
   /**
    * H2 — both legs' own provenance, whole and unmixed. A flattened
    * `source`/`asOf`/`carriedDays` here used to borrow `source` from whichever
@@ -373,7 +550,7 @@ export type LocalCrossRate = {
  * destination amount stays empty and the person types it.
  */
 export function readCrossRate<TRun, TSchema extends typeof ledgerSchema>(
-  db: ReplicaDb<TRun, TSchema>,
+  db: Queryable<TRun, TSchema>,
   { from, to, date }: { from: CurrencyCode; to: CurrencyCode; date: AccountingDate },
 ): LocalCrossRate | undefined {
   const [pivotRow] = db
@@ -401,7 +578,7 @@ export function readCrossRate<TRun, TSchema extends typeof ledgerSchema>(
   // 1 unit of `from` is `1 / fromLeg.rate` pivot, and that many pivots are
   // `toLeg.rate` times as many units of `to` — so the cross rate is the
   // ratio of the two, pivot cancelled.
-  const rate = pivotPerUnit(dec(toLeg.rate).dividedBy(fromLeg.rate));
+  const rate = crossRate(dec(toLeg.rate).dividedBy(fromLeg.rate));
 
   // H2 — both legs, whole and unmixed. Which one is "worse", whether either
   // is a fabricated pivot self-leg, and whether to say "manual" are all

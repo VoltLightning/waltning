@@ -22,6 +22,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { createAccountExecutor } from "../accounts/create-account.executor.ts";
+import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
@@ -119,7 +120,10 @@ function seed() {
       {
         base: USD,
         quote: PLN,
-        date: accountingDate("2026-03-01"),
+        // H1 — within `readRate`'s ten-day carry cap of `expenseInput`'s own
+        // date (2026-03-12): the point of this row is to be the *newest*
+        // real quote before the capture, not to test the cap itself.
+        date: accountingDate("2026-03-08"),
         rate: money.unitsPerPivot(PLN_PER_PIVOT),
         source: "nbp",
       },
@@ -324,6 +328,110 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     // unit. Storing 4.0231 here would value an 18 PLN coffee at 72 USD.
     expect(result.row.fxRate).toBe(PIVOT_PER_PLN);
     expect(result.row.fxRate).not.toBe("4.023100000000");
+    // H2 — the seeded row is 4 days before the capture's own date and within
+    // `readRate`'s ten-day cap, so `readNearestRate` answers at step 1: the
+    // rate in effect for this date, not an estimate, even though its own
+    // date differs from the row's.
+    expect(result.row.fxRateEstimated).toBe(false);
+  });
+
+  // H1 — `readRate` prices a capture from the rate *at its own date*, never
+  // "the newest row regardless of date". A row dated after the capture must
+  // not be used to value it.
+  it("H1 — a back-dated capture is priced from the rate at its own date, not a newer row", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: USD,
+          quote: PLN,
+          date: accountingDate("2026-02-20"),
+          rate: money.unitsPerPivot("3.5000"),
+          source: "nbp",
+        },
+        // A newer row exists too — must not win over the capture's own date.
+        {
+          base: USD,
+          quote: PLN,
+          date: accountingDate("2026-03-12"),
+          rate: money.unitsPerPivot("9.0000"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_PLN, "PLN"),
+      date: "2026-02-20",
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("3.5000")));
+    expect(result.row.fxRateEstimated).toBe(false);
+  });
+
+  // C1/C2 — the ten-day cap is `readRate`'s own read-side rule (S18,
+  // references); it must not gate a capture. A rate 31 days from the
+  // capture's own date is still the honest answer this replica can give, so
+  // the row saves rather than being lost to the outbox with no trace on
+  // screen. `SPEC.md` §7.6, `architecture/01`/`06`: a missing rate must never
+  // cost you the transaction.
+  it("C1/C2 — a capture 31 days from the only held rate still saves, estimated", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("0.9000"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-02-01", // 31 days from the only row (2026-01-01)
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("0.9000")));
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+
+  // L4/H1 — the after-side fallback, through the real write path: a
+  // back-dated capture with nothing at or before its own date still prices
+  // from the nearest row *after* it, rather than refusing — the same
+  // "currency just added to the ledger" case `readNearestRate`'s own
+  // docblock names, proven here end to end rather than only at the reader.
+  it("H1 — a capture before the only held rate still saves, priced from it", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-02-01"),
+        rate: money.unitsPerPivot("0.9100"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-01", // 31 days before the only row (2026-02-01)
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("0.9100")));
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+
+  // C1/C2 — the executor refuses only when the pair holds no rate row at
+  // all, the exact condition `readCurrencies.capturable` gates on — never on
+  // distance from the capture's own date.
+  it("C1/C2 — refuses only when the pair has no rate at all, not on distance", () => {
+    expect(() =>
+      write(createTransactionExecutor, {
+        ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+        date: "2026-02-01",
+      }),
+    ).toThrow(/no last-known rate for USD\/CHF/);
   });
 
   it("prefers a rate the caller asserted over anything cached", () => {
@@ -378,6 +486,7 @@ describe("the rate the phone writes into a NOT NULL column", () => {
       from: "2026-03-12",
       to: "2026-03-12",
       rate: "0.90",
+      today: "2026-06-01",
     });
 
     const result = write(createTransactionExecutor, expenseInput(TXN_A, ACCOUNT_CHF, "CHF"));
@@ -427,6 +536,178 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     // The server answers this at drain; `false` is the column's default and not
     // a claim this executor made.
     expect(result.row.fxRateEstimated).toBe(false);
+  });
+});
+
+// H2 — `fxRateEstimated` follows `readNearestRate`'s own step, never
+// `asOf !== date`. §7.6's table gives carry-forward (weekend, holiday, an
+// ordinary stale-but-within-cap quote) its own row, separate from "when no
+// rate exists at all" — only the second is an estimate.
+describe("H2 — fxRateEstimated is set only when readNearestRate had to reach past carry-forward", () => {
+  it("a next-day capture, priced from yesterday's real quote, is not an estimate", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("0.9000"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-02",
+    });
+
+    expect(result.row.fxRateEstimated).toBe(false);
+  });
+
+  it("a capture on a carried weekend day is not an estimate", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-02"), // Friday
+          rate: money.unitsPerPivot("0.9000"),
+          source: "nbp",
+        },
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-03"), // Saturday, carried
+          rate: money.unitsPerPivot("0.9000"),
+          source: "carried_forward",
+        },
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-04"), // Sunday, carried
+          rate: money.unitsPerPivot("0.9000"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-04",
+    });
+
+    expect(result.row.fxRateEstimated).toBe(false);
+  });
+
+  it("nothing before the capture's date, only a quote 3 days after, is an estimate", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-01-04"),
+        rate: money.unitsPerPivot("0.9000"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-01",
+    });
+
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+
+  it("carry exhausted past the ten-day cap, nothing after, is an estimate off the before row", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-01-01"), // 20 days before the capture
+        rate: money.unitsPerPivot("0.9000"),
+        source: "nbp",
+      })
+      .run();
+
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+      date: "2026-01-21",
+    });
+
+    expect(result.row.fxRate).toBe(money.reciprocal(money.unitsPerPivot("0.9000")));
+    expect(result.row.fxRateEstimated).toBe(true);
+  });
+});
+
+// H2/M1 — end to end, through the real `change_pivot` and `create_transaction`
+// executors: a `change_pivot` whose earliest bridge date is itself a
+// carried-forward copy with no real quote before it must neither mint an
+// orphaned reciprocal row (M1) nor leave a later capture unable to price
+// itself off the real quote that does exist (H2). This is the exact
+// reproduction from the review: `USD/CHF 2026-01-03 carried_forward |
+// 2026-01-05 nbp`, pivot changed to CHF, then a capture on the orphan's own
+// former date.
+describe("H2 — an orphaned carried_forward bridge must not refuse a capture, end to end", () => {
+  it("change_pivot drops the orphan, and the capture still prices from the real quote", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // The earliest USD→CHF bridge date in range — carried forward, with
+        // no real quote for the pair anywhere before it.
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-03"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+        // The only real quote for the pair.
+        {
+          base: USD,
+          quote: CHF,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "CHF" });
+
+    // M1 — the pivot change itself must not have minted an orphan for the
+    // new pair: exactly the real quote's date survives, sourced honestly.
+    const chfToUsd = s.ledger.replica.db
+      .select()
+      .from(fxRates)
+      .where(eq(fxRates.base, CHF))
+      .all()
+      .filter((row) => row.quote === USD);
+    expect(chfToUsd).toHaveLength(1);
+    expect(chfToUsd[0]?.date).toBe(accountingDate("2026-01-05"));
+    // H1-r6 — the reciprocal keeps the *bridge's own* source. `nbp` published
+    // this very pair, and reading its quote the other way round is the same
+    // publication, not a triangulation; only a cross computed *through* the
+    // bridge is `derived`.
+    expect(chfToUsd[0]?.source).toBe("nbp");
+    // 1 USD = 0.25 CHF (the seeded rate) ⇒ 1 CHF = 4 USD.
+    expect(chfToUsd[0]?.rate).toBe(money.unitsPerPivot("4"));
+
+    // H2 — the capture, on the orphan's own former date, resolves through
+    // the real quote rather than throwing "no last-known rate for CHF/USD".
+    const result = write(createTransactionExecutor, {
+      ...expenseInput(TXN_A, ACCOUNT_USD, "USD"),
+      date: "2026-01-03",
+    });
+
+    // fx_rate is pivot(CHF)-per-unit(USD) — the reciprocal of the row above,
+    // which lands back on the original 0.25 (1 USD = 0.25 CHF).
+    expect(result.row.fxRate).toBe(money.pivotPerUnit("0.25"));
+    // The resolved rate is dated 2026-01-05, two days from this row's own
+    // 2026-01-03 — not exact for this date, so estimated.
+    expect(result.row.fxRateEstimated).toBe(true);
   });
 });
 

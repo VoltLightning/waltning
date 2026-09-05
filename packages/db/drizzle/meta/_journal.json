@@ -85,6 +85,13 @@
       "when": 1788589200000,
       "tag": "0011_transaction_scale_and_category_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788589200001,
+      "tag": "0012_fx_rates_derived_and_amount_guards",
+      "breakpoints": true
     }
   ]
 }

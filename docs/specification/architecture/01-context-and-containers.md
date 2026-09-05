@@ -57,7 +57,7 @@ authoritative for filing as out of scope.
 
 | Dependency | If unavailable | Degradation |
 |---|---|---|
-| FX providers | Rates go stale | Writes **still succeed** — `fx_rate` is required, so the last known rate is carried forward with `fx_rate_estimated = true` and a bounded carry window. Never blocks entry |
+| FX providers | Rates go stale | Writes **still succeed** — `fx_rate` is required, so the last known rate is carried forward within a bounded window; `fx_rate_estimated` is set only once that window is exhausted or nothing is held at all, never for an ordinary carried rate. Never blocks entry |
 | Model providers | Classification and agent unavailable | Manual entry and all deterministic paths unaffected. The import review queue still works, unclassified |
 | Backblaze B2 | Offsite copy stops | Local nightly dump continues. **Silent failure is the risk** — surfaced on S30 beside backup status |
 | Tailscale | **Total loss of access** | Accepted (§5.1). Every device must run it; the alternative is a public login page |

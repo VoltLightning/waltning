@@ -9,161 +9,91 @@
  * someone opens the file, at which point it is a lie of a different shape
  * than the one `it.fails` exists to catch.
  *
- * This file does two things: asserts every `it.fails(` title on the branch
- * starts with a finding id, and — on failure only — prints the full
- * inventory (file, id, title) so the assertion message itself is the list a
- * fix PR reads, rather than something a human has to go and recompute.
+ * This file's job is to guard the *scanner*, not to demand that failures
+ * exist. The live inventory is allowed to be empty — a branch where every
+ * encoded finding has been fixed is the goal, not a bug in this test — so
+ * what's asserted directly is that each shape the scanner has to recognise
+ * (a direct `it.fails(` call, the bound `finding ? it.fails : it` form, a
+ * loop-expanded template-literal title, and a mention inside a comment that
+ * must be ignored) is fed through the same regexes this file uses on real
+ * source and comes out found and classified exactly. A scan-sanity check
+ * guards the other way a count of zero could lie: that the glob actually
+ * matched at least one journey/invariant file, so a moved or renamed
+ * directory can't make the whole scan vacuous while still reporting zero.
+ * Only once those hold does the file assert every *live* `it.fails(` title
+ * starts with a finding id — printing the full inventory on failure, and
+ * saying plainly when there's nothing to print.
  *
  * The checked set is the same glob `docs-consistency.test.ts` uses for
  * `describe("journeys and invariants")` — derived from the filesystem, so a
  * file a parallel task adds is covered the moment it lands.
+ *
+ * The scanner itself — `inventoryOf` and everything it is built from — lives
+ * in `known-failures-inventory.ts`, a plain module rather than part of this
+ * file: Biome's `noExportsInTest` refuses an `export` inside a `*.test.ts`
+ * file, and `inventoryOf` has to be exported for the composition test below
+ * to call it directly.
  */
 
-import { globSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { globSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  boundFormFindingsIn,
+  directFindingsIn,
+  expandLoopTemplates,
+  FINDING_ID_RE,
+  idOf,
+  inventoryOf,
+  inventoryTable,
+  stripBlockComments,
+} from "./known-failures-inventory.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const read = (p: string): string => readFileSync(join(repoRoot, p), "utf8");
 
 const journeyFiles = [
   ...globSync("packages/*/src/{journeys,invariants}/**/*.test.{ts,tsx}", { cwd: repoRoot }),
   ...globSync("apps/*/src/journeys/**/*.test.tsx", { cwd: repoRoot }),
 ].sort();
 
-/**
- * `R2 H3`, `R2 H1-r3`, `R4 H-r4` (a rule-level finding with no revision
- * digit) — the shape named in this task's brief — plus one shape the brief's
- * regex does not cover but the branch already carries: `R4` bare, with no
- * letter at all. `settle-debt.journey.test.ts`'s own header explains it —
- * `Findings: R2 H3, R4 (settle scale mirror)` — some findings are named at
- * the rule level, never broken into a lettered severity, so the id is just
- * `R[1-6]`. The `(?!\d)` after `R[1-6]` is load-bearing: without it `R23 H1`
- * would read as the bare id `R2` followed by leftover text, rather than
- * being rejected as out of range. `suite — ` covers a finding about the
- * suite itself rather than about the app.
- */
-const FINDING_ID_RE = /^(?:R[1-6](?!\d)(?: [CHML]\d*(?:-r\d+)?)?|suite — )/;
-
-interface Entry {
-  file: string;
-  title: string;
-}
-
-/**
- * Doc comments illustrate `it.fails(...)` in prose without ever calling it —
- * `j16-move-money.journey.test.tsx`'s own header does exactly this
- * (`` `it.fails("R4 H-r4")` ``, inside a `/** … *\/` block), and a scan that
- * doesn't know the difference counts a site that doesn't exist. Block
- * comments are blanked (character-for-character, so line numbers used
- * nowhere here still line up if anyone adds offset reporting later) before
- * either scan below runs.
- */
-function stripBlockComments(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
-}
-
-/**
- * Direct calls: `it.fails("…")`, `it.fails('…')` or `` it.fails(`…`) ``. The
- * title is the whole first argument, up to the matching (same-style) quote
- * — titles in this codebase do not embed an escaped or opposite-style
- * quote, so a non-greedy match to the next matching quote is exact for all
- * three styles, backtick included (`read-equals-write.test.ts`'s own
- * per-seed titles are template literals, not plain strings).
- */
-const IT_FAILS_RE = /\bit\.fails\(\s*(["'`])(.*?)\1/gs;
-
-function directFindingsIn(file: string, text: string): Entry[] {
-  return [...text.matchAll(IT_FAILS_RE)].map((m) => ({ file, title: m[2] ?? "" }));
-}
-
-/**
- * Loop-parameterised titles: `for (const X of ARR) { it.fails(\`…${X}…\`, …) }`
- * with `ARR` a same-file `const ARR = [a, b, …]` array of literals — this
- * scan's only shape of it is `read-equals-write.test.ts`'s `SEEDS` loop, one
- * source line registering five real, distinct `it.fails` calls (one per
- * seed) the moment vitest collects the file. Substituting each element back
- * into the matched template turns that one source-level match into the five
- * inventory entries it actually stands for. A title whose loop or array this
- * can't resolve is kept once, unexpanded — its finding id is always literal
- * text ahead of the interpolation, so the id check below still holds either
- * way; only the *count* would undershoot.
- */
-function expandLoopTemplates(text: string, entries: Entry[]): Entry[] {
-  return entries.flatMap((entry) => {
-    const interp = /\$\{(\w+)\}/.exec(entry.title);
-    if (!interp) return [entry];
-    const varName = interp[1] as string;
-    const forMatch = new RegExp(`for\\s*\\(\\s*const\\s+${varName}\\s+of\\s+(\\w+)\\s*\\)`).exec(
-      text,
-    );
-    if (!forMatch) return [entry];
-    const arrName = forMatch[1] as string;
-    const arrMatch = new RegExp(`const\\s+${arrName}\\s*=\\s*\\[([^\\]]*)\\]`).exec(text);
-    if (!arrMatch) return [entry];
-    const elements = (arrMatch[1] ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    if (elements.length === 0) return [entry];
-    return elements.map((el) => ({
-      ...entry,
-      title: entry.title.replaceAll(`\${${varName}}`, el),
-    }));
-  });
-}
-
-/**
- * Bound form: `const NAME = <cond> ? it.fails : it;`, called later as
- * `NAME(label, …)` with `label` built at runtime — no `it.fails(` text
- * exists at the call site at all. Both `name-collision-parity.test.ts`
- * files (ledger and db) are the only shape of this on the branch: a
- * `Partial<Record<number, string>>` map from a corpus index to a finding id,
- * read by the same ternary that binds `NAME`. Rather than interpreting the
- * `.forEach` to recover exactly which titles it builds, this reads the same
- * map the code reads — each entry is one bound `it.fails` site, matching
- * `LEDGER_FINDING`'s three and `POSTGRES_FINDING`'s five.
- */
-const BOUND_FORM_RE = /\bconst\s+\w+\s*=\s*\w+\s*\?\s*it\.fails\s*:\s*it\b/;
-const FINDING_MAP_RE =
-  /const\s+\w*FINDING\w*\s*:\s*Partial<Record<number,\s*string>>\s*=\s*\{([\s\S]*?)\n\};/;
-const FINDING_ENTRY_RE = /(\d+):\s*"([^"]+)"/g;
-
-function boundFormFindingsIn(file: string, text: string): Entry[] {
-  if (!BOUND_FORM_RE.test(text)) return [];
-  const mapMatch = FINDING_MAP_RE.exec(text);
-  if (!mapMatch) return [];
-  const body = mapMatch[1] ?? "";
-  return [...body.matchAll(FINDING_ENTRY_RE)].map(([, index, findingId]) => ({
-    file,
-    title: `${findingId} — NAME_PAIRS[${index}], bound to it.fails via this file's own finding lookup`,
-  }));
-}
-
-function findingsIn(file: string): Entry[] {
-  const text = stripBlockComments(read(file));
-  return [
-    ...expandLoopTemplates(text, directFindingsIn(file, text)),
-    ...boundFormFindingsIn(file, text),
-  ];
-}
-
-const allEntries = journeyFiles.flatMap(findingsIn);
-
-/** The id itself: the title up to its first " — ", or the whole title if there isn't one. */
-const idOf = (title: string): string => title.split(" — ")[0] ?? title;
-
-function inventoryTable(entries: Entry[]): string {
-  return entries.map((e) => `${e.file} :: ${idOf(e.title)} :: ${e.title}`).join("\n");
-}
+const allEntries = inventoryOf(journeyFiles);
 
 describe("known failures", () => {
-  it("is scanning something", () => {
+  /**
+   * `allEntries` is `inventoryOf(journeyFiles)` — proven here against a file
+   * the real glob never reaches, `tests/setup/known-failure-fixture.ts`,
+   * rather than a temp file the glob's own exclusion would make the proof
+   * vacuous either way. Replace the `flatMap` inside `inventoryOf` with `[]`
+   * and this is the test that catches it: every other assertion in this file
+   * reads `allEntries`, which would just as happily be `[]`.
+   */
+  it("composes the flatMap over the files it is given", () => {
+    const fixture = "tests/setup/known-failure-fixture.ts";
+    const entries = inventoryOf([fixture]);
+    expect(entries.map((e) => e.title)).toEqual([
+      "R1 C1 — a fixture finding, read by inventoryOf but never executed",
+    ]);
+    expect(entries.every((e) => e.file === fixture)).toBe(true);
+
+    // And the composition, not just one file's output: two files in, both
+    // files' findings out — an implementation that dropped the flatMap for a
+    // single lookup would pass the single-file case above and fail this one.
+    expect(inventoryOf([fixture, fixture])).toHaveLength(2);
+    expect(inventoryOf([])).toEqual([]);
+  });
+
+  /**
+   * Guards the other way a live count of zero could lie: a moved or renamed
+   * journeys/invariants directory would make the glob below match nothing,
+   * and a scan over an empty file list reports zero findings whether or not
+   * any exist. This is independent of whether the branch currently carries
+   * any `it.fails(` calls at all.
+   */
+  it("scans at least one journey or invariant file", () => {
     expect(
-      allEntries.length,
-      "it.fails( calls found across journeys and invariants",
-    ).toBeGreaterThan(5);
+      journeyFiles.length,
+      "journey/invariant files matched by the glob this scan runs over",
+    ).toBeGreaterThan(0);
   });
 
   /**
@@ -181,11 +111,20 @@ describe("known failures", () => {
   });
 
   /**
-   * Guards the scan itself: template-literal titles, titles bound through a
+   * Guards the scan itself, one shape at a time: a plain direct call, a
+   * loop-expanded template-literal title, a title bound through a
    * `finding ? it.fails : it` name, and a doc-comment mention of
-   * `it.fails("…")` that never actually calls it.
+   * `it.fails("…")` that never actually calls it and must be ignored. Each
+   * sample is fed through the exact same regexes and functions the live scan
+   * uses, so these fixtures prove the scanner works whether or not the live
+   * inventory below finds anything.
    */
-  it("recognises a template-literal title, a bound-form title, and ignores a comment mention", () => {
+  it("finds and classifies a direct call, a template-literal title, a bound-form title, and ignores a comment mention", () => {
+    const directSample = stripBlockComments('it.fails("R2 H3 — a real finding", () => {});\n');
+    expect(directFindingsIn("sample", directSample).map((e) => e.title)).toEqual([
+      "R2 H3 — a real finding",
+    ]);
+
     const templateSample = stripBlockComments(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: a plain string standing in for a source file's own text — `${seed}` here is literal characters this sample is scanned for, never interpolated.
       "for (const seed of SEEDS) {\n  it.fails(`R1 H1-r4 — seed ${seed}: a template title`, () => {});\n}\nconst SEEDS = [1, 2, 3] as const;\n",
@@ -212,15 +151,16 @@ describe("known failures", () => {
     expect(directFindingsIn("sample", commentSample)).toEqual([]);
   });
 
-  it("gives every it.fails( a title that starts with a finding id", () => {
+  it("gives every live it.fails( a title that starts with a finding id, or reports there are none", () => {
     const offenders = allEntries.filter((e) => !FINDING_ID_RE.test(e.title));
-    expect(
-      offenders,
-      offenders.length === 0
-        ? "every it.fails( title starts with a finding id"
-        : `it.fails( titles with no leading finding id — the list a fix PR consults:\n${inventoryTable(
+    const message =
+      offenders.length > 0
+        ? `it.fails( titles with no leading finding id — the list a fix PR consults:\n${inventoryTable(
             offenders,
-          )}\n\nfull inventory:\n${inventoryTable(allEntries)}`,
-    ).toEqual([]);
+          )}\n\nfull inventory:\n${inventoryTable(allEntries)}`
+        : allEntries.length === 0
+          ? "no known failures — every encoded finding is fixed"
+          : "every it.fails( title starts with a finding id";
+    expect(offenders, message).toEqual([]);
   });
 });

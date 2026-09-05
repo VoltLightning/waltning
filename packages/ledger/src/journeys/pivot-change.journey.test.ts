@@ -4,9 +4,12 @@
  * is not a verbatim heading anywhere in SPEC.md; §7.0's pivot/display table
  * and its "Change the pivot" bullet are where the operation is actually
  * specified, and §7.6 covers manual overrides instead), §7.7 (the ten-day
- * carry cap this rewrite must not let a stale bridge dodge).
- * Findings: R1 M4, R1 M1-r4, R1 H1-r5 (orphan reciprocal), R1 H2-r5 (carry
- * clock reset), R1 M1-r5 (drops rows silently).
+ * carry cap this rewrite must not let a stale bridge dodge). SPEC.md §7.6
+ * "Changing the pivot" is what the carried-leg-is-dropped and
+ * `droppedDates` assertions below prove.
+ * Findings: R1 M4, R1 M1-r4, R1 H1-r5 — fixed by #119 (orphan reciprocal; a
+ * carried leg is dropped, not re-based), R1 H2-r5 — fixed by #119 (carry
+ * clock reset), R1 M1-r5 — fixed by #119 (drops rows silently).
  */
 import { accountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
@@ -32,7 +35,12 @@ function fxRows(j: ReturnType<typeof openJourney>) {
 }
 
 describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
-  it.fails("R1 H1-r5 — a carried-forward row cannot stand in as the new pivot's own bridge", () => {
+  // SPEC.md §7.6 "Changing the pivot": "A carried or missing bridge drops
+  // the whole date, counted and reported rather than swallowed." And: "A
+  // leg whose own row is `carried_forward` is dropped rather than re-based,
+  // because its origin's date has already produced (or been dropped with)
+  // the `derived` row carry-forward will reach."
+  it("R1 H1-r5 — a carried-forward row cannot stand in as the new pivot's own bridge", () => {
     const j = setup();
     try {
       // The only "bridge" to EUR on 2026-01-01 is itself a carried-forward
@@ -42,7 +50,7 @@ describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
       seedRate(j, PIVOT, USD, "2026-01-02", "0.25", "carried_forward");
       seedRate(j, PIVOT, EUR, "2026-01-02", "0.91", "nbp");
 
-      j.session.changePivot({ code: EUR }, j.capture);
+      const result = j.session.changePivot({ code: EUR }, j.capture);
 
       const rows = fxRows(j);
       const day1 = accountingDate("2026-01-01");
@@ -52,8 +60,27 @@ describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
       // a rebased quote, not a reciprocal row for the old pivot.
       expect(rows.filter((r) => r.base === EUR && r.date === day1)).toHaveLength(0);
 
-      expect(rows.some((r) => r.base === EUR && r.quote === USD && r.date === day2)).toBe(true);
+      // 2026-01-02's own PLN/USD row is `carried_forward` — a copy of
+      // 2026-01-01's real quote — so §7.6 drops that leg rather than
+      // re-basing it: no EUR/USD row for the date, even though the day's
+      // bridge (PLN/EUR) is real and does re-base the reciprocal below.
+      expect(rows.some((r) => r.base === EUR && r.quote === USD && r.date === day2)).toBe(false);
       expect(rows.some((r) => r.base === EUR && r.quote === PIVOT && r.date === day2)).toBe(true);
+
+      // Only 2026-01-01 counts as a dropped *date* — its bridge is itself
+      // carried-forward, an orphan. 2026-01-02's dropped leg is not a
+      // second count: `droppedDates` counts whole dates the rewrite could
+      // not re-derive at all, never individual legs within a date that did.
+      expect(result.droppedDates).toBe(1);
+
+      // 2026-01-02's carried USD leg traces back to 2026-01-01 for its
+      // origin — but that date's bridge was itself an orphan and dropped
+      // whole, so it never produced a `derived` EUR/USD row either.
+      // Carry-forward has nothing to reach ("or been dropped with", §7.6),
+      // so `readRate` refuses rather than inventing a rate for a pair no
+      // row was ever written for.
+      const readRate = j.session.readRate({ base: EUR, quote: USD, date: day2 });
+      expect(readRate).toBeNull();
 
       // Every surviving carried-forward (or otherwise non-original) EUR
       // row traces to a real, non-carried quote for the same pair at or
@@ -73,7 +100,7 @@ describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
     }
   });
 
-  it.fails("R1 H2-r5 — a rebased row's freshness clock must not reset to the leg's own date", () => {
+  it("R1 H2-r5 — a rebased row's freshness clock must not reset to the leg's own date", () => {
     const j = setup();
     try {
       // The EUR bridge is 20 days stale by 2026-01-21 (real quote on
@@ -96,7 +123,7 @@ describe("change_pivot — SPEC.md §7.0's rewrite, one date at a time", () => {
     }
   });
 
-  it.fails("R1 M1-r5 — a dropped date is reported, not swallowed", () => {
+  it("R1 M1-r5 — a dropped date is reported, not swallowed", () => {
     const j = setup();
     try {
       // 28 daily USD quotes, none bridged to EUR except the last day —

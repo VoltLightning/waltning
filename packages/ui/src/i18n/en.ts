@@ -732,6 +732,25 @@ export const en = {
       "The pivot is the technical hub every rate is stored against. Refused once any transaction exists — a phone alone has no way to re-rate the history that would leave behind. Changing it is rare, audited, and never something moving abroad requires.",
     pivotConfirmSubmit: "Yes, change it",
     pivotChangeRefused: "The pivot can't change while a transaction exists.",
+    /**
+     * M2 — §7.0's *"dropped rather than left mis-quoted"*, said out loud. The
+     * rewrite keeps only the dates that hold a real published rate against
+     * the new pivot; the rest are dropped rather than re-based off a figure
+     * nobody quoted.
+     *
+     * i18next's real `count`-driven suffixes, not a flat pair: English's two
+     * categories collapse onto one string here, Polish's four each say
+     * something different, and `en.ts` is the type — a language with more
+     * grammar than English needs the same key set present here.
+     */
+    pivotChangeDroppedDates_one:
+      "Pivot changed · {{count}} date had no rate to rebase and was dropped",
+    pivotChangeDroppedDates_few:
+      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+    pivotChangeDroppedDates_many:
+      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+    pivotChangeDroppedDates_other:
+      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
     /** C1 — the executor's other refusal: the chosen code is already the pivot. */
     pivotAlreadyPivot: "That currency is already the pivot.",
     /** C1 — the target `Select` in the pivot-change flow, ahead of the confirm dialog. */

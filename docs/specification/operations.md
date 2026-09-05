@@ -135,10 +135,10 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | Operation | Auto | Notes |
 |---|---|---|
 | `sync_fx_rates` · `force_sync` · `backfill_fx_rates` | ✅ | Idempotent and safe to repeat |
-| `set_manual_rate` · `clear_manual_rate` | ❌ | An assertion about a figure nobody published |
+| `set_manual_rate` · `clear_manual_rate` | ❌ | An assertion about a figure nobody published. `set_manual_rate(pair, from, to, rate, overwriteManual, today?)` — a rate is refused for a date that has not happened yet, and `today` is the device's own day because nothing below the client has a zone. **Optional**: absent, it is derived from where and when the capture happened, so an entry queued before the field existed still replays |
 | `add_currency` · `archive_currency` · `set_rate_source` · `set_pinned` | ❌ | |
 | `update_currency` | ❌ | Cosmetic patch only — symbol, symbol position, decimals (S17 §9.2). Never `code`, `rateSource`, `pinned` or `isPivot`, each of which is its own operation above |
-| `change_pivot` | ❌ | `ConfirmDialog`. Should essentially never happen (§7.0) |
+| `change_pivot` | ❌ | `ConfirmDialog`. Should essentially never happen (§7.0). Returns `droppedDates` — the dates it could not re-base against the new pivot (§7.6), surfaced on S17 rather than swallowed: a rewrite that keeps one date in twenty-eight must not read like one that kept them all |
 
 ### Import, rules, recurring, receipts
 

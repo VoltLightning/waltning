@@ -18,11 +18,14 @@
  */
 
 import type { CurrencyCode } from "@waltning/core/money";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
 const { currencies, fxRates } = ledgerSchema;
+
+/** See `read-rate.ts`'s own copy — the server's carried-forward marker. */
+const CARRIED_FORWARD = "carried_forward";
 
 export type LocalCurrency = {
   code: CurrencyCode;
@@ -44,6 +47,18 @@ export type LocalCurrency = {
    * A currency being uncapturable does not make it unusable: an account can be
    * opened in it and its balance renders at its own scale. Holding and capturing
    * are separate capabilities (§14.6).
+   *
+   * **L1/H2 — a row is not enough; it must be a *real* one, and this now
+   * agrees with `readNearestRate` exactly.** `change_pivot` and a corrected
+   * date (`set_manual_rate`'s H3) can both leave a `carried_forward` row
+   * behind with no real quote for the pair to descend from —
+   * `readNearestRate` (`read-rate.ts`) compares only real-source candidates,
+   * so a pair with any orphaned carried row is never valued off it, and this
+   * must agree or a screen would offer a capture the write then throws on.
+   * Both ask the same question — *does the pair hold at least one row whose
+   * own source is real* — one date-blind, one nearest a date; a pair counts
+   * here only when at least one of its rows has a real source (`nbp`,
+   * `ecb`, `manual`, …), never on bare existence.
    */
   capturable: boolean;
   /**
@@ -77,13 +92,22 @@ export function readCurrencies<TRun, TSchema extends typeof ledgerSchema>(
 
   // No pivot means no rate can be resolved for anything, including a currency
   // that has a row — `provisionalFxRate` refuses on that branch first.
+  //
+  // L1/H2 — `source <> carried_forward`: a pair whose only rows are carried
+  // copies has no real quote to descend from, so `readNearestRate` refuses
+  // it regardless of how many carried rows exist. Excluding it here is what
+  // keeps this flag and that refusal in agreement exactly — `readNearestRate`
+  // now compares only real-source candidates on both sides of a date, so
+  // there is no longer a case where a pair marked `capturable` here can
+  // still be refused there over an orphaned carried row landing nearer the
+  // capture's own date.
   const quoted = new Set<CurrencyCode>(
     pivot === undefined
       ? []
       : db
           .selectDistinct({ quote: fxRates.quote })
           .from(fxRates)
-          .where(and(eq(fxRates.base, pivot.code)))
+          .where(and(eq(fxRates.base, pivot.code), ne(fxRates.source, CARRIED_FORWARD)))
           .all()
           .map((row) => row.quote),
   );

@@ -13,7 +13,7 @@
  * exactly as `contract.types.ts` does.
  */
 
-import type { Money, PivotPerUnit, UnitsPerPivot } from "./money.ts";
+import type { CrossRate, Money, PivotPerUnit, toPivot, UnitsPerPivot } from "./money.ts";
 
 type Expect<T extends true> = T;
 type Not<T extends boolean> = T extends true ? false : true;
@@ -50,3 +50,20 @@ export const inhabited: [PivotPerUnit, UnitsPerPivot] = [
   "0.248564000000" as PivotPerUnit,
   "4.023100000000" as UnitsPerPivot,
 ];
+
+/* ── M1: a triangulated cross rate is neither direction ──────────────────── */
+
+/**
+ * `readCrossRate` triangulates through the pivot and its answer is not a
+ * `PivotPerUnit` — multiplying by it does not land on the pivot at all, it
+ * lands in whichever currency the cross pair's `to` side names.
+ */
+export type CrossRateIsNotPivotPerUnit = Expect<Not<Extends<CrossRate, PivotPerUnit>>>;
+export type PivotPerUnitIsNotCrossRate = Expect<Not<Extends<PivotPerUnit, CrossRate>>>;
+
+/** `toPivot` takes `PivotPerUnit` only — a `CrossRate` must not typecheck there. */
+export type ToPivotRefusesCrossRate = Expect<
+  Not<Extends<CrossRate, Parameters<typeof toPivot>[1]>>
+>;
+
+export const crossRateInhabited: CrossRate = "3.810000000000" as CrossRate;

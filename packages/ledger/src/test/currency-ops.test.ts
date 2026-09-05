@@ -14,15 +14,26 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { updateCurrencyInput } from "@waltning/core/registry/inputs";
 import Database from "better-sqlite3";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { addCurrencyExecutor } from "../currencies/add-currency.executor.ts";
 import { archiveCurrencyExecutor } from "../currencies/archive-currency.executor.ts";
-import { changePivotExecutor } from "../currencies/change-pivot.executor.ts";
+import {
+  assertEveryDerivedRowTraces,
+  changePivotExecutor,
+  type PendingRow,
+} from "../currencies/change-pivot.executor.ts";
 import { clearManualRateExecutor } from "../currencies/clear-manual-rate.executor.ts";
+import { readCurrencies } from "../currencies/read-currencies.ts";
 import { readCurrencySettings } from "../currencies/read-currency-settings.ts";
-import { listFxRates, readCoverage, readCrossRate, readRate } from "../currencies/read-rate.ts";
+import {
+  listFxRates,
+  readCoverage,
+  readCrossRate,
+  readNearestRate,
+  readRate,
+} from "../currencies/read-rate.ts";
 import { setManualRateExecutor } from "../currencies/set-manual-rate.executor.ts";
 import { setPinnedExecutor } from "../currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "../currencies/set-rate-source.executor.ts";
@@ -42,6 +53,7 @@ const { accounts, currencies, fxRates, outbox, recurringTransactions, transactio
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
 const EUR = currencyCode("EUR");
+const GBP = currencyCode("GBP");
 const ACCOUNT = id<"accounts">("11111111-1111-4111-8111-111111111111");
 const TXN = id<"transactions">("22222222-2222-4222-8222-222222222222");
 
@@ -560,10 +572,12 @@ describe("change_pivot", () => {
     expect(rows.find((r) => r.base === "USD" && r.quote === "PLN")).toBeDefined();
   });
 
-  // M6 — the orphan-drop test above only proves the drop. This is its
-  // inverse: a carried row whose origin's date *does* have a bridge must
-  // survive the rewrite and come out rebased, not dropped along with it.
-  it("M6 — keeps and rebases a carried_forward row whose origin's date has a bridge", () => {
+  // C1/C2-r6 — a carried leg holds no rate of its own, only a copy of an
+  // earlier real quote, so the rewrite does not re-base it at all: the
+  // origin's own date produces the `derived` row, and carry-forward reaches
+  // it at *read* time with the true age. Writing a rebased copy instead put
+  // the staleness into `source`, which is provenance and not a clock.
+  it("C1-r6 — drops a carried_forward leg; its origin's date carries the pair, read-side", () => {
     s.ledger.replica.db
       .insert(fxRates)
       .values([
@@ -604,19 +618,32 @@ describe("change_pivot", () => {
 
     const rows = rateRows();
     const eurRows = rows.filter((r) => r.base === "USD" && r.quote === "EUR");
-    expect(eurRows).toHaveLength(2);
-    const day2 = eurRows.find((r) => r.date === accountingDate("2026-01-02"));
-    expect(day2?.source).toBe("carried_forward");
-    expect(day2?.rate).toBeDefined();
+    // One row, on the origin's own date: 0.23 / 0.25 = 0.92, stamped for what
+    // produced it. Day 2's carried copy is simply not written.
+    expect(eurRows).toHaveLength(1);
+    expect(eurRows[0]?.date).toBe(accountingDate("2026-01-01"));
+    expect(eurRows[0]?.source).toBe("derived");
+    expect(eurRows[0]?.rate).toBe(money.unitsPerPivot("0.92"));
+
+    // …and day 2 still answers, by carrying forward one day from that row —
+    // an honest age, where the written copy claimed none at all.
+    const day2 = readRate(s.ledger.replica.db, {
+      base: USD,
+      quote: EUR,
+      date: accountingDate("2026-01-02"),
+    });
+    expect(day2?.rate).toBe(money.unitsPerPivot("0.92"));
+    expect(day2?.carriedDays).toBe(1);
   });
 
-  // M8 — §7.6: a carried row is a copy of the nearest earlier real quote,
-  // and that must still hold after a pivot rewrite. Rebasing a carried row
-  // by *its own date's* bridge (0.20 on day 2) rather than its *origin's*
-  // bridge (0.25 on day 1) would make it 0.23/0.20 = 1.15 while its origin
-  // becomes 0.23/0.25 = 0.92 — the same stored rate, two different rebased
-  // answers, and no longer a copy of anything.
-  it("M8 — a kept carried row rebases by its origin's bridge, staying a copy", () => {
+  // M8-r6 — §7.6: a carried row is a copy of the nearest earlier real quote,
+  // and that must still hold after a pivot rewrite. Re-basing a carried row
+  // by *its own date's* bridge (0.20 on day 2) would make it 0.23/0.20 =
+  // 1.15 while its origin became 0.23/0.25 = 0.92 — one stored rate, two
+  // rebased answers, a copy of nothing. Dropping the copy outright settles
+  // the question: there is one row, on the origin's date, and every later
+  // day reads it through carry-forward rather than through a second figure.
+  it("M8-r6 — a carried copy never becomes a second, differently-rebased answer", () => {
     s.ledger.replica.db
       .insert(fxRates)
       .values([
@@ -654,20 +681,19 @@ describe("change_pivot", () => {
     write(changePivotExecutor, { code: "USD" });
 
     const eurRows = rateRows().filter((r) => r.base === "USD" && r.quote === "EUR");
-    expect(eurRows).toHaveLength(2);
-    const rates = new Set(eurRows.map((r) => r.rate));
-    // Both rows — the origin and the kept carried copy — land on the same
-    // rebased value: 0.23 / 0.25 = 0.92, never the carried row's own-date
-    // bridge answer of 0.23 / 0.20 = 1.15.
-    expect(rates).toEqual(new Set([money.unitsPerPivot("0.92")]));
+    // One row only — the origin's — at 0.23 / 0.25 = 0.92. Never a second at
+    // the carried row's own-date bridge answer of 0.23 / 0.20 = 1.15.
+    expect(eurRows).toHaveLength(1);
+    expect(eurRows.map((r) => r.rate)).toEqual([money.unitsPerPivot("0.92")]);
+    expect(eurRows.map((r) => r.date)).toEqual([accountingDate("2026-01-01")]);
   });
 
-  // L3 — the outer loop used to `continue` a whole date bucket with no
-  // bridge of its own, dropping every row on it including a carried row
-  // whose *origin* (an earlier date) does have a bridge. M8's own per-row
-  // rebase never even ran for that row. Day 2 here has no USD bridge at
-  // all, only EUR carried forward from day 1 — it must still survive.
-  it("L3 — keeps a carried row on a date with no bridge of its own, when its origin's date has one", () => {
+  // L3-r6 — a date with no bridge of its own is dropped whole, carried rows
+  // included, and `droppedDates` says so. Nothing is lost by it: day 2 here
+  // holds only a copy of day 1's EUR quote, and day 1 rebased, so day 2's
+  // answer is a carry-forward away — with the age stated, which the copy
+  // could not have carried through the rewrite.
+  it("L3-r6 — a date with no bridge of its own is dropped whole, and counted", () => {
     s.ledger.replica.db
       .insert(fxRates)
       .values([
@@ -697,14 +723,587 @@ describe("change_pivot", () => {
       ])
       .run();
 
-    write(changePivotExecutor, { code: "USD" });
+    const { row } = write(changePivotExecutor, { code: "USD" });
 
     const eurRows = rateRows().filter((r) => r.base === "USD" && r.quote === "EUR");
-    expect(eurRows).toHaveLength(2);
-    const day2 = eurRows.find((r) => r.date === accountingDate("2026-01-02"));
-    expect(day2?.source).toBe("carried_forward");
-    // Rebased by the origin's (day 1) bridge: 0.23 / 0.25 = 0.92.
+    expect(eurRows).toHaveLength(1);
+    expect(eurRows[0]?.date).toBe(accountingDate("2026-01-01"));
+    // Rebased by day 1's own bridge: 0.23 / 0.25 = 0.92.
+    expect(eurRows[0]?.rate).toBe(money.unitsPerPivot("0.92"));
+    expect(row.droppedDates).toBe(1);
+
+    const day2 = readRate(s.ledger.replica.db, {
+      base: USD,
+      quote: EUR,
+      date: accountingDate("2026-01-02"),
+    });
     expect(day2?.rate).toBe(money.unitsPerPivot("0.92"));
+    expect(day2?.carriedDays).toBe(1);
+  });
+
+  // M1/H2 — the exact scenario the reciprocal insert used to mint an orphan
+  // for: the *bridge itself* is a carried-forward copy with no real quote
+  // anywhere before it. The per-row loop already refuses to rebase a row
+  // like this (C2's origin guard); the reciprocal `(newPivot, oldPivot)` row
+  // this test scans for must be refused the same way, never minted as a
+  // `carried_forward` row with nothing real behind it — the exact row
+  // `readNearestRate` (H2) and `capturable` both refuse to serve.
+  it("M1 — never mints an orphaned carried_forward reciprocal for the new pair", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // The earliest bridge date in range — carried forward, and with no
+        // real (PLN, USD) quote anywhere before it to trace to.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-03"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+        // The only real quote for the pair, strictly after the carried row.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "USD" });
+
+    // Scan the whole table for the new pair: not one row is a carried copy
+    // with no real source anywhere before it.
+    const usdToPln = rateRows().filter((r) => r.base === "USD" && r.quote === "PLN");
+    for (const row of usdToPln) {
+      if (row.source !== "carried_forward") continue;
+      const hasRealBefore = usdToPln.some(
+        (other) => other.source !== "carried_forward" && other.date <= row.date,
+      );
+      expect(hasRealBefore).toBe(true);
+    }
+
+    // The carried date is dropped outright, never carried into the new pair.
+    expect(usdToPln.find((r) => r.date === accountingDate("2026-01-03"))).toBeUndefined();
+    // The real quote's date still rebases. H1-r6 — the reciprocal keeps the
+    // *bridge's own* source: `nbp` published this pair, and its reciprocal is
+    // the same publication read the other way round, not a triangulation.
+    // Only a cross computed *through* the bridge is `derived`.
+    const day5 = usdToPln.find((r) => r.date === accountingDate("2026-01-05"));
+    expect(day5?.source).toBe("nbp");
+    expect(day5?.rate).toBe(money.unitsPerPivot("4")); // 1 PLN = 0.25 USD ⇒ 1 USD = 4 PLN
+  });
+
+  // M1/M2 — the origin guard used to gate only the reciprocal: a carried
+  // bridge dropped `(newPivot, oldPivot)` correctly, but a *different* real
+  // quote sharing that same date still divided by the carried bridge and
+  // landed stamped as if it were fresh. One rule for the whole date now: a
+  // bridge that is not a real published quote prices nothing on its date,
+  // not the reciprocal and not any other quote either.
+  it("M1/M2 — a carried bridge drops the whole date, never rebasing another quote off it", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Day 1 — the bridge to EUR, carried forward with no real (PLN, EUR)
+        // quote anywhere before it: an orphan.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.90"),
+          source: "carried_forward",
+        },
+        // Day 1 — an unrelated real quote sharing the orphan's date. This is
+        // exactly the row the old code wrongly rebased.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        // Day 2 — a real bridge, and a real quote that rebases off it
+        // normally: proof the fix does not over-skip.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.92"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.20"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "EUR" });
+
+    const rows = rateRows();
+    // Day 1 — the orphaned bridge date: nothing at all lands for it, derived
+    // or reciprocal alike (the extended "no orphan" scan: scan the whole
+    // date, not just the reciprocal that used to be checked).
+    expect(rows.filter((r) => r.date === accountingDate("2026-01-01"))).toHaveLength(0);
+    expect(
+      rows.find(
+        (r) => r.base === "EUR" && r.quote === "USD" && r.date === accountingDate("2026-01-01"),
+      ),
+    ).toBeUndefined();
+    expect(
+      rows.find(
+        (r) => r.base === "EUR" && r.quote === "PLN" && r.date === accountingDate("2026-01-01"),
+      ),
+    ).toBeUndefined();
+
+    // Day 2 — the real bridge still prices both the reciprocal and the
+    // unrelated quote sharing its date.
+    const eurToPln = rows.find(
+      (r) => r.base === "EUR" && r.quote === "PLN" && r.date === accountingDate("2026-01-02"),
+    );
+    const eurToUsd = rows.find(
+      (r) => r.base === "EUR" && r.quote === "USD" && r.date === accountingDate("2026-01-02"),
+    );
+    expect(eurToPln?.source).toBe("nbp"); // the reciprocal keeps the bridge's own source
+    expect(eurToUsd?.source).toBe("derived"); // a cross: 0.20 / 0.92
+  });
+
+  // H1-r6 — the reciprocal keeps the bridge's own source, and `manual` is the
+  // case that makes the rule worth stating: the person asserted this pair
+  // (§7.6 level 2), and the reciprocal of an assertion is the same assertion
+  // read the other way round, not a computation. A cross reached *through*
+  // that manual leg is `derived` all the same — nobody asserted EUR/USD.
+  it("H1-r6 — the reciprocal of a manual bridge stays manual; a cross through it is derived", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "manual",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.50"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    write(changePivotExecutor, { code: "EUR" });
+
+    const rows = rateRows();
+    const eurToPln = rows.find((r) => r.base === "EUR" && r.quote === "PLN");
+    expect(eurToPln?.source).toBe("manual");
+    expect(eurToPln?.rate).toBe(money.unitsPerPivot("4")); // 1 / 0.25
+    const eurToUsd = rows.find((r) => r.base === "EUR" && r.quote === "USD");
+    expect(eurToUsd?.source).toBe("derived");
+    expect(eurToUsd?.rate).toBe(money.unitsPerPivot("2")); // 0.50 / 0.25
+  });
+
+  // H2-r6 — `change_pivot` mints rates by division and parses none of them,
+  // so it is the one writer that can produce a figure outside the interval
+  // every parsed rate is held to (`money.rateInBounds`). A tiny bridge under
+  // an ordinary quote is the shape that does it: the rebased cross overflows
+  // `numeric(24,12)`, and the reciprocal `create_transaction` would take of
+  // it truncates to zero — the throw that used to land inside `apply`, after
+  // the outbox entry had already committed. Dropped, counted, never written.
+  it("H2-r6 — a date whose rebased rate would fall outside the bounds is dropped and counted", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // A bridge at the very bottom of the interval…
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.000000000002"),
+          source: "nbp",
+        },
+        // …under an ordinary quote. The reciprocal is fine (1 / 2e-12 =
+        // 5e11, inside), so it is the *cross* that fails: 3 / 2e-12 = 1.5e12,
+        // past the top of the interval and past `numeric(24,12)` with it.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("3"),
+          source: "nbp",
+        },
+        // A perfectly ordinary date, to prove the drop is per-date.
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"),
+          rate: money.unitsPerPivot("0.50"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const { row } = write(changePivotExecutor, { code: "EUR" });
+
+    const rows = rateRows();
+    // Nothing at all from the out-of-bounds date — not the cross, and not
+    // the reciprocal it shared the date with.
+    expect(rows.filter((r) => r.date === accountingDate("2026-01-01"))).toHaveLength(0);
+    expect(row.droppedDates).toBe(1);
+    // The ordinary date is untouched.
+    expect(rows.filter((r) => r.date === accountingDate("2026-01-02"))).toHaveLength(2);
+  });
+
+  /**
+   * C1/C2-r6 — the reviewer's own two fixtures, and the invariant
+   * `pivot-change.journey.test.ts` states, run over **both** of them.
+   *
+   * Round 5 stamped a real leg `carried_forward` whenever its bridge was one,
+   * which broke two different readers at once with the same row: with no real
+   * `EUR/USD` row behind it, the new pair became an orphan (`readRate`
+   * refuses, `capturable` reads `false`, `droppedDates` said `0`); and with a
+   * real row behind it, `readRate` walked past the fresh figure to a
+   * ten-day-old origin while `listFxRates` showed the fresh one — S18 and the
+   * capture disagreeing about the same date.
+   *
+   * Both fixtures share one shape: a real bridge on 01-01, a *carried* bridge
+   * on 01-11, and a real `USD` quote on each. The 01-11 bridge is not a
+   * published rate, so 01-11 is dropped whole and counted; 01-01 rebases; and
+   * 01-11's answer comes from carry-forward, ten days out, which is inside
+   * §7.7's cap. The two differ only in the 01-11 `USD` quote (0.25 / 0.50),
+   * which is precisely the figure round 5 wrote and then read back wrong.
+   */
+  const REVIEWER_FIXTURES = [
+    { name: "an unchanged quote on the carried date", usdOn11: "0.25" },
+    { name: "a doubled quote on the carried date", usdOn11: "0.50" },
+  ] as const;
+
+  function seedReviewerFixture(usdOn11: string) {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.90"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: EUR,
+          date: accountingDate("2026-01-11"),
+          rate: money.unitsPerPivot("0.90"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-11"),
+          rate: money.unitsPerPivot(usdOn11),
+          source: "nbp",
+        },
+      ])
+      .run();
+  }
+
+  // 0.25 / 0.90, at `unitsPerPivot`'s twelve places — the one figure both
+  // `readRate` and `listFxRates` must answer with, for both fixtures.
+  const REBASED_ON_01 = money.unitsPerPivot("0.277777777778");
+
+  describe.each(REVIEWER_FIXTURES)("the reviewer's fixture — $name", ({ usdOn11 }) => {
+    it("drops the carried bridge's date, counts it, and mints no orphan", () => {
+      seedReviewerFixture(usdOn11);
+
+      const { row } = write(changePivotExecutor, { code: "EUR" });
+
+      const rows = rateRows();
+      expect(row.droppedDates).toBe(1);
+      expect(rows.filter((r) => r.date === accountingDate("2026-01-11"))).toHaveLength(0);
+
+      const day1 = rows.find(
+        (r) => r.base === "EUR" && r.quote === "USD" && r.date === accountingDate("2026-01-01"),
+      );
+      expect(day1?.source).toBe("derived");
+      expect(day1?.rate).toBe(REBASED_ON_01);
+      // The reciprocal keeps the bridge's own source (H1-r6).
+      const reciprocal = rows.find((r) => r.base === "EUR" && r.quote === "PLN");
+      expect(reciprocal?.source).toBe("nbp");
+
+      // The pivot-change journey's own invariant, run here over *both*
+      // fixtures rather than over the one that happened to be in front of it:
+      // every non-original row traces to a real, non-carried quote for the
+      // same pair at or before its own date.
+      for (const r of rows.filter(
+        (x) => x.source === "carried_forward" || x.source === "derived",
+      )) {
+        const hasRealOrigin = rows.some(
+          (other) =>
+            other.base === r.base &&
+            other.quote === r.quote &&
+            other.source !== "carried_forward" &&
+            other.date <= r.date,
+        );
+        expect(hasRealOrigin).toBe(true);
+      }
+    });
+
+    it("still prices 01-11 — carried forward ten days, and capturable", () => {
+      seedReviewerFixture(usdOn11);
+      write(changePivotExecutor, { code: "EUR" });
+
+      const resolved = readRate(s.ledger.replica.db, {
+        base: EUR,
+        quote: USD,
+        date: accountingDate("2026-01-11"),
+      });
+      expect(resolved?.rate).toBe(REBASED_ON_01);
+      expect(resolved?.asOf).toBe(accountingDate("2026-01-01"));
+      expect(resolved?.carriedDays).toBe(10);
+
+      const usd = readCurrencies(s.ledger.replica.db).find((c) => c.code === "USD");
+      expect(usd?.capturable).toBe(true);
+    });
+
+    it("read equals write on 01-11 — the capture, S18's table, and the estimate flag agree", () => {
+      seedReviewerFixture(usdOn11);
+      write(changePivotExecutor, { code: "EUR" });
+
+      const nearest = readNearestRate(s.ledger.replica.db, {
+        base: EUR,
+        quote: USD,
+        date: accountingDate("2026-01-11"),
+      });
+      expect(nearest?.rate).toBe(REBASED_ON_01);
+      // Ten days out is inside §7.7's cap, so this is the rate *in effect* on
+      // 01-11 — carry-forward, not the "no rate exists at all" fallback — and
+      // a capture that day is therefore not an estimate.
+      expect(nearest?.inEffect).toBe(true);
+
+      // S18 shows exactly what the capture used: one row, on 01-01, at the
+      // same figure. Round 5 showed 0.5556 here and stored 0.2778.
+      const table = listFxRates(s.ledger.replica.db, {
+        base: EUR,
+        quote: USD,
+        from: accountingDate("2026-01-01"),
+        to: accountingDate("2026-01-11"),
+      });
+      expect(table.map((r) => r.rate)).toEqual([REBASED_ON_01]);
+    });
+  });
+
+  /**
+   * M1 — `assertEveryDerivedRowTraces` used to seed itself from `written` and
+   * check `written` against that same seed, so a `derived` row always
+   * "traced" to itself and the throw was unreachable — CLAUDE.md's "break it
+   * once", against the helper directly rather than through `changePivot`
+   * (a hand-built `written` reaching this shape can never come out of the
+   * executor itself, since rule 1 already drops any date whose bridge is
+   * missing before a leg like this could be minted).
+   */
+  describe("assertEveryDerivedRowTraces (M1 — unfalsifiable before the fix)", () => {
+    it("throws on a derived row with no same-date reciprocal", () => {
+      const written: PendingRow[] = [
+        {
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "derived",
+          fetchedAt: null,
+        },
+      ];
+
+      expect(() => assertEveryDerivedRowTraces(PLN, written)).toThrow(/no reciprocal/);
+    });
+
+    it("does not throw once the same date's reciprocal is present", () => {
+      const written: PendingRow[] = [
+        {
+          quote: PLN,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("4"),
+          source: "nbp",
+          fetchedAt: null,
+        },
+        {
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "derived",
+          fetchedAt: null,
+        },
+      ];
+
+      expect(() => assertEveryDerivedRowTraces(PLN, written)).not.toThrow();
+    });
+  });
+
+  /**
+   * M2 — a second pivot change must re-base off a `derived` bridge, not
+   * refuse every date. After PLN→EUR every EUR cross is `derived` (no real
+   * `EUR/x` row was ever published), so a rule that only accepted a
+   * real-source bridge made EUR→GBP drop every date whole
+   * (`droppedDates` 5, 0 rows) — an entire currency's history erased by a
+   * second pivot change nobody would expect to be destructive.
+   *
+   * Chosen so every quotient terminates within twelve places: PLN/USD,
+   * PLN/EUR and PLN/GBP divide evenly at every step of both rewrites, so
+   * this proves the *rule*, not decimal.js's own rounding.
+   */
+  describe("M2 — a pivot change re-bases off a real-source or derived bridge", () => {
+    const DAILY_RATES = [
+      { date: "2026-01-01", usd: "0.20", eur: "0.80", gbp: "0.16" },
+      { date: "2026-01-02", usd: "0.25", eur: "0.50", gbp: "0.10" },
+      { date: "2026-01-03", usd: "0.40", eur: "0.80", gbp: "0.20" },
+      { date: "2026-01-04", usd: "0.20", eur: "0.40", gbp: "0.08" },
+      { date: "2026-01-05", usd: "0.50", eur: "1.00", gbp: "0.25" },
+    ] as const;
+
+    beforeEach(() => {
+      s.ledger.replica.db.insert(currencies).values({ code: GBP, name: "Placeholder" }).run();
+      s.ledger.replica.db
+        .insert(fxRates)
+        .values(
+          DAILY_RATES.flatMap(({ date, usd, eur, gbp }) => [
+            {
+              base: PLN,
+              quote: USD,
+              date: accountingDate(date),
+              rate: money.unitsPerPivot(usd),
+              source: "nbp" as const,
+            },
+            {
+              base: PLN,
+              quote: EUR,
+              date: accountingDate(date),
+              rate: money.unitsPerPivot(eur),
+              source: "nbp" as const,
+            },
+            {
+              base: PLN,
+              quote: GBP,
+              date: accountingDate(date),
+              rate: money.unitsPerPivot(gbp),
+              source: "nbp" as const,
+            },
+          ]),
+        )
+        .run();
+    });
+
+    it("PLN → EUR → GBP: every date survives both rewrites", () => {
+      const first = write(changePivotExecutor, { code: "EUR" });
+      expect(first.row.droppedDates).toBe(0);
+
+      const second = write(changePivotExecutor, { code: "GBP" });
+      expect(second.row.droppedDates).toBe(0);
+
+      // Three quotes × five dates, plus the reciprocal for each — nothing
+      // dropped, nothing orphaned.
+      expect(rateRows()).toHaveLength(15);
+    });
+
+    it("USD, EUR and PLN all read capturable off the derived-bridge pivot", () => {
+      write(changePivotExecutor, { code: "EUR" });
+      write(changePivotExecutor, { code: "GBP" });
+
+      const byCode = new Map(readCurrencies(s.ledger.replica.db).map((c) => [c.code, c]));
+      expect(byCode.get(USD)?.capturable).toBe(true);
+      expect(byCode.get(EUR)?.capturable).toBe(true);
+      expect(byCode.get(PLN)?.capturable).toBe(true);
+    });
+
+    it("readRate(GBP/USD, day3) equals the cross computed from the original PLN quotes", () => {
+      write(changePivotExecutor, { code: "EUR" });
+      write(changePivotExecutor, { code: "GBP" });
+
+      const day3 = accountingDate("2026-01-03");
+      const resolved = readRate(s.ledger.replica.db, { base: GBP, quote: USD, date: day3 });
+
+      // By hand, from the original PLN-pivot quotes on 01-03 (USD 0.40, GBP
+      // 0.20), the same two divisions `change_pivot` performs, each rounded
+      // to twelve places exactly as `unitsPerPivot` does:
+      //   EUR bridge  = PLN/EUR = 0.80        ⇒ EUR/USD = 0.40 / 0.80 = 0.5
+      //   GBP bridge  = EUR/GBP = 0.20 / 0.80 = 0.25 ⇒ GBP/USD = 0.5 / 0.25 = 2
+      expect(resolved?.rate).toBe(money.unitsPerPivot("2"));
+      expect(resolved?.source).toBe("derived");
+    });
+  });
+});
+
+/**
+ * M3 — `fx_rates_rate_bounds`'s SQLite twin (`ddl.ts`'s `__new_fx_rates`
+ * rebuild), break it once. A raw insert, not `s.ledger.replica.db.insert`:
+ * `fxRates.rate`'s branded `UnitsPerPivot` type refuses an out-of-bounds
+ * literal at compile time, which is `zUnitsPerPivot`'s job (`zod.ts`) — this
+ * proves the CHECK holds when that layer is bypassed, the same way a bug in
+ * the code could.
+ */
+/** better-sqlite3's own message, under drizzle's wrapping `DrizzleError`. */
+function rootCauseMessage(error: unknown): string {
+  let current = error;
+  while (current instanceof Error && current.cause) current = current.cause;
+  return current instanceof Error ? current.message : String(current);
+}
+
+describe("fx_rates_rate_bounds (SQLite twin)", () => {
+  it("refuses a rate at the floor, 0.000000000001", () => {
+    let caught: unknown;
+    try {
+      s.ledger.replica.db.run(
+        sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-01', '0.000000000001', 'nbp')`,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(rootCauseMessage(caught)).toMatch(/CHECK constraint failed/);
+  });
+
+  it("refuses a rate at the ceiling, 999999999999", () => {
+    let caught: unknown;
+    try {
+      s.ledger.replica.db.run(
+        sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-02', '999999999999', 'nbp')`,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(rootCauseMessage(caught)).toMatch(/CHECK constraint failed/);
+  });
+
+  it("accepts a rate one step inside the floor, 0.000000000002", () => {
+    s.ledger.replica.db.run(
+      sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-03', '0.000000000002', 'nbp')`,
+    );
+    expect(rateRows().find((r) => r.date === "2026-01-03")?.rate).toBe("0.000000000002");
+  });
+
+  it("accepts a rate one step inside the ceiling, 999999999998", () => {
+    s.ledger.replica.db.run(
+      sql`INSERT INTO fx_rates (base, quote, date, rate, source) VALUES ('PLN', 'USD', '2026-01-04', '999999999998', 'nbp')`,
+    );
+    expect(rateRows().find((r) => r.date === "2026-01-04")?.rate).toBe("999999999998");
   });
 });
 
@@ -718,11 +1317,76 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-03",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     expect(result.row).toEqual({ written: 3, replacedManual: 0 });
     expect(rateRows()).toHaveLength(3);
     expect(rateRows().every((r) => r.source === "manual")).toBe(true);
+  });
+
+  /**
+   * M1 — `today` is optional, and this is the payload a build that predates
+   * the field produced. A required field would make it fail `parse` forever,
+   * and `recover.ts` halts replay at the first entry it cannot apply — so one
+   * queued entry would strand every entry behind it, permanently.
+   */
+  describe("M1 — `today` omitted, as a queued pre-change entry has it", () => {
+    it("writes, deriving the day from where and when the capture happened", () => {
+      const result = write(setManualRateExecutor, {
+        base: "PLN",
+        quote: "USD",
+        from: "2026-01-01",
+        to: "2026-01-03",
+        rate: "0.25",
+      });
+
+      expect(result.row).toEqual({ written: 3, replacedManual: 0 });
+      expect(rateRows()).toHaveLength(3);
+    });
+
+    it("still refuses a future date — the rule moves to the executor, it does not lapse", () => {
+      // The capture is `Europe/Warsaw` at a fixed instant, so "today" is that
+      // instant's own Warsaw day; a range ending well past it must refuse
+      // exactly as the schema's own check would have.
+      const at = new Date("2026-03-12T09:00:00Z");
+      expect(() =>
+        writeLocally(s.ledger, {
+          executor: setManualRateExecutor,
+          registry: ledgerRegistry,
+          input: {
+            base: "PLN",
+            quote: "USD",
+            from: "2099-01-01",
+            to: "2099-01-03",
+            rate: "0.25",
+          },
+          capture: { ...capture, at },
+        }),
+      ).toThrow(/has not happened yet/);
+      expect(rateRows()).toHaveLength(0);
+    });
+
+    it("accepts a range ending on the capture's own day, in the capture's own zone", () => {
+      // 23:30 UTC on the 11th is already the 12th in Warsaw (UTC+1), and the
+      // day the ledger means is the local one — C28's own failure, the other
+      // way round.
+      const at = new Date("2026-03-11T23:30:00Z");
+      const result = writeLocally(s.ledger, {
+        executor: setManualRateExecutor,
+        registry: ledgerRegistry,
+        input: {
+          base: "PLN",
+          quote: "USD",
+          from: "2026-03-12",
+          to: "2026-03-12",
+          rate: "0.25",
+        },
+        capture: { ...capture, at },
+      });
+
+      expect(result.row).toEqual({ written: 1, replacedManual: 0 });
+    });
   });
 
   it("refuses a base that is not the pivot", () => {
@@ -733,6 +1397,7 @@ describe("set_manual_rate", () => {
         from: "2026-01-01",
         to: "2026-01-01",
         rate: "0.9",
+        today: "2026-06-01",
       }),
     ).toThrow(/must be the pivot/);
   });
@@ -744,6 +1409,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-01",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     expect(() =>
@@ -753,6 +1419,7 @@ describe("set_manual_rate", () => {
         from: "2026-01-01",
         to: "2026-01-01",
         rate: "0.26",
+        today: "2026-06-01",
       }),
     ).toThrow(/already has a manual rate/);
   });
@@ -764,6 +1431,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-01",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     const result = write(setManualRateExecutor, {
@@ -772,6 +1440,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-01",
       to: "2026-01-01",
       rate: "0.26",
+      today: "2026-06-01",
       overwriteManual: true,
     });
 
@@ -788,6 +1457,7 @@ describe("set_manual_rate", () => {
       from: "2026-01-02",
       to: "2026-01-02",
       rate: "0.25",
+      today: "2026-06-01",
     });
 
     expect(() =>
@@ -797,6 +1467,7 @@ describe("set_manual_rate", () => {
         from: "2026-01-01",
         to: "2026-01-03",
         rate: "0.30",
+        today: "2026-06-01",
       }),
     ).toThrow();
 
@@ -804,6 +1475,133 @@ describe("set_manual_rate", () => {
     // second, refused write landed.
     expect(rateRows()).toHaveLength(1);
     expect(rateRows()[0]?.rate).toBe("0.25");
+  });
+
+  // H3 — a `carried_forward` row whose origin this write corrects holds a
+  // now-stale copy of the old rate; left in place it would keep answering
+  // reads with a figure no provider ever published.
+  it("H3 — deletes a carried_forward row whose origin is a date this write corrects", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "0.30",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+
+    const rows = rateRows();
+    expect(rows.find((r) => r.date === accountingDate("2026-01-05"))).toBeUndefined();
+    // The raw input string lands — `zUnitsPerPivot` does not normalize scale.
+    expect(rows.find((r) => r.date === accountingDate("2026-01-01"))?.rate).toBe("0.30");
+  });
+
+  // H3 — a carried row descending from a date *outside* the corrected range
+  // is untouched: its origin never changed.
+  it("H3 — leaves a carried_forward row alone when its origin is not among the corrected dates", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-10",
+      to: "2026-01-10",
+      rate: "0.30",
+      today: "2026-06-01",
+    });
+
+    expect(rateRows().find((r) => r.date === accountingDate("2026-01-05"))).toBeDefined();
+  });
+
+  // H1 — a downstream carried row whose *pre-write* origin sits outside the
+  // corrected range must still be deleted when this write turns a date
+  // *inside* the range into a nearer real origin for it. Scanning against
+  // the pre-write state (the bug) finds the old, still-distant origin and
+  // leaves this row in place, answering reads with a rate this write just
+  // superseded.
+  it("H1 — deletes a downstream carried row whose origin only lands in range after this write", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "nbp",
+        },
+        // Carrying forward from 2026-01-01 — nothing else real exists yet.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-10"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-15"),
+          rate: money.unitsPerPivot("0.25"),
+          source: "carried_forward",
+        },
+      ])
+      .run();
+
+    // Corrects 2026-01-10 — a date that was itself carried_forward. Its
+    // *pre-write* origin is 2026-01-01, outside this range; only after the
+    // write does 2026-01-10 become the nearer real origin for 2026-01-15.
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-10",
+      to: "2026-01-10",
+      rate: "0.30",
+      today: "2026-06-01",
+    });
+
+    const rows = rateRows();
+    expect(rows.find((r) => r.date === accountingDate("2026-01-10"))?.source).toBe("manual");
+    expect(rows.find((r) => r.date === accountingDate("2026-01-15"))).toBeUndefined();
   });
 });
 
@@ -836,9 +1634,120 @@ describe("clear_manual_rate", () => {
       to: "2026-01-03",
     });
 
-    expect(result.row).toEqual({ deleted: 1 });
+    expect(result.row).toEqual({ deleted: 1, restored: 0 });
     expect(rateRows()).toHaveLength(1);
     expect(rateRows()[0]?.source).toBe("nbp");
+  });
+
+  // C1 — the worked example: NBP 3.81 → set 3.9 → clear → 3.81 with source
+  // `nbp` back. Before this fix, clearing deleted the row outright and left
+  // a hole exactly where the provider's own figure used to be.
+  it("C1 — restores the row a manual write displaced, source and all", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("3.81"),
+        source: "nbp",
+      })
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "3.9",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+    expect(rateRows()[0]?.source).toBe("manual");
+    expect(rateRows()[0]?.rate).toBe("3.9");
+
+    const result = write(clearManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+    });
+
+    expect(result.row).toEqual({ deleted: 0, restored: 1 });
+    const rows = rateRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.source).toBe("nbp");
+    expect(rows[0]?.rate).toBe(money.unitsPerPivot("3.81"));
+    expect(rows[0]?.displacedRate).toBeNull();
+  });
+
+  // C1 — a manual row with nothing displaced (the date held no prior row) is
+  // still deleted outright; there is nothing to restore it to.
+  it("C1 — deletes outright when the manual row displaced nothing", () => {
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "3.9",
+      today: "2026-06-01",
+    });
+
+    const result = write(clearManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+    });
+
+    expect(result.row).toEqual({ deleted: 1, restored: 0 });
+    expect(rateRows()).toHaveLength(0);
+  });
+
+  // C1 — a second manual write over an already-manual row must not clobber
+  // what the *first* one displaced.
+  it("C1 — a second manual write keeps the original displaced row, not the intermediate manual one", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("3.81"),
+        source: "nbp",
+      })
+      .run();
+
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "3.9",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+    write(setManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+      rate: "4.0",
+      overwriteManual: true,
+      today: "2026-06-01",
+    });
+
+    const result = write(clearManualRateExecutor, {
+      base: "PLN",
+      quote: "USD",
+      from: "2026-01-01",
+      to: "2026-01-01",
+    });
+
+    const rows = rateRows();
+    expect(result.row).toEqual({ deleted: 0, restored: 1 });
+    expect(rows[0]?.source).toBe("nbp");
+    expect(rows[0]?.rate).toBe(money.unitsPerPivot("3.81"));
   });
 });
 
@@ -903,6 +1812,45 @@ describe("readRate", () => {
       date: accountingDate("2026-01-10"),
     });
     expect(rate).toBeUndefined();
+  });
+
+  // H3 — a `carried_forward` row's own `rate` is a snapshot taken when it
+  // was written; if its origin is later corrected (`set_manual_rate`), the
+  // snapshot goes stale. `readRate` must answer with the origin's *current*
+  // rate, never the carried copy's own stored value.
+  it("H3 — returns the origin's current rate, not the carried copy's stale snapshot", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: EUR,
+        date: accountingDate("2026-02-01"),
+        rate: money.unitsPerPivot("0.20"),
+        source: "carried_forward",
+      })
+      .run();
+    // The origin the carried row above descends from — corrected *after*
+    // fillForward already copied the old rate into the carried row.
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: EUR,
+        date: accountingDate("2026-01-28"),
+        rate: money.unitsPerPivot("0.99"),
+        source: "manual",
+      })
+      .run();
+
+    const rate = readRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: EUR,
+      date: accountingDate("2026-02-01"),
+    });
+
+    expect(rate?.rate).toBe(money.unitsPerPivot("0.99"));
+    expect(rate?.source).toBe("manual");
+    expect(rate?.asOf).toBe(accountingDate("2026-01-28"));
   });
 
   // SHOULD-FIX — `fillForward` (`packages/db/src/fx/sources.ts`) stores up to
@@ -979,6 +1927,352 @@ describe("readRate", () => {
       date: accountingDate("2026-03-05"),
     });
     expect(rate).toBeUndefined();
+  });
+});
+
+// H1 — `readNearestRate` compares the calendar distance on both sides of
+// `date` rather than always preferring the newest row at-or-before it.
+describe("readNearestRate", () => {
+  it("prefers the before row when it is closer", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-08"), // 2 days before
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-20"), // 10 days after
+          rate: money.unitsPerPivot("4.50"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-08"));
+  });
+
+  it("prefers the after row when it is closer — a 2020 row must not beat one 26 days later", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2020-01-01"), // years before
+          rate: money.unitsPerPivot("3.90"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-27"), // 26 days after
+          rate: money.unitsPerPivot("4.10"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.10"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-27"));
+  });
+
+  it("ties to the before row when both sides are equally far", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"), // 5 days before
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-15"), // 5 days after
+          rate: money.unitsPerPivot("4.50"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-05"));
+  });
+
+  it("falls back to the only row, when it is after date", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-02-01"),
+        rate: money.unitsPerPivot("4.20"),
+        source: "nbp",
+      })
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.20"));
+    expect(rate?.asOf).toBe(accountingDate("2026-02-01"));
+  });
+
+  it("falls back to the only row, when it is before date", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("3.80"),
+        source: "nbp",
+      })
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-02-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("3.80"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-01"));
+  });
+
+  it("is undefined with no rows at all", () => {
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: EUR,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate).toBeUndefined();
+  });
+
+  // L4 — a real-source hit reports daysAway alongside asOf.
+  it("L4 — daysAway is 0 on an exact real-source hit", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-10"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "nbp",
+      })
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.daysAway).toBe(0);
+  });
+
+  // H1 — round-4 correction: carry-forward wins before any distance is ever
+  // compared. §7.6's table gives *weekend or holiday* its own row — *"carry
+  // forward the last published rate"* — and the "nearest in calendar days on
+  // either side" sentence sits only under the table's *next* heading, "when
+  // no rate exists at all". Step 1 (`readRate`'s own answer) succeeds here —
+  // the carried row at the query date traces to the real row 9 days before,
+  // still within the ten-day cap — so it wins even though a real row sits
+  // only 1 day away on the other side.
+  it("H1 — carry-forward (9 days, within the cap) wins over a nearer real row on the other side", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-01"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-10"), // the query date, carried from 01-01 (9 days)
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-11"), // only 1 day after, but never compared
+          rate: money.unitsPerPivot("4.90"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-10"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-01"));
+    expect(rate?.daysAway).toBe(9);
+    expect(rate?.inEffect).toBe(true);
+  });
+
+  // H1 — the common weekend case: a source publishes Friday and Monday,
+  // carrying forward over the weekend. §7.6's table names this its own
+  // row — carry-forward — so Friday's rate (carried through the weekend) is
+  // the answer for Sunday, never Monday's, however much nearer Monday sits
+  // in calendar days.
+  it("H1 — Friday's carried rate wins on a carried Sunday, never Monday's nearer real quote", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-02"), // Friday
+          rate: money.unitsPerPivot("4.00"),
+          source: "nbp",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-03"), // Saturday, carried
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-04"), // Sunday, carried — the query date
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"), // Monday — nearer, but never compared
+          rate: money.unitsPerPivot("4.30"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-04"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.00"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-02"));
+    // Measured to the origin (Friday), not to the query date's own carried row.
+    expect(rate?.daysAway).toBe(2);
+    expect(rate?.inEffect).toBe(true);
+  });
+
+  // H2 — the nearer candidate is a carried_forward row with no locatable
+  // origin at all (no real row anywhere before it). The old code picked it
+  // as `nearest` on distance alone, then refused outright on the failed
+  // origin walk — although a real row exists further out on the other side.
+  it("H2 — an orphaned carried_forward row nearer than the query date must not refuse a usable real rate (before side)", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Orphaned: no real (PLN, USD) row anywhere at or before this date.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-03"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("4.30"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    // Queried exactly on the orphan's own date — the old code's "nearest"
+    // picked it at distance 0 and refused, exactly the H2 reproduction from
+    // `create_transaction`: a real rate exists, but the read still failed.
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-03"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
+    expect(rate?.asOf).toBe(accountingDate("2026-01-05"));
+    expect(rate?.daysAway).toBe(2);
+    expect(rate?.inEffect).toBe(false);
+  });
+
+  // H2, mirrored — the orphaned carried row is nearer on the *after* side,
+  // with the only real row further out and strictly before the query date's
+  // possible before-candidates (there are none here at all).
+  it("H2 — an orphaned carried_forward row nearer than the query date must not refuse a usable real rate (after side)", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values([
+        // Orphaned: no real (PLN, USD) row anywhere at or before this date.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-01-05"),
+          rate: money.unitsPerPivot("4.00"),
+          source: "carried_forward",
+        },
+        // The only real row for the pair — farther away than the orphan,
+        // and later still.
+        {
+          base: PLN,
+          quote: USD,
+          date: accountingDate("2026-02-01"),
+          rate: money.unitsPerPivot("4.30"),
+          source: "nbp",
+        },
+      ])
+      .run();
+
+    // Nothing at or before this date — the orphaned carried row (4 days
+    // after) used to win the "nearest, any source" comparison outright,
+    // since there was no before-candidate to compare it against.
+    const rate = readNearestRate(s.ledger.replica.db, {
+      base: PLN,
+      quote: USD,
+      date: accountingDate("2026-01-01"),
+    });
+    expect(rate?.rate).toBe(money.unitsPerPivot("4.30"));
+    expect(rate?.asOf).toBe(accountingDate("2026-02-01"));
+    expect(rate?.daysAway).toBe(31);
+    expect(rate?.inEffect).toBe(false);
   });
 });
 
@@ -1136,9 +2430,11 @@ describe("readCoverage", () => {
     );
   });
 
-  // M4 — a manual rate set into the future must not inflate `days` (or the
-  // percentage) past what `calendarDays` — counted only through today —
-  // actually covers.
+  // M4 — a row past `today` must not inflate `days` (or the percentage) past
+  // what `calendarDays` — counted only through today — actually covers.
+  // `set_manual_rate` refuses `to > today` (L2), so this reads the replica
+  // directly rather than through the operation — the scoping in the read
+  // itself is the guard now, not an input this executor would ever accept.
   it("M4 — a future-dated row is excluded from days and calendarDays alike", () => {
     const first = accountingDate("2026-01-01");
     const today = accountingDate("2026-01-05");
@@ -1152,7 +2448,9 @@ describe("readCoverage", () => {
           rate: money.unitsPerPivot("4.00"),
           source: "nbp" as const,
         })),
-        // Set past `today` — S18's "set a range" allows a future end date.
+        // Past `today` — never written by `set_manual_rate` itself (L2), but
+        // the replica could still hold one (a synced row with a provider's
+        // clock skew, a pre-existing row from before the refusal shipped).
         {
           base: PLN,
           quote: USD,
@@ -1170,40 +2468,7 @@ describe("readCoverage", () => {
         realDays: 5,
         calendarDays: 5,
         coveragePct: 100,
-        futureRows: 1,
       }),
-    );
-  });
-
-  // L7 — a currency whose only rows are future-dated has `days === 0`, the
-  // same shape as no rows at all — but it is not "no rates yet": someone set
-  // a rate, it just is not due yet. `futureRows` is how `CoverageTag` tells
-  // the two states apart.
-  it("L7 — a currency with only future-dated rows reports futureRows, not empty", () => {
-    const today = accountingDate("2026-01-05");
-    s.ledger.replica.db
-      .insert(fxRates)
-      .values([
-        {
-          base: PLN,
-          quote: USD,
-          date: accountingDate("2026-01-10"),
-          rate: money.unitsPerPivot("4.00"),
-          source: "manual",
-        },
-        {
-          base: PLN,
-          quote: USD,
-          date: accountingDate("2026-01-11"),
-          rate: money.unitsPerPivot("4.00"),
-          source: "manual",
-        },
-      ])
-      .run();
-
-    const coverage = readCoverage(s.ledger.replica.db, today);
-    expect(coverage.find((c) => c.code === "USD")).toEqual(
-      expect.objectContaining({ days: 0, calendarDays: 0, coveragePct: 0, futureRows: 2 }),
     );
   });
 
@@ -1394,6 +2659,44 @@ describe("readCurrencySettings", () => {
   });
 });
 
+// L1 — `readCurrencies.capturable` must agree with `readNearestRate`'s own
+// refusal: a pair whose only rows are `carried_forward`, with no real quote
+// anywhere for it to descend from, is not capturable, however many carried
+// rows it holds.
+describe("readCurrencies", () => {
+  it("is capturable once a real quote exists", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-01"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "nbp",
+      })
+      .run();
+
+    const usd = readCurrencies(s.ledger.replica.db).find((c) => c.code === "USD");
+    expect(usd?.capturable).toBe(true);
+  });
+
+  it("is not capturable when every row for the pair is an orphaned carried_forward copy", () => {
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: PLN,
+        quote: USD,
+        date: accountingDate("2026-01-05"),
+        rate: money.unitsPerPivot("4.00"),
+        source: "carried_forward",
+      })
+      .run();
+
+    const usd = readCurrencies(s.ledger.replica.db).find((c) => c.code === "USD");
+    expect(usd?.capturable).toBe(false);
+  });
+});
+
 /* ── capture, once a rate has been set by hand ───────────────────────────── */
 
 describe("capture in a currency that gained a rate through set_manual_rate", () => {
@@ -1404,6 +2707,7 @@ describe("capture in a currency that gained a rate through set_manual_rate", () 
       from: "2026-03-12",
       to: "2026-03-12",
       rate: "4.00",
+      today: "2026-06-01",
     });
 
     // A capture in USD now resolves through `lastKnownRate` — the same path
@@ -1459,17 +2763,17 @@ describe("readCrossRate", () => {
     // 4.0 / 0.92 = 4.3478260869565217…, rounded half-up at `PivotPerUnit`'s
     // twelve decimal places — not the ledger's usual eight, and not
     // re-rounded a second time by this assertion.
-    expect(cross?.rate).toBe(money.pivotPerUnit("4.347826086957"));
+    expect(cross?.rate).toBe(money.crossRate("4.347826086957"));
   });
 
   it("triangulates PLN→EUR the other way", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: PLN, to: EUR, date: DATE });
-    expect(cross?.rate).toBe(money.pivotPerUnit("0.23"));
+    expect(cross?.rate).toBe(money.crossRate("0.23"));
   });
 
   it("is exactly 1 when the same currency is on both sides", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: EUR, to: EUR, date: DATE });
-    expect(cross?.rate).toBe(money.pivotPerUnit("1"));
+    expect(cross?.rate).toBe(money.crossRate("1"));
   });
 
   it("collapses to the plain readRate when the pivot is the destination", () => {
@@ -1478,7 +2782,7 @@ describe("readCrossRate", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: PLN, to: USD, date: DATE });
     // `readRate` holds PLN in units-per-pivot; the cross rate asked for is
     // pivot-per-unit — its reciprocal.
-    expect(cross?.rate).toBe(money.reciprocal(direct.rate));
+    expect(cross?.rate).toBe(money.crossRate(money.reciprocal(direct.rate)));
   });
 
   it("collapses to the plain readRate when the pivot is the source", () => {
@@ -1487,7 +2791,7 @@ describe("readCrossRate", () => {
     const cross = readCrossRate(s.ledger.replica.db, { from: USD, to: PLN, date: DATE });
     // Valuing 1 pivot unit in PLN is exactly what `readRate` already holds —
     // rebranded pivot-per-unit, not recomputed.
-    expect(cross?.rate).toBe(direct.rate);
+    expect(cross?.rate).toBe(money.crossRate(direct.rate));
   });
 
   /**

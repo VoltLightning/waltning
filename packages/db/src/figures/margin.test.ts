@@ -97,4 +97,26 @@ describe("§4a margin — SQL against money.ts, real Postgres", () => {
     expect(rows[0]?.marginPivot).toBe("0.00000000");
     expect(rows[0]?.realizedRate).toBe("1.00000000");
   });
+
+  /**
+   * H4 — `money.margin` divides by `amountPivot` and refuses it at zero; the
+   * guarantee this pins is the one nothing in application code can bypass:
+   * `transactions_amount_positive` refuses the row before it ever reaches
+   * `transactionMargins`. Broken once, here, to prove the CHECK actually
+   * fires rather than merely reading as though it does.
+   */
+  it("refuses a zero amount_original for a transfer at the constraint", async () => {
+    await scratch.sql.unsafe(`DELETE FROM transactions`);
+    await expect(
+      scratch.sql`
+        INSERT INTO transactions
+          (id, date, type, account_id, to_account_id, amount_original, to_amount,
+           currency, to_currency, fx_rate, to_fx_rate)
+        VALUES
+          ('88888888-8888-8888-8888-888888888888', '2026-09-04', 'transfer',
+           '11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222',
+           0.00, 0.00, 'USD', 'PLN', ${money.pivotPerUnit("1")}, ${money.pivotPerUnit("1")})
+      `,
+    ).rejects.toThrow(/transactions_amount_positive/);
+  });
 });

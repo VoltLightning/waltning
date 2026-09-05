@@ -42,8 +42,13 @@ import { useInteraction } from "./interaction.ts";
 import { Tag } from "./tag";
 
 export type RateFieldReference = {
-  /** A rate for display — `Money` (a derived figure) or a branded `Rate` (a reference read straight off `readCrossRate`); `formatRate` accepts either. */
-  rate: money.Money | money.Rate;
+  /**
+   * A rate for display — `Money` (a derived figure), a branded `Rate`
+   * (`fx_rates`' own direction), or a `CrossRate` (M1 — `readCrossRate`'s
+   * own triangulated answer, the usual case here); `formatRate` renders any
+   * of the three the same way, as a bare decimal.
+   */
+  rate: money.Money | money.Rate | money.CrossRate;
   source: string;
   /** `AccountingDate`'s shape — the reference row's own date, never today's. */
   date: string;

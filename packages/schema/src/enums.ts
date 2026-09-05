@@ -58,8 +58,22 @@ export const COUNTERPARTY_KIND = ["person", "company"] as const;
  */
 export const COUNTERPARTY_ROLE = ["debt", "contribution", "reference"] as const;
 
-/** §7.6 — `manual` outranks every synced source for the same pair and date. */
-export const FX_SOURCE = ["nbp", "ecb", "nbrb", "nbg", "manual", "carried_forward"] as const;
+/**
+ * §7.6 — `manual` outranks every synced source for the same pair and date.
+ *
+ * `derived` (M4) marks a row `change_pivot` re-bases onto the new pivot by
+ * triangulating through the bridge rate — never the original row's own
+ * source, which would claim a provider re-quoted a pair it never touched.
+ */
+export const FX_SOURCE = [
+  "nbp",
+  "ecb",
+  "nbrb",
+  "nbg",
+  "manual",
+  "carried_forward",
+  "derived",
+] as const;
 
 export const IMPORT_ROW_STATUS = [
   "pending",

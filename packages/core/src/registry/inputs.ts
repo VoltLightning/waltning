@@ -29,7 +29,15 @@
 import { z } from "zod";
 import { type AccountingDate, daysBetween } from "../date.ts";
 import type { Id } from "../id.ts";
-import { type CurrencyCode, type Decimal, dec, type Money, type TxnType } from "../money.ts";
+import {
+  type CurrencyCode,
+  type Decimal,
+  dec,
+  type Money,
+  reciprocal,
+  type TxnType,
+  type UnitsPerPivot,
+} from "../money.ts";
 import {
   zAccountingDate,
   zCurrencyCode,
@@ -324,9 +332,12 @@ export const createTransactionInput = z
      * Optional, and present only when you are asserting a rate that actually
      * applied — §7.6 level 1, *"enter the rate your bank actually applied"*,
      * which travels as an explicit agreement rather than as the phone's cache.
-     * Absent is the ordinary case and the server resolves it at commit, which
-     * is also the only moment `fx_rate_estimated` can be answered correctly —
-     * so that flag is the server's to write and is not an input at all.
+     * Absent is the ordinary case and the server resolves it at commit.
+     * `fx_rate_estimated` is not an input either way: it is set by whichever
+     * side does the valuing — the phone, locally, from `readNearestRate`'s
+     * own step (carry-forward vs. reaching past it); the server again at
+     * drain, from its own resolution against the row's date — never
+     * asserted by the caller.
      */
     fxRate: zPivotPerUnit.optional(),
 
@@ -360,8 +371,12 @@ export const createTransactionInput = z
     externalId: z.string().trim().min(1).max(200).optional(),
 
     // Not here, on purpose:
-    //   `fx_rate_estimated`     — the server sets it at drain, iff no published
-    //                             rate existed for that date (§14.6).
+    //   `fx_rate_estimated`     — set by whichever side values the row, never
+    //                             asserted by the caller: the phone locally
+    //                             (`readNearestRate`'s step 2, carry-forward
+    //                             exhausted or nothing held), the server
+    //                             again at drain iff no published rate exists
+    //                             for that date (§7.6, §14.6).
     //   `recurring_id`, `occurrence_date`
     //                           — `materialize_occurrence` posts one, and
     //                             `link_occurrence` stamps a row you already
@@ -384,17 +399,24 @@ export const createTransactionInput = z
     /**
      * `transactions_amount_positive`. Stated as *"negative only for
      * adjustment"* rather than as an absolute floor, because the CHECK reads
-     * `>= 0 or type = 'adjustment'` and a schema that refused every negative
+     * `> 0 or type = 'adjustment'` and a schema that refused every negative
      * would make reconciling an account downward impossible.
+     *
+     * **H4 — zero is refused too, adjustment excepted.** `money.margin`
+     * divides by `amount_pivot`, and a zero `amount_original` on any other
+     * type makes that division undefined — an income or expense of nothing
+     * is not a payment event (§6.10) and was never a value this column
+     * needed to hold.
      */
     // M4 — `safeDec`, not `dec`: `superRefine` still runs even when
     // `amountOriginal` already failed `zMoney`'s own regex, and `dec()`
     // throws on that (see `safeDec`'s own comment, above).
-    if (t.type !== "adjustment" && safeDec(t.amountOriginal)?.lt(0) === true) {
+    if (t.type !== "adjustment" && safeDec(t.amountOriginal)?.lte(0) === true) {
       ctx.addIssue({
         code: "custom",
         path: ["amountOriginal"],
-        message: "amounts are positive; `type` carries direction (§7.2) — only an adjustment signs",
+        message:
+          "amounts are positive and non-zero; `type` carries direction (§7.2) — only an adjustment signs",
       });
     }
 
@@ -970,7 +992,53 @@ const MANUAL_RATE_RANGE_ISSUE = {
  * `overwriteManual` carries the screen's second confirmation (S18 §8) as
  * data: the input is the answer to *"replace the existing manual entry?"*,
  * not a prompt this schema could ask on its own.
+ *
+ * **H1 — `today` is the caller's, same reason `createTransactionInput.date`
+ * is required rather than defaulted.** This schema has no zone of its own
+ * (`date.ts`), so it cannot compute "today" itself; the caller holds the
+ * device date and passes it, and `to <= today` is checked against exactly
+ * that value rather than a server clock a phone-only write has no access to.
+ *
+ * **M1 — and it is *optional*, at the same `opVersion`.** A required field
+ * would make every entry already queued by a build that predates it fail
+ * `parse`, and `recover.ts` halts replay at the first entry it cannot apply
+ * — permanently, since nothing ever rewrites a queued payload. Absent, the
+ * executor derives the day from the entry's own `Capture` (`captureDate`,
+ * `write.ts`), which is where the day was always coming from; the `to <=
+ * today` refusal below then runs there instead of here, on exactly the same
+ * value. So the payload shape only ever *widened*, and no version bump is
+ * owed.
+ *
+ * **H3-r5 — a rate too large to reciprocate is refused here, before the
+ * outbox entry exists.** `set-manual-rate.executor.ts`'s own `apply` runs
+ * *after* the intent is already enqueued (`write.ts`'s two-phase write), so
+ * a refusal inside it leaves the outbox entry standing — the write "failed"
+ * with a row already claiming it happened. `money.reciprocal` throws for
+ * exactly this rate (a hyperinflated units-per-pivot whose flip rounds to
+ * zero at twelve places); this schema refuses it at parse time instead, and
+ * that parse genuinely gates every write, not merely the screen that first
+ * typed it: `writeLocally` (`write.ts`) parses via `executor.input.parse`
+ * before either commit, and replay (`recover.ts`'s `executor.invoke`) parses
+ * the same payload through the same schema before re-applying it.
+ *
+ * **Belt and suspenders with `zUnitsPerPivot`'s own bounds.** Once
+ * `RATE_MIN_EXCLUSIVE`/`RATE_MAX_EXCLUSIVE` (`zod.ts`, `money.ts`) refuse a
+ * rate outside `(1e-12, 999999999999)` at the field itself, no *in-bounds*
+ * rate can reach `money.reciprocal`'s own throw — its flip only rounds to
+ * zero at or past the same `RATE_MAX_EXCLUSIVE` those bounds already
+ * exclude. This refine still runs, named for what it once caught alone
+ * before those bounds existed, so a future loosening of them does not
+ * quietly reopen this exact throw.
  */
+const rateReciprocates = (v: { rate: UnitsPerPivot }) => {
+  try {
+    reciprocal(v.rate);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const setManualRateInput = z
   .object({
     base: zCurrencyCode,
@@ -978,13 +1046,22 @@ export const setManualRateInput = z
     ...rateRange,
     rate: zUnitsPerPivot,
     overwriteManual: z.boolean().default(false),
+    today: zAccountingDate.optional(),
   })
   .refine((v) => v.base !== v.quote, {
     message: "a rate needs two different currencies",
     path: ["quote"],
   })
   .refine(rateRangeOrdered, RATE_RANGE_ISSUE)
-  .refine(manualRateRangeWithinCap, MANUAL_RATE_RANGE_ISSUE);
+  .refine(manualRateRangeWithinCap, MANUAL_RATE_RANGE_ISSUE)
+  .refine((v) => v.today === undefined || v.to <= v.today, {
+    message: "a manual rate cannot be set for a date that has not happened yet",
+    path: ["to"],
+  })
+  .refine(rateReciprocates, {
+    message: "this rate is too large to reciprocate — refused, not written",
+    path: ["rate"],
+  });
 export type SetManualRateInput = z.output<typeof setManualRateInput>;
 
 /** `clear_manual_rate` — §7.6's undo: deletes `manual` rows only, never a synced one. */

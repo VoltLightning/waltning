@@ -18,16 +18,68 @@
  * = Q, quote = X, rate = r/k)`. The old pivot itself becomes an ordinary
  * quote: `(base = Q, quote = P, rate = 1/k)`.
  *
- * **A real quote with no bridge on its own date cannot be re-derived at all**
- * and is dropped rather than left mis-quoted against a pivot that no longer
- * holds — arc 2's sync repopulates it against the new pivot once it exists.
- * A **carried-forward** row is the exception (L3): it holds no rate of its
- * own, only a copy of the nearest earlier real quote, so it rebases by *that
- * quote's own date's* bridge even when its own date has none — dropped only
- * when the origin itself has no bridge to trace to (C2).
+ * ─── The guarantees this operation makes ──────────────────────────────────
+ *
+ * **Staleness and provenance are two facts, and `source` carries only the
+ * second.** `fx_rates.source` says *who published this* — `nbp`, `manual`,
+ * `derived`. How stale a figure is, is measured at read time by `readRate`,
+ * which walks `carried_forward` rows back to a real origin and counts the
+ * days. Stamping a real quote `carried_forward` to signal staleness broke
+ * both readings at once: the row stopped naming its own provenance, and the
+ * pair it belonged to became unreadable whenever no real row of the new pair
+ * stood behind it. So this operation mints provenance and lets carry-forward
+ * do its own work, at read time, from the rows below.
+ *
+ * 1. **A date is rebased when its bridge is a real-source OR `derived`
+ *    row** — `nbp`, `ecb`, `manual`, and a bridge this same operation minted
+ *    on an earlier rewrite, all alike. A `derived` bridge was itself
+ *    triangulated from two quotes published *that day* (rule 2), so it is
+ *    fresh for its own date exactly like a real one — a second pivot change
+ *    re-basing off it is no less honest than the first rebasing off a
+ *    provider's own quote. Only a `carried_forward` (or missing) bridge
+ *    holds no rate of its own, only a copy of an earlier day's, and dividing
+ *    every other quote on the date by that copy produces figures no reader
+ *    can date honestly — that, and only that, **drops the whole date**,
+ *    counted in `droppedDates`. `readRate` then carries forward across the
+ *    gap from whichever earlier date *did* rebase, with the true age
+ *    (§7.7's ten-day cap measured from a real origin, not from the newest
+ *    stored row).
+ * 2. **A rebased cross row is stamped `derived`.** Both legs were published
+ *    that day — the bridge is real by (1) and the leg is real by this rule —
+ *    so the figure is fresh for its own date and `derived` names exactly
+ *    what produced it: the triangulation, not a provider who never quoted
+ *    this pair. **A leg whose own row is `carried_forward` is dropped**: it
+ *    is a copy of an earlier real quote, and that earlier date has already
+ *    produced (or been dropped with) its own `derived` row, which
+ *    carry-forward reaches at read time.
+ * 3. **The reciprocal `(newPivot, oldPivot)` keeps the bridge's own
+ *    source.** `manual` stays `manual` — the person asserted that pair, and
+ *    the reciprocal of an assertion is the same assertion, not a
+ *    computation. A provider source stays that provider, for the same
+ *    reason. Only a *cross* computed through the bridge is `derived`,
+ *    including one computed from a `manual` leg.
+ * 4. **After writing, the invariant is asserted rather than assumed** — every
+ *    leg row this leaves for the new pivot shares its date with a reciprocal
+ *    row, so no cross for a date whose bridge was never processed can reach
+ *    the table (M1 — a `written` row cannot vacuously justify itself; a
+ *    genuinely orphaned leg has no same-date reciprocal to point to, real or
+ *    `derived` alike, since rule 1 above already dropped that whole date
+ *    before either could be minted). That is the same check
+ *    `pivot-change.journey.test.ts` runs from the outside; running it here
+ *    too makes it a guarantee of the operation, and a violation refuses the
+ *    whole rewrite rather than committing an orphan.
+ *
+ * **H2 — a rebased rate outside `money.ts`'s rate bounds drops its date too.**
+ * Every parsed rate is bounded at the contract edge (`zUnitsPerPivot`), but
+ * this operation *mints* rates by division and parses nothing, so a tiny
+ * bridge under a large quote can produce a figure `numeric(24,12)` cannot
+ * hold — or one whose reciprocal truncates to zero, which is the throw
+ * `create_transaction`'s own `apply` used to hit on a rate this operation had
+ * minted. Refused here, before the row exists, and counted like any other
+ * dropped date.
  */
 
-import { dec, type UnitsPerPivot, unitsPerPivot } from "@waltning/core/money";
+import { dec, rateInBounds, type UnitsPerPivot, unitsPerPivot } from "@waltning/core/money";
 import { type ChangePivotInput, changePivotInput } from "@waltning/core/registry/inputs";
 import { eq, isNull, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
@@ -43,9 +95,22 @@ type LocalFxRateRow = typeof fxRates.$inferSelect;
 /** See `read-rate.ts`'s own copy — the server's carried-forward marker. */
 const CARRIED_FORWARD = "carried_forward";
 
+/** This operation's own stamp for a triangulated figure (§7.6, `FX_SOURCE`). */
+const DERIVED = "derived";
+
+/**
+ * M1-r5 — the new pivot's own row, plus how many dates the rewrite could
+ * not re-derive at all (§7.0's own "dropped rather than left mis-quoted").
+ * `LocalCurrencyRow` alone answered "did it work?" and nothing else; a
+ * range that drops every date but one still returns the same shape as one
+ * that dropped none, and nothing short of counting `fx_rates` rows before
+ * and after told the two apart.
+ */
+export type ChangePivotResult = LocalCurrencyRow & { droppedDates: number };
+
 export const changePivotExecutor = defineLocalExecutor<
   typeof changePivotInput,
-  LocalCurrencyRow,
+  ChangePivotResult,
   ReplicaTx
 >({
   operation: "change_pivot",
@@ -55,7 +120,21 @@ export const changePivotExecutor = defineLocalExecutor<
   apply: (input, tx) => changePivot(input, tx),
 });
 
-function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
+/**
+ * One row this rewrite intends to write, held until the whole date is known
+ * good. Column types come from the table itself rather than being restated as
+ * `string`, so a `source` outside `FX_SOURCE` is a compile error here rather
+ * than a value SQLite would silently accept.
+ */
+export type PendingRow = {
+  quote: LocalFxRateRow["quote"];
+  date: LocalFxRateRow["date"];
+  rate: UnitsPerPivot;
+  source: LocalFxRateRow["source"];
+  fetchedAt: LocalFxRateRow["fetchedAt"];
+};
+
+function changePivot(input: ChangePivotInput, tx: ReplicaTx): ChangePivotResult {
   const [newPivot] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!newPivot) {
     throw new LocalRefusal(`change_pivot: no currency ${input.code}`, { dependency: true });
@@ -92,95 +171,86 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
     byDate.set(row.date, bucket);
   }
 
-  // A carried-forward row's own date rarely matches its origin's — it holds
-  // a copy of the nearest earlier real quote. Traced here, per quote, oldest
-  // first, the same walk-back `findOrigin` (`read-rate.ts`) does at read
-  // time — needed below to tell an orphaned carried row from one whose
-  // origin survives the rewrite (C2).
-  const realByQuote = new Map<string, LocalFxRateRow[]>();
-  for (const row of rows) {
-    if (row.source === CARRIED_FORWARD) continue;
-    const bucket = realByQuote.get(row.quote) ?? [];
-    bucket.push(row);
-    realByQuote.set(row.quote, bucket);
-  }
-  for (const bucket of realByQuote.values()) bucket.sort((a, b) => (a.date < b.date ? -1 : 1));
-
-  function originDateOf(quote: string, date: string): string | undefined {
-    let found: string | undefined;
-    for (const row of realByQuote.get(quote) ?? []) {
-      if (row.date > date) break;
-      found = row.date;
-    }
-    return found;
-  }
-
-  // Dates a bridge rate to the new pivot survives on — computed before the
-  // delete below so a carried row's origin can be checked against it.
-  const bridgeDates = new Set<string>();
-  for (const [date, dateRows] of byDate) {
-    if (dateRows.some((row) => row.quote === newPivot.code)) bridgeDates.add(date);
-  }
-
   tx.delete(fxRates).where(eq(fxRates.base, oldPivot.code)).run();
 
+  // M1-r5 — one date, counted once. Never a per-row tally, which would report
+  // the same dropped date once per currency held that day rather than once.
+  let droppedDates = 0;
+  const written: PendingRow[] = [];
+
   for (const dateRows of byDate.values()) {
-    // L3 — this date's *own* bridge, when it has one. Never the reason to
-    // skip the whole bucket: a carried row here can still trace to an
-    // *origin's* bridge on an earlier date (M8, below), and `continue`ing
-    // the date wholesale dropped that row along with every real, unbridged
-    // one — even though M8's own per-row rebase would have kept it.
+    // Rule 1 (M2) — the bridge decides the whole date, and a real-source OR
+    // `derived` bridge decides it in favour of rebasing. A `derived` bridge
+    // is a row an earlier pivot change minted, triangulated from two quotes
+    // published on this exact date — as fresh for it as a provider's own
+    // quote would be, so a second rewrite may divide by it exactly as the
+    // first divided by a real one. Only `carried_forward` — a copy of an
+    // earlier day's rate, holding none of its own — or a missing bridge
+    // drops the date.
     const bridge = dateRows.find((row) => row.quote === newPivot.code);
-    const k = bridge ? dec(bridge.rate) : undefined;
+    if (!bridge || bridge.source === CARRIED_FORWARD) {
+      droppedDates += 1;
+      continue;
+    }
+
+    const k = dec(bridge.rate);
+    const pending: PendingRow[] = [
+      {
+        // Rule 3 — the bridge's own source, not `derived`: the reciprocal of
+        // an assertion is the same assertion, and of a provider's quote the
+        // same provider's quote. Its `fetched_at` carries forward too — the
+        // original quote's own freshness, since no new fetch happened.
+        quote: oldPivot.code,
+        date: bridge.date,
+        rate: unitsPerPivot(dec(1).dividedBy(k)),
+        source: bridge.source,
+        fetchedAt: bridge.fetchedAt,
+      },
+    ];
 
     for (const row of dateRows) {
-      if (row.quote === newPivot.code) continue; // consumed into the reciprocal row below
-      // M8 — a carried-forward row rebases by its *origin's* own bridge, not
-      // the bridge on the date it happens to be carried onto (if any). §7.6:
-      // a carried row is a copy of the nearest earlier real quote, and two
-      // different bridge rates on two different dates would rebase the same
-      // stored rate into two different answers — the copy stops being one.
-      let bridgeRate = k;
-      if (row.source === CARRIED_FORWARD) {
-        const origin = originDateOf(row.quote, row.date);
-        // An orphaned carried-forward child (C2) — its origin's own date had
-        // no bridge and was dropped above, so this row's rate would now
-        // trace to nothing. §7.6: the table never holds an invented figure.
-        if (origin === undefined || !bridgeDates.has(origin)) continue;
-        const originBridge = byDate.get(origin)?.find((r) => r.quote === newPivot.code);
-        // `bridgeDates.has(origin)` already guarantees this row exists —
-        // never trust the same lookup twice without a fallback.
-        if (!originBridge) continue;
-        bridgeRate = dec(originBridge.rate);
-      }
-      // A real (non-carried) row with no bridge on its own date, and no
-      // origin to trace to, cannot be re-derived at all — dropped rather
-      // than left mis-quoted against a pivot that no longer holds (§4).
-      if (bridgeRate === undefined) continue;
-      const rebased: UnitsPerPivot = unitsPerPivot(dec(row.rate).dividedBy(bridgeRate));
+      if (row.quote === newPivot.code) continue; // consumed into the reciprocal above
+      // Rule 2 — a carried leg holds no rate of its own. Its origin's date
+      // either produced a `derived` row of its own (which carry-forward
+      // reaches at read time, with the true age) or was itself dropped; a
+      // copy rebased here would claim, in either case, a freshness the
+      // figure does not have.
+      if (row.source === CARRIED_FORWARD) continue;
+      pending.push({
+        quote: row.quote,
+        date: row.date,
+        rate: unitsPerPivot(dec(row.rate).dividedBy(k)),
+        source: DERIVED,
+        fetchedAt: row.fetchedAt,
+      });
+    }
+
+    // H2 — the whole date, or none of it. A rebased figure outside the rate
+    // bounds is one `numeric(24,12)` cannot hold, or one whose reciprocal
+    // truncates to a stored zero the moment `create_transaction` prices a
+    // capture off it. Dropping the date keeps the reciprocal and the crosses
+    // it prices consistent with each other, which a per-row drop would not.
+    if (!pending.every((row) => rateInBounds(row.rate))) {
+      droppedDates += 1;
+      continue;
+    }
+
+    for (const row of pending) {
       tx.insert(fxRates)
         .values({
           base: newPivot.code,
           quote: row.quote,
           date: row.date,
-          rate: rebased,
+          rate: row.rate,
           source: row.source,
+          fetchedAt: row.fetchedAt,
         })
         .run();
+      written.push(row);
     }
-
-    if (!bridge || !k) continue; // no bridge on this date — nothing to reciprocate for it.
-    const reciprocal: UnitsPerPivot = unitsPerPivot(dec(1).dividedBy(k));
-    tx.insert(fxRates)
-      .values({
-        base: newPivot.code,
-        quote: oldPivot.code,
-        date: bridge.date,
-        rate: reciprocal,
-        source: bridge.source,
-      })
-      .run();
   }
+
+  assertEveryDerivedRowTraces(oldPivot.code, written);
 
   tx.update(currencies)
     .set({ isPivot: false, version: sql`${currencies.version} + 1`, updatedAt: new Date() })
@@ -195,5 +265,54 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
   if (!updated) {
     throw new Error("change_pivot: the new pivot's row vanished mid-write");
   }
-  return updated;
+  return { ...updated, droppedDates };
+}
+
+/**
+ * Rule 4 — the guarantee, in code rather than in this file's prose.
+ *
+ * **M1 — this used to seed itself from `written` and check `written`
+ * against that same seed, so every `derived` row "traced" to itself
+ * trivially and the throw below was unreachable — the whole function was
+ * unfalsifiable.** A `derived` row cannot be its own witness, and once
+ * rule 1 (M2) accepts a `derived` bridge, no row in a legitimately-chained
+ * rewrite is ever literally *real* — a second `change_pivot` off a first
+ * one's own output can leave `written` entirely `derived`, and that must
+ * not throw (§7.6's rule 1). So the witness this checks for is not
+ * "some real-source row for this quote", which a chained rewrite can never
+ * offer; it is the one fact rule 1/2/3 actually guarantee and a coding bug
+ * in them could actually break: **every leg this rewrite computed shares
+ * its date with the reciprocal that bridge produced.** A leg with no
+ * same-date reciprocal in `written` names a date rule 1 should have dropped
+ * whole (§7.6's rule 1) but did not. The reciprocal is always minted
+ * alongside the legs it bridges, so nothing in this function's own logic
+ * today can actually produce that shape — this guards a future
+ * restructuring that writes legs without their reciprocal, and is exactly
+ * what a hand-built `written` missing its reciprocal reproduces in
+ * `currency-ops.test.ts`.
+ *
+ * The reciprocal's own row needs no witness here: rule 1 already refused
+ * unless its date's bridge was real or `derived`, so a reciprocal reaching
+ * `written` at all is already the guarantee, not a claim still to prove.
+ *
+ * One pass to collect the dates that have a reciprocal, one pass over every
+ * leg to check against that set — never a scan per row (L5).
+ */
+export function assertEveryDerivedRowTraces(
+  oldPivotCode: string,
+  written: readonly PendingRow[],
+): void {
+  const reciprocalDates = new Set(
+    written.filter((row) => row.quote === oldPivotCode).map((row) => row.date),
+  );
+
+  for (const row of written) {
+    if (row.quote === oldPivotCode) continue; // the reciprocal itself — see above
+    if (row.source !== CARRIED_FORWARD && row.source !== DERIVED) continue;
+    if (reciprocalDates.has(row.date)) continue;
+    throw new Error(
+      `change_pivot: refused — ${row.quote} on ${row.date} is ${row.source} with no reciprocal ` +
+        "row for that date, so the date rule 1 should have dropped whole was not",
+    );
+  }
 }

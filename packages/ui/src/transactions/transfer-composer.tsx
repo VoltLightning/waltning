@@ -62,8 +62,13 @@ export type TransferComposerAccount = {
 };
 
 export type TransferComposerReferenceRate = {
-  /** Pivot-per-unit, source → destination — multiply `amountRaw` by this to reach `toAmountRaw` (§7.5). */
-  rate: money.PivotPerUnit;
+  /**
+   * A triangulated `CrossRate` (M1), source → destination — multiply
+   * `amountRaw` by this to reach `toAmountRaw` (§7.5). Not `PivotPerUnit`:
+   * `readCrossRate`'s own answer never goes to the pivot, it lands in the
+   * destination currency directly.
+   */
+  rate: money.CrossRate;
   source: string;
   date: string;
   /** H2 — `crossRateProvenance`'s own carry, for the same leg `source`/`date` name. */
