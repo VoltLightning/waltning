@@ -456,7 +456,21 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    *
    * (The third — a hoisted `const card = <Card>…</Card>` rendered as
    * `{card}` — is gone: the same declaration-following the frame prop needed
-   * closes it, so a lone `{identifier}` inside a panel is now resolved.)
+   * closes it, so a lone `{identifier}` inside a panel is now resolved. The
+   * resolved declaration re-enters as an expression, so a hoisted
+   * `const body = cond ? <Card/> : <Card/>` is split into its branches and
+   * each one judged, rather than read as two siblings and judged as neither.)
+   *
+   * **And one limitation of that resolution, in the same spirit.**
+   * `jsxOfIdentifier` takes the **first** `const NAME =` in the file, with no
+   * notion of scope: two declarations of the same name in different functions
+   * resolve to whichever is written first, and the check then judges JSX the
+   * panel never rendered — or misses JSX it did. No screen in this repository
+   * declares one name twice today, and a file that starts to is the signal to
+   * grow this into a scope-aware lookup rather than to trust the first hit.
+   * It is the same hand-rolled-scanner trade-off `importsOf` above declares,
+   * with one difference worth stating: the two evasions above are loud, and
+   * this one would be quiet.
    *
    * Each is a deliberate act, not a slip: writing one of these means moving
    * the card out of the shape the rule reads in order to keep it. The
@@ -655,7 +669,16 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
       const name = stripComments(inner).trim();
       if (!IDENTIFIER.test(name) || seen.has(name)) return [];
       const declared = jsxOfIdentifier(source, name);
-      return declared === undefined ? [] : soleContents(declared, source, new Set([...seen, name]));
+      // Re-entered as an *expression*, not as a child list. A hoisted
+      // `const body = cond ? <Card/> : <Card/>` is two branches of one
+      // screen; read as children it is two siblings, and a panel with two
+      // siblings is not an offender — so the whole chain would go unjudged
+      // for the price of hoisting it. Wrapping in `{…}` sends it back
+      // through the same ternary/`&&` splitter a written-out conditional
+      // takes, and every branch is judged to its leaves.
+      return declared === undefined
+        ? []
+        : soleContents(`{${declared}}`, source, new Set([...seen, name]));
     }
     return resolve(only, source, seen);
   }
@@ -994,8 +1017,33 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
         .flatMap((panel) => soleContents(panel, screen))
         .filter((child) => child.name === "Card" && !isSkeletonCard(child));
 
+    // **Broken once on the hoisted conditional.** `today-screen.tsx`'s own
+    // `ledgerBody` is a chain of them, and reading the declaration as a child
+    // list made it two siblings — a shape the rule ignores — so the whole
+    // chain went unjudged. Each branch is now followed to its leaves: two
+    // cards, two offences; a branch with a sibling, none.
+    const hoistedTernary = `const body = loaded ? (
+      <Card title="Recent"><Rows /></Card>
+    ) : (
+      <Card title="Recent"><Placeholder /></Card>
+    );
+    return <TodayFrame total={hero} body={body} />;`;
+    const hoistedChain = `const body = failed ? (
+      <ErrorState />
+    ) : loaded ? (
+      <Card title="Recent"><Rows /></Card>
+    ) : (
+      <>
+        <Card title="Recent"><Rows /></Card>
+        <Button label="Show all" onPress={handleShowAll} />
+      </>
+    );
+    return <TodayFrame total={hero} body={body} />;`;
+
     expect(soleCards(offending)).toHaveLength(1);
     expect(soleCards(fine)).toHaveLength(0);
+    expect(soleCards(hoistedTernary)).toHaveLength(2);
+    expect(soleCards(hoistedChain)).toHaveLength(1);
     // A frame whose panel holds fixed content is not a frame — `StartupFailed`
     // renders its own `ErrorState`, and nothing of a screen's goes through it.
     expect(panelPropName("<View style={styles.center}><ErrorState /></View>")).toBeUndefined();

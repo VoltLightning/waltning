@@ -260,3 +260,44 @@ it("renders neither card when the pivot is the only currency", () => {
   expect(screen.queryByText("Coverage")).toBeNull();
   expect(screen.queryByText("100%")).toBeNull();
 });
+
+/**
+ * N-3 — the two states that are **not** *no quote currency*, and must not be
+ * mistaken for it. S18 §3 and §6: a ledger with no pivot, and a custom range
+ * that does not parse, each leave nothing to table — but there *is* a
+ * currency to compare against, so the hint that says there is not would be a
+ * false sentence. Neither draws the table card and neither draws the hint.
+ *
+ * The coverage card is a third thing and stays: coverage is per currency, not
+ * per range and not per pivot, so its rows are still true of this ledger.
+ * Dropping it here would hide a real list because an unrelated field was
+ * mistyped.
+ *
+ * **Broken once** — the guarded branch is `noQuoteCurrency ? hint : (nulls ?
+ * null : card)`. Flatten it to `quote === null || range === null || pivot ===
+ * undefined ? hint : card` — the shape round 3 replaced — and both cases
+ * below render *No currency to compare against the pivot yet.* while holding
+ * two currencies.
+ */
+it("draws neither the table card nor the hint when the ledger names no pivot", () => {
+  // Two currencies, and neither of them the pivot.
+  withLedger({ listCurrencySettings: () => [PLN_ROW, { ...USD_ROW, isPivot: false }] });
+
+  expect(screen.queryByText("No currency to compare against the pivot yet.")).toBeNull();
+  expect(screen.queryByText("Date")).toBeNull();
+  // Coverage is per currency, so it is still true and still drawn.
+  expect(screen.getByText("Coverage")).toBeDefined();
+});
+
+it("draws neither the table card nor the hint when the custom range does not parse", () => {
+  withLedger({});
+  // The table is there on the default 30-day preset — the absence below is
+  // the range's doing, not the fixture's.
+  expect(screen.getByText("Date")).toBeDefined();
+
+  fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-09-3x" } });
+
+  expect(screen.queryByText("No currency to compare against the pivot yet.")).toBeNull();
+  expect(screen.queryByText("Date")).toBeNull();
+  expect(screen.getByText("Coverage")).toBeDefined();
+});

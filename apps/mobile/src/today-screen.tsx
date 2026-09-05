@@ -365,15 +365,18 @@ export default function Today() {
         ledger has never held a transaction is `first-run` for the ledger, not
         for the account list; a ledger that holds rows the window did not
         return is the ordinary empty. Both render on the ground
-        (`design-system/05` §5.1), in the wording S10's own two empties already
-        use. No new copy — the same lines, one screen earlier.
+        (`design-system/05` §5.1). The first-run pair is S10's own, unchanged —
+        the ledger is empty is the same fact on both screens. The ordinary one
+        is this screen's own (`transactions.emptyRecent*`, S04 §6): S10's says
+        a filter is excluding every row, and Recent has no filter to blame — it
+        has a five-row window, and *Show all* goes where the rows are.
       */}
       {snapshot.recent.length === 0 ? (
         everCaptured ? (
           <EmptyState
             variant="filtered"
-            title={t("transactions.emptyFilteredTitle")}
-            body={t("transactions.emptyFilteredBody")}
+            title={t("transactions.emptyRecentTitle")}
+            body={t("transactions.emptyRecentBody")}
             primaryAction={showAllAction}
           />
         ) : (

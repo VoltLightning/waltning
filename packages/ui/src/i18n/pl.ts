@@ -156,6 +156,9 @@ export const pl: Messages = {
     emptyFirstRunBody: "Zapisz pierwszy wydatek lub przychód, aby rozpocząć swoją księgę.",
     emptyFilteredTitle: "Brak pasujących transakcji",
     emptyFilteredBody: "Ten filtr wyklucza wszystkie wiersze.",
+    emptyRecentTitle: "Brak ostatnich",
+    emptyRecentBody:
+      "Twoja księga zawiera transakcje, ale żadnej wśród najnowszych. Pokaż wszystkie otwiera pełną listę.",
     loadFailedTitle: "Nie udało się wczytać transakcji",
     loadFailedWhy: "Coś poszło nie tak podczas odczytu księgi.",
     accountFilterFrom: "Z {{account}}",

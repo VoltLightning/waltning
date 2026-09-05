@@ -71,6 +71,11 @@ it("groups by kind, in S16's order, with a subtotal header per currency", () => 
  * **Broken once**: with the `.filter((group) => group.rows.length > 0)` gone
  * from `groups`, this ledger renders all nine `KIND_ORDER` headings, seven of
  * them empty, and the assertions below fail on the first of them.
+ *
+ * The loop names **all seven** — every kind in `KIND_ORDER` this ledger holds
+ * no account in, the two loan kinds included. A subset would let a kind added
+ * to `KIND_ORDER`, or one simply forgotten, draw an empty card with nothing
+ * saying so; the point of the check is the whole order, not a sample of it.
  */
 it("draws no card for a kind nobody holds an account in", () => {
   render(
@@ -91,7 +96,15 @@ it("draws no card for a kind nobody holds an account in", () => {
   expect(screen.getAllByText("Bank").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
   // The kinds this ledger holds nothing in — no heading, so no card.
-  for (const kind of ["Card", "Clearing", "Investment", "Deposit", "Other"]) {
+  for (const kind of [
+    "Card",
+    "Clearing",
+    "Loan (receivable)",
+    "Loan (payable)",
+    "Investment",
+    "Deposit",
+    "Other",
+  ]) {
     expect(screen.queryByText(kind), `${kind} group drawn with no rows`).toBeNull();
   }
 });

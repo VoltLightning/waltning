@@ -38,8 +38,11 @@ renders on the ground where every other hint on this screen does.
 table and for the coverage list — the list holds exactly one row per quote
 currency — so the hint and the coverage card are drawn from one value rather
 than from two conditions that happen to agree. A date range that does not parse
-is a different state and draws neither card and no hint: it must not claim
-there is no quote currency when there is one.
+is a different state, and so is a ledger that names no pivot: each leaves
+nothing to table, so each drops the table card and draws **no hint** — neither
+may claim there is no quote currency when there is one. The coverage card is
+not theirs to drop: coverage is per currency, not per range and not per pivot,
+so its rows stay true and stay drawn.
 
 ## 4. Components
 
@@ -65,7 +68,7 @@ there is no quote currency when there is one.
 |---|---|
 | Loading | Virtualized rows resolve as scrolled |
 | Populated | Fresh · stale · syncing · has overrides |
-| Empty | A pair with no rates at all — states the source and its last attempt |
+| Empty | A pair with no rates at all — states the source and its last attempt. No quote currency at all: no table card, no coverage card, and the hint on the ground saying why. **No pivot**, or a custom range that does not parse: no table card and **no hint** either — there is a currency to compare against, so the hint would be false; the coverage card stays |
 | Error | Sync failed → `ErrorState(recoverable)`. **Rate-limited → paced retry**, not immediate |
 | Offline | Read-only from cache; overrides queue |
 | Gated | n/a |

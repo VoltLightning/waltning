@@ -279,6 +279,17 @@ export const en = {
     emptyFilteredTitle: "No matching transactions",
     /** Names the excluding filter and its hidden count (S10 §6) — `count` renders via `states.filteredHidden`. */
     emptyFilteredBody: "This filter is excluding every row.",
+    /**
+     * S04 §6's ordinary empty, and only S04's. Today's Recent is a five-row
+     * window over a ledger that holds rows, so neither of the pair above is
+     * true of it: *No transactions yet* is a claim about the whole ledger, and
+     * *This filter is excluding every row* names a filter this screen does not
+     * have. The window came back empty and the full list is where the rows
+     * are — which is what *Show all* beside this does.
+     */
+    emptyRecentTitle: "Nothing recent",
+    emptyRecentBody:
+      "Your ledger has transactions, just none among the latest few. Show all opens the full list.",
     loadFailedTitle: "Couldn't load your transactions",
     loadFailedWhy: "Something went wrong reading the ledger.",
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */

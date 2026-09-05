@@ -189,7 +189,7 @@ and the two are never conflated.
 |---|---|
 | Loading | Skeleton rows per group; group subtotals resolve last |
 | Populated | As drawn |
-| Empty | `EmptyState(first-run)` — offers *Add an account* and *Import from Money Manager*. Reachable directly from the tab bar by someone who abandoned J1 |
+| Empty | `EmptyState(first-run)` — offers *Add an account*. *Import from Money Manager* is S29's path, the setup wizard this screen enters by that name (S29 §2), and arrives with it; until then this state offers create alone rather than an action with nowhere to go. Reachable directly from the tab bar by someone who abandoned J1 |
 | Error | Balance query failed → `ErrorState(recoverable)`; the register still lists accounts without figures rather than showing nothing |
 | Offline | Cached with age |
 | Gated | Currency change refused when transactions exist; business refused on shared accounts |
