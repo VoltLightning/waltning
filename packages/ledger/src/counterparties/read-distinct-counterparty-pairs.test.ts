@@ -23,8 +23,8 @@ beforeEach(() => {
   stores.ledger.replica.db
     .insert(counterparties)
     .values([
-      { id: NINA, name: "Nina" },
-      { id: MAREK, name: "Marek" },
+      { id: NINA, name: "Nina", nameFolded: "nina" },
+      { id: MAREK, name: "Marek", nameFolded: "marek" },
     ])
     .run();
 });

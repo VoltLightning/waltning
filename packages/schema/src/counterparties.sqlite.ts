@@ -4,9 +4,9 @@ import { COUNTERPARTY_KIND } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 
 /**
- * The unique index on the *normalised* name is Postgres's, in `packages/db`
- * (`counterparties_name_uq`, `lower(btrim(name))`) — except here it isn't only
- * Postgres's.
+ * The unique index on `name_folded` is Postgres's too, in `packages/db`
+ * (`counterparties_name_uq`, partial where `not archived`) — except here it
+ * isn't only Postgres's.
  *
  * **This table is the one exception to "constraints stay in `packages/db`."**
  * Every other shared table's SQLite half is bare — `k.table(name, columns())`,
@@ -16,17 +16,62 @@ import { sqliteKit as k } from "./kit.ts";
  * where a collision is merely wasted effort (two `Tag` rows spelled
  * differently). It is not fine here: S15's whole guard is that two spellings
  * of one person cannot both exist, and `create_counterparty`'s executor can
- * only refuse a `fold(name)` collision against *rows this replica already
- * has* — it cannot see a duplicate the server would refuse tomorrow, and until
- * a real index backs it, two offline creates of "Nina" and "nina " both land.
- * `SQLite has no generated column in this Drizzle dialect (a stored
- * `name_folded` is Postgres's other approach), so the index is an expression
- * index over `lower(trim(name))` instead — the same normalisation, computed at
- * query time rather than materialised.
+ * only refuse a collision against *rows this replica already has* — it cannot
+ * see a duplicate the server would refuse tomorrow, and until a real index
+ * backs it, two offline creates of the same person both land.
+ *
+ * **`name_folded` is a stored column, not an expression index (R2 C1).** An
+ * expression index over `lower(trim(name))` was tried first, and SQLite's
+ * `lower()` is ASCII-only — `ŁUKASZ` and `łukasz` fold to two different
+ * strings on the phone and only collide once Postgres's locale-aware
+ * `lower()` sees them at drain. `fold()` (`@waltning/core/capture/names`,
+ * case-fold plus the nine Polish diacritics) runs in JavaScript at write
+ * time instead, on both engines, so the two spellings are the same folded
+ * string before either index ever sees them.
+ *
+ * **Postgres computes this column now (`GENERATED ALWAYS AS (…) STORED`,
+ * `packages/db/src/schema.ts`, R2 H2); this one stays app-written.** Not an
+ * oversight — SQLite has no portable equivalent of Postgres's `translate()`,
+ * which the fold expression needs for the nine Polish diacritics, so a
+ * `GENERATED ALWAYS AS` expression here would need a custom scalar function
+ * registered on the connection, invisible to `drizzle-kit`'s plain-SQL
+ * migration diffing and to `packages/ledger/tools/embed-ddl.ts`, which only
+ * ever reproduces columns, affinities, `primary key` and `not null` from
+ * that SQL. `create_counterparty`/`update_counterparty` writing it directly
+ * — the same `fold()` Postgres's generated expression mirrors — is what
+ * keeps the two engines in agreement without a JS function neither
+ * `drizzle-kit` nor the DDL embedder can see.
  */
 export const counterpartiesColumns = () => ({
   id: k.id<"counterparties">("id"),
   name: k.text("name").notNull(),
+  /**
+   * `fold(name)` — see above. Written by `create_counterparty`/
+   * `update_counterparty`, never derived by a query. The `''` default exists
+   * for one reason: SQLite refuses `ADD COLUMN … NOT NULL` without one on a
+   * table that has rows, so the migration step that introduces this column
+   * could not run on a phone that already holds counterparties.
+   *
+   * **The column and the unique index on it are two separate migrations** —
+   * `replica/0006_schema.sql` only adds this column; `replica/0007_schema.sql`
+   * is the one that drops the old `lower(trim(name))` index and creates the
+   * new unique index on this column. The split leaves room for the backfill
+   * that versioned chains run between the two steps, writing `fold(name)`
+   * into every existing row before the unique index exists to collide with
+   * the `''` default (PR #117). On this branch both files run in one
+   * version-1 step on a fresh database, so no row ever holds the `''`
+   * default at rest: `createCounterpartyInput`'s `name` is
+   * `z.string().trim().min(1)`, and every raw-insert fixture (`seed.ts`'s
+   * `seedCounterparty`, `executors.test.ts`'s own `seed()`) writes a real
+   * `fold()`ed value too, the same as `create_counterparty` would.
+   *
+   * **The unique index below covers every unarchived row, `''` included.**
+   * A phone mid-upgrade — between 0006 applying and the backfill finishing —
+   * is the one place two rows could legitimately both hold `''`; that window
+   * does not exist on this branch (previous paragraph), so there is nothing
+   * live for the index to wrongly collide.
+   */
+  nameFolded: k.text("name_folded").notNull().default(""),
   kind: k.text("kind", { enum: COUNTERPARTY_KIND }).notNull().default("person"),
   settlementCurrency: k.currency("settlement_currency").references(() => currencies.code),
   contact: k.text("contact"),
@@ -40,5 +85,7 @@ export const counterpartiesColumns = () => ({
 });
 
 export const counterparties = k.table("counterparties", counterpartiesColumns(), (t) => [
-  k.uniqueIndex("counterparties_name_uq").on(sql`lower(trim(${t.name}))`),
+  // M3 — an archived counterparty's old name must not block a fresh one from
+  // taking it; history stays under the old row regardless (§9.2).
+  k.uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
 ]);

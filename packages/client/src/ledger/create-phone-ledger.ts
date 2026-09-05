@@ -1053,7 +1053,11 @@ export type PhoneLedgerController = {
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
   createTransaction: (
     draft: QuickAddDraft,
-  ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
+  ) => // #116 review, L2 — `deferred` marks a capture that saved (the outbox
+  // entry committed) but could not yet value itself (no FX rate); absent
+  // or `false` for an ordinary save. Never a reason to treat this as
+  // anything but a success — `quick-add-screen.tsx` dismisses either way.
+  { id: Id<"transactions">; deferred?: boolean } | { fieldErrors: readonly FieldError[] };
   createCategory: (
     draft: CreateCategoryDraft,
   ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
@@ -1303,6 +1307,11 @@ function accountWriteRefusal(error: unknown): FieldError | null {
  * business" (that one is about the *account*, S16's editor; this one is about
  * the *row*, reached only if a caller somehow got past `ScopeSegments` and
  * the screen's own account-switch reset), so it carries its own `messageKey`.
+ *
+ * **`LocalDeferral` is not a refusal, and never reaches this mapper.** It is
+ * caught first, at the call site (#116 review, L2) — see the comment there
+ * for why: a *saved* capture routed through `fieldErrors` here used to read
+ * as a failed one to both the caller and the screen.
  */
 function createTransactionRefusal(error: unknown): FieldError | null {
   if (!(error instanceof Error)) return null;
@@ -2106,10 +2115,29 @@ export function createPhoneLedger(
       });
       try {
         const capture = runtime.capture();
+
+        // R2 H5 — computed here, from the replica this controller can see
+        // right now, and carried on the payload rather than left for the
+        // executor to recompute at apply time (by which point another write
+        // may have moved a different set than this one saw). Paged fully:
+        // S13's whole history for this counterparty, every role.
+        const movedTransactionIds: Id<"transactions">[] = [];
+        let cursor: PhoneSearchCursor | undefined;
+        for (;;) {
+          const page = port.searchTransactions(
+            { counterpartyId: id<"counterparties">(draft.loserId) },
+            cursor,
+          );
+          movedTransactionIds.push(...page.rows.map((row) => row.id));
+          cursor = page.nextCursor;
+          if (!cursor) break;
+        }
+
         const parsed = mergeCounterpartiesInput.safeParse({
           mergeId: runtime.id<"counterpartyMerges">(),
           winnerId: draft.winnerId,
           loserId: draft.loserId,
+          movedTransactionIds,
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
@@ -2285,14 +2313,76 @@ export function createPhoneLedger(
           };
         }
 
+        /**
+         * **#116 review, M3 — refused, never silently rewritten (SPEC.md
+         * §6.5: a transaction's currency is its account's).** This used to
+         * read `const currency = account?.currency ?? draft.currency`,
+         * unconditionally: a `draft.currency` that named dollars while the
+         * picked account only ever holds złoty was quietly corrected to the
+         * account's own currency rather than told to the person who typed
+         * it — exactly the silent-until-drain failure `settle-debt.executor.ts`'s
+         * own H3 check exists to catch on retry, reached here first instead.
+         * Only checked when the account is known locally, the same as the
+         * `capturable` guard above.
+         */
+        if (account && draft.currency !== account.currency) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "currency",
+                message: `This account only holds ${account.currency} — settle in that currency.`,
+                messageKey: "settleDebt.currencyMismatch",
+                params: { accountCurrency: account.currency },
+              },
+            ],
+          };
+        }
+
         const capture = runtime.capture();
+
+        // R2 H4 — `type` is read here, from the balance the controller can
+        // see right now, and carried on the payload rather than left for the
+        // executor to derive at apply time (which may run after other writes
+        // have moved the balance the sheet showed).
+        //
+        // R2 L2 — compared at `balance.decimals`, the same rounding
+        // `settle-debt.executor.ts` applies before it reads the live sign.
+        // An unrounded compare here could pick a `type` a raw dust balance
+        // agrees with but the executor's own rounded read does not — the
+        // write would then meet H4's "the balance moved, reload" refusal for
+        // a balance that, in every unit either side renders, never moved.
+        const balance = port
+          .listCounterpartyBalances(capture.date)
+          .find(
+            (row) =>
+              row.counterpartyId === draft.counterpartyId &&
+              row.currency === draft.dischargesCurrency,
+          );
+        const type: "income" | "expense" =
+          balance && money.cmp(money.round(balance.balance, balance.decimals), money.ZERO) < 0
+            ? "expense"
+            : "income";
+
+        // R2 H3 — a mismatch already refused above when the account is
+        // known, so this agrees with `draft.currency` whenever it runs;
+        // `account?.currency` only still matters for an account this
+        // replica does not recognise, left to the schema/executor exactly
+        // as the `capturable` guard above already does.
+        const currency = account?.currency ?? draft.currency;
+
         const parsed = settleDebtInput.safeParse({
           id: runtime.id<"transactions">(),
           counterpartyId: draft.counterpartyId,
           accountId: draft.accountId,
           date: draft.date,
           amount: draft.amount,
-          currency: draft.currency,
+          currency,
+          type,
           discharges: { currency: draft.dischargesCurrency, amount: draft.dischargesAmount },
           note: draft.note,
           categoryId: draft.categoryId ?? undefined,
@@ -2431,6 +2521,35 @@ export function createPhoneLedger(
         try {
           port.createTransaction(parsed.data, capture);
         } catch (refusal) {
+          /**
+           * **#116 review, L2 — a `LocalDeferral` is a saved outcome, not a
+           * refusal, and is caught here rather than reaching
+           * `createTransactionRefusal` at all.** `write.ts` commits the
+           * outbox entry before `apply` ever runs, so a no-rate deferral
+           * still means the capture is on the outbox — only not yet valued.
+           * Reporting it as `fieldErrors` used to leave the draft on screen
+           * with a field marked invalid; the person's only visible move was
+           * Save again, which minted a *second*, genuinely new capture on
+           * top of the first — `runtime.id()` above runs again on every call,
+           * it does not remember the first attempt's id. `deferred: true` on
+           * the success shape tells the caller this happened without a
+           * second outcome shape to add: `quick-add-screen.tsx` dismisses
+           * exactly as it would for an ordinary save and shows
+           * `transactions.deferredNoRate` as a toast instead of a field
+           * error. Matched on `error.name` rather than `instanceof
+           * LocalDeferral`: this file is deliberately structural against
+           * `@waltning/ledger` (see `PhoneCurrency`'s own comment above), and
+           * `LocalDeferral`'s `name` is fixed by its class field.
+           */
+          if (refusal instanceof Error && refusal.name === "LocalDeferral") {
+            refresh();
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "success",
+            });
+            return { id: parsed.data.id, deferred: true };
+          }
           const fieldError = createTransactionRefusal(refusal);
           if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {

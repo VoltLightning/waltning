@@ -15,7 +15,7 @@ import {
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalTransactionRow } from "./create-transaction.executor.ts";
@@ -47,13 +47,15 @@ export const updateTransactionExecutor = defineLocalExecutor<
 function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTransactionRow {
   const current = tx.select().from(transactions).where(eq(transactions.id, input.id)).get();
   if (!current) {
-    throw new Error(`update_transaction: no transaction ${input.id}`);
+    throw new LocalRefusal(`update_transaction: no transaction ${input.id}`, {
+      dependency: true,
+    });
   }
   if (current.deletedAt !== null) {
-    throw new Error(`update_transaction: ${input.id} is deleted`);
+    throw new LocalRefusal(`update_transaction: ${input.id} is deleted`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `update_transaction: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -78,7 +80,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   };
   const shapeIssues = transactionShapeIssues(merged);
   if (shapeIssues.length > 0) {
-    throw new Error(
+    throw new LocalRefusal(
       `update_transaction: patch would violate the transaction shape — ${shapeIssues
         .map((issue) => `${issue.field}: ${issue.message}`)
         .join("; ")}`,

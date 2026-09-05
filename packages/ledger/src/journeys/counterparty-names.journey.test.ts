@@ -10,9 +10,10 @@
  * (on SQLite) not diacritic-insensitive — lives only in
  * `packages/schema/src/counterparties.sqlite.ts` and the executor it backs
  * (`create-counterparty.executor.ts`), not in a numbered spec heading.
- * Findings: R2 C1, R2 H1-r3 (NFD), R2 M3 (archived name is free), R2 M1-r4
- * (trim set), R2 H6 (a refused entry is a visible blocked state, never a
- * silent pending row).
+ * Findings: R2 C1 — fixed by #116, R2 H1-r3 — fixed by #116 (NFD), R2 M3 —
+ * fixed by #116 (archived name is free), R2 M1-r4 — fixed by #116 (the trim
+ * CHECK), R2 H6 — fixed by #116 (a refused entry is a visible blocked
+ * state, never a silent pending row).
  *
  * **R2 M3 is one half of a joint rule with `merge-unmerge.journey.test.ts`'s
  * own R2 H1**: an archived name is free (this file), but an unmerge that
@@ -46,7 +47,7 @@ function assertRefused(j: ReturnType<typeof openJourney>, cpBId: Id<"counterpart
 }
 
 describe("create_counterparty — S15 §6's folded-name guard", () => {
-  it.fails("R2 C1 — SQLite's ASCII-only lower() lets a Polish diacritic case pair (Ł/ł) through the folded-name guard", () => {
+  it("R2 C1 — SQLite's ASCII-only lower() lets a Polish diacritic case pair (Ł/ł) through the folded-name guard", () => {
     const j = setup();
     try {
       j.session.createCounterparty(
@@ -79,7 +80,7 @@ describe("create_counterparty — S15 §6's folded-name guard", () => {
     }
   });
 
-  it.fails("R2 H1-r3 — an NFD-normalised spelling of a name collides with its NFC form only in a person's head, not in lower(trim())", () => {
+  it("R2 H1-r3 — an NFD-normalised spelling of a name collides with its NFC form only in a person's head, not in lower(trim())", () => {
     const j = setup();
     try {
       const nfc = "Józef Placeholder";
@@ -149,7 +150,7 @@ describe("create_counterparty — S15 §6's folded-name guard", () => {
     }
   });
 
-  it.fails("R2 M3 — archiving a counterparty does not free its name for reuse, though S15 §9's whole point of an archived (never deleted) loser is that it can safely be superseded", () => {
+  it("R2 M3 — archiving a counterparty does not free its name for reuse, though S15 §9's whole point of an archived (never deleted) loser is that it can safely be superseded", () => {
     const j = setup();
     try {
       const created = j.session.createCounterparty(
@@ -259,7 +260,7 @@ describe("create_counterparty — S15 §6's folded-name guard", () => {
     }
   });
 
-  it.fails("R2 H6 — a refused counterparty is a visible blocked entry, never a pending row", () => {
+  it("R2 H6 — a refused counterparty is a visible blocked entry, never a pending row", () => {
     const j = setup();
     try {
       j.session.createCounterparty(

@@ -105,14 +105,21 @@ describe("create_counterparty", () => {
   /**
    * The service's duplicate check is for the message; the unique index is the
    * guarantee. This asserts the *database* is what refuses, by using a name
-   * that differs only in case and whitespace — which the application check
-   * would let through if it were doing the work.
+   * that differs only in case — which the application check would let
+   * through if it were doing the work.
+   *
+   * R3 M1 — case only, not whitespace too: `handler` takes `z.output<Input>`,
+   * already-parsed input, and `createCounterpartyInput`'s `z.string().trim()`
+   * means a real caller can never hand it an untrimmed name. Padding this
+   * one anyway would hit `counterparties_name_trimmed` instead of the unique
+   * index this test is about — that engine-level refusal is its own case,
+   * in `counterparty-name-folded-parity.test.ts`.
    */
-  it("refuses a duplicate that differs only in case and whitespace", async () => {
+  it("refuses a duplicate that differs only in case", async () => {
     await createCounterparty.handler({ name: "Tomek", kind: "person", note: "" }, ctx);
 
     await expect(
-      createCounterparty.handler({ name: "  tomek  ", kind: "person", note: "" }, ctx),
+      createCounterparty.handler({ name: "TOMEK", kind: "person", note: "" }, ctx),
     ).rejects.toThrow(/already exists/);
   });
 

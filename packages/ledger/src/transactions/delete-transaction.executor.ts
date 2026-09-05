@@ -17,7 +17,7 @@ import {
   deleteTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalTransactionRow } from "./create-transaction.executor.ts";
@@ -44,13 +44,15 @@ export const deleteTransactionExecutor = defineLocalExecutor<
 function softDeleteTransaction(input: DeleteTransactionInput, tx: ReplicaTx): LocalTransactionRow {
   const current = tx.select().from(transactions).where(eq(transactions.id, input.id)).get();
   if (!current) {
-    throw new Error(`delete_transaction: no transaction ${input.id}`);
+    throw new LocalRefusal(`delete_transaction: no transaction ${input.id}`, {
+      dependency: true,
+    });
   }
   if (current.deletedAt !== null) {
-    throw new Error(`delete_transaction: ${input.id} is already deleted`);
+    throw new LocalRefusal(`delete_transaction: ${input.id} is already deleted`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `delete_transaction: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }

@@ -3,9 +3,10 @@
  * ("intent commits first"),
  * architecture/08-offline-and-concurrency.md H15 (a blocked outbox is a
  * state, never a silent drop).
- * Findings: R2 H6, R2 H1-r3 (deferral marked refused), R2 C2-r4 (deferred entry below the watermark),
- * R2 H1-r4 (a capture replayed successfully after an earlier halt is not left blocked, and the
- * update queued behind it lands).
+ * Findings: R2 H6, R2 H1-r3 (deferral marked refused), R2 C2-r4 — fixed by
+ * #116 (deferred entry below the watermark), R2 H1-r4 — fixed by #116 (a
+ * capture replayed successfully after an earlier halt is not left blocked,
+ * and the update queued behind it lands).
  */
 import { accountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
@@ -61,7 +62,7 @@ describe("J02 — a capture in a currency with no rate row", () => {
     }
   });
 
-  it.fails("R2 C2-r4 — lands on the launch after a rate row arrives, even when a later entry applied in between", () => {
+  it("R2 C2-r4 — lands on the launch after a rate row arrives, even when a later entry applied in between", () => {
     const j = setup();
     try {
       capture(j, ID.txn1);
@@ -102,7 +103,7 @@ describe("J02 — a capture in a currency with no rate row", () => {
     }
   });
 
-  it.fails("R2 H1-r4 — a capture replayed successfully after an earlier halt is not left blocked, and the update queued behind it lands", () => {
+  it("R2 H1-r4 — a capture replayed successfully after an earlier halt is not left blocked, and the update queued behind it lands", () => {
     const j = setup();
     try {
       capture(j, ID.txn1);

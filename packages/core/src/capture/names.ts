@@ -27,9 +27,27 @@ const DIACRITICS: Record<string, string> = {
   ż: "z",
 };
 
-/** Case-fold and strip the diacritics above. Length-preserving — see the note on `DIACRITICS`. */
+/**
+ * Case-fold and strip the diacritics above. The diacritic strip in
+ * `DIACRITICS` is length-preserving, one character to one character — but
+ * `toLowerCase()` is not: Turkish `İ` (U+0130) lowercases to two code units
+ * (`i` plus a combining dot above), so `fold()` as a whole can grow a string
+ * by one character on input it happens to contain.
+ *
+ * **`normalize("NFC")` first (R2 M1).** `DIACRITICS` matches single
+ * *precomposed* code points (`ó` is one character, U+00F3). Text that arrived
+ * decomposed — `o` plus a combining acute, U+006F U+0301, the form some IMEs
+ * and iOS's own text fields produce — never matches those keys, so `Józef`
+ * folded to `józef` instead of `jozef` and two spellings of the same name
+ * missed each other at the one index built to catch exactly that
+ * (`counterparties_name_uq`). NFC composes it back to the single code point
+ * first, so the replace below sees the same character either way.
+ */
 export function fold(s: string): string {
-  return s.toLowerCase().replace(/[ąćęłńóśźż]/g, (ch) => DIACRITICS[ch] ?? ch);
+  return s
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[ąćęłńóśźż]/g, (ch) => DIACRITICS[ch] ?? ch);
 }
 
 function escapeRegExp(s: string): string {

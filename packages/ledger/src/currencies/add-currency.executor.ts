@@ -11,7 +11,7 @@
 
 import { type AddCurrencyInput, addCurrencyInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -38,7 +38,7 @@ function insertCurrency(input: AddCurrencyInput, tx: ReplicaTx): LocalCurrencyRo
   const [existing] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
 
   if (existing) {
-    throw new Error(
+    throw new LocalRefusal(
       existing.archived
         ? `add_currency: ${input.code} already exists, archived — un-archive it instead of adding it again`
         : `add_currency: ${input.code} already exists`,

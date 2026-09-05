@@ -8,9 +8,10 @@
  * which transactions moved. Unmerge restores them and un-archives it."). The
  * brief cites "§9.3" — S15 has no numbered §9.3; §9 is "Open questions", an
  * unordered list, and its second item is the heading actually cited above.
- * Findings: R2 H1 (unmerge repoints a later reassignment), R2 H2 (chained
- * merge), R2 H5 (moved ids on the payload), R2 M2-r4 (loser cannot be lost
- * twice).
+ * Findings: R2 H1 — fixed by #116 (unmerge repoints a later reassignment),
+ * R2 H2 — fixed by #116 (chained merge), R2 H5 — fixed by #116 (moved ids on
+ * the payload), R2 M2-r4 — fixed by #116 (the winner≠loser CHECK; loser
+ * cannot be lost twice).
  *
  * **R2 H1 is one half of a joint rule with `counterparty-names.journey.test.ts`'s
  * own R2 M3**: an archived name is free (the other file), but an unmerge
@@ -71,11 +72,16 @@ function setup() {
 }
 
 describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's reversible merge", () => {
-  it.fails("R2 H5 — listCounterpartyMerges carries a moved-row count but not the moved ids themselves", () => {
+  it("R2 H5 — listCounterpartyMerges carries a moved-row count but not the moved ids themselves", () => {
     const j = setup();
     try {
       j.session.mergeCounterparties(
-        { mergeId: MERGE_1, winnerId: ID.cpA, loserId: ID.cpB },
+        {
+          mergeId: MERGE_1,
+          winnerId: ID.cpA,
+          loserId: ID.cpB,
+          movedTransactionIds: [ID.txn1, ID.txn2, TXN3],
+        },
         j.capture,
       );
 
@@ -95,11 +101,16 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
     }
   });
 
-  it.fails("R2 H1 — unmerge repoints every originally-moved id back to the loser, overwriting a reassignment made after the merge", () => {
+  it("R2 H1 — unmerge repoints every originally-moved id back to the loser, overwriting a reassignment made after the merge", () => {
     const j = setup();
     try {
       j.session.mergeCounterparties(
-        { mergeId: MERGE_1, winnerId: ID.cpA, loserId: ID.cpB },
+        {
+          mergeId: MERGE_1,
+          winnerId: ID.cpA,
+          loserId: ID.cpB,
+          movedTransactionIds: [ID.txn1, ID.txn2, TXN3],
+        },
         j.capture,
       );
 
@@ -136,11 +147,16 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
     }
   });
 
-  it.fails("R2 H2 — a winner still holding an open (un-reversed) merge can itself be merged away, chaining the absorption", () => {
+  it("R2 H2 — a winner still holding an open (un-reversed) merge can itself be merged away, chaining the absorption", () => {
     const j = setup();
     try {
       j.session.mergeCounterparties(
-        { mergeId: MERGE_1, winnerId: ID.cpA, loserId: ID.cpB },
+        {
+          mergeId: MERGE_1,
+          winnerId: ID.cpA,
+          loserId: ID.cpB,
+          movedTransactionIds: [ID.txn1, ID.txn2, TXN3],
+        },
         j.capture,
       );
 
@@ -158,10 +174,17 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
 
       // cpA is still the *live* winner of an open (un-reversed) merge —
       // absorbing it into cpC now would leave cpB's eventual unmerge with
-      // nowhere real to restore to.
+      // nowhere real to restore to. Refused before the moved set is ever
+      // read, so its own `movedTransactionIds` — the three ids MERGE_1 just
+      // moved onto cpA — never gets used.
       expect(() =>
         j.session.mergeCounterparties(
-          { mergeId: MERGE_2, winnerId: CP_C, loserId: ID.cpA },
+          {
+            mergeId: MERGE_2,
+            winnerId: CP_C,
+            loserId: ID.cpA,
+            movedTransactionIds: [ID.txn1, ID.txn2, TXN3],
+          },
           j.capture,
         ),
       ).toThrow();
@@ -174,13 +197,20 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
     const j = setup();
     try {
       j.session.mergeCounterparties(
-        { mergeId: MERGE_1, winnerId: ID.cpA, loserId: ID.cpB },
+        {
+          mergeId: MERGE_1,
+          winnerId: ID.cpA,
+          loserId: ID.cpB,
+          movedTransactionIds: [ID.txn1, ID.txn2, TXN3],
+        },
         j.capture,
       );
 
+      // Refused for being already archived, before the (now empty — cpB
+      // holds nothing after MERGE_1) moved set is read.
       expect(() =>
         j.session.mergeCounterparties(
-          { mergeId: MERGE_2, winnerId: ID.cpA, loserId: ID.cpB },
+          { mergeId: MERGE_2, winnerId: ID.cpA, loserId: ID.cpB, movedTransactionIds: [] },
           j.capture,
         ),
       ).toThrow();

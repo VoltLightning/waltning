@@ -21,7 +21,7 @@ import {
   createTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { and, desc, eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -158,12 +158,12 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
   if (!input.isBusiness) return;
 
   if (isSharedAccount(tx, input.accountId)) {
-    throw new Error(
+    throw new LocalRefusal(
       "create_transaction: a business transaction cannot sit in a shared account (SPEC.md §6.7, §13.1)",
     );
   }
   if (input.toAccountId !== undefined && isSharedAccount(tx, input.toAccountId)) {
-    throw new Error(
+    throw new LocalRefusal(
       "create_transaction: a business transaction cannot move into a shared account (SPEC.md §6.7)",
     );
   }
@@ -221,7 +221,7 @@ function isSharedAccount(tx: ReplicaTx, accountId: CreateTransactionInput["accou
  * 3. **Cross-currency: the last-known rate for the pair**, which is the one use
  *    `SPEC.md` §14.5 keeps those rows in the replica for — *"last-known rate
  *    per currency pair, for pricing a new capture"*.
- * 4. **No rate at all: refuse.** Argued below.
+ * 4. **No rate at all: defer.** Argued below.
  */
 function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotPerUnit {
   if (input.fxRate !== undefined) return input.fxRate;
@@ -232,8 +232,8 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
     // A replica with no pivot currency cannot answer "how many pivots is one of
     // these?" for *any* currency, including the transaction's own — `1` would
     // only be right if this currency happened to be the pivot, which is the
-    // fact that is missing. Refusing is the same branch as case 4.
-    throw new Error(
+    // fact that is missing. Deferring is the same branch as case 4.
+    throw new LocalDeferral(
       "create_transaction: no pivot currency in the replica, so no rate can be resolved — " +
         "the intent remains in the outbox for a later backend to value",
     );
@@ -248,7 +248,7 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
 
   if (rate === undefined) {
     /**
-     * **Refuse, rather than write `1`.**
+     * **Defer, rather than write `1`.**
      *
      * `1` for a cross-currency row is a *wrong figure that looks right*: it
      * silently values a 4 000 PLN expense as 4 000 USD in every pivot total on
@@ -260,17 +260,21 @@ function provisionalFxRate(input: CreateTransactionInput, tx: ReplicaTx): PivotP
      * commits the outbox entry *before* it calls `apply` (§14.6 — intent first,
      * because it is the half that cannot be reconstructed), so what remains is
      * an entry whose row is missing. That is the ordinary crash window: the
-     * capture still drains to a server that can resolve the rate properly, and
-     * `recover.ts` marks the entry `blocked(terminal)` with this message for
-     * S30 to render — *"blocked local replay is not the same as blocking the
-     * drain"*. A visible refusal naming the missing pair beats an invisible row
-     * that is off by the exchange rate.
+     * capture still drains to a server that can resolve the rate properly.
      *
-     * The case is reachable: a currency added to the ledger while the phone was
-     * offline has no rate row yet. It is not the same as "the rate is stale",
-     * which is case 3 and is fine.
+     * **`LocalDeferral`, not `LocalRefusal` (R3 H1).** The missing rate is
+     * local state, not a business rule the input violates — a currency added
+     * to the ledger while the phone was offline has no rate row yet, and that
+     * gap closes on its own the moment a rate arrives, whether from a fresh
+     * sync or the server that eventually drains this entry. `write.ts` leaves
+     * the entry `pending` rather than `blocked(refused)` for exactly that
+     * reason: a refusal never gets retried. **R4 C2** — it also marks
+     * `disposition: "deferred"`, so `recover.ts`'s `outstanding` query keeps
+     * finding this entry at every launch even once a later write has pushed
+     * the watermark past it, until this branch stops throwing. It is not the
+     * same as "the rate is stale", which is case 3 and is fine.
      */
-    throw new Error(
+    throw new LocalDeferral(
       `create_transaction: no last-known rate for ${pivot}/${input.currency}, and a ` +
         "cross-currency row must not be valued at 1 — the intent remains in the outbox " +
         "for a later backend to value",

@@ -19,7 +19,7 @@
 
 import { type UpdateAccountInput, updateAccountInput } from "@waltning/core/registry/inputs";
 import { and, eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalAccountRow } from "./create-account.executor.ts";
@@ -42,13 +42,13 @@ export const updateAccountExecutor = defineLocalExecutor<
 function patchAccount(input: UpdateAccountInput, tx: ReplicaTx): LocalAccountRow {
   const [current] = tx.select().from(accounts).where(eq(accounts.id, input.id)).all();
   if (!current) {
-    throw new Error(`update_account: no account ${input.id}`);
+    throw new LocalRefusal(`update_account: no account ${input.id}`, { dependency: true });
   }
   if (current.archived) {
-    throw new Error(`update_account: ${input.id} is archived`);
+    throw new LocalRefusal(`update_account: ${input.id} is archived`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `update_account: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -56,7 +56,7 @@ function patchAccount(input: UpdateAccountInput, tx: ReplicaTx): LocalAccountRow
   const mergedOwnership = input.patch.ownership ?? current.ownership;
   const mergedIsBusiness = input.patch.isBusiness ?? current.isBusiness;
   if (mergedOwnership === "shared" && mergedIsBusiness) {
-    throw new Error(
+    throw new LocalRefusal(
       "update_account: a shared account is never business — §6.7, accounts_shared_not_business",
     );
   }

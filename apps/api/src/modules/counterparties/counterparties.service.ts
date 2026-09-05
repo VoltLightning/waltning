@@ -11,6 +11,13 @@
  * duplicate would still arrive as `validation`, just carrying Postgres's own
  * wording. It exists because the useful sentence here mentions case and
  * whitespace, and the shared translator has no way to know that.
+ *
+ * **`name_folded` is never set here (R2 H2).** It is `GENERATED ALWAYS AS
+ * (…) STORED` in `packages/db/src/schema.ts` now — Postgres refuses an
+ * insert that supplies a value for a generated column outright, so this
+ * would not compile past the type and would not run past the database
+ * either way. `fold()` still runs on the phone (`create-counterparty.executor.ts`),
+ * where SQLite has no generated columns to lean on.
  */
 
 import type { CurrencyCode } from "@waltning/core/money";

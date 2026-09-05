@@ -16,7 +16,7 @@
 
 import { type ArchiveGroupInput, archiveGroupInput } from "@waltning/core/registry/inputs";
 import { and, eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalGroupRow } from "./create-group.executor.ts";
@@ -39,10 +39,10 @@ export const archiveGroupExecutor = defineLocalExecutor<
 function archiveGroup(input: ArchiveGroupInput, tx: ReplicaTx): LocalGroupRow {
   const [current] = tx.select().from(accountGroups).where(eq(accountGroups.id, input.id)).all();
   if (!current) {
-    throw new Error(`archive_group: no group ${input.id}`);
+    throw new LocalRefusal(`archive_group: no group ${input.id}`, { dependency: true });
   }
   if (current.archived) {
-    throw new Error(`archive_group: ${input.id} is already archived`);
+    throw new LocalRefusal(`archive_group: ${input.id} is already archived`);
   }
 
   const referring = tx
@@ -51,7 +51,7 @@ function archiveGroup(input: ArchiveGroupInput, tx: ReplicaTx): LocalGroupRow {
     .where(and(eq(accounts.groupId, input.id), eq(accounts.archived, false)))
     .all();
   if (referring.length > 0) {
-    throw new Error(
+    throw new LocalRefusal(
       `archive_group: ${referring.length} live account(s) still name group ${input.id} — ` +
         "a group with accounts cannot vanish under them",
     );

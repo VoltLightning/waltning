@@ -18,7 +18,7 @@
 
 import { type CategorizeBatchInput, categorizeBatchInput } from "@waltning/core/registry/inputs";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalTransactionRow } from "./create-transaction.executor.ts";
@@ -73,7 +73,7 @@ function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactio
    */
   const distinctIds = new Set(input.transactionIds).size;
   if (updated.length !== distinctIds) {
-    throw new Error(
+    throw new LocalRefusal(
       `categorize_batch: named ${distinctIds} distinct transactions, ${updated.length} ` +
         "were live income or expense rows — one is missing, deleted, or a transfer/adjustment " +
         "(transactions_category_shape)",

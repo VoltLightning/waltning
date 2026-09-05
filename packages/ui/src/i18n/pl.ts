@@ -106,6 +106,8 @@ export const pl: Messages = {
     amount: "Kwota",
     account: "Konto",
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",
+    deferredNoRate:
+      "Zapisano — zostanie wycenione, gdy tylko będzie znany kurs wymiany dla {{currency}}.",
     expense: "Wydatek",
     income: "Przychód",
     category: "Kategoria",
@@ -368,6 +370,7 @@ export const pl: Messages = {
   settleDebt: {
     noCounterparty: "Ten kontrahent już nie istnieje.",
     nothingToSettle: "W tej walucie nie ma nic do rozliczenia.",
+    currencyMismatch: "To konto obsługuje tylko {{accountCurrency}} — rozlicz w tej walucie.",
     currencies: "Waluty",
     rates: "Kursy wymiany",
 

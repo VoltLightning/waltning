@@ -24,6 +24,109 @@
 import type { z } from "zod";
 
 /**
+ * A business refusal — the write is invalid, not merely undelivered.
+ *
+ * **R2 M2.** `write.ts` used to mark *every* throw out of `apply` as
+ * `blocked(refused)` — a collision, a stale version, and a broken driver or a
+ * violated invariant all landed on the identical row. Only the first group
+ * refuses identically on any retry; the second is the crash-window case
+ * `architecture/08` exists for, and forcing it into `refused` told a future
+ * launch never to replay a write it should retry.
+ *
+ * An executor throws `LocalRefusal` for the business case — no such row,
+ * already archived, a stale `version`, a rule the write violates — and a
+ * plain `Error` for everything else: a return value the driver should never
+ * produce, a constraint that should already be impossible. `write.ts`
+ * narrows on `instanceof LocalRefusal` to decide which.
+ *
+ * **R3 M3 — three shapes stay plain `Error`, never `LocalRefusal`, because none
+ * of them is reachable with a conforming driver:** the driver returning nothing
+ * from an `insert` (seven call sites: "insert returned no row"), a row that
+ * "changed between read and write" after its own version already matched on
+ * read (the compare-and-swap update or delete finds zero rows despite running
+ * inside the same synchronous SQLite transaction that just confirmed the
+ * version, so nothing else could have raced it), and a constraint that should
+ * already be impossible given the checks above it. A `LocalRefusal` right
+ * beside one of these — the stale-version check itself, say — is the real,
+ * reachable business case; only the *second*, post-write check of the same row
+ * is the impossible one. See `write.ts`'s catch for what the distinction
+ * buys: a business refusal blocks the entry forever, so misclassifying an
+ * impossible branch as one would drop a capture that a fixed driver could
+ * still apply.
+ *
+ * **#116 review, H2 — `dependency` narrows *which* `LocalRefusal`s that "forever" ever
+ * applies to.** `write.ts` used to defer *every* refusal, of any class,
+ * whenever some unrelated entry elsewhere in the outbox was still `deferred`
+ * — a stable, permanent refusal (a folded-name collision, a stale `version`,
+ * a currency mismatch) filed as `deferred` alongside it, and so never surfaced
+ * to the person who typed it (`architecture/08` H15). Only a refusal that
+ * really *could* be caused by a missing dependency — a row an earlier,
+ * still-outstanding entry has not yet materialised — is retryable that way;
+ * `dependency: true` marks exactly that shape, thrown at the "no such <row>"
+ * checks (`!current`, `!winner`, `!loser`, and their kin) across the
+ * executors. Everything else — a business rule the write itself violates —
+ * defaults to `dependency: false` and refuses on every retry, unconditionally,
+ * because nothing else outstanding can ever change its answer.
+ */
+export class LocalRefusal extends Error {
+  override readonly name = "LocalRefusal";
+  /**
+   * True when this refusal names a row that does not exist *yet* rather than
+   * one that never will — see the class doc's #116-review H2 note. `write.ts` and
+   * `recover.ts` both read this to decide whether an unrelated outstanding
+   * deferral may turn this refusal into a retryable `deferred` disposition
+   * too; a refusal that leaves it `false` (the default) always stays
+   * `refused`, regardless of what else is outstanding.
+   */
+  readonly dependency: boolean;
+
+  constructor(message: string, options?: { dependency?: boolean }) {
+    super(message);
+    this.dependency = options?.dependency ?? false;
+  }
+}
+
+/**
+ * A deferral — the replica cannot apply this write yet, but a later launch or
+ * a server can; the entry stays pending.
+ *
+ * **R3 H1.** `create_transaction`'s two no-rate branches (no pivot currency in
+ * the replica; no last-known rate for the pair) were `LocalRefusal` through
+ * round 3, which `write.ts` marks `blocked(refused)` — and `recover.ts`'s
+ * `outstanding` query skips a `refused` entry forever, so the drain never
+ * sends it either. That silently drops a capture the operation's own doc
+ * comment says survives: *"the throw is not a lost capture … the capture
+ * still drains to a server that can resolve the rate"* — and it contradicts
+ * `architecture/08` §5's "never drop".
+ *
+ * The distinction from `LocalRefusal` is retryability, not severity: a
+ * refusal is wrong on every retry with the same input, because the business
+ * rule it names does not change. A deferral is right on a later retry with
+ * the *identical* input, because what is missing is local state — a pivot, a
+ * rate row — that a later sync or a fresh launch can supply without the
+ * caller doing anything differently. `state` stays exactly `pending`, the
+ * outbox commit's own value, so the drain keeps trying to send it and local
+ * replay keeps retrying its `apply` — neither one is a "blocked" write.
+ *
+ * **R4 C2 — but it is not untraceable any more.** Through round 3 a
+ * deferral left nothing in the outbox at all, on the theory that
+ * `recover.ts` would find it again "at every launch" by the plain fact of
+ * its `seq` sitting above the watermark. That theory broke the moment a
+ * *later* entry applied first: `advanceAppliedSeq` is a monotonic max, so an
+ * ordinary write behind a deferred one pushed the watermark past it, and the
+ * old `outstanding` query's `seq > applied` filter then hid the deferred
+ * entry forever — a capture that was supposedly never dropped, silently
+ * unreachable. `write.ts` and `recover.ts` now both set `disposition:
+ * "deferred"` on this class (never touching `state`), and `recover.ts`'s
+ * `outstanding` query matches that mark *independently of `seq`*, so the
+ * entry is retried at every launch — genuinely, this time — until the
+ * missing state arrives, however far the watermark has since moved.
+ */
+export class LocalDeferral extends Error {
+  override readonly name = "LocalDeferral";
+}
+
+/**
  * How one operation applies to the local tables.
  *
  * `Tx` is the transaction handle rather than the database, for the same reason

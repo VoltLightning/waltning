@@ -14,14 +14,27 @@
  * **Not H13's rule.** A collision the *server* admits at H13 is a merge
  * decision for arc 2 to make, never an error there; this refusal is the
  * phone's own capture-time rule (S15 §6), scoped to what this replica holds.
+ *
+ * **Compares `name_folded`, not `lower(trim(name))` (R2 C1).** SQLite's
+ * `lower()` is ASCII-only, so `ŁUKASZ` and `łukasz` used to fold to two
+ * different strings on the phone and both land — the index that was meant to
+ * catch that never saw them collide. `fold()`
+ * (`@waltning/core/capture/names`) runs the same case-fold-plus-diacritics in
+ * JavaScript instead, so the value stored here is exactly what
+ * `counterparties_name_uq` indexes.
+ *
+ * **Archived rows are excluded (R2 M3)**, matching the index: an archived
+ * counterparty's old name is free for a fresh one to take, and history stays
+ * under the archived row regardless (§9.2).
  */
 
+import { fold } from "@waltning/core/capture/names";
 import {
   type CreateCounterpartyInput,
   createCounterpartyInput,
 } from "@waltning/core/registry/inputs";
-import { and, ne, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { and, eq, ne } from "drizzle-orm";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
@@ -46,12 +59,16 @@ export const createCounterpartyExecutor = defineLocalExecutor<
 });
 
 function insertCounterparty(input: CreateCounterpartyInput, tx: ReplicaTx): LocalCounterpartyRow {
+  // `fold()` never trims by itself (see the header note); trimmed here so
+  // this holds regardless of whether the caller already did.
+  const nameFolded = fold(input.name.trim());
   const [collision] = tx
     .select({ id: counterparties.id, name: counterparties.name })
     .from(counterparties)
     .where(
       and(
-        sql`lower(trim(${counterparties.name})) = lower(trim(${input.name}))`,
+        eq(counterparties.nameFolded, nameFolded),
+        eq(counterparties.archived, false),
         // Excluded, not refused: a replayed create of this same row (§14.6 —
         // "twice is once") must not collide with itself.
         ne(counterparties.id, input.id),
@@ -60,7 +77,7 @@ function insertCounterparty(input: CreateCounterpartyInput, tx: ReplicaTx): Loca
     .all();
 
   if (collision) {
-    throw new Error(
+    throw new LocalRefusal(
       `create_counterparty: "${input.name}" collides with existing counterparty ` +
         `"${collision.name}" (${collision.id}) — counterparties_name_uq`,
     );
@@ -68,6 +85,7 @@ function insertCounterparty(input: CreateCounterpartyInput, tx: ReplicaTx): Loca
 
   const fields = {
     name: input.name,
+    nameFolded,
     kind: input.kind,
     settlementCurrency: input.settlementCurrency,
     contact: input.contact,

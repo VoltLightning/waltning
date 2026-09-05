@@ -8,7 +8,7 @@
 
 import { type SetRateSourceInput, setRateSourceInput } from "@waltning/core/registry/inputs";
 import { and, eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
@@ -32,13 +32,13 @@ export const setRateSourceExecutor = defineLocalExecutor<
 function setRateSource(input: SetRateSourceInput, tx: ReplicaTx): LocalCurrencyRow {
   const [current] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!current) {
-    throw new Error(`set_rate_source: no currency ${input.code}`);
+    throw new LocalRefusal(`set_rate_source: no currency ${input.code}`, { dependency: true });
   }
   if (current.archived) {
-    throw new Error(`set_rate_source: ${input.code} is archived`);
+    throw new LocalRefusal(`set_rate_source: ${input.code} is archived`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `set_rate_source: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }

@@ -242,14 +242,134 @@ export const categoryMappings = pgTable(
  * Counterparties — §6.6
  * ------------------------------------------------------------------ */
 
-export const counterparties = pgTable("counterparties", counterpartiesColumns(), (t) => [
-  uniqueIndex("counterparties_name_uq").on(normalized(t.name)),
-]);
+/**
+ * The Unicode whitespace set JS's `String.prototype.trim()` strips, as a
+ * `btrim()` character argument.
+ *
+ * **R3 M1.** `btrim("name")` with no explicit charset trims ASCII space only
+ * — confirmed on Postgres 16, `btrim(E'Name\t')` keeps the tab. JS `.trim()`
+ * drops it, along with NBSP and every other Unicode `White_Space` character.
+ * A raw insert of a tab- or NBSP-padded name therefore used to fold
+ * differently on the two engines even though the app path is already safe
+ * (`z.string().trim()` on every name-bearing input). `FOLD_SQL` below no
+ * longer calls `btrim` at all — trimming an untrimmed name would still let it
+ * *through*, silently disagreeing with `fold()`'s stricter idea of trimmed,
+ * so the `counterparties_name_trimmed` CHECK this constant also builds
+ * refuses an untrimmed name outright instead. ASCII space/tab/newline/
+ * vertical-tab/form-feed are the `E'…'` half; everything else JS treats as
+ * whitespace — NBSP, the Unicode space separators, the line/paragraph
+ * separators, and the BOM — is the `U&'…'` half, `\XXXX` being Postgres's
+ * four-hex-digit Unicode string escape.
+ *
+ * **Vertical tab is `\x0B`, not `\v` (R4 C1).** Postgres's `E'…'` escapes
+ * recognise `\b \f \n \r \t` plus the numeric forms (`\xh`, `\ooo`, `\uxxxx`,
+ * `\Uxxxxxxxx`) — there is no `\v`. Under "any other character following a
+ * backslash is taken literally", `E'\v'` is just the letter `v`. Confirmed
+ * live: with the old text, `btrim('Ivanov', charset)` came back `'Ivano'`
+ * — the trailing `v` read as whitespace — so `counterparties_name_trimmed`
+ * refused `Ivanov`, `Lev`, `van der Berg`, any name touching the letter `v`
+ * at an edge. Meanwhile U+000B itself was absent from the charset, so a
+ * name genuinely padded with a vertical tab passed the CHECK and folded
+ * differently from `fold()`, which does treat U+000B as whitespace.
+ * `\x0B` is Postgres's hex-escape form and needs no `U&` half.
+ */
+export const JS_TRIM_CHARSET_SQL =
+  `E' \\t\\n\\r\\x0B\\f' || U&'\\00A0\\1680\\2000\\2001\\2002\\2003` +
+  `\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000\\FEFF'`;
+
+/**
+ * `name_folded`'s Postgres-only fold, reused by the migration's collision
+ * pre-check (R2 M2) as well as this column's own `GENERATED ALWAYS AS`.
+ * Kept as one string, not retyped in two places: the migration is
+ * hand-checked SQL and cannot `import` this, but a reviewer comparing them
+ * can at least diff identical text.
+ *
+ * **`normalize(…, NFC)` first (R2 H1).** Without it this expression folded
+ * without normalising, so an NFD *Józef* — `o` plus a combining acute, the
+ * form some IMEs and iOS's own text fields produce — was admitted here while
+ * `@waltning/core/capture/names`'s `fold()` (which does `normalize("NFC")`
+ * before anything else) refused the identical name on the phone: one engine
+ * enforced `counterparties_name_uq`, the other did not. `normalize()` on
+ * `text` has been IMMUTABLE since Postgres 13, same as `lower()`/
+ * `translate()`/`btrim()` under this database's collation
+ * (`docker-compose.yml`'s `--icu-locale=und-x-icu`) — checked directly
+ * against a live instance before committing to this over a trigger.
+ *
+ * **No `btrim(…)` around `"name"` (R3 M1).** It used to open with
+ * `btrim("name")`, which only strips ASCII space and so silently disagreed
+ * with `fold()`'s full-Unicode-whitespace `.trim()` on a tab- or
+ * NBSP-padded name. Folding an untrimmed name — with whatever charset —
+ * would still be *a* fold, just not the one the phone computed for the
+ * identical input, and the two would keep disagreeing for some future
+ * whitespace character neither list happens to name. So this fold no
+ * longer trims at all: `counterparties_name_trimmed` below refuses an
+ * untrimmed `name` before this expression ever runs on it, and every row
+ * this function does see is already the trimmed string `fold()` folds too.
+ */
+export const FOLD_SQL = `lower(translate(normalize("name", NFC), 'ĄĆĘŁŃÓŚŹŻąćęłńóśźż', 'ACELNOSZZacelnoszz'))`;
+
+export const counterparties = pgTable(
+  "counterparties",
+  {
+    // R3 L2 — `nameFolded` below **must follow** this spread, not precede it:
+    // `counterpartiesColumns()` (`packages/schema/src/counterparties.pg.ts`)
+    // already declares a plain, app-written `nameFolded`, for parity with the
+    // SQLite table that has no generated columns to declare instead. Object
+    // literals resolve a repeated key to its *last* occurrence, so the
+    // `generatedAlwaysAs` column below silently replaces the shared plain one
+    // — correctly, but only because of where it sits in this list. Swapping
+    // the two would compile and would build a `counterparties` table whose
+    // `name_folded` is the app-written kind Postgres does not need.
+    ...counterpartiesColumns(),
+    /**
+     * `GENERATED ALWAYS AS (…) STORED`, not app-written (R2 H2).
+     *
+     * The shared column (`counterparties.pg.ts`) is a plain `text` — SQLite
+     * has no generated columns (`packages/ledger`'s kit says so directly:
+     * "This table is the one exception to 'constraints stay in
+     * `packages/db`.'"), so the replica keeps writing it at capture time,
+     * the only place it *can* be kept honest offline. Postgres does not
+     * share that limit: a raw `insert into counterparties` that skipped
+     * `name_folded` — or supplied a stale one — used to write straight
+     * past `counterparties_name_uq` and nothing caught it. Generated here
+     * instead, so the column cannot exist without being this fold of
+     * `name`, ever, regardless of what wrote the row. `FOLD_SQL`'s own
+     * comment above covers why every function in it is IMMUTABLE.
+     */
+    nameFolded: text("name_folded").notNull().generatedAlwaysAs(sql.raw(FOLD_SQL)),
+  },
+  (t) => [
+    // R2 C1/M3 — indexed on `name_folded` rather than `normalized(t.name)`:
+    // the two engines now share one normalisation, `fold()`, instead of
+    // Postgres enforcing a stricter rule than the SQLite replica that
+    // captures offline can check. Partial, excluding archived rows, so an
+    // old name is free for reuse once its owner is archived (§9.2 —
+    // history stays under the old row).
+    uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
+    // R3 M1 — the engine half of the fix, alongside `FOLD_SQL` dropping
+    // `btrim`: a `name` that is not already trimmed to JS `.trim()`'s exact
+    // definition of trimmed is refused here, outright, rather than folded
+    // under some charset that quietly disagrees with `fold()`. See
+    // `JS_TRIM_CHARSET_SQL` above for what "trimmed" means.
+    check(
+      "counterparties_name_trimmed",
+      sql`${t.name} = btrim(${t.name}, ${sql.raw(JS_TRIM_CHARSET_SQL)})`,
+    ),
+  ],
+);
 
 /**
  * `merge_counterparties` / `unmerge_counterparties` — S15 §9.2. The record of
  * which transactions moved, so unmerge reverses exactly them rather than
  * re-deriving the set.
+ *
+ * **M2**: `winner <> loser` — the executor's own `mergeCounterpartiesInput`
+ * refine already refuses this, but a CHECK holds regardless of the caller.
+ * **R2 H2**: the partial unique index on an open merge's `loser_id` refuses a
+ * counterparty being absorbed by two merges at once — one half of "a chained
+ * merge reverses into the wrong owner"; the other half (a winner or loser
+ * reappearing on *either* side of an open merge) is the executor's own
+ * pre-check, which this index cannot express alone.
  */
 export const counterpartyMerges = pgTable(
   "counterparty_merges",
@@ -257,6 +377,10 @@ export const counterpartyMerges = pgTable(
   (t) => [
     index("counterparty_merges_winner_idx").on(t.winnerId),
     index("counterparty_merges_loser_idx").on(t.loserId),
+    check("counterparty_merges_winner_ne_loser", sql`${t.winnerId} <> ${t.loserId}`),
+    uniqueIndex("counterparty_merges_loser_open_uq")
+      .on(t.loserId)
+      .where(sql`${t.unmergedAt} is null`),
   ],
 );
 

@@ -1052,7 +1052,11 @@ export const updateCounterpartyInput = z
     version: z.number().int().positive(),
     patch: counterpartyPatch,
   })
-  .refine((v) => Object.keys(v.patch).length > 0, {
+  // R2 L1 — `Object.keys` counts a key that is *present* with value
+  // `undefined` (e.g. `{ name: undefined }`, which a caller can construct by
+  // spreading an unset draft field), so a patch that sets nothing still
+  // passed. Every value must be something other than `undefined`.
+  .refine((v) => Object.values(v.patch).some((value) => value !== undefined), {
     message: "a patch must set at least one field",
     path: ["patch"],
   });
@@ -1062,12 +1066,33 @@ export type UpdateCounterpartyInput = z.output<typeof updateCounterpartyInput>;
  * `merge_counterparties` — S15 §9.2. `mergeId` is client-minted (H13), the
  * same reason `create_account`'s `id` is: the id this write mints (the merge
  * record) travels with the queued entry, not a value the server hands back.
+ *
+ * **`movedTransactionIds` travels on the payload, always (`operations.md`
+ * line 130: this is what makes unmerge exact rather than a re-derivation),
+ * computed by the controller from the replica it can see at the moment of
+ * the merge, rather than recomputed by the executor at apply time** — the
+ * same reason `settleDebtInput` never supplies a residual: the set of live
+ * transactions naming `loserId` can change between the screen reading it and
+ * the write landing (another device's own write, or the phone's own outbox
+ * draining out of order), and an executor that ever re-derives "everything
+ * currently pointing at the loser" moves a different set than the person
+ * saw, or moves something a concurrent write already reassigned.
+ * `create-phone-ledger.ts`'s `mergeCounterparties` action pages through
+ * `searchTransactions` and supplies exactly this.
+ *
+ * **Required, not optional (#116 review, M1).** A prior shape let this be
+ * omitted "for a fixture with no pre-read to name", which quietly gave the
+ * executor licence to fall back to deriving the moved set itself — the
+ * *"the recorded ids are what makes unmerge exact"* guarantee has no
+ * fallback to fall back to. A fixture now seeds the ids it created before
+ * merging them, the same discipline any other caller carries.
  */
 export const mergeCounterpartiesInput = z
   .object({
     mergeId: zId<"counterpartyMerges">(),
     winnerId: zId<"counterparties">(),
     loserId: zId<"counterparties">(),
+    movedTransactionIds: z.array(zId<"transactions">()),
   })
   .refine((v) => v.winnerId !== v.loserId, {
     message: "a counterparty cannot merge into itself",
@@ -1110,6 +1135,21 @@ export type RecordDistinctCounterpartiesInput = z.output<typeof recordDistinctCo
  * never supplied *to* it. Supplying one would let a stale client figure
  * overwrite a balance that moved since the sheet opened (`architecture/08`
  * H9).
+ *
+ * **`type` is verified rather than derived at apply time (R2 H4).** A
+ * controller that read the live balance's sign to build this payload
+ * (`create-phone-ledger.ts`'s `settleDebt` action) names that same sign
+ * here; the phone's own outbox can apply a dependent write out of order, so
+ * an executor that always re-derived the sign at apply time could silently
+ * disagree with the direction the person was shown. Checked against the
+ * live balance and refused on disagreement.
+ *
+ * **Required, not optional (#116 review, M2).** R2 H4 itself carries `type`
+ * to prove the settlement's direction was verified, not assumed — an
+ * omitted `type` skipped that verification for exactly the caller least
+ * likely to have re-derived it independently. A fixture now reads (or
+ * establishes) the balance it settles and carries the sign it expects, the
+ * same discipline any other caller carries.
  */
 export const settleDebtInput = z
   .object({
@@ -1121,6 +1161,8 @@ export const settleDebtInput = z
     /** What actually changed hands. Positive — direction is derived, not entered. */
     amount: zMoney,
     currency: zCurrencyCode,
+    /** They owe you (`income`) or you owe them (`expense`) — see above. */
+    type: z.enum(["income", "expense"]),
     /** Which balance this discharges, and how much of it — §6.6's settlement table. */
     discharges: z.object({
       currency: zCurrencyCode,

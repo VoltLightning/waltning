@@ -8,7 +8,7 @@
 
 import { type ArchiveAccountInput, archiveAccountInput } from "@waltning/core/registry/inputs";
 import { and, eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalAccountRow } from "./create-account.executor.ts";
@@ -31,13 +31,13 @@ export const archiveAccountExecutor = defineLocalExecutor<
 function archiveAccount(input: ArchiveAccountInput, tx: ReplicaTx): LocalAccountRow {
   const [current] = tx.select().from(accounts).where(eq(accounts.id, input.id)).all();
   if (!current) {
-    throw new Error(`archive_account: no account ${input.id}`);
+    throw new LocalRefusal(`archive_account: no account ${input.id}`, { dependency: true });
   }
   if (current.archived) {
-    throw new Error(`archive_account: ${input.id} is already archived`);
+    throw new LocalRefusal(`archive_account: ${input.id} is already archived`);
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `archive_account: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }

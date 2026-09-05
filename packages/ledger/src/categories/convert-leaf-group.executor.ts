@@ -11,7 +11,7 @@
 import type { Id } from "@waltning/core/id";
 import { type ConvertLeafGroupInput, convertLeafGroupInput } from "@waltning/core/registry/inputs";
 import { and, count, eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
@@ -34,10 +34,10 @@ export const convertLeafGroupExecutor = defineLocalExecutor<
 function convertLeafGroup(input: ConvertLeafGroupInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new Error(`convert_leaf_group: no category ${input.id}`);
+    throw new LocalRefusal(`convert_leaf_group: no category ${input.id}`, { dependency: true });
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `convert_leaf_group: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -45,7 +45,7 @@ function convertLeafGroup(input: ConvertLeafGroupInput, tx: ReplicaTx): LocalCat
   if (input.to === "group") {
     const referenced = referenceCount(input.id, tx);
     if (referenced > 0) {
-      throw new Error(
+      throw new LocalRefusal(
         `convert_leaf_group: ${referenced} transaction(s) reference ${input.id} — recategorise or merge first`,
       );
     }
@@ -56,7 +56,9 @@ function convertLeafGroup(input: ConvertLeafGroupInput, tx: ReplicaTx): LocalCat
       .where(eq(categories.parentId, input.id))
       .all();
     if (children > 0) {
-      throw new Error(`convert_leaf_group: ${input.id} has ${children} child(ren) — refused`);
+      throw new LocalRefusal(
+        `convert_leaf_group: ${input.id} has ${children} child(ren) — refused`,
+      );
     }
   }
 

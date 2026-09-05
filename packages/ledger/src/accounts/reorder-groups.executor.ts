@@ -5,7 +5,7 @@
 
 import { type ReorderGroupsInput, reorderGroupsInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalGroupRow } from "./create-group.executor.ts";
@@ -35,7 +35,7 @@ function reorderGroups(input: ReorderGroupsInput, tx: ReplicaTx): readonly Local
       .returning()
       .all();
     if (!row) {
-      throw new Error(`reorder_groups: no group ${id}`);
+      throw new LocalRefusal(`reorder_groups: no group ${id}`, { dependency: true });
     }
     rows.push(row);
   }

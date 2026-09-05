@@ -150,6 +150,14 @@ export const en = {
      * currency, not the direction.
      */
     needsRate: "{{currency}} needs an exchange rate before a transaction can be recorded in it.",
+    /**
+     * R4 L2 — `create_transaction`'s `LocalDeferral`: unlike `needsRate`
+     * above (refused before the write, nothing saved), this fires *after*
+     * the outbox entry has already committed — a currency added while
+     * offline, with no last-known rate yet. The capture is not lost; it is
+     * simply not valued yet, so the wording says "saved", never "failed".
+     */
+    deferredNoRate: "Saved — it will be valued once an exchange rate for {{currency}} is known.",
     expense: "Expense",
     income: "Income",
     category: "Category",
@@ -557,6 +565,14 @@ export const en = {
   settleDebt: {
     noCounterparty: "This counterparty no longer exists.",
     nothingToSettle: "There is nothing open in this currency to settle.",
+    /**
+     * #116 review, M3 — SPEC.md §6.5: a transaction's currency is its
+     * account's. The controller used to silently rewrite a mismatched
+     * `currency` to the account's own rather than say so; this is the
+     * refusal that replaces the rewrite, named on the field a person could
+     * actually fix.
+     */
+    currencyMismatch: "This account only holds {{accountCurrency}} — settle in that currency.",
     currencies: "Currencies",
     rates: "Exchange rates",
 

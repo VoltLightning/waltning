@@ -22,8 +22,9 @@ import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { defineLocalExecutor, localRegistry } from "../executor.ts";
+import { defineLocalExecutor, LocalDeferral, LocalRefusal, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
+import { recoverOnLaunch } from "../recover.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { type Capture, type LocalTx, writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
@@ -83,7 +84,7 @@ const createCounterparty = defineLocalExecutor<typeof CREATE_COUNTERPARTY, { id:
   apply: (input, tx) => {
     const [row] = tx
       .insert(counterparties)
-      .values({ id: id<"counterparties">(input.id), name: input.name })
+      .values({ id: id<"counterparties">(input.id), name: input.name, nameFolded: input.name })
       .returning({ id: counterparties.id })
       .all();
     if (!row) throw new Error("no row returned");
@@ -118,18 +119,71 @@ const createTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: s
   },
 });
 
-/** An executor that mints nothing and always refuses — the crash in test form. */
+/**
+ * An executor whose `LocalRefusal` names a missing dependency — the "no such
+ * row" shape #116 review's H2 marks `dependency: true`. Distinct from
+ * `refuses` below, which is the stable, business-rule shape that must never
+ * become `deferred` no matter what else is outstanding.
+ */
+const dependencyRefuses = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "dependency_refuses",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: () => [],
+  apply: () => {
+    throw new LocalRefusal("no such row yet", { dependency: true });
+  },
+});
+
+/** An executor that mints nothing and always refuses — a `LocalRefusal`. */
 const refuses = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
   operation: "refuses",
   opVersion: 1,
   input: CREATE_TRANSACTION,
   mints: () => [],
   apply: () => {
-    throw new Error("the replica half failed");
+    throw new LocalRefusal("the replica half failed");
   },
 });
 
-const registry = localRegistry<Tx>([createTransaction, createCounterparty, refuses]);
+/**
+ * An executor whose `apply` throws a genuine driver/invariant error — never
+ * a `LocalRefusal`. R2 M2: this is the crash-window case, not a refusal, so
+ * the entry it queued must be left `pending`, not marked `blocked`.
+ */
+const crashes = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "crashes",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: () => [],
+  apply: () => {
+    throw new Error("the driver went away");
+  },
+});
+
+/**
+ * An executor whose `apply` throws `LocalDeferral` — R3 H1: local state is
+ * missing, not a business rule violated, so the entry it queued must be left
+ * exactly as `crashes`' plain `Error` leaves it, never marked `blocked`.
+ */
+const defers = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "defers",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: () => [],
+  apply: () => {
+    throw new LocalDeferral("missing local state, not yet supplied");
+  },
+});
+
+const registry = localRegistry<Tx>([
+  createTransaction,
+  createCounterparty,
+  refuses,
+  crashes,
+  defers,
+  dependencyRefuses,
+]);
 
 const capture: Capture = { timeZone: "Europe/Warsaw", offsetMinutes: 60 };
 
@@ -218,7 +272,11 @@ describe("a write records its intent and materialises", () => {
     // naming it must not hold the transaction behind anything.
     s.ledger.replica.db
       .insert(counterparties)
-      .values({ id: id<"counterparties">("cp-old"), name: "Placeholder" })
+      .values({
+        id: id<"counterparties">("cp-old"),
+        name: "Placeholder",
+        nameFolded: "placeholder",
+      })
       .run();
 
     const only = writeLocally(s.ledger, {
@@ -262,6 +320,188 @@ describe("a failure between the two commits keeps the intent", () => {
     expect(rows()).toHaveLength(0);
     // The watermark did not move, which is what tells the next launch to replay.
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+
+    // R2 H6 — a refusal marks the entry `blocked(terminal)` in this same
+    // catch, so it can never be picked up by a drain that would only resend
+    // the same refusal forever. `pending` is the bug this replaces.
+    const [entry] = entries();
+    expect(entry?.state).toBe("blocked");
+    expect(entry?.blockedKind).toBe("terminal");
+    expect(entry?.blockedReason).toBe("the replica half failed");
+    // R2 M4 — `refused`, never `recover.ts`'s `replay_halted`: this write's
+    // own `apply` rejected it, so it will refuse identically on any retry.
+    expect(entry?.disposition).toBe("refused");
+  });
+
+  /**
+   * R2 M2 — a throw that is not a `LocalRefusal` is the crash window, not a
+   * refusal: the entry must be left exactly as the first commit left it, so
+   * `recover.ts` replays it rather than a drain resending a write `write.ts`
+   * itself decided was doomed.
+   */
+  it("leaves the entry pending — not blocked — when apply throws a plain error", () => {
+    expect(() =>
+      writeLocally(s.ledger, { executor: crashes, registry, input: input("txn-1"), capture }),
+    ).toThrow("the driver went away");
+
+    expect(entries()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
+    expect(entry?.blockedKind).toBeNull();
+    expect(entry?.disposition).toBeNull();
+  });
+
+  /**
+   * R4 C2 — a `LocalDeferral` never moves `state`, the same as a plain
+   * `Error` (both fall through the `instanceof LocalRefusal` half of the
+   * check), but for a different reason worth its own test: this one is a
+   * *named*, expected outcome — missing local state, not a driver failure —
+   * and it must stay retryable for exactly the same reason. `state: "blocked"`
+   * would tell `recover.ts` never to look at it again, which is the R2-era
+   * bug this class exists to avoid repeating. Unlike a plain `Error`, though,
+   * it now *does* leave a mark: `disposition: "deferred"`, so
+   * `recover.ts`'s `outstanding` query can find this entry again no matter
+   * how far the watermark moves past it (R4 C2's own finding).
+   */
+  it("leaves the entry pending, marked deferred rather than blocked — R4 C2", () => {
+    expect(() =>
+      writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+    ).toThrow("missing local state, not yet supplied");
+
+    expect(entries()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
+    expect(entry?.blockedKind).toBeNull();
+    expect(entry?.disposition).toBe("deferred");
+  });
+
+  /**
+   * R4 C2 — the finding itself, reproduced on the write path: a deferral at
+   * seq 1 followed by an ordinary write at seq 2 advances the watermark to
+   * 2, *above* the still-deferred entry's own seq. Before this fix, that
+   * silently and permanently hid entry 1 from `recover.ts`'s `outstanding`
+   * query — `gt(seq, applied)` alone had nothing left to match. This proves
+   * `writeLocally` marks the deferral so it survives that.
+   */
+  it("is not hidden once a later write advances the watermark past it", () => {
+    expect(() =>
+      writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+    ).toThrow();
+
+    writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-2"),
+      capture,
+    });
+
+    // The watermark reflects entry 2's genuine success — above entry 1's own
+    // seq, exactly the shape that used to hide it.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+
+    const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(deferred?.disposition).toBe("deferred");
+    expect(deferred?.state).toBe("pending");
+
+    // `recover.ts`'s own tests prove the retry itself; this proves only that
+    // `write.ts` left the trail `recover.ts` depends on.
+    const recovery = recoverOnLaunch(s.ledger, registry);
+    // Still deferred — `defers` always throws — but found and re-attempted,
+    // which is the property the old code lost.
+    expect(recovery.replayed).toEqual([]);
+    const [stillDeferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(stillDeferred?.disposition).toBe("deferred");
+  });
+
+  /**
+   * #116 review, H2 — the two classes `LocalRefusal.dependency` distinguishes.
+   *
+   * Before this fix, `write.ts` deferred *any* `LocalRefusal` whenever *any*
+   * entry anywhere was outstanding-deferred — a stable, permanent refusal
+   * filed `deferred` alongside an unrelated deferral and so never surfaced to
+   * the person who typed it (`architecture/08` H15).
+   */
+  describe("only a dependency-shaped refusal is eligible to defer", () => {
+    it("defers a `dependency: true` refusal while an earlier entry is still deferred", () => {
+      expect(() =>
+        writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+      ).toThrow();
+
+      expect(() =>
+        writeLocally(s.ledger, {
+          executor: dependencyRefuses,
+          registry,
+          input: input("txn-2"),
+          capture,
+        }),
+      ).toThrow("no such row yet");
+
+      const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+      expect(entry2?.state).toBe("pending"); // deferred, never blocked
+      expect(entry2?.disposition).toBe("deferred");
+      // The reason is latched even though this is not a `blocked` entry, so
+      // S30 can say why the capture is waiting.
+      expect(entry2?.blockedReason).toBe("no such row yet");
+    });
+
+    it("still refuses a business-rule refusal outright, even while an earlier entry is deferred", () => {
+      expect(() =>
+        writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+      ).toThrow();
+
+      // `refuses` never sets `dependency` — a folded-name collision, a stale
+      // `version`, a currency mismatch, none of which the deferred entry
+      // ahead of it could ever change the answer to.
+      expect(() =>
+        writeLocally(s.ledger, { executor: refuses, registry, input: input("txn-2"), capture }),
+      ).toThrow("the replica half failed");
+
+      const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+      expect(entry2?.state).toBe("blocked");
+      expect(entry2?.blockedKind).toBe("terminal");
+      expect(entry2?.disposition).toBe("refused");
+      expect(entry2?.blockedReason).toBe("the replica half failed");
+    });
+  });
+
+  /**
+   * R2 L1 — if marking the entry `blocked` itself throws, the caller must
+   * not lose the refusal that got it there: it travels as `cause` rather
+   * than being swallowed by whatever broke the second write.
+   */
+  it("attaches the original refusal as `cause` when marking it blocked also fails", () => {
+    const blockWriteError = new Error("outbox db is locked");
+    const updateSpy = vi.spyOn(s.ledger.outbox.db, "update").mockImplementation(() => {
+      throw blockWriteError;
+    });
+
+    let caught: unknown;
+    try {
+      writeLocally(s.ledger, { executor: refuses, registry, input: input("txn-1"), capture });
+    } catch (e) {
+      caught = e;
+    } finally {
+      updateSpy.mockRestore();
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as Error;
+    expect(err.message).toContain("failed to mark");
+    expect(err.message).toContain("outbox db is locked");
+    expect(err.cause).toBeInstanceOf(Error);
+    expect((err.cause as Error).message).toBe("the replica half failed");
+
+    // The block-write never landed, so the entry is exactly as the first
+    // commit left it — `pending`, not silently stuck looking sendable, but
+    // also not misreported as `blocked`.
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
   });
 
   it("reports which commit boundary failed with the complete cause chain", () => {

@@ -16,6 +16,7 @@
  * no reader could ever have produced.
  */
 
+import { fold } from "@waltning/core/capture/names";
 import { accountingDate } from "@waltning/core/date";
 import { id as brandId } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
@@ -84,9 +85,14 @@ export function seedRate(
 }
 
 export function seedCounterparty(j: Journey, id: string, name: string): void {
+  // `nameFolded` is written here, not left at its `''` default — a raw insert
+  // that skips it is a row `counterparties_name_uq` cannot see collide (R2
+  // H1). `fold()`, not the index's own SQL, because this bypasses
+  // `create_counterparty` on purpose (see the module doc) and must still
+  // produce the value that executor would have written.
   j.raw()
     .replica.db.insert(ledgerSchema.counterparties)
-    .values({ id: brandId<"counterparties">(id), name })
+    .values({ id: brandId<"counterparties">(id), name, nameFolded: fold(name.trim()) })
     .run();
 }
 

@@ -240,11 +240,24 @@ describe("every other guard is identifiable", () => {
 });
 
 describe("Postgres's own refusals", () => {
+  /**
+   * R2 H2 — `name_folded` is `GENERATED ALWAYS AS (…) STORED` now, never
+   * supplied by an insert (Postgres refuses a value for a generated column
+   * outright). Naming only `name` here is the point: the raw, un-normalised
+   * spelling is what a caller actually has, and the index must still catch
+   * it without anything computing the fold on this test's behalf.
+   *
+   * R3 M1 — differs by case alone, not whitespace too: an untrimmed `name`
+   * is now refused by `counterparties_name_trimmed` before it ever reaches
+   * this index (see `counterparty-name-folded-parity.test.ts`), so a padded
+   * second insert here would hit that CHECK instead of the one this test is
+   * actually about.
+   */
   it("maps a unique violation and names the index", async () => {
     await s.sql`INSERT INTO counterparties (name, kind) VALUES ('Placeholder One', 'person')`;
 
     const error = await refusal(
-      `INSERT INTO counterparties (name, kind) VALUES ('  placeholder one  ', 'person')`,
+      `INSERT INTO counterparties (name, kind) VALUES ('PLACEHOLDER ONE', 'person')`,
     );
     expect(error.code).toBe("validation");
     // The normalized-name index, which is the one that actually holds.

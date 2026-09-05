@@ -10,7 +10,7 @@
 import type { Id } from "@waltning/core/id";
 import { type ReparentCategoryInput, reparentCategoryInput } from "@waltning/core/registry/inputs";
 import { and, eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
@@ -33,10 +33,10 @@ export const reparentCategoryExecutor = defineLocalExecutor<
 function reparentCategory(input: ReparentCategoryInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new Error(`reparent_category: no category ${input.id}`);
+    throw new LocalRefusal(`reparent_category: no category ${input.id}`, { dependency: true });
   }
   if (current.version !== input.version) {
-    throw new Error(
+    throw new LocalRefusal(
       `reparent_category: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
@@ -47,27 +47,29 @@ function reparentCategory(input: ReparentCategoryInput, tx: ReplicaTx): LocalCat
     // allowed. Everything below this line runs only for a leaf, which is the
     // only thing R1/R2 together permit to have a parent at all.
     if (!current.isLeaf) {
-      throw new Error(
+      throw new LocalRefusal(
         `reparent_category: ${input.id} is a group — a group may only sit at the root, never nested under another (TAXONOMY.md R2, two levels)`,
       );
     }
 
     const [parent] = tx.select().from(categories).where(eq(categories.id, input.parentId)).all();
     if (!parent) {
-      throw new Error(`reparent_category: no parent ${input.parentId}`);
+      throw new LocalRefusal(`reparent_category: no parent ${input.parentId}`, {
+        dependency: true,
+      });
     }
     if (parent.isLeaf) {
-      throw new Error(
+      throw new LocalRefusal(
         `reparent_category: ${input.parentId} is a leaf — a category is a group or a leaf, never both (TAXONOMY.md R1)`,
       );
     }
     if (parent.kind !== current.kind) {
-      throw new Error(
+      throw new LocalRefusal(
         `reparent_category: target group ${input.parentId} is ${parent.kind}, ${input.id} is ${current.kind} — refused across kinds (J12 §4)`,
       );
     }
     if (wouldCycle(input.parentId, input.id, tx)) {
-      throw new Error(
+      throw new LocalRefusal(
         `reparent_category: ${input.parentId} is a descendant of ${input.id} — that would make the tree a cycle`,
       );
     }

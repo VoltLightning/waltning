@@ -321,7 +321,7 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(result.row.fxRate).toBe("0.2400");
   });
 
-  it("refuses a cross-currency capture it cannot value, and keeps the intent", () => {
+  it("defers a cross-currency capture it cannot value, and keeps the intent (R3 H1)", () => {
     // CHF is in the ledger and has no rate row — a currency added while the
     // phone was offline. Writing 1 here would value a CHF row as if it were
     // USD, in every pivot total on the dashboard, with nothing marking it.
@@ -335,6 +335,17 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(entries()).toHaveLength(1);
     expect(txnRows()).toHaveLength(0);
     expect(readAppliedSeq(s.ledger.replica.db)).toBe(0);
+
+    // R3 H1 — a `LocalDeferral`, not a `LocalRefusal`: the missing rate is
+    // local state a later sync can supply, so `state` stays exactly what the
+    // outbox commit left it. `blocked(refused)` would tell `recover.ts`
+    // never to retry it — the bug this fixes. R4 C2 — `disposition:
+    // "deferred"` is the new mark that keeps it findable regardless of
+    // where the watermark later moves.
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
+    expect(entry?.blockedKind).toBeNull();
+    expect(entry?.disposition).toBe("deferred");
   });
 
   /**
@@ -362,7 +373,7 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(txnRows()).toHaveLength(1);
   });
 
-  it("refuses rather than guessing when the replica names no pivot currency", () => {
+  it("defers rather than guessing when the replica names no pivot currency (R3 H1)", () => {
     s.ledger.replica.db.update(currencies).set({ isPivot: false }).run();
 
     // Without a pivot, "is this currency the pivot?" is unanswerable — and `1`
@@ -370,6 +381,13 @@ describe("the rate the phone writes into a NOT NULL column", () => {
     expect(() => write(createTransactionExecutor, expenseInput(TXN_A, ACCOUNT_USD, "USD"))).toThrow(
       /no pivot currency/,
     );
+
+    // Same R3 H1 branch as the missing-rate case above: local state, not a
+    // business rule, so the entry stays retryable rather than blocked —
+    // marked `deferred` (R4 C2), not `blocked`.
+    const [entry] = entries();
+    expect(entry?.state).toBe("pending");
+    expect(entry?.disposition).toBe("deferred");
   });
 
   it("does not stamp the destination rate, which the column lets it leave open", () => {
@@ -479,5 +497,94 @@ describe("an entry replayed after a crash produces the same row", () => {
       .all();
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe("Bank D · PLN");
+  });
+});
+
+/* ── R3 H1/M2 — a deferred entry during replay ──────────────────────────── */
+
+describe("a deferred entry during launch replay (R3 H1/M2)", () => {
+  it("does not halt the entries behind it, and applies them", () => {
+    // The crash scenario: neither entry's replica row has ever been written.
+    // Inserted directly, the way `write.ts` itself would have left them —
+    // seq 1 is the entry `create_transaction`'s own `provisionalFxRate` defers
+    // on (CHF, no rate row); seq 2 is an ordinary same-pivot capture that has
+    // nothing to do with it.
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values([
+        {
+          seq: 1,
+          operation: "create_transaction",
+          opVersion: 1,
+          payload: expenseInput(TXN_A, ACCOUNT_CHF, "CHF"),
+          deps: [],
+          capturedTz: capture.timeZone,
+          capturedOffsetMinutes: capture.offsetMinutes,
+        },
+        {
+          seq: 2,
+          operation: "create_transaction",
+          opVersion: 1,
+          payload: expenseInput(TXN_B, ACCOUNT_PLN, "PLN"),
+          deps: [],
+          capturedTz: capture.timeZone,
+          capturedOffsetMinutes: capture.offsetMinutes,
+        },
+      ])
+      .run();
+
+    const recovery = recoverOnLaunch(s.ledger, ledgerRegistry);
+
+    // Before this fix, hitting seq 1's refusal during replay called `haltAt`
+    // and returned immediately — seq 2 would never be attempted, on this
+    // launch or any later one, until someone found and resolved seq 1 by
+    // hand. `LocalDeferral` is skipped instead, and replay continues.
+    expect(recovery.halted).toBeNull();
+
+    const rows = txnRows();
+    expect(rows.map((row) => row.id)).toEqual([TXN_B]);
+
+    // Skipped, not halted, and never `blocked` on this entry's account — but
+    // now marked `disposition: "deferred"` (R4 C2), so it stays findable by
+    // `recover.ts`'s `outstanding` query however far the watermark moves.
+    const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(deferred?.state).toBe("pending");
+    expect(deferred?.disposition).toBe("deferred");
+  });
+
+  it("applies once the missing rate exists, on a later launch", () => {
+    // A real capture, through the real write path — refused for exactly the
+    // reason above, and left pending.
+    expect(() => write(createTransactionExecutor, expenseInput(TXN_A, ACCOUNT_CHF, "CHF"))).toThrow(
+      /no last-known rate for USD\/CHF/,
+    );
+    expect(txnRows()).toHaveLength(0);
+
+    // What supplies the missing rate here is not this device's own outbox —
+    // it is a fresh `fx_rates` row landing the way a background sync would
+    // deliver one, independent of anything this phone queued.
+    s.ledger.replica.db
+      .insert(fxRates)
+      .values({
+        base: USD,
+        quote: CHF,
+        date: accountingDate("2026-03-12"),
+        rate: money.unitsPerPivot("0.90"),
+        source: "manual",
+      })
+      .run();
+
+    s.reopen();
+    const recovery = recoverOnLaunch(s.ledger, ledgerRegistry);
+
+    expect(recovery.halted).toBeNull();
+    expect(recovery.replayed).toHaveLength(1);
+    expect(txnRows().map((row) => row.id)).toEqual([TXN_A]);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(1);
+
+    // R4 C2 — cleared once it actually applied; nothing left marking it as
+    // still outstanding.
+    const [resolved] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(resolved?.disposition).toBeNull();
   });
 });

@@ -35,7 +35,7 @@
  * database, and the whole guarantee here is about what survives a crash.
  */
 
-import type { ExtractTablesWithRelations } from "drizzle-orm";
+import { type ExtractTablesWithRelations, eq } from "drizzle-orm";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
 import type { z } from "zod";
 import {
@@ -43,7 +43,13 @@ import {
   emitLedgerDiagnostic,
   type LedgerDiagnostics,
 } from "./diagnostics.ts";
-import type { AnyLocalExecutor, LocalExecutor, LocalRegistry } from "./executor.ts";
+import {
+  type AnyLocalExecutor,
+  LocalDeferral,
+  type LocalExecutor,
+  LocalRefusal,
+  type LocalRegistry,
+} from "./executor.ts";
 import { advanceAppliedSeq } from "./migrate.ts";
 import type { Ledger, LedgerSchema } from "./open.ts";
 import { claimSeq, deriveDeps, type OutboxPayload, outbox } from "./outbox.ts";
@@ -115,7 +121,24 @@ export type LocalWrite<Input extends z.ZodTypeAny, Row, Tx> = {
 
   capture: Capture;
 
-  /** Operational evidence only; it never receives the input or payload. */
+  /**
+   * Operational evidence, local to this device.
+   *
+   * **R3 M4.** This never receives the raw `input` or `payload` object — every
+   * event above is a fixed shape of scope/phase/boundary/operation/seq, plus,
+   * on failure, `describeLedgerError(error)`. That last part is not silence
+   * about the write's content: a `LocalRefusal`'s `message` is built *from*
+   * the input it refused (a name, an id, a balance — see any
+   * `*.executor.ts`), and `describeDiagnosticError` (`packages/core`) keeps a
+   * caught error's `message` verbatim. So a refusal's diagnostic event carries
+   * whatever that refusal's text names. That is deliberate, not a leak to fix:
+   * the message is the same user-facing refusal text a client maps to UI
+   * copy, and redacting it here would make the sink disagree with what the
+   * person who triggered it was shown. What stays true is narrower than the
+   * old claim: this sink is a local callback the caller supplies — nothing in
+   * this module sends it anywhere — so whatever it does receive stays on the
+   * device unless the caller's own sink chooses to forward it.
+   */
   diagnostics?: LedgerDiagnostics;
 };
 
@@ -250,6 +273,105 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
       return applied;
     });
   } catch (error) {
+    // R2 M2 — only a `LocalRefusal` is a refusal. It used to be every throw
+    // out of `apply`: a collision `create_counterparty` throws, a stale
+    // `update_counterparty` version, *and* a broken driver or a violated
+    // invariant, indistinguishably. The first group refuses identically on
+    // any retry, so it is marked `blocked` here, in this same catch — the
+    // entry never gets a chance to look sendable (R2 H6). The second is the
+    // crash window `architecture/08` exists for: the write itself may still
+    // be good, so the entry is left exactly as the first commit left it —
+    // `pending`, real, unsent, and drainable — and `recover.ts` is what
+    // replays it, never this catch.
+    //
+    // R2 M4 — `disposition: "refused"`, never `"replay_halted"`
+    // (`recover.ts`'s own halt): this write's own `apply` rejected it, so it
+    // will refuse identically on any retry or on a server. `outbox.ts`
+    // documents the distinction `recover.ts`'s `outstanding` query reads.
+    //
+    // R4 C2 — `LocalDeferral` is now matched too, below, and no longer falls
+    // through untouched. It used to: the entry was left exactly as the
+    // outbox commit left it, `pending` with nothing recorded, on the theory
+    // that `recover.ts` would retry it "at every launch until that state
+    // arrives." That theory was false the moment a *later* entry applied
+    // first: `advanceAppliedSeq` is a monotonic max, so a normal write at
+    // seq 2 following this deferral at seq 1 pushed the watermark to 2, and
+    // `recover.ts`'s old `gt(seq, applied)` filter then hid seq 1 forever —
+    // its effect was never present, but nothing said so. `disposition:
+    // "deferred"` is what `recover.ts`'s `outstanding` query now matches on
+    // *regardless of seq*, so the entry stays findable no matter how far the
+    // watermark moves past it. `state` is deliberately untouched — it stays
+    // `pending`, exactly as the outbox commit left it, because the drain
+    // must still try to send it (§14.1) and local replay must still retry
+    // it, neither of which a `blocked` write.ts would ever attempt.
+    //
+    // R2 H1-r4 — a `LocalRefusal` met here is not automatically trustworthy,
+    // the same reason `recover.ts`'s own `anyDeferredSoFar` (R4 H1) exists:
+    // this write's own `apply` may have refused it only because an earlier
+    // capture is itself still `deferred` — a rate not yet known, say — and
+    // the row this write names (an update's target transaction, most often)
+    // has therefore not materialised yet, not because it never will. Every
+    // entry this one could depend on was claimed a lower `seq` than this
+    // one, so "any entry still `deferred`" is exactly "an entry ahead of
+    // this one is still outstanding" — this write's own enqueue above ran
+    // before `apply`, so its own entry cannot be the one this query finds.
+    //
+    // **#116 review, H2 — but only when the refusal itself is `dependency`-shaped.**
+    // Through this round, *any* `LocalRefusal` met while *any* entry anywhere
+    // was `deferred` was filed `deferred` too — a stable, permanent refusal
+    // (a folded-name collision, a stale `version`, a currency mismatch) that
+    // has nothing to do with the unrelated deferred entry, filed alongside it
+    // and so never surfaced to the person who typed it (`architecture/08`
+    // H15: a refusal must be visible, not silently retried forever). Only a
+    // refusal an executor threw as `dependency: true` — the "no such <row>"
+    // checks, which really can be answered differently once the entry ahead
+    // resolves — is eligible to become `deferred` this way; everything else
+    // refuses unconditionally, on this attempt and every later one.
+    if (error instanceof LocalRefusal || error instanceof LocalDeferral) {
+      const anEarlierEntryIsDeferred =
+        error instanceof LocalRefusal &&
+        error.dependency &&
+        ledger.outbox.db
+          .select({ id: outbox.id })
+          .from(outbox)
+          .where(eq(outbox.disposition, "deferred"))
+          .limit(1)
+          .all().length > 0;
+      const disposition =
+        error instanceof LocalDeferral || anEarlierEntryIsDeferred ? "deferred" : "refused";
+      const reason = error.message;
+      try {
+        ledger.outbox.db
+          .update(outbox)
+          .set(
+            disposition === "refused"
+              ? { state: "blocked", blockedKind: "terminal", disposition, blockedReason: reason }
+              : { disposition, blockedReason: reason },
+          )
+          .where(eq(outbox.id, enqueued.entryId))
+          .run();
+      } catch (blockError) {
+        // R2 L1 — the entry would otherwise be left looking ordinary,
+        // silently, if recording the disposition itself failed: the caller
+        // sees only this write's own error and never learns the entry it
+        // queued still needs the mark it just failed to get. The original
+        // error travels as `cause` rather than being swallowed.
+        const blockReason = blockError instanceof Error ? blockError.message : String(blockError);
+        emitLedgerDiagnostic(diagnostics, {
+          scope: "local_write",
+          phase: "failure",
+          boundary: "replica",
+          operation: executor.operation,
+          seq: enqueued.seq,
+          error: describeLedgerError(blockError),
+        });
+        throw new Error(
+          `local_write: failed to mark ${enqueued.entryId} ${disposition} — ${blockReason}`,
+          { cause: error },
+        );
+      }
+    }
+
     emitLedgerDiagnostic(diagnostics, {
       scope: "local_write",
       phase: "failure",

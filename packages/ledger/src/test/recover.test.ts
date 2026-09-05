@@ -16,9 +16,9 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import type Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { defineLocalExecutor, localRegistry } from "../executor.ts";
+import { defineLocalExecutor, LocalDeferral, LocalRefusal, localRegistry } from "../executor.ts";
 import { readAppliedSeq } from "../migrate.ts";
 import { recoverOnLaunch } from "../recover.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -33,6 +33,7 @@ let s: ScratchStores;
 
 beforeEach(() => {
   s = scratchStores();
+  deferGate = true;
   s.ledger.replica.db
     .insert(currencies)
     .values({ code: currencyCode("PLN"), name: "Placeholder" })
@@ -74,6 +75,57 @@ const createTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: s
 });
 
 const registry = localRegistry<Tx>([createTransaction]);
+
+/** Always throws `LocalRefusal` — the business-rule case, R3 M2's own test. */
+const refusingTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "refuses",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: (input) => [input.id],
+  apply: () => {
+    throw new LocalRefusal("refuses on every attempt");
+  },
+});
+
+/**
+ * Throws `LocalDeferral` while `deferGate` is `true` — the missing-local-state
+ * case — and applies normally once it flips, standing in for a rate row (or
+ * any other local fact) arriving between two launches. Reset in `beforeEach`
+ * so one test's flip cannot leak into the next.
+ */
+let deferGate = true;
+const deferringTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "defers",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: (input) => [input.id],
+  apply: (input, tx) => {
+    if (deferGate) {
+      throw new LocalDeferral("missing local state, not yet supplied");
+    }
+    const [row] = tx
+      .insert(transactions)
+      .values({
+        id: id<"transactions">(input.id) as Id<"transactions">,
+        date: accountingDate("2026-03-12"),
+        type: "expense",
+        accountId: id<"accounts">("acc-1"),
+        amountOriginal: money.toMoney(input.amount_original),
+        currency: currencyCode("PLN"),
+        fxRate: money.pivotPerUnit("1.000000000000"),
+      })
+      .returning({ id: transactions.id })
+      .all();
+    if (!row) throw new Error("no row returned");
+    return row;
+  },
+});
+
+const registryWithFailures = localRegistry<Tx>([
+  createTransaction,
+  refusingTransaction,
+  deferringTransaction,
+]);
 
 /**
  * The first half of a write, and nothing else.
@@ -199,6 +251,9 @@ describe("an entry that cannot be replayed stops replay, and says why", () => {
     expect(blocked?.state).toBe("blocked");
     expect(blocked?.blockedKind).toBe("terminal");
     expect(blocked?.blockedReason).toContain("an_operation_this_build_forgot");
+    // R2 M4 — `replay_halted`, never `write.ts`'s `refused`: local replay is
+    // what stalled, not the write itself. The drain may still send it.
+    expect(blocked?.disposition).toBe("replay_halted");
   });
 
   it("leaves the watermark below it, so nothing claims the missing effect landed", () => {
@@ -224,5 +279,537 @@ describe("an entry that cannot be replayed stops replay, and says why", () => {
     // could not replay it is not the app that gets to discard it.
     expect(entry).toBeDefined();
     expect(entry?.payload).toEqual({ id: "txn-1", amount_original: "18.00000000" });
+  });
+
+  /**
+   * R2 L1 — if marking the entry `blocked` itself throws, the replay
+   * failure that got it there must not be lost either: it travels as
+   * `cause` rather than being swallowed by whatever broke the second write.
+   */
+  it("attaches the original replay failure as `cause` when marking it blocked also fails", () => {
+    intentOnly(1, "txn-1", "an_operation_this_build_forgot");
+    const blockWriteError = new Error("outbox db is locked");
+    const updateSpy = vi.spyOn(s.ledger.outbox.db, "update").mockImplementation(() => {
+      throw blockWriteError;
+    });
+
+    let caught: unknown;
+    try {
+      recoverOnLaunch(s.ledger, registry);
+    } catch (e) {
+      caught = e;
+    } finally {
+      updateSpy.mockRestore();
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as Error;
+    expect(err.message).toContain("failed to mark");
+    expect(err.message).toContain("outbox db is locked");
+    expect(err.cause).toBeInstanceOf(Error);
+    expect((err.cause as Error).message).toContain("an_operation_this_build_forgot");
+  });
+});
+
+/**
+ * R2 M4 — `blocked(terminal)` used to mean two different things: `write.ts`'s
+ * own refusal ("never send") and this file's own replay halt ("send later").
+ * `disposition` names which, and `outstanding`'s query reads it.
+ */
+describe("a `refused` entry is skipped on later launches", () => {
+  it("does not re-attempt it, and lets entries behind it replay past it", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2");
+    intentOnly(3, "txn-3");
+    // Simulate `write.ts` having already refused entry 2, on an earlier
+    // launch — a folded-name collision or a stale version, say.
+    s.ledger.outbox.db
+      .update(outbox)
+      .set({
+        state: "blocked",
+        blockedKind: "terminal",
+        disposition: "refused",
+        blockedReason: "refused before this launch",
+      })
+      .where(eq(outbox.seq, 2))
+      .run();
+
+    const recovery = recoverOnLaunch(s.ledger, registry);
+
+    // Not re-halted: a `refused` entry's `apply` would only throw the same
+    // way again, so it is not retried at all, and entries 1 and 3 replay.
+    expect(recovery.halted).toBeNull();
+    expect(recovery.replayed).toHaveLength(2);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+    // It created nothing when it was refused, so there is nothing for a
+    // later entry to depend on — the watermark is free to jump past it.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(3);
+
+    const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(entry2?.state).toBe("blocked");
+    expect(entry2?.disposition).toBe("refused");
+  });
+
+  it("still halts on a `replay_halted` entry, on every launch, never skipping it", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "an_operation_this_build_forgot");
+    intentOnly(3, "txn-3");
+
+    const first = recoverOnLaunch(s.ledger, registry);
+    expect(first.halted?.seq).toBe(2);
+    expect(first.replayed).toHaveLength(1);
+
+    // A second launch tries again rather than silently accepting the halt —
+    // an app update may since have supplied the missing executor.
+    const second = recoverOnLaunch(s.ledger, registry);
+    expect(second.halted?.seq).toBe(2);
+    expect(second.replayed).toEqual([]);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1"]);
+  });
+
+  /**
+   * #116 review, M4 — `clearDispositionAt` used to clear only `disposition`.
+   * A `replay_halted` entry that finally applies (the missing executor
+   * above, supplied) kept `state: "blocked"` forever after: nothing else
+   * ever set it back, so an entry that had genuinely landed still read as
+   * blocked to S30 and to anything checking `state`. `state`, `blockedKind`
+   * and `blockedReason` are cleared in the same update this test proves.
+   */
+  it("clears state, blockedKind and blockedReason too once a replay_halted entry finally applies", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "an_operation_this_build_forgot");
+    intentOnly(3, "txn-3");
+
+    recoverOnLaunch(s.ledger, registry);
+    const [halted] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(halted?.state).toBe("blocked");
+    expect(halted?.blockedKind).toBe("terminal");
+    expect(halted?.blockedReason).not.toBeNull();
+
+    // An app update supplies the executor this build was missing.
+    const previouslyMissingOperation = defineLocalExecutor<
+      typeof CREATE_TRANSACTION,
+      { id: string },
+      Tx
+    >({
+      operation: "an_operation_this_build_forgot",
+      opVersion: 1,
+      input: CREATE_TRANSACTION,
+      mints: (input) => [input.id],
+      apply: createTransaction.apply,
+    });
+    const registryFixed = localRegistry<Tx>([createTransaction, previouslyMissingOperation]);
+
+    const recovery = recoverOnLaunch(s.ledger, registryFixed);
+
+    expect(recovery.halted).toBeNull();
+    expect(recovery.replayed).toHaveLength(2); // txn-2, then txn-3 behind it
+    expect(
+      rows()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["txn-1", "txn-2", "txn-3"]);
+
+    const [applied] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(applied?.state).toBe("pending");
+    expect(applied?.blockedKind).toBeNull();
+    expect(applied?.disposition).toBeNull();
+    expect(applied?.blockedReason).toBeNull();
+  });
+});
+
+/**
+ * R3 M2 — before this fix, a `LocalRefusal` met *during* replay (as opposed
+ * to one already `blocked` from an earlier launch, above) fell into the
+ * generic catch and called `haltAt`: `replay_halted`, and everything behind
+ * it stopped, on every launch, forever — the mirror image of the bug M2
+ * names. Now it is marked `blocked(refused)` in the same step `write.ts`
+ * itself would have, and replay continues.
+ */
+describe("a refusal met during replay is blocked and skipped, not halted (R3 M2)", () => {
+  it("marks it refused, applies the entries behind it, and does not halt", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "refuses");
+    intentOnly(3, "txn-3");
+
+    const recovery = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(recovery.halted).toBeNull();
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+
+    const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(entry2?.state).toBe("blocked");
+    expect(entry2?.blockedKind).toBe("terminal");
+    expect(entry2?.disposition).toBe("refused");
+    expect(entry2?.blockedReason).toBe("refuses on every attempt");
+  });
+
+  it("is not re-attempted on the next launch, same as a refusal write.ts itself marked", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "refuses");
+    intentOnly(3, "txn-3");
+
+    recoverOnLaunch(s.ledger, registryWithFailures);
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(second.halted).toBeNull();
+    expect(second.replayed).toEqual([]);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+  });
+});
+
+/**
+ * R4 C2 — the counterpart for `LocalDeferral`: marked `disposition:
+ * "deferred"`, `state` left `pending`, so — unlike a refusal — it is
+ * genuinely retried at every launch, and succeeds the moment whatever local
+ * state it was missing arrives.
+ */
+describe("a deferral met during replay is marked deferred, not blocked (R4 C2)", () => {
+  it("does not halt, applies the entries behind it, and leaves the entry pending", () => {
+    intentOnly(1, "txn-1");
+    intentOnly(2, "txn-2", "defers");
+    intentOnly(3, "txn-3");
+
+    const recovery = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(recovery.halted).toBeNull();
+    expect(rows().map((r) => r.id)).toEqual(["txn-1", "txn-3"]);
+
+    const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+    expect(entry2?.state).toBe("pending");
+    expect(entry2?.blockedKind).toBeNull();
+    expect(entry2?.disposition).toBe("deferred");
+  });
+
+  it("is retried on the next launch, unlike a refusal, and applies once resolved", () => {
+    intentOnly(1, "txn-1", "defers");
+
+    const first = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(first.halted).toBeNull();
+    expect(first.replayed).toEqual([]);
+    expect(rows()).toHaveLength(0);
+    const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(deferred?.disposition).toBe("deferred");
+
+    // Whatever local state `apply` was missing has arrived by the next launch
+    // — a fresh rate row, say. Nothing about the entry itself changed; only
+    // what the executor can now do with it.
+    deferGate = false;
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(second.halted).toBeNull();
+    expect(second.replayed).toHaveLength(1);
+    expect(rows().map((r) => r.id)).toEqual(["txn-1"]);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(1);
+
+    // Cleared the moment it actually applied — nothing left marking it as
+    // still outstanding.
+    const [resolved] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(resolved?.disposition).toBeNull();
+  });
+});
+
+/**
+ * R4 C2 — the finding this whole rename exists to fix: before it, a deferred
+ * entry's `seq` sitting below a watermark a *later* entry advanced past it
+ * made `outstanding`'s plain `gt(seq, applied)` filter hide it forever. Both
+ * paths that can produce that shape are proven here: replay (this describe)
+ * and `write.ts` itself (`write.test.ts`'s own mirror of this).
+ */
+describe("a deferred entry is not lost once a later entry advances the watermark past it (R4 C2)", () => {
+  it("keeps finding it at every launch, and applies it once the missing state arrives", () => {
+    intentOnly(1, "txn-1", "defers");
+    intentOnly(2, "txn-2");
+
+    const first = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    // Entry 2 genuinely applied, so the watermark reads 2 — *above* the
+    // still-deferred entry 1's own seq. The old `gt(seq, applied)` filter
+    // would have hidden entry 1 on every launch from here on.
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+    expect(first.replayed).toHaveLength(1);
+    expect(rows().map((r) => r.id)).toEqual(["txn-2"]);
+
+    const [deferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(deferred?.disposition).toBe("deferred");
+
+    // A second launch, still deferred: still found, still retried, still not
+    // applied — proving it was never hidden by the watermark in between.
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(second.replayed).toEqual([]);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+
+    // The missing state arrives. A third launch finds entry 1 again — by
+    // `disposition`, not by `seq` versus a watermark that is already past
+    // it — and applies it.
+    deferGate = false;
+    const third = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(third.replayed).toHaveLength(1);
+    expect(
+      rows()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["txn-1", "txn-2"]);
+
+    const [resolved] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
+    expect(resolved?.disposition).toBeNull();
+  });
+
+  it("holds with a deferral on both sides of an entry that applies in between", () => {
+    // seq 1 and 3 both defer while seq 2 applies normally, in one launch.
+    intentOnly(1, "txn-1", "defers");
+    intentOnly(2, "txn-2");
+    intentOnly(3, "txn-3", "defers");
+
+    const first = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(first.replayed).toHaveLength(1);
+    expect(readAppliedSeq(s.ledger.replica.db)).toBe(2);
+
+    const stillDeferred = s.ledger.outbox.db
+      .select({ seq: outbox.seq, disposition: outbox.disposition })
+      .from(outbox)
+      .where(eq(outbox.disposition, "deferred"))
+      .all();
+    expect(stillDeferred.map((e) => e.seq).sort()).toEqual([1, 3]);
+
+    deferGate = false;
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+    // Both resolve in the same launch, in seq order.
+    expect(second.replayed).toHaveLength(2);
+    expect(
+      rows()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["txn-1", "txn-2", "txn-3"]);
+
+    const remaining = s.ledger.outbox.db
+      .select({ disposition: outbox.disposition })
+      .from(outbox)
+      .where(eq(outbox.disposition, "deferred"))
+      .all();
+    expect(remaining).toEqual([]);
+  });
+});
+
+/**
+ * R4 H1 — a `LocalRefusal` met while an earlier entry is itself still
+ * `deferred` is not trustworthy: the refusal was decided against a replica
+ * that is known incomplete (the deferred entry ahead of it has not written
+ * its row yet), so it must not be treated as terminal.
+ */
+describe("a refusal caused by a deferral ahead of it is deferred, not refused (R4 H1)", () => {
+  it("marks the refusal deferred rather than terminal while the entry ahead of it is still outstanding", () => {
+    // 1 = create_transaction txn-A (deferred); 2 = an update that only
+    // succeeds once txn-A exists, so it refuses — as long as 1 is still
+    // outstanding, that refusal is untrustworthy.
+    const updateInput = z.object({ id: z.string() });
+    let deferFirst = true;
+    const createsA = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+      operation: "creates_a",
+      opVersion: 1,
+      input: CREATE_TRANSACTION,
+      mints: (input) => [input.id],
+      apply: (input, tx) => {
+        if (deferFirst) throw new LocalDeferral("no rate yet");
+        const [row] = tx
+          .insert(transactions)
+          .values({
+            id: id<"transactions">(input.id) as Id<"transactions">,
+            date: accountingDate("2026-03-12"),
+            type: "expense",
+            accountId: id<"accounts">("acc-1"),
+            amountOriginal: money.toMoney(input.amount_original),
+            currency: currencyCode("PLN"),
+            fxRate: money.pivotPerUnit("1.000000000000"),
+          })
+          .returning({ id: transactions.id })
+          .all();
+        if (!row) throw new Error("no row returned");
+        return row;
+      },
+    });
+    const updatesA = defineLocalExecutor<typeof updateInput, { id: string }, Tx>({
+      operation: "updates_a",
+      opVersion: 1,
+      input: updateInput,
+      mints: () => [],
+      apply: (input, tx) => {
+        const [row] = tx
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(eq(transactions.id, id<"transactions">(input.id) as Id<"transactions">))
+          .all();
+        // #116 review, H2 — dependency-shaped: "no such row" is exactly the
+        // refusal a still-outstanding entry ahead of it can resolve.
+        if (!row) throw new LocalRefusal(`no transaction ${input.id}`, { dependency: true });
+        return row;
+      },
+    });
+    const registryH1 = localRegistry<Tx>([createsA, updatesA]);
+
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values({
+        seq: 1,
+        operation: "creates_a",
+        opVersion: 1,
+        payload: { id: "txn-A", amount_original: "18.00000000" },
+        deps: [],
+        capturedTz: "Europe/Warsaw",
+        capturedOffsetMinutes: 60,
+      })
+      .run();
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values({
+        seq: 2,
+        operation: "updates_a",
+        opVersion: 1,
+        payload: { id: "txn-A" },
+        deps: [],
+        capturedTz: "Europe/Warsaw",
+        capturedOffsetMinutes: 60,
+      })
+      .run();
+
+    const first = recoverOnLaunch(s.ledger, registryH1);
+    expect(first.halted).toBeNull();
+    expect(first.replayed).toEqual([]);
+
+    const [entry1, entry2] = s.ledger.outbox.db.select().from(outbox).orderBy(outbox.seq).all();
+    expect(entry1?.disposition).toBe("deferred");
+    expect(entry1?.state).toBe("pending");
+    // The refusal is recorded as `deferred`, never `refused` — `refused`
+    // would strand it forever once entry 1 does resolve.
+    expect(entry2?.disposition).toBe("deferred");
+    expect(entry2?.state).toBe("pending");
+
+    // The rate arrives. Both resolve, in order, on the same launch: entry 1
+    // applies first and creates the row, entry 2's refusal no longer fires.
+    deferFirst = false;
+    const second = recoverOnLaunch(s.ledger, registryH1);
+    expect(second.replayed).toHaveLength(2);
+    expect(rows().map((r) => r.id)).toEqual(["txn-A"]);
+
+    const [resolved1, resolved2] = s.ledger.outbox.db
+      .select()
+      .from(outbox)
+      .orderBy(outbox.seq)
+      .all();
+    expect(resolved1?.disposition).toBeNull();
+    expect(resolved2?.disposition).toBeNull();
+  });
+
+  /**
+   * #116 review, H2 — the counterpart proven in the same shape as the test
+   * above: an earlier entry being `deferred` does not make *every* refusal
+   * behind it untrustworthy, only one whose own class could be caused by a
+   * missing dependency. A folded-name collision, a stale `version`, a
+   * currency mismatch — none of those has anything to do with whether some
+   * unrelated entry ahead of it has resolved, and must stay `refused` so it
+   * actually surfaces to the person who typed it (`architecture/08` H15),
+   * rather than being silently retried forever alongside an unrelated
+   * deferral.
+   */
+  it("does not defer a business-rule refusal just because an earlier entry is deferred", () => {
+    const deferFirst = true;
+    const createsA = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+      operation: "creates_a_2",
+      opVersion: 1,
+      input: CREATE_TRANSACTION,
+      mints: (input) => [input.id],
+      apply: () => {
+        if (deferFirst) throw new LocalDeferral("no rate yet");
+        throw new Error("unused in this test");
+      },
+    });
+    // Always refuses, on every attempt, regardless of what else is
+    // outstanding — a folded-name collision stands in for the shape.
+    const collidesInput = z.object({ id: z.string() });
+    const collidesB = defineLocalExecutor<typeof collidesInput, { id: string }, Tx>({
+      operation: "collides_b",
+      opVersion: 1,
+      input: collidesInput,
+      mints: () => [],
+      apply: () => {
+        throw new LocalRefusal("collides with existing counterparty — counterparties_name_uq");
+      },
+    });
+    const registryH2 = localRegistry<Tx>([createsA, collidesB]);
+
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values({
+        seq: 1,
+        operation: "creates_a_2",
+        opVersion: 1,
+        payload: { id: "txn-A", amount_original: "18.00000000" },
+        deps: [],
+        capturedTz: "Europe/Warsaw",
+        capturedOffsetMinutes: 60,
+      })
+      .run();
+    s.ledger.outbox.db
+      .insert(outbox)
+      .values({
+        seq: 2,
+        operation: "collides_b",
+        opVersion: 1,
+        payload: { id: "cp-B" },
+        deps: [],
+        capturedTz: "Europe/Warsaw",
+        capturedOffsetMinutes: 60,
+      })
+      .run();
+
+    const recovery = recoverOnLaunch(s.ledger, registryH2);
+    expect(recovery.halted).toBeNull();
+
+    const [entry1, entry2] = s.ledger.outbox.db.select().from(outbox).orderBy(outbox.seq).all();
+    // Entry 1 is genuinely deferred — untouched by this finding.
+    expect(entry1?.disposition).toBe("deferred");
+    // Entry 2 stays `refused`, not `deferred`, even though entry 1 ahead of
+    // it is outstanding — this is the bug this finding fixes.
+    expect(entry2?.disposition).toBe("refused");
+    expect(entry2?.state).toBe("blocked");
+    expect(entry2?.blockedKind).toBe("terminal");
+  });
+});
+
+/**
+ * #116 review, L3 — `session.ts`'s own `lastRecovery` comment already
+ * promised S30 "the deferred count" before `LaunchRecovery` had a field to
+ * hold it. Read fresh from the outbox on every return, not accumulated
+ * through the replay loop, so it counts an entry deferred by an earlier
+ * launch just as much as one this pass touched.
+ */
+describe("LaunchRecovery.deferred counts every outstanding deferral", () => {
+  it("counts more than one deferred entry, and drops to zero once both resolve", () => {
+    intentOnly(1, "txn-1", "defers");
+    intentOnly(2, "txn-2", "defers");
+
+    const first = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(first.deferred).toBe(2);
+
+    deferGate = false;
+    const second = recoverOnLaunch(s.ledger, registryWithFailures);
+    expect(second.deferred).toBe(0);
+    expect(
+      rows()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["txn-1", "txn-2"]);
+  });
+
+  it("still counts entries left deferred from an earlier launch, even when this one halts", () => {
+    intentOnly(1, "txn-1", "defers");
+    intentOnly(2, "txn-2", "an_operation_this_build_forgot");
+
+    const recovery = recoverOnLaunch(s.ledger, registryWithFailures);
+
+    expect(recovery.halted?.seq).toBe(2);
+    // Entry 1 is genuinely deferred, entry 2 is halted rather than
+    // deferred — the count names only the former.
+    expect(recovery.deferred).toBe(1);
   });
 });

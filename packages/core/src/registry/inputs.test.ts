@@ -1076,6 +1076,23 @@ describe("updateCounterpartyInput", () => {
 
     expect(parsed.patch.settlementCurrency).toBeNull();
   });
+
+  /**
+   * R2 L1 — `Object.keys` counts a key that is *present* with value
+   * `undefined`, which a caller can build by spreading an unset draft field
+   * (`{ ...maybeUnset }`). A patch that sets nothing this way must still
+   * refuse, the same as `{}`.
+   */
+  it("refuses a patch whose only key is present but undefined", () => {
+    const result = updateCounterpartyInput.safeParse({
+      id: COUNTERPARTY_ID,
+      version: 1,
+      patch: { name: undefined },
+    });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("patch");
+  });
 });
 
 describe("mergeCounterpartiesInput", () => {
@@ -1084,20 +1101,51 @@ describe("mergeCounterpartiesInput", () => {
       mergeId: MERGE_ID,
       winnerId: COUNTERPARTY_ID,
       loserId: COUNTERPARTY_ID,
+      movedTransactionIds: [],
     });
 
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("loserId");
   });
 
-  it("accepts two different counterparties", () => {
+  it("accepts two different counterparties, and the moved ids named", () => {
     const parsed = mergeCounterpartiesInput.parse({
+      mergeId: MERGE_ID,
+      winnerId: COUNTERPARTY_ID,
+      loserId: OTHER_COUNTERPARTY_ID,
+      movedTransactionIds: [SETTLE_TXN_ID],
+    });
+
+    expect(parsed.winnerId).toBe(COUNTERPARTY_ID);
+    expect(parsed.movedTransactionIds).toEqual([SETTLE_TXN_ID]);
+  });
+
+  // #116 review, M1 — `movedTransactionIds` is required, not optional.
+  // `operations.md` line 130 names the recorded ids as what makes unmerge
+  // exact rather than a re-derivation; an omitted field used to let the
+  // executor derive its own moved set instead, quietly, which is exactly
+  // the re-derivation that line rules out. Every caller now names the ids
+  // it moved, even when that is `[]`.
+  it("refuses when movedTransactionIds is missing", () => {
+    const result = mergeCounterpartiesInput.safeParse({
       mergeId: MERGE_ID,
       winnerId: COUNTERPARTY_ID,
       loserId: OTHER_COUNTERPARTY_ID,
     });
 
-    expect(parsed.winnerId).toBe(COUNTERPARTY_ID);
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("movedTransactionIds");
+  });
+
+  it("accepts an empty movedTransactionIds — nothing on the loser to move", () => {
+    const parsed = mergeCounterpartiesInput.parse({
+      mergeId: MERGE_ID,
+      winnerId: COUNTERPARTY_ID,
+      loserId: OTHER_COUNTERPARTY_ID,
+      movedTransactionIds: [],
+    });
+
+    expect(parsed.movedTransactionIds).toEqual([]);
   });
 });
 
@@ -1138,8 +1186,21 @@ describe("settleDebtInput", () => {
     date: "2026-08-04",
     amount: "50",
     currency: "EUR",
+    type: "expense" as const,
     discharges: { currency: "EUR", amount: "50" },
   };
+
+  // #116 review, M2 — `type` is required, not optional. R2 H4 carries it to
+  // prove the settlement's direction was verified against the live balance,
+  // not assumed; an omitted `type` used to skip that verification entirely
+  // for exactly the caller least likely to have re-derived it independently.
+  it("requires type — carried and verified against the live balance", () => {
+    const { type: _omit, ...withoutType } = base;
+    const result = settleDebtInput.safeParse(withoutType);
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("type");
+    expect(settleDebtInput.parse(base).type).toBe("expense");
+  });
 
   it("parses S14's worked example — no residual field exists", () => {
     const parsed = settleDebtInput.parse(base);

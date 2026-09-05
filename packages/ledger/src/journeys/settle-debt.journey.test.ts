@@ -2,7 +2,7 @@
  * Proves: flows/J07-lend-and-settle.md §3–§5, SPEC.md §6.5 (a row's currency
  * is its account's).
  *
- * Findings: R2 H3, R4 (settle scale mirror).
+ * Findings: R2 H3 — fixed by #116, R4 (settle scale mirror).
  *
  * **Scenario (5) from the brief is dropped.** `settleDebtInput`
  * (`packages/core/src/registry/inputs.ts`) carries no field for the balance
@@ -90,6 +90,9 @@ describe("settle_debt — J07 §3–§5, a settlement never implicitly clears a 
           date: accountingDate("2026-04-01"),
           amount: money.toMoney("100.00"),
           currency: PIVOT,
+          // cpA owes 100.00 PLN (the lend above) — settling it in full is
+          // money flowing back in.
+          type: "income",
           discharges: { currency: PIVOT, amount: money.toMoney("100.00") },
           note: "",
         },
@@ -111,7 +114,7 @@ describe("settle_debt — J07 §3–§5, a settlement never implicitly clears a 
     }
   });
 
-  it.fails("R2 H3 — settle_debt never checks that `currency` names the destination account's own currency (SPEC.md §6.5)", () => {
+  it("R2 H3 — settle_debt never checks that `currency` names the destination account's own currency (SPEC.md §6.5)", () => {
     const j = setup();
     try {
       lend(j);
@@ -124,6 +127,9 @@ describe("settle_debt — J07 §3–§5, a settlement never implicitly clears a 
             date: accountingDate("2026-04-01"),
             amount: money.toMoney("40.00"),
             currency: USD, // claims dollars landed in a PLN account
+            // cpA still owes 100.00 PLN — refused on the currency mismatch
+            // before this is ever read.
+            type: "income",
             discharges: { currency: PIVOT, amount: money.toMoney("40.00") },
             note: "",
           },
@@ -150,6 +156,8 @@ describe("settle_debt — J07 §3–§5, a settlement never implicitly clears a 
             date: accountingDate("2026-04-01"),
             amount: money.toMoney("100.005"), // three places into a 2dp currency
             currency: PIVOT,
+            // cpA still owes 100.00 PLN — money would flow back in.
+            type: "income",
             discharges: { currency: PIVOT, amount: money.toMoney("100.005") },
             note: "",
           },

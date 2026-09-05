@@ -21,7 +21,7 @@
 
 import { type MergeCategoriesInput, mergeCategoriesInput } from "@waltning/core/registry/inputs";
 import { eq, sql } from "drizzle-orm";
-import { defineLocalExecutor } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
@@ -51,18 +51,27 @@ export const mergeCategoriesExecutor = defineLocalExecutor<
 function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCategoriesResult {
   const [loser] = tx.select().from(categories).where(eq(categories.id, input.loserId)).all();
   const [winner] = tx.select().from(categories).where(eq(categories.id, input.winnerId)).all();
-  if (!loser) throw new Error(`merge_categories: no category ${input.loserId}`);
-  if (!winner) throw new Error(`merge_categories: no category ${input.winnerId}`);
-  if (loser.archived) throw new Error(`merge_categories: ${input.loserId} is already archived`);
-  if (winner.archived) throw new Error(`merge_categories: ${input.winnerId} is archived`);
+  if (!loser) {
+    throw new LocalRefusal(`merge_categories: no category ${input.loserId}`, {
+      dependency: true,
+    });
+  }
+  if (!winner) {
+    throw new LocalRefusal(`merge_categories: no category ${input.winnerId}`, {
+      dependency: true,
+    });
+  }
+  if (loser.archived)
+    throw new LocalRefusal(`merge_categories: ${input.loserId} is already archived`);
+  if (winner.archived) throw new LocalRefusal(`merge_categories: ${input.winnerId} is archived`);
   if (!loser.isLeaf || !winner.isLeaf) {
     // J12 §4 — "Survivor is a group: refused, only leaves hold transactions."
     // A group loser is refused for the identical reason: there is nothing on
     // it to move.
-    throw new Error("merge_categories: only leaves hold transactions — refused on a group");
+    throw new LocalRefusal("merge_categories: only leaves hold transactions — refused on a group");
   }
   if (loser.kind !== winner.kind) {
-    throw new Error(
+    throw new LocalRefusal(
       `merge_categories: ${input.loserId} is ${loser.kind}, ${input.winnerId} is ${winner.kind} — refused across kinds`,
     );
   }

@@ -17,13 +17,14 @@
  * disagree with the corpus for a different reason without the other file's
  * `it.fails` needing to move.
  *
- * Findings: R2 C1 (a Polish letter's case pair, and the full Polish-diacritic
- * pair, pass Postgres's `lower()` under this repo's pinned ICU collation
- * (`docker-compose.yml`'s `--locale-provider=icu --icu-locale=und-x-icu`,
- * not the host's locale) — see the per-pair comments below, this is narrower
- * than R2's phone-side claim), R2 H1-r3 (NFC/NFD), R2 M1-r4 (tab and NBSP are
- * not `btrim`'s default character), R2 C1-r4 (the `\v` escape, same cause as
- * R2 M1-r4).
+ * Findings: R2 C1 — fixed by #116 (a Polish letter's case pair, and the full
+ * Polish-diacritic pair, pass Postgres's `lower()` under this repo's pinned
+ * ICU collation (`docker-compose.yml`'s `--locale-provider=icu
+ * --icu-locale=und-x-icu`, not the host's locale) — see the per-pair
+ * comments below, this is narrower than R2's phone-side claim), R2 H1-r3 —
+ * fixed by #116 (NFC/NFD), R2 M1-r4 — fixed by #116 (tab and NBSP are not
+ * `btrim`'s default character), R2 C1-r4 — fixed by #116 (the `\v` escape,
+ * same cause as R2 M1-r4).
  */
 import { NAME_PAIRS } from "@waltning/core/capture/names-corpus";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -74,11 +75,12 @@ const POSTGRES_FINDING: Partial<Record<number, string>> = {
   // pair correctly (a pure case change, no diacritic to strip), so Postgres
   // refuses it and agrees with the corpus. Only the phone disagrees on this
   // one — see R2 C1 in the ledger half of this pair.
-  1: "R2 H1-r3", // NFC/NFD
-  4: "R2 M1-r4", // tab
-  5: "R2 M1-r4", // NBSP
-  6: "R2 C1-r4", // \v
-  10: "R2 C1", // Zażółć/ZAZOLC — lower() folds case, never strips a diacritic
+  //
+  // Every other index Postgres once disagreed on — R2 H1-r3 (NFC/NFD),
+  // R2 M1-r4 (tab, NBSP), R2 C1-r4 (\v), R2 C1 (Zażółć/ZAZOLC) — is fixed by
+  // #116: `FOLD_SQL` normalises to NFC before folding, `counterparties_name_trimmed`
+  // refuses an untrimmed name outright (`JS_TRIM_CHARSET_SQL` covers tab, NBSP
+  // and `\x0B` alike), and `translate()` folds the nine Polish diacritics.
 };
 
 describe("counterparties_name_uq — Postgres's half of the fold-guard parity", () => {

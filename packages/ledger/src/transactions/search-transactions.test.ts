@@ -168,7 +168,7 @@ describe("searchTransactions — structural filters, alone and combined", () => 
     const nina = id<"counterparties">("00000000-0000-4000-8000-0000000000d1");
     stores.ledger.replica.db
       .insert(counterparties)
-      .values([{ id: nina, name: "Nina", kind: "person" }])
+      .values([{ id: nina, name: "Nina", nameFolded: "nina", kind: "person" }])
       .run();
     insertExpense({
       id: "00000000-0000-4000-8000-000000000004",
@@ -187,7 +187,7 @@ describe("searchTransactions — structural filters, alone and combined", () => 
     const nina = id<"counterparties">("00000000-0000-4000-8000-0000000000d2");
     stores.ledger.replica.db
       .insert(counterparties)
-      .values([{ id: nina, name: "Nina", kind: "person" }])
+      .values([{ id: nina, name: "Nina", nameFolded: "nina", kind: "person" }])
       .run();
     insertExpense({
       id: "00000000-0000-4000-8000-000000000005",

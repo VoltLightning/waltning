@@ -11,7 +11,7 @@ import { currencyCode } from "@waltning/core/money";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAccountExecutor } from "../accounts/create-account.executor.ts";
-import { defineLocalExecutor, localRegistry } from "../executor.ts";
+import { defineLocalExecutor, LocalRefusal, localRegistry } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema } from "../schema-map.ts";
 import { categorizeBatchExecutor } from "../transactions/categorize-batch.executor.ts";
@@ -249,8 +249,8 @@ describe("delete_transaction", () => {
 describe("a crash between the two stores", () => {
   it("leaves the outbox entry pending and the row unpatched — write.test.ts's technique, per op", () => {
     // Mirrors write.test.ts's `refuses` executor: same operation name and
-    // input, an `apply` that always throws, standing in for a replica commit
-    // that fails after the outbox commit already landed.
+    // input, an `apply` that always throws a `LocalRefusal`, standing in for
+    // a replica commit that fails after the outbox commit already landed.
     type Tx = LocalTx<unknown, typeof ledgerSchema>;
     const failingUpdate = defineLocalExecutor<typeof updateTransactionExecutor.input, never, Tx>({
       operation: "update_transaction",
@@ -258,7 +258,7 @@ describe("a crash between the two stores", () => {
       input: updateTransactionExecutor.input,
       mints: () => [],
       apply: () => {
-        throw new Error("the replica half failed");
+        throw new LocalRefusal("the replica half failed");
       },
     });
     const registry = localRegistry([failingUpdate]);
@@ -281,7 +281,11 @@ describe("a crash between the two stores", () => {
       "create_transaction",
       "update_transaction",
     ]);
-    expect(entries[2]?.state).toBe("pending");
+    // R2 H6 — blocked(terminal), not pending: a refusal must never leave a
+    // drainable entry that only resends the same refusal forever.
+    expect(entries[2]?.state).toBe("blocked");
+    expect(entries[2]?.blockedKind).toBe("terminal");
+    expect(entries[2]?.blockedReason).toBe("the replica half failed");
     expect(readTxn()?.payee).toBe(before?.payee);
 
     // The entry survives a relaunch, replayable — nothing was lost, only
