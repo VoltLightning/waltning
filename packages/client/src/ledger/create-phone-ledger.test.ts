@@ -684,14 +684,24 @@ describe("phone ledger controller", () => {
    * counterparty and role all reach the write, not only amount and account.
    */
   it("carries income, category, date, note, business and counterparty through to the write", () => {
-    const { controller, createTransaction } = harness();
+    // H1a — the category has to be one the snapshot actually offers now: an
+    // id absent from it is archived or gone, and the controller refuses it
+    // rather than writing a row no picker could display.
+    const incomeCategory: PhoneCategory = {
+      id: id<"categories">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+      name: "Freelance",
+      kind: "income",
+    };
+    const { controller, createTransaction } = harness(undefined, {
+      categories: [incomeCategory],
+    });
     const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
 
     controller.createTransaction({
       type: "income",
       amount: "25",
       accountId,
-      categoryId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      categoryId: incomeCategory.id,
       date: "2026-07-01",
       note: "Freelance invoice",
       isBusiness: true,
@@ -862,6 +872,41 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * L-b — a date that names no real day is refused here, and the refusal
+   * arrives with a catalogue key rather than only Zod's English literal.
+   *
+   * The command bar's grammar refuses `2026-02-31` before it ever gets this
+   * far (`capture/grammar.ts`'s `no_date`), which is where it *should* be
+   * caught; this is the layer beneath, reached by any caller that names a
+   * date directly, and it must refuse rather than write a day that is not on
+   * a calendar.
+   */
+  it("refuses a calendar-invalid date, in a language the screen can render", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      date: "2026-02-31",
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "date", message: expect.any(String), messageKey: "transactions.badDate" },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("a real leap day is not refused — the check is the calendar, not the shape twice", () => {
+    const { controller } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      date: "2024-02-29",
+    });
+    expect(result).not.toHaveProperty("fieldErrors");
+  });
+
+  /**
    * H2 — `createTransactionInput` cannot know the account's currency, only
    * the controller has both in view. PLN holds 2 decimal places here; a
    * third digit is refused on `amountOriginal` before the write, never
@@ -917,6 +962,31 @@ describe("phone ledger controller", () => {
         message: expect.stringContaining("income"),
         messageKey: "transactions.categoryKindMismatch",
         params: { type: "income" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * H1a — the case that reached a saved row: D2's payee memory proposed a
+   * leaf a payee last sat on, the category had since been archived, and
+   * `snapshot.categories` (which excludes archived rows) had no match — so
+   * the kind check above simply found nothing to compare and let it through.
+   * Absent is now refused the same as wrong-kind, since neither is a category
+   * any picker would offer.
+   */
+  it("refuses a categoryId that is not among the categories offered (H1a — archived, or gone)", () => {
+    const { controller, createTransaction } = harness(undefined, { categories: [] });
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId),
+      categoryId: id<"categories">("77777777-7777-4777-8777-777777777777"),
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "categoryId",
+        message: expect.stringContaining("no longer available"),
+        messageKey: "transactions.categoryUnavailable",
       },
     ]);
     expect(createTransaction).not.toHaveBeenCalled();

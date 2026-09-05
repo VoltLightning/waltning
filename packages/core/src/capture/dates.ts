@@ -8,7 +8,7 @@
  * on a clock, so it carries none of `todayIn`'s hazard.
  */
 
-import { type AccountingDate, accountingDate, addDays } from "../date.ts";
+import { type AccountingDate, accountingDate, addDays, isRealCalendarDate } from "../date.ts";
 import { fold } from "./names.ts";
 
 export type DateMatch = { date: AccountingDate; span: [number, number] };
@@ -34,7 +34,9 @@ const WEEKDAYS: readonly { word: string; index: number }[] = [
   { word: "sobota", index: 6 },
 ];
 
-const ISO_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/;
+/** The same shape, global — `isoDateSpans` scans, `ISO_DATE` claims the first real one. */
+const ISO_DATE_ALL = /\b\d{4}-\d{2}-\d{2}\b/g;
 const DAY_MONTH = /\b(\d{1,2})\.(\d{1,2})\b/;
 
 /** The weekday a bare date falls on — pure calendar math on its own Y/M/D, never a clock read. */
@@ -61,16 +63,17 @@ export function findDate(
 ): DateMatch | null {
   const iso = ISO_DATE.exec(text);
   if (iso) {
-    const [full, y, m, d] = iso;
-    if (full !== undefined && y !== undefined && m !== undefined && d !== undefined) {
-      try {
-        const date = accountingDate(`${y}-${m}-${d}`);
-        return { date, span: [iso.index, iso.index + full.length] };
-      } catch {
-        // Not a real calendar date (month 13, day 32, …) — fall through to
-        // the other tokens rather than throwing on a string that merely
-        // looks like a date.
-      }
+    const [full] = iso;
+    // L-b — the shape is not enough. `accountingDate` checks only that
+    // (`date.ts`'s own comment says why), so `2026-02-31` used to bind here
+    // as a date and be refused on save by `zod.ts#zAccountingDate`, which
+    // does run the calendar. This asks the *same* question that schema asks,
+    // through the same function, so a date this grammar reads is a date the
+    // contract edge will take. A shaped token that names no real day falls
+    // through to the tokens below rather than binding — `grammar.ts` refuses
+    // the line as `no_date` instead of quietly dating it today.
+    if (full !== undefined && isRealCalendarDate(full)) {
+      return { date: accountingDate(full), span: [iso.index, iso.index + full.length] };
     }
   }
 
@@ -86,10 +89,15 @@ export function findDate(
         // "Current year; if in the future, last year" (Task 3). ISO strings
         // compare lexicographically the same as calendar order.
         const candidate = thisYear > today ? `${year - 1}-${pad2(month)}-${pad2(day)}` : thisYear;
-        return {
-          date: accountingDate(candidate),
-          span: [dayMonth.index, dayMonth.index + full.length],
-        };
+        // L-b, on this reader too: `31.04` passes the 1–31 range above and is
+        // not a day. The same `isRealCalendarDate` the ISO branch asks, so
+        // neither branch can bind a date the contract edge would refuse.
+        if (isRealCalendarDate(candidate)) {
+          return {
+            date: accountingDate(candidate),
+            span: [dayMonth.index, dayMonth.index + full.length],
+          };
+        }
       }
     }
   }
@@ -116,4 +124,43 @@ export function findDate(
   }
 
   return null;
+}
+
+/**
+ * L2 — every `YYYY-MM-DD`-shaped token in the text, with the one fact
+ * `findDate` above decides by: whether it names a real calendar day.
+ *
+ * **Why the shape, and not only the real ones.** `findAmount` runs before this
+ * module does (`grammar.ts` resolves the amount first), and a leading ISO date
+ * offers it a four-digit number: `2026-08-10 48.90 cash coffee` bound `2026` as
+ * the amount, the date span then overlapped a claim already made, and the line
+ * silently landed on *today* for `2026 PLN`. The digits inside a date-shaped
+ * token are never the money on the line — that holds for `2026-02-31` exactly
+ * as it holds for `2026-08-10`, so the amount scanner skips both and the
+ * unreal one is refused as a date rather than mined for a year.
+ *
+ * **`real` is `findDate`'s own answer, not a second one.** The two must never
+ * disagree about which token is a date: a span `findAmount` skipped and
+ * `findDate` then refused would lose the line its amount for nothing, so the
+ * one that is skipped-and-refused becomes `grammar.ts`'s `no_date` instead of
+ * a silent fall back to today.
+ */
+export type IsoDateSpan = {
+  span: [number, number];
+  /** `isRealCalendarDate` — the check `zod.ts#zAccountingDate` runs at the contract edge. */
+  real: boolean;
+};
+
+export function isoDateSpans(text: string): readonly IsoDateSpan[] {
+  const spans: IsoDateSpan[] = [];
+  ISO_DATE_ALL.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: the idiomatic `exec` loop.
+  while ((match = ISO_DATE_ALL.exec(text))) {
+    spans.push({
+      span: [match.index, match.index + match[0].length],
+      real: isRealCalendarDate(match[0]),
+    });
+  }
+  return spans;
 }

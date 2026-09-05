@@ -1432,7 +1432,7 @@ describe("a constraint declared in the schema is present on the device", () => {
    * side of that comparison, and the fresh-database tests above are where its
    * presence is asserted instead.
    */
-  function objects(db: Database.Database, type: "index" | "table"): string[] {
+  function objects(db: Database.Database, type: "index" | "table" | "trigger"): string[] {
     return db
       .prepare("select name from sqlite_master where type = ? and name not like 'sqlite_%'")
       .all(type)
@@ -1697,6 +1697,45 @@ describe("a constraint declared in the schema is present on the device", () => {
       inspect(path, (db) => db.prepare("select count(*) as n from transaction_lines").get()),
       "and so did the child row `ON DELETE CASCADE` could otherwise have taken with it",
     ).toEqual({ n: 1 });
+  });
+
+  /**
+   * **H1a's four triggers, counted after the *whole* chain has run — because
+   * a rebuild deletes a trigger and says nothing.**
+   *
+   * `DROP TABLE` takes every trigger defined on that table with it, so a
+   * copy-rename-drop step landing *after* a `CREATE TRIGGER` silently
+   * un-enforces it: no error, no missing table, no failed migration, just a
+   * guarantee that has stopped firing. That is exactly what happened once —
+   * the pair on `transactions` was written into `0009_schema` and
+   * `0010_schema`'s brand rebuild removed both, while the `transaction_lines`
+   * pair (that table is not rebuilt) survived and made the loss look
+   * partial rather than systematic. All four live at the end of the head
+   * migration now.
+   *
+   * The other H1a tests (`transaction-ops.test.ts`) provoke the refusal,
+   * which is the better assertion — but each of them opens a store on a
+   * chain that ends where the chain ends today, so an eighteenth migration
+   * rebuilding `transactions` would break them in a way that reads as "the
+   * new migration is wrong" rather than "the trigger is gone". This one
+   * names the mechanism: a census, off `sqlite_master`, of a database that
+   * has run every step. `toEqual` rather than a `toContain` per name, so a
+   * trigger that is added without being counted here is red too.
+   */
+  it("keeps every archived-category trigger alive to the end of the chain", () => {
+    const ledger = openAt("triggers");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    ledger.close();
+
+    expect(
+      inspect(join(dir, "triggers-replica.db"), (db) => objects(db, "trigger")),
+      "a later rebuild of either table must re-create these below itself",
+    ).toEqual([
+      "transaction_lines_category_not_archived_insert",
+      "transaction_lines_category_not_archived_update",
+      "transactions_category_not_archived_insert",
+      "transactions_category_not_archived_update",
+    ]);
   });
 });
 

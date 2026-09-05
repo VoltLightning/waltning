@@ -501,6 +501,48 @@ export const REPLICA_STEPS: readonly {
       `INSERT INTO \`__new_recurring_transactions\`("id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version") SELECT "id", "type", "account_id", "to_account_id", "category_id", "counterparty_id", "amount_original", "currency", "payee", "note", "rrule", "next_date", "end_date", "enabled", "external_id", "created_at", "updated_at", "version" FROM \`recurring_transactions\``,
       `DROP TABLE \`recurring_transactions\``,
       `ALTER TABLE \`__new_recurring_transactions\` RENAME TO \`recurring_transactions\``,
+      `CREATE TRIGGER \`transactions_category_not_archived_insert\`
+BEFORE INSERT ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`archived\` = 1
+	);
+END`,
+      `CREATE TRIGGER \`transactions_category_not_archived_update\`
+BEFORE UPDATE ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+	AND (OLD.\`category_id\` IS NULL OR OLD.\`category_id\` <> NEW.\`category_id\`)
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`archived\` = 1
+	);
+END`,
+      `CREATE TRIGGER \`transaction_lines_category_not_archived_insert\`
+BEFORE INSERT ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`archived\` = 1
+	);
+END`,
+      `CREATE TRIGGER \`transaction_lines_category_not_archived_update\`
+BEFORE UPDATE ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+	AND (OLD.\`category_id\` IS NULL OR OLD.\`category_id\` <> NEW.\`category_id\`)
+BEGIN
+	SELECT RAISE(ABORT, 'category is archived — an archived category is not assignable (H1a)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`archived\` = 1
+	);
+END`,
     ],
   },
 ];

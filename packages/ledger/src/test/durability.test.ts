@@ -312,7 +312,11 @@ function plusDays(base: string, days: number): AccountingDate {
 }
 
 describe("a replica offline for months", () => {
-  it("keeps 2 000 transactions across ~14 months through a reopen — nothing dropped by date", () => {
+  // 20 s alone on this machine; four parallel worktrees running their gates push
+  // it past vitest's 30 s default. The budget is the test's own, not the suite's.
+  it("keeps 2 000 transactions across ~14 months through a reopen — nothing dropped by date", {
+    timeout: 120_000,
+  }, () => {
     const s = scratchStores();
     try {
       s.ledger.replica.db

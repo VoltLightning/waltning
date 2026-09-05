@@ -17,7 +17,7 @@
  */
 
 import { z } from "zod";
-import { type AccountingDate, accountingDate } from "./date.ts";
+import { type AccountingDate, accountingDate, isRealCalendarDate } from "./date.ts";
 import type { Id, IdTable } from "./id.ts";
 import {
   type CurrencyCode,
@@ -127,25 +127,6 @@ export const zUnitsPerPivot = z
   .transform((v): UnitsPerPivot => v as UnitsPerPivot);
 
 /**
- * A real Gregorian day, not merely the `YYYY-MM-DD` shape — `Date.UTC` rolls
- * `2026-02-30` forward into March rather than refusing it, so a value that
- * survives the round trip unchanged was a real day; one that does not was
- * never on a calendar. No clock is read — every number here comes from the
- * string itself. The same check `packages/ui/src/primitives/date-field.tsx`'s
- * `isRealCalendarDate` already runs at the UI's own edit boundary; M3 gives
- * every *contract* boundary the same guarantee, not only the one screen.
- */
-function isRealCalendarDate(value: string): boolean {
-  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
-  const rolled = new Date(Date.UTC(year, month - 1, day));
-  return (
-    rolled.getUTCFullYear() === year &&
-    rolled.getUTCMonth() === month - 1 &&
-    rolled.getUTCDate() === day
-  );
-}
-
-/**
  * A bare `YYYY-MM-DD`, on a real calendar.
  *
  * **M3 — a calendar check, not shape alone.** The regex alone accepts
@@ -153,7 +134,10 @@ function isRealCalendarDate(value: string): boolean {
  * this schema — the edge every registry operation's date field parses
  * through — is where month 1–12, the day within that month, and leap years
  * are actually checked. `date.ts`'s own comment states why the line sits
- * here and not there.
+ * here and not there, and `isRealCalendarDate` lives there too rather than
+ * privately here: the capture grammar (`capture/dates.ts`) has to refuse
+ * exactly the days this schema refuses, or a typed line binds a date that is
+ * then rejected on save.
  */
 export const zAccountingDate = z
   .string()

@@ -36,7 +36,7 @@ import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
 
-const { accounts, currencies, transactions } = schema;
+const { accounts, categories, currencies, transactions } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalTransactionRow = typeof transactions.$inferSelect;
@@ -91,6 +91,7 @@ export function insertTransaction(
   tx: ReplicaTx,
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
+  assertCategoryNotArchived(tx, input.categoryId, "create_transaction: category_id");
   // R4 re-review — restored. L10 had dropped this call on the theory that
   // `create_transaction`'s own `validate` already ran it, pre-outbox, on this
   // exact `input`, so a second call here would check nothing new — true only
@@ -211,6 +212,59 @@ function assertBusinessNotShared(input: CreateTransactionInput, tx: ReplicaTx): 
     throw new LocalRefusal(
       "create_transaction: a business transaction cannot move into a shared account (SPEC.md §6.7)",
     );
+  }
+}
+
+/**
+ * H1a — **no row in this replica may newly point at an archived category.**
+ *
+ * `transactions.category_id` was only ever half of that: `transaction_lines`
+ * carries its own `category_id` (§10.3's split), and a split line is exactly
+ * where a category nobody can see any more lands unnoticed — the parent row
+ * shows a category the reader recognises while a line underneath it carries a
+ * retired leaf.
+ *
+ * **The good error, between two guarantees.** Below it the replica's own four
+ * `*_category_not_archived_insert` / `_update` triggers (the head migration,
+ * two per table) and, on the server, `assert_category_not_archived`
+ * (`0001_database_objects.sql`, SQLSTATE `WA019`, likewise on both tables)
+ * refuse the same write — all broken once, in `transaction-ops.test.ts` and
+ * `pg-errors.test.ts`. A trigger's message names no operation and no field;
+ * `where` is how this one does, which is what an executor is for.
+ *
+ * **Exported, and called from every executor that can move a `category_id`**:
+ * `update_transaction`'s patch, `set_transaction_lines`' every line, and
+ * `categorize_batch`'s bulk `UPDATE` — the last one before the write rather
+ * than after it, because that statement touches N rows at once and a refusal
+ * arriving mid-batch would name no row in particular.
+ *
+ * A client-side refusal exists a layer up as well
+ * (`create-phone-ledger.ts`'s own `categoryId === undefined` refusal, H1a),
+ * which is the one a person actually reads — the same three-deep layering
+ * `assertTransactionScale` has against `QuickAddForm`'s own amount check.
+ */
+export function assertCategoryNotArchived(
+  tx: ReplicaTx,
+  // `| null` past `CreateTransactionInput["categoryId"]`'s own type: only
+  // `update_transaction`'s patch can ever explicitly clear a category, and
+  // clearing one is never a category to check.
+  categoryId: CreateTransactionInput["categoryId"] | null,
+  /** The operation and the field this call is checking — `"set_transaction_lines: transaction_lines[l-1].category_id"`. */
+  where: string,
+): void {
+  if (categoryId === null || categoryId === undefined) return;
+
+  const [row] = tx
+    .select({ archived: categories.archived })
+    .from(categories)
+    .where(eq(categories.id, categoryId))
+    .limit(1)
+    .all();
+  // The FK to `categories` already refuses an unknown id; a missing row here
+  // means that check has not run yet in this same statement (`assert_category_
+  // kind_matches_type`'s own Postgres comment makes the identical call).
+  if (row?.archived) {
+    throw new LocalRefusal(`${where}: category ${categoryId} is archived (H1a)`);
   }
 }
 

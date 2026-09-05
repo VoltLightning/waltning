@@ -116,10 +116,12 @@ export const pl: Messages = {
     category: "Kategoria",
     categorySuggested: "Sugerowana: {{name}}",
     categoryKindMismatch: "Ta kategoria nie pasuje do: {{type}}.",
+    categoryUnavailable: "Ta kategoria nie jest już dostępna.",
     noCategory: "Brak kategorii",
     more: "Więcej",
     date: "Data",
     invalidDate: "Nieprawidłowa data (RRRR-MM-DD).",
+    badDate: "To nie jest prawdziwy dzień kalendarzowy.",
     business: "Firmowe",
     counterparty: "Kontrahent",
     noCounterparty: "Brak kontrahenta",
@@ -189,6 +191,21 @@ export const pl: Messages = {
     sameAccountRefused: "Przelew wymaga dwóch różnych kont.",
 
     newCounterparty: "+ Nowa osoba lub firma",
+
+    // L2 — "cash" (unchanged), not "gotówka": nothing populates an account's
+    // Polish alias today (`en.ts`'s own comment on this same key), and a
+    // literal account named "Cash" resolves in any locale the same way the
+    // English example does.
+    commandBarPlaceholder: "48,90 cash kawa wczoraj",
+    commandBarLabel: "Dodaj transakcję",
+    commandBarCategoryPrompt: "Kategoria?",
+    commandBarNoAmount: "Nie znaleziono kwoty — zacznij od liczby.",
+    commandBarNoAccount: "Nie dopasowano konta — podaj nazwę, aby kontynuować.",
+    commandBarNoDate: "To nie jest prawdziwy dzień — sprawdź miesiąc i dzień.",
+    commandBarCurrencyMismatch: "Ta waluta nie pasuje do wskazanego konta.",
+    commandBarTooMuchUnmatched: "Zbyt wiele niezrozumiałych słów — spróbuj krótszej linii.",
+    commandBarHint: "Spacje grupują tysiące; przecinek lub kropka to znak dziesiętny.",
+    commandBarChipsLabel: "Rozpoznane pola",
   },
   counterparties: {
     settlingWith: "Rozliczenie z {{name}}",

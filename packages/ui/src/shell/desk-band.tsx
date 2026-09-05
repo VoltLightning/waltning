@@ -50,7 +50,7 @@ export type DeskBandProps = {
   brand: React.ReactNode;
   /** `DeskNavItem`s, in route order. */
   nav: React.ReactNode;
-  /** `N`'s composer slot — a disabled placeholder until `DESK2`. Kept when collapsed. */
+  /** `N`'s composer slot — `<CommandBar>` (`transactions/command-bar.tsx`) once an account exists to capture against, `CommandBarPlaceholder` below otherwise (`tabs-shell.tsx`'s own `DeskCommandBar`, mirroring `FloatingAdd`'s `disabled={!hasAccounts}` on the phone). Kept when collapsed. */
   commandBar: React.ReactNode;
   /** The ledger's leading currency — `CurrencyChip`, or nothing to show. Dropped when collapsed. */
   currency: React.ReactNode;
@@ -192,10 +192,13 @@ export function CurrencyChip({ currency }: CurrencyChipProps) {
 }
 
 /**
- * `N`'s composer, before `DESK2` builds it. A disabled look — muted text,
- * `shellNavActiveFill`'s own border — rather than `TextField`: that component
- * always draws a label above the input, which a single-line slot in a
- * horizontal band has no row for, and this one accepts no text yet regardless.
+ * `N`'s composer, while nothing is capturable — `tabs-shell.tsx`'s own
+ * `DeskCommandBar` renders this instead of `<CommandBar>` until an account
+ * exists, the same reason `FloatingAdd` disables on the phone. A disabled
+ * look — muted text, `shellNavActiveFill`'s own border — rather than
+ * `TextField`: that component always draws a label above the input, which a
+ * single-line slot in a horizontal band has no row for, and this one accepts
+ * no text regardless.
  */
 export function CommandBarPlaceholder() {
   const t = useT();

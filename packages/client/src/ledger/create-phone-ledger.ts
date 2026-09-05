@@ -2958,12 +2958,43 @@ export function createPhoneLedger(
          * `transactions_category_kind_matches_type`
          * (`0011_transaction_scale_and_category_kind.sql`), broken once
          * there to prove it fires even if this refusal is ever bypassed.
+         *
+         * H1a — `category === undefined` used to fall through with no
+         * refusal at all: `snapshot.categories` (`listCategories`) already
+         * excludes archived rows, so an id that D2 proposed off *payee
+         * history* (`listPayeeHistory`, which does not exclude them) found
+         * no match here and the row saved a category the picker would never
+         * offer, silently. Absent is refused the same as wrong-kind — either
+         * way it is not a category this draft may carry — mirrored by the
+         * Postgres trigger `assert_category_not_archived`
+         * (`0001_database_objects.sql`, `WA019`), the replica's own
+         * `transactions_category_not_archived_*` triggers, and
+         * `assertCategoryNotArchived`
+         * (`transactions/create-transaction.executor.ts`), broken once each
+         * to prove they fire even if this refusal is ever bypassed.
          */
         if (draft.categoryId !== null && (draft.type === "income" || draft.type === "expense")) {
           const category = snapshot.categories.find(
             (candidate) => candidate.id === draft.categoryId,
           );
-          if (category !== undefined && category.kind !== draft.type) {
+          if (category === undefined) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.categoryUnavailable")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "categoryId",
+                  message: "This category is no longer available",
+                  messageKey: "transactions.categoryUnavailable",
+                },
+              ],
+            };
+          }
+          if (category.kind !== draft.type) {
             emitClientDiagnostic(diagnostics, {
               scope: "client_action",
               action: "create_transaction",

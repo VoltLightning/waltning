@@ -21,8 +21,13 @@
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
+import { useCommandBar } from "@waltning/client/transactions/use-command-bar";
+import { mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { type CaptureContext, parseCapture } from "@waltning/core/capture/grammar";
 import { currencyCode } from "@waltning/core/money";
 import { CurrencyChip } from "@waltning/ui/fx/currency-chip";
 import { useT } from "@waltning/ui/i18n/provider";
@@ -36,10 +41,15 @@ import { FloatingAdd } from "@waltning/ui/shell/floating-add";
 import { TabBar, type TabBarItem } from "@waltning/ui/shell/tab-bar";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { CommandBar, type CommandBarHandle } from "@waltning/ui/transactions/command-bar";
+import {
+  KNOWN_PATHS,
+  resolveFieldErrorMessage,
+} from "@waltning/ui/transactions/field-error-messages";
 import { router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, Text, View } from "react-native";
-import { displayCurrency, floatPosition } from "./platform";
+import { displayCurrency, floatPosition, lastCapture, subscribeCommandBarHotkey } from "./platform";
 import { useTabBarItems } from "./use-tab-bar-items";
 
 function handleAdd() {
@@ -196,6 +206,117 @@ function DeskScope() {
   return <SegmentControl segments={segments} value={scope} onChange={setScope} tone="shell" />;
 }
 
+/**
+ * `N`'s own composer — `DeskBand`'s command-bar slot, `screens/S05-quick-add.
+ * md` §3's "Web — ≥1024px". `N` focuses it from anywhere
+ * (`subscribeCommandBarHotkey`, `platform.ts`'s own seam), D1's grammar
+ * (`parseCapture`) resolves the line live, D2 proposes the category, and
+ * Enter saves through the same `createTransaction` the phone's own quick-add
+ * draft calls.
+ *
+ * **The one place this arc builds `CaptureContext`.** `useCommandBar`
+ * (`packages/client`) takes `parse` as a parameter precisely so this — the
+ * component that already has the ledger's accounts, categories, today's date
+ * and the four-hour last-used window, the same shapes `DeskCurrency`/
+ * `DeskHero` above already read off this same snapshot — is the one to close
+ * `parseCapture` over them.
+ *
+ * **`CommandBarPlaceholder` while nothing is capturable** — the same reason
+ * `FloatingAdd` disables on the phone (`FloatingAddLayer`'s own
+ * `disabled={!hasAccounts}`, above). `<CommandBar>` fills the slot the moment
+ * an account exists.
+ *
+ * **Defined here, not its own file.** `apps hold only what names a
+ * platform` (`tests/architecture.test.ts`) reads a file's own source for a
+ * platform import — `expo-router`'s `router`, `react-native`'s primitives —
+ * and a standalone wiring file importing only `packages/client`/
+ * `packages/ui` and a sibling `./platform` would have named none of its own,
+ * failing that test outright. `DeskCurrency`/`DeskHero`/`DeskScope` already
+ * take the same shape for the same reason.
+ */
+function DeskCommandBar() {
+  const t = useT();
+  const ledger = useLedgerController();
+  const snapshot = usePhoneLedger(ledger);
+  // L7 — read every render, deliberately: `quick-add-screen.tsx`'s own
+  // `today` read takes the identical shape, for the identical reason — a
+  // date that goes stale across midnight while the tab stays open is a worse
+  // defect than a cheap `Intl` call this component already re-renders on
+  // every keystroke of the bar itself. `deviceRuntime` (`packages/client`) is
+  // the isolated seam `Date`/`Intl` never appear outside of; nothing here
+  // reads either directly.
+  const capture = deviceRuntime().capture();
+  const today = capture.date;
+  const lastUsedAccountId = useLastUsedAccount(
+    lastCapture,
+    capture.at.getTime(),
+    snapshot.accounts,
+  );
+
+  // Fixed to expense (`use-command-bar.ts`'s own scope decision) — the
+  // grammar never matches an income-only category against this bar's line.
+  const expenseCategories = useMemo(
+    () => snapshot.categories.filter((category) => category.kind === "expense"),
+    [snapshot.categories],
+  );
+
+  const context: CaptureContext = useMemo(
+    () => ({
+      accounts: snapshot.accounts,
+      categories: expenseCategories,
+      defaultAccountId: lastUsedAccountId,
+      today,
+      // Both languages' words already resolve unconditionally (`dates.ts`'s
+      // own comment) — this is the seam a future locale-specific rule would
+      // need, not a live switch today.
+      locale: "en",
+    }),
+    [snapshot.accounts, expenseCategories, lastUsedAccountId, today],
+  );
+  const parse = useCallback((text: string) => parseCapture(text, context), [context]);
+
+  const commandBar = useCommandBar(ledger, parse, expenseCategories);
+
+  const fieldErrors = useMemo(() => {
+    if (commandBar.fieldErrors === undefined) return undefined;
+    const resolved = commandBar.fieldErrors.map((error) => ({
+      path: error.path,
+      message: resolveFieldErrorMessage(t, error),
+    }));
+    return mapFieldErrors(resolved, KNOWN_PATHS);
+  }, [commandBar.fieldErrors, t]);
+
+  const commandBarRef = useRef<CommandBarHandle>(null);
+  useEffect(() => subscribeCommandBarHotkey(() => commandBarRef.current?.focus()), []);
+
+  // L6 — `capturable`, not merely "exists": an account whose currency has no
+  // rate yet (`needsRate`) cannot take a capture either, and the placeholder
+  // is the honest state for that ledger too — showing the real bar would
+  // only earn a `needsRate` refusal the instant Enter is pressed.
+  const hasCapturableAccount = snapshot.accounts.some((account) => account.capturable);
+  if (!hasCapturableAccount) return <CommandBarPlaceholder />;
+
+  return (
+    <CommandBar
+      ref={commandBarRef}
+      value={commandBar.text}
+      onChangeText={commandBar.setText}
+      accounts={snapshot.accounts}
+      categories={expenseCategories}
+      today={today}
+      parse={commandBar.parse}
+      {...(commandBar.categoryProposal === undefined
+        ? {}
+        : { categoryProposal: commandBar.categoryProposal })}
+      categoryAutoFilled={commandBar.categoryAutoFilled}
+      onUndoCategory={commandBar.undoCategory}
+      {...(fieldErrors === undefined ? {} : { fieldErrors })}
+      onSubmit={commandBar.submit}
+      onDiscard={commandBar.discard}
+    />
+  );
+}
+
 function DeskLayer({ slot }: { slot: React.ReactNode }) {
   const styles = useStyles();
   const { items, onSelect } = useTabBarItems();
@@ -207,7 +328,7 @@ function DeskLayer({ slot }: { slot: React.ReactNode }) {
       <DeskBand
         brand={<Brand />}
         nav={items.map((item) => <DeskNavLink key={item.name} item={item} onSelect={onSelect} />)}
-        commandBar={<CommandBarPlaceholder />}
+        commandBar={<DeskCommandBar />}
         currency={<DeskCurrency />}
         scope={<DeskScope />}
         hero={<DeskHero collapsed={collapsed} />}

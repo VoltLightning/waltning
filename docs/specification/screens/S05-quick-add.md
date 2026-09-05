@@ -107,18 +107,70 @@ and Enter to save. No keypad, no dock, no camera.
 ```
   48.90 cash coffee yesterday
   ─────────────────────────────────────────
-   48,90 zł   [Cash · PLN]  [10 Aug]
-   payee: coffee   [ Category? ]
+   Spaces group thousands; comma or point is the decimal mark.
+   48.90 PLN   Payee: coffee
+   [ Cash ]  [ Sep 2 ]  [ Category? ]
 ```
 
 Parsing is **deterministic first**: first number is the amount, known account
 and category names bind to their chips, relative dates parse, the rest becomes
-the payee. Instant, no model call.
+the payee — D1's grammar, the one this section's own worked example resolves.
+D2's payee memory proposes the category the same way it does on the phone,
+machine-filled at or above `computations.md` §14's display threshold and left
+for the category chip to ask about below it.
 
-When the grammar cannot resolve — no amount found, or too much unmatched — the
-composer offers *interpret with model ⏎* rather than silently spending 2–5 s.
-The slow path is always chosen, never stumbled into, and it renders the same
-`TrailRow` as voice (P2).
+**The bar states its one non-obvious rule about numbers, standing:** *spaces
+group thousands; comma or point is the decimal mark*. That is not the
+convention half of Europe types — `1.234,56` resolves to `1.234` — and it is
+the one thing a typed line cannot say for itself before the figure is already
+wrong. The rest of the grammar announces itself in the chips as it resolves.
+
+**A second number is payee text, not a second thousands group.** The
+first-number rule is the whole rule: `1234 567 cash` is 1 234 złoty with `567`
+in the payee, never one million. A grouping chain only ever starts from a one-
+to three-digit head, because no real thousands separator follows a fourth
+digit.
+
+**The three resolved chips are one list.** The account, the date and the
+category sit together in a `listbox` the input owns as a `combobox` — Up, Down
+and Tab all walk it, `aria-activedescendant` names the chip reached, and DOM
+focus stays in the input throughout. The arrows cycle, because they belong to
+the list; Tab leaves the bar past the last chip, because it belongs to the
+page. The amount, the payee and the captions are outside that list: they are
+readings, not choices. The hint above is the input's own `aria-describedby`,
+not loose text beside it.
+
+**The list is read, never chosen from.** `aria-selected` marks the chip the
+walk has reached and nothing else — no key, tap or click changes what a chip
+says, and correcting a field means retyping the line. That is the one place
+this list departs from an ordinary combobox, where Enter would commit the
+active option; here Enter saves the transaction.
+
+**A name the grammar does not recognise is payee text, not a refusal — with a
+last-used account to fall back on.** §9.2's own four-hour window supplies a
+default account the moment one exists, and an unrecognised token folds into
+the payee the same way "coffee" does in the headline example: `48.90 revolut
+coffee` resolves against the last-used account, payee `revolut coffee`, when
+that window is open. The refusal below only ever fires with **no** default
+account *and* no name the grammar recognises — the ordinary state is a filled
+account chip, not a stopped line.
+
+**A date that names no real day is refused, never quietly replaced by today.**
+`2026-02-31` matches the `YYYY-MM-DD` shape and is not a day. The grammar asks
+the same calendar question the contract edge asks (`zAccountingDate`), so a
+date the bar binds is a date the save will take; a shaped token that names no
+real day stops the line and says so. Its digits are never read as money
+either — a line whose only token is such a value has no amount, and refuses
+for that reason instead.
+
+**No model path.** When D1 truly cannot resolve a line — no amount found, no
+account at all (no default, no recognised name), a date that is not a real
+calendar day, a currency that disagrees with the named account, or too much
+left over — the bar shows the reason beneath it and nothing else. No model call is spent guessing; retyping a
+clearer line is the whole recovery, and Enter on such a line is a no-op rather
+than a save attempt. §9 Q3 records the same decision: this arc builds only the
+grammar, and a model fallback for the shape too ambiguous for it is a future
+direction, not something this bar offers today.
 
 This is a genuine divergence rather than a reflow. The mobile design optimises
 for one thumb and no keyboard; the desktop has a keyboard and a person sitting
@@ -178,8 +230,11 @@ on Save. `✕` discards with a confirm **only if a machine filled something** �
 discarding your own typing is cheap to redo; discarding a transcription is not.
 
 ### Web
-`N` opens the composer from anywhere. Enter saves, Escape discards, Tab moves
-through resolved chips. No mouse required.
+`N` opens the composer from anywhere. Enter saves, Escape discards (or undoes a
+machine-filled category, when that chip is the one the walk has reached). Up
+and Down move through the resolved chips and cycle; Tab moves through them too
+and then leaves the bar, the way Tab leaves any other field. No mouse required,
+and no way to get stuck.
 
 ### Shared
 **Nothing is written until Save.** Voice and OCR fill a draft; they do not
@@ -189,7 +244,11 @@ fact.
 ## 8. Rules this screen must obey
 
 - **P2** — every machine-filled field states what produced it, in one line, with
-  Undo. The draft is never a black box.
+  Undo. The draft is never a black box. On the desk command bar that Undo is a
+  control: a ghost button on the provenance line beside *From your history:
+  <payee>*, plus `Esc` while the category chip is the one Tab has reached. The
+  keyboard route alone would not satisfy this rule — an Undo reachable only by
+  a key nothing on screen names is not one.
 - **P1** — if the draft's currency differs from the display currency, the
   converted figure shows with its rate; if the date has no rate,
   `fx_rate_estimated` is set and rendered amber.
@@ -233,7 +292,7 @@ fact.
    **Window: four hours**, named `LAST_USED_WINDOW_MS` in
    `packages/client/src/transactions/last-capture.ts`.
 3. ~~**Web command-bar parsing is unspecified.**~~ **Decided: deterministic
-   grammar first, model as an explicit fallback.**
+   grammar first — no model path in this arc.**
 
    The grammar handles the common shape with no latency and no model call: the
    first number is the amount, a known account or category name binds to its
@@ -241,9 +300,10 @@ fact.
    become the payee. Chips resolve **live beneath the line**, so an ambiguity is
    visible before Enter rather than after.
 
-   **The fallback is offered, not taken automatically.** When the grammar cannot
-   resolve an amount — or leaves too much unmatched — the composer says so and
-   shows *interpret with model ⏎* rather than silently spending 2–5 s. That
-   removes the real cost of a hybrid, which is not two code paths but two
-   unpredictable latencies in one box: here the slow path is always a thing you
-   chose, and it renders the same `TrailRow` the voice path does (P2).
+   **This arc builds only the grammar.** A line it cannot resolve shows the
+   reason beneath it and nothing else — no *interpret with model* offer, no
+   2–5 s spent guessing, and Enter on such a line is a no-op rather than a save
+   attempt. A model fallback for the shape too ambiguous for the grammar is a
+   real future direction — the same hybrid shape voice capture already takes,
+   rendering `TrailRow` (P2) — but it is not part of what this bar does today,
+   and nothing here should be read as describing a composer that offers it.

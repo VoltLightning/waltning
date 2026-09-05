@@ -8,11 +8,11 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseQuickAddRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { acceptProposedCategory } from "@waltning/client/transactions/accept-proposed-category";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
-import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
-import { PROPOSAL_DISPLAY_THRESHOLD, proposeCategory } from "@waltning/core/capture/payee-memory";
+import { proposeCategory } from "@waltning/core/capture/payee-memory";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
@@ -23,6 +23,10 @@ import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
+import {
+  KNOWN_PATHS,
+  resolveFieldErrorMessage,
+} from "@waltning/ui/transactions/field-error-messages";
 import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import {
   QuickAddComposer,
@@ -36,45 +40,6 @@ import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
 type CounterpartyRole = "debt" | "contribution" | "reference";
-
-/** `create_transaction`'s own field paths — everything else lands at form level. */
-const KNOWN_PATHS = [
-  "amountOriginal",
-  "accountId",
-  "categoryId",
-  "payee",
-  "date",
-  "note",
-  "isBusiness",
-  "counterpartyId",
-  "counterpartyRole",
-];
-
-/**
- * A refusal's own text, resolving the one `messageKey` the controller sets
- * (`transactions.needsRate`, on an uncapturable account) through `useT()` —
- * it cannot call the hook itself (`packages/client` is not a component).
- */
-function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
-  if (error.messageKey === "transactions.needsRate") {
-    return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
-  }
-  if (error.messageKey === "transactions.tooManyDecimals") {
-    return t("transactions.tooManyDecimals", {
-      currency: error.params?.["currency"] ?? "",
-      decimals: error.params?.["decimals"] ?? "",
-    });
-  }
-  if (error.messageKey === "transactions.sharedNeverBusiness") {
-    return t("transactions.sharedNeverBusiness");
-  }
-  if (error.messageKey === "transactions.categoryKindMismatch") {
-    const kind =
-      error.params?.["type"] === "income" ? t("transactions.income") : t("transactions.expense");
-    return t("transactions.categoryKindMismatch", { type: kind });
-  }
-  return error.message;
-}
 
 function handleDeskCancel() {
   router.back();
@@ -295,40 +260,30 @@ export default function QuickAdd() {
     [ledger, payeeFold],
   );
   /**
-   * H1-b — the proposal's own category kind, read off the replica the same
-   * way `pickedCategory`/`proposedCategory` already gate by `kind === type`
-   * inside `QuickAddComposer` (`transactions_category_shape`, §7's own
-   * rule: a category attaches to income or expense, never either
-   * interchangeably). `proposeCategory` itself carries no `kind` — the
-   * category tree is a client concern (`payee-memory.ts`'s own doc) — so
-   * this is the one lookup that answers it.
-   */
-  const proposedCategoryKind = categoryProposal
-    ? snapshot.categories.find((category) => category.id === categoryProposal.categoryId)?.kind
-    : undefined;
-  /**
-   * H1 — a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` **is** the
-   * draft's category the moment it fills, not only a suggestion the sheet
-   * has to confirm (S05 §8). `composerCategoryId` (a real pick) always wins;
-   * short of that, the effective category is the proposal's own id, exactly
-   * the pattern `effectiveAccountId`/`lastUsedAccountId` already keeps for
-   * the account chip.
+   * H1 — a proposal at or above the display threshold **is** the draft's
+   * category the moment it fills, not only a suggestion the sheet has to
+   * confirm (S05 §8). `composerCategoryId` (a real pick) always wins; short
+   * of that, the effective category is the proposal's own id, exactly the
+   * pattern `effectiveAccountId`/`lastUsedAccountId` already keeps for the
+   * account chip.
    *
-   * H1-b — and only while the proposal's own kind still matches
-   * `composerType`. Without this, switching Expense→Income after an expense
-   * proposal auto-filled left `effectiveCategoryId` naming the stale
-   * expense leaf while the chip itself rendered empty (`QuickAddComposer`'s
-   * own `pickedCategory` already filters by kind) — Save would have sent an
-   * income row carrying an expense category, invisibly. A type switch needs
-   * no separate "clear" action: this is derived fresh from `composerType`
-   * every render, so the mismatch alone is what turns it off.
+   * `acceptProposedCategory` (`packages/client`, shared with the desk
+   * command bar) is the H1-b membership-and-kind guard: it refuses a
+   * proposal whose category is not among `snapshot.categories` at all
+   * (H1a — archived, or since deleted, either way absent from that list) or
+   * whose kind disagrees with `composerType`. Without the kind half,
+   * switching Expense→Income after an expense proposal auto-filled left
+   * `effectiveCategoryId` naming the stale expense leaf while the chip
+   * itself rendered empty (`QuickAddComposer`'s own `pickedCategory` already
+   * filters by kind) — Save would have sent an income row carrying an
+   * expense category, invisibly. A type switch needs no separate "clear"
+   * action: this is derived fresh from `composerType` every render, so the
+   * mismatch alone is what turns it off.
    */
   const categoryAutoFilled =
     composerCategoryId === null &&
-    categoryProposal !== undefined &&
-    categoryProposal.confidence >= PROPOSAL_DISPLAY_THRESHOLD &&
     !categoryProposalDismissed &&
-    proposedCategoryKind === composerType;
+    acceptProposedCategory(categoryProposal, snapshot.categories, composerType);
   const effectiveCategoryId =
     composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
   const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);

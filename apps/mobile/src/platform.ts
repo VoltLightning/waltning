@@ -146,3 +146,81 @@ export function saveHaptic(): void {}
  */
 export const DEVICE_LOCALES: readonly string[] =
   typeof navigator === "undefined" ? [] : [...(navigator.languages ?? [])];
+
+/**
+ * `N` focuses the desk command bar from anywhere (`screens/S05-quick-add.md`
+ * §7 Web) — a global keyboard listener, which is a platform read the same way
+ * `DEVICE_LOCALES` above is: `window` exists on the web build and not on a
+ * phone, so this file is where the seam is named (`architecture/11`).
+ * `tabs-shell.tsx`'s own `DeskCommandBar` calls this to move focus onto its own `<CommandBar>`
+ * ref; it never touches `window` itself.
+ *
+ * **Skipped while another field already has focus.** `N` is a letter someone
+ * types into the note field, the payee field, anywhere — stealing focus out
+ * from under a keystroke meant for that field would be exactly the kind of
+ * global shortcut this pattern is usually criticised for. `INPUT`,
+ * `TEXTAREA` and `contentEditable` are the three shapes a typable field takes
+ * in this bundle (`react-native-web`'s own `TextInput` renders the first two).
+ *
+ * **L6 — three more things a bare letter shortcut has to decide**, decided
+ * here and tested in `platform.test.ts` rather than inherited:
+ *
+ * - **`event.repeat` is ignored.** Holding `n` down autorepeats at the OS's
+ *   rate; every repeat would re-focus a bar already focused, and on a slow
+ *   render that is a stream of focus moves nobody asked for. The first press
+ *   is the intention.
+ * - **A composition in progress is ignored** (`isComposing`, and the `229`
+ *   keyCode browsers send while an IME is mid-word). Typing Japanese, Korean
+ *   or Chinese produces `keydown` events whose `key` is a letter and whose
+ *   meaning belongs to the IME; stealing focus mid-composition destroys the
+ *   word being composed.
+ * - **An open sheet or dialog swallows it.** Every sheet in this app is a
+ *   `BottomSheet` → RN's `Modal`, which RNW renders as `role="dialog"` with
+ *   `aria-modal` and a focus trap; a shortcut that pulled focus to a bar
+ *   *behind* a modal would move focus out of that trap, which is the thing a
+ *   modal exists to prevent. There is no sheet provider to read an open count
+ *   from, so the DOM is asked directly: **any** `[role="dialog"]` in the
+ *   document means one is open. That is deliberately wider than *"the focused
+ *   element is inside a dialog"* — RNW's own focus trap can park focus on a
+ *   `FocusBracket` that sits *outside* the `[role="dialog"]` node it wraps
+ *   (`ModalFocusTrap` renders the brackets as siblings of `ModalContent`), so
+ *   an `activeElement` test would let the hotkey through in exactly the case
+ *   it exists to catch. RNW sets the role only while a `Modal` is visible, so
+ *   a closed sheet leaves nothing behind.
+ *
+ * Guarded the same way `DEVICE_LOCALES` is: a jsdom-less render (a Node SSR
+ * pass, a non-DOM test) has no `window` to attach to, and the correct answer
+ * there is "the hotkey never fires," not a crash.
+ */
+export function subscribeCommandBarHotkey(onTrigger: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  function handleKeyDown(event: KeyboardEvent): void {
+    if (event.key !== "n" && event.key !== "N") return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.repeat) return;
+    if (event.isComposing || event.keyCode === COMPOSING_KEY_CODE) return;
+    const target = event.target;
+    if (target instanceof HTMLElement) {
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+    }
+    if (document.querySelector(DIALOG_SELECTOR) !== null) return;
+    event.preventDefault();
+    onTrigger();
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}
+
+/**
+ * The `keydown` `keyCode` every browser sends while an IME is composing — the
+ * one reliable signal in the browsers that leave `isComposing` false on the
+ * first keystroke of a composition. Named because `229` alone reads like a
+ * magic number.
+ */
+const COMPOSING_KEY_CODE = 229;
+
+/** What an open sheet looks like in the DOM — RNW's `Modal` sets this while, and only while, it is visible. */
+const DIALOG_SELECTOR = '[role="dialog"]';

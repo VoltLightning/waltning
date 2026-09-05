@@ -25,7 +25,8 @@
     "./theme/roles": "./src/theme/roles.ts",
     "./theme/styles": "./src/theme/styles.ts",
     "./transactions/*": "./src/transactions/*.tsx",
-    "./transactions/amount-keys": "./src/transactions/amount-keys.ts"
+    "./transactions/amount-keys": "./src/transactions/amount-keys.ts",
+    "./transactions/field-error-messages": "./src/transactions/field-error-messages.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -64,6 +64,81 @@ describe("no amount", () => {
   });
 });
 
+describe("C1 — thousands grouping is optional, never mandatory", () => {
+  it("a bare four-digit integer — '1000' is one number, not '100'", () => {
+    expect(findAmount("1000")?.amount).toBe("1000.00000000");
+  });
+
+  it("an ungrouped decimal past three integer digits — '1234.56'", () => {
+    expect(findAmount("1234.56")?.amount).toBe("1234.56000000");
+  });
+
+  it("a bare five-digit integer — '12345'", () => {
+    expect(findAmount("12345")?.amount).toBe("12345.00000000");
+  });
+
+  it("a correctly space-grouped amount still matches whole — '1 234.56'", () => {
+    const found = findAmount("1 234.56");
+    expect(found?.amount).toBe("1234.56000000");
+    expect(found?.span).toEqual([0, 8]);
+  });
+
+  it("two different punctuation marks never both group — '1.234,56' reads the first as the decimal mark, per the grammar's own rule that whitespace is the one thousands separator", () => {
+    // `.` is read as the decimal mark the instant it appears (the grammar's
+    // stated locale rule), so this is the number `1.234` — `,56` is left
+    // over, not folded in as a second thousands group.
+    const found = findAmount("1.234,56");
+    expect(found?.amount).toBe("1.23400000");
+    expect(found?.span).toEqual([0, 5]);
+  });
+});
+
+describe("L1 — a grouping chain starts from a 1–3 digit head, and only from one", () => {
+  it("'1234 567 cash' reads 1234 and leaves 567 outside the amount's own span", () => {
+    // The defect this closes: `\d+(?:[ ]\d{3})*` welded the two into
+    // `1234567`, a figure a thousand times either of the numbers typed, with
+    // nothing left over for the reader to notice.
+    const found = findAmount("1234 567 cash");
+    expect(found?.amount).toBe("1234.00000000");
+    expect(found?.span).toEqual([0, 4]);
+  });
+
+  it("'1000 2000 cash' takes the first number only — the second is payee text, not a second thousands group", () => {
+    const found = findAmount("1000 2000 cash");
+    expect(found?.amount).toBe("1000.00000000");
+    expect(found?.span).toEqual([0, 4]);
+  });
+
+  it("a real three-group chain still matches whole — '1 234 567'", () => {
+    const found = findAmount("1 234 567");
+    expect(found?.amount).toBe("1234567.00000000");
+    expect(found?.span).toEqual([0, 9]);
+  });
+});
+
+describe("L2 — an ISO date's digits are never the amount", () => {
+  it("a leading '2026-08-10' is skipped and the money after it is found", () => {
+    const found = findAmount("2026-08-10 48.90 cash coffee");
+    expect(found?.amount).toBe("48.90000000");
+    expect(found?.span).toEqual([11, 16]);
+  });
+
+  it("mid-line too — the minus rule alone would have read the year off '2026'", () => {
+    const found = findAmount("coffee 2026-08-10 48.90 cash");
+    expect(found?.amount).toBe("48.90000000");
+  });
+
+  it("a date-*shaped* token holds no money, real day or not — '9999-99-99'", () => {
+    // L-b — the scanner skips every `YYYY-MM-DD` span, including one that
+    // names no real day. `9999` on the front of a date is not the amount on
+    // the line whether or not the 99th of September exists; `findDate`
+    // refuses to bind it and `grammar.ts` refuses the line rather than
+    // mining the token for a year.
+    expect(findAmount("9999-99-99")).toBeNull();
+    expect(findAmount("2026-02-31")).toBeNull();
+  });
+});
+
 describe("the first-number rule", () => {
   it("'2 coffees 18' binds to 2, not 18 — a known, documented cost of a grammar with no notion of 'looks like a price'", () => {
     const found = findAmount("2 coffees 18");

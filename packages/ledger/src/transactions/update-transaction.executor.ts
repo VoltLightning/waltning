@@ -19,7 +19,10 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
-import type { LocalTransactionRow } from "./create-transaction.executor.ts";
+import {
+  assertCategoryNotArchived,
+  type LocalTransactionRow,
+} from "./create-transaction.executor.ts";
 
 const { transactions } = schema;
 
@@ -86,6 +89,12 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
         .map((issue) => `${issue.field}: ${issue.message}`)
         .join("; ")}`,
     );
+  }
+  // H1a — the same guarantee `create_transaction`'s own `insertTransaction`
+  // carries, checked whenever this patch actually touches `categoryId`; an
+  // untouched category is not this write's to re-litigate.
+  if ("categoryId" in input.patch) {
+    assertCategoryNotArchived(tx, merged.categoryId, "update_transaction: category_id");
   }
 
   /**
