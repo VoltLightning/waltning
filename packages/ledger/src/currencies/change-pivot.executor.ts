@@ -58,7 +58,7 @@ export const changePivotExecutor = defineLocalExecutor<
 function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
   const [newPivot] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!newPivot) {
-    throw new LocalRefusal(`change_pivot: no currency ${input.code}`);
+    throw new LocalRefusal(`change_pivot: no currency ${input.code}`, { dependency: true });
   }
   if (newPivot.archived) {
     throw new LocalRefusal(`change_pivot: ${input.code} is archived`);
@@ -69,7 +69,7 @@ function changePivot(input: ChangePivotInput, tx: ReplicaTx): LocalCurrencyRow {
 
   const [oldPivot] = tx.select().from(currencies).where(eq(currencies.isPivot, true)).all();
   if (!oldPivot) {
-    throw new LocalRefusal("change_pivot: no pivot currency is set");
+    throw new LocalRefusal("change_pivot: no pivot currency is set", { dependency: true });
   }
 
   const [{ n: txnCount } = { n: 0 }] = tx

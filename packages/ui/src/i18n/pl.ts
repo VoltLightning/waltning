@@ -370,6 +370,7 @@ export const pl: Messages = {
   settleDebt: {
     noCounterparty: "Ten kontrahent już nie istnieje.",
     nothingToSettle: "W tej walucie nie ma nic do rozliczenia.",
+    currencyMismatch: "To konto obsługuje tylko {{accountCurrency}} — rozlicz w tej walucie.",
     currencies: "Waluty",
     rates: "Kursy wymiany",
 

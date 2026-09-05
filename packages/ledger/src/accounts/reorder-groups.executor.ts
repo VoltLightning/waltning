@@ -35,7 +35,7 @@ function reorderGroups(input: ReorderGroupsInput, tx: ReplicaTx): readonly Local
       .returning()
       .all();
     if (!row) {
-      throw new LocalRefusal(`reorder_groups: no group ${id}`);
+      throw new LocalRefusal(`reorder_groups: no group ${id}`, { dependency: true });
     }
     rows.push(row);
   }

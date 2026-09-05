@@ -58,7 +58,9 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     .where(eq(transactions.id, input.transactionId))
     .get();
   if (!current) {
-    throw new LocalRefusal(`set_transaction_lines: no transaction ${input.transactionId}`);
+    throw new LocalRefusal(`set_transaction_lines: no transaction ${input.transactionId}`, {
+      dependency: true,
+    });
   }
   if (current.deletedAt !== null) {
     throw new LocalRefusal(`set_transaction_lines: ${input.transactionId} is deleted`);

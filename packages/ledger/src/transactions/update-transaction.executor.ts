@@ -47,7 +47,9 @@ export const updateTransactionExecutor = defineLocalExecutor<
 function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTransactionRow {
   const current = tx.select().from(transactions).where(eq(transactions.id, input.id)).get();
   if (!current) {
-    throw new LocalRefusal(`update_transaction: no transaction ${input.id}`);
+    throw new LocalRefusal(`update_transaction: no transaction ${input.id}`, {
+      dependency: true,
+    });
   }
   if (current.deletedAt !== null) {
     throw new LocalRefusal(`update_transaction: ${input.id} is deleted`);

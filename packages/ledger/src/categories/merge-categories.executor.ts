@@ -51,8 +51,16 @@ export const mergeCategoriesExecutor = defineLocalExecutor<
 function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCategoriesResult {
   const [loser] = tx.select().from(categories).where(eq(categories.id, input.loserId)).all();
   const [winner] = tx.select().from(categories).where(eq(categories.id, input.winnerId)).all();
-  if (!loser) throw new LocalRefusal(`merge_categories: no category ${input.loserId}`);
-  if (!winner) throw new LocalRefusal(`merge_categories: no category ${input.winnerId}`);
+  if (!loser) {
+    throw new LocalRefusal(`merge_categories: no category ${input.loserId}`, {
+      dependency: true,
+    });
+  }
+  if (!winner) {
+    throw new LocalRefusal(`merge_categories: no category ${input.winnerId}`, {
+      dependency: true,
+    });
+  }
   if (loser.archived)
     throw new LocalRefusal(`merge_categories: ${input.loserId} is already archived`);
   if (winner.archived) throw new LocalRefusal(`merge_categories: ${input.winnerId} is archived`);

@@ -710,6 +710,31 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * #116 review, L2 — a `LocalDeferral` out of the port is a *saved* outcome
+   * (`write.ts` commits the outbox entry before `apply` ever runs), never a
+   * refusal. Before this fix it reached `fieldErrors` the same as a genuine
+   * refusal, which left the caller unable to tell "saved, not yet valued"
+   * from "not saved at all" — and a screen that kept the draft on a retry
+   * would mint a second, genuinely new capture on top of the first.
+   */
+  it("reports a captured deferral as saved, with `deferred: true`, never as fieldErrors", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    createTransaction.mockImplementationOnce(() => {
+      throw Object.assign(new Error("create_transaction: no last-known rate for PLN/CHF"), {
+        name: "LocalDeferral",
+      });
+    });
+
+    const result = controller.createTransaction(expenseDraft(accountId));
+
+    expect(result).toHaveProperty("id");
+    expect("deferred" in result && result.deferred).toBe(true);
+    // Not a refusal: nothing named `fieldErrors` on this outcome.
+    expect(result).not.toHaveProperty("fieldErrors");
+  });
+
+  /**
    * **The write is refused before the outbox is touched.**
    *
    * `provisionalFxRate` refuses the same capture, but it does so mid-transaction
@@ -2061,10 +2086,12 @@ describe("phone ledger controller — counterparties and settlement", () => {
   });
 
   /**
-   * R2 H3 — the same overwrite `createTransaction` makes: the account's own
-   * currency reaches the write, never a stale or mismatched draft field.
+   * #116 review, M3 — a mismatched `currency` is refused on the field, never
+   * silently rewritten to the account's own (SPEC.md §6.5). This replaces
+   * the prior "overwrites the draft's currency" test: the overwrite it
+   * proved is the bug.
    */
-  it("settleDebt: overwrites the draft's currency with the account's own", () => {
+  it("settleDebt: refuses a currency that does not match the account's own, before the write", () => {
     const { controller, settleDebt } = counterpartyHarness({
       listAccounts: () => [
         account("33333333-3333-4333-8333-333333333333", "Bank A · PLN", PLN, "0"),
@@ -2081,22 +2108,29 @@ describe("phone ledger controller — counterparties and settlement", () => {
       ],
     });
 
-    controller.settleDebt({
+    const result = controller.settleDebt({
       counterpartyId: NINA,
       accountId: "33333333-3333-4333-8333-333333333333",
       date: "2026-08-04",
       amount: "50",
-      currency: "EUR", // stale/mismatched — the account is PLN
+      currency: "EUR", // mismatched — the account is PLN
       dischargesCurrency: "EUR",
       dischargesAmount: "50",
       note: "",
       categoryId: null,
     });
 
-    expect(settleDebt).toHaveBeenCalledWith(
-      expect.objectContaining({ currency: "PLN" }),
-      expect.anything(),
-    );
+    expect(result).toEqual({
+      fieldErrors: [
+        {
+          path: "currency",
+          message: "This account only holds PLN — settle in that currency.",
+          messageKey: "settleDebt.currencyMismatch",
+          params: { accountCurrency: "PLN" },
+        },
+      ],
+    });
+    expect(settleDebt).not.toHaveBeenCalled();
   });
 
   /**

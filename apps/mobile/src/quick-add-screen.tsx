@@ -410,6 +410,23 @@ export default function QuickAdd() {
     setFieldErrors(undefined);
     void lastCapture.set({ accountId: effectiveAccountId, at: Date.now() });
     saveHaptic();
+    // #116 review, L2 — `deferred` is still a save: the capture is on the
+    // outbox, only not yet valued (no FX rate). Dismissed exactly as an
+    // ordinary save, with the same route-param `Toast` `transaction-detail-
+    // screen.tsx`'s own delete uses, so the person sees "saved", never a
+    // field marked invalid on a draft that has already gone.
+    if (result.deferred) {
+      router.dismissTo({
+        pathname: "/",
+        params: {
+          message: t("transactions.deferredNoRate", {
+            currency: selectedComposerAccount?.currency ?? "",
+          }),
+          nonce: String(Date.now()),
+        },
+      });
+      return;
+    }
     router.dismissTo("/");
   }, [
     composerAmountRaw,
@@ -423,6 +440,7 @@ export default function QuickAdd() {
     composerType,
     effectiveAccountId,
     ledger,
+    selectedComposerAccount,
     t,
   ]);
 
@@ -451,9 +469,23 @@ export default function QuickAdd() {
         return;
       }
       setFieldErrorsDesk(undefined);
+      // #116 review, L2 — same rule as the composer's own save above: a
+      // deferred capture still dismisses, with a toast instead of a field
+      // error.
+      if (result.deferred) {
+        const account = composerAccounts.find((candidate) => candidate.id === next.accountId);
+        router.dismissTo({
+          pathname: "/",
+          params: {
+            message: t("transactions.deferredNoRate", { currency: account?.currency ?? "" }),
+            nonce: String(Date.now()),
+          },
+        });
+        return;
+      }
       router.dismissTo("/");
     },
-    [ledger, t],
+    [composerAccounts, ledger, t],
   );
 
   if (breakpoint === "desk") {

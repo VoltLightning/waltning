@@ -44,7 +44,9 @@ export const deleteTransactionExecutor = defineLocalExecutor<
 function softDeleteTransaction(input: DeleteTransactionInput, tx: ReplicaTx): LocalTransactionRow {
   const current = tx.select().from(transactions).where(eq(transactions.id, input.id)).get();
   if (!current) {
-    throw new LocalRefusal(`delete_transaction: no transaction ${input.id}`);
+    throw new LocalRefusal(`delete_transaction: no transaction ${input.id}`, {
+      dependency: true,
+    });
   }
   if (current.deletedAt !== null) {
     throw new LocalRefusal(`delete_transaction: ${input.id} is already deleted`);

@@ -43,7 +43,9 @@ function insertCategory(input: CreateCategoryInput, tx: ReplicaTx): LocalCategor
   if (input.parentId !== null) {
     const [parent] = tx.select().from(categories).where(eq(categories.id, input.parentId)).all();
     if (!parent) {
-      throw new LocalRefusal(`create_category: no parent ${input.parentId}`);
+      throw new LocalRefusal(`create_category: no parent ${input.parentId}`, {
+        dependency: true,
+      });
     }
     if (parent.isLeaf) {
       throw new LocalRefusal(

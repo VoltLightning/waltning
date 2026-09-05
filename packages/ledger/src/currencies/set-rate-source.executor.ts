@@ -32,7 +32,7 @@ export const setRateSourceExecutor = defineLocalExecutor<
 function setRateSource(input: SetRateSourceInput, tx: ReplicaTx): LocalCurrencyRow {
   const [current] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!current) {
-    throw new LocalRefusal(`set_rate_source: no currency ${input.code}`);
+    throw new LocalRefusal(`set_rate_source: no currency ${input.code}`, { dependency: true });
   }
   if (current.archived) {
     throw new LocalRefusal(`set_rate_source: ${input.code} is archived`);

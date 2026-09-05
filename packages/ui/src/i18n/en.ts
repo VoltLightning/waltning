@@ -565,6 +565,14 @@ export const en = {
   settleDebt: {
     noCounterparty: "This counterparty no longer exists.",
     nothingToSettle: "There is nothing open in this currency to settle.",
+    /**
+     * #116 review, M3 — SPEC.md §6.5: a transaction's currency is its
+     * account's. The controller used to silently rewrite a mismatched
+     * `currency` to the account's own rather than say so; this is the
+     * refusal that replaces the rewrite, named on the field a person could
+     * actually fix.
+     */
+    currencyMismatch: "This account only holds {{accountCurrency}} — settle in that currency.",
     currencies: "Currencies",
     rates: "Exchange rates",
 

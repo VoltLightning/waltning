@@ -39,7 +39,7 @@ export const archiveGroupExecutor = defineLocalExecutor<
 function archiveGroup(input: ArchiveGroupInput, tx: ReplicaTx): LocalGroupRow {
   const [current] = tx.select().from(accountGroups).where(eq(accountGroups.id, input.id)).all();
   if (!current) {
-    throw new LocalRefusal(`archive_group: no group ${input.id}`);
+    throw new LocalRefusal(`archive_group: no group ${input.id}`, { dependency: true });
   }
   if (current.archived) {
     throw new LocalRefusal(`archive_group: ${input.id} is already archived`);

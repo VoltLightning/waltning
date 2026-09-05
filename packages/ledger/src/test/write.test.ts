@@ -119,6 +119,22 @@ const createTransaction = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: s
   },
 });
 
+/**
+ * An executor whose `LocalRefusal` names a missing dependency — the "no such
+ * row" shape #116 review's H2 marks `dependency: true`. Distinct from
+ * `refuses` below, which is the stable, business-rule shape that must never
+ * become `deferred` no matter what else is outstanding.
+ */
+const dependencyRefuses = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
+  operation: "dependency_refuses",
+  opVersion: 1,
+  input: CREATE_TRANSACTION,
+  mints: () => [],
+  apply: () => {
+    throw new LocalRefusal("no such row yet", { dependency: true });
+  },
+});
+
 /** An executor that mints nothing and always refuses — a `LocalRefusal`. */
 const refuses = defineLocalExecutor<typeof CREATE_TRANSACTION, { id: string }, Tx>({
   operation: "refuses",
@@ -166,6 +182,7 @@ const registry = localRegistry<Tx>([
   refuses,
   crashes,
   defers,
+  dependencyRefuses,
 ]);
 
 const capture: Capture = { timeZone: "Europe/Warsaw", offsetMinutes: 60 };
@@ -400,6 +417,57 @@ describe("a failure between the two commits keeps the intent", () => {
     expect(recovery.replayed).toEqual([]);
     const [stillDeferred] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 1)).all();
     expect(stillDeferred?.disposition).toBe("deferred");
+  });
+
+  /**
+   * #116 review, H2 — the two classes `LocalRefusal.dependency` distinguishes.
+   *
+   * Before this fix, `write.ts` deferred *any* `LocalRefusal` whenever *any*
+   * entry anywhere was outstanding-deferred — a stable, permanent refusal
+   * filed `deferred` alongside an unrelated deferral and so never surfaced to
+   * the person who typed it (`architecture/08` H15).
+   */
+  describe("only a dependency-shaped refusal is eligible to defer", () => {
+    it("defers a `dependency: true` refusal while an earlier entry is still deferred", () => {
+      expect(() =>
+        writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+      ).toThrow();
+
+      expect(() =>
+        writeLocally(s.ledger, {
+          executor: dependencyRefuses,
+          registry,
+          input: input("txn-2"),
+          capture,
+        }),
+      ).toThrow("no such row yet");
+
+      const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+      expect(entry2?.state).toBe("pending"); // deferred, never blocked
+      expect(entry2?.disposition).toBe("deferred");
+      // The reason is latched even though this is not a `blocked` entry, so
+      // S30 can say why the capture is waiting.
+      expect(entry2?.blockedReason).toBe("no such row yet");
+    });
+
+    it("still refuses a business-rule refusal outright, even while an earlier entry is deferred", () => {
+      expect(() =>
+        writeLocally(s.ledger, { executor: defers, registry, input: input("txn-1"), capture }),
+      ).toThrow();
+
+      // `refuses` never sets `dependency` — a folded-name collision, a stale
+      // `version`, a currency mismatch, none of which the deferred entry
+      // ahead of it could ever change the answer to.
+      expect(() =>
+        writeLocally(s.ledger, { executor: refuses, registry, input: input("txn-2"), capture }),
+      ).toThrow("the replica half failed");
+
+      const [entry2] = s.ledger.outbox.db.select().from(outbox).where(eq(outbox.seq, 2)).all();
+      expect(entry2?.state).toBe("blocked");
+      expect(entry2?.blockedKind).toBe("terminal");
+      expect(entry2?.disposition).toBe("refused");
+      expect(entry2?.blockedReason).toBe("the replica half failed");
+    });
   });
 
   /**

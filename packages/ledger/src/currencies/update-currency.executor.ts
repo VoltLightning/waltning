@@ -44,7 +44,7 @@ export const updateCurrencyExecutor = defineLocalExecutor<
 function patchCurrency(input: UpdateCurrencyInput, tx: ReplicaTx): LocalCurrencyRow {
   const [current] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!current) {
-    throw new LocalRefusal(`update_currency: no currency ${input.code}`);
+    throw new LocalRefusal(`update_currency: no currency ${input.code}`, { dependency: true });
   }
   if (current.version !== input.version) {
     throw new LocalRefusal(

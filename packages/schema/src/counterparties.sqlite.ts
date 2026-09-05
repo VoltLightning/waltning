@@ -52,32 +52,24 @@ export const counterpartiesColumns = () => ({
    * table that has rows, so the migration step that introduces this column
    * could not run on a phone that already holds counterparties.
    *
-   * **R4 M3 — the column and the unique index on it are two separate
-   * migrations, deliberately, and a JS backfill runs between them.**
-   * `replica/0006_schema.sql` only adds this column, every existing row
-   * still holding `''`; `replica/0007_schema.sql` is the one that drops the
-   * old `lower(trim(name))` index and creates the new unique index on this
-   * column. Bundled into one file — as this used to be — a phone with two or
-   * more live counterparties would fail its own migration: every row reads
-   * `''` the instant the column exists, and a unique index created in that
-   * same breath collides with itself before anything has had a chance to
-   * backfill a real value. The backfill itself is a follow-up PR's, not this
-   * migration's — it runs as ordinary application code after 0006 applies
-   * and before 0007 does, writing `fold(name)` into every row.
+   * **The column and the unique index on it are two separate migrations** —
+   * `replica/0006_schema.sql` only adds this column; `replica/0007_schema.sql`
+   * is the one that drops the old `lower(trim(name))` index and creates the
+   * new unique index on this column. The split leaves room for the backfill
+   * that versioned chains run between the two steps, writing `fold(name)`
+   * into every existing row before the unique index exists to collide with
+   * the `''` default (PR #117). On this branch both files run in one
+   * version-1 step on a fresh database, so no row ever holds the `''`
+   * default at rest: `createCounterpartyInput`'s `name` is
+   * `z.string().trim().min(1)`, and every raw-insert fixture (`seed.ts`'s
+   * `seedCounterparty`, `executors.test.ts`'s own `seed()`) writes a real
+   * `fold()`ed value too, the same as `create_counterparty` would.
    *
-   * **`''` never reaches the unique index below, by construction.**
-   * `createCounterpartyInput`'s `name` is `z.string().trim().min(1)`, and
-   * `fold()` is length-preserving, so no write through the executors can
-   * ever produce an empty folded name. The only rows that hold the raw `''`
-   * default are ones nothing has computed a real value for yet — pre-backfill
-   * rows on an upgrading phone, and this file's own fixture helpers (`seed.ts`'s
-   * `seedCounterparty`, which inserts straight into the table the way
-   * `executors.test.ts`'s own `seed()` does, bypassing `create_counterparty`
-   * on purpose). Treating `''` as "not yet folded" rather than "folded to
-   * nothing" is what the index's `and ${t.nameFolded} != ''` clause below
-   * says: a real collision (two folded names that agree) is still refused,
-   * but two rows that both still carry the unset sentinel are not mistaken
-   * for that.
+   * **The unique index below covers every unarchived row, `''` included.**
+   * A phone mid-upgrade — between 0006 applying and the backfill finishing —
+   * is the one place two rows could legitimately both hold `''`; that window
+   * does not exist on this branch (previous paragraph), so there is nothing
+   * live for the index to wrongly collide.
    */
   nameFolded: k.text("name_folded").notNull().default(""),
   kind: k.text("kind", { enum: COUNTERPARTY_KIND }).notNull().default("person"),
@@ -95,10 +87,5 @@ export const counterpartiesColumns = () => ({
 export const counterparties = k.table("counterparties", counterpartiesColumns(), (t) => [
   // M3 — an archived counterparty's old name must not block a fresh one from
   // taking it; history stays under the old row regardless (§9.2).
-  // The `!= ''` half excludes the unset sentinel — see the comment on
-  // `nameFolded` above.
-  k
-    .uniqueIndex("counterparties_name_uq")
-    .on(t.nameFolded)
-    .where(sql`not ${t.archived} and ${t.nameFolded} != ''`),
+  k.uniqueIndex("counterparties_name_uq").on(t.nameFolded).where(sql`not ${t.archived}`),
 ]);

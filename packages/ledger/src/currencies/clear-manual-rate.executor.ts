@@ -34,7 +34,7 @@ export const clearManualRateExecutor = defineLocalExecutor<
 function clearManualRate(input: ClearManualRateInput, tx: ReplicaTx): ClearManualRateResult {
   const [pivot] = tx.select().from(currencies).where(eq(currencies.isPivot, true)).all();
   if (!pivot) {
-    throw new LocalRefusal("clear_manual_rate: no pivot currency is set");
+    throw new LocalRefusal("clear_manual_rate: no pivot currency is set", { dependency: true });
   }
   if (input.base !== pivot.code) {
     throw new LocalRefusal(

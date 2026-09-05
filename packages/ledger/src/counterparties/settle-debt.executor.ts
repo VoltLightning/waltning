@@ -9,17 +9,18 @@
  * always lands somewhere, even when that somewhere is a flipped sign
  * (over-settlement, S14 §9.2 — never refused, only stated).
  *
- * **Direction is always read off the live balance's sign here; a carried
- * `input.type` is verified against it, never trusted outright (R2 H4).**
- * §6.6's four cases collapse to one rule — they owe you (positive) → money
- * flows in as `income`; you owe them (negative) → money flows out as
- * `expense`, the sign and the cash direction always opposite. A controller
- * that read the sign when it built the payload names it as `input.type`, and
- * a disagreement with the live read here means *the balance moved — reload*,
- * not a silent flip — the phone's own outbox can apply a dependent write out
- * of order, so the direction shown and the direction actually taken could
- * otherwise disagree silently. A caller with no such read (`input.type`
- * omitted) gets the live sign directly, the same as before R2 H4.
+ * **Direction is always read off the live balance's sign here; `input.type`
+ * is verified against it, never trusted outright (R2 H4).** §6.6's four
+ * cases collapse to one rule — they owe you (positive) → money flows in as
+ * `income`; you owe them (negative) → money flows out as `expense`, the sign
+ * and the cash direction always opposite. The controller reads the sign when
+ * it builds the payload and names it as `input.type`, and a disagreement
+ * with the live read here means *the balance moved — reload*, not a silent
+ * flip — the phone's own outbox can apply a dependent write out of order, so
+ * the direction shown and the direction actually taken could otherwise
+ * disagree silently. Required, not optional (#116 review, M2): an omitted
+ * `type` skipped this verification for exactly the caller least likely to
+ * have re-derived it independently.
  *
  * **Refuses a currency that contradicts the account (R2 H3).** §6.5:
  * *a transaction's currency is its account's currency* — Postgres enforces it
@@ -80,7 +81,9 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .where(eq(counterparties.id, input.counterpartyId))
     .all();
   if (!counterparty) {
-    throw new LocalRefusal(`settle_debt: no counterparty ${input.counterpartyId}`);
+    throw new LocalRefusal(`settle_debt: no counterparty ${input.counterpartyId}`, {
+      dependency: true,
+    });
   }
 
   // R2 H3 — §6.5: a transaction's currency is its account's currency.
@@ -92,7 +95,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .where(eq(accounts.id, input.accountId))
     .all();
   if (!account) {
-    throw new LocalRefusal(`settle_debt: no account ${input.accountId}`);
+    throw new LocalRefusal(`settle_debt: no account ${input.accountId}`, { dependency: true });
   }
   if (account.currency !== input.currency) {
     throw new LocalRefusal(
@@ -112,7 +115,9 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     .where(eq(currencies.code, input.discharges.currency))
     .all();
   if (!currencyRow) {
-    throw new LocalRefusal(`settle_debt: no currency ${input.discharges.currency}`);
+    throw new LocalRefusal(`settle_debt: no currency ${input.discharges.currency}`, {
+      dependency: true,
+    });
   }
   const decimals = currencyRow.decimals;
 
@@ -128,13 +133,14 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
 
   // R2 H4 — §6.6's four cases, collapsed: they owe you (positive) → money
   // flows in as `income`; you owe them (negative) → money flows out as
-  // `expense`. A carried `input.type` is the controller's own read of this
-  // sign, taken when the sheet built the payload; verified against the live
-  // sign rather than trusted, and never silently overridden — a disagreement
-  // means the balance moved since the sheet was shown. Omitted, the live
-  // sign is simply used.
+  // `expense`. `input.type` is the controller's own read of this sign, taken
+  // when the sheet built the payload; verified against the live sign rather
+  // than trusted, and never silently overridden — a disagreement means the
+  // balance moved since the sheet was shown. #116 review, M2: required, not
+  // optional — an omitted `type` skipped this verification entirely for the
+  // one caller least likely to have re-derived it.
   const liveType = sign > 0 ? ("income" as const) : ("expense" as const);
-  if (input.type !== undefined && input.type !== liveType) {
+  if (input.type !== liveType) {
     throw new LocalRefusal(
       `settle_debt: expected ${input.type} but the live balance in ` +
         `${input.discharges.currency} now settles as ${liveType} — the balance moved, reload`,

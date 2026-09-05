@@ -53,9 +53,37 @@ import type { z } from "zod";
  * buys: a business refusal blocks the entry forever, so misclassifying an
  * impossible branch as one would drop a capture that a fixed driver could
  * still apply.
+ *
+ * **#116 review, H2 — `dependency` narrows *which* `LocalRefusal`s that "forever" ever
+ * applies to.** `write.ts` used to defer *every* refusal, of any class,
+ * whenever some unrelated entry elsewhere in the outbox was still `deferred`
+ * — a stable, permanent refusal (a folded-name collision, a stale `version`,
+ * a currency mismatch) filed as `deferred` alongside it, and so never surfaced
+ * to the person who typed it (`architecture/08` H15). Only a refusal that
+ * really *could* be caused by a missing dependency — a row an earlier,
+ * still-outstanding entry has not yet materialised — is retryable that way;
+ * `dependency: true` marks exactly that shape, thrown at the "no such <row>"
+ * checks (`!current`, `!winner`, `!loser`, and their kin) across the
+ * executors. Everything else — a business rule the write itself violates —
+ * defaults to `dependency: false` and refuses on every retry, unconditionally,
+ * because nothing else outstanding can ever change its answer.
  */
 export class LocalRefusal extends Error {
   override readonly name = "LocalRefusal";
+  /**
+   * True when this refusal names a row that does not exist *yet* rather than
+   * one that never will — see the class doc's #116-review H2 note. `write.ts` and
+   * `recover.ts` both read this to decide whether an unrelated outstanding
+   * deferral may turn this refusal into a retryable `deferred` disposition
+   * too; a refusal that leaves it `false` (the default) always stays
+   * `refused`, regardless of what else is outstanding.
+   */
+  readonly dependency: boolean;
+
+  constructor(message: string, options?: { dependency?: boolean }) {
+    super(message);
+    this.dependency = options?.dependency ?? false;
+  }
 }
 
 /**

@@ -43,7 +43,7 @@ export const archiveCurrencyExecutor = defineLocalExecutor<
 function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurrencyRow {
   const [current] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!current) {
-    throw new LocalRefusal(`archive_currency: no currency ${input.code}`);
+    throw new LocalRefusal(`archive_currency: no currency ${input.code}`, { dependency: true });
   }
   if (current.archived) {
     throw new LocalRefusal(`archive_currency: ${input.code} is already archived`);

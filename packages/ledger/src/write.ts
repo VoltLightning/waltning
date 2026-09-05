@@ -315,13 +315,22 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
     // one, so "any entry still `deferred`" is exactly "an entry ahead of
     // this one is still outstanding" — this write's own enqueue above ran
     // before `apply`, so its own entry cannot be the one this query finds.
-    // A refusal met while that is true is marked `deferred` instead of
-    // `refused`, so `recover.ts`'s `outstanding` query retries it once the
-    // entry ahead of it resolves, rather than blocking it terminally for a
-    // row that may exist by the very next launch.
+    //
+    // **#116 review, H2 — but only when the refusal itself is `dependency`-shaped.**
+    // Through this round, *any* `LocalRefusal` met while *any* entry anywhere
+    // was `deferred` was filed `deferred` too — a stable, permanent refusal
+    // (a folded-name collision, a stale `version`, a currency mismatch) that
+    // has nothing to do with the unrelated deferred entry, filed alongside it
+    // and so never surfaced to the person who typed it (`architecture/08`
+    // H15: a refusal must be visible, not silently retried forever). Only a
+    // refusal an executor threw as `dependency: true` — the "no such <row>"
+    // checks, which really can be answered differently once the entry ahead
+    // resolves — is eligible to become `deferred` this way; everything else
+    // refuses unconditionally, on this attempt and every later one.
     if (error instanceof LocalRefusal || error instanceof LocalDeferral) {
       const anEarlierEntryIsDeferred =
         error instanceof LocalRefusal &&
+        error.dependency &&
         ledger.outbox.db
           .select({ id: outbox.id })
           .from(outbox)
@@ -337,7 +346,7 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
           .set(
             disposition === "refused"
               ? { state: "blocked", blockedKind: "terminal", disposition, blockedReason: reason }
-              : { disposition },
+              : { disposition, blockedReason: reason },
           )
           .where(eq(outbox.id, enqueued.entryId))
           .run();

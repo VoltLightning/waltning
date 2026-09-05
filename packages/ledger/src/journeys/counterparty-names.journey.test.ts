@@ -11,9 +11,9 @@
  * `packages/schema/src/counterparties.sqlite.ts` and the executor it backs
  * (`create-counterparty.executor.ts`), not in a numbered spec heading.
  * Findings: R2 C1 — fixed by #116, R2 H1-r3 — fixed by #116 (NFD), R2 M3 —
- * fixed by #116 (archived name is free), R2 M1-r4 (trim set), R2 H6 — fixed
- * by #116 (a refused entry is a visible blocked state, never a silent
- * pending row).
+ * fixed by #116 (archived name is free), R2 M1-r4 — fixed by #116 (the trim
+ * CHECK), R2 H6 — fixed by #116 (a refused entry is a visible blocked
+ * state, never a silent pending row).
  *
  * **R2 M3 is one half of a joint rule with `merge-unmerge.journey.test.ts`'s
  * own R2 H1**: an archived name is free (this file), but an unmerge that

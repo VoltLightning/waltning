@@ -31,7 +31,7 @@ export const renameCategoryExecutor = defineLocalExecutor<
 function renameCategory(input: RenameCategoryInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new LocalRefusal(`rename_category: no category ${input.id}`);
+    throw new LocalRefusal(`rename_category: no category ${input.id}`, { dependency: true });
   }
   if (current.version !== input.version) {
     throw new LocalRefusal(

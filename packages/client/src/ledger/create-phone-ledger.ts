@@ -1053,7 +1053,11 @@ export type PhoneLedgerController = {
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
   createTransaction: (
     draft: QuickAddDraft,
-  ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
+  ) => // #116 review, L2 — `deferred` marks a capture that saved (the outbox
+  // entry committed) but could not yet value itself (no FX rate); absent
+  // or `false` for an ordinary save. Never a reason to treat this as
+  // anything but a success — `quick-add-screen.tsx` dismisses either way.
+  { id: Id<"transactions">; deferred?: boolean } | { fieldErrors: readonly FieldError[] };
   createCategory: (
     draft: CreateCategoryDraft,
   ) => { id: Id<"categories"> } | { fieldErrors: readonly FieldError[] };
@@ -1304,31 +1308,13 @@ function accountWriteRefusal(error: unknown): FieldError | null {
  * the *row*, reached only if a caller somehow got past `ScopeSegments` and
  * the screen's own account-switch reset), so it carries its own `messageKey`.
  *
- * **R4 L2 — `LocalDeferral` is not a refusal, and is caught first.** Before
- * this, `create-transaction.executor.ts`'s no-rate `LocalDeferral` fell
- * through every branch below, returned `null`, and the caller's `if
- * (!fieldError) throw refusal` rethrew it — the composer saw a bare
- * exception for a write that had, in fact, already committed to the outbox
- * (`write.ts` commits the entry before it ever calls `apply`). Matched on
- * `error.name` rather than `instanceof LocalDeferral`: this file is
- * deliberately structural against `@waltning/ledger` (see `PhoneCurrency`'s
- * own comment above) so the port stays the only thread to the storage
- * engine, and `LocalDeferral`'s `name` is fixed by its class field. Routed
- * through the same `fieldErrors` channel as every other mapper here — there
- * is no third outcome in `PhoneLedgerController.createTransaction`'s
- * contract, and S30 (R4's `lastRecovery`) is the eventual place a *saved,
- * not-yet-valued* capture gets its own treatment, not this screen, not yet.
+ * **`LocalDeferral` is not a refusal, and never reaches this mapper.** It is
+ * caught first, at the call site (#116 review, L2) — see the comment there
+ * for why: a *saved* capture routed through `fieldErrors` here used to read
+ * as a failed one to both the caller and the screen.
  */
-function createTransactionRefusal(error: unknown, currency: CurrencyCode): FieldError | null {
+function createTransactionRefusal(error: unknown): FieldError | null {
   if (!(error instanceof Error)) return null;
-  if (error.name === "LocalDeferral") {
-    return {
-      path: "",
-      message: error.message,
-      messageKey: "transactions.deferredNoRate",
-      params: { currency },
-    };
-  }
   if (
     error.message.includes("cannot sit in a shared account") ||
     error.message.includes("cannot move into a shared account")
@@ -2327,6 +2313,36 @@ export function createPhoneLedger(
           };
         }
 
+        /**
+         * **#116 review, M3 — refused, never silently rewritten (SPEC.md
+         * §6.5: a transaction's currency is its account's).** This used to
+         * read `const currency = account?.currency ?? draft.currency`,
+         * unconditionally: a `draft.currency` that named dollars while the
+         * picked account only ever holds złoty was quietly corrected to the
+         * account's own currency rather than told to the person who typed
+         * it — exactly the silent-until-drain failure `settle-debt.executor.ts`'s
+         * own H3 check exists to catch on retry, reached here first instead.
+         * Only checked when the account is known locally, the same as the
+         * `capturable` guard above.
+         */
+        if (account && draft.currency !== account.currency) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "settle_debt",
+            phase: "success",
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "currency",
+                message: `This account only holds ${account.currency} — settle in that currency.`,
+                messageKey: "settleDebt.currencyMismatch",
+                params: { accountCurrency: account.currency },
+              },
+            ],
+          };
+        }
+
         const capture = runtime.capture();
 
         // R2 H4 — `type` is read here, from the balance the controller can
@@ -2352,9 +2368,11 @@ export function createPhoneLedger(
             ? "expense"
             : "income";
 
-        // R2 H3 — the same overwrite `createTransaction` makes below: the
-        // account's own currency, never the draft's, so a stale or
-        // mismatched draft field can never reach the write.
+        // R2 H3 — a mismatch already refused above when the account is
+        // known, so this agrees with `draft.currency` whenever it runs;
+        // `account?.currency` only still matters for an account this
+        // replica does not recognise, left to the schema/executor exactly
+        // as the `capturable` guard above already does.
         const currency = account?.currency ?? draft.currency;
 
         const parsed = settleDebtInput.safeParse({
@@ -2503,7 +2521,36 @@ export function createPhoneLedger(
         try {
           port.createTransaction(parsed.data, capture);
         } catch (refusal) {
-          const fieldError = createTransactionRefusal(refusal, account.currency);
+          /**
+           * **#116 review, L2 — a `LocalDeferral` is a saved outcome, not a
+           * refusal, and is caught here rather than reaching
+           * `createTransactionRefusal` at all.** `write.ts` commits the
+           * outbox entry before `apply` ever runs, so a no-rate deferral
+           * still means the capture is on the outbox — only not yet valued.
+           * Reporting it as `fieldErrors` used to leave the draft on screen
+           * with a field marked invalid; the person's only visible move was
+           * Save again, which minted a *second*, genuinely new capture on
+           * top of the first — `runtime.id()` above runs again on every call,
+           * it does not remember the first attempt's id. `deferred: true` on
+           * the success shape tells the caller this happened without a
+           * second outcome shape to add: `quick-add-screen.tsx` dismisses
+           * exactly as it would for an ordinary save and shows
+           * `transactions.deferredNoRate` as a toast instead of a field
+           * error. Matched on `error.name` rather than `instanceof
+           * LocalDeferral`: this file is deliberately structural against
+           * `@waltning/ledger` (see `PhoneCurrency`'s own comment above), and
+           * `LocalDeferral`'s `name` is fixed by its class field.
+           */
+          if (refusal instanceof Error && refusal.name === "LocalDeferral") {
+            refresh();
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "success",
+            });
+            return { id: parsed.data.id, deferred: true };
+          }
+          const fieldError = createTransactionRefusal(refusal);
           if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {
             scope: "client_action",

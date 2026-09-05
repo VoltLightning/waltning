@@ -35,7 +35,7 @@ export const archiveCategoryExecutor = defineLocalExecutor<
 function archiveCategory(input: ArchiveCategoryInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new LocalRefusal(`archive_category: no category ${input.id}`);
+    throw new LocalRefusal(`archive_category: no category ${input.id}`, { dependency: true });
   }
   if (current.archived) {
     throw new LocalRefusal(`archive_category: ${input.id} is already archived`);

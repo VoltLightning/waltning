@@ -42,7 +42,7 @@ export const updateAccountExecutor = defineLocalExecutor<
 function patchAccount(input: UpdateAccountInput, tx: ReplicaTx): LocalAccountRow {
   const [current] = tx.select().from(accounts).where(eq(accounts.id, input.id)).all();
   if (!current) {
-    throw new LocalRefusal(`update_account: no account ${input.id}`);
+    throw new LocalRefusal(`update_account: no account ${input.id}`, { dependency: true });
   }
   if (current.archived) {
     throw new LocalRefusal(`update_account: ${input.id} is archived`);

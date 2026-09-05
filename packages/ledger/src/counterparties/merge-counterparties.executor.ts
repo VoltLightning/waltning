@@ -6,13 +6,12 @@
  * Every transaction that ends up moved is repointed to `winnerId`, the moved
  * ids are recorded on a `counterparty_merges` row, and the loser is archived
  * (never deleted — §6.9). `unmerge_counterparties` reverses precisely that
- * recorded list. **Which ids "end up moved" has two paths (R2 H5 —
- * `namedMovedRows` and `mergeCounterparties` below):** a caller that named
- * them explicitly (its own pre-read of the replica) gets exactly that list,
- * refused if any of it no longer names the loser; a caller with nothing to
- * name gets whatever this transaction discovers pointing at the loser right
- * now, atomically. Both are recorded the same way, and `listCounterpartyMerges`
- * reads either back the same way.
+ * recorded list. **Every caller names the ids it moved (R2 H5 —
+ * `namedMovedRows` below, required per #116 review M1):** the caller's own
+ * pre-read of the replica names exactly the list this refuses against,
+ * naming which id no longer names the loser if any of it moved since. There
+ * is no second, self-deriving path any more — see `namedMovedRows`'s own doc
+ * for why that path was a bug, not a convenience.
  *
  * **This deliberately differs from `merge_categories` (J12), which is not
  * reversible in one step.** A counterparty merge only re-points a foreign
@@ -76,11 +75,22 @@ export const mergeCounterpartiesExecutor = defineLocalExecutor<
 });
 
 /**
- * The caller-named half of R2 H5 — refuses if any named id no longer points
- * at the loser, then moves exactly the named ids. Chunked (R2 M3): a single
- * `inArray` over every named id binds one SQLite variable per id, and a move
- * past `SQLITE_MAX_VARIABLE_NUMBER` (999) would otherwise throw "too many
- * SQL variables" instead of the refusal below.
+ * R2 H5 — refuses if any named id no longer points at the loser, then moves
+ * exactly the named ids. Chunked (R2 M3): a single `inArray` over every
+ * named id binds one SQLite variable per id, and a move past
+ * `SQLITE_MAX_VARIABLE_NUMBER` (999) would otherwise throw "too many SQL
+ * variables" instead of the refusal below.
+ *
+ * **The only path, since #116 review M1.** A self-deriving fallback —
+ * "nothing named, so move whatever this transaction discovers pointing at
+ * the loser right now" — used to run when `movedTransactionIds` was omitted.
+ * `operations.md` line 130 is exactly why that was never a safe convenience:
+ * the recorded ids are what makes `unmerge_counterparties` reverse *this*
+ * merge rather than "everything the winner currently holds", and a caller
+ * that skipped naming them got a merge record whose list was accurate by
+ * coincidence, not by constraint. `movedTransactionIds` is required now, so
+ * every caller — this operation's own fixtures included — is the caller
+ * this function was already written for.
  */
 function namedMovedRows(
   tx: ReplicaTx,
@@ -128,8 +138,16 @@ function mergeCounterparties(
     .from(counterparties)
     .where(eq(counterparties.id, input.loserId))
     .all();
-  if (!winner) throw new LocalRefusal(`merge_counterparties: no counterparty ${input.winnerId}`);
-  if (!loser) throw new LocalRefusal(`merge_counterparties: no counterparty ${input.loserId}`);
+  if (!winner) {
+    throw new LocalRefusal(`merge_counterparties: no counterparty ${input.winnerId}`, {
+      dependency: true,
+    });
+  }
+  if (!loser) {
+    throw new LocalRefusal(`merge_counterparties: no counterparty ${input.loserId}`, {
+      dependency: true,
+    });
+  }
   if (winner.archived) {
     throw new LocalRefusal(`merge_counterparties: ${input.winnerId} is archived`);
   }
@@ -180,23 +198,17 @@ function mergeCounterparties(
     );
   }
 
-  // R2 H5 — a caller with its own pre-read (`create-phone-ledger.ts`'s
-  // `mergeCounterparties` action, paging `searchTransactions`) names exactly
-  // the ids it saw, and this refuses one that no longer names the loser: a
-  // concurrent write already reassigned it, and silently dropping it from
-  // the moved set would move a different set than the controller — and the
-  // person — saw. A caller with no such pre-read (this operation's own
-  // fixtures included) omits the field entirely and gets the ids this
-  // transaction discovers for itself, below — never a mix of the two, since
-  // an omitted list is `undefined`, not `[]`.
-  const movedRows = input.movedTransactionIds
-    ? namedMovedRows(tx, input.loserId, input.winnerId, input.movedTransactionIds)
-    : tx
-        .update(transactions)
-        .set({ counterpartyId: input.winnerId })
-        .where(and(eq(transactions.counterpartyId, input.loserId), isNull(transactions.deletedAt)))
-        .returning({ id: transactions.id })
-        .all();
+  // R2 H5 — the caller (`create-phone-ledger.ts`'s `mergeCounterparties`
+  // action, paging `searchTransactions`) names exactly the ids it saw, and
+  // this refuses one that no longer names the loser: a concurrent write
+  // already reassigned it, and silently dropping it from the moved set
+  // would move a different set than the controller — and the person — saw.
+  // #116 review, M1: `movedTransactionIds` is required, not optional — a
+  // prior shape let a caller with no pre-read omit it and get "everything
+  // currently pointing at the loser" instead, which is exactly the
+  // re-derivation `operations.md` line 130 says this field exists to avoid.
+  // Every caller, fixtures included, now names the ids it moved.
+  const movedRows = namedMovedRows(tx, input.loserId, input.winnerId, input.movedTransactionIds);
 
   // R2 L3 — the named path's stale check only catches a *named* id
   // reassigned away from the loser; it says nothing about a live transaction

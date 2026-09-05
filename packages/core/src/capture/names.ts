@@ -28,8 +28,11 @@ const DIACRITICS: Record<string, string> = {
 };
 
 /**
- * Case-fold and strip the diacritics above. Length-preserving — see the note
- * on `DIACRITICS`.
+ * Case-fold and strip the diacritics above. The diacritic strip in
+ * `DIACRITICS` is length-preserving, one character to one character — but
+ * `toLowerCase()` is not: Turkish `İ` (U+0130) lowercases to two code units
+ * (`i` plus a combining dot above), so `fold()` as a whole can grow a string
+ * by one character on input it happens to contain.
  *
  * **`normalize("NFC")` first (R2 M1).** `DIACRITICS` matches single
  * *precomposed* code points (`ó` is one character, U+00F3). Text that arrived

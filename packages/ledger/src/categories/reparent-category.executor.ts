@@ -33,7 +33,7 @@ export const reparentCategoryExecutor = defineLocalExecutor<
 function reparentCategory(input: ReparentCategoryInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new LocalRefusal(`reparent_category: no category ${input.id}`);
+    throw new LocalRefusal(`reparent_category: no category ${input.id}`, { dependency: true });
   }
   if (current.version !== input.version) {
     throw new LocalRefusal(
@@ -54,7 +54,9 @@ function reparentCategory(input: ReparentCategoryInput, tx: ReplicaTx): LocalCat
 
     const [parent] = tx.select().from(categories).where(eq(categories.id, input.parentId)).all();
     if (!parent) {
-      throw new LocalRefusal(`reparent_category: no parent ${input.parentId}`);
+      throw new LocalRefusal(`reparent_category: no parent ${input.parentId}`, {
+        dependency: true,
+      });
     }
     if (parent.isLeaf) {
       throw new LocalRefusal(

@@ -170,7 +170,7 @@ describe("J07 — lend and settle", () => {
    * Nothing enforced it, so a USD amount could sit on a PLN account and
    * every balance downstream would be wrong."*
    */
-  it.fails("R2 H3 — settle_debt never checks that `currency` names the destination account's own currency (SPEC.md §6.5)", () => {
+  it("R2 H3 — settle_debt never checks that `currency` names the destination account's own currency (SPEC.md §6.5)", () => {
     const { ledger, fixture } = setupJourney();
 
     const result = ledger.controller.settleDebt({

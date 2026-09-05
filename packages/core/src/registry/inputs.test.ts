@@ -1120,17 +1120,32 @@ describe("mergeCounterpartiesInput", () => {
     expect(parsed.movedTransactionIds).toEqual([SETTLE_TXN_ID]);
   });
 
-  // R2 H5 — a caller with no pre-read to name the moved ids from (this
-  // operation's own fixtures included) omits the field, and the executor
-  // discovers them itself at apply time.
-  it("leaves movedTransactionIds unset for a caller with nothing to name", () => {
-    const parsed = mergeCounterpartiesInput.parse({
+  // #116 review, M1 — `movedTransactionIds` is required, not optional.
+  // `operations.md` line 130 names the recorded ids as what makes unmerge
+  // exact rather than a re-derivation; an omitted field used to let the
+  // executor derive its own moved set instead, quietly, which is exactly
+  // the re-derivation that line rules out. Every caller now names the ids
+  // it moved, even when that is `[]`.
+  it("refuses when movedTransactionIds is missing", () => {
+    const result = mergeCounterpartiesInput.safeParse({
       mergeId: MERGE_ID,
       winnerId: COUNTERPARTY_ID,
       loserId: OTHER_COUNTERPARTY_ID,
     });
 
-    expect(parsed.movedTransactionIds).toBeUndefined();
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("movedTransactionIds");
+  });
+
+  it("accepts an empty movedTransactionIds — nothing on the loser to move", () => {
+    const parsed = mergeCounterpartiesInput.parse({
+      mergeId: MERGE_ID,
+      winnerId: COUNTERPARTY_ID,
+      loserId: OTHER_COUNTERPARTY_ID,
+      movedTransactionIds: [],
+    });
+
+    expect(parsed.movedTransactionIds).toEqual([]);
   });
 });
 
@@ -1175,14 +1190,15 @@ describe("settleDebtInput", () => {
     discharges: { currency: "EUR", amount: "50" },
   };
 
-  // R2 H4 — carried when the caller has one, verified rather than derived
-  // (`settle-debt.executor.ts`); optional here so a caller with no live-sign
-  // read to carry — this operation's own fixtures included — still parses,
-  // and gets the executor's own read of the live sign instead.
-  it("accepts type when the caller supplies one, and leaves it unset otherwise", () => {
+  // #116 review, M2 — `type` is required, not optional. R2 H4 carries it to
+  // prove the settlement's direction was verified against the live balance,
+  // not assumed; an omitted `type` used to skip that verification entirely
+  // for exactly the caller least likely to have re-derived it independently.
+  it("requires type — carried and verified against the live balance", () => {
     const { type: _omit, ...withoutType } = base;
-    expect(settleDebtInput.safeParse(withoutType).success).toBe(true);
-    expect(settleDebtInput.parse(withoutType).type).toBeUndefined();
+    const result = settleDebtInput.safeParse(withoutType);
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("type");
     expect(settleDebtInput.parse(base).type).toBe("expense");
   });
 

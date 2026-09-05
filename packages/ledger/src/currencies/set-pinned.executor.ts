@@ -30,7 +30,7 @@ export const setPinnedExecutor = defineLocalExecutor<
 function setPinned(input: SetPinnedInput, tx: ReplicaTx): LocalCurrencyRow {
   const [current] = tx.select().from(currencies).where(eq(currencies.code, input.code)).all();
   if (!current) {
-    throw new LocalRefusal(`set_pinned: no currency ${input.code}`);
+    throw new LocalRefusal(`set_pinned: no currency ${input.code}`, { dependency: true });
   }
   if (current.archived) {
     throw new LocalRefusal(`set_pinned: ${input.code} is archived`);

@@ -34,7 +34,7 @@ export const convertLeafGroupExecutor = defineLocalExecutor<
 function convertLeafGroup(input: ConvertLeafGroupInput, tx: ReplicaTx): LocalCategoryRow {
   const [current] = tx.select().from(categories).where(eq(categories.id, input.id)).all();
   if (!current) {
-    throw new LocalRefusal(`convert_leaf_group: no category ${input.id}`);
+    throw new LocalRefusal(`convert_leaf_group: no category ${input.id}`, { dependency: true });
   }
   if (current.version !== input.version) {
     throw new LocalRefusal(

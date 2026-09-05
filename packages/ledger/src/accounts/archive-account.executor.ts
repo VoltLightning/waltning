@@ -31,7 +31,7 @@ export const archiveAccountExecutor = defineLocalExecutor<
 function archiveAccount(input: ArchiveAccountInput, tx: ReplicaTx): LocalAccountRow {
   const [current] = tx.select().from(accounts).where(eq(accounts.id, input.id)).all();
   if (!current) {
-    throw new LocalRefusal(`archive_account: no account ${input.id}`);
+    throw new LocalRefusal(`archive_account: no account ${input.id}`, { dependency: true });
   }
   if (current.archived) {
     throw new LocalRefusal(`archive_account: ${input.id} is already archived`);

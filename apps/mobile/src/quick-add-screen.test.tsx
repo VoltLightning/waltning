@@ -306,4 +306,42 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     });
     expect(router.dismissTo).toHaveBeenCalledWith("/");
   });
+
+  /**
+   * #116 review, L2 — a `LocalDeferral` out of the port is a *saved* outcome
+   * (the outbox entry already committed), never a refusal: the screen must
+   * dismiss exactly as it does on an ordinary save, not leave the draft on
+   * screen with a field marked invalid — a retry against a kept draft would
+   * mint a second, genuinely new capture on top of the first. The toast
+   * carries `transactions.deferredNoRate`, the same route-param `Toast`
+   * `transaction-detail-screen.tsx`'s own delete uses.
+   *
+   * Last, for the same reason the test above is: a successful save writes
+   * the real device clock into `lastCapture`, and this one saves too — and,
+   * running after that one, inherits its real `lastCapture` write, so the
+   * account chip already reads "filled automatically" here rather than
+   * needing `pickCashAccount()` again.
+   */
+  it("dismisses a deferred capture as saved, with a toast, not a field error", () => {
+    const createTransaction = vi.fn(() => {
+      throw Object.assign(new Error("create_transaction: no last-known rate for PLN/CHF"), {
+        name: "LocalDeferral",
+      });
+    });
+    withLedger({ createTransaction });
+
+    tapKeys("4", "8", ".", "9", "0");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(createTransaction).toHaveBeenCalledOnce();
+    // Dismissed with a message, not left on screen with a field error.
+    expect(router.dismissTo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pathname: "/",
+        params: expect.objectContaining({
+          message: expect.stringContaining("Saved"),
+        }),
+      }),
+    );
+  });
 });

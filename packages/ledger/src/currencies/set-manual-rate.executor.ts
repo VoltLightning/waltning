@@ -50,7 +50,7 @@ function dateRange(from: AccountingDate, to: AccountingDate): AccountingDate[] {
 function setManualRate(input: SetManualRateInput, tx: ReplicaTx): SetManualRateResult {
   const [pivot] = tx.select().from(currencies).where(eq(currencies.isPivot, true)).all();
   if (!pivot) {
-    throw new LocalRefusal("set_manual_rate: no pivot currency is set");
+    throw new LocalRefusal("set_manual_rate: no pivot currency is set", { dependency: true });
   }
   if (input.base !== pivot.code) {
     throw new LocalRefusal(

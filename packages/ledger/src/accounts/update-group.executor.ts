@@ -38,7 +38,7 @@ function patchGroup(input: UpdateGroupInput, tx: ReplicaTx): LocalGroupRow {
     .all();
 
   if (!updated) {
-    throw new LocalRefusal(`update_group: no group ${input.id}`);
+    throw new LocalRefusal(`update_group: no group ${input.id}`, { dependency: true });
   }
   return updated;
 }

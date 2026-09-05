@@ -107,7 +107,21 @@ function main(): void {
     // the upgrade for that finding's journey to have anything to exercise.
     seedCounterparty(j, ID.cpA, "Anna Placeholder");
     seedCounterparty(j, ID.cpB, "Łukasz Placeholder");
-    seedCounterparty(j, CP_LOWER, "łukasz placeholder");
+    // `CP_LOWER` bypasses `seedCounterparty` on purpose (#116 review, H1):
+    // that helper now writes a real `fold()`ed value, correct for every
+    // *other* fixture — but `fold("łukasz placeholder")` agrees with
+    // `ID.cpB`'s own fold, and both are still live at this point in the
+    // script (the merge below is what archives this one), which would
+    // collide against `counterparties_name_uq` immediately, before this
+    // fixture ever gets to represent anything. A raw insert with
+    // `name_folded` left at its `''` default is exactly the shape H1's own
+    // comment on that column names: a pre-backfill row, from before
+    // anything had computed it a real value — this fixture's whole point is
+    // to be one.
+    j.raw()
+      .replica.db.insert(counterparties)
+      .values({ id: CP_LOWER, name: "łukasz placeholder" })
+      .run();
 
     // One `fx_rates` row per real `FX_SOURCE` member — `fx_rates_pk` is
     // `(base, quote, date)`, not `source`, so each needs its own date.
@@ -160,8 +174,10 @@ function main(): void {
     // the fixture still carries both rows the fold would unify: one live
     // (`ID.cpB`), one archived but present (`CP_LOWER`) — archiving is never
     // deleting (S15 §9.2), so the row the collision needs is still there.
+    // `movedTransactionIds` is `[]` — required now (#116 review, M1) — since
+    // nothing above ever captured a transaction against `CP_LOWER`.
     j.session.mergeCounterparties(
-      { mergeId: MERGE_ID, winnerId: ID.cpA, loserId: CP_LOWER },
+      { mergeId: MERGE_ID, winnerId: ID.cpA, loserId: CP_LOWER, movedTransactionIds: [] },
       CAPTURE,
     );
 

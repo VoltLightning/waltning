@@ -44,7 +44,9 @@ export const supersedeTransactionExecutor = defineLocalExecutor<
 function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransactionRow {
   const old = tx.select().from(transactions).where(eq(transactions.id, input.supersedesId)).get();
   if (!old) {
-    throw new LocalRefusal(`supersede_transaction: no transaction ${input.supersedesId}`);
+    throw new LocalRefusal(`supersede_transaction: no transaction ${input.supersedesId}`, {
+      dependency: true,
+    });
   }
   if (old.deletedAt !== null) {
     throw new LocalRefusal(`supersede_transaction: ${input.supersedesId} is already deleted`);

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "394efc11-167e-4129-8a06-f6da4b9295be",
+  "id": "e7986c03-5ce1-493c-b2e0-478bfec41ab0",
   "prevId": "c59b1a19-d8ea-483a-9ae5-a5b41ad053ae",
   "tables": {
     "account_groups": {
@@ -450,7 +450,7 @@
             "name_folded"
           ],
           "isUnique": true,
-          "where": "not \"counterparties\".\"archived\" and \"counterparties\".\"name_folded\" != ''"
+          "where": "not \"counterparties\".\"archived\""
         }
       },
       "foreignKeys": {

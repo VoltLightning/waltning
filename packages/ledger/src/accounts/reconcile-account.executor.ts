@@ -54,7 +54,9 @@ export const reconcileAccountExecutor = defineLocalExecutor<
 function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTransactionRow {
   const [account] = tx.select().from(accounts).where(eq(accounts.id, input.accountId)).all();
   if (!account) {
-    throw new LocalRefusal(`reconcile_account: no account ${input.accountId}`);
+    throw new LocalRefusal(`reconcile_account: no account ${input.accountId}`, {
+      dependency: true,
+    });
   }
   if (account.archived) {
     throw new LocalRefusal(`reconcile_account: ${input.accountId} is archived`);
