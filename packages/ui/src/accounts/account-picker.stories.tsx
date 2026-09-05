@@ -178,8 +178,9 @@ export const WithLastUsed: Story = {
  * No rate held for BYN — shown, muted, and it says why rather than
  * disappearing (S05). `TWENTY`'s own BYN tile sits in the CASH group, below
  * the list's `maxHeight` scroll cut, so its baseline was indistinguishable
- * from `TwentyAccounts`; this fixture puts it first, in the first group, so
- * the tile and its "needs a rate" caption land inside the captured frame.
+ * from `TwentyAccounts`; this fixture is four accounts total — no scroll cut
+ * to clear — so the tile and its "needs a rate" caption land inside the
+ * captured frame regardless of which group it sits in.
  */
 const UNCAPTURABLE: AccountPickerAccount[] = [
   {
@@ -190,7 +191,7 @@ const UNCAPTURABLE: AccountPickerAccount[] = [
     kind: "cash",
     capturable: false,
     ownership: "own",
-    groupId: "grp-bank",
+    groupId: "grp-cash",
   },
   ...FEW,
 ];

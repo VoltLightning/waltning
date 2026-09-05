@@ -207,7 +207,17 @@ function EditableAmountField({
   return (
     <View style={styles.block}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.field, error ? styles.invalid : null]}>
+      <View
+        style={[
+          styles.field,
+          error ? styles.invalid : null,
+          // §2.6: the ring goes on the field — `[input][affix]` — not the
+          // `TextInput` alone, the same rule `search-field.tsx`'s fix states.
+          // An errored field's ring is the danger colour instead of the
+          // ordinary one.
+          focused ? (error ? styles.focusedError : styles.focused) : null,
+        ]}
+      >
         <TextInput
           accessibilityLabel={label}
           // `decimal-pad` rather than `numeric`: it offers the separator and not
@@ -217,16 +227,7 @@ function EditableAmountField({
           onChangeText={handleTextChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          style={[
-            styles.input,
-            // The ring belongs on this node, not the wrapping `field` View —
-            // `search-field.tsx`'s own defect: the DOM node that receives
-            // focus is this `TextInput`, and without an outline here the
-            // browser draws its own native ring on top of ours. An errored
-            // field's ring is the danger colour whether focused or not, the
-            // same rule `text-field.tsx`'s own fix states.
-            focused ? (error ? styles.inputErrorFocused : styles.inputFocused) : null,
-          ]}
+          style={styles.input}
         />
         {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>
@@ -261,17 +262,29 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "right",
     fontVariant: [...tabularNums],
     // Suppresses the browser's own native focus ring on this `TextInput` —
-    // `search-field.tsx`'s own fix for the same defect.
+    // without it, focusing the field draws that ring here, on the actual
+    // focused DOM node, bisecting the field instead of enclosing it. The
+    // real ring is `focused`/`focusedError` above, on the wrapper. **Both
+    // properties are required** — see `search-field.tsx`'s own fix: Chromium's
+    // default `outline-style: auto` renders its own native ring at its own
+    // width regardless of an author `outlineWidth: 0`.
     outlineWidth: 0,
+    outlineStyle: "solid",
   },
   affix: { color: theme.textMuted, ...text.ui("caption") },
-  inputFocused: {
+  // **`outlineStyle` is required, not decorative** — see `search-field.tsx`'s
+  // own fix: this `View` never receives real DOM focus, so without naming a
+  // style `outline-style` stays at its CSS-initial `none` and neither ring
+  // ever paints regardless of width or colour.
+  focused: {
     outlineWidth: focus.width,
+    outlineStyle: "solid",
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
-  inputErrorFocused: {
+  focusedError: {
     outlineWidth: focus.width,
+    outlineStyle: "solid",
     outlineColor: theme.dangerBorder,
     outlineOffset: focus.offset,
   },

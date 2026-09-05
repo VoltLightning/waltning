@@ -297,6 +297,7 @@ export const pl: Messages = {
     archive: "Archiwizuj",
     moveTargetLabel: "Grupa",
     moveTargetPlaceholder: "Wybierz grupę",
+    moveAcrossKinds: "{{name}} należy do strony {{kind}} — kategoria nie może zmienić strony",
     mergeWinnerLabel: "Scal w",
     mergeWinnerPlaceholder: "Wybierz kategorię",
     mergeRowTransactions: "Transakcje",

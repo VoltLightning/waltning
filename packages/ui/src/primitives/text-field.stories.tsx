@@ -6,6 +6,7 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { useState } from "react";
 import { View } from "react-native";
+import { userEvent, waitFor, within } from "storybook/test";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 import { TextField } from "./text-field";
@@ -35,6 +36,33 @@ export const WithError: Story = {
     value: "   ",
     hint: "Shown on every row this account appears in.",
     error: "A name needs at least one visible character.",
+  },
+};
+
+/**
+ * `inputErrorFocused` — the danger ring is never swamped by the ordinary
+ * green focus ring once the errored field is actually focused.
+ */
+export const WithErrorFocused: Story = {
+  args: {
+    value: "   ",
+    hint: "Shown on every row this account appears in.",
+    error: "A name needs at least one visible character.",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = await canvas.findByLabelText("Name");
+    await userEvent.click(input);
+    // `focused` is React state, set from the input's own `onFocus` — one
+    // render tick behind the click's own DOM focus. `outlineStyle` stays
+    // "none" at rest (`inputError` sets no outline at all) and becomes
+    // "auto" only once `inputErrorFocused` actually applies, so this is the
+    // ring itself settling rather than a guess at how long that takes.
+    await waitFor(() => {
+      if (getComputedStyle(input).outlineStyle === "none") {
+        throw new Error("input has not taken the focus ring yet");
+      }
+    });
   },
 };
 

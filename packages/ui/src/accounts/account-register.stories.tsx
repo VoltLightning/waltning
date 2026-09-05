@@ -84,16 +84,23 @@ export const WithArchived: Story = {
   args: { accounts: POPULATED, archivedAccounts: ARCHIVED },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByText("Archived"));
-    // The row mounts the instant `archivedOpen` flips, but the click's own
-    // press-scale (`press-scale.ts`) is still settling back to 1 — a
-    // screenshot taken mid-settle catches the row's text at partial opacity.
-    // `ArchivedToggle` puts no opacity on the row itself (a whole-row fade
-    // failed `axe`'s contrast check there), so waiting for the row to be
-    // present and stable, rather than changing the component, is correct.
-    const row = await canvas.findByText("Old · PLN");
+    const toggle = await canvas.findByRole("button", { name: "Archived" });
+    await userEvent.click(toggle);
+    await canvas.findByText("Old · PLN");
+    // The row mounts the instant `archivedOpen` flips and carries no
+    // opacity or transform of its own — `ArchivedToggle`'s own comment: a
+    // whole-row fade failed `axe`'s contrast check here. What is still
+    // settling is the *toggle button's* own `usePressScale` (`press-scale.ts`)
+    // easing its `scale` back to 1 after release, on the `Animated.View`
+    // that wraps it (`button.tsx`) — a screenshot taken mid-settle catches
+    // the button a hair smaller than its resting size.
+    const wrapper = toggle.parentElement;
     await waitFor(() => {
-      if (getComputedStyle(row).opacity !== "1") throw new Error("row still settling");
+      if (wrapper === null) throw new Error("button has no Animated.View wrapper");
+      const { transform } = getComputedStyle(wrapper);
+      if (transform !== "none" && transform !== "matrix(1, 0, 0, 1, 0, 0)") {
+        throw new Error("press-scale still settling");
+      }
     });
   },
 };

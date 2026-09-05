@@ -3234,7 +3234,12 @@ describe("category writes", () => {
       const { controller } = harness(undefined, { categoryTree: tree() });
       const result = controller.moveCategory({ id: SALARY, parentId: FOOD_GROUP });
       expect("fieldErrors" in result && result.fieldErrors).toEqual([
-        { path: "parentId", message: '"Food" is an expense group — refused across kinds' },
+        {
+          path: "parentId",
+          message: "Food belongs to the expense side — a category cannot move across kinds",
+          messageKey: "categories.moveAcrossKinds",
+          params: { name: "Food", kind: "expense" },
+        },
       ]);
     });
 
