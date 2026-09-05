@@ -32,6 +32,21 @@ export type LedgerDiagnosticEvent =
       error: LedgerDiagnosticError;
     }
   | {
+      /**
+       * The one refusal a session turns into an action rather than a plain
+       * failure: `PreJournalStoreError` (`migrate.ts`), caught in `start()`.
+       * `stage` is always one of the two migration steps because that is the
+       * only place the error is thrown from; `store` names which chain of
+       * the pair was refused, though both are deleted together (§14.6 — the
+       * replica and the outbox are only consistent as a pair).
+       */
+      scope: "ledger_startup";
+      phase: "rebuild";
+      stage: "migrate_outbox" | "migrate_replica";
+      store: "replica" | "outbox";
+      error: LedgerDiagnosticError;
+    }
+  | {
       scope: "local_write";
       phase: "start";
       boundary: "validate";

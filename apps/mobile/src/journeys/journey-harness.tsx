@@ -75,6 +75,8 @@ export function createJourneyLedger(): JourneyLedger {
     fs: nodeFs,
     removeDatabase: (path) => rmSync(path, { force: true }),
     bootstrapCurrencies: BOOTSTRAP_CURRENCIES,
+    // No journey run through this harness is about a pre-journal store.
+    preJournalStores: "refuse",
   });
   const controller = createPhoneLedger(session, deviceRuntime());
   return { controller, scratch, close: scratch.close };

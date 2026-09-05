@@ -275,12 +275,19 @@ intention:
    and a checksum of its statements, created by the migrator before the chain
    and written inside the same transaction as the step it records. Which
    steps run is then what the journal does not hold, in order, with
-   `user_version` a fast path that moves in that same transaction. Three
-   refusals fall out of it, each with nothing written and no copy taken:
+   `user_version` a fast path that moves in that same transaction. Two of the
+   three are always refusals, and the third is the app's own choice, each
+   with nothing written and no copy taken:
 
    - **A database above version 0 with no journal** was written before the
-     journal existed, and which of this build's steps it ran cannot be known.
-     Guessing re-runs a step over real rows.
+     journal existed, and which of this build's steps it ran cannot be known
+     — not a migration outcome, so it is not this rule's business. What the
+     app does with it is `LocalLedgerSessionOptions.preJournalStores`, a
+     session option decided at the platform seam: `"rebuild"` deletes both
+     stores and starts from nothing, logging a `ledger_startup` rebuild that
+     names the store, while no installed device could hold a ledger worth
+     keeping; `"refuse"` leaves the pair untouched and reports the refusal
+     once that stops being true.
    - **A journaled tag whose checksum is not this build's** means a shipped
      file was edited. A generated step's statements are frozen once an
      installed database has run them; a change to what a step does is a new
@@ -306,12 +313,16 @@ intention:
    committing. The replica is the whole ledger, not a window
    (`14-local-first.md`), so it is never a database this module drops to
    recover a version mismatch — the outbox below never was, for the same
-   reason, and neither is the replica. A **refetch from a backend** —
+   reason, and neither is the replica. The one exception is the pair no chain
+   can account for, above — that is not a version mismatch this module is
+   recovering from, it is a file no migration ever produced, and what happens
+   to it is the session's `preJournalStores` choice, not this module's. A
+   **refetch from a backend** —
    rebuilding the replica from what a server holds — is a *separate*
    operation belonging to sync (arc 2), triggered by sync's own decisions (an
    epoch mismatch, an explicit reset a person asked for), never by a schema
    version. A separate, forward-only, never-destructive chain for the outbox,
-   same rule.
+   same rule, same exception.
 2. **The outbox table's shape never changes with the domain.** The payload is
    opaque to it, so domain changes change *payloads*, not tables.
 3. **Upcasters, not migrations.** Pure functions `upcast(op, v, payload)` chained
@@ -322,7 +333,10 @@ intention:
    releases, or simply not updated.
 5. **Never drop.** No upcaster means `blocked(unsupported_version)`, surfaced on
    S30 with the raw payload readable and exportable, so a lost intention can be
-   re-entered by hand rather than vanishing.
+   re-entered by hand rather than vanishing. The one exception is the same one
+   item 1 names: an outbox above version 0 with no journal is not a version
+   this rule is answering for, and what happens to it is the session's
+   `preJournalStores` choice.
 6. **Migrate in one transaction, bumping the version inside it.** Migrations run
    at launch, which is when iOS is most likely to kill the app.
 

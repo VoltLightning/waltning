@@ -60,6 +60,10 @@ const options = () => ({
   fs,
   removeDatabase: (path: string) => rmSync(path, { force: true }),
   bootstrapCurrencies,
+  // Nothing here is about a pre-journal store; `"refuse"` keeps that true —
+  // a rebuild would silently hide a bug this file's own assertions would
+  // otherwise catch.
+  preJournalStores: "refuse" as const,
 });
 
 const accountInput = () =>

@@ -89,6 +89,9 @@ export function openJourney(options?: {
     removeDatabase: (path) => rmSync(path, { force: true }),
     bootstrapCurrencies: options?.bootstrap ?? [],
     ...(options?.migrations ? { migrations: options.migrations } : {}),
+    // No journey built on this harness is about a pre-journal store — that
+    // gets its own construction in `upgrade.journey.test.ts`.
+    preJournalStores: "refuse",
   };
 
   let rawLedger: Ledger<Run, Schema> | undefined;

@@ -368,6 +368,17 @@ schema version triggers; this arc has no backend to refetch from, so the
 question does not arise here at all, and even once one exists a schema
 mismatch is answered by migrating forward, not by falling back to a resync.
 
+**The one exception is a pair no chain can account for, not a migration
+outcome.** A store above version 0 with no `__ledger_migrations` was not
+produced by any step this migrator can name — the rule above governs what a
+*migration* may do, and running one over such a file is exactly the guess it
+refuses. What the app does with a file it cannot account for is
+`LocalLedgerSessionOptions.preJournalStores`, a session option decided at the
+platform seam, never by a schema version: `"rebuild"` — delete the pair and
+start from nothing, logging a warning — while no installed device could hold
+a ledger worth keeping; `"refuse"` from the first install that ships with a
+journal onward, once that stops being true.
+
 **The version records which step ran, not how many.** A `user_version` is the
 generated file's own four-digit prefix plus one, so it names one file for the
 life of the product. Deriving it from the step's position in the chain would
@@ -386,12 +397,15 @@ same transaction as the step it records. What runs on a launch is what the
 journal does not hold, in order; `user_version` is the fast path, moving in
 that same transaction.
 
-Three things are then refusals rather than guesses, each with nothing written
-and no pre-migration copy taken:
+Two things are always refusals, and the third is the app's own choice, each
+with nothing written and no pre-migration copy taken:
 
 - **Above version 0 with no journal.** The file was written before the journal
-  existed and cannot say what it ran; the recovery is to delete both files and
-  let the app rebuild them, which the refusal spells out by name.
+  existed and cannot say what it ran — not a migration outcome at all (see
+  above), so `session.ts`'s `preJournalStores` decides: `"rebuild"` deletes
+  both stores and starts from nothing, logging a `ledger_startup` rebuild that
+  names the store; `"refuse"` leaves the pair untouched and reports the
+  refusal, naming the files a person would delete by hand.
 - **A journaled tag whose checksum is not this build's.** A generated
   migration file's statements are frozen the moment an installed database has
   run them — every device that ran the old ones would otherwise disagree

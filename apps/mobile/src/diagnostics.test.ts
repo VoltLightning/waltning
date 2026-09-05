@@ -72,6 +72,36 @@ describe("the Metro diagnostic sink", () => {
     ]);
   });
 
+  /**
+   * H-1: the old catch-all (`"start"` → started, `"failure"` → failed, else
+   * → "completed") reported a rebuild as a plain success — a rebuild is
+   * neither, and belongs at `warn`, not `info`.
+   */
+  it("logs a pre-journal rebuild at warn, with the outcome 'rebuilt'", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { mobileDiagnostics } = await freshDiagnostics();
+    info.mockClear();
+    warn.mockClear();
+
+    mobileDiagnostics({
+      scope: "ledger_startup",
+      phase: "rebuild",
+      stage: "migrate_replica",
+      store: "replica",
+      error: {
+        name: "PreJournalStoreError",
+        message: "replica is at version 1 and has no __ledger_migrations table",
+      },
+    });
+
+    expect(info).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledOnce();
+    const record = JSON.parse(String(warn.mock.calls[0]?.[0]));
+    expect(record.message).toBe("ledger_startup migrate_replica rebuilt");
+    expect(record.store).toBe("replica");
+  });
+
   it("keeps LogTape warnings but suppresses its startup notice", async () => {
     const output = vi.spyOn(console, "info").mockImplementation(() => undefined);
 

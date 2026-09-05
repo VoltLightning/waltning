@@ -507,4 +507,8 @@ export const pl: Messages = {
     "stub.body": "Ten ekran nie jest jeszcze gotowy.",
     "stub.goToToday": "Przejdź do Dziś",
   },
+  startup: {
+    ledgerFailedTitle: "Nie udało się otworzyć księgi",
+    ledgerFailedBody: "{{message}}",
+  },
 };

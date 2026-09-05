@@ -693,6 +693,55 @@ function recordApplied(tx: SqlRunner, step: Migration, appliedAt: string): void 
   );
 }
 
+/** Which of the two chains a refusal or a rebuild names. */
+type LedgerStoreName = "replica" | "outbox";
+
+/**
+ * Thrown by `readAppliedTags` alone — the one refusal `session.ts`'s `start`
+ * may turn into a rebuild rather than a plain failure, per its own
+ * `preJournalStores` option. This class states only the fact and that
+ * nothing has been written; the recovery — rebuild, or a refusal naming the
+ * files to delete by hand — is the session's decision, never the
+ * migrator's, so it is not spelled out here. `store` and `path` name the
+ * offending file for whichever caller decides; `version` is `found`, for a
+ * diagnostic to log.
+ */
+export class PreJournalStoreError extends Error {
+  override readonly name = "PreJournalStoreError";
+  readonly store: LedgerStoreName;
+  readonly path: string;
+  readonly version: number;
+
+  constructor(store: LedgerStoreName, path: string, version: number) {
+    super(
+      `${store} is at version ${version} and has no ${MIGRATION_JOURNAL} table — it was written by a build from before this migrator journaled what it ran, so which of this build's steps have already been applied cannot be known, and guessing runs a step twice over real rows. Nothing has been written.`,
+    );
+    this.store = store;
+    this.path = path;
+    this.version = version;
+  }
+}
+
+/**
+ * `error instanceof PreJournalStoreError`, backed up by name.
+ *
+ * Hermes/Babel's transpilation of a class extending a built-in `Error` can
+ * lose the prototype chain `instanceof` walks — and Metro resolving two
+ * copies of this module (the exact failure the platform-variant
+ * extension-less rule in `tests/architecture.test.ts` exists to prevent)
+ * would hand a caller a `PreJournalStoreError` from a different module
+ * instance than the one `instanceof` here checks against. The constructor's
+ * own properties (`store`, `path`, `version`, `name`) are set regardless of
+ * either failure mode, so `name` is a safe fallback rather than a weaker
+ * substitute.
+ */
+export function isPreJournalStoreError(error: unknown): error is PreJournalStoreError {
+  return (
+    error instanceof PreJournalStoreError ||
+    (error instanceof Error && error.name === "PreJournalStoreError")
+  );
+}
+
 /**
  * What this file has already run — and the two refusals that answer "I cannot
  * tell" with a stop rather than a guess.
@@ -701,14 +750,16 @@ function recordApplied(tx: SqlRunner, step: Migration, appliedAt: string): void 
  * just created it, `refuseStaleCopy` has not been reached yet, and there is
  * nothing on disk for a wrong answer to damage.
  *
- * **A database above zero with no journal is refused**, because the only thing
- * that can be said about it is that some build wrote it and did not say what
- * it ran. `user_version` alone is not enough to reconstruct that: this
- * repository has already shipped a build whose whole chain was one version, so
- * `user_version = 1` there means "everything ran" and here means "one step
- * ran", and running the difference destroys the file. Nothing installed
- * predates the journal in a form worth preserving, so the message says to
- * delete the pair and let the app rebuild them.
+ * **A database above zero with no journal throws `PreJournalStoreError`**,
+ * because the only thing that can be said about it is that some build wrote
+ * it and did not say what it ran. `user_version` alone is not enough to
+ * reconstruct that: this repository has already shipped a build whose whole
+ * chain was one version, so `user_version = 1` there means "everything ran"
+ * and here means "one step ran", and running the difference destroys the
+ * file. `session.ts`'s `start` catches this one error class and, per its own
+ * `preJournalStores` option, either rebuilds the pair from nothing or
+ * refuses — the choice belongs to the app, at the platform seam, never to
+ * this module or to a schema version.
  *
  * **A journaled tag whose checksum is not this build's is refused by name.** A
  * generated `.sql` file's statements are frozen the moment an installed
@@ -720,15 +771,13 @@ function readAppliedTags<TRun, TSchema extends LedgerSchema>(
   db: BaseSQLiteDatabase<"sync", TRun, TSchema>,
   migrations: readonly Migration[],
   found: number,
-  store: string,
+  store: LedgerStoreName,
   path: string,
 ): ReadonlySet<string> {
   if (found === 0) return new Set<string>();
 
   if (!journalPresent(db)) {
-    throw new Error(
-      `${store} is at version ${found} and has no ${MIGRATION_JOURNAL} table — it was written by a build from before this migrator journaled what it ran, so which of this build's steps have already been applied cannot be known, and guessing runs a step twice over real rows. Nothing has been written. The recovery is to let the app rebuild both files from nothing: with the app closed, delete ${path}, ${path}-wal and ${path}-shm, and the same three files for the other store beside it — the replica and the outbox are only consistent as a pair — then start the app again`,
-    );
+    throw new PreJournalStoreError(store, path, found);
   }
 
   const journal = readJournal(db);
@@ -1037,7 +1086,7 @@ export function migrateOutbox<TRun, TSchema extends LedgerSchema>(
   // "install the newer build" is the right sentence either way.
   if (found > current) {
     throw new Error(
-      `outbox is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. The outbox is never dropped (architecture/08 §5): install the newer build, or export the entries from S30 before doing anything else`,
+      `outbox is at version ${found} and this build's chain ends at ${current} — a database written by a newer app. The outbox is never dropped for a version mismatch (architecture/08 §5): install the newer build, or export the entries from S30 before doing anything else`,
     );
   }
 

@@ -135,7 +135,13 @@ import {
   type LedgerDiagnostics,
   type LedgerStartupStage,
 } from "./diagnostics.ts";
-import { type LedgerFs, type Migration, migrateOutbox, migrateReplica } from "./migrate.ts";
+import {
+  isPreJournalStoreError,
+  type LedgerFs,
+  type Migration,
+  migrateOutbox,
+  migrateReplica,
+} from "./migrate.ts";
 import { type Ledger, type LedgerPaths, openLedger, type SqliteOpener } from "./open.ts";
 import { type LaunchRecovery, recoverOnLaunch } from "./recover.ts";
 import { ledgerRegistry } from "./registry.ts";
@@ -361,9 +367,41 @@ export type LocalLedgerSessionOptions<TRun> = {
     readonly outbox?: readonly Migration[];
   };
   diagnostics?: LedgerDiagnostics;
+  /**
+   * What a pre-journal store — a file above version 0 with no
+   * `__ledger_migrations`, one no chain can account for — means for this
+   * session. No default: the decision belongs to the platform seam that
+   * knows whether an installed device could hold a ledger worth keeping,
+   * never to a schema version, so every caller states it in the open.
+   *
+   * `"rebuild"` — the pair is deleted and `start` retries from nothing
+   * (`removeStorePair`); the app's own choice while no current install
+   * predates the journal. `"refuse"` — the pair is left untouched and the
+   * migrator's error propagates, wrapped with the recovery this mode is
+   * honest about: a person deleting the files by hand.
+   */
+  preJournalStores: "rebuild" | "refuse";
 };
 
 type SessionLedger<TRun> = Ledger<TRun, typeof ledgerSchema>;
+
+/**
+ * Both files, gone — `reset`'s own delete loop, and now also what a
+ * pre-journal rebuild runs before it retries `start`. `architecture/14`
+ * §14.6: the replica and the outbox are only consistent as a pair, so
+ * whichever store a refusal named, both are deleted together.
+ */
+function removeStorePair<TRun>(
+  options: Pick<LocalLedgerSessionOptions<TRun>, "paths" | "fs" | "removeDatabase">,
+): void {
+  for (const path of [options.paths.replica, options.paths.outbox]) {
+    options.removeDatabase(path);
+    for (const suffix of ["-wal", "-shm", ".pre-migration"]) {
+      const sibling = `${path}${suffix}`;
+      if (options.fs.exists(sibling)) options.fs.remove(sibling);
+    }
+  }
+}
 
 /**
  * `start`'s two results, kept together rather than the recovery discarded.
@@ -379,7 +417,16 @@ type StartResult<TRun> = {
   readonly recovery: LaunchRecovery;
 };
 
-function start<TRun>(options: LocalLedgerSessionOptions<TRun>): StartResult<TRun> {
+/**
+ * `rebuilt` distinguishes the retry after a rebuild from the original call —
+ * without it, a second `PreJournalStoreError` (the rebuilt pair is itself
+ * pre-journal, which should never happen but must not hang the app) would
+ * rebuild forever instead of surfacing as a failure.
+ */
+function start<TRun>(
+  options: LocalLedgerSessionOptions<TRun>,
+  state: { rebuilt: boolean } = { rebuilt: false },
+): StartResult<TRun> {
   const { diagnostics } = options;
   let stage: LedgerStartupStage = "open";
   emitLedgerDiagnostic(diagnostics, { scope: "ledger_startup", phase: "start", stage });
@@ -443,6 +490,64 @@ function start<TRun>(options: LocalLedgerSessionOptions<TRun>): StartResult<TRun
     });
     return { ledger, recovery };
   } catch (error) {
+    if (
+      isPreJournalStoreError(error) &&
+      (stage === "migrate_outbox" || stage === "migrate_replica")
+    ) {
+      if (options.preJournalStores === "rebuild" && !state.rebuilt) {
+        ledger.close();
+        emitLedgerDiagnostic(diagnostics, {
+          scope: "ledger_startup",
+          phase: "rebuild",
+          stage,
+          store: error.store,
+          error: describeLedgerError(error),
+        });
+        try {
+          removeStorePair(options);
+        } catch (removeError) {
+          // A rebuild that cannot even delete the pair must not vanish into
+          // an unrelated throw with no `ledger_startup` failure logged —
+          // the original `PreJournalStoreError` is why a delete was ever
+          // attempted, so it rides along as `cause`.
+          const message = removeError instanceof Error ? removeError.message : String(removeError);
+          const wrapped = new Error(
+            `the pre-journal rebuild could not delete the pair: ${message}`,
+            { cause: error },
+          );
+          emitLedgerDiagnostic(diagnostics, {
+            scope: "ledger_startup",
+            phase: "failure",
+            stage,
+            error: describeLedgerError(wrapped),
+          });
+          throw wrapped;
+        }
+        return start(options, { rebuilt: true });
+      }
+
+      // Either mode ends here with a plain `Error`, never `PreJournalStoreError`
+      // itself: `state.rebuilt` means the rebuilt pair is *itself* pre-journal,
+      // which should never happen but must surface rather than loop, and
+      // `"refuse"` never rebuilds at all. The migrator's own message states
+      // only the fact (M-2) — the recovery each mode gives is this session's
+      // to add, not the migrator's.
+      ledger.close();
+      const wrapped =
+        options.preJournalStores === "rebuild"
+          ? new Error(`the pre-journal rebuild did not take: ${error.message}`, { cause: error })
+          : new Error(
+              `${error.message} The recovery in this mode is to close the app, delete ${error.path}, ${error.path}-wal, ${error.path}-shm and ${error.path}.pre-migration, and the same four files for the other store beside it — the replica and the outbox are only consistent as a pair — then start the app again.`,
+              { cause: error },
+            );
+      emitLedgerDiagnostic(diagnostics, {
+        scope: "ledger_startup",
+        phase: "failure",
+        stage,
+        error: describeLedgerError(wrapped),
+      });
+      throw wrapped;
+    }
     ledger.close();
     emitLedgerDiagnostic(diagnostics, {
       scope: "ledger_startup",
@@ -752,13 +857,7 @@ export function createLocalLedgerSession<TRun>(
       closed = true;
       current.close();
 
-      for (const path of [options.paths.replica, options.paths.outbox]) {
-        options.removeDatabase(path);
-        for (const suffix of ["-wal", "-shm", ".pre-migration"]) {
-          const sibling = `${path}${suffix}`;
-          if (options.fs.exists(sibling)) options.fs.remove(sibling);
-        }
-      }
+      removeStorePair(options);
 
       ({ ledger, recovery: lastRecovery } = start(options));
       closed = false;
