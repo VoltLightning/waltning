@@ -527,10 +527,16 @@ export type PhoneTransactionDetail = {
  * package stays free of `@waltning/schema` too. **Known gap, not fixed
  * here:** §15.1 writes `actor = 'system'` on an invariant violation, a value
  * neither the schema's `Actor` nor this restatement carries.
+ *
+ * `entity` is `string`, not `IdTable` — the real table set an audit row can
+ * name includes `currencies` and `fx_rates`, natural-keyed tables with no
+ * branded row id, which `IdTable` (a list of tables a *row* is branded
+ * against) omits by construction. `IdTable` here would have made S18's own
+ * audited manual-rate trail unaskable.
  */
 export type PhoneAuditEntry = {
   id: string;
-  entity: IdTable;
+  entity: string;
   entityId: string;
   action: string;
   actor: "user" | "agent" | "import" | "migration";
@@ -679,7 +685,7 @@ export type PhoneLedgerPort = {
   categorizeBatch: (input: CategorizeBatchInput, capture: PhoneCapture) => void;
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
   /** S09's audit history — always `unavailable_on_device`; see `PhoneAuditLogResult`'s own doc. */
-  getAuditLog: (entity: IdTable, entityId: string) => PhoneAuditLogResult;
+  getAuditLog: (entity: string, entityId: string) => PhoneAuditLogResult;
   updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
   deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
@@ -1217,7 +1223,7 @@ export type PhoneLedgerController = {
   /** S09's whole subject, read fresh — not carried in the snapshot. */
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
   /** S09's audit history, read fresh — not carried in the snapshot. */
-  getAuditLog: (entity: IdTable, entityId: string) => PhoneAuditLogResult;
+  getAuditLog: (entity: string, entityId: string) => PhoneAuditLogResult;
   createAccount: (
     draft: CreateAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };

@@ -20,26 +20,40 @@
  * handler's `{ status: "ok", rows }` slots into the same type once one
  * exists, without moving where this is called from.
  *
- * **`entity` is validated against the schema, not trusted.** A caller still
- * picks any `IdTable` at the type level (the vocabulary every other read on
- * this session already uses), but at run time this checks the name against
- * `ledgerSchema`'s own keys — the actual table set this ledger holds, not a
- * second list copied by hand and left to drift from it. `entityId` is
- * checked non-blank for the same reason: an argument this function ignored
- * would be a nullish "didn't work" one layer further out, where nobody is
- * looking for it.
+ * **`entity` is `string`, matching the audit row it names** —
+ * `registry/operation.ts`'s own `AuditSpec.entity: string` and `audit_log`'s
+ * `entity` column (`SPEC.md` §6.2) are both untyped free text, because the
+ * real table set includes `currencies` and `fx_rates` — natural-keyed, with
+ * no branded row id, so `@waltning/core/id`'s `IdTable` (a list of tables a
+ * *row* is branded against) omits them by construction. A first version of
+ * this file typed `entity: IdTable`, which quietly made S18's own audited
+ * manual-rate trail unaskable — `getAuditLog("fx_rates", …)` would not have
+ * compiled. `string` is the honest width; the check below is what keeps it
+ * from being *unchecked* width.
+ *
+ * **`entity` is validated against the schema, not trusted.** At run time
+ * this checks the name against the *real* table names `ledgerSchema` holds
+ * — `getTableName()` on each table, the SQL identifier an audit row
+ * actually carries (`account_groups`, not `accountGroups`) — never a second
+ * list copied by hand and left to drift from it. `entityId` is checked
+ * non-blank for the same reason: an argument this function ignored would be
+ * a nullish "didn't work" one layer further out, where nobody is looking
+ * for it.
  */
 
-import type { IdTable } from "@waltning/core/id";
 import type { JsonValue } from "@waltning/core/json";
 import type { Actor } from "@waltning/schema/enums";
+import { getTableName } from "drizzle-orm";
 import { ledgerSchema } from "../schema-map.ts";
 
 /**
- * The table names this ledger actually holds, derived from the schema map
- * rather than restated — the set `entity` is checked against below.
+ * The real SQL table names this ledger actually holds, derived from the
+ * schema map rather than restated — the set `entity` is checked against
+ * below.
  */
-const AUDITED_ENTITIES: ReadonlySet<string> = new Set(Object.keys(ledgerSchema));
+const AUDITED_ENTITIES: ReadonlySet<string> = new Set(
+  Object.values(ledgerSchema).map((table) => getTableName(table)),
+);
 
 /**
  * One `audit_log` row, field-for-field (`SPEC.md` §6.2).
@@ -53,7 +67,7 @@ const AUDITED_ENTITIES: ReadonlySet<string> = new Set(Object.keys(ledgerSchema))
  */
 export type LocalAuditEntry = {
   id: string;
-  entity: IdTable;
+  entity: string;
   entityId: string;
   action: string;
   actor: Actor;
@@ -71,7 +85,7 @@ export type AuditLogResult =
  * above. Throws on an `entity` this ledger's schema does not name, or a
  * blank `entityId`: an argument is checked, then answered, never ignored.
  */
-export function readAuditLog(entity: IdTable, entityId: string): AuditLogResult {
+export function readAuditLog(entity: string, entityId: string): AuditLogResult {
   if (!AUDITED_ENTITIES.has(entity)) {
     throw new Error(`get_audit_log: "${entity}" is not a table this ledger's schema holds`);
   }

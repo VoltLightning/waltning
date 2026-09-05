@@ -561,6 +561,13 @@ An amount token matches `amount_original` exactly, in any currency. A match
 inside a receipt names the line that matched. Offline search is substring-only
 over the cache, and says so.
 
+**Offline has no similarity score to rank by**, so its order is `date`
+descending, then `id` descending — a plain, total order rather than an
+approximation of the online ranking. This is a decision, not an accident of
+whichever query the implementation happened to write: without it stated here,
+the next implementation is as free to choose insertion order or a different
+tie-break as this one was.
+
 ---
 
 ## 14 · Confidence

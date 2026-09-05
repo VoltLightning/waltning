@@ -1,6 +1,6 @@
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import type { AccountingDate } from "@waltning/core/date";
-import type { Id, IdTable } from "@waltning/core/id";
+import type { Id } from "@waltning/core/id";
 import type {
   CurrencyCode,
   IncomeExpenseBucket,
@@ -289,7 +289,7 @@ export type LocalLedgerSession = {
    * closed session refuses this the same way it refuses every other read.
    * See `read-audit-log.ts` for why the answer is always the one status.
    */
-  getAuditLog: (entity: IdTable, entityId: string) => AuditLogResult;
+  getAuditLog: (entity: string, entityId: string) => AuditLogResult;
   updateTransaction: (input: UpdateTransactionInput, capture: Capture) => LocalTransactionRow;
   deleteTransaction: (input: DeleteTransactionInput, capture: Capture) => LocalTransactionRow;
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
