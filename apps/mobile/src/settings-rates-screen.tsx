@@ -179,7 +179,7 @@ export default function SettingsRatesScreen() {
   const shownCoverage = coverage.filter((row) => quoteCurrencies.has(row.code));
 
   return (
-    <GroundPanel>
+    <GroundPanel scroll="own">
       <Card title={t("routes.rates")}>
         {pivot === undefined ? null : (
           <Select

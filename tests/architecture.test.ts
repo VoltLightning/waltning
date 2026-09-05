@@ -104,6 +104,38 @@ function importsNamed(text: string, name: string, specifier: string): boolean {
   );
 }
 
+/** A named import of `name`, from any specifier — spans a multi-line brace list. */
+function importsIdentifier(text: string, name: string): boolean {
+  return new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*["'][^"']+["']`).test(text);
+}
+
+/**
+ * Every name a `packages/ui/src` component exports, from a file that itself
+ * imports `FlatList` or `SectionList` from `react-native` — a screen reaching
+ * one of these (`RateTable`, say) owns a virtualized list exactly as much as
+ * a screen importing `FlatList` itself, one layer removed. Built from disk
+ * rather than named, so a new list-backed component is covered the day it
+ * exists rather than the day someone remembers to add it here.
+ */
+function virtualizedListBearingNames(): Set<string> {
+  const files = sourceFiles(join(repoRoot, "packages/ui/src")).filter(
+    (file) => /\.tsx$/.test(file) && !isTest(file) && !/\.stories\.tsx$/.test(file),
+  );
+  const names = new Set<string>();
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    const bearsList =
+      importsNamed(text, "FlatList", "react-native") ||
+      importsNamed(text, "SectionList", "react-native");
+    if (!bearsList) continue;
+    for (const match of text.matchAll(/export\s+(?:function|const|class)\s+([A-Z]\w*)/g)) {
+      const name = match[1];
+      if (name !== undefined) names.add(name);
+    }
+  }
+  return names;
+}
+
 /* ── Public modules ─────────────────────────────────────────────────────── */
 
 describe("public modules resolve directly to their owners", () => {
@@ -274,6 +306,14 @@ describe("apps hold only what names a platform", () => {
         // `app/`'s, not a second `app/` — so it earns the same exemption
         // without needing to name a platform on its own.
         if (/^apps\/[^/]+\/src\/journeys\//.test(rel(file))) continue;
+        // `startup-failed-screen.tsx` composes two already platform-neutral
+        // `@waltning/ui` pieces (`GroundPanel`, `ErrorState`) and reads
+        // nothing of its own — the same reasoning `src/journeys/` gets its
+        // exemption for. It is `_layout.tsx`'s own composition for the one
+        // state a route tree cannot render (startup itself failed, before
+        // any router exists), kept as a named file rather than folded into
+        // `_layout.tsx` because it has its own test.
+        if (/^apps\/[^/]+\/src\/startup-failed-screen\.tsx$/.test(rel(file))) continue;
         if (!NAMES_PLATFORM.test(readFileSync(file, "utf8"))) offenders.push(rel(file));
       }
     }
@@ -344,18 +384,26 @@ describe("GroundPanel is the page scroller", () => {
     ).toEqual([]);
   });
 
-  it("a screen that renders a virtualized list opts GroundPanel out", () => {
+  it("a screen that renders a virtualized list, directly or through a component that owns one, opts GroundPanel out", () => {
     const files = screenFiles();
     expect(files.length, "screen files found").toBeGreaterThan(5);
+    const bearingNames = virtualizedListBearingNames();
+    expect(bearingNames.size, "components that own a FlatList/SectionList found").toBeGreaterThan(
+      0,
+    );
     const offenders: string[] = [];
     for (const file of files) {
       const text = readFileSync(file, "utf8");
-      const rendersList =
+      const rendersListDirectly =
         importsNamed(text, "FlatList", "react-native") ||
         importsNamed(text, "SectionList", "react-native");
+      const rendersListIndirectly = [...bearingNames].some((name) => importsIdentifier(text, name));
+      const rendersList = rendersListDirectly || rendersListIndirectly;
       const optsOut = /scroll="own"/.test(text);
       if (rendersList && !optsOut) {
-        offenders.push(`${rel(file)}: imports FlatList/SectionList without scroll="own"`);
+        offenders.push(
+          `${rel(file)}: renders a virtualized list (directly or through a component) without scroll="own"`,
+        );
       }
       if (optsOut && !rendersList) {
         offenders.push(`${rel(file)}: passes scroll="own" without owning a FlatList/SectionList`);
@@ -363,7 +411,7 @@ describe("GroundPanel is the page scroller", () => {
     }
     expect(
       offenders,
-      'a screen that owns a virtualized list must pass scroll="own", and nothing else may',
+      'a screen that owns a virtualized list — directly or through a component it renders — must pass scroll="own", and nothing else may',
     ).toEqual([]);
   });
 });

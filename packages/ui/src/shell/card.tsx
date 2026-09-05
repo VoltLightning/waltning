@@ -4,9 +4,8 @@
  * `Card`: `surface`, `radius-md`, a one-pixel `border` and **no shadow**, with
  * an optional title and one action. **One** action, not a row of them — a card
  * with three affordances in its header is a card whose content has stopped
- * being the point. A card groups related rows or holds a figure; it never
- * wraps a whole screen or a single field — which screens need one is decided
- * per screen, elsewhere in the design system.
+ * being the point. A card groups related rows or holds a hero figure — which
+ * screens want one, and how many, is a design decision made per screen.
  *
  * `GroundPanel`: the `radius-lg` surface that lifts over the shell. It is the
  * page body, and the reason the shell's dark band reads as behind rather than
@@ -35,14 +34,25 @@
  * off the bottom of the device with no way to reach it. A screen that owns a
  * virtualized list (`FlatList`/`SectionList`) passes `scroll="own"` instead —
  * nesting a list inside a `ScrollView` of the same orientation is the React
- * Native double-scroll warning, not a second kind of page. Either way, nothing
- * nests a second scroller of its own; `tests/architecture.test.ts` enforces
- * both halves of that.
+ * Native double-scroll warning, not a second kind of page. That includes a
+ * list owned one layer removed, through a component the screen renders
+ * (`RateTable`'s own `FlatList`, reached from `settings-rates-screen.tsx`) —
+ * the warning does not care whether the screen wrote the `FlatList` itself or
+ * a component it composes did. Either way, nothing nests a second scroller of
+ * its own; `tests/architecture.test.ts` enforces both halves of that,
+ * discovering which components own one from disk rather than a hardcoded
+ * list.
  *
  * The clearance lives on the scroll content, not on the panel itself — so the
  * last row clears the home indicator at the end of the scroll, at the bottom
  * of what was typed or read, rather than at the fold where a short screen's
- * content happens to end.
+ * content happens to end. `clearBottom` (default `true`) turns off the
+ * *bottom* half of that — the design padding (`space.x5`) stays, but not the
+ * device's own home-indicator inset — for a screen whose bottom edge is
+ * already owned by something else fixed there (`Dock`, on `transfer-screen.tsx`
+ * and `quick-add-screen.tsx`): two things adding the same inset is the
+ * double-padding `11-platform-notes.md` already states the rule against for
+ * the shell and the panel.
  */
 
 import { ScrollView, Text, View } from "react-native";
@@ -79,14 +89,23 @@ export type GroundPanelProps = {
   /**
    * `"page"` (default) — the panel is the page scroller. `"own"` — the plain
    * `View` this component was before scrolling existed, for a screen that
-   * already owns a virtualized list (`FlatList`/`SectionList`): nesting one
-   * of those inside a `ScrollView` of the same orientation is the React
-   * Native double-scroll warning, not a second kind of page.
+   * already owns a virtualized list, directly or through a component it
+   * renders (`FlatList`/`SectionList`): nesting one of those inside a
+   * `ScrollView` of the same orientation is the React Native double-scroll
+   * warning, not a second kind of page.
    */
   scroll?: "page" | "own";
+  /**
+   * `true` (default) — the panel clears the home-indicator inset at the
+   * bottom, same as it always has. `false` — the design padding
+   * (`space.x5`) stays, but not the device inset: for a screen whose bottom
+   * edge is already owned by something else fixed there (`Dock`), the panel
+   * adding the same inset a second time would double-pad it.
+   */
+  clearBottom?: boolean;
 };
 
-export function GroundPanel({ children, scroll = "page" }: GroundPanelProps) {
+export function GroundPanel({ children, scroll = "page", clearBottom = true }: GroundPanelProps) {
   const styles = useStyles();
   const insets = useSafeArea();
 
@@ -96,7 +115,7 @@ export function GroundPanel({ children, scroll = "page" }: GroundPanelProps) {
   // itself in `"own"` — so the last row clears the home indicator at the end
   // of the scroll, not at the fold.
   const clearance = {
-    paddingBottom: space.x5 + insets.bottom,
+    paddingBottom: space.x5 + (clearBottom ? insets.bottom : 0),
     paddingLeft: space.x5 + insets.left,
     paddingRight: space.x5 + insets.right,
   };

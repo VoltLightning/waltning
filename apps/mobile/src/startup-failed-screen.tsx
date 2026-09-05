@@ -13,15 +13,13 @@
  */
 
 import { useT } from "@waltning/ui/i18n/provider";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
-import { makeStyles } from "@waltning/ui/theme/styles";
-import { View } from "react-native";
 
 export function StartupFailedScreen({ error }: { error: Error }) {
   const t = useT();
-  const styles = useStyles();
   return (
-    <View style={styles.root}>
+    <GroundPanel>
       {/* The migrator's own sentence is written for a person, so it is shown
           verbatim rather than replaced with a generic one. */}
       <ErrorState
@@ -29,10 +27,6 @@ export function StartupFailedScreen({ error }: { error: Error }) {
         what={t("startup.ledgerFailedTitle")}
         why={t("startup.ledgerFailedBody", { message: error.message })}
       />
-    </View>
+    </GroundPanel>
   );
 }
-
-const useStyles = makeStyles((theme) => ({
-  root: { flex: 1, justifyContent: "center", backgroundColor: theme.ground },
-}));

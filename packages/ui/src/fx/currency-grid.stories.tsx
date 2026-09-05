@@ -1,5 +1,5 @@
 /**
- * `CurrencyGrid` — `design-system/04` §4.x. Choosing one currency where the
+ * `CurrencyGrid` — `design-system/04` §4.6. Choosing one currency where the
  * whole set is visible at once — `create-account-form.tsx`'s own currency
  * field.
  *
@@ -9,8 +9,8 @@
  * `iframe.html` capture path `visual/stories.spec.ts` uses — so a four-column
  * story would screenshot identically to the three-column ones, a duplicate
  * baseline standing in for a state nothing here can actually render. The
- * responsive split is covered instead by `create-account-form.tsx`'s own
- * unit test.
+ * responsive split is covered instead by `currency-grid.test.tsx`'s own
+ * unit test, which mocks `useBreakpoint` directly.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";

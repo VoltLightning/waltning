@@ -416,9 +416,16 @@ export default function Debt() {
             primaryAction={{ label: t("counterparties.add"), onPress: handleAdd }}
           />
         ) : (
-          visibleRows.map((row) => (
-            <DebtCounterpartyRow key={row.counterpartyId} row={row} onSelect={handleSelect} />
-          ))
+          // Its own, gap-less `View` — `root`'s own `gap` is the space
+          // between *blocks* (banner, totals, this list), not between one
+          // row and the next; a row abuts the one below it exactly as it did
+          // before `ScrollView` came out (`root` used to have only this list
+          // as a distant sibling, never every row as one).
+          <View style={styles.rows}>
+            {visibleRows.map((row) => (
+              <DebtCounterpartyRow key={row.counterpartyId} row={row} onSelect={handleSelect} />
+            ))}
+          </View>
         )}
       </View>
     </GroundPanel>
@@ -426,8 +433,15 @@ export default function Debt() {
 }
 
 const useStyles = makeStyles((theme) => ({
-  root: { gap: space.x4, flex: 1 },
+  // No `flex: 1` — this is `GroundPanel`'s sole child both times it is used
+  // below, and `flex: 1` there gives it a `flexBasis` of `0`, which pins it
+  // to the viewport and defeats both the panel's own scroll and its bottom
+  // clearance (H1).
+  root: { gap: space.x4 },
   totals: { gap: space.xs },
   totalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   totalLabel: { color: theme.textMuted },
+  // No `gap` — rows abut, the same as before `ScrollView` came out; `root`'s
+  // own `gap` is between this block and the ones above it, not within it.
+  rows: {},
 }));

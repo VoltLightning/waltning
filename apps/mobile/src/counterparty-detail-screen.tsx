@@ -659,7 +659,16 @@ export default function CounterpartyDetail() {
           }}
         />
       ) : (
-        historyRows.map((row) => <HistoryRow key={row.id} row={row} onPress={handleOpenRow} />)
+        // Its own, gap-less `View` — the panel's own `gap` is the space
+        // between *blocks* (the header above, `Edit` below), not between one
+        // row and the next; a row abuts the one below it exactly as it did
+        // inside the plain `ScrollView` this replaced, which had no `gap` at
+        // all.
+        <View style={styles.historyRows}>
+          {historyRows.map((row) => (
+            <HistoryRow key={row.id} row={row} onPress={handleOpenRow} />
+          ))}
+        </View>
       )}
 
       <Button label={t("common.edit")} onPress={handleEdit} variant="ghost" />
@@ -725,6 +734,8 @@ const useStyles = makeStyles((theme) => ({
     paddingTop: space.x4,
   },
   historyTitle: { color: theme.textMuted, ...text.ui("kicker") },
+  // No `gap` — rows abut, the same as the plain `ScrollView` this replaced.
+  historyRows: {},
   mergeRow: {
     flexDirection: "row",
     alignItems: "center",

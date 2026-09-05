@@ -1,5 +1,5 @@
 /**
- * `<CurrencyGrid>` — `design-system/04` §4.x. Choosing **one** currency out of
+ * `<CurrencyGrid>` — `design-system/04` §4.6. Choosing **one** currency out of
  * a set small enough to show whole — account creation is the one call site
  * today. `CurrencyChip` (§4.5) is a different question: which of a few
  * *pinned* currencies a header displays figures in, cycled one tap at a time.
@@ -37,7 +37,12 @@ import { focus, radius, space, touchTarget } from "../tokens.ts";
 export type CurrencyGridItem = { code: CurrencyCode; name: string; symbol: string };
 
 export type CurrencyGridProps = {
-  /** Every currency the form offers. Empty renders nothing — the caller's own message for that state. */
+  /**
+   * Every currency the form offers. Empty renders nothing — `create-account-form.tsx`
+   * has no dedicated message for that state today either; `currency` stays
+   * `null` and Save stays disabled, silently. A real empty state is a
+   * follow-up, not invented here.
+   */
   currencies: readonly CurrencyGridItem[];
   /** The current pick, or `null` before one is made. */
   selected: CurrencyCode | null;
@@ -95,7 +100,7 @@ function CurrencyTile({ currency, selected, disabled, desk, onSelect }: Currency
     <Animated.View style={[press.style, desk ? styles.cellWrapDesk : styles.cellWrapPhone]}>
       <Pressable
         accessibilityRole="radio"
-        accessibilityLabel={currency.name}
+        accessibilityLabel={`${currency.code} — ${currency.name}`}
         accessibilityState={{ checked: selected, disabled }}
         aria-checked={selected}
         aria-disabled={disabled}
@@ -119,6 +124,7 @@ function CurrencyTile({ currency, selected, disabled, desk, onSelect }: Currency
         <Text style={styles.name} numberOfLines={1}>
           {currency.name}
         </Text>
+        {selected ? <View style={styles.check} /> : null}
       </Pressable>
     </Animated.View>
   );
@@ -149,6 +155,26 @@ const useStyles = makeStyles((theme) => ({
   codeSelected: { color: theme.accentText, ...text.ui("body", 600) },
   symbol: { color: theme.textMuted, ...text.ui("body") },
   name: { color: theme.textMuted, ...text.ui("caption") },
+  /**
+   * The same drawn check `AccountTile` and `Chip` carry — the non-colour
+   * half of the selected signal (P5), and `theme.accentText`, the token
+   * both of those already use: it is the one tuned for contrast against
+   * `accentFill` in *both* themes, which a plain `theme.accent` is not
+   * (dark mode's own `accentFill` is a near-black green, and `accentText`
+   * is the light tint that reads on it). A `View`, not a `Text` glyph, for
+   * the same reason those two: no font-glyph availability to depend on.
+   */
+  check: {
+    position: "absolute",
+    top: space.lg,
+    right: space.x2,
+    width: 11,
+    height: 6,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: theme.accentText,
+    transform: [{ rotate: "-45deg" }],
+  },
   disabled: { opacity: 0.45 },
   focused: {
     outlineWidth: focus.width,

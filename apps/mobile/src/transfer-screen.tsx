@@ -26,9 +26,8 @@ import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
-import { useSafeArea } from "@waltning/ui/primitives/safe-area";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
 import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
@@ -127,7 +126,6 @@ function decimalsExceed(raw: string, decimals: number): boolean {
 export default function Transfer() {
   const t = useT();
   const styles = useStyles();
-  const insets = useSafeArea();
   const raw = useLocalSearchParams<{ from?: string | string[] }>();
   const routeState = parseTransferRoute(raw);
   const ledger = useLedgerController();
@@ -516,16 +514,11 @@ export default function Transfer() {
     [t],
   );
 
-  // Computed rather than in the stylesheet: the inset is per-device, the same
-  // reason `quick-add-screen.tsx`'s own `horizontalInsets` is.
-  const horizontalInsets = {
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
-  };
-
   return (
     <View style={styles.root}>
-      <View style={[styles.scroll, horizontalInsets]}>
+      {/* `clearBottom={false}` — `Dock`, below, owns the bottom inset; the
+          panel adding it too would double-pad the home indicator. */}
+      <GroundPanel clearBottom={false}>
         <TransferComposer
           accounts={accounts}
           fromAccountId={fromAccountId}
@@ -548,7 +541,7 @@ export default function Transfer() {
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
           onCancel={handleCancel}
         />
-      </View>
+      </GroundPanel>
       <Dock
         mode="keypad"
         modes={modes}
@@ -574,5 +567,4 @@ export default function Transfer() {
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, backgroundColor: theme.ground },
-  scroll: { flex: 1, paddingTop: space.x5, gap: space.x4 },
 }));

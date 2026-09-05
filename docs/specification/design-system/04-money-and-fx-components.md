@@ -117,12 +117,17 @@ equal widths, `role="radiogroup"` over `role="radio"` tiles — the same anatomy
 `AccountPicker`'s account grid and `CategorySheet`'s leaf grid already settled
 on. Selected takes the accent border and fill; disabled dims the whole grid.
 
-**A currency choice on a form is this grid, never a `Select` or a row of
-chips.** A `Select` hides every option behind one already-collapsed value,
-which is the wrong trade for a field the person is expected to look at, not
-recall; a wrapped chip row reads its options at whatever width each label
-happens to need, so a short code sits next to a long one with no shared
-rhythm and no predictable count per row.
+**Which control depends on what the currency is for, not just that it is
+one.** This grid is the choice when the whole set should be visible at once,
+weighed against every other — opening an account, where the currency is the
+one thing that never changes about it afterwards. A currency field inside a
+row-shaped form is a `Select`, the same as any other field in that row —
+`counterparty-form.tsx`'s settlement currency, someone else's own preference,
+not a decision this product is asking the person to weigh. A currency
+cycled from a small, already-pinned set is `<CurrencyChip>` (§4.5), the
+header's own display toggle. Three components, three different questions;
+none of them substitutes for this grid's own answer to *"pick one, from
+everything, deliberately."*
 
 ### 4.7 `<RateTable>`
 

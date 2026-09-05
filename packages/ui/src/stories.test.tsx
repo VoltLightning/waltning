@@ -28,6 +28,7 @@ import { render } from "@testing-library/react";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 import * as amount from "./fx/amount.stories";
+import * as currencyGrid from "./fx/currency-grid.stories";
 import * as button from "./primitives/button.stories";
 import * as chip from "./primitives/chip.stories";
 import * as shell from "./shell/shell.stories";
@@ -58,6 +59,7 @@ const MODULES = {
   Button: button,
   Banner: banner,
   Chip: chip,
+  CurrencyGrid: currencyGrid,
   EmptyState: emptyState,
   ErrorState: errorState,
   MatchWarning: matchWarning,
