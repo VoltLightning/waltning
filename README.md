@@ -158,6 +158,13 @@ Two things need a bit of setup the first time:
   again: it can't reach your Mac's `localhost`, so point it at your machine with
   `EXPO_PUBLIC_API_URL`.
 
+For the native route, `pnpm --filter @waltning/mobile dev` starts Expo Go alone
+(`apps/mobile/README.md` has the `a`/`i`/`w` shortcuts) — the native preview
+doesn't call the API, so there's normally nothing to run alongside it. `pnpm
+dev:all` starts the API and Expo Go together anyway (`pnpm --parallel`,
+Ctrl-C stops both), for working on both at once even though the native route
+doesn't yet talk to it.
+
 ### Checking it works
 
 ```sh

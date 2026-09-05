@@ -104,22 +104,29 @@ export default defineConfig({
   },
 
   /**
-   * One worker, deliberately.
+   * Four workers, measured.
    *
-   * There is nothing to gain by raising this today: `testDir` holds exactly
-   * one spec file, and without `fullyParallel` Playwright shards work by
-   * file, not by test. `--workers=4` against this suite still prints
-   * `Running 1097 tests using 1 worker` and finishes in the same ~9 minutes
-   * as `workers: 1` — measured three consecutive runs, 1097/1097 passing
-   * every time, no story that failed at one worker and not the other or vice
-   * versa. Raising the number here changes nothing until the suite is split
-   * across files or `fullyParallel` is turned on, and turning that on is the
-   * GPU-and-font-cache-sharing risk this config exists to avoid: real
-   * concurrent capture, not a config number, is what turns into one-pixel
-   * differences indistinguishable from a regression. A visual suite that is
-   * occasionally wrong is worse than a slower one that is not.
+   * `testDir` holds exactly one spec file, and without `fullyParallel`
+   * Playwright shards work by file, not by test — `workers` above 1 was
+   * previously a dead number: `--workers=4` against this suite printed
+   * `Running 1097 tests using 1 worker` and took the same ~9 minutes as
+   * `workers: 1`, because there was only ever one file to hand a second
+   * worker.
+   *
+   * `fullyParallel: true` is what actually spreads the 1097 stories across
+   * workers, which is the concurrent-GPU-and-font-cache case this config
+   * used to avoid outright rather than test. Measured against the same
+   * static Storybook build: three consecutive `--workers=4` runs, each
+   * 1097/1097 passing, zero flaky retries, wall clock 2:31 / 2:28 / 2:30 —
+   * against ~8:48 at one worker. No story failed under parallel load that
+   * passed serially, at `threshold: 0.02` / `maxDiffPixels: 50` on this
+   * machine, with the viewport pinned and the clock frozen for the
+   * `ThinkingIndicator` stories exactly as before. A visual suite that is
+   * occasionally wrong is worse than a slower one that is not — this is the
+   * evidence that it isn't, not an assumption that it can't be.
    */
-  workers: 1,
+  fullyParallel: true,
+  workers: 4,
 
   /**
    * **No retries.** A screenshot that passes on the second attempt did not
