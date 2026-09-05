@@ -50,6 +50,8 @@ export const pl: Messages = {
     discardBody: "Zawiera automatycznie wypełnione konto — łatwo wprowadzić ją ponownie.",
 
     edit: "Edytuj",
+    approve: "Zatwierdź",
+    decline: "Odrzuć",
   },
   accounts: {
     currency: "Waluta",
@@ -210,6 +212,16 @@ export const pl: Messages = {
     commandBarTooMuchUnmatched: "Zbyt wiele niezrozumiałych słów — spróbuj krótszej linii.",
     commandBarHint: "Spacje grupują tysiące; przecinek lub kropka to znak dziesiętny.",
     commandBarChipsLabel: "Rozpoznane pola",
+
+    ledgerTable: "Tabela transakcji",
+    selectRow: "Zaznacz {{payee}}",
+    selectedCount: "Zaznaczono: {{count}}",
+    confirmCategorizeBatchOne: "Skategoryzować {{count}} transakcję jako {{category}}?",
+    confirmCategorizeBatchMany: "Skategoryzować {{count}} transakcji jako {{category}}?",
+    categorizeBatchAppliedOne: "Skategoryzowano {{count}} transakcję",
+    categorizeBatchAppliedMany: "Skategoryzowano {{count}} transakcji",
+    categorizeBatchFailedWhy:
+      "Jeden z zaznaczonych wierszy nie kwalifikuje się już do zmiany — mógł zostać usunięty albo jest przelewem lub korektą.",
   },
   counterparties: {
     settlingWith: "Rozliczenie z {{name}}",

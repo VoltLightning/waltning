@@ -125,9 +125,14 @@ Virtualized infinite scroll. Short swipe → category sheet; long swipe → edit
 Nothing destructive on a swipe (`design-system/05` §5.6). Pull to refresh.
 
 ### Web
-`J`/`K` move, `Enter` opens, `/` focuses search, `F` opens the filter rail.
-Shift-click selects a range; multi-select enables `categorize_batch` behind one
-`DiffCard` stating the affected count. Sorting is by column header.
+`J`/`K` move, `Enter` opens. The rail is persistent (§3), so `/` and `F` both
+reach the same place — the rail's search field — rather than one opening it and
+the other only focusing what is already on screen. Shift-click selects a range;
+multi-select enables `categorize_batch` behind one confirm stating the affected
+count and the target category — not a `DiffCard` (`design-system/05` §5.3):
+that component's shape is a per-row before/after, and a batch spans rows that
+each carried a different category before, so a single before/after pair would
+either lie or say nothing. Sorting is by column header.
 
 ### Shared
 A filter arriving from another screen is **shown, not silently applied** —

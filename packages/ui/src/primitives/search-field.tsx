@@ -43,6 +43,14 @@ export type SearchFieldProps = {
   autoFocus?: boolean;
   /** Live match count. Absent while there is nothing to report yet (before typing). */
   resultCount?: number;
+  /**
+   * React 19 accepts `ref` as an ordinary prop on a function component —
+   * no `forwardRef` — which is the whole reason this is a plain field here
+   * rather than a second, imperative export. S10 §7 (web)'s `F` — "focuses
+   * the rail" — is the one caller: `ledger-screen.tsx`'s desk rail keeps a
+   * ref to this field's own `TextInput` and calls its built-in `.focus()`.
+   */
+  ref?: React.Ref<TextInput>;
 };
 
 /** Drawn at 20, hit-slop restores the §10 floor — `select.tsx`'s token does the same. */
@@ -55,6 +63,7 @@ export function SearchField({
   onClear,
   autoFocus = false,
   resultCount,
+  ref,
 }: SearchFieldProps) {
   const t = useT();
   const theme = useTheme();
@@ -84,6 +93,7 @@ export function SearchField({
           <View style={styles.glassHandle} />
         </View>
         <TextInput
+          ref={ref}
           role="searchbox"
           accessibilityLabel={placeholder}
           value={value}

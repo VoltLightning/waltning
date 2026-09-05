@@ -2,99 +2,82 @@
  * S10 · the whole ledger — searchable, filterable, grouped by day, with a
  * running total and a swipe to recategorise. Replaces the stub.
  *
- * **One screen, both surfaces**, per `wave-3-shared.md` §3 — the mobile
- * layout `S10-transactions-list.md` §3 describes. The web table (§3's
- * ≥1024px density-first layout) is not this PR: `DeskBand`'s breakpoint
- * swaps the *shell* furniture already (`tabs-shell.tsx`), never the screen
- * body, so a virtualised table is a real second layout, not a style tweak —
- * and this phone list is the first honest data point for the desk table's
- * own virtualisation risk (the gate task names this explicitly).
+ * **One screen, both surfaces**, per `wave-3-shared.md` §3 — a real second
+ * layout, not a style tweak, branched on `useBreakpoint()` at the top of the
+ * return rather than in `tabs-shell.tsx`, which swaps the shell's own
+ * furniture and never the screen body. Below `desk`, the mobile layout
+ * `S10-transactions-list.md` §3 describes; at `desk`, §3's own density-first
+ * table — `<LedgerTable>`, a filter rail instead of the chip row, sort by
+ * column header, shift-click range select, and `categorize_batch` behind
+ * one confirm (§7 web). Both branches share every hook above the return —
+ * the filter state, the search page, the category tree — so a write on
+ * either surface is the one path `useTransactionSearch`'s own `subscribe`
+ * already refreshes.
  *
- * **The screen builds day sections and the `FlatList`** — see
+ * **The phone branch builds day sections and the `FlatList`** — see
  * `group-by-day.ts`'s own doc for why that split is not `TransactionList`'s
- * job.
+ * job. The desk branch hands `<LedgerTable>` its own flat, sorted row list
+ * instead — a table has no days to group by.
  */
 
 import type {
   CategorizeBatchDraft,
   PhoneCurrencyTotal,
   PhoneSearchTransaction,
-  TransactionFilterDraft,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
+import {
+  type LedgerFilterState,
+  useLedgerFilters,
+} from "@waltning/client/ledger/use-ledger-filters";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useTransactionSearch } from "@waltning/client/ledger/use-transaction-search";
 import { groupByDay } from "@waltning/client/transactions/group-by-day";
-import { addDays } from "@waltning/core/date";
+import { sortLedgerRows } from "@waltning/client/transactions/ledger-table-sort";
+import { useLedgerTableSelection } from "@waltning/client/transactions/use-ledger-table-selection";
+import { useLedgerTableSort } from "@waltning/client/transactions/use-ledger-table-sort";
+import {
+  accountingDate,
+  addDays,
+  shiftMonth,
+  type YearMonth,
+  yearMonth,
+} from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { Amount } from "@waltning/ui/fx/amount";
-import { decimalMark } from "@waltning/ui/i18n/locales";
+import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Chip } from "@waltning/ui/primitives/chip";
 import { DateField } from "@waltning/ui/primitives/date-field";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
+import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { PeriodHeader } from "@waltning/ui/shell/period-header";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { hairline, space, touchTarget } from "@waltning/ui/tokens";
+import { hairline, radius, space, touchTarget } from "@waltning/ui/tokens";
+import {
+  CategorizeSelectionConfirm,
+  type CategorizeSelectionConfirmState,
+} from "@waltning/ui/transactions/categorize-selection-confirm";
+import { LedgerSelectionBar } from "@waltning/ui/transactions/ledger-selection-bar";
+import { LedgerTable, type LedgerTableRow } from "@waltning/ui/transactions/ledger-table";
 import { SwipeableRow } from "@waltning/ui/transactions/swipeable-row";
 import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { type Href, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { FlatList, Pressable, Text, type TextInput, View } from "react-native";
 
 const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
-
-/** `SegmentControl`'s scope options — `SPEC.md` §6.7's own four-way partition. */
-type Scope = "all" | "mine" | "shared" | "business";
-
-type FilterState = {
-  text: string;
-  accountIds: readonly string[];
-  categoryIds: readonly string[];
-  scope: Scope;
-  from: string;
-  to: string;
-};
-
-const EMPTY_FILTER: FilterState = {
-  text: "",
-  accountIds: [],
-  categoryIds: [],
-  scope: "all",
-  from: "",
-  to: "",
-};
-
-function hasActiveFilter(filter: FilterState): boolean {
-  return (
-    filter.accountIds.length > 0 ||
-    filter.categoryIds.length > 0 ||
-    filter.scope !== "all" ||
-    filter.from !== "" ||
-    filter.to !== ""
-  );
-}
-
-function toDraft(filter: FilterState): TransactionFilterDraft {
-  return {
-    text: filter.text,
-    accountIds: filter.accountIds,
-    categoryIds: filter.categoryIds,
-    scope: filter.scope,
-    from: filter.from,
-    to: filter.to,
-  };
-}
 
 /**
  * S09's route — C5, running in parallel (`wave-3-shared.md` §3b). This
@@ -110,25 +93,88 @@ function handlePressRoute(id: string) {
   router.push({ pathname: "/transaction/[id]", params: { id } } as unknown as Href);
 }
 
+/**
+ * A `PhoneSearchTransaction` reshaped into `<LedgerTable>`'s own row —
+ * `packages/ui` may not import `@waltning/client` (the architecture floor:
+ * siblings), so this join happens here, the one layer that already depends
+ * on both. `scope` reads the *account's* `ownership` — `isBusiness` is a
+ * property of the row, not the account, and takes precedence the same way
+ * the scope `SegmentControl`'s four values partition (`SPEC.md` §6.7).
+ */
+function toDeskRow(
+  row: PhoneSearchTransaction,
+  accounts: readonly { id: string; ownership: string }[],
+  t: ReturnType<typeof useT>,
+): LedgerTableRow {
+  const account = accounts.find((candidate) => candidate.id === row.accountId);
+  const scope = row.isBusiness
+    ? t("shell.scopeBusiness")
+    : account?.ownership === "shared"
+      ? t("shell.scopeShared")
+      : t("shell.scopeMine");
+  // §6.1 — a transfer stays one row; both accounts read here rather than
+  // only the "from" leg, so a re-pair a person would otherwise have to do
+  // by eye never comes up.
+  const accountLabel =
+    row.type === "transfer" && row.toAccountName
+      ? `${row.accountName} → ${row.toAccountName}`
+      : row.accountName;
+
+  return {
+    id: row.id,
+    date: row.date,
+    payee: row.payee,
+    category: row.categoryName ?? "",
+    account: accountLabel,
+    scope,
+    amountValue: row.amount,
+    currency: row.currency,
+    decimals: row.decimals,
+    type: row.type,
+    isBusiness: row.isBusiness,
+    // `transactions_category_shape` — only income and expense ever take a category.
+    selectable: row.type === "income" || row.type === "expense",
+  };
+}
+
+/** The desk categorize-selection flow's own state machine — one `useState`, five shapes. */
+type DeskCategorizeState =
+  | { phase: "picking"; kind: "income" | "expense" }
+  | {
+      phase: "confirming" | "applying" | "error";
+      categoryId: string;
+      categoryName: string;
+      count: number;
+      transactionIds: readonly string[];
+    }
+  | { phase: "approved"; count: number };
+
+function deskCategorizeConfirmState(
+  phase: Exclude<DeskCategorizeState["phase"], "picking">,
+): CategorizeSelectionConfirmState {
+  return phase === "confirming" ? "pending" : phase;
+}
+
 export default function Ledger() {
   const t = useT();
+  const locale = useLocale();
   const styles = useStyles();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const { account } = useLocalSearchParams<{ account?: string }>();
 
-  const [filter, setFilter] = useState<FilterState>(() => ({
-    ...EMPTY_FILTER,
-    accountIds: account ? [account] : [],
-  }));
+  // `useLedgerFilters`'s own initial value is read once, on mount, the same
+  // way the `useState` it replaced only ever read `account` once — a param
+  // arriving later would not retroactively seed a filter already in use.
+  const filters = useLedgerFilters({ accountIds: account ? [account] : [] });
+  const { filter } = filters;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [categorizeSheet, setCategorizeSheet] = useState<{
     transactionId: string;
     kind: "income" | "expense";
   } | null>(null);
 
-  const draft = useMemo(() => toDraft(filter), [filter]);
-  const search = useTransactionSearch(ledger, draft);
+  const search = useTransactionSearch(ledger, filters.draft);
 
   const today = deviceRuntime().capture().date;
   const yesterday = addDays(today, -1);
@@ -144,46 +190,96 @@ export default function Ledger() {
   );
   const entries = useMemo(() => flattenSections(sections), [sections]);
 
+  const breakpoint = useBreakpoint();
+
+  /* ── Desk (S10 §3 web): the table's own rows, sorted and selectable ──── */
+  const deskSort = useLedgerTableSort();
+  const unsortedDeskRows = useMemo(
+    () => search.rows.map((row) => toDeskRow(row, snapshot.accounts, t)),
+    [search.rows, snapshot.accounts, t],
+  );
+  const deskRows = useMemo(
+    () => sortLedgerRows(unsortedDeskRows, deskSort.sort),
+    [unsortedDeskRows, deskSort.sort],
+  );
+  const deskSelection = useLedgerTableSelection(deskRows);
+
+  const [deskCategorize, setDeskCategorize] = useState<DeskCategorizeState | null>(null);
+  const handleOpenCategorizeSelection = useCallback(() => {
+    const rows = search.rows.filter((row) => deskSelection.isSelected(row.id));
+    const allIncome = rows.length > 0 && rows.every((row) => row.type === "income");
+    setDeskCategorize({ phase: "picking", kind: allIncome ? "income" : "expense" });
+  }, [search.rows, deskSelection]);
+  const handleDismissDeskCategorize = useCallback(() => setDeskCategorize(null), []);
+  const handlePickDeskCategory = useCallback(
+    (categoryId: string) => {
+      const rows = search.rows.filter((row) => deskSelection.isSelected(row.id));
+      const category = snapshot.categories.find((candidate) => candidate.id === categoryId);
+      setDeskCategorize({
+        phase: "confirming",
+        categoryId,
+        categoryName: category?.name ?? "",
+        count: rows.length,
+        transactionIds: rows.map((row) => row.id),
+      });
+    },
+    [search.rows, deskSelection, snapshot.categories],
+  );
+  const handleDeclineDeskCategorize = useCallback(() => setDeskCategorize(null), []);
+  const handleApproveDeskCategorize = useCallback(() => {
+    if (deskCategorize?.phase !== "confirming") return;
+    const { categoryId, categoryName, count, transactionIds } = deskCategorize;
+    setDeskCategorize({ phase: "applying", categoryId, categoryName, count, transactionIds });
+    try {
+      const result = ledger.categorizeBatch({ transactionIds, categoryId });
+      if ("fieldErrors" in result) {
+        setDeskCategorize({ phase: "error", categoryId, categoryName, count, transactionIds });
+        return;
+      }
+      deskSelection.clear();
+      setDeskCategorize({ phase: "approved", count: result.count });
+    } catch {
+      setDeskCategorize({ phase: "error", categoryId, categoryName, count, transactionIds });
+    }
+  }, [deskCategorize, ledger, deskSelection]);
+
+  /* ── Desk rail: the period stepper (§3 web) — month bounds feed `filters.setRange` ── */
+  const currentMonth = yearMonth(today.slice(0, 7));
+  const [periodMonth, setPeriodMonth] = useState<YearMonth>(currentMonth);
+  const applyPeriodMonth = useCallback(
+    (month: YearMonth) => {
+      setPeriodMonth(month);
+      filters.setRange(`${month}-01`, addDays(accountingDate(`${shiftMonth(month, 1)}-01`), -1));
+    },
+    [filters],
+  );
+  const handlePeriodPrevious = useCallback(
+    () => applyPeriodMonth(shiftMonth(periodMonth, -1)),
+    [periodMonth, applyPeriodMonth],
+  );
+  const handlePeriodNext = useCallback(
+    () => applyPeriodMonth(shiftMonth(periodMonth, 1)),
+    [periodMonth, applyPeriodMonth],
+  );
+  const handlePeriodToday = useCallback(
+    () => applyPeriodMonth(currentMonth),
+    [currentMonth, applyPeriodMonth],
+  );
+
+  // `F` — S10 §7 web. `SearchField`'s own `ref` prop (React 19, no `forwardRef`)
+  // reaches the real `TextInput.focus()` this needs.
+  const searchInputRef = useRef<TextInput>(null);
+  const handleFocusRail = useCallback(() => searchInputRef.current?.focus(), []);
+
   const handleOpenSheet = useCallback(() => setSheetOpen(true), []);
   const handleDismissSheet = useCallback(() => setSheetOpen(false), []);
-  const handleClearAll = useCallback(() => setFilter(EMPTY_FILTER), []);
-  const handleRemoveAccount = useCallback((id: string) => {
-    setFilter((current) => ({
-      ...current,
-      accountIds: current.accountIds.filter((existing) => existing !== id),
-    }));
-  }, []);
-  const handleRemoveCategory = useCallback((id: string) => {
-    setFilter((current) => ({
-      ...current,
-      categoryIds: current.categoryIds.filter((existing) => existing !== id),
-    }));
-  }, []);
-  const handleRemoveScope = useCallback(() => {
-    setFilter((current) => ({ ...current, scope: "all" }));
-  }, []);
-  const handleRemoveDateRange = useCallback(() => {
-    setFilter((current) => ({ ...current, from: "", to: "" }));
-  }, []);
-
-  const handleChangeText = useCallback((next: string) => {
-    setFilter((current) => ({ ...current, text: next }));
-  }, []);
-  const handleChangeAccountIds = useCallback((next: readonly string[]) => {
-    setFilter((current) => ({ ...current, accountIds: next }));
-  }, []);
-  const handleChangeCategoryIds = useCallback((next: readonly string[]) => {
-    setFilter((current) => ({ ...current, categoryIds: next }));
-  }, []);
-  const handleChangeScope = useCallback((next: string) => {
-    setFilter((current) => ({ ...current, scope: next as Scope }));
-  }, []);
-  const handleChangeFrom = useCallback((next: string) => {
-    setFilter((current) => ({ ...current, from: next }));
-  }, []);
-  const handleChangeTo = useCallback((next: string) => {
-    setFilter((current) => ({ ...current, to: next }));
-  }, []);
+  // `SegmentControl`'s own `onChange` is generic over `string` — the cast is
+  // the same narrow one the phone build always made, just moved to the one
+  // spot a `string` meets `PhoneTransactionScope`.
+  const handleChangeScope = useCallback(
+    (next: string) => filters.setScope(next as LedgerFilterState["scope"]),
+    [filters],
+  );
 
   const handleShortSwipe = useCallback(
     (id: string) => {
@@ -219,13 +315,13 @@ export default function Ledger() {
   const activeFilters = activeFilterChips(t, filter, {
     accounts: snapshot.accounts,
     categories: snapshot.categories,
-    onRemoveAccount: handleRemoveAccount,
-    onRemoveCategory: handleRemoveCategory,
-    onRemoveScope: handleRemoveScope,
-    onRemoveDateRange: handleRemoveDateRange,
+    onRemoveAccount: filters.removeAccount,
+    onRemoveCategory: filters.removeCategory,
+    onRemoveScope: filters.removeScope,
+    onRemoveDateRange: filters.removeDateRange,
   });
 
-  const filtered = hasActiveFilter(filter);
+  const filtered = filters.hasActiveFilter;
   const showEmpty = search.loaded && search.error === undefined && search.rows.length === 0;
   // Only asked for when the empty state needs it — an unfiltered count on
   // every render would be a second query nothing else on screen wants.
@@ -250,11 +346,146 @@ export default function Ledger() {
     if (search.hasMore) search.loadMore();
   }, [search]);
 
+  if (breakpoint === "desk") {
+    const emptyState = filtered ? (
+      <EmptyState
+        variant="filtered"
+        title={t("transactions.emptyFilteredTitle")}
+        body={t("transactions.emptyFilteredBody")}
+        count={excludedCount}
+        primaryAction={{ label: t("transactions.clearFilters"), onPress: filters.clearAll }}
+      />
+    ) : (
+      <EmptyState
+        variant="first-run"
+        title={t("transactions.emptyFirstRunTitle")}
+        body={t("transactions.emptyFirstRunBody")}
+        primaryAction={{ label: t("routes.expense"), onPress: handleOpenSheet }}
+      />
+    );
+
+    return (
+      <GroundPanel>
+        <View style={styles.deskLayout}>
+          <View style={styles.deskRail}>
+            <SearchField
+              ref={searchInputRef}
+              value={filter.text}
+              onChangeText={filters.setText}
+              placeholder={t("transactions.searchPlaceholder")}
+            />
+            <PeriodHeader
+              label={monthLabel(periodMonth, locale)}
+              onPrevious={handlePeriodPrevious}
+              onNext={handlePeriodNext}
+              onToday={handlePeriodToday}
+              isCurrent={periodMonth === currentMonth}
+            />
+            <MultiSelect
+              label={t("transactions.filterAccount")}
+              placeholder={t("transactions.filterAccount")}
+              options={accountOptions}
+              values={filter.accountIds}
+              onChange={filters.setAccountIds}
+              searchable
+            />
+            <MultiSelect
+              label={t("transactions.filterCategory")}
+              placeholder={t("transactions.filterCategory")}
+              options={categoryOptions}
+              values={filter.categoryIds}
+              onChange={filters.setCategoryIds}
+              searchable
+            />
+            <SegmentControl
+              segments={scopeSegments(t)}
+              value={filter.scope}
+              onChange={handleChangeScope}
+            />
+            {/*
+              The rail *is* the "shown, not silently applied" treatment at
+              desk width (S10 §3 web: "the filter bar as a persistent left
+              rail rather than a chip row") — each control already displays
+              its own active value (the `MultiSelect`'s own token, the
+              `SegmentControl`'s own selected segment), so a second chip row
+              restating the same state would be the duplicate mobile's own
+              chips-plus-closed-sheet layout never has to show at once. Only
+              "clear every filter at a stroke" earns a control of its own.
+            */}
+            {filtered ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("transactions.clearAllFilters")}
+                onPress={filters.clearAll}
+                style={styles.clearAll}
+              >
+                <Text style={styles.clearAllText}>{t("transactions.clearAllFilters")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={styles.deskMain}>
+            {search.loaded && search.total.count === 0 ? null : (
+              <Card>{search.loaded ? <RunningTotal total={search.total} /> : <TotalSkeleton />}</Card>
+            )}
+            <LedgerSelectionBar
+              count={deskSelection.count}
+              onCategorize={handleOpenCategorizeSelection}
+              onClear={deskSelection.clear}
+            />
+            {deskCategorize && deskCategorize.phase !== "picking" ? (
+              <CategorizeSelectionConfirm
+                count={deskCategorize.count}
+                categoryName={"categoryName" in deskCategorize ? deskCategorize.categoryName : ""}
+                state={deskCategorizeConfirmState(deskCategorize.phase)}
+                onApprove={handleApproveDeskCategorize}
+                onDecline={handleDeclineDeskCategorize}
+                onDismiss={handleDismissDeskCategorize}
+              />
+            ) : null}
+            {!search.loaded ? (
+              <View style={styles.skeletonList}>
+                {SKELETON_ROW_KEYS.map((key) => (
+                  <Skeleton key={key} shape="row" label={t("transactions.loadingTransactions")} />
+                ))}
+              </View>
+            ) : search.error !== undefined ? (
+              <ErrorState
+                variant="recoverable"
+                what={t("transactions.loadFailedTitle")}
+                why={t("transactions.loadFailedWhy")}
+                action={{ label: t("common.retry"), onPress: search.retry }}
+              />
+            ) : (
+              <LedgerTable
+                rows={deskRows}
+                sort={deskSort.sort}
+                onSortColumn={deskSort.onSortColumn}
+                selection={deskSelection}
+                onOpenRow={handlePressRoute}
+                onFocusRail={handleFocusRail}
+                emptyState={emptyState}
+              />
+            )}
+          </View>
+        </View>
+
+        <CategorySheet
+          visible={deskCategorize?.phase === "picking"}
+          kind={deskCategorize?.phase === "picking" ? deskCategorize.kind : "expense"}
+          tree={snapshot.categoryTree}
+          onPick={handlePickDeskCategory}
+          onDismiss={handleDismissDeskCategorize}
+        />
+      </GroundPanel>
+    );
+  }
+
   return (
     <GroundPanel scroll="own">
       <SearchField
         value={filter.text}
-        onChangeText={handleChangeText}
+        onChangeText={filters.setText}
         placeholder={t("transactions.searchPlaceholder")}
       />
       <View style={styles.chipRow}>
@@ -266,7 +497,7 @@ export default function Ledger() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("transactions.clearAllFilters")}
-            onPress={handleClearAll}
+            onPress={filters.clearAll}
             style={styles.clearAll}
           >
             <Text style={styles.clearAllText}>{t("transactions.clearAllFilters")}</Text>
@@ -298,7 +529,7 @@ export default function Ledger() {
             title={t("transactions.emptyFilteredTitle")}
             body={t("transactions.emptyFilteredBody")}
             count={excludedCount}
-            primaryAction={{ label: t("transactions.clearFilters"), onPress: handleClearAll }}
+            primaryAction={{ label: t("transactions.clearFilters"), onPress: filters.clearAll }}
           />
         ) : (
           <EmptyState
@@ -329,7 +560,7 @@ export default function Ledger() {
           placeholder={t("transactions.filterAccount")}
           options={accountOptions}
           values={filter.accountIds}
-          onChange={handleChangeAccountIds}
+          onChange={filters.setAccountIds}
           searchable
         />
         <MultiSelect
@@ -337,7 +568,7 @@ export default function Ledger() {
           placeholder={t("transactions.filterCategory")}
           options={categoryOptions}
           values={filter.categoryIds}
-          onChange={handleChangeCategoryIds}
+          onChange={filters.setCategoryIds}
           searchable
         />
         <SegmentControl
@@ -348,13 +579,13 @@ export default function Ledger() {
         <DateField
           label={t("transactions.filterFrom")}
           value={filter.from}
-          onChange={handleChangeFrom}
+          onChange={filters.setFrom}
           today={today}
         />
         <DateField
           label={t("transactions.filterTo")}
           value={filter.to}
-          onChange={handleChangeTo}
+          onChange={filters.setTo}
           today={today}
         />
       </BottomSheet>
@@ -395,7 +626,7 @@ type ActiveFilterDeps = {
 /** Every active filter, as a chip descriptor — one per account, category, the scope, and the date range. */
 function activeFilterChips(
   t: ReturnType<typeof useT>,
-  filter: FilterState,
+  filter: LedgerFilterState,
   deps: ActiveFilterDeps,
 ): readonly ActiveFilterChipDescriptor[] {
   const chips: ActiveFilterChipDescriptor[] = [];
@@ -660,4 +891,14 @@ const useStyles = makeStyles((theme) => ({
   dayHeader: { paddingTop: space.x3, paddingBottom: space.xs },
   dayHeaderText: { color: theme.textMuted, ...text.ui("kicker") },
   rowSeparator: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
+  // S10 §3 web — "the filter bar as a persistent left rail" beside the table.
+  deskLayout: { flex: 1, flexDirection: "row", gap: space.x5 },
+  deskRail: {
+    width: 280,
+    gap: space.x3,
+    paddingRight: space.x3,
+    borderRightWidth: hairline.width,
+    borderRightColor: theme.hairline,
+  },
+  deskMain: { flex: 1, gap: space.md, borderRadius: radius.md },
 }));

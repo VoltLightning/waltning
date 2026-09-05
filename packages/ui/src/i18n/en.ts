@@ -71,6 +71,9 @@ export const en = {
     discardBody: "It carries an auto-filled account — discarding it is cheap to redo.",
 
     edit: "Edit",
+    /** `05` §5.3's own pair — the desk table's batch-categorise confirm reuses them (DESK3). */
+    approve: "Approve",
+    decline: "Decline",
   },
   accounts: {
     currency: "Currency",
@@ -397,6 +400,22 @@ export const en = {
     commandBarHint: "Spaces group thousands; comma or point is the decimal mark.",
     /** The resolved chips' own group — a `listbox` the bar's `combobox` controls, named because a bare group announces nothing. */
     commandBarChipsLabel: "Resolved fields",
+
+    /* ── S10 §3 web (DESK3) — the desk table ──────────────────────────── */
+    /** `<LedgerTable>`'s own accessible name — a table with no visible title needs one. */
+    ledgerTable: "Ledger table",
+    /** The selection checkbox's accessible name — `payee` arrives already resolved, "—" included. */
+    selectRow: "Select {{payee}}",
+    /** `<LedgerSelectionBar>` — count is the same word whatever the count. */
+    selectedCount: "{{count}} selected",
+    /** `<CategorizeSelectionConfirm>`'s own summary line. */
+    confirmCategorizeBatchOne: "Categorise {{count}} transaction as {{category}}?",
+    confirmCategorizeBatchMany: "Categorise {{count}} transactions as {{category}}?",
+    categorizeBatchAppliedOne: "{{count}} transaction recategorised",
+    categorizeBatchAppliedMany: "{{count}} transactions recategorised",
+    /** `transactions_category_shape`'s own refusal, stated once rather than the raw thrown message. */
+    categorizeBatchFailedWhy:
+      "One of the selected rows is no longer eligible — it may have been deleted, or it is a transfer or an adjustment.",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {
