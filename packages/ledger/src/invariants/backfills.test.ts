@@ -337,7 +337,8 @@ describe("every objects hook creates something the chain would not otherwise hav
    * seventh living somewhere that cannot move.
    */
   it("no migration step creates a trigger — every one of them lives in a hook", () => {
-    const offenders = REPLICA_STEPS.flatMap((step) =>
+    // Both chains: the checksum argument is the same for the outbox.
+    const offenders = [...REPLICA_STEPS, ...OUTBOX_STEPS].flatMap((step) =>
       step.statements
         .filter((statement) => /^\s*CREATE\s+TRIGGER/i.test(statement))
         .map((statement) => `${step.tag}: ${statement.slice(0, 80)}`),

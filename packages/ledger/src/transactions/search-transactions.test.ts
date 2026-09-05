@@ -470,6 +470,33 @@ describe("searchTransactions — paging", () => {
  * actually prepared rather than against a timing.
  */
 describe("searchTransactions — countOnly", () => {
+  /**
+   * The count must be the figure the full path computes, over the same four
+   * §13 columns — including `transaction_lines.description`, which only the
+   * shared `lineDescriptionsBy` lookup reaches. A word that lives in a line
+   * alone counts one on both paths, or the count is an approximation.
+   */
+  it("counts a line-description-only match exactly as the full path does", () => {
+    const txnId = insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    stores.ledger.replica.db
+      .insert(transactionLines)
+      .values({
+        id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e2"),
+        transactionId: txnId,
+        description: "Printer toner",
+        amount: money.toMoney("48.90"),
+      })
+      .run();
+
+    const full = searchTransactions(stores.ledger.replica.db, { text: "toner" });
+    const counted = searchTransactions(stores.ledger.replica.db, { text: "toner" }, undefined, {
+      countOnly: true,
+    });
+
+    expect(full.total.count).toBe(1);
+    expect(counted.total.count).toBe(full.total.count);
+  });
+
   it("counts the same rows the full operation counts, and returns nothing else", () => {
     for (let i = 0; i < 7; i++) {
       insertExpense({

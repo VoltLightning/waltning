@@ -430,7 +430,7 @@ export type Backfill = {
  * removes the failure mode entirely, so it is defence in depth rather than a
  * fix for any device known to be in that state — no shipped build ever
  * created these, and the disposable-until-first-install ruling is what lets
- * the head be edited instead. `backfills.test.ts` runs the hook twice and
+ * a delivered step be edited instead. `backfills.test.ts` runs the hook twice and
  * expects no throw.
  */
 const CATEGORY_KIND_TRIGGERS: readonly string[] = [
