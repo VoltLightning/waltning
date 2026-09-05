@@ -57,9 +57,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   // function ever runs) has already loaded it by the time either check
   // below reads `process.env`. `!== undefined` would treat that empty
   // string as "set", read a freshly-copied `.env` as appliance mode, and
-  // start nothing at all — a real failure this shipped with once, and one
-  // that blamed this file for doing nothing rather than the empty string
-  // that caused it.
+  // start nothing at all — the empty string is the actual condition being
+  // guarded against here, not a hypothetical one.
   if (apiUrlOverride && webUrlOverride) {
     return async () => {};
   }
@@ -132,8 +131,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
    * database behind (harmless to a *later run* — the next `pnpm e2e` clones
    * its own, uniquely named, and never touches an old one) and, less often,
    * a spawned process still listening on its port (loud, not silent — the
-   * next `pnpm e2e` finds a later port instead, per `findFreePort`, rather
-   * than passing against the wrong server). Nothing reaps a leftover
+   * next `pnpm e2e` finds a later port instead: `findFreePort`'s own
+   * bind-and-connect check, `servers.ts`'s own doc, catches a leftover
+   * process bound to a wildcard address exactly as it catches one on
+   * `127.0.0.1`/`::1` specifically, so it is never handed back the port a
+   * still-running orphan already holds). Nothing reaps a leftover
    * `waltning_test_e2e_*` database, though — enough interrupted runs leave
    * enough of them that a person should occasionally check for and drop
    * them by hand; they cost disk, not correctness. Removed once setup

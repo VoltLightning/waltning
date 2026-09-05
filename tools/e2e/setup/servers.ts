@@ -29,7 +29,7 @@ import {
   readSync,
   statSync,
 } from "node:fs";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
 export type Server = {
@@ -167,17 +167,28 @@ export function readPort(name: string, raw: string | undefined, fallback: number
 }
 
 /**
- * One address family's half of `canBindPort`. `EADDRNOTAVAIL`/`EAFNOSUPPORT`
+ * One address family's half of a bind-test. `EADDRNOTAVAIL`/`EAFNOSUPPORT`
  * on `::1` mean this machine has no IPv6 loopback to worry about, not that
- * the port is busy — every other error (`EADDRINUSE`, most commonly) means
- * something is actually listening there.
+ * the port is busy — `EADDRINUSE` means something is bound to this exact
+ * address and port. `EACCES`/`EPERM` (a privileged port, or a sandboxing
+ * policy) is neither: no address this process tries will ever succeed, so
+ * this throws rather than reporting "busy" and sending `findFreePort`
+ * scanning upward through a whole range it was never going to bind either.
  */
 function tryBind(port: number, host: string): Promise<"bound" | "busy" | "unsupported"> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const server = createServer();
     server.once("error", (error: NodeJS.ErrnoException) => {
       if (error.code === "EADDRNOTAVAIL" || error.code === "EAFNOSUPPORT") resolve("unsupported");
-      else resolve("busy");
+      else if (error.code === "EACCES" || error.code === "EPERM") {
+        reject(
+          new Error(
+            `Cannot bind port ${port} on ${host} (${error.code}) — a permission problem, not a ` +
+              "busy port. Check what else is running as a different user, or a sandbox/firewall " +
+              "policy, rather than re-running `pnpm e2e`.",
+          ),
+        );
+      } else resolve("busy");
     });
     server.listen(port, host, () => {
       server.close(() => resolve("bound"));
@@ -186,20 +197,67 @@ function tryBind(port: number, host: string): Promise<"bound" | "busy" | "unsupp
 }
 
 /**
- * A port is free only if *this process* can bind it — on `127.0.0.1` and,
- * separately, on `::1`. A connect-test (dial the port, `ECONNREFUSED` means
- * nothing is there) cannot see a listener bound to one address family and
- * not the other: `127.0.0.1` and `::1` are different sockets, and something
- * bound only to the latter (`python3 -m http.server 8099 --bind ::1`, a
- * stray Node dev server defaulting to IPv6) would answer a bind-test on
- * `::1` with `EADDRINUSE` while a connect-test dialing `127.0.0.1` sees
- * nothing and calls the port free. A machine with no IPv6 loopback at all
- * has nothing to check there, which `tryBind`'s `"unsupported"` case covers.
+ * One address family's half of a connect-test. `ECONNREFUSED` is the only
+ * answer that means nothing is listening; `EADDRNOTAVAIL`/`EAFNOSUPPORT`
+ * (dialling `::1` with no IPv6 loopback configured) means there is nothing
+ * to check on this address family at all, same as `tryBind`'s own case. A
+ * successful connection, or a socket that neither connects nor errors
+ * within a second, both mean something is there.
+ */
+function tryConnect(port: number, host: string): Promise<"refused" | "answered" | "unsupported"> {
+  return new Promise((resolve) => {
+    const socket = connect({ port, host });
+    socket.setTimeout(1_000);
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve("answered");
+    });
+    socket.once("timeout", () => {
+      socket.destroy();
+      resolve("answered");
+    });
+    socket.once("error", (error: NodeJS.ErrnoException) => {
+      if (error.code === "ECONNREFUSED") resolve("refused");
+      else if (error.code === "EADDRNOTAVAIL" || error.code === "EAFNOSUPPORT")
+        resolve("unsupported");
+      else resolve("answered");
+    });
+  });
+}
+
+/**
+ * A port is free only if both a bind-test *and* a connect-test agree, on
+ * both `127.0.0.1` and `::1`.
+ *
+ * **The bind-test alone is not enough.** On this machine (confirmed
+ * directly, not assumed), a `listen()` on `127.0.0.1:<port>` succeeds even
+ * while something else already holds a *wildcard* listener on that port
+ * (`0.0.0.0`/`::`, `SO_REUSEADDR`) — which is exactly how Metro binds by
+ * default. A leaked `expo start --web` from an interrupted run would read
+ * as free, `findFreePort` would hand its own port straight back to it, and
+ * the new `expo start --web --port <n>` this run spawns would fail to bind
+ * and abort — surfacing as `waitForLogLine` timing out on a log line that
+ * was never going to arrive, not as the port conflict it actually is.
+ *
+ * **The connect-test closes exactly that gap.** A wildcard listener still
+ * *answers* a connection dialled at `127.0.0.1` or `::1` — sockets are
+ * address-specific to bind, not to accept — so `tryConnect` sees it even
+ * though `tryBind` alone could not.
+ *
+ * **Neither test alone covers what the other does.** A connect-test by
+ * itself misses a listener bound to one address family and not the other
+ * (`python3 -m http.server 8099 --bind ::1` answers nothing on `127.0.0.1`,
+ * so a `127.0.0.1`-only connect-test would call it free) — the bind-test on
+ * `::1` catches that with `EADDRINUSE`. Together: a `listen()` proves no
+ * *specific* listener is already on that exact address, and a connect
+ * proves no *wildcard* listener is answering there either.
  */
 async function canBindPort(port: number): Promise<boolean> {
   if ((await tryBind(port, "127.0.0.1")) !== "bound") return false;
-  const v6 = await tryBind(port, "::1");
-  return v6 !== "busy";
+  if ((await tryBind(port, "::1")) === "busy") return false;
+  if ((await tryConnect(port, "127.0.0.1")) !== "refused") return false;
+  const v6Connect = await tryConnect(port, "::1");
+  return v6Connect === "refused" || v6Connect === "unsupported";
 }
 
 /**
@@ -261,19 +319,55 @@ function stopper(child: ChildProcess): () => Promise<void> {
 }
 
 /**
- * Runs `work`, but rejects immediately if `child` itself emits `"error"`
- * (failed to spawn at all — a missing binary, `EACCES`, and the like) —
- * without this, a spawn failure would leave `waitForHttp`/`waitForLogLine`
- * polling for up to their own full timeout for a process that was never
- * going to answer.
+ * A permanent, do-nothing `"error"` listener — Node treats an `"error"`
+ * event with *no* listener attached as an unhandled exception and crashes
+ * the whole process, not just the emitter. `raceWithChildError`'s own
+ * `once("error", …)` only covers the readiness window and is removed once
+ * `work` settles; without a permanent listener underneath it, an error the
+ * child emits later — while its output is only being driven through by
+ * specs, long after `startApi`/`startWeb` returned — would take this
+ * process down with it instead of, at worst, doing nothing.
  */
-function raceWithChildError<T>(child: ChildProcess, work: Promise<T>): Promise<T> {
+function armAgainstUnhandledError(child: ChildProcess): void {
+  child.on("error", () => {});
+}
+
+/**
+ * Runs `work`, but rejects immediately if `child` itself emits `"error"`
+ * (failed to spawn at all — a missing binary, `EACCES`, and the like) or
+ * `"exit"` (started, then died before finishing `work`) — without this,
+ * either failure would leave `waitForHttp`/`waitForLogLine` polling for up
+ * to their own full timeout for a process that was never going to answer,
+ * instead of failing immediately with the exit code and the log's own tail.
+ *
+ * One registration spans however much of `work` the caller passes —
+ * `waitForOwnProcess` calls this once around its whole log-line-then-`200`
+ * sequence, not once per step, so a child that dies between the two still
+ * fails immediately rather than only during whichever step happened to be
+ * running.
+ */
+function raceWithChildError<T>(
+  child: ChildProcess,
+  logFile: string,
+  label: string,
+  work: Promise<T>,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const onError = (error: Error): void => reject(error);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+      reject(
+        new Error(
+          `${label} exited before it was ready (code ${code}, signal ${signal ?? "none"}).\n\n` +
+            `${logFile}, last lines:\n${tail(logFile)}`,
+        ),
+      );
+    };
     child.once("error", onError);
+    child.once("exit", onExit);
     work.then(
       (value) => {
         child.off("error", onError);
+        child.off("exit", onExit);
         resolve(value);
       },
       // `unknown`, the same as a `catch` binding — a promise's rejection
@@ -281,6 +375,7 @@ function raceWithChildError<T>(child: ChildProcess, work: Promise<T>): Promise<T
       // than it does there.
       (error: unknown) => {
         child.off("error", onError);
+        child.off("exit", onExit);
         reject(error);
       },
     );
@@ -288,7 +383,7 @@ function raceWithChildError<T>(child: ChildProcess, work: Promise<T>): Promise<T
 }
 
 /**
- * `findFreePort` only proves a port was bindable at the moment it probed it;
+ * `findFreePort` only proves a port was free at the moment it probed it;
  * something else can still bind it before `spawn()` runs. What follows
  * narrows that, in order, to no stronger a claim than the evidence supports:
  *
@@ -304,7 +399,12 @@ function raceWithChildError<T>(child: ChildProcess, work: Promise<T>): Promise<T
  *    real and not closed by anything here.
  * 3. **The child must still be running.** `exitCode === null` after both of
  *    the above: a process that had already lost the port would show up as
- *    dead, not as a startup line with no `200` to follow.
+ *    dead, not as a startup line with no `200` to follow. `raceWithChildError`
+ *    (wrapping both steps together, below) already catches the far more
+ *    common shape of that same failure — the child exiting *during* 1 or
+ *    2 — immediately rather than waiting either step out; this is the one
+ *    remaining case, the child dying in the gap after `work` resolves but
+ *    before this line runs.
  *
  * None of this is a lock. It is what turns "something on this port answered
  * 200" into "the log line, then the port, then the process — all three,
@@ -326,19 +426,20 @@ async function waitForOwnProcess(
 ): Promise<void> {
   await raceWithChildError(
     child,
-    waitForLogLine(options.logFile, options.logNeedles, {
-      timeoutMs: options.logTimeoutMs,
-      label: options.label,
-    }),
-  );
-  await raceWithChildError(
-    child,
-    waitForHttp(options.httpUrl, {
-      timeoutMs: options.httpTimeoutMs,
-      label: options.label,
-      logFile: options.logFile,
-      ...(options.httpIntervalMs === undefined ? {} : { intervalMs: options.httpIntervalMs }),
-    }),
+    options.logFile,
+    options.label,
+    (async () => {
+      await waitForLogLine(options.logFile, options.logNeedles, {
+        timeoutMs: options.logTimeoutMs,
+        label: options.label,
+      });
+      await waitForHttp(options.httpUrl, {
+        timeoutMs: options.httpTimeoutMs,
+        label: options.label,
+        logFile: options.logFile,
+        ...(options.httpIntervalMs === undefined ? {} : { intervalMs: options.httpIntervalMs }),
+      });
+    })(),
   );
 
   if (child.exitCode !== null) {
@@ -387,6 +488,7 @@ export async function startApi(options: { appDatabaseUrl: string; from: number }
         detached: true,
         stdio: ["ignore", logFd, logFd],
       });
+      armAgainstUnhandledError(child);
     } finally {
       closeSync(logFd);
     }
@@ -417,14 +519,12 @@ export async function startApi(options: { appDatabaseUrl: string; from: number }
  * Spawns tier 2's own Expo web bundle, on its own dedicated port, and waits
  * for it to answer ready.
  *
- * **Never a developer's own Metro.** This used to reuse whatever answered on
- * `:8081` — the default port a developer's own `pnpm dev:web` binds to — on
- * the theory that the web build is stateless with respect to its server.
- * That theory is true of the *API*, never of the browser it runs in: OPFS is
- * scoped per *origin*, and every port is its own origin, so a developer's
- * `:8081` tab and this suite sharing that port would have shared one SQLite
- * worker and one bootstrapped ledger between a person's own testing and this
- * suite's writes. A dedicated port (`from` — `global.ts`'s `E2E_WEB_PORT`,
+ * **Never a developer's own Metro.** `:8081` — the default port a
+ * developer's own `pnpm dev:web` binds to — is never a candidate here, on
+ * purpose: OPFS is scoped per *origin*, and every port is its own origin, so
+ * a developer's `:8081` tab and this suite sharing that port would share one
+ * SQLite worker and one bootstrapped ledger between a person's own testing
+ * and this suite's writes. A dedicated port (`from` — `global.ts`'s `E2E_WEB_PORT`,
  * default 8082 — or the next free one after it) keeps tier 2's origin, and
  * therefore its ledger, its own — never touching `:8081` and never touched
  * by it. `url` on the returned `Server` names whichever port it actually
@@ -457,6 +557,7 @@ export async function startWeb(options: { from: number }): Promise<Server> {
           stdio: ["ignore", logFd, logFd],
         },
       );
+      armAgainstUnhandledError(child);
     } finally {
       closeSync(logFd);
     }
