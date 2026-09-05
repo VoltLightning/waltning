@@ -29,6 +29,14 @@
  * wrong place cannot be detected after the fact — it has already made a
  * repository — so the check has to happen on the argument list, before the
  * child process exists.
+ *
+ * That guard judges the `dir` parameter, so the argument list must not be
+ * able to name a *second* location behind its back: `git -C /tmp/x -C /repo
+ * commit` runs in `/repo`, and `--git-dir`, `--work-tree`, `--namespace` and
+ * `--exec-path` relocate the same way. {@link assertNoRelocation} refuses
+ * every one of them, in both `--flag value` and `--flag=value` spellings,
+ * unless the value is itself under `os.tmpdir()` — the `dir` parameter is
+ * the only sanctioned way to say where a fixture works.
  */
 
 import { execFileSync } from "node:child_process";
@@ -168,11 +176,56 @@ function assertMutationAllowed(dir: string, args: readonly string[]): void {
 }
 
 /**
+ * The options that move where git works, and so make `dir` a lie: `-C` and
+ * `--work-tree` change the working tree, `--git-dir` the repository,
+ * `--namespace` which refs are visible, `--exec-path` which binaries git
+ * runs as subcommands. `git -C /tmp/x -C /repo commit` commits in `/repo` —
+ * the last one wins, and this fixture's own `-C dir` is the *first*
+ * argument, so anything a caller passes overrides it.
+ *
+ * `-c` is deliberately not here: it sets a config value for one command
+ * rather than relocating anything, and it cannot reach a config file.
+ */
+const RELOCATION_FLAGS: ReadonlySet<string> = new Set([
+  "-C",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--exec-path",
+]);
+
+/**
+ * Refuses a second location inside `args`. Runs for every call, read-only
+ * ones included: `git -C /repo log` is harmless, but a rule that allows it
+ * has to decide read-only-ness *before* it knows where the command runs,
+ * and the whole point of this module is that the location is decided in one
+ * place. The directory parameter is that place.
+ */
+function assertNoRelocation(dir: string, args: readonly string[]): void {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    const equals = arg.indexOf("=");
+    const flag = equals === -1 ? arg : arg.slice(0, equals);
+    if (!RELOCATION_FLAGS.has(flag)) continue;
+    const attached = equals === -1 ? undefined : arg.slice(equals + 1);
+    const value = attached ?? args[i + 1] ?? "";
+    if (attached === undefined) i += 1;
+    if (value !== "" && isUnderTmp(value)) continue;
+    throw new Error(
+      `git fixture: refusing to run \`git ${args.join(" ")}\` — \`${flag}\` names ` +
+        `${value === "" ? "<no value>" : value}, which is not under ${TMP_ROOT}. ` +
+        `The dir parameter (${dir}) is the only sanctioned way to say where a fixture git call runs.`,
+    );
+  }
+}
+
+/**
  * The only sanctioned way any test invokes the `git` executable with a
  * mutating verb — `tests/git-fixture-boundary.test.ts` enforces that
  * directly. Always `-C dir`, never a bare `cwd`.
  */
 export function git(dir: string, args: string[]): string {
+  assertNoRelocation(dir, args);
   assertMutationAllowed(dir, args);
   const env = {
     ...stripGitEnv(process.env),
@@ -222,6 +275,7 @@ export const _internal = {
   FIXTURE_IDENTITY,
   READ_ONLY_VERBS,
   VALUE_FLAGS,
+  RELOCATION_FLAGS,
   UNRESOLVED,
   TMP_ROOT,
 };

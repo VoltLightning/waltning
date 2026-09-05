@@ -13,7 +13,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -179,5 +180,57 @@ describe("package.json stays the implementation", () => {
     // an owner decides otherwise.
     expect(scripts).not.toHaveProperty("dev");
     expect(repoRoot).toBeTruthy();
+  });
+});
+
+describe("every shell script the gate and the Makefile call is executable (L-9)", () => {
+  /**
+   * `tools/db-ready.sh` shipped mode 644. `pnpm db:ready` names an
+   * interpreter (`sh tools/db-ready.sh`), so it worked — but a `#!/bin/sh`
+   * script that cannot be run as `./tools/db-ready.sh` is a trap for the
+   * next caller, and the hooks in `.githooks/` have no interpreter in front
+   * of them at all: git execs those directly, and a non-executable
+   * `pre-commit` is a gate that silently does not run.
+   *
+   * Both modes are checked. The file system's is what a shell obeys here
+   * and now; git's index mode is what everyone else checks out, and the two
+   * can disagree — a `chmod +x` that is never staged fixes this machine and
+   * nobody else's.
+   */
+  function shellScripts(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(join(repoRoot, dir))) {
+      // `tools/e2e/node_modules` holds other people's scripts; their modes
+      // are not this repository's business.
+      if (entry === "node_modules" || entry === "dist") continue;
+      const relPath = `${dir}/${entry}`;
+      if (statSync(join(repoRoot, relPath)).isDirectory()) shellScripts(relPath, out);
+      else if (entry.endsWith(".sh")) out.push(relPath);
+    }
+    return out;
+  }
+
+  const scriptPaths = [...shellScripts("tools"), ...shellScripts(".githooks")];
+
+  it("finds the scripts it is supposed to be checking", () => {
+    expect(scriptPaths, "shell scripts under tools/ and .githooks/").toContain("tools/db-ready.sh");
+    expect(scriptPaths).toContain(".githooks/needs-visual.sh");
+    expect(scriptPaths.length, "*.sh files found").toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(scriptPaths)("%s is executable on disk", (relPath) => {
+    const executableBits = statSync(join(repoRoot, relPath)).mode & 0o111;
+    expect(executableBits, `${relPath} has no execute bit`).not.toBe(0);
+  });
+
+  it("records mode 100755 in git, so a fresh checkout gets the same thing", () => {
+    const indexed = execFileSync("git", ["ls-files", "-s", "--", ...scriptPaths], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    })
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.split(/\s+/, 1)[0] ?? "");
+    expect(indexed.length, "every script is tracked").toBe(scriptPaths.length);
+    expect([...new Set(indexed)], "git modes across those scripts").toEqual(["100755"]);
   });
 });

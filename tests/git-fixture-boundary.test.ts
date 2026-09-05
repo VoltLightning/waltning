@@ -18,12 +18,23 @@
  * with a literal verb in the array and let every one of those shapes
  * through, which is a boundary that catches the mistake already made and no
  * other.
+ *
+ * The same default governs the *command word*. `git`, `/usr/bin/git` and
+ * `git.exe` are one binary under four spellings, so the scan compares
+ * basenames rather than the string `git`; and a command word that is not a
+ * literal at all — `execFileSync(GIT, …)`, ``execSync(`${bin} commit`)`` —
+ * is refused outright, because a binary this scan cannot read is a possible
+ * `git`.
+ *
+ * What it reads is every `.ts`/`.tsx` file under `tests/`, `tools/`,
+ * `packages/` and `apps/`, not only the ones named `*.test.ts`. A helper, a
+ * script, an app's platform module can each spawn exactly what a test can.
  */
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { _internal, createTempGitRepo, git, removeTempGitRepo } from "./git-fixture.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -124,6 +135,27 @@ describe("no unproven git call outside tests/git-fixture.ts (M-b, M-1)", () => {
   }
 
   /**
+   * `exec` is the one entry point above whose name is also a standard
+   * method: `/re/.exec(text)`, `sqlite.exec(sql)`. Dotted, it is one of
+   * those unless the receiver is a `child_process` binding — and a dotted
+   * `exec` still gets scanned for a literal `git` command word, it just
+   * cannot raise the *unresolved command* alarm, which would otherwise fire
+   * on every regex match in the repository.
+   */
+  const COLLIDING_NAMES = new Set(["exec"]);
+  const CHILD_PROCESS_RECEIVER = /(?:^|[^\w$])(?:cp|proc|childProcess|child_process)\s*\.\s*$/;
+
+  /**
+   * Command expressions the language itself proves are not git.
+   * `process.execPath` is Node's own binary — deliberately the only member,
+   * because every addition is a hole: an unreadable command word is a
+   * possible `git` until something *guarantees* otherwise.
+   */
+  const PROVEN_NON_GIT_COMMANDS = new Set(["process.execPath"]);
+
+  type ExecCall = { text: string; commandMustBeLiteral: boolean };
+
+  /**
    * Every exec-family call in `source`, as its own argument-list (or tagged
    * template) source text.
    *
@@ -133,17 +165,31 @@ describe("no unproven git call outside tests/git-fixture.ts (M-b, M-1)", () => {
    * open paren, so a template literal, a `sh -c "git …"` string, and
    * `pnpm exec git …` all walked straight past it.
    */
-  function execCallTexts(source: string): string[] {
+  function execCallTexts(source: string): ExecCall[] {
     const names = [...BASE_EXEC_FUNCS, ...promisifiedNames(source)];
     const CALL = new RegExp(`\\b(?:${names.map(escapeRe).join("|")})\\s*[(\`]`, "g");
-    const texts = [...source.matchAll(CALL)].map((m) =>
-      balanced(source, (m.index ?? 0) + m[0].length - 1),
-    );
-    // execa's `$` tagged template: `` $`git commit` ``.
-    for (const m of source.matchAll(/(?:^|[^A-Za-z0-9_$.])\$\s*`/g)) {
-      texts.push(balanced(source, (m.index ?? 0) + m[0].length - 1));
+    const calls: ExecCall[] = [];
+    for (const m of source.matchAll(CALL)) {
+      const start = m.index ?? 0;
+      const name = m[0].replace(/\s*[(`]$/, "");
+      const before = source.slice(Math.max(0, start - 64), start);
+      const dotted = /\.\s*$/.test(before);
+      const isMethodCollision =
+        dotted && COLLIDING_NAMES.has(name) && !CHILD_PROCESS_RECEIVER.test(before);
+      calls.push({
+        text: balanced(source, start + m[0].length - 1),
+        commandMustBeLiteral: !isMethodCollision,
+      });
     }
-    return texts;
+    // execa's `$` tagged template: `` $`git commit` ``. Its first word is
+    // the command word too, so the same rule applies.
+    for (const m of source.matchAll(/(?:^|[^A-Za-z0-9_$.])\$\s*`/g)) {
+      calls.push({
+        text: balanced(source, (m.index ?? 0) + m[0].length - 1),
+        commandMustBeLiteral: true,
+      });
+    }
+    return calls;
   }
 
   type Token = { text: string; literal: boolean };
@@ -208,23 +254,50 @@ describe("no unproven git call outside tests/git-fixture.ts (M-b, M-1)", () => {
   }
 
   /**
-   * Every `git` invocation inside one exec call, as the argument list that
-   * follows it — with each unresolvable token replaced by the sentinel the
-   * fixture's own allowlist treats as "not proven".
-   *
-   * `git` must itself be a literal: this is looking for the command being
-   * run, not for the wrapper named `git` that tests are supposed to call.
+   * `git`, `/usr/bin/git`, `../bin/git`, `git.exe` — one binary, four
+   * spellings. Round 3's scanner compared the token to the string `git`, so
+   * an absolute path to the same executable read as an ordinary word.
    */
-  function gitArgLists(callText: string): string[][] {
-    const tokens = tokenize(callText);
-    const lists: string[][] = [];
+  function isGitCommandWord(text: string): boolean {
+    const base = text.split(/[/\\]+/).pop() ?? "";
+    return base.replace(/\.exe$/i, "") === "git";
+  }
+
+  type Invocation = { command: string; args: string[] };
+
+  /**
+   * The git invocations inside one exec call: each command word, with the
+   * argument list that follows it and every unresolvable token replaced by
+   * the sentinel the fixture's own allowlist treats as "not proven".
+   *
+   * Two ways in. A literal token whose basename is `git` is a git command
+   * word wherever it sits — first argument, or after `sh -c` / `pnpm exec`.
+   * And the *command position* itself (the first token of the call) is a
+   * violation whenever it is not a literal at all: `execFileSync(GIT, …)`
+   * and ``execSync(`${bin} commit`)`` name a binary this scan cannot read,
+   * and an unreadable binary is a possible `git`. The wrapper
+   * `git(dir, […])` is not an exec-family call and never reaches here.
+   */
+  function gitInvocations(call: ExecCall): Invocation[] {
+    const tokens = tokenize(call.text);
+    const asArgs = (from: number) =>
+      tokens.slice(from).map((arg) => (arg.literal ? arg.text : _internal.UNRESOLVED));
+    const found: Invocation[] = [];
+    const first = tokens[0];
+    if (
+      call.commandMustBeLiteral &&
+      first !== undefined &&
+      !first.literal &&
+      !PROVEN_NON_GIT_COMMANDS.has(first.text)
+    ) {
+      found.push({ command: _internal.UNRESOLVED, args: asArgs(1) });
+      return found;
+    }
     tokens.forEach((token, index) => {
-      if (token.text !== "git" || !token.literal) return;
-      lists.push(
-        tokens.slice(index + 1).map((arg) => (arg.literal ? arg.text : _internal.UNRESOLVED)),
-      );
+      if (!token.literal || !isGitCommandWord(token.text)) return;
+      found.push({ command: token.text, args: asArgs(index + 1) });
     });
-    return lists;
+    return found;
   }
 
   /** The invocation up to and including its verb — what a failure message needs to name. */
@@ -251,20 +324,49 @@ describe("no unproven git call outside tests/git-fixture.ts (M-b, M-1)", () => {
       .map((arg) => (arg === _internal.UNRESOLVED ? "<unresolved>" : arg))
       .join(" ")
       .trim();
-    return `git ${text || "<no verb>"}`;
+    return text || "<no verb>";
+  }
+
+  function describeInvocation(invocation: Invocation): string {
+    const command =
+      invocation.command === _internal.UNRESOLVED ? "<unresolved command>" : invocation.command;
+    return `${command} ${describeArgs(invocation.args)}`.trim();
   }
 
   /** The unproven git invocations in one file's source, described for a failure message. */
   function unprovenGitCalls(source: string): string[] {
     const found: string[] = [];
-    for (const callText of execCallTexts(source)) {
-      for (const args of gitArgLists(callText)) {
-        if (_internal.isReadOnlyGitArgs(args)) continue;
-        found.push(describeArgs(args));
+    for (const call of execCallTexts(source)) {
+      for (const invocation of gitInvocations(call)) {
+        // An unreadable command word is never proven, whatever follows it.
+        if (
+          invocation.command !== _internal.UNRESOLVED &&
+          _internal.isReadOnlyGitArgs(invocation.args)
+        )
+          continue;
+        found.push(describeInvocation(invocation));
       }
     }
     return found;
   }
+
+  /**
+   * Directories whose contents nobody in this repository wrote: installed
+   * packages, build output, and the generated migration trees under
+   * `drizzle/` (SQL today, and this scan should not start policing them if
+   * that ever changes).
+   */
+  const SKIPPED_DIRS = new Set([
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".expo",
+    "drizzle",
+    "storybook-static",
+    "playwright-report",
+    "test-results",
+  ]);
 
   function tsFiles(dir: string, out: string[] = []): string[] {
     let entries: string[];
@@ -274,7 +376,7 @@ describe("no unproven git call outside tests/git-fixture.ts (M-b, M-1)", () => {
       return out;
     }
     for (const entry of entries) {
-      if (entry === "node_modules" || entry === "dist" || entry === ".expo") continue;
+      if (SKIPPED_DIRS.has(entry)) continue;
       const full = join(dir, entry);
       if (statSync(full).isDirectory()) tsFiles(full, out);
       else if (/\.(ts|tsx)$/.test(entry)) out.push(full);
@@ -283,38 +385,47 @@ describe("no unproven git call outside tests/git-fixture.ts (M-b, M-1)", () => {
   }
 
   /**
-   * `tests/` in full, and every test or spec file under the four trees that
-   * hold the rest of this repository's code. `apps/**` and `tools/**` are
-   * here because nothing stops an app or a tool test from shelling out to
-   * git — the incident this rule exists for was one file in one directory,
-   * and a boundary that only watches the directory it already happened in
-   * is a memorial, not a control.
+   * **Every** `.ts`/`.tsx` file under these four trees — not only
+   * `*.test.ts`. A helper a test imports is not a test file and can spawn
+   * anything the test would have; so can a script under `tools/`, an app's
+   * platform module, or a package's build-time code. Round 3 scanned
+   * `tests/` in full and test files elsewhere, which left the majority of
+   * the repository's source outside a boundary whose whole claim is that
+   * *nothing* invokes git except the fixture.
+   *
+   * The two exemptions are unchanged: `tests/git-fixture.ts`, which is the
+   * sanctioned caller, and this file, which holds literal bait.
    */
-  const SCANNED_ROOTS = ["tests", "packages", "apps", "tools"];
+  const SCANNED_ROOTS = ["tests", "tools", "packages", "apps"];
 
   function candidateFiles(): string[] {
-    const underTests = tsFiles(join(repoRoot, "tests")).filter(
+    return SCANNED_ROOTS.flatMap((root) => tsFiles(join(repoRoot, root))).filter(
       (f) => f !== HELPER_FILE && f !== THIS_FILE,
     );
-    const elsewhere = SCANNED_ROOTS.filter((root) => root !== "tests").flatMap((root) =>
-      tsFiles(join(repoRoot, root)).filter((f) => /\.(test|spec)\.tsx?$/.test(f)),
-    );
-    return [...underTests, ...elsewhere];
   }
 
-  it("scans tests/, packages/, apps/ and tools/ — not just the directory it first went wrong in", () => {
+  it("scans every .ts/.tsx under tests/, tools/, packages/ and apps/ — not only test files", () => {
     const files = candidateFiles().map((f) => relative(repoRoot, f));
-    expect(files.length, "candidate files found").toBeGreaterThan(20);
-    expect(SCANNED_ROOTS).toContain("apps");
-    expect(SCANNED_ROOTS).toContain("tools");
+    // 717 files when this was written (719 under the four roots, minus the
+    // fixture and this file). The floor is well below that so an ordinary
+    // deletion does not fail the gate, and well above round 3's ~250, which
+    // is the number this finding was about.
+    expect(files.length, "candidate files scanned").toBeGreaterThan(500);
+    for (const root of SCANNED_ROOTS) {
+      expect(
+        files.some((f) => f.startsWith(`${root}/`)),
+        `${root}/ files are in the scan`,
+      ).toBe(true);
+    }
+    // The point of L-8: non-test source is scanned too.
     expect(
-      files.some((f) => f.startsWith("apps/")),
-      "apps/ test files are in the scan",
-    ).toBe(true);
-    expect(
-      files.some((f) => f.startsWith("packages/")),
-      "packages/ test files are in the scan",
-    ).toBe(true);
+      files.filter((f) => !/\.(test|spec)\.tsx?$/.test(f)).length,
+      "non-test files scanned",
+    ).toBeGreaterThan(300);
+    expect(files, "the sanctioned caller stays exempt").not.toContain("tests/git-fixture.ts");
+    expect(files, "this file's bait stays exempt").not.toContain(
+      "tests/git-fixture-boundary.test.ts",
+    );
   });
 
   it("finds none — every candidate file goes through tests/git-fixture.ts instead", () => {
@@ -351,6 +462,63 @@ describe("no unproven git call outside tests/git-fixture.ts (M-b, M-1)", () => {
     const calls = unprovenGitCalls(bait);
     expect(calls, `bait not caught: ${bait}`).toHaveLength(1);
     expect(calls[0]).toContain(verb);
+  });
+
+  // Broken once, by hand, with each of the two shapes L-7 names: an
+  // `execFileSync("/usr/bin/git", ["commit", …])` appended to
+  // tests/verify-visual-gate.test.ts and a `const GIT = "git"` +
+  // `execFileSync(GIT, ["commit", …])` appended to
+  // packages/core/src/money.ts — a *non-test* file, which is only in the
+  // scan because of L-8. Both failed the assertion above, naming the file
+  // and, respectively, `/usr/bin/git commit` and `<unresolved command>
+  // commit`; both were reverted before anything was staged.
+  it.each([
+    [
+      'execFileSync("/usr/bin/git", ["commit", "-m", "bait"], { cwd: dir });',
+      "/usr/bin/git commit",
+    ],
+    ['execFileSync("git.exe", ["reset", "--hard"], { cwd: dir });', "git.exe reset"],
+    [
+      'execSync("C:\\\\tools\\\\Git\\\\bin\\\\git.exe add -A");',
+      "C:\\tools\\Git\\bin\\git.exe add",
+    ],
+    ['execSync("/usr/local/bin/git push --force");', "/usr/local/bin/git push"],
+  ])("reads a path to the same binary as the command word: %s", (bait, expected) => {
+    expect(unprovenGitCalls(bait)).toEqual([expected]);
+  });
+
+  it("refuses a command name it cannot read — the binary might be git", () => {
+    const constBinding = [
+      'const GIT = "git";',
+      'execFileSync(GIT, ["commit", "-m", "bait"], { cwd: dir });',
+    ].join("\n");
+    expect(unprovenGitCalls(constBinding)).toEqual(["<unresolved command> commit"]);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the placeholder is the bait
+    expect(unprovenGitCalls("execSync(`${bin} commit -m bait`);")).toEqual([
+      "<unresolved command> commit",
+    ]);
+    // Read-only-looking arguments do not rescue it: `<unresolved> status`
+    // is only read-only if the binary really was git, and that is exactly
+    // what could not be established.
+    expect(unprovenGitCalls('execFileSync(bin, ["status"]);')).toEqual([
+      "<unresolved command> status",
+    ]);
+  });
+
+  it("does not mistake RegExp#exec or a sqlite handle for a child process", () => {
+    // `exec` is also a standard method. Without this, L-7's command rule
+    // would fire on every `/re/.exec(line)` in the repository — hundreds of
+    // them — and the scan would be useless rather than strict.
+    expect(unprovenGitCalls("const m = /^(\\w+)$/.exec(line);")).toEqual([]);
+    expect(unprovenGitCalls("replicaSqlite.exec(replicaSql);")).toEqual([]);
+    // A child_process binding spelled with a receiver still counts.
+    expect(unprovenGitCalls('cp.exec("git commit -m bait");')).toEqual(["git commit"]);
+  });
+
+  it("lets through the one command expression the language proves is not git", () => {
+    // `process.execPath` is Node's own binary. It is the only member of
+    // that allowlist, and the reason it can be one.
+    expect(unprovenGitCalls('execFileSync(process.execPath, ["-e", probe]);')).toEqual([]);
   });
 
   it("catches an argument list it cannot read — a verb list held in a const", () => {
@@ -448,5 +616,76 @@ describe("the fixture refuses to mutate anything outside os.tmpdir() (L-2)", () 
     // A directory whose name merely starts with the temp root's name is not
     // inside it — the separator in the prefix check is what says so.
     expect(_internal.isUnderTmp(`${_internal.TMP_ROOT}-not-really`)).toBe(false);
+  });
+});
+
+describe("the fixture refuses a second location inside args (L-6)", () => {
+  /**
+   * The tmpdir guard judges the `dir` parameter. Git's own relocation
+   * options let an argument list name somewhere else entirely — and the
+   * fixture's `-C dir` goes in *first*, so a caller's `-C` wins. A
+   * disposable repository as `dir` would then have made the call look
+   * perfectly isolated while it ran in this repository.
+   */
+  let tempRepo = "";
+
+  beforeAll(() => {
+    tempRepo = createTempGitRepo("gate-reloc-");
+  });
+
+  afterAll(() => {
+    removeTempGitRepo(tempRepo);
+  });
+
+  it("throws on `-C <repo root>` even from a temp repo — before any git process starts", () => {
+    let thrown: unknown;
+    try {
+      git(tempRepo, ["-C", repoRoot, "commit", "-q", "-m", "this must never run"]);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown, "a relocated call must throw").toBeInstanceOf(Error);
+    expect((thrown as Error).message).toMatch(/refusing to run/);
+    expect((thrown as Error).message).toContain("-C");
+    // Same proof as the tmpdir guard's: no child process was ever spawned.
+    const asChildError = thrown as { status?: unknown; stderr?: unknown; pid?: unknown };
+    expect(asChildError.status, "no child process exit status").toBeUndefined();
+    expect(asChildError.stderr, "no child process stderr").toBeUndefined();
+    expect(asChildError.pid, "no child process pid").toBeUndefined();
+  });
+
+  it("refuses every relocation option, in both spellings", () => {
+    for (const flag of _internal.RELOCATION_FLAGS) {
+      const target = flag === "--git-dir" ? join(repoRoot, ".git") : repoRoot;
+      expect(() => git(tempRepo, [flag, target, "status"]), `${flag} <value>`).toThrow(
+        /refusing to run/,
+      );
+      expect(() => git(tempRepo, [`${flag}=${target}`, "status"]), `${flag}=value`).toThrow(
+        /refusing to run/,
+      );
+    }
+    // The five, named — a shrinking set would be a silent widening.
+    expect([..._internal.RELOCATION_FLAGS].sort()).toEqual([
+      "--exec-path",
+      "--git-dir",
+      "--namespace",
+      "--work-tree",
+      "-C",
+    ]);
+  });
+
+  it("refuses relocation even on a read-only verb — location is decided in one place", () => {
+    expect(() => git(repoRoot, ["--git-dir", join(repoRoot, ".git"), "log"])).toThrow(
+      /refusing to run/,
+    );
+  });
+
+  it("refuses a relocation flag with no value at all", () => {
+    expect(() => git(tempRepo, ["-C"])).toThrow(/refusing to run/);
+  });
+
+  it("still allows a value that is itself under tmpdir, and `-c`, which relocates nothing", () => {
+    expect(() => git(tempRepo, ["-C", tempRepo, "status", "--porcelain"])).not.toThrow();
+    expect(() => git(tempRepo, ["-c", "core.abbrev=12", "status", "--porcelain"])).not.toThrow();
   });
 });
