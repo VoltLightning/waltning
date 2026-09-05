@@ -17,6 +17,7 @@ function row(overrides: Partial<LedgerTableRow> & { id: string }): LedgerTableRo
     decimals: 2,
     type: "expense",
     isBusiness: false,
+    brandKey: null,
     selectable: true,
     ...overrides,
   };
@@ -65,6 +66,32 @@ describe("LedgerTable", () => {
     expect(screen.getByText("Groceries")).toBeDefined();
     expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mine").length).toBeGreaterThan(0);
+  });
+
+  /**
+   * §14.4b, S10 §4 — the identity column carries the same `BrandIcon` the
+   * phone's `TransactionRow` does. Read by the mark it draws, since the
+   * badge is deliberately hidden from the accessibility tree (the payee
+   * beside it already says who this is): the catalogue's own `"O"` for a
+   * recognised payee, and `monogramFor`'s first letter for one it has never
+   * heard of — never blank in either case.
+   */
+  it("draws the brand mark for a recognised payee and a monogram for an unknown one", () => {
+    render(
+      <LedgerTable
+        rows={[
+          row({ id: "1", payee: "ORLEN", brandKey: "orlen" }),
+          row({ id: "2", payee: "Corner Bakery", brandKey: null }),
+        ]}
+        sort={null}
+        onSortColumn={noop}
+        selection={selectionOf()}
+        onOpenRow={noop}
+      />,
+    );
+
+    expect(screen.getByText("O")).toBeDefined();
+    expect(screen.getByText("C")).toBeDefined();
   });
 
   it("clicking a column header asks the caller to sort by it", () => {
@@ -446,6 +473,98 @@ describe("LedgerTable", () => {
       for (let i = 0; i < 3; i++) fireEvent.keyDown(container, { key: "j" });
       fireEvent.keyDown(container, { key: " " });
       expect(selection.toggleRow).not.toHaveBeenCalled();
+    });
+
+    /**
+     * M (round 4) — one handler run per key press, wherever focus sits.
+     *
+     * A row delegates a key only where `react-native-web`'s responder would
+     * otherwise have swallowed it (`isValidKeyPress`: `Enter` anywhere,
+     * `Space` only on a `<button>` or a `role="button"`). The checkbox is a
+     * `<div role="checkbox">`, so `Space` there is swallowed by nothing and
+     * reaches the scroller by itself — a delegate that handed it over too
+     * ran the table's handler twice for one press, toggling the ringed row
+     * and then untoggling it, so `Space` on a focused checkbox did nothing
+     * at all.
+     *
+     * Fired on the focused element rather than on the scroller, which is
+     * the only arrangement in which the doubling exists.
+     */
+    it("Space on a focused checkbox toggles the ringed row exactly once", () => {
+      const selection = selectionOf();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selection}
+          onOpenRow={noop}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const checkbox = screen.getByRole("checkbox", { name: "Select Corner Bakery" });
+      checkbox.focus();
+      // The ring walks to row 2 while focus stays on row 1's checkbox.
+      fireEvent.keyDown(container, { key: "j" });
+      fireEvent.keyDown(container, { key: "j" });
+
+      fireEvent.keyDown(checkbox, { key: " " });
+      expect(selection.toggleRow).toHaveBeenCalledTimes(1);
+      expect(selection.toggleRow).toHaveBeenCalledWith("2", false);
+    });
+
+    /** And `x`, which no responder claims on any element, from the same place. */
+    it("x on a focused checkbox toggles the ringed row exactly once", () => {
+      const selection = selectionOf();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selection}
+          onOpenRow={noop}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const checkbox = screen.getByRole("checkbox", { name: "Select Corner Bakery" });
+      checkbox.focus();
+      fireEvent.keyDown(container, { key: "j" });
+
+      fireEvent.keyDown(checkbox, { key: "x" });
+      expect(selection.toggleRow).toHaveBeenCalledTimes(1);
+      expect(selection.toggleRow).toHaveBeenCalledWith("1", false);
+    });
+
+    /**
+     * The row body is the other half, and the reason the delegate exists at
+     * all: it *is* a native `<button>`, so `Space` there is a valid key
+     * press, the responder stops the event, and nothing reaches the
+     * scroller unless the row hands it over. Once, and only once.
+     */
+    it("Space on a focused row body toggles the ringed row exactly once", () => {
+      const selection = selectionOf();
+      render(
+        <LedgerTable
+          rows={ROWS}
+          sort={null}
+          onSortColumn={noop}
+          selection={selection}
+          onOpenRow={noop}
+        />,
+      );
+
+      const container = screen.getByTestId("ledger-table-scroller");
+      const body = screen.getByRole("button", { name: "Corner Bakery" });
+      expect(body.tagName).toBe("BUTTON");
+      body.focus();
+      fireEvent.keyDown(container, { key: "j" });
+      fireEvent.keyDown(container, { key: "j" });
+
+      fireEvent.keyDown(body, { key: " " });
+      expect(selection.toggleRow).toHaveBeenCalledTimes(1);
+      expect(selection.toggleRow).toHaveBeenCalledWith("2", false);
     });
 
     /**

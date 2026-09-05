@@ -168,6 +168,10 @@ function toDeskRow(
     decimals: row.decimals,
     type: row.type,
     isBusiness: row.isBusiness,
+    // §14.4b — the same key the phone row already draws its `BrandIcon`
+    // from, resolved offline at write time. Straight through: this screen
+    // never matches a payee itself.
+    brandKey: row.brandKey,
     // `transactions_category_shape` — only income and expense ever take a category.
     selectable: row.type === "income" || row.type === "expense",
   };

@@ -66,8 +66,9 @@ Rows group by date. Foreign rows carry `FxAmount`; transfers render as
 
 ### Web — ≥1024px
 
-Table, not cards: date · payee · category · account · scope · amount, sortable,
-with the filter bar as a persistent left rail rather than a chip row. The rail
+Table, not cards: date · brand mark · payee · category · account · scope ·
+amount, sortable, with the filter bar as a persistent left rail rather than a
+chip row. The rail
 buys simultaneous visibility of every filter dimension, which is what makes this
 the surface for a real reconciliation session.
 
@@ -83,7 +84,7 @@ scrolling one.
 | `FilterBar` | Account · category · scope · currency · date range · counterparty. Reports the count each filter excludes (§5.6) |
 | `SearchField` | Payee, note, amount, **and receipt contents** — merchant plus line descriptions. A match inside a receipt states which line matched, so the result is explicable rather than surprising |
 | `TransactionRow` / `TransferRow` | `BIZ` where business; `FxAmount` where foreign |
-| `BrandIcon` | `TransactionRow`'s own leading mark — same component and catalogue as S04 (§14.4b) |
+| `BrandIcon` | The leading mark on both surfaces — `TransactionRow`'s on mobile, and the desk table's identity column, between the date and the payee. Same component and catalogue as S04 (§14.4b); an unrecognised payee falls back to its monogram rather than to nothing |
 | `SwipeAction` | Mobile — short swipe categorize, long swipe edit. **Never delete** |
 | `EmptyState(filtered)` | Names the excluding filter and its hidden count |
 | `EmptyState(first-run)` | Nothing has ever existed |

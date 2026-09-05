@@ -4,13 +4,26 @@
  * `0011_transaction_scale_and_category_kind.sql`'s `assert_amount_scale` and
  * its siblings (`SPEC.md` §7.2).
  *
- * **SQLite carries no trigger of its own** (`ddl.ts` states every `CHECK`
- * this schema can enforce alone, and a cross-table lookup against
- * `currencies` is not one of them), so an executor that skips this check is
- * the only thing standing between a mis-typed figure and a row past the
- * precision its own currency claims to hold. The phone's own screens already
- * refuse this (`create-phone-ledger.ts`'s own `H2`/`M` checks), but a screen
- * is not the local write path's only caller —
+ * **No database object under it on this engine — and that is now a choice,
+ * not a limitation.** A `CHECK` cannot state this rule (`ddl.ts` carries
+ * every one the schema can enforce alone, and a cross-table lookup into
+ * `currencies` is not among them), but the replica does carry triggers: the
+ * two `transactions_category_kind_matches_type` ones, created by
+ * `migrate.ts`'s `REPLICA_BACKFILLS` `objects` hook, are the replica's whole
+ * answer to WA017. So a scale trigger is writable in the same slot, and the
+ * reason there is none is what it would and would not buy. SQLite's
+ * `RAISE(ABORT, …)` takes a string literal and nothing else — it cannot name
+ * the offending currency, its declared scale, or the figure — so a trigger
+ * here could only ever be a *backstop* beneath this function, never a
+ * replacement for it, and the backstop every one of these rows already
+ * reaches is Postgres's `assert_amount_scale` at sync
+ * (`0011_transaction_scale_and_category_kind.sql`, `SPEC.md` §7.2).
+ *
+ * Which makes this function the only thing standing between a mis-typed
+ * figure and a *locally* stored row past the precision its own currency
+ * claims to hold. The phone's own screens already refuse this
+ * (`create-phone-ledger.ts`'s own `H2`/`M` checks), but a screen is not the
+ * local write path's only caller —
  * `invariants/scale-after-every-op.test.ts` reaches every executor directly,
  * the way a future `set_transaction_lines`-style bulk import or a bug in a
  * screen's own guard would.

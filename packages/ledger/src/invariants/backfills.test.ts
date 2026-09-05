@@ -138,12 +138,13 @@ describe("every backfill names a step that exists", () => {
 
   /**
    * `0009_schema` is exactly this shape: a `check` that refuses a rate its own
-   * new `CHECK` cannot accept, and nothing to *derive*, so no `fill` — but an
-   * `objects` hook that creates the two category-kind triggers, which is the
-   * replica's own `0001_database_objects.sql` (L8, round 2). Proven two ways
-   * — the type accepts a hook with no `fill`, and the real registry carries
-   * one — so a future `Backfill` edit that makes `fill` required again fails
-   * here first, at compile time, rather than as a mystery type error inside
+   * new `CHECK` cannot accept, and nothing to *derive*, so no `fill`.
+   * `0010_schema` is the other shape — an `objects` hook alone, creating the
+   * two category-kind triggers that are the replica's own
+   * `0001_database_objects.sql` (L8, round 2). Proven two ways — the type
+   * accepts a hook with no `fill`, and the real registry carries two — so a
+   * future `Backfill` edit that makes `fill` required again fails here
+   * first, at compile time, rather than as a mystery type error inside
    * `migrate.ts`.
    */
   it("allows a hook with only a check and no fill", () => {
@@ -154,8 +155,8 @@ describe("every backfill names a step that exists", () => {
       "0009_schema derives no column value",
     ).toBeUndefined();
     expect(
-      REPLICA_BACKFILLS["0009_schema"]?.objects,
-      "0009_schema creates the WA017 triggers a generated file cannot hold",
+      REPLICA_BACKFILLS["0010_schema"]?.objects,
+      "0010_schema creates the WA017 triggers a generated file cannot hold",
     ).toBeDefined();
   });
 });
@@ -273,6 +274,31 @@ describe("every objects hook creates something the chain would not otherwise hav
 
     const created = [...withHook].filter((name) => !without.has(name));
     expect(created.length, `${tag}'s objects hook created nothing`).toBeGreaterThan(0);
+  });
+
+  /**
+   * And the same question asked by name, because the generic diff above is
+   * a property and this is the guarantee (round 4, and the reason the hook
+   * moved off `0009_schema`).
+   *
+   * SQLite has no `ALTER TABLE … ALTER COLUMN`, so drizzle-kit expresses a
+   * column addition on a constrained table as copy-rename-drop — and
+   * `DROP TABLE` takes that table's triggers with it. `0010_schema` does
+   * exactly that to `transactions`, so an `objects` hook on `0009_schema`
+   * created two triggers the very next step deleted, leaving a fresh
+   * install at the head with WA017 unenforced on the replica and every test
+   * still green: `transaction-ops.test.ts` migrates the whole chain and
+   * would have caught it, but only because it happens to write a bad row —
+   * nothing said the *object* had to survive.
+   *
+   * So: run the real chain to the end, and ask for the two names. After the
+   * whole chain, never after the hook's own step, which is precisely the
+   * distinction the defect lived in.
+   */
+  it("the WA017 triggers exist after the whole chain, not merely after their own step", () => {
+    const names = objectsAfterChain("wa017-head", REPLICA_BACKFILLS);
+    expect(names.has("transactions_category_kind_matches_type_insert")).toBe(true);
+    expect(names.has("transactions_category_kind_matches_type_update")).toBe(true);
   });
 });
 

@@ -64,12 +64,18 @@
  *
  * - **The row body and the checkbox handle `onKeyDown` themselves and hand
  *   the event to the table's own handler** — only for the keys
- *   `PressResponder` swallows (`Enter`, and `Space` on a button-role
- *   element); everything else, `j`/`k`/`f` included, is left to bubble to
- *   the scroller on its own, which is why the delegate cannot double-move
- *   the ring. `react-native-web`'s `Pressable` calls its own key handler
- *   first and then the one it was passed, so this runs regardless of the
- *   `stopPropagation` above it.
+ *   `PressResponder` would otherwise have swallowed on *that* element, which
+ *   is not the same set for the two of them. `isValidKeyPress` is `Enter`
+ *   anywhere, `Space` only on a `<button>` or a `role="button"`: so the row
+ *   body delegates both and the checkbox delegates `Enter` alone.
+ *   Everything else — `j`/`k`/`f`, `x`, and `Space` on the checkbox — is
+ *   left to bubble to the scroller on its own. That condition is the whole
+ *   correctness argument: delegating a key the responder does not swallow
+ *   runs the table's handler twice for one press, which on `Space` meant
+ *   toggling the ringed row and then untoggling it, so the key did nothing
+ *   at all. `react-native-web`'s `Pressable` calls its own key handler
+ *   first and then the one it was passed, so the delegate runs regardless
+ *   of the `stopPropagation` above it.
  * - **The press that key would otherwise complete is cancelled**, and the
  *   two controls need two different cancellations because
  *   `react-native-web` renders them as two different elements.
@@ -130,7 +136,7 @@
 
 import { type SortKey, type SortState, sortRows } from "@waltning/core/ledger-table";
 import type * as money from "@waltning/core/money";
-import { useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 import {
   FlatList,
   type GestureResponderEvent,
@@ -144,6 +150,7 @@ import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, hairline, radius, space, tabularNums, touchTarget } from "../tokens.ts";
+import { BrandIcon } from "./brand-icon";
 import { TRANSACTION_AMOUNT_KIND, type TransactionType } from "./transaction-row";
 
 /**
@@ -169,6 +176,18 @@ export type LedgerTableRow = {
   decimals: number;
   type: TransactionType;
   isBusiness: boolean;
+  /**
+   * `SPEC.md` §14.4b, S10 §4 — the catalogue key this row resolved to
+   * offline, or `null` when nothing matched.
+   *
+   * **Required, not optional, unlike `TransactionRow`'s own.** That prop is
+   * optional so a caller which has not read the field yet draws no badge at
+   * all rather than a fallback monogram it never asked for; this table has
+   * exactly one caller (`apps/mobile/src/ledger-screen.tsx`), it reads the
+   * field, and a row shape with a hole in it is how the phone list and the
+   * desk table would drift apart on the same data.
+   */
+  brandKey: string | null;
   /** Only income/expense rows join a batch categorize — `transactions_category_shape`. */
   selectable: boolean;
 };
@@ -236,16 +255,36 @@ type TableKeyEvent = { key: string; preventDefault: () => void };
 type TableKeyProps = { onKeyDown: (event: TableKeyEvent) => void };
 
 /**
- * The keys `react-native-web`'s `PressResponder` treats as a press —
- * `Enter` anywhere, `Space` on a button-role element — and therefore the
- * keys it calls `stopPropagation()` on, which is what keeps them from
- * reaching the scroller by themselves (`PressResponder.js`'s own
- * `isValidKeyPress`). A row delegates exactly these and nothing else:
- * `j`/`k`/`f` bubble on their own, and delegating them too would move the
- * ring twice per press.
+ * The keys `react-native-web`'s `PressResponder` treats as a press, and
+ * therefore the keys it calls `stopPropagation()` on — which is what keeps
+ * them from reaching the scroller by themselves, and the whole reason a row
+ * delegates anything at all.
+ *
+ * **It is `isValidKeyPress` restated, `buttonLike` included.** That
+ * predicate is `key === 'Enter' || (isSpacebar && isButtonish)`, where
+ * `isButtonish` is a `<button>` element or `role="button"` — so `Enter` is
+ * swallowed anywhere, and `Space` is swallowed only on the row body
+ * (`accessibilityRole="button"`, a native `<button>`), never on the
+ * checkbox (`<div role="checkbox">`).
+ *
+ * Getting that second half wrong is not a missing delegation, it is a
+ * doubled one: `Space` on a focused checkbox bubbles to the scroller on its
+ * own *and* was handed over by the delegate, so the ringed row was toggled
+ * twice and the net effect of pressing `Space` was nothing at all. One
+ * handler run per key press is the rule, and the condition for delegating
+ * is exactly "the responder above me would otherwise have eaten this".
+ *
+ * `j`/`k`/`f` and `x` are swallowed by nothing and are delegated by nobody.
+ *
+ * **`"Spacebar"` is the legacy key name older engines send** — the same one
+ * `isValidKeyPress` and `PressResponder.onKeyDown` both still accept, so it
+ * is accepted identically here and by `handleTableKeyDown`'s own toggle
+ * branch. A value the responder treats as a press and this file did not
+ * would be swallowed and then acted on by nobody.
  */
-function isDelegatedKey(key: string): boolean {
-  return key === "Enter" || key === " " || key === "Spacebar";
+function isDelegatedKey(key: string, buttonLike: boolean): boolean {
+  if (key === "Enter") return true;
+  return buttonLike && (key === " " || key === "Spacebar");
 }
 
 /**
@@ -298,6 +337,8 @@ export type LedgerTableProps = {
  */
 const CHECKBOX_WIDTH = 32;
 const DATE_WIDTH = 84;
+/** The `BrandIcon` column — a 20px badge centred, with the header holding the same width open. */
+const BRAND_WIDTH = 28;
 const SCOPE_WIDTH = 88;
 const AMOUNT_WIDTH = 120;
 
@@ -375,7 +416,7 @@ export function LedgerTable({
       } else if (key === "k") {
         event.preventDefault();
         moveActive(-1);
-      } else if (key === " " || key === "x") {
+      } else if (key === " " || key === "spacebar" || key === "x") {
         // `preventDefault` before anything else — `Space` scrolls the
         // nearest scroller by default, and the nearest scroller is this
         // table, so the ring would leave the viewport as it was checked.
@@ -469,12 +510,15 @@ function LedgerTableHeader({ sort, onSortColumn }: LedgerTableHeaderProps) {
     <View style={styles.headerRow}>
       <View style={[styles.cell, styles.checkboxCell]} />
       {COLUMNS.map((column) => (
-        <LedgerTableHeaderCell
-          key={column}
-          column={column}
-          sort={sort}
-          onSortColumn={onSortColumn}
-        />
+        <Fragment key={column}>
+          <LedgerTableHeaderCell column={column} sort={sort} onSortColumn={onSortColumn} />
+          {/* The brand badge's own width, held open in the header so the
+              four columns after it line up with their body cells — see the
+              row's `brandCell` comment. Unlabelled, like the checkbox
+              column: a mark has no header word of its own, and `Payee`
+              already names the identity column it leads into. */}
+          {column === "date" ? <View style={styles.brandCell} /> : null}
+        </Fragment>
       ))}
     </View>
   );
@@ -566,21 +610,32 @@ function LedgerTableRowView({
   const styles = useStyles();
   const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
   /**
-   * `Enter` and `Space` never reach the scroller from here — `PressResponder`
-   * stops them — so the row hands them over itself. Everything else is left
-   * alone and bubbles.
+   * Two delegates, because the row holds two elements the responder treats
+   * differently (`isDelegatedKey`). The row body is a native `<button>`, so
+   * `Enter` *and* `Space` are swallowed there and both are handed over; the
+   * checkbox is a `<div role="checkbox">`, where only `Enter` is — `Space`
+   * bubbles to the scroller by itself, and delegating it too would run the
+   * table's handler twice for one press and toggle the ringed row back to
+   * where it started. Everything else is left alone in both.
    */
-  const handleKeyDown = useCallback(
+  const handleBodyKeyDown = useCallback(
     (event: TableKeyEvent) => {
-      if (isDelegatedKey(event.key)) onKeyDown(event);
+      if (isDelegatedKey(event.key, true)) onKeyDown(event);
     },
     [onKeyDown],
   );
-  // A prop bag, not a JSX attribute — `Pressable`'s React Native type
-  // declares no `onKeyDown` even though `react-native-web` forwards one
+  const handleCheckboxKeyDown = useCallback(
+    (event: TableKeyEvent) => {
+      if (isDelegatedKey(event.key, false)) onKeyDown(event);
+    },
+    [onKeyDown],
+  );
+  // Prop bags, not JSX attributes — `Pressable`'s React Native type declares
+  // no `onKeyDown` even though `react-native-web` forwards one
   // (`threshold-slider.tsx`'s own precedent, and this file's `keyboardProps`
   // above).
-  const keyboardProps: TableKeyProps = { onKeyDown: handleKeyDown };
+  const bodyKeyboardProps: TableKeyProps = { onKeyDown: handleBodyKeyDown };
+  const checkboxKeyboardProps: TableKeyProps = { onKeyDown: handleCheckboxKeyDown };
   // The one narrow `unknown` step this file needs — the file doc explains
   // why: `GestureResponderEvent` genuinely carries `shiftKey` on web, but
   // its type does not say so, and `unknown` is the sanctioned way through a
@@ -610,7 +665,7 @@ function LedgerTableRowView({
             checked={selected}
             label={row.payee}
             onPress={handleToggle}
-            keyboardProps={keyboardProps}
+            keyboardProps={checkboxKeyboardProps}
           />
         ) : null}
       </View>
@@ -626,10 +681,32 @@ function LedgerTableRowView({
         // `focusable` warns as deprecated besides.
         tabIndex={-1}
         onPress={handlePress}
-        {...keyboardProps}
+        {...bodyKeyboardProps}
         style={styles.rowBody}
       >
         <Text style={[styles.cellText, styles.dateCell]}>{row.date.slice(5)}</Text>
+        {/*
+          §14.4b, S10 §4 — the same `BrandIcon` and the same catalogue
+          `TransactionRow` draws on the phone, in the identity column, ahead
+          of the payee it belongs to. `size={20}`, the "widget" size, rather
+          than the row's own 24: this is a `bodySm` table row, and a 24px
+          badge is taller than the text beside it.
+
+          Passed unconditionally, never `brandKey === undefined ? null : …`
+          — that branch exists on `TransactionRow` for a caller which has not
+          read the field yet, and `LedgerTableRow.brandKey` is required, so
+          there is no such caller here. An unmatched payee gets the monogram
+          fallback, which is what "never blank" means.
+
+          **Its own fixed-width cell, with an empty twin in the header.**
+          Every other column is fixed or `flex: 1` in both rows, so a badge
+          added to the body alone would take its width out of the three
+          flexible columns and slide `category`, `account`, `scope` and
+          `amount` left of the headers that name them.
+        */}
+        <View style={styles.brandCell}>
+          <BrandIcon brandKey={row.brandKey} payee={row.payee} size={20} />
+        </View>
         <Text style={[styles.cellText, styles.flexCell]} numberOfLines={1}>
           {row.payee || "—"}
         </Text>
@@ -724,6 +801,7 @@ const useStyles = makeStyles((theme) => ({
   cellText: { color: theme.text, ...text.ui("bodySm") },
   cellTextMuted: { color: theme.textMuted, ...text.ui("bodySm") },
   checkboxCell: { width: CHECKBOX_WIDTH, alignItems: "center", justifyContent: "center" },
+  brandCell: { width: BRAND_WIDTH, alignItems: "center", justifyContent: "center" },
   dateCell: {
     width: DATE_WIDTH,
     color: theme.textMuted,

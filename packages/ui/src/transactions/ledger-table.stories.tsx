@@ -28,6 +28,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { matchBrand } from "@waltning/core/brands/match";
 import { cycleSortState, selectableRange } from "@waltning/core/ledger-table";
 import * as money from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
@@ -46,13 +47,20 @@ import {
   sortLedgerTableRows,
 } from "./ledger-table";
 
+/**
+ * Two of the ten are payees the bundled catalogue recognises (§14.4b) — so
+ * every screenshot below carries both halves of what `BrandIcon` does: the
+ * catalogue's own accent badge for `ORLEN` and `YouTube`, and the monogram
+ * fallback for the eight it has never heard of. A fixture of unknown payees
+ * only would screenshot the fallback and call it the feature.
+ */
 const PAYEES = [
   "Corner Bakery",
-  "Rewe",
+  "ORLEN",
   "Monthly invoice",
   "Cash withdrawal",
   "Electric co-op",
-  "Gym membership",
+  "YouTube",
   "Bookshop",
   "Pharmacy",
   "Ride share",
@@ -76,10 +84,11 @@ function generateRows(count: number): LedgerTableRow[] {
     // no checkbox, which is what makes `RangeSelected` a real test of H6's
     // "the range skips it" rather than a fixture where every row is alike.
     const isTransfer = i % 6 === 5;
+    const payee = PAYEES[i % PAYEES.length] ?? "";
     rows.push({
       id: `row-${i}`,
       date: `2026-${month}-${String(day).padStart(2, "0")}`,
-      payee: PAYEES[i % PAYEES.length] ?? "",
+      payee,
       category: CATEGORIES[i % CATEGORIES.length] ?? "",
       account: ACCOUNTS[i % ACCOUNTS.length] ?? "",
       scope: SCOPES[i % SCOPES.length] ?? "",
@@ -91,6 +100,11 @@ function generateRows(count: number): LedgerTableRow[] {
       decimals: 2,
       type: isTransfer ? "transfer" : isExpense ? "expense" : "income",
       isBusiness: i % 7 === 0,
+      // The shipped offline matcher, never a hand-written key — the same
+      // resolution `create_transaction` runs at write time, so a story can
+      // never screenshot a badge the real write path would not have
+      // produced for that payee.
+      brandKey: matchBrand(payee) ?? null,
       selectable: !isTransfer,
     });
   }

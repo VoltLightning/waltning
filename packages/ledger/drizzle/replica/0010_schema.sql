@@ -30,6 +30,16 @@
 -- connection before it opens its transaction, since SQLite treats the
 -- statement as a no-op inside one; this file states the window it needs so
 -- it reads correctly on its own.)
+--
+-- **The `transactions` rebuild below drops that table's triggers**, which is
+-- why `migrate.ts`'s `REPLICA_BACKFILLS["0010_schema"].objects` — the two
+-- `transactions_category_kind_matches_type` triggers (WA017) — hangs off
+-- *this* step and not the earlier one that introduced them. SQLite deletes a
+-- table's triggers with the table and says nothing; the hook re-creates them
+-- after the rename, and `invariants/backfills.test.ts` asks `sqlite_master`
+-- for both names after the whole chain so the next rebuild of this table
+-- cannot lose them quietly. A step that rebuilds `transactions` again takes
+-- the hook with it.
 CREATE TABLE `brand_aliases` (
 	`alias` text PRIMARY KEY NOT NULL,
 	`brand_key` text NOT NULL,

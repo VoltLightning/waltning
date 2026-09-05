@@ -57,9 +57,26 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
+    // §14.4b — an unrecognised payee, which is what "Corner Bakery" is
+    // against the bundled catalogue. `RECOGNISED_ROW` below is the other
+    // half.
+    brandKey: null,
     counterpartyRole: null,
     ...overrides,
   };
+}
+
+/**
+ * A payee the bundled catalogue does recognise (§14.4b, S10 §4) — so the
+ * desk table's identity column can be checked against the mark the offline
+ * matcher resolved rather than only against the monogram fallback.
+ */
+function recognisedRow(): PhoneSearchTransaction {
+  return expenseRow({
+    id: id<"transactions">("44444444-4444-4444-8444-444444444444"),
+    payee: "ORLEN",
+    brandKey: "orlen",
+  });
 }
 
 /**
@@ -237,11 +254,24 @@ function activateEveryFilterDimension() {
  */
 function textSeenWhile(render: () => void): readonly string[] {
   const observer = new MutationObserver(() => {});
-  observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+  observer.observe(document.body, {
+    childList: true,
+    characterData: true,
+    // L (round 4) — **the whole point of the helper.** A `characterData`
+    // record names the text node that changed, not the text it changed
+    // *from*, so reading `record.target.textContent` at drain time reads
+    // the node's *final* value: every intermediate this exists to catch had
+    // already been overwritten by the time it was read, and "the caption is
+    // never briefly wrong" was an assertion that could not fail. `oldValue`
+    // is the value the observer captured at the moment of the change, and
+    // it is only recorded when this option asks for it.
+    characterDataOldValue: true,
+    subtree: true,
+  });
   render();
   const seen: string[] = [];
   for (const record of observer.takeRecords()) {
-    if (record.type === "characterData") seen.push(record.target.textContent ?? "");
+    if (record.type === "characterData") seen.push(record.oldValue ?? "");
     // `NodeList` is indexed rather than iterable under this tsconfig's lib.
     record.addedNodes.forEach((node) => {
       seen.push(node.textContent ?? "");
@@ -283,6 +313,27 @@ describe("Ledger at desk width", () => {
     expect(screen.getByRole("button", { name: "Payee" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Amount" })).toBeDefined();
     expect(screen.getByText("Corner Bakery")).toBeDefined();
+  });
+
+  /**
+   * §14.4b, S10 §4 — the desk table draws the same `BrandIcon` the phone
+   * row does, from the key the port already carries. Read by the mark,
+   * because the badge is hidden from the accessibility tree: the
+   * catalogue's `"O"` for a payee it knows, `monogramFor`'s `"C"` for one
+   * it does not.
+   */
+  it("draws each row's brand mark in the identity column", () => {
+    const rows = [recognisedRow(), expenseRow()];
+    const controller = fakeController(() => ({
+      rows,
+      nextCursor: undefined,
+      total: { count: 2, currencies: [] },
+    }));
+    withLedger(<Ledger />, controller);
+
+    expect(screen.getByText("ORLEN")).toBeDefined();
+    expect(screen.getByText("O")).toBeDefined();
+    expect(screen.getByText("C")).toBeDefined();
   });
 
   it("shows the filter rail — search, period stepper, accounts, categories, scope", () => {
@@ -588,8 +639,14 @@ describe("Ledger at desk width", () => {
       fireEvent.click(screen.getByRole("tab", { name: "Mine" }));
     });
 
+    // The vacuity guard, and the proof the helper reads what it claims to:
+    // this is the text the caption held *before* the click, which is only
+    // in `seen` if the observer captured the value at the moment it
+    // changed. Reading `record.target.textContent` at drain time yields the
+    // node's final value instead — "Excludes 15 rows" — and every
+    // intermediate, including the wrong one below, is invisible.
+    expect(seen.some((text) => text.includes("Excludes 22 rows"))).toBe(true);
     // 20 of the reader's own rows in the whole ledger, 5 this month.
-    expect(seen.length, "vacuity guard — the observer saw the change").toBeGreaterThan(0);
     expect(screen.getByText("Excludes 15 rows")).toBeDefined();
     expect(screen.getByText("Excludes 3 rows")).toBeDefined();
     // 20 − 8: the new query's total against the old filter's count.

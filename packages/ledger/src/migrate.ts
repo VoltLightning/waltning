@@ -363,17 +363,29 @@ export type Backfill = {
  * `base`/`quote`/`date`/`rate`, and that the fix is to delete or re-set the
  * rate in S18 and relaunch.
  *
- * **`0009_schema`'s `objects` creates the two category-kind triggers** (L8,
- * round 2). This is the replica's *only* hand-written-SQL slot — there is no
- * `0001_database_objects.sql` beside the generated chain the way `packages/db`
- * has one, because `tools/steps.ts` reads every `.sql` in `drizzle/replica`
- * as a step and drizzle-kit owns the filenames in there. A trigger written
- * into a generated file survives exactly until the next `pnpm
- * ledger:generate` rewrites that file — drizzle-kit cannot emit a trigger at
- * all, so it cannot re-emit one it never knew about, and the loss would be
- * silent: the phone would migrate cleanly to the same version with the
- * guarantee gone. Here it is code, in the file the migrator reads, and
+ * **The chain's head `objects` hook creates the two category-kind triggers**
+ * (L8, round 2). This is the replica's *only* hand-written-SQL slot — there
+ * is no `0001_database_objects.sql` beside the generated chain the way
+ * `packages/db` has one, because `tools/steps.ts` reads every `.sql` in
+ * `drizzle/replica` as a step and drizzle-kit owns the filenames in there. A
+ * trigger written into a generated file survives exactly until the next
+ * `pnpm ledger:generate` rewrites that file — drizzle-kit cannot emit a
+ * trigger at all, so it cannot re-emit one it never knew about, and the loss
+ * would be silent: the phone would migrate cleanly to the same version with
+ * the guarantee gone. Here it is code, in the file the migrator reads, and
  * `backfills.test.ts` refuses a key that names no step.
+ *
+ * **A trigger hook belongs on the chain's *head*, and moves when the head
+ * does.** SQLite has no `ALTER TABLE … ALTER COLUMN`, so drizzle-kit
+ * expresses almost every table change as copy-rename-drop — and `DROP TABLE`
+ * takes that table's triggers with it, silently. These two spent one commit
+ * on `0009_schema`, where they were created and then dropped again eleven
+ * lines into `0010_schema`'s `transactions` rebuild: a fresh install reached
+ * the head with the guarantee gone and nothing red. So the hook rides the
+ * last step that touches `transactions`, and
+ * `backfills.test.ts`'s structural test asks `sqlite_master` **after the
+ * whole chain has run**, not after the hook's own step — the one question
+ * whose answer a later rebuild can change.
  */
 /**
  * WA017 on the replica: a row whose `category_id` names a category of the
@@ -384,8 +396,9 @@ export type Backfill = {
  *
  * **`IF NOT EXISTS`, because a database can reach this step already holding
  * them** (L5, round 3). The two triggers spent one commit inside
- * `0009_schema.sql` before moving into this hook, so a device migrated by
- * that build arrives at the same step with both already created — and a bare
+ * `0009_schema.sql`, and another on `0009_schema`'s own hook, before moving
+ * here, so a device migrated by either build arrives at the step with both
+ * already created — and a bare
  * `CREATE TRIGGER` would abort the transaction on the duplicate name, roll
  * the whole step back, and repeat identically on every launch after. That is
  * a real shape for an unreleased head being carried across a rebuild, and it
@@ -453,27 +466,6 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
     },
   },
   "0009_schema": {
-    /**
-     * DESK3 review round 1, C2 layer 3 — the same guarantee Postgres's WA017
-     * (`assert_category_kind_matches_type`,
-     * `packages/db/drizzle/0011_transaction_scale_and_category_kind.sql`)
-     * already enforces. `categorize-batch.executor.ts`'s own `WHERE` clause
-     * refuses a kind mismatch with a real message; this is the backstop
-     * `CLAUDE.md` asks for beside it — "holds when code is wrong", not the
-     * caller's own good-error path. `create-transaction.executor.ts` and
-     * `update-transaction.executor.ts` write a single row each and take the
-     * same trigger for free.
-     *
-     * **Two triggers, not one.** SQLite's `UPDATE OF <columns>` restricts
-     * which column changes fire a trigger, but that clause does not exist
-     * for `INSERT` — an inserted row has no "before" to name columns against
-     * — so an insert-time check needs its own trigger, the only way SQLite's
-     * grammar lets one mirror Postgres's single `BEFORE INSERT OR UPDATE OF
-     * category_id, type`.
-     */
-    objects: (tx) => {
-      for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
-    },
     check: (db) => {
       const rows = db.all<{ base: string; quote: string; date: string; rate: string }>(
         sql.raw(`select "base", "quote", "date", "rate" from "fx_rates"`),
@@ -496,6 +488,39 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       throw new Error(
         `this upgrade adds fx_rates_rate_bounds (${RATE_MIN_EXCLUSIVE} < rate < ${RATE_MAX_EXCLUSIVE}), and ${outOfBounds.length} row(s) of "fx_rates" already fall outside it — ${detail}. Nothing has been written and no pre-migration copy taken. Open the previous build, delete or re-set each rate in S18, then upgrade again`,
       );
+    },
+  },
+  "0010_schema": {
+    /**
+     * DESK3 review round 1, C2 layer 3 — the same guarantee Postgres's WA017
+     * (`assert_category_kind_matches_type`,
+     * `packages/db/drizzle/0011_transaction_scale_and_category_kind.sql`)
+     * already enforces. `categorize-batch.executor.ts`'s own `WHERE` clause
+     * refuses a kind mismatch with a real message; this is the backstop
+     * `CLAUDE.md` asks for beside it — "holds when code is wrong", not the
+     * caller's own good-error path. `create-transaction.executor.ts` and
+     * `update-transaction.executor.ts` write a single row each and take the
+     * same trigger for free.
+     *
+     * **Two triggers, not one.** SQLite's `UPDATE OF <columns>` restricts
+     * which column changes fire a trigger, but that clause does not exist
+     * for `INSERT` — an inserted row has no "before" to name columns against
+     * — so an insert-time check needs its own trigger, the only way SQLite's
+     * grammar lets one mirror Postgres's single `BEFORE INSERT OR UPDATE OF
+     * category_id, type`.
+     *
+     * **On `0010_schema` rather than `0009_schema`, and on whatever the head
+     * becomes next.** `0010_schema` rebuilds `transactions` copy-rename-drop
+     * to add `brand_key`/`brand_source` (§14.4b), and SQLite drops a table's
+     * triggers with the table — so a hook one step earlier created two
+     * triggers that the very next step deleted. This key moves with the last
+     * step that rebuilds `transactions`; the file doc above says why that is
+     * a rule rather than a one-off, and `backfills.test.ts` asks
+     * `sqlite_master` after the *whole* chain so the next rebuild cannot
+     * repeat it quietly.
+     */
+    objects: (tx) => {
+      for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
 };
