@@ -248,6 +248,8 @@ export type PhoneRecentTransaction = {
   currency: CurrencyCode;
   decimals: number;
   isBusiness: boolean;
+  /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalRecentTransaction.brandKey` field-for-field. */
+  brandKey: string | null;
 };
 
 /**
@@ -432,6 +434,8 @@ export type PhoneSearchTransaction = {
   payee: string;
   note: string;
   categoryName: string | null;
+  /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalSearchTransaction.brandKey` field-for-field. */
+  brandKey: string | null;
   accountId: Id<"accounts">;
   accountName: string;
   /** Present only on a transfer. */
@@ -504,6 +508,8 @@ export type PhoneTransactionDetail = {
   accountName: string;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalTransactionDetail.brandKey` field-for-field. */
+  brandKey: string | null;
   /** Already signed, the `"from"` leg — same rule as `PhoneRecentTransaction`. */
   amount: Money;
   currency: CurrencyCode;

@@ -4,7 +4,7 @@ import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
-import { COUNTERPARTY_ROLE, TXN_SOURCE, TXN_TYPE } from "./enums.ts";
+import { BRAND_SOURCE, COUNTERPARTY_ROLE, TXN_SOURCE, TXN_TYPE } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
 
@@ -86,6 +86,17 @@ export const transactionsColumns = () => ({
   toFxRate: k.pivotPerUnit("to_fx_rate"),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
+  /**
+   * `SPEC.md` §14.4b — see `transactions.pg.ts`'s identical field for the
+   * full argument. `transactions_brand_shape` (below) is one of the
+   * exceptions this file already carries alongside
+   * `transactions_debt_amount_requires_currency`: the phone is a writer of
+   * this table this arc with no server yet to catch a caller that skipped
+   * the pairing, so §14.6 requires it refused at capture time, not only on a
+   * server that does not exist yet.
+   */
+  brandKey: k.text("brand_key"),
+  brandSource: k.text("brand_source", { enum: BRAND_SOURCE }),
   isBusiness: k.boolean("is_business").notNull().default(false),
   isCapital: k.boolean("is_capital").notNull().default(false),
   recurringId: k
@@ -110,11 +121,13 @@ export const transactionsColumns = () => ({
 });
 
 /**
- * Three exceptions to "most indexes and checks stay in `packages/db`":
+ * Four exceptions to "most indexes and checks stay in `packages/db`":
  * `transactions_category_idx` backs the category reads on the phone,
  * `transactions_counterparty_idx` backs the counterparty-balance reads
- * (R2 M4), and `transactions_debt_amount_requires_currency` is the one check
- * that must refuse at capture time rather than only on the server (L).
+ * (R2 M4), `transactions_debt_amount_requires_currency` and
+ * `transactions_brand_shape` are each a check that must refuse at capture
+ * time rather than only on a server that does not exist yet this arc (L,
+ * §14.4b).
  */
 export const transactions = k.table("transactions", transactionsColumns(), (t) => [
   index("transactions_category_idx").on(t.categoryId),
@@ -123,4 +136,5 @@ export const transactions = k.table("transactions", transactionsColumns(), (t) =
     "transactions_debt_amount_requires_currency",
     sql`${t.debtAmount} IS NULL OR ${t.debtCurrency} IS NOT NULL`,
   ),
+  check("transactions_brand_shape", sql`(${t.brandKey} IS NULL) = (${t.brandSource} IS NULL)`),
 ]);

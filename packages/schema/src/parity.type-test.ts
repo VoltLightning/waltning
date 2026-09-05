@@ -25,6 +25,8 @@ import type { accountGroups as pgAccountGroups } from "./account-groups.pg.ts";
 import type { accountGroups as sqliteAccountGroups } from "./account-groups.sqlite.ts";
 import type { accounts as pgAccounts } from "./accounts.pg.ts";
 import type { accounts as sqliteAccounts } from "./accounts.sqlite.ts";
+import type { brandAliases as pgBrandAliases } from "./brand-aliases.pg.ts";
+import type { brandAliases as sqliteBrandAliases } from "./brand-aliases.sqlite.ts";
 import type { categories as pgCategories } from "./categories.pg.ts";
 import type { categories as sqliteCategories } from "./categories.sqlite.ts";
 import type { counterparties as pgCounterparties } from "./counterparties.pg.ts";
@@ -56,6 +58,7 @@ import type { transactions as sqliteTransactions } from "./transactions.sqlite.t
 type Pg = {
   accountGroups: typeof pgAccountGroups;
   accounts: typeof pgAccounts;
+  brandAliases: typeof pgBrandAliases;
   categories: typeof pgCategories;
   counterparties: typeof pgCounterparties;
   counterpartyDistinctPairs: typeof pgCounterpartyDistinctPairs;
@@ -74,6 +77,7 @@ type Pg = {
 type Sqlite = {
   accountGroups: typeof sqliteAccountGroups;
   accounts: typeof sqliteAccounts;
+  brandAliases: typeof sqliteBrandAliases;
   categories: typeof sqliteCategories;
   counterparties: typeof sqliteCounterparties;
   counterpartyDistinctPairs: typeof sqliteCounterpartyDistinctPairs;

@@ -27,6 +27,7 @@
  */
 
 import { z } from "zod";
+import { isValidBrandKey } from "../brands/catalog.ts";
 import { type AccountingDate, daysBetween } from "../date.ts";
 import type { Id } from "../id.ts";
 import {
@@ -358,6 +359,21 @@ export const createTransactionInput = z
     payee: z.string().trim().max(200).default(""),
     note: z.string().trim().max(2000).default(""),
 
+    /**
+     * `SPEC.md` §14.4b — an explicit assertion, never the common case. Absent,
+     * `resolveBrand` (`@waltning/core/brands/match`) tries to match `payee`
+     * against the bundled catalogue instead, and the row's `brand_source`
+     * records which happened (`manual` here, `catalog` there) — never a
+     * caller input, the same reason `fxRateEstimated` is not one (see
+     * "Not here, on purpose", below).
+     *
+     * Catalogue-validated at this boundary — `brandKeyIsValid`'s issue below
+     * — because the key is Waltning-owned code, not free text: `SPEC.md`'s
+     * "valid pair" requirement is exactly "absent, or a member of the
+     * catalogue", checked once here rather than differently on each engine.
+     */
+    brandKey: z.string().trim().min(1).max(64).optional(),
+
     /** §13.1. Gated per-field by the operation's `taxSensitiveFields`, not here. */
     isBusiness: z.boolean().default(false),
 
@@ -394,8 +410,27 @@ export const createTransactionInput = z
     //   `ryczalt_rate`, `ryczalt_activity`, `tax_fx_*`
     //                           — server-resolved at commit (§14.6, §13.6).
     //   `deleted_at`            — `delete_transaction`, soft (§6.9).
+    //   `brand_source`          — derived by `resolveBrand`, never asserted:
+    //                             `manual` when `brandKey` was supplied here,
+    //                             `catalog` when the payee matched instead —
+    //                             the same split `fx_rate_estimated` draws
+    //                             above.
   })
   .superRefine((t, ctx) => {
+    /**
+     * `SPEC.md` §14.4b's "valid pair" contract check — the key is
+     * Waltning-owned versioned code (`brandKey`'s own doc, above), so an
+     * upstream slug or a typo is refused here rather than reaching the
+     * executor as a row nothing can ever render a mark for.
+     */
+    if (t.brandKey !== undefined && !isValidBrandKey(t.brandKey)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["brandKey"],
+        message: `"${t.brandKey}" is not in the bundled brand catalogue (SPEC.md §14.4b)`,
+      });
+    }
+
     /**
      * `transactions_amount_positive`. Stated as *"negative only for
      * adjustment"* rather than as an absolute floor, because the CHECK reads
@@ -748,6 +783,15 @@ const transactionPatch = z
     note: z.string().trim().max(2000).optional(),
     isBusiness: z.boolean().optional(),
     isCapital: z.boolean().optional(),
+    /**
+     * `SPEC.md` §14.4b. Nullable — `null` clears an explicit assignment back
+     * to "let the payee decide" (the executor re-runs `resolveBrand` against
+     * the row's own payee once this key is gone, rather than leaving a
+     * `brand_source: "manual"` row with nothing to justify it). Present and
+     * non-null follows `createTransactionInput.brandKey`'s own catalogue
+     * check, below.
+     */
+    brandKey: z.string().trim().min(1).max(64).nullable().optional(),
   })
   .strict();
 
@@ -762,6 +806,21 @@ export const updateTransactionInput = z
     path: ["patch"],
   })
   .superRefine((v, ctx) => {
+    // `SPEC.md` §14.4b's "valid pair" check, same as `createTransactionInput`'s
+    // own — a patched `brandKey` is the identical Waltning-owned catalogue
+    // key, never a value only a fresh row was expected to carry. `null`
+    // clears the field and is never a violation.
+    if (
+      v.patch.brandKey !== undefined &&
+      v.patch.brandKey !== null &&
+      !isValidBrandKey(v.patch.brandKey)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["patch", "brandKey"],
+        message: `"${v.patch.brandKey}" is not in the bundled brand catalogue (SPEC.md §14.4b)`,
+      });
+    }
     // M2 — the same `> 0` refine `create_transaction` carries: a patch that
     // sets `to_amount` follows `transactions_to_amount_positive` too, not
     // only a fresh row. `null` clears the field and is never a violation.

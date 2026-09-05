@@ -18,6 +18,7 @@ import Animated from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useInteraction } from "../primitives/interaction.ts";
+import { monogramFor } from "../primitives/monogram.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { SearchField } from "../primitives/search-field";
 import { BottomSheet } from "../shell/bottom-sheet";
@@ -25,7 +26,6 @@ import { text } from "../theme/fonts.ts";
 import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
-import { monogramFor } from "./monogram.ts";
 
 export type CounterpartyPickerCounterparty = {
   id: string;

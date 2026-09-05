@@ -39,6 +39,15 @@ type Story = StoryObj<typeof meta>;
 
 export const Expense: Story = {};
 
+/** `SPEC.md` §14.4b — recognised offline, never blank for an unmatched payee. */
+export const RecognisedBrand: Story = {
+  args: { payee: "ORLEN", brandKey: "orlen" },
+};
+
+export const UnrecognisedBrand: Story = {
+  args: { payee: "Corner Café", brandKey: null },
+};
+
 /** The column. This is the story that shows whether the figures line up. */
 export const Ledger: Story = {
   render: renderLedger,
@@ -53,6 +62,16 @@ const LEDGER: TransactionRowProps[] = [
     amount: money.toMoney("-48.90"),
     currency: "PLN",
     type: "expense",
+  },
+  {
+    date: "2026-08-24",
+    payee: "ORLEN",
+    category: "Transport",
+    account: "Cash",
+    amount: money.toMoney("-184.30"),
+    currency: "PLN",
+    type: "expense",
+    brandKey: "orlen",
   },
   {
     date: "2026-08-24",

@@ -29,6 +29,7 @@ import { Amount } from "../fx/amount";
 import { FxAmount } from "../fx/fx-amount";
 import { useT } from "../i18n/provider";
 import { useInteraction } from "../primitives/interaction.ts";
+import { monogramFor } from "../primitives/monogram.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { text } from "../theme/fonts.ts";
 import { useTheme } from "../theme/provider";
@@ -36,7 +37,6 @@ import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { AgeingBar } from "./ageing-bar";
 import { DebtDirectionTag } from "./debt-direction-tag";
-import { monogramFor } from "./monogram.ts";
 
 export type CounterpartyKind = "person" | "company";
 

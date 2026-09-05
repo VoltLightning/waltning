@@ -79,6 +79,7 @@ scrolling one.
 | `FilterBar` | Account · category · scope · currency · date range · counterparty. Reports the count each filter excludes (§5.6) |
 | `SearchField` | Payee, note, amount, **and receipt contents** — merchant plus line descriptions. A match inside a receipt states which line matched, so the result is explicable rather than surprising |
 | `TransactionRow` / `TransferRow` | `BIZ` where business; `FxAmount` where foreign |
+| `BrandIcon` | `TransactionRow`'s own leading mark — same component and catalogue as S04 (§14.4b) |
 | `SwipeAction` | Mobile — short swipe categorize, long swipe edit. **Never delete** |
 | `EmptyState(filtered)` | Names the excluding filter and its hidden count |
 | `EmptyState(first-run)` | Nothing has ever existed |

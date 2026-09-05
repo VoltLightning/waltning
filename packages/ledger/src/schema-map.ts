@@ -1,5 +1,6 @@
 import { accountGroups } from "@waltning/schema/sqlite/account-groups";
 import { accounts } from "@waltning/schema/sqlite/accounts";
+import { brandAliases } from "@waltning/schema/sqlite/brand-aliases";
 import { categories } from "@waltning/schema/sqlite/categories";
 import { counterparties } from "@waltning/schema/sqlite/counterparties";
 import { counterpartyDistinctPairs } from "@waltning/schema/sqlite/counterparty-distinct-pairs";
@@ -20,6 +21,7 @@ import { outbox, outboxSeq } from "./outbox.ts";
 export const ledgerSchema = {
   accountGroups,
   accounts,
+  brandAliases,
   categories,
   counterparties,
   counterpartyDistinctPairs,

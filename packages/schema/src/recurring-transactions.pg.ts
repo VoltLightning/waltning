@@ -2,7 +2,7 @@ import { accounts } from "./accounts.pg.ts";
 import { categories } from "./categories.pg.ts";
 import { counterparties } from "./counterparties.pg.ts";
 import { currencies } from "./currencies.pg.ts";
-import { txnType } from "./enums.pg.ts";
+import { brandSource, txnType } from "./enums.pg.ts";
 import { pgKit as k } from "./kit.ts";
 
 /**
@@ -27,6 +27,16 @@ export const recurringTransactionsColumns = () => ({
     .references(() => currencies.code),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
+  /**
+   * `SPEC.md` §14.4b — the same pair `transactions.pg.ts` carries, so a
+   * subscription's occurrences can inherit a recognised mark rather than
+   * each posted row re-matching its own payee. No executor writes these yet
+   * (no `create_recurring`/`update_recurring` operation exists this arc);
+   * the shape guarantee (`recurring_transactions_brand_shape`,
+   * `packages/db/src/schema.ts`) is ready for the write path that does.
+   */
+  brandKey: k.text("brand_key"),
+  brandSource: brandSource("brand_source"),
   rrule: k.text("rrule").notNull(),
   nextDate: k.date("next_date"),
   endDate: k.date("end_date"),

@@ -33,3 +33,13 @@ export const Income: Story = {
 export const Transfer: Story = {
   args: { amount: toMoney("100.00"), type: "transfer", accountName: "Savings" },
 };
+
+/** `SPEC.md` §14.4b — recognised offline, no network at render time. */
+export const RecognisedBrand: Story = {
+  args: { amount: toMoney("-184.30"), payee: "ORLEN", brandKey: "orlen" },
+};
+
+/** Never blank — the payee's own monogram, same treatment `CounterpartyRow` gives an unmatched name. */
+export const UnrecognisedPayee: Story = {
+  args: { payee: "Corner Café", brandKey: null },
+};

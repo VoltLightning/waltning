@@ -106,12 +106,12 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 
 | Operation | Auto | Notes |
 |---|---|---|
-| `create_transaction` | ❌ | The core write. One payment event, one row (§6.10) |
-| `update_transaction` | ✅ | Field-level; `is_business` flips are audited (§13.1) |
+| `create_transaction` | ❌ | The core write. One payment event, one row (§6.10). Optional `brandKey` (§14.4b) — catalogue-validated; absent, the executor matches `payee` against the bundled catalogue offline and sets `brand_source: catalog` itself, never the caller |
+| `update_transaction` | ✅ | Field-level; `is_business` flips are audited (§13.1). A patched `payee` re-runs the §14.4b brand match unless the row already carries a `manual` one; a patched `brandKey` (including `null`, to clear it) always wins |
 | `delete_transaction` | ❌ | Soft. Never auto — deletion is the one thing you cannot un-notice |
 | `set_transaction_lines` | ✅ | The optional breakdown (§10.3) |
 | `categorize_batch` | ✅ | The bulk path; one `DiffCard` states the affected count |
-| `supersede_transaction` | ❌ | Import row replaces a manual entry, reattaching its receipt (S02) |
+| `supersede_transaction` | ❌ | Import row replaces a manual entry, reattaching its receipt (S02). The replacement is a full `create_transaction` input, so it carries the identical §14.4b brand resolution |
 | `attach_receipt` | ✅ | |
 | `rerate_transactions` | ❌ | Bulk FX re-rate; **never touches a closed period** (S18) |
 
@@ -146,7 +146,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 |---|---|---|
 | `run_import` · `accept_row` · `skip_row` | ✅ | Undoable as one unit (§8.4) |
 | `propose_rule` · `create_rule` · `update_rule` · `disable_rule` · `reorder_rules` | ❌ | A rule changes future classification |
-| `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | Inputs include `is_subscription` and `service` (§14.4a) — rule fields, not a separate operation, so S34 adds no second write path. When payee or counterparty matches the catalog's aliases, the editor **proposes** both; never set silently (same policy as amount drift) |
+| `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | Inputs include `is_subscription` and `service` (§14.4a) — rule fields, not a separate operation, so S34 adds no second write path. When payee or counterparty matches the catalog's aliases, the editor **proposes** both; never set silently (same policy as amount drift). `recurring_transactions.brand_key`/`brand_source` (§14.4b) exist on the table today with no write path yet — these operations are where one lands |
 | `materialize_occurrence` | ✅ | Posts an occurrence. The unique index on `(recurring_id, occurrence_date)` stops **this rule** firing twice — it does **not** stop a hand-entered duplicate, whose `recurring_id` is NULL and which is therefore not in the index at all (C8, §14.4) |
 | `link_occurrence` | ❌ | The other half of C8's fix, and it was missing. Stamps `recurring_id` and `occurrence_date` onto a row **you already entered by hand**, which both satisfies the occurrence and puts the row into the index so the question cannot be asked twice. Offered instead of *Post* when an unlinked row matches within ±3 days and ±1% on the same account and currency |
 | `reclassify` | ❌ | **Was referenced in four documents and defined in none.** Re-runs classification against **today's** ledger, so it is expected to differ from the original — which is exactly why it is not called "replay". Replay pins `model_id`, `rule_snapshot` and `retrieved_ids` and reproduces the recorded answer (C10); this does not. Never auto: it rewrites rows you already accepted |

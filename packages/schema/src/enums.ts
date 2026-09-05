@@ -89,6 +89,15 @@ export const TAX_LINE_KIND = ["revenue", "expense", "excluded"] as const;
 /** A dashboard widget's footprint in the grid. */
 export const WIDGET_SIZE = ["s", "m", "l"] as const;
 
+/**
+ * `SPEC.md` §14.4b. Restated from `@waltning/core/brands/catalog`'s own
+ * `BRAND_SOURCE` — `registry/inputs.ts`'s note on `ACCOUNT_KIND` gives the
+ * general reason every enum in this file is restated rather than imported;
+ * this one has no core-side brand to pin it against either, the same gap
+ * that note records.
+ */
+export const BRAND_SOURCE = ["catalog", "manual"] as const;
+
 export type AccountKind = (typeof ACCOUNT_KIND)[number];
 export type Ownership = (typeof OWNERSHIP)[number];
 export type CategoryKind = (typeof CATEGORY_KIND)[number];
@@ -101,3 +110,4 @@ export type FxSource = (typeof FX_SOURCE)[number];
 export type ImportRowStatus = (typeof IMPORT_ROW_STATUS)[number];
 export type TaxLineKind = (typeof TAX_LINE_KIND)[number];
 export type WidgetSize = (typeof WIDGET_SIZE)[number];
+export type BrandSource = (typeof BRAND_SOURCE)[number];

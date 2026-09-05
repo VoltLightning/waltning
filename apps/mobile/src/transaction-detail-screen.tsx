@@ -275,6 +275,8 @@ export default function TransactionDetail() {
           decimals={detail.decimals}
           type={detail.type}
           accountName={detail.accountName}
+          payee={detail.payee}
+          brandKey={detail.brandKey}
         />
       </Card>
       <Card>

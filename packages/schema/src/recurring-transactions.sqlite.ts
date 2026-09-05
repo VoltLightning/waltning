@@ -2,7 +2,7 @@ import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
-import { TXN_TYPE } from "./enums.ts";
+import { BRAND_SOURCE, TXN_TYPE } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 
 /**
@@ -27,6 +27,9 @@ export const recurringTransactionsColumns = () => ({
     .references(() => currencies.code),
   payee: k.text("payee").notNull().default(""),
   note: k.text("note").notNull().default(""),
+  /** `SPEC.md` §14.4b — see `recurring-transactions.pg.ts`'s identical field. */
+  brandKey: k.text("brand_key"),
+  brandSource: k.text("brand_source", { enum: BRAND_SOURCE }),
   rrule: k.text("rrule").notNull(),
   nextDate: k.date("next_date"),
   endDate: k.date("end_date"),

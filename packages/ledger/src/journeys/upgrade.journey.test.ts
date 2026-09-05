@@ -361,8 +361,21 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
             table === "transactions" ? before + fixture.pendingBefore.length : before;
           expect(after, `${table}'s row count after the upgrade`).toBe(expected);
         }
+        // `SPEC.md` §14.4b — `brand_aliases` is the first table the replica
+        // has ever grown past `0000_schema`'s own shape (every table before
+        // it existed from the chain's very first step), so a fixture cut
+        // below `0010_schema` genuinely does not have it yet. Named rather
+        // than silently widened: any *other* new table would still fail this
+        // assertion, which is the property worth keeping.
+        const KNOWN_NEW_TABLES = ["brand_aliases"];
+        for (const table of KNOWN_NEW_TABLES) {
+          expect(
+            replicaCountsAfter[table],
+            `${table} is new since this fixture's own version and starts empty`,
+          ).toBe(0);
+        }
         expect(Object.keys(replicaCountsAfter).sort()).toEqual(
-          Object.keys(fixture.replicaCountsBefore).sort(),
+          [...Object.keys(fixture.replicaCountsBefore), ...KNOWN_NEW_TABLES].sort(),
         );
 
         // Recovery never adds or removes an outbox row — only a `sending`

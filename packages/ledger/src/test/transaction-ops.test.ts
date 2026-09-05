@@ -6,7 +6,9 @@
  * per op because a new executor is a new chance to break it.
  */
 
+import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -207,6 +209,201 @@ describe("update_transaction", () => {
       .get();
     expect(after?.categoryId).toBeNull();
     expect(after?.version).toBe(before?.version);
+  });
+});
+
+/** `SPEC.md` §14.4b — resolved offline, at write time, by every path that produces a row. */
+describe("brand recognition (§14.4b)", () => {
+  const ORLEN = id<"transactions">("00000000-0000-4000-8000-000000000b01");
+
+  it("matches a recognised payee and sources it 'catalog', with no caller input", () => {
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: ORLEN,
+        date: "2026-09-01",
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: "184.30",
+        currency: PLN,
+        payee: "ORLEN",
+      },
+    });
+    const row = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, ORLEN))
+      .get();
+    expect(row?.brandKey).toBe("orlen");
+    expect(row?.brandSource).toBe("catalog");
+  });
+
+  it("leaves both fields null for an unrecognised payee — never one alone", () => {
+    // `TXN` (beforeEach) is payee "Coffee", which matches nothing.
+    const row = readTxn();
+    expect(row?.brandKey).toBeNull();
+    expect(row?.brandSource).toBeNull();
+  });
+
+  it("an asserted brandKey wins over the payee and is sourced 'manual'", () => {
+    writeLocally(stores.ledger, {
+      executor: createTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: ORLEN,
+        date: "2026-09-01",
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: "10",
+        currency: PLN,
+        payee: "Corner Café",
+        brandKey: "youtube",
+      },
+    });
+    const row = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, ORLEN))
+      .get();
+    expect(row?.brandKey).toBe("youtube");
+    expect(row?.brandSource).toBe("manual");
+  });
+
+  it("refuses a brandKey the bundled catalogue does not carry — never an upstream slug", () => {
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: createTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          id: ORLEN,
+          date: "2026-09-01",
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: "10",
+          currency: PLN,
+          payee: "Netflix",
+          brandKey: "netflix",
+        },
+      }),
+    ).toThrow(/brand catalogue/);
+  });
+
+  it("re-matches a patched payee when the row carries no manual assignment", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { payee: "ORLEN" } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("orlen");
+    expect(after?.brandSource).toBe("catalog");
+  });
+
+  it("a manual assignment is sticky against a later payee edit", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: before?.version ?? 0, patch: { brandKey: "youtube" } },
+    });
+    const manual = readTxn();
+    expect(manual?.brandSource).toBe("manual");
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: manual?.version ?? 0,
+        patch: { payee: "Some other payee entirely" },
+      },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("youtube");
+    expect(after?.brandSource).toBe("manual");
+  });
+
+  it("clearing brandKey with null lets the payee decide again", () => {
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN,
+        version: before?.version ?? 0,
+        patch: { payee: "ORLEN", brandKey: "youtube" },
+      },
+    });
+    const manual = readTxn();
+    expect(manual?.brandKey).toBe("youtube");
+
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: manual?.version ?? 0, patch: { brandKey: null } },
+    });
+    const after = readTxn();
+    expect(after?.brandKey).toBe("orlen");
+    expect(after?.brandSource).toBe("catalog");
+  });
+
+  it("supersede_transaction resolves the brand of its replacement, the same as create", () => {
+    const REPLACEMENT = id<"transactions">("00000000-0000-4000-8000-000000000b02");
+    const before = readTxn();
+    writeLocally(stores.ledger, {
+      executor: supersedeTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        supersedesId: TXN,
+        supersedesVersion: before?.version ?? 0,
+        replacement: {
+          id: REPLACEMENT,
+          date: "2026-09-01",
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: "184.30",
+          currency: PLN,
+          payee: "ORLEN",
+          source: "import",
+        },
+      },
+    });
+    const replaced = stores.ledger.replica.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, REPLACEMENT))
+      .get();
+    expect(replaced?.brandKey).toBe("orlen");
+    expect(replaced?.brandSource).toBe("catalog");
+  });
+
+  it("the transactions_brand_shape CHECK refuses a raw insert with only one field set (L)", () => {
+    expect(() =>
+      stores.ledger.replica.db
+        .insert(transactions)
+        .values({
+          id: id<"transactions">("00000000-0000-4000-8000-000000000b03"),
+          date: accountingDate("2026-09-01"),
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: money.toMoney("10"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+          brandKey: "orlen",
+        })
+        .run(),
+    ).toThrow(/CHECK constraint failed/i);
   });
 });
 
