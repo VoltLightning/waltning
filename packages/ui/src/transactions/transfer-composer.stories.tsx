@@ -125,6 +125,12 @@ export const Untouched: Story = {
 export const NeedsRate: Story = {
   args: {
     accounts: [{ ...USD_ACCOUNT, capturable: false }, PLN_ACCOUNT, SAVINGS_ACCOUNT],
+    // `capturable` is `pivot !== undefined && (isPivot || quoted.has(code))`
+    // (`read-currencies.ts`), so an uncapturable USD is a USD nothing quotes
+    // — and a pair with no quote has no cross rate to reference. A frame
+    // showing the refusal above a live reference is a state the app cannot
+    // produce.
+    referenceRate: undefined,
     onSetRate: noop,
   },
 };
@@ -140,6 +146,8 @@ export const NeedsRatePhone: Story = {
   decorators: [withPhoneWidth],
   args: {
     accounts: [{ ...USD_ACCOUNT, capturable: false }, PLN_ACCOUNT, SAVINGS_ACCOUNT],
+    // Same reason as `NeedsRate` above: no quote, so no reference rate.
+    referenceRate: undefined,
     onSetRate: noop,
   },
 };

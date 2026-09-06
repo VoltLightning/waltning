@@ -15,8 +15,13 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { useCallback, useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
-import { CategorySheet, type CategoryTreeNode } from "./category-sheet";
+import {
+  CategorySheet,
+  type CategorySheetCreateDraft,
+  type CategoryTreeNode,
+} from "./category-sheet";
 
 function noop() {}
 function createLeaf() {
@@ -40,6 +45,16 @@ const TRANSPORT: CategoryTreeNode = {
   kind: "expense",
   isLeaf: false,
 };
+/** The seed's own root leaf — `run.ts` writes `seed:<key>`, and that is how it is known. */
+const UNCATEGORIZED: CategoryTreeNode = {
+  id: "uncategorized",
+  parentId: null,
+  name: "Uncategorized",
+  kind: "expense",
+  isLeaf: true,
+  externalId: "seed:uncategorized",
+};
+
 const TREE: CategoryTreeNode[] = [
   FOOD,
   { id: "groceries", parentId: "food", name: "Groceries", kind: "expense", isLeaf: true },
@@ -73,8 +88,18 @@ type Story = StoryObj<typeof meta>;
 /** The default: every leaf across every group, `Uncategorized` last and muted. */
 export const Browsing: Story = { args: WITH_CREATE };
 
-/** A picker-only caller — `+ New` is refused rather than opening a dead end. */
+/** A picker-only caller — the footer holds *Use* alone, since nothing here can create. */
 export const NoCreate: Story = {};
+
+/**
+ * The same picker-only caller on a ledger whose taxonomy has not arrived
+ * (S10's categorize path). It offers nothing to create with, so it says
+ * nothing about creating — the copy names what *can* happen: the row stays
+ * uncategorized.
+ */
+export const NoCreateEmpty: Story = {
+  args: { tree: [], usage: {} },
+};
 
 /** Live, and covering every leaf regardless of the group chip (S06 §9). */
 export const Searching: Story = {
@@ -181,6 +206,41 @@ export const EmptyTreeCreating: Story = {
 };
 
 /**
+ * **The write, and what the sheet does with it.** The story holds the tree in
+ * state and appends the row `create_category` would write — a leaf, at the
+ * parent it was given, with no `sort` of its own — so the frame after Save is
+ * the real one rather than a stub's return value. `Coffee` is an ordinary
+ * cell; the seeded blank keeps its own row below the divider, which is the
+ * thing identifying it *by position* used to get wrong.
+ */
+export const EmptyTreeCreated: Story = {
+  args: { tree: [UNCATEGORIZED], usage: {} },
+  render: (args) => <CreatingDemo {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "Create a category" }));
+    await userEvent.type(await canvas.findByLabelText("Name"), "Coffee");
+    await userEvent.click(await canvas.findByRole("button", { name: "Save" }));
+    const grid = within(await canvas.findByRole("radiogroup", { name: "Category" }));
+    await expect(grid.findByRole("radio", { name: /Coffee/ })).resolves.toBeDefined();
+  },
+};
+
+/** The tree as state, so a create lands in it — `quick-add-composer.stories.tsx`'s own `WithCounterpartyDemo` shape. */
+function CreatingDemo(args: React.ComponentProps<typeof CategorySheet>) {
+  const [tree, setTree] = useState<readonly CategoryTreeNode[]>(args.tree);
+  const handleCreate = useCallback((draft: CategorySheetCreateDraft) => {
+    const id = `cat-${draft.name.toLowerCase()}`;
+    setTree((current) => [
+      { id, parentId: draft.parentId, name: draft.name, kind: draft.kind, isLeaf: true },
+      ...current,
+    ]);
+    return { id };
+  }, []);
+  return <CategorySheet {...args} tree={tree} onCreate={handleCreate} />;
+}
+
+/**
  * The seeded shape of a fresh **expense** tree: `Uncategorized` and nothing
  * else. Still the empty state — one honest blank is not a taxonomy — and the
  * row itself stays pickable below it.
@@ -188,9 +248,7 @@ export const EmptyTreeCreating: Story = {
 export const OnlyUncategorized: Story = {
   args: {
     ...WITH_CREATE,
-    tree: [
-      { id: "uncategorized", parentId: null, name: "Uncategorized", kind: "expense", isLeaf: true },
-    ],
+    tree: [UNCATEGORIZED],
     usage: { uncategorized: 3 },
   },
 };

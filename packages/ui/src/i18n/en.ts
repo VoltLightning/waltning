@@ -695,6 +695,12 @@ export const en = {
     pickerEmptyTitle: "No categories yet",
     pickerEmptyBody: "Create one now, or leave this transaction uncategorized.",
     /**
+     * The same empty, in a sheet opened to *pick* — S10's categorize path
+     * passes no `onCreate`, so there is nothing here that can create and
+     * saying *create one now* offers an action the surface does not have.
+     */
+    pickerEmptyReadOnlyBody: "Nothing to pick yet — a transaction can stay uncategorized.",
+    /**
      * The empty state's own action — the pinned footer's *New*, named in
      * full. Two controls on one sheet cannot both be *New*: a screen reader
      * would announce the same button twice, and the empty state's is the one

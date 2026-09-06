@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { CategorySheet, type CategoryTreeNode } from "./category-sheet";
 
@@ -239,9 +239,14 @@ it("shows a name collision under the field and never calls onPick", () => {
   expect(onPick).not.toHaveBeenCalled();
 });
 
-it("disables + New when the caller offers no onCreate", () => {
+/**
+ * Absent, not disabled: a control that can never enable for this caller is
+ * chrome shaped like an offer, and S10's categorize path has no create at
+ * all — the sheet says so in words instead.
+ */
+it("offers no + New at all when the caller offers no onCreate", () => {
   render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
-  expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-disabled")).toBe("true");
+  expect(screen.queryByRole("button", { name: "New" })).toBeNull();
 });
 
 /** S06 §4: creating in place is an ordinary part of the sheet, not an opt-in — enabled the moment a handler exists. */
@@ -374,6 +379,114 @@ it("still asks for a group when the tree has them", () => {
   fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Coffee" } });
   expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+});
+
+/**
+ * **The row the create writes is not the honest blank.** The sheet used to
+ * find `Uncategorized` as *the first root leaf*, and this sheet's own create
+ * makes a second one — which sorts ahead of the seeded row (`sort` defaults
+ * to 0, `Uncategorized` is seeded last and by name sorts near the end), so
+ * the new category took the Uncategorized slot below the divider and
+ * `Uncategorized` itself appeared as a pickable cell in the grid, which is
+ * the one place §9.2 says it never goes.
+ *
+ * The write is run the way the app runs it — `onCreate` appends the row the
+ * executor would write and the sheet is re-rendered with the tree that comes
+ * back — because a static `tree` prop with a stubbed id asserts the write's
+ * shape and can never see what the sheet does with the result.
+ */
+it("keeps Uncategorized apart after creating a second root leaf (S06 §9.2)", () => {
+  const tree: CategoryTreeNode[] = [UNCATEGORIZED];
+  const onCreate = (draft: {
+    name: string;
+    kind: "income" | "expense";
+    parentId: string | null;
+  }) => {
+    // What `create_category` writes: a leaf, at the parent it was given, with
+    // no `sort` of its own — the column default, 0, ahead of the seeded row.
+    tree.unshift({
+      id: "cat-coffee",
+      parentId: draft.parentId,
+      name: draft.name,
+      kind: draft.kind,
+      isLeaf: true,
+    });
+    return { id: "cat-coffee" };
+  };
+
+  const { rerender } = render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={tree}
+      onPick={vi.fn()}
+      onCreate={onCreate}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Coffee" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  rerender(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[...tree]}
+      onPick={vi.fn()}
+      onCreate={onCreate}
+      onDismiss={vi.fn()}
+    />,
+  );
+
+  // The new leaf is an ordinary cell in the grid; the seeded blank is not —
+  // it keeps its own row below the divider (§9.2), which is still there.
+  const grid = within(screen.getByRole("radiogroup", { name: "Category" }));
+  expect(grid.getByRole("radio", { name: "Coffee" })).toBeDefined();
+  expect(grid.queryByRole("radio", { name: "Uncategorized" })).toBeNull();
+  expect(screen.getByRole("radio", { name: "Uncategorized" })).toBeDefined();
+  // And the sheet is no longer empty — there is a category to pick now.
+  expect(screen.queryByText("No categories yet")).toBeNull();
+});
+
+/**
+ * The seed's own tag names the row exactly, once sync carries it down —
+ * `categories-screen.tsx` keeps the same two-stage rule.
+ */
+it("finds the honest blank by the seed's tag before its shape", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[
+        { ...UNCATEGORIZED, id: "seeded", name: "Nieprzypisane", externalId: "seed:uncategorized" },
+        { id: "cat-coffee", parentId: null, name: "Coffee", kind: "expense", isLeaf: true },
+      ]}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  const grid = within(screen.getByRole("radiogroup", { name: "Category" }));
+  expect(grid.getByRole("radio", { name: "Coffee" })).toBeDefined();
+  // Named in another language, so only the seed's tag can tell it apart.
+  expect(grid.queryByRole("radio", { name: "Nieprzypisane" })).toBeNull();
+  expect(screen.getByRole("radio", { name: "Nieprzypisane" })).toBeDefined();
+});
+
+/**
+ * M1 — a sheet opened only to pick (S10's categorize path passes no
+ * `onCreate`) must not tell a person to create. There is nothing here that
+ * can, and the round-2 copy invited it anyway.
+ */
+it("offers no create, in words or in chrome, when the caller cannot create (S06 §6)", () => {
+  render(<CategorySheet visible kind="expense" tree={[]} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  expect(screen.getByText("No categories yet")).toBeDefined();
+  expect(
+    screen.getByText("Nothing to pick yet — a transaction can stay uncategorized."),
+  ).toBeDefined();
+  expect(screen.queryByText(/Create one now/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Create a category" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "New" })).toBeNull();
 });
 
 /**

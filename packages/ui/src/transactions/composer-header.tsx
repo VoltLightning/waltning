@@ -89,8 +89,11 @@ type KindControlProps = {
  *
  * **The menu marks the current kind**, because being read is the whole reason
  * it opens — a sheet that answers nothing the trigger had not already said is
- * a tap spent on nothing. `RadioGroup`, the same shape `ScopeSegments` and
- * `AccountPicker` already use to say *this one*.
+ * a tap spent on nothing. Its rows are written here rather than taken from
+ * `RadioGroup`: that component refuses a press on its own selected value, as
+ * a form field should, and a menu whose marked row does nothing is a sheet
+ * that will not close on the very option a thumb reaches for first.
+ * `AccountPicker`'s tile is the shape instead — marked, and picking commits.
  *
  * **Transfer is not among them** (§9.1): a transfer is two accounts, two
  * amounts and a live rate, and it has its own composer, reached from
@@ -145,11 +148,12 @@ function KindControl({ kind, onChange }: KindControlProps) {
         <View style={styles.kindControlChevron} />
       </Pressable>
       <BottomSheet visible={open} title={t("transactions.kind")} onDismiss={handleDismiss}>
-        <View
-          accessibilityRole="radiogroup"
-          accessibilityLabel={t("transactions.kind")}
-          style={styles.kindOptions}
-        >
+        {/*
+          The group takes no name of its own: `BottomSheet`'s own title
+          already says *Kind*, and a second identical label announces the
+          word twice on a sheet holding two rows.
+        */}
+        <View accessibilityRole="radiogroup" style={styles.kindOptions}>
           <KindOption
             kind="expense"
             label={t("transactions.expense")}

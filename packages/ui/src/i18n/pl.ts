@@ -350,6 +350,8 @@ export const pl: Messages = {
     searchEmpty: "Szukaj kategorii",
     pickerEmptyTitle: "Brak kategorii",
     pickerEmptyBody: "Utwórz teraz albo zostaw tę transakcję bez kategorii.",
+    pickerEmptyReadOnlyBody:
+      "Nie ma jeszcze czego wybierać — transakcja może zostać bez kategorii.",
     createFirst: "Utwórz kategorię",
     noGroupsYet: "Brak grup — to będzie kategoria najwyższego poziomu.",
     new: "Nowa",

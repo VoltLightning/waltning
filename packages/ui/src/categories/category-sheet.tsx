@@ -20,8 +20,17 @@
  * **Two levels, one rule (`TAXONOMY.md` R1/R2).** A group chip *narrows*; it
  * is never itself pickable — the taxonomy enforces that a category is a group
  * or a leaf, never both, so this component does not have to guard against a
- * group id reaching `onPick`. `Uncategorized` is the one leaf the taxonomy
- * seeds at the root (`parentId: null`); every other leaf sits under a group.
+ * group id reaching `onPick`.
+ *
+ * **A root leaf is not the same thing as `Uncategorized`.** The seed puts one
+ * leaf at the root and every seeded leaf under a group, but nothing refuses a
+ * second root leaf — `create_category`'s `parentId` is nullable, and this
+ * sheet's own create makes one whenever the taxonomy holds no group to name.
+ * So the honest blank is identified by *what it is* (`isSeededUncategorized`
+ * below), never by *where it sits*: matching the first root leaf handed the
+ * Uncategorized row to whichever category was created first and put
+ * `Uncategorized` itself in the grid, which is exactly the place §9.2 says it
+ * never goes.
  *
  * **Search always covers every leaf, ignoring the chosen group (§9's open
  * question, decided).** Positions never move — no recency, no usage
@@ -60,9 +69,24 @@ export type CategoryTreeNode = {
   name: string;
   kind: "income" | "expense";
   isLeaf: boolean;
+  /**
+   * The seed's own tag (`seed:uncategorized`) — never rendered, carried only
+   * so identifying the honest blank does not have to fall back to matching
+   * by shape. `category-tree.tsx` carries the same field for the same
+   * reason. Optional: `PhoneCategoryNode` does not set it yet (arc-phone has
+   * no sync, so nothing writes an `externalId` on the phone's own rows), and
+   * a fixture that does not care omits it.
+   */
+  externalId?: string | null;
 };
 
-/** What the create-in-place row can save. `parentId: null` is refused above the root leaf, `Uncategorized`. */
+/**
+ * What the create-in-place row can save. `parentId: null` is a real answer —
+ * the first category of a taxonomy with no group to put it under, the same
+ * write S19's own create sheet makes (`TAXONOMY.md` R1 is about a node being
+ * a group or a leaf, not about parents). With groups on the tree this sheet
+ * asks which one.
+ */
 export type CategorySheetCreateDraft = {
   name: string;
   kind: "income" | "expense";
@@ -88,6 +112,32 @@ export type CategorySheetProps = {
   onDismiss: () => void;
 };
 
+/**
+ * **The seeded honest blank, by identity rather than by position.**
+ * `categories-screen.tsx`'s own `isUncategorized` is this rule, and this is
+ * the same two stages for the same reasons: the seed's tag first
+ * (`packages/db/src/seed/run.ts` writes `seed:<key>`), which names the exact
+ * row once sync carries `externalId` down to the replica; the whole seeded
+ * *shape* second, which is what actually matches today, because arc-phone has
+ * no sync and nothing sets an `externalId` on a phone's own categories.
+ *
+ * The shape has to be all four parts. Sibling uniqueness is `(parent, kind,
+ * name)`, so an income leaf named "Uncategorized" is a legal, reachable row
+ * that is **not** this one — matching on name and root alone would swallow it.
+ * And `parentId === null && isLeaf` alone is not the blank at all any more:
+ * this sheet creates root leaves whenever the taxonomy has no group, and the
+ * first one created would otherwise take the blank's place.
+ */
+function isSeededUncategorized(node: CategoryTreeNode): boolean {
+  if (node.externalId === "seed:uncategorized") return true;
+  return (
+    node.parentId === null &&
+    node.kind === "expense" &&
+    node.isLeaf &&
+    node.name.trim().toLowerCase() === "uncategorized"
+  );
+}
+
 export function CategorySheet({
   visible,
   kind,
@@ -110,10 +160,7 @@ export function CategorySheet({
 
   const nodes = useMemo(() => tree.filter((node) => node.kind === kind), [tree, kind]);
   const groups = useMemo(() => nodes.filter((node) => !node.isLeaf), [nodes]);
-  const uncategorized = useMemo(
-    () => nodes.find((node) => node.isLeaf && node.parentId === null),
-    [nodes],
-  );
+  const uncategorized = useMemo(() => nodes.find(isSeededUncategorized), [nodes]);
   const ordinaryLeaves = useMemo(
     () => nodes.filter((node) => node.isLeaf && node !== uncategorized),
     [nodes, uncategorized],
@@ -303,15 +350,14 @@ export function CategorySheet({
         {visibleLeaves.length === 0 ? (
           emptyTree ? (
             createAction === undefined ? (
-              // Nowhere to create (no group, or a picker-only caller), so
-              // nothing is offered: an `EmptyState` requires an action, and
-              // the only honest action here is none. The body says where
-              // categories come from and that a capture saves without one.
-              // A picker-only caller (`onCreate` absent): nothing to offer,
-              // and an `EmptyState` requires an action.
+              // **A picker-only caller** (`onCreate` absent — S10's
+              // categorize path). There is nothing here that can create, so
+              // the copy offers nothing: an `EmptyState` requires an action,
+              // and inviting one this sheet cannot perform is the promise
+              // this state exists to avoid.
               <View style={styles.emptyTree}>
                 <Text style={styles.emptyTreeTitle}>{t("categories.pickerEmptyTitle")}</Text>
-                <Text style={styles.emptyTreeBody}>{t("categories.pickerEmptyBody")}</Text>
+                <Text style={styles.emptyTreeBody}>{t("categories.pickerEmptyReadOnlyBody")}</Text>
               </View>
             ) : (
               <EmptyState
@@ -374,12 +420,16 @@ export function CategorySheet({
         />
       ) : null}
       <View style={styles.footer}>
-        <Button
-          label={t("categories.new")}
-          onPress={handleOpenCreate}
-          variant="secondary"
-          disabled={!canCreate}
-        />
+        {/*
+          Absent, not disabled, for a caller that passes no `onCreate`: a
+          control that can never enable is chrome shaped like an offer, and
+          the sheet already says in words that this one only picks.
+        */}
+        {canCreate ? (
+          <Button label={t("categories.new")} onPress={handleOpenCreate} variant="secondary" />
+        ) : (
+          <View />
+        )}
         <Button
           label={
             highlightedLeaf === undefined

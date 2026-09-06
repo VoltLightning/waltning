@@ -23,6 +23,7 @@ import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
@@ -127,7 +128,7 @@ export default function QuickAdd() {
   const insets = useSafeArea();
   // Beside the JSX rather than in `useStyles`: that cache is keyed on the
   // theme and this is keyed on the device (`ComposerHeader`'s own split).
-  const clearTop = { paddingTop: insets.top };
+  const clearTop = { paddingTop: space.x5 + insets.top };
 
   /**
    * D4a: S06's sheet is composed here, not inside `QuickAddForm` or
@@ -562,53 +563,57 @@ export default function QuickAdd() {
 
   if (breakpoint === "desk") {
     return (
-      <GroundPanel>
-        {/* The route's own name, on the ground. The navigation header used
-            to carry it and this route no longer has one — the phone's
-            composer states its name in `ComposerHeader`'s band, and the desk
-            fallback, which is a form rather than a composer, states it here.
-            The same string the header showed, so the desk reads exactly as
-            it did.
+      <View style={styles.root}>
+        {/* The route's own name, in a band beside the panel — not inside it.
+            The navigation header used to carry it and this route no longer
+            has one; the phone's composer states its name in
+            `ComposerHeader`'s band, and the desk fallback, which is a form
+            rather than a composer, states it here. The same string the
+            header showed, so the desk reads exactly as it did.
 
-            It clears the top inset itself for the same reason the band does:
-            `GroundPanel` never clears the top, because it was written when
-            every route above it had a header. This one no longer has. Zero
+            Beside, because clearance that scrolls is not clearance:
+            `GroundPanel` is the page scroller and never clears the top,
+            having been written when every route above it had a header. Zero
             on a browser and on every device that can reach this breakpoint
             today (`app.json` pins portrait and no tablet), so this is the
-            guarantee holding rather than a number anyone will see move. */}
-        <Text style={[styles.deskTitle, clearTop]}>{t("routes.expense")}</Text>
-        <QuickAddForm
-          accounts={accounts}
-          categories={snapshot.categories}
-          counterparties={snapshot.counterparties}
-          today={today}
-          initialAmount={draft.amount}
-          accountId={deskAccountId}
-          onOpenAccountPicker={handleOpenDeskAccountPicker}
-          categoryId={categoryId}
-          onOpenCategoryPicker={handleOpenCategoryPicker}
-          {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
-          onCancel={handleDeskCancel}
-          onSave={handleDeskSave}
-        />
-        <CategorySheet
-          visible={categorySheet.open}
-          kind={categorySheet.kind}
-          tree={snapshot.categoryTree}
-          onPick={handlePickCategory}
-          onCreate={handleCreateCategory}
-          onDismiss={handleDismissCategorySheet}
-        />
-        <AccountPicker
-          visible={deskAccountPicker.open}
-          accounts={pickerAccounts}
-          groups={pickerGroups}
-          accountId={deskAccountId}
-          onPick={handlePickDeskAccount}
-          onCreateAccount={handleDeskAccountPickerCreateAccount}
-          onDismiss={handleDismissDeskAccountPicker}
-        />
-      </GroundPanel>
+            shape being right rather than a number anyone will see move. */}
+        <View style={[styles.deskBand, clearTop]}>
+          <Text style={styles.deskTitle}>{t("routes.expense")}</Text>
+        </View>
+        <GroundPanel>
+          <QuickAddForm
+            accounts={accounts}
+            categories={snapshot.categories}
+            counterparties={snapshot.counterparties}
+            today={today}
+            initialAmount={draft.amount}
+            accountId={deskAccountId}
+            onOpenAccountPicker={handleOpenDeskAccountPicker}
+            categoryId={categoryId}
+            onOpenCategoryPicker={handleOpenCategoryPicker}
+            {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
+            onCancel={handleDeskCancel}
+            onSave={handleDeskSave}
+          />
+          <CategorySheet
+            visible={categorySheet.open}
+            kind={categorySheet.kind}
+            tree={snapshot.categoryTree}
+            onPick={handlePickCategory}
+            onCreate={handleCreateCategory}
+            onDismiss={handleDismissCategorySheet}
+          />
+          <AccountPicker
+            visible={deskAccountPicker.open}
+            accounts={pickerAccounts}
+            groups={pickerGroups}
+            accountId={deskAccountId}
+            onPick={handlePickDeskAccount}
+            onCreateAccount={handleDeskAccountPickerCreateAccount}
+            onDismiss={handleDismissDeskAccountPicker}
+          />
+        </GroundPanel>
+      </View>
     );
   }
 
@@ -709,6 +714,12 @@ export default function QuickAdd() {
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, backgroundColor: theme.ground },
-  /** The desk fallback's own heading — the navigation header's own face (`_layout.tsx`'s `headerTitleStyle`). */
+  /** The desk fallback's own header band — `ComposerHeader`'s shape, without a ✕ the form already carries as *Cancel*. */
+  deskBand: {
+    backgroundColor: theme.ground,
+    paddingHorizontal: space.x5,
+    paddingBottom: space.x3,
+  },
+  /** Its heading — the navigation header's own face (`_layout.tsx`'s `headerTitleStyle`). */
   deskTitle: { color: theme.text, ...text.ui("displayThree") },
 }));
