@@ -81,7 +81,7 @@ export const WithShared: Story = { args: { accounts: SHARED } };
 
 /** The toggle open — archived accounts, muted, with their own count. */
 export const WithArchived: Story = {
-  args: { accounts: POPULATED, archivedAccounts: ARCHIVED },
+  args: { accounts: POPULATED, archivedAccounts: ARCHIVED, archivedLoaded: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const toggle = await canvas.findByRole("button", { name: "Archived" });
@@ -94,6 +94,29 @@ export const WithArchived: Story = {
     // easing its `scale` back to 1 after release, on the `Animated.View`
     // that wraps it (`button.tsx`) — a screenshot taken mid-settle catches
     // the button a hair smaller than its resting size.
+    const wrapper = toggle.parentElement;
+    await waitFor(() => {
+      if (wrapper === null) throw new Error("button has no Animated.View wrapper");
+      const { transform } = getComputedStyle(wrapper);
+      if (transform !== "none" && transform !== "matrix(1, 0, 0, 1, 0, 0)") {
+        throw new Error("press-scale still settling");
+      }
+    });
+  },
+};
+
+/**
+ * The toggle open with nothing behind it. The rows load lazily, so a register
+ * cannot hide the heading in advance — it opens and says what it found.
+ */
+export const ArchivedEmpty: Story = {
+  args: { accounts: POPULATED, archivedAccounts: [], archivedLoaded: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: "Archived" });
+    await userEvent.click(toggle);
+    await canvas.findByText("No archived accounts.");
+    // The same `usePressScale` settle `WithArchived` waits out — see there.
     const wrapper = toggle.parentElement;
     await waitFor(() => {
       if (wrapper === null) throw new Error("button has no Animated.View wrapper");

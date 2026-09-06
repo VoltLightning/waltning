@@ -74,6 +74,19 @@ export default function NewAccount() {
     }
   }, [invalidMessage]);
 
+  /**
+   * §14.6's way out, from the form's own note: S18, opened on the currency
+   * that has no rate and on the day the form is already dated by. `today` is
+   * the same bare `YYYY-MM-DD` string `DateField`'s shortcut row uses — no
+   * `Date` arithmetic, and no second source for what day it is.
+   */
+  const handleSetRate = useCallback(
+    (currency: string) => {
+      router.push({ pathname: "/settings/rates", params: { quote: currency, date: today } });
+    },
+    [today],
+  );
+
   const handleSave = useCallback(
     (draft: CreateAccountDraft) => {
       const result = ledger.createAccount(draft);
@@ -114,6 +127,7 @@ export default function NewAccount() {
         groups={snapshot.groups}
         onCancel={handleCancel}
         onSave={handleSave}
+        onSetRate={handleSetRate}
       />
     </GroundPanel>
   );

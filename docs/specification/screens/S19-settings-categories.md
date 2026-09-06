@@ -26,6 +26,15 @@ Tree — 15 groups, 59 leaves — with usage counts per leaf and an archived tog
 A collision finder sits above it. Web shows the tree and the merge preview side
 by side; mobile pushes the preview to a sheet.
 
+**New category** sits on the ground below the tree, always — the taxonomy grows
+from this screen, and `create_category` was reachable only from S06's capture
+sheet, which means only while capturing something. It opens a sheet asking for
+a name, a kind, and a parent group. The parent is optional: R1 makes a node a
+group or a leaf, and an empty taxonomy has no group for the first one to sit
+under, so an unchosen parent creates a top-level category and
+`convert_leaf_group` turns it into a group afterwards. A sibling collision is
+refused by the same check S06 makes, on the name field.
+
 **`Uncategorized` sits apart, with its count as a trend and one action:**
 
 ```
@@ -43,6 +52,8 @@ and the count is visibly sitting there not shrinking.
 | Component | Notes |
 |---|---|
 | `SearchField` | Across leaves and groups |
+| `CreateCategorySheet` | Name, kind, optional parent — S19's own `create_category`, the same write S06's sheet makes |
+| `EmptyState(first-run)` | A taxonomy with nothing in it, offering *New category* |
 | `Tag` | Usage count · `archived` · `unused` |
 | `ComparisonTable` | Merge preview — how many transactions move, and from where |
 | `MatchWarning` | The collision finder, reused. Looks for **near**-duplicates (`Groceries` / `Grocery`), since exact ones are already refused by the uniqueness index |
@@ -53,7 +64,7 @@ and the count is visibly sitting there not shrinking.
 
 | Reads | Writes |
 |---|---|
-| `get_category_tree` with usage counts | `rename_category` · `merge_categories` · `archive_category` · `reparent_category` |
+| `get_category_tree` with usage counts | `create_category` · `rename_category` · `merge_categories` · `archive_category` · `reparent_category` |
 | Collision candidates | `convert_leaf_group` |
 | `Uncategorized` count, and its trend | opens `categorize_batch` via S03 — gated as any bulk write |
 
@@ -63,7 +74,7 @@ and the count is visibly sitting there not shrinking.
 |---|---|
 | Loading | Instant from cache |
 | Populated | Tree, archived hidden by default |
-| Empty | n/a — seeded |
+| Empty | `EmptyState(first-run)` — *No categories yet*, offering *New category*. The server-backed ledger seeds the taxonomy, and a phone-alone one seeds nothing: the screen was a search field and an archived toggle over a blank page |
 | Error | Rename collides with a sibling → refused by the uniqueness index, naming the existing sibling |
 | Offline | Read-only. Structural changes to a taxonomy that other queued writes reference are refused rather than queued. **Not modelled on the phone-alone ledger** (arc 1 has no server to be offline from); this rule applies once one exists |
 | Gated | Convert to group refused while transactions reference it; reparent refused across kinds; merge onto a group refused |

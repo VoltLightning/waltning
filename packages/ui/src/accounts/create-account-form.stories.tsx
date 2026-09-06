@@ -44,6 +44,20 @@ export const Collapsed: Story = {};
 export const Expanded: Story = { args: { defaultExpanded: true } };
 
 /**
+ * §14.6 — a currency the replica holds but cannot value a capture in. The
+ * account still opens; the note says what that costs, and offers S18.
+ */
+export const CurrencyWithoutRate: Story = {
+  args: {
+    currencies: [
+      { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
+      { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", capturable: true },
+    ],
+    onSetRate: noop,
+  },
+};
+
+/**
  * §6.7: shared money is never business. Picking *Shared* forces the toggle
  * off and disabled rather than merely warning — the input refines this too,
  * so the form should not offer the contradiction in the first place.

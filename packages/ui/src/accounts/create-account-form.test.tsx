@@ -274,3 +274,48 @@ it("renders nothing extra with no fieldErrors prop", () => {
   );
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+/**
+ * §14.6 — holding a currency and capturing in it are two capabilities. The
+ * account still opens; the form says what the missing rate costs and offers
+ * the one screen that fixes it.
+ */
+it("names a currency with no rate, and offers S18 with it", () => {
+  const onSetRate = vi.fn();
+  render(
+    <CreateAccountForm
+      currencies={[
+        { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
+        { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", capturable: true },
+      ]}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+      onSetRate={onSetRate}
+    />,
+  );
+
+  expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Set a BYN rate" }));
+  expect(onSetRate).toHaveBeenCalledWith("BYN");
+
+  // Choosing one that can be valued takes the note away — and Save was never
+  // blocked by it in the first place.
+  fireEvent.click(screen.getByRole("radio", { name: "PLN — Polish Złoty" }));
+  expect(screen.queryByText(/has no exchange rate yet/)).toBeNull();
+});
+
+/** A caller that never resolved the question is not claiming a currency is unusable. */
+it("says nothing about rates when no currency declares capturable", () => {
+  render(
+    <CreateAccountForm
+      currencies={currencies}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  expect(screen.queryByText(/has no exchange rate yet/)).toBeNull();
+});

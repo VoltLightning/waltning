@@ -26,7 +26,7 @@
  */
 
 import { isAccountingDate } from "@waltning/core/date";
-import type * as money from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 import {
   ACCOUNT_KIND,
   type AccountKind,
@@ -37,7 +37,8 @@ import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { AmountField } from "../fx/amount-field";
 import type { Messages } from "../i18n/en.ts";
-import { useT } from "../i18n/provider";
+import { decimalMark } from "../i18n/locales.ts";
+import { useLocale, useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
@@ -58,10 +59,16 @@ export type AccountEditorAccount = {
   name: string;
   currency: string;
   currencySymbol: string;
+  /**
+   * The currency's own scale. The stored figure is `numeric(20,8)`, so an
+   * opening balance of nothing reads `0.00000000` in the field unless it is
+   * presented at the scale the account is actually kept in.
+   */
+  decimals: number;
   kind: AccountKind;
   ownership: Ownership;
   isBusiness: boolean;
-  openingBalance: string;
+  openingBalance: money.Money;
   openingDate: string | null;
   memo: string;
   groupId: string | null;
@@ -121,13 +128,14 @@ export function AccountEditor({
   onCreateGroup,
 }: AccountEditorProps) {
   const t = useT();
+  const locale = useLocale();
   const styles = useStyles();
 
   const [name, setName] = useState(account.name);
   const [kind, setKind] = useState<AccountKind>(account.kind);
   const [ownership, setOwnership] = useState<Ownership>(account.ownership);
   const [isBusiness, setIsBusiness] = useState(account.isBusiness);
-  const [openingBalance, setOpeningBalance] = useState(account.openingBalance);
+  const [openingBalance, setOpeningBalance] = useState<string>(account.openingBalance);
   const [openingDateText, setOpeningDateText] = useState(account.openingDate ?? "");
   const [memo, setMemo] = useState(account.memo);
   const [groupId, setGroupId] = useState<string | null>(account.groupId);
@@ -138,8 +146,44 @@ export function AccountEditor({
   const dateInvalid = openingDateText !== "" && !isAccountingDate(openingDateText);
   // §6.7 — forced off rather than merely warned, matching `CreateAccountForm`.
   const businessValue = ownership === "shared" ? false : isBusiness;
-  const openingChanged =
-    openingBalance !== account.openingBalance || (openingDateText || null) !== account.openingDate;
+  /**
+   * **Presented at the currency's own scale, in the reader's own notation,
+   * saved exact.**
+   *
+   * `openingBalance` is stored as `numeric(20,8)` (`SPEC.md` §7.0), so an
+   * account opened at nothing arrives here as `"0.00000000"` — eight
+   * decimals of a scale no złoty account is ever kept in. `money.forDisplay`
+   * is the one figure formatter (`design-system/04` §4.1), so this field
+   * reads `0,00` beside every other figure on a Polish screen instead of the
+   * dot `toFixed` would give regardless of language — in the one component
+   * whose whole reason for existing is the comma. It also refuses a minus
+   * sign on a figure that rounds to nothing, which a bare `toFixed` does not.
+   *
+   * **Ungrouped, and only here.** `forDisplay` groups thousands, which is
+   * right for a figure that is read and wrong for one that is typed into: a
+   * field seeded `6 200.00` keeps that space through every later keystroke,
+   * so putting the cursor after `200` and typing `5` reads `6 2005.00` — a
+   * grouping that is now false for the number it holds, on a `decimal-pad`
+   * keyboard with no space key to repair it. The mark is the part that is a
+   * language property (§4.1); the grouping is a reading affordance, and this
+   * is not a place anyone reads.
+   *
+   * `parseAmount` accepts either mark and strips the separator either way, so
+   * what is typed back is the same money. The state above still holds
+   * whatever the ledger handed over, so an untouched editor produces an empty
+   * patch rather than a write of the presented string.
+   */
+  const openingBalanceShown = money
+    .forDisplay(account.openingBalance, account.decimals, decimalMark(locale))
+    .replace(/\s/g, "");
+  /**
+   * **Compared by value, not by spelling.** `"12.50"` typed back into a field
+   * showing `"12.50"` is the same money as the stored `"12.50000000"`, and a
+   * string comparison would call it a change and offer Save on a patch that
+   * writes nothing new.
+   */
+  const openingBalanceChanged = !money.dec(openingBalance).eq(account.openingBalance);
+  const openingChanged = openingBalanceChanged || (openingDateText || null) !== account.openingDate;
 
   /**
    * Only what changed — `update_account`'s executor refuses an empty patch,
@@ -154,7 +198,7 @@ export function AccountEditor({
     if (ownership !== account.ownership) next.ownership = ownership;
     if (memo !== account.memo) next.memo = memo;
     if (businessValue !== account.isBusiness) next.isBusiness = businessValue;
-    if (openingBalance !== account.openingBalance) next.openingBalance = openingBalance;
+    if (openingBalanceChanged) next.openingBalance = openingBalance;
     const nextOpeningDate = openingDateText === "" ? null : openingDateText;
     if (nextOpeningDate !== account.openingDate) next.openingDate = nextOpeningDate;
     return next;
@@ -165,6 +209,7 @@ export function AccountEditor({
     kind,
     memo,
     openingBalance,
+    openingBalanceChanged,
     openingDateText,
     ownership,
     trimmed,
@@ -213,6 +258,10 @@ export function AccountEditor({
   }, [dateInvalid, onSave, patch, patchEmpty, trimmed]);
 
   const nameError = fieldErrors?.byField["name"]?.[0];
+  // `update_account`'s scale refusal ("PLN holds 2 decimal places — this
+  // amount has more") is about this field and nothing else; under *Could not
+  // save* it read as a defect of the form.
+  const openingBalanceError = fieldErrors?.byField["openingBalance"]?.[0];
 
   return (
     <View style={styles.root}>
@@ -270,9 +319,10 @@ export function AccountEditor({
       />
       <AmountField
         label={t("accounts.openingBalance")}
-        initial={openingBalance}
+        initial={openingBalanceShown}
         onChange={handleOpeningBalanceChange}
         currency={account.currency}
+        {...(openingBalanceError === undefined ? {} : { error: openingBalanceError })}
       />
       <DateField
         label={t("accounts.openingDate")}
@@ -313,11 +363,16 @@ export function AccountEditor({
             />
           </View>
         ) : (
-          <Button
-            label={t("accounts.newGroup")}
-            onPress={handleStartCreatingGroup}
-            variant="ghost"
-          />
+          // Sized to its own label — the third of the same shape: a `Button`
+          // fills the column it sits in, so a ghost control painted a
+          // full-width filled band the moment it was hovered.
+          <View style={styles.inline}>
+            <Button
+              label={t("accounts.newGroup")}
+              onPress={handleStartCreatingGroup}
+              variant="ghost"
+            />
+          </View>
         )}
       </View>
 
@@ -352,6 +407,8 @@ const useStyles = makeStyles((theme) => ({
   formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   groupBlock: { gap: space.md },
+  /** A control that must not stretch to the ground's own width. */
+  inline: { alignSelf: "flex-start" },
   newGroupRow: { gap: space.md },
   openingConfirm: { color: theme.assertedText, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },

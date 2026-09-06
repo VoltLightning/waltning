@@ -91,6 +91,36 @@ export const en = {
   accounts: {
     currency: "Currency",
     create: "Create account…",
+    /**
+     * The register's own primary — S16 §6's own phrase, on the ground below
+     * the groups and in the empty state alike. `create` above is the
+     * picker's wording, where the action interrupts a capture and the
+     * ellipsis is honest about leaving it.
+     */
+    add: "Add account",
+    /**
+     * S16 §6's archived section, opened onto nothing. The heading stays —
+     * the rows load lazily, so "none" is only known once the toggle has run
+     * — and says what it found rather than leaving a bare title.
+     */
+    archivedNone: "No archived accounts.",
+    /**
+     * The same section, opened while a search is on. The sentence above is a
+     * claim about the ledger; this one is a claim about the query, and
+     * saying the first while three archived accounts sit behind a filter is
+     * a statement the reader has no way to check.
+     */
+    archivedNoMatches: "No archived accounts match.",
+    /**
+     * §14.6 — holding a currency and capturing in it are two capabilities,
+     * and only the second is gated. Shown under the currency grid once a
+     * currency with no rate is chosen: the account is still creatable, so
+     * the sentence states the consequence rather than refusing.
+     */
+    currencyNotCapturable:
+      "{{currency}} has no exchange rate yet. The account opens fine; transactions in it cannot be recorded until one is set.",
+    /** The way out of the sentence above — S18, opened on that currency and today's date. */
+    setRate: "Set a {{currency}} rate",
     moreDetails: "More details",
     fewerDetails: "Fewer details",
     kind: "Kind",
@@ -638,6 +668,26 @@ export const en = {
     chooseGroup: "Choose a group",
     /** S19's archived toggle. */
     showArchived: "Show archived",
+    /**
+     * S19's own create path — the same `create_category` write S06's sheet
+     * makes, offered from the screen that manages the taxonomy rather than
+     * only from the sheet that spends it. `new` above is the sheet's pinned
+     * footer, where the word sits beside a leaf grid and needs no noun.
+     */
+    newCategory: "New category",
+    /** The kind chooser on the create sheet — a leaf belongs to one side of the taxonomy. */
+    kind: "Kind",
+    /**
+     * The create sheet's parent picker, unchosen. R1 makes a node a group or
+     * a leaf, and an empty taxonomy has no group to create the first one
+     * under — so "none" is a real answer, not a missing one.
+     */
+    noParent: "None — a top-level category",
+    /** The same answer, where it is the only one: no group exists to choose. */
+    noGroupsYet: "No groups yet — this will be a top-level category.",
+    /** S19 §6 — a ledger whose taxonomy has not been seeded yet. */
+    emptyTitle: "No categories yet",
+    emptyBody: "Create the first one, and every capture can be filed under it.",
     /** `Tag` variants over a leaf — usage count, archived, unused. */
     archived: "Archived",
     unused: "Unused",

@@ -65,7 +65,19 @@ export default function Accounts() {
   const handleSelectAccount = useCallback((id: string) => {
     router.push(`/accounts/${id}`);
   }, []);
-  const handleLoadArchived = useCallback(() => ledger.loadArchived(), [ledger]);
+  /**
+   * S16 §6's lazy load, and the flag that says it happened. The register
+   * cannot tell an empty result from an unread one, and the difference is
+   * the difference between *no archived accounts* and *not looked yet* —
+   * `loadArchived()` is synchronous today (`create-phone-ledger.ts` sets a
+   * flag and refolds), so this commits in the same render; a loader that
+   * ever stops being synchronous sets it where it resolves instead.
+   */
+  const [archivedLoaded, setArchivedLoaded] = useState(false);
+  const handleLoadArchived = useCallback(() => {
+    ledger.loadArchived();
+    setArchivedLoaded(true);
+  }, [ledger]);
   const handleDismissToast = useCallback(() => setToast(null), []);
 
   return (
@@ -73,6 +85,7 @@ export default function Accounts() {
       <AccountRegister
         accounts={snapshot.accounts.map(toRegisterAccount)}
         archivedAccounts={snapshot.archivedAccounts.map(toRegisterAccount)}
+        archivedLoaded={archivedLoaded}
         onSelectAccount={handleSelectAccount}
         onLoadArchived={handleLoadArchived}
         onCreateAccount={handleCreateAccount}

@@ -15,6 +15,7 @@
 import type {
   ArchiveCategoryDraft,
   ConvertCategoryDraft,
+  CreateCategoryDraft,
   MergeCategoryDraft,
   MoveCategoryDraft,
   RenameCategoryDraft,
@@ -27,14 +28,17 @@ import { id as brandId } from "@waltning/core/id";
 import { CategoryActionsSheet } from "@waltning/ui/categories/category-actions-sheet";
 import { CategoryTree, type CategoryTreeNode } from "@waltning/ui/categories/category-tree";
 import { CollisionFinder } from "@waltning/ui/categories/collision-finder";
+import { CreateCategorySheet } from "@waltning/ui/categories/create-category-sheet";
 import { MergeCategorySheet } from "@waltning/ui/categories/merge-category-sheet";
 import { MoveCategorySheet } from "@waltning/ui/categories/move-category-sheet";
 import { RenameCategorySheet } from "@waltning/ui/categories/rename-category-sheet";
 import { useT } from "@waltning/ui/i18n/provider";
+import { Button } from "@waltning/ui/primitives/button";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { Tag } from "@waltning/ui/primitives/tag";
 import { Toggle } from "@waltning/ui/primitives/toggle";
 import { GroundPanel } from "@waltning/ui/shell/card";
+import { EmptyState } from "@waltning/ui/states/empty-state";
 import { Toast, UndoToast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -58,7 +62,9 @@ type MergeState = {
   initialWinnerId: string | null;
   error?: string;
 };
-type SheetState = ActionsState | RenameState | MoveState | MergeState | null;
+/** S19 §5's own `create_category` — nothing to open it *over*, so it carries no subject. */
+type CreateState = { type: "create"; error?: string };
+type SheetState = ActionsState | RenameState | MoveState | MergeState | CreateState | null;
 
 type ToastState = { message: string; undo?: () => void; token: number } | null;
 
@@ -300,6 +306,20 @@ export default function CategoriesScreen() {
     [sheet, ledger, nodes, t, messageOf, showToast],
   );
 
+  const handleOpenCreate = useCallback(() => setSheet({ type: "create" }), []);
+  const handleSaveCreate = useCallback(
+    (draft: CreateCategoryDraft) => {
+      const result = ledger.createCategory(draft);
+      if ("fieldErrors" in result) {
+        setSheet({ type: "create", error: messageOf(result.fieldErrors) });
+        return;
+      }
+      setSheet(null);
+      showToast({ message: t("categories.newCategory") });
+    },
+    [ledger, t, messageOf, showToast],
+  );
+
   const handleConfirmMerge = useCallback(
     (winnerId: string) => {
       if (sheet?.type !== "merge") return;
@@ -348,6 +368,15 @@ export default function CategoriesScreen() {
       .map((node) => ({ id: node.id, name: node.name }));
   }, [sheet, nodes]);
 
+  /** Every group, both kinds — the sheet narrows by whichever kind is chosen. */
+  const createGroups = useMemo(
+    () =>
+      nodes
+        .filter((node) => !node.isLeaf && !node.archived)
+        .map((node) => ({ id: node.id, name: node.name, kind: node.kind })),
+    [nodes],
+  );
+
   const mergeCandidates = useMemo(() => {
     if (sheet?.type !== "merge") return [];
     return nodes
@@ -371,32 +400,74 @@ export default function CategoriesScreen() {
     snapshot.revision,
   );
 
+  /**
+   * §6 said *"Empty — n/a, the taxonomy is seeded"*, and on a phone-alone
+   * ledger nothing seeds it: the screen was a search field and a toggle over
+   * a blank page, with no way to put anything under either.
+   */
+  const empty = nodes.length === 0;
+
   return (
     <GroundPanel>
-      <SearchField
-        value={search}
-        onChangeText={setSearch}
-        placeholder={t("common.search")}
-        onClear={handleClearSearch}
-        {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
-      />
-      <Toggle
-        label={t("categories.showArchived")}
-        value={showArchived}
-        onChange={setShowArchived}
-      />
-      <CollisionFinder candidates={snapshot.categoryCollisions} onReview={handleReviewCollision} />
-      {uncategorized === null ? null : (
-        <View style={styles.uncategorized}>
-          <Text style={styles.uncategorizedName}>{uncategorized.name}</Text>
-          <Tag variant="neutral">
-            {uncategorized.usageCount === 1
-              ? t("categories.usageOne", { count: uncategorized.usageCount })
-              : t("categories.usageMany", { count: uncategorized.usageCount })}
-          </Tag>
-        </View>
+      {empty ? (
+        <EmptyState
+          variant="first-run"
+          title={t("categories.emptyTitle")}
+          body={t("categories.emptyBody")}
+          primaryAction={{ label: t("categories.newCategory"), onPress: handleOpenCreate }}
+        />
+      ) : (
+        <>
+          <SearchField
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t("common.search")}
+            onClear={handleClearSearch}
+            {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
+          />
+          <Toggle
+            label={t("categories.showArchived")}
+            value={showArchived}
+            onChange={setShowArchived}
+          />
+          <CollisionFinder
+            candidates={snapshot.categoryCollisions}
+            onReview={handleReviewCollision}
+          />
+          {uncategorized === null ? null : (
+            <View style={styles.uncategorized}>
+              <Text style={styles.uncategorizedName}>{uncategorized.name}</Text>
+              <Tag variant="neutral">
+                {uncategorized.usageCount === 1
+                  ? t("categories.usageOne", { count: uncategorized.usageCount })
+                  : t("categories.usageMany", { count: uncategorized.usageCount })}
+              </Tag>
+            </View>
+          )}
+          <CategoryTree nodes={rows} onOpenActions={handleOpenActions} />
+
+          {/*
+            Persistent, on the ground under the tree — the taxonomy grows from
+            this screen, and an action reachable only from an empty state is
+            one that disappears the moment it is first used.
+          */}
+          <View style={styles.actions}>
+            <Button
+              label={t("categories.newCategory")}
+              onPress={handleOpenCreate}
+              variant="primary"
+            />
+          </View>
+        </>
       )}
-      <CategoryTree nodes={rows} onOpenActions={handleOpenActions} />
+
+      <CreateCategorySheet
+        visible={sheet?.type === "create"}
+        groups={createGroups}
+        {...(sheet?.type === "create" && sheet.error !== undefined ? { error: sheet.error } : {})}
+        onSave={handleSaveCreate}
+        onDismiss={handleDismissSheet}
+      />
 
       <CategoryActionsSheet
         visible={sheet?.type === "actions"}
@@ -456,4 +527,6 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-between",
   },
   uncategorizedName: { color: theme.text, ...text.ui("body", 600) },
+  /** Sized to its label — a primary that stretched the ground would read as a bar. */
+  actions: { alignSelf: "flex-start" },
 }));

@@ -31,7 +31,7 @@ it("shows the first-run empty state with nothing to hold", () => {
     />,
   );
   expect(screen.getByText("No accounts yet")).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Create account…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add account" }));
   expect(onCreateAccount).toHaveBeenCalledTimes(1);
 });
 
@@ -154,6 +154,7 @@ it("archived accounts stay hidden until the toggle opens, and the load fires onc
     <AccountRegister
       accounts={[account({})]}
       archivedAccounts={[account({ id: "old-1", name: "Old · PLN" })]}
+      archivedLoaded
       onSelectAccount={vi.fn()}
       onLoadArchived={onLoadArchived}
       onCreateAccount={vi.fn()}
@@ -167,6 +168,97 @@ it("archived accounts stay hidden until the toggle opens, and the load fires onc
   expect(onLoadArchived).toHaveBeenCalledTimes(1);
   expect(screen.getByText("Old · PLN")).toBeDefined();
   expect(screen.getByText("Archived (1)")).toBeDefined();
+});
+
+/**
+ * **A loader that never loads leaves the section closed.** An empty
+ * `archivedAccounts` means two things — nothing fetched, nothing there — and
+ * the register is only told which by `archivedLoaded`. Without it the
+ * section cannot open, because the alternative is a categorical sentence
+ * about a list nobody has read.
+ */
+it("stays collapsed while the load has not delivered", () => {
+  render(
+    <AccountRegister
+      accounts={[account({})]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByText("Archived"));
+
+  expect(screen.queryByText("No archived accounts.")).toBeNull();
+  expect(screen.queryByText("Archived (0)")).toBeNull();
+  expect(screen.getByRole("button", { name: "Archived" }).getAttribute("aria-expanded")).toBe(
+    "false",
+  );
+});
+
+/**
+ * Loaded, and there is nothing there. The heading takes its expanded string —
+ * the control read *Archived* while open once, at the moment tapping it
+ * would close the section — and announces that it is expanded.
+ */
+it("says so when the archived section opens onto nothing", () => {
+  render(
+    <AccountRegister
+      accounts={[account({})]}
+      archivedAccounts={[]}
+      archivedLoaded
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByText("Archived"));
+
+  expect(screen.getByText("No archived accounts.")).toBeDefined();
+  const heading = screen.getByRole("button", { name: "Archived (0)" });
+  expect(heading.getAttribute("aria-expanded")).toBe("true");
+});
+
+/**
+ * *No archived accounts* is a claim about the ledger. Made while two sit
+ * behind a search query it is simply false — the query is what excluded
+ * them, and that is a different sentence.
+ */
+it("says the query excluded them, not that there are none", () => {
+  render(
+    <AccountRegister
+      accounts={[account({})]}
+      archivedAccounts={[
+        account({ id: "old-1", name: "Old · PLN" }),
+        account({ id: "old-2", name: "Older · PLN" }),
+      ]}
+      archivedLoaded
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "zzz" } });
+  fireEvent.click(screen.getByText("Archived"));
+
+  expect(screen.getByText("No archived accounts match.")).toBeDefined();
+  expect(screen.queryByText("No archived accounts.")).toBeNull();
+});
+
+/** S16 §3 — the register's own primary, on the ground under every group. */
+it("offers Add account with accounts present, not only in the empty state", () => {
+  const onCreateAccount = vi.fn();
+  render(
+    <AccountRegister
+      accounts={[account({})]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={onCreateAccount}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+  expect(onCreateAccount).toHaveBeenCalledTimes(1);
 });
 
 it("tapping a row calls onSelectAccount with its id", () => {

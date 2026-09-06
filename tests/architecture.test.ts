@@ -704,9 +704,27 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     return resolve(only, source, seen);
   }
 
+  /**
+   * **One hop into `packages/ui`, because a screen composes names.** A
+   * `View` or a fragment around one thing renders that thing, and so does a
+   * component whose own render *is* one card — `<SettingsMenu/>` is a
+   * `<Card>` with another name on it, and a rule that matched the literal
+   * tag stopped seeing the very screen it was written about the day that
+   * name was given. `panelFrames` already performs the same hop for a
+   * component that is a `GroundPanel`; this is its other half.
+   *
+   * **Nothing about `seen` guards this hop**, and it does not need to:
+   * `uiCards()` is resolved to a fixed point before anyone looks anything up,
+   * and this returns that answer without recursing. A card component written
+   * in terms of itself resolves to nothing in the first round and never
+   * enters the map — the round counter there is the guard, and the sentence
+   * that used to claim one here described code that was never written.
+   */
   function resolve(child: Child, source: string, seen: ReadonlySet<string>): Child[] {
     if (child.name === "View" || child.name === FRAGMENT)
       return soleContents(innerOf(child), source, seen);
+    const found = uiCards().get(child.name);
+    if (found !== undefined) return [found.card];
     return [child];
   }
 
@@ -727,69 +745,22 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     );
   }
 
-  /**
-   * **The header is read where it is decided, and by its value.**
-   *
-   * A tab root has no navigation header because `app/_layout.tsx` says so:
-   * `<Stack.Screen name="(tabs)" options={{ headerShown: false }} />`. The
-   * `(tabs)` layout itself declares nothing about a header — it mounts
-   * `expo-router/ui`'s bare `<Tabs>` — so scanning *that* file for the word
-   * `headerShown` reads a file that never had a say. And scanning for the
-   * option *name* is not enough either: `headerShown: true` matches the name
-   * exactly as `false` does, so a name match alone spends nothing. The value
-   * is what the exemption rests on, and the value is what is checked.
-   *
-   * The tabs layout is still consulted, but only as the fallback for a root
-   * layout with no `<Stack.Screen name="(tabs)">` at all — the one shape in
-   * which `expo-router` would take the option from the group's own layout
-   * instead. With neither saying `false`, a `Stack` shows a header by
-   * default, so the exemption is not granted.
-   */
-  const HEADER_HIDDEN = /\bheaderShown\s*[:=]\s*\{?\s*false\b/;
-
-  /** The `<Stack.Screen name="(tabs)" …/>` element of a root layout, if it has one. */
-  function tabsScreenTag(rootLayout: string): string | undefined {
-    for (const m of stripComments(rootLayout).matchAll(/<Stack\.Screen\b[\s\S]*?\/>/g)) {
-      if (/\bname\s*=\s*["'`]\(tabs\)["'`]/.test(m[0])) return m[0];
-    }
-    return undefined;
-  }
-
-  /** Whether the tab group's screens render with no navigation header. */
-  function tabsHeaderHidden(rootLayout: string, tabsLayout: string): boolean {
-    const tag = tabsScreenTag(rootLayout);
-    if (tag !== undefined) return HEADER_HIDDEN.test(tag);
-    return HEADER_HIDDEN.test(stripComments(tabsLayout));
-  }
-
   const sourceOf = (file: string) => (existsSync(file) ? readFileSync(file, "utf8") : "");
 
   /**
    * The screens a tab route renders — read from `app/(tabs)/*.tsx`, not
-   * listed. The tab group renders with no navigation header, which
-   * `tabsHeaderHidden` above reads out of the option that decides it, so a
-   * tab root's own name is on the shell's band above it rather than in a
-   * navigation bar: `05-composites` §5.1 states the exception as a principle,
-   * *"a tab root's menu list is an untitled card"* — a list of routes is
-   * related rows, which is what earns a card at all — and this derives it
-   * rather than naming a file.
+   * listed, so a sixth tab is covered the day it is written.
    *
-   * **Both halves of the principle are read.** An app whose tab group is
-   * given a header yields no roots at all — every screen under it is judged
-   * like any other — and a menu card that grows something other than buttons
-   * stops matching `isMenuCard`. Either change loses the exemption the same
-   * day.
+   * **A tab root is not exempt from anything by being one.** It is one half
+   * of the menu-card exemption (`isMenuList` below is the other), and the
+   * half that says *which* screens the question is even asked about: a stack
+   * screen pushed from somewhere is never a menu, whatever it renders.
    */
   function tabRootScreens(): Set<string> {
     const roots = new Set<string>();
     for (const app of appRoots()) {
       const dir = join(app, "app", "(tabs)");
       if (!existsSync(dir)) continue;
-      const hidden = tabsHeaderHidden(
-        sourceOf(join(app, "app", "_layout.tsx")),
-        sourceOf(join(dir, "_layout.tsx")),
-      );
-      if (!hidden) continue;
       for (const name of readdirSync(dir)) {
         if (!/\.tsx$/.test(name) || name === "_layout.tsx") continue;
         for (const spec of importsOf(join(dir, name))) {
@@ -919,13 +890,430 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     return bodies;
   }
 
-  /** A menu list: every real child of the card is a `Button`. */
-  function isMenuCard(card: Child): boolean {
-    const children = topLevelChildren(innerOf(card));
-    const names = children.flatMap((child) =>
-      child.name === EXPRESSION ? namesIn(child.raw) : [child.name],
+  /** An optional type-parameter list — `<Id extends string>`, never nested. */
+  const GENERICS = "(?:<[^<>]*>)?";
+
+  /**
+   * Every `packages/ui` component that *is* a card, listed. Two components
+   * is not a fact worth asserting on its own; a component *leaving* this map
+   * is, because the rule then stops seeing every screen made of it — which
+   * is the failure C1 was.
+   */
+  const UI_CARD_COMPONENTS = ["SettingsMenu", "SharedGroup"];
+
+  /** The text inside the bracket that opens at `at`, brackets counted. */
+  function balanced(src: string, at: number): string | undefined {
+    const close = { "(": ")", "{": "}", "[": "]" }[src[at] ?? ""];
+    if (close === undefined) return undefined;
+    let depth = 0;
+    for (let i = at; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "{" || c === "[") depth++;
+      else if (c === ")" || c === "}" || c === "]") {
+        depth--;
+        if (depth === 0) return src.slice(at + 1, i);
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * A component's own body — **however it is declared.**
+   *
+   * `function Name(…) { … }`, `const Name = (…) => { … }` and
+   * `const Name = (…) => (…)` are three spellings of one thing, and a scanner
+   * that knew only the first decided an architecture rule by declaration
+   * style. `block` says which kind of body came back: a `{…}` body holds
+   * `return` statements, a concise one *is* the return.
+   */
+  function componentBody(
+    source: string,
+    component: string,
+  ): { body: string; block: boolean } | undefined {
+    const src = stripComments(source);
+    const declared = new RegExp(
+      `\\b(?:function\\s+${component}\\s*${GENERICS}\\s*\\(|const\\s+${component}\\b[^=]*=\\s*${GENERICS}\\s*\\()`,
+    ).exec(src);
+    if (!declared) return undefined;
+    // Past the parameter list, whichever form opened it.
+    const params = src.indexOf("(", declared.index + declared[0].length - 1);
+    const afterParams = params < 0 ? -1 : params + (balanced(src, params)?.length ?? 0) + 2;
+    if (afterParams < 0) return undefined;
+    const rest = src.slice(afterParams);
+    const opens = /^\s*(?::[^={]*)?(?:=>)?\s*[({]/.exec(rest);
+    if (!opens) return undefined;
+    const at = afterParams + opens[0].length - 1;
+    const body = balanced(src, at);
+    if (body === undefined) return undefined;
+    return { body, block: src[at] === "{" };
+  }
+
+  /**
+   * A brace that opens a **function's** body rather than a block's — an arrow
+   * callback, or a nested named `function`.
+   *
+   * The parameter list is matched with no nested parens (`[^()]*`), which is
+   * what keeps `if (x) {` out of it: reaching back to a `function` keyword
+   * would have to cross that function's own `()`, and it cannot. A named
+   * nested helper was the version this test caught — its `return` was read as
+   * the component's, and a component that renders one card fell out of the
+   * map for having a helper in it.
+   */
+  const OPENS_A_FUNCTION = /(?:=>|\bfunction\s*[\w$]*\s*\([^()]*\))\s*$/;
+
+  /**
+   * Every value a component can return, `null` included.
+   *
+   * **Braces opened by a function are skipped**, so a `return` inside a
+   * `useCallback`, a `.map` callback or a named helper is that function's,
+   * not the component's. Reading them all was how a scanner came to depend on
+   * whether a branch happened to wrap its JSX in parentheses.
+   */
+  function componentReturns(body: string): string[] {
+    const returns: string[] = [];
+    const stack: boolean[] = [];
+    for (let i = 0; i < body.length; i++) {
+      const c = body[i];
+      if (c === "{") stack.push(OPENS_A_FUNCTION.test(body.slice(Math.max(0, i - 120), i)));
+      else if (c === "}") stack.pop();
+      else if (body.startsWith("return", i) && !/[\w$]/.test(body[i - 1] ?? " ")) {
+        if (stack.some(Boolean)) continue;
+        const from = i + "return".length;
+        let depth = 0;
+        let end = body.length;
+        for (let j = from; j < body.length; j++) {
+          const d = body[j];
+          if (d === "(" || d === "{" || d === "[") depth++;
+          else if (d === ")" || d === "}" || d === "]") {
+            if (depth === 0) {
+              end = j;
+              break;
+            }
+            depth--;
+          } else if (
+            (d === ";" || d === "\n") &&
+            depth === 0 &&
+            body.slice(from, j).trim() !== ""
+          ) {
+            end = j;
+            break;
+          }
+        }
+        returns.push(body.slice(from, end).trim());
+        i = end;
+      }
+    }
+    return returns;
+  }
+
+  /**
+   * The `Card` a `packages/ui` component's own render *is*, if it is one.
+   *
+   * **Every branch that renders anything, and `null` does not count against
+   * it.** A component that renders one card and otherwise nothing —
+   * `SharedGroup`'s `if (accounts.length === 0) return null` — is a card; one
+   * that renders a card on one path and a `View` on another is not, because a
+   * screen made of it is not always one card. The old version read only
+   * `return (`, so the same early branch was disqualifying or invisible
+   * depending on whether it used parentheses.
+   */
+  function rootCard(source: string, component: string): Child | undefined {
+    const found = componentBody(source, component);
+    if (found === undefined) return undefined;
+    const returns = found.block ? componentReturns(found.body) : [found.body];
+    let card: Child | undefined;
+    for (const expression of returns) {
+      if (expression === "null" || expression === "undefined" || expression === "") continue;
+      const only = soleContents(`{${expression}}`, source);
+      if (only.length !== 1 || only[0]?.name !== "Card") return undefined;
+      card = only[0];
+    }
+    return card;
+  }
+
+  /** A `packages/ui` component, before anything has been resolved about it. */
+  type CardCandidate = { name: string; source: string };
+
+  /**
+   * A component that *is* a card, and the file it was written in — the
+   * second half matters because the rows it maps are declared there, and
+   * whether they navigate is the question the exemption turns on.
+   */
+  type CardComponent = { card: Child; source: string };
+
+  /** Every exported component in `packages/ui`, in no meaningful order. */
+  function cardCandidates(): CardCandidate[] {
+    const candidates: CardCandidate[] = [];
+    const files = sourceFiles(join(repoRoot, "packages/ui/src")).filter(
+      (f) => /\.tsx$/.test(f) && !isTest(f) && !/\.stories\.tsx$/.test(f),
     );
-    return names.length > 0 && names.every((name) => name === "Button");
+    for (const file of files) {
+      const source = readFileSync(file, "utf8");
+      const declarations = stripComments(source).matchAll(
+        new RegExp(
+          `\\bexport\\s+(?:function\\s+([A-Z][\\w]*)|const\\s+([A-Z][\\w]*)\\b[^=\\n]*=\\s*${GENERICS}\\s*\\()`,
+          "g",
+        ),
+      );
+      for (const m of declarations) {
+        const name = m[1] ?? m[2];
+        if (name !== undefined) candidates.push({ name, source });
+      }
+    }
+    return candidates;
+  }
+
+  /**
+   * The components that *are* a card, resolved to a **fixed point**.
+   *
+   * A card component may be written in terms of another one, so the answer
+   * for one depends on the answer for the next — and a single pass gave a
+   * different answer depending on which file `readdirSync` happened to list
+   * first. Renaming a file is not a behavioural change and must not flip an
+   * architecture rule, so the map is grown until it stops growing: every
+   * candidate is retried against everything learned in the previous round,
+   * and the result is the same whatever order the disk hands them over in.
+   */
+  function cardMapOf(candidates: readonly CardCandidate[]): Map<string, CardComponent> {
+    const cards = new Map<string, CardComponent>();
+    const previous = UI_CARDS;
+    UI_CARDS = cards;
+    try {
+      for (let round = 0; round <= candidates.length; round++) {
+        const before = cards.size;
+        for (const { name, source } of candidates) {
+          if (cards.has(name)) continue;
+          const card = rootCard(source, name);
+          if (card !== undefined) cards.set(name, { card, source });
+        }
+        if (cards.size === before) break;
+      }
+    } finally {
+      UI_CARDS = previous;
+    }
+    return cards;
+  }
+
+  /**
+   * The card components, built **whole** before anyone looks one up — the
+   * map `resolve` consults while it is being built is the previous round's,
+   * never a half-filled one.
+   */
+  let UI_CARDS: Map<string, CardComponent> | undefined;
+  let UI_CARDS_BUILT: Map<string, CardComponent> | undefined;
+
+  function uiCards(): Map<string, CardComponent> {
+    if (UI_CARDS !== undefined) return UI_CARDS;
+    UI_CARDS_BUILT ??= cardMapOf(cardCandidates());
+    return UI_CARDS_BUILT;
+  }
+
+  /** A `const NAME = …`, type annotation and all, up to the `;` that ends it. */
+  function declarationOf(source: string, name: string): string | undefined {
+    const src = stripComments(source);
+    const decl = new RegExp(`\\bconst\\s+${name}\\b\\s*(?::[^=]*)?=\\s*`).exec(src);
+    if (!decl) return undefined;
+    const from = decl.index + decl[0].length;
+    let depth = 0;
+    for (let i = from; i < src.length; i++) {
+      const c = src[i];
+      if (c === "(" || c === "{" || c === "[") depth++;
+      else if (c === ")" || c === "}" || c === "]") depth--;
+      else if (c === ";" && depth === 0) return src.slice(from, i);
+    }
+    return src.slice(from);
+  }
+
+  /**
+   * How many entries a named collection holds, followed to the array literal
+   * that declares them — through one `.map()` if the name is a projection of
+   * another list, which is how a screen turns its own table of destinations
+   * into the rows a menu renders.
+   *
+   * `undefined` where it cannot be answered. A count nobody can read is not
+   * a count of two, and the exemption below is granted on the answer, never
+   * on the absence of one.
+   */
+  function listLength(
+    source: string,
+    name: string,
+    seen: ReadonlySet<string> = new Set(),
+  ): number | undefined {
+    if (seen.has(name)) return undefined;
+    const decl = declarationOf(source, name);
+    if (decl === undefined) return undefined;
+    const open = decl.indexOf("[");
+    if (open >= 0 && !/[({[]/.test(decl.slice(0, open))) {
+      const inner = balanced(decl, open);
+      if (inner === undefined) return undefined;
+      return topLevelCommas(inner) + (inner.trim() === "" ? 0 : 1);
+    }
+    const mapped = /\b([A-Za-z_$][\w$]*)\s*\.map\s*\(/.exec(decl);
+    return mapped ? listLength(source, mapped[1] ?? "", new Set([...seen, name])) : undefined;
+  }
+
+  /** Commas at bracket depth zero — how many separators an array literal has. */
+  function topLevelCommas(inner: string): number {
+    let depth = 0;
+    let count = 0;
+    for (const c of inner) {
+      if (c === "(" || c === "{" || c === "[") depth++;
+      else if (c === ")" || c === "}" || c === "]") depth--;
+      else if (c === "," && depth === 0) count++;
+    }
+    return count;
+  }
+
+  /** The opening tag of the first `<Component …>` in `source`. */
+  function tagOf(source: string, component: string): string | undefined {
+    const src = stripComments(source);
+    const m = new RegExp(`<${component}\\b`).exec(src);
+    if (!m) return undefined;
+    const end = openTagEnd(src, m.index);
+    return end === undefined ? undefined : src.slice(m.index, end.end);
+  }
+
+  /**
+   * How many rows a card holds as a **menu list**, or `undefined` where it is
+   * not one.
+   *
+   * Two shapes are a menu: sibling rows written out, and one collection
+   * mapped to a row apiece. The second is the one a named component uses, and
+   * the collection is the *screen's* — the component maps a prop — so the
+   * count is resolved in the screen's own source, where the destinations are
+   * declared. Anything else in the card, or a title on it, is not a menu.
+   */
+  function menuRowCount(screenSource: string, card: Child): number | undefined {
+    const open = openTagEnd(card.raw, 0);
+    // Brace-aware, so an element inside a prop (`action={<Controls/>}`) does
+    // not end the tag early and hide a `title` written after it.
+    if (/\b(?:title|tag|action)\s*=/.test(card.raw.slice(0, open?.end ?? 0))) return undefined;
+
+    const children = topLevelChildren(unwrap(innerOf(card))).filter(isRealContent);
+    // Written out: every child is a control, and every one of them goes
+    // somewhere. Both halves — a row that has a handler and a row that
+    // navigates are not the same claim, and §5.1 grants the exemption to the
+    // second.
+    if (
+      children.length > 1 &&
+      children.every(
+        (child) =>
+          isControl(screenSource, child) && navigatesTo(screenSource, pressHandlerOf(child)),
+      )
+    )
+      return children.length;
+
+    const only = children.length === 1 ? children[0] : undefined;
+    if (only === undefined || only.name !== EXPRESSION) return undefined;
+    const mapped = /\b([A-Za-z_$][\w$]*)\s*\.map\s*\(/.exec(stripComments(only.raw));
+    if (!mapped) return undefined;
+
+    const component = [...uiCards()].find(([, c]) => c.card.raw === card.raw)?.[0];
+    const owner = component === undefined ? screenSource : (uiCards().get(component)?.source ?? "");
+    // **What the collection is mapped *to*.** Seven `Text`s in a card are
+    // seven rows and no destinations, and §5.1 grants the exemption to a
+    // list of destinations — so the row itself has to be a control,
+    // resolved in the file that writes it.
+    const row = topLevelChildren(only.raw.slice(1, -1)).find((child) => child.name !== EXPRESSION);
+    if (row === undefined || !isControl(owner, row)) return undefined;
+
+    if (component === undefined) {
+      // The card is the screen's own, so the row's handler is too.
+      if (!navigatesTo(screenSource, pressHandlerOf(row))) return undefined;
+      return listLength(screenSource, mapped[1] ?? "");
+    }
+
+    /**
+     * **A named menu's destinations are the screen's, not the menu's.** The
+     * component maps a prop to a row and calls another prop on press; both
+     * values are written at the call site, so that is where both questions
+     * are asked — does anything this screen hands the menu actually
+     * navigate, and how many entries did it hand over.
+     */
+    const tag = tagOf(screenSource, component) ?? "";
+    if (!propsOf(tag).some((prop) => navigatesTo(screenSource, propValue(tag, prop))))
+      return undefined;
+    const value = propValue(tag, mapped[1] ?? "");
+    return value === undefined ? undefined : listLength(screenSource, value.trim());
+  }
+
+  /** Every prop a tag names — `onSelect={…}` and friends, not string props. */
+  function propsOf(tag: string): string[] {
+    return [...tag.matchAll(/\b([a-zA-Z_$][\w$]*)\s*=\s*\{/g)].flatMap((m) => m[1] ?? []);
+  }
+
+  /** The `onPress` a control is given, as written. */
+  function pressHandlerOf(element: Child): string | undefined {
+    const open = openTagEnd(element.raw, 0);
+    return propValue(element.raw.slice(0, open?.end ?? 0), "onPress");
+  }
+
+  /**
+   * Whether an element is a control at all — a pressable, or a component
+   * whose own render is one. The *shape* half of "a row that navigates".
+   */
+  function isControl(source: string, element: Child): boolean {
+    if (element.name === "Button" || element.name === "Pressable")
+      return /\bonPress\s*=/.test(element.raw);
+    const found = componentBody(source, element.name);
+    if (found === undefined) return false;
+    return /<(?:Button|Pressable|IconButton)\b[^>]*\bonPress\s*=/.test(found.body);
+  }
+
+  /** A navigation, however this app spells one. */
+  const NAVIGATION = /\brouter\s*\.\s*(?:push|replace|navigate|dismissTo)\s*\(|<Link\b|\bhref\s*=/;
+
+  /**
+   * Whether a handler expression reaches a **destination**.
+   *
+   * This is the clause that keeps the exemption to the sentence
+   * `design-system/05` §5.1 actually grants: *a list of destinations, rows
+   * that navigate*. Checking for `onPress=` alone was checking punctuation —
+   * a tab root of two buttons calling local no-op handlers is one whole-screen
+   * card and no destinations at all, and it passed.
+   *
+   * **A named reference is the only shape it has to read.**
+   * `architecture/11` bans an inline function in a JSX prop and Biome refuses
+   * one, so every handler in this repository is a name — resolved to its own
+   * declaration in the same file, which is where a screen keeps them. The
+   * inline form is read as written anyway, for the day that ban is what
+   * changes.
+   */
+  function navigatesTo(source: string, expression: string | undefined): boolean {
+    if (expression === undefined) return false;
+    const written = stripComments(expression).trim();
+    if (written === "") return false;
+    const body = IDENTIFIER.test(written) ? declarationOf(source, written) : written;
+    return body !== undefined && NAVIGATION.test(body);
+  }
+
+  /** Views and fragments around a card's contents are not contents. */
+  function unwrap(jsx: string): string {
+    let inner = jsx;
+    for (let step = 0; step < 10; step++) {
+      const content = topLevelChildren(inner).filter(isRealContent);
+      const only = content.length === 1 ? content[0] : undefined;
+      if (!only || (only.name !== "View" && only.name !== FRAGMENT)) return inner;
+      inner = innerOf(only);
+    }
+    return inner;
+  }
+
+  /**
+   * **§5.1's one exemption, re-keyed to what actually earns it.** A card
+   * groups rows, and a tab root's menu is rows: four destinations, a label
+   * and a chevron each, is the thing a card is for. Two or more of them,
+   * because one row in a card is a single control, which is the shape the
+   * rule refuses everywhere else.
+   *
+   * It used to be keyed to the tab group having no navigation header, on the
+   * grounds that the card's title was then the only place the screen's name
+   * could render. The shell draws that name, so the premise was gone and the
+   * key with it — and a card that holds a title is now the shape that spends
+   * the exemption rather than the one that earns it.
+   */
+  function isMenuList(screenSource: string, card: Child): boolean {
+    return (menuRowCount(screenSource, card) ?? 0) >= 2;
   }
 
   it("no screen's GroundPanel wraps the whole screen in one Card", () => {
@@ -942,7 +1330,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
           (child) =>
             child.name === "Card" &&
             !isSkeletonCard(child) &&
-            !(tabRoots.has(file) && isMenuCard(child)),
+            !(tabRoots.has(file) && isMenuList(text, child)),
         );
         if (only) {
           offenders.push(rel(file));
@@ -1072,49 +1460,239 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   });
 
   /**
-   * **The exemption's premise, checked rather than asserted in prose.** The
-   * menu card is allowed only because a tab root has no navigation header to
-   * carry its name, and that is decided in exactly one place —
-   * `app/_layout.tsx`'s `<Stack.Screen name="(tabs)" options={…}>`. So the
-   * premise is read from that option's *value*, and broken once here in both
-   * ways it can end: the value flips to `true`, and the whole line goes away
-   * (leaving a `Stack`, which shows a header by default). Either way the app
-   * yields no tab roots at all — the exemption being spent.
+   * **The exemption, exercised against the screen that has it.** The old
+   * version of this test read a layout file's `headerShown` option and three
+   * synthetic strings, and by the end it protected a shape that existed
+   * nowhere: the premise was "a tab root has no header to carry its name",
+   * the shell grew one, and the rows stopped being `Button`s. So this reads
+   * the real `settings-screen.tsx`, resolves its panel to the card that is
+   * actually rendered — through `SettingsMenu`, which is where the card now
+   * lives — and breaks it once in each of the three ways the exemption can
+   * be lost.
    */
-  it("spends the settings-menu exemption when the tab group's header comes back", () => {
-    const layouts = appRoots()
-      .map((app) => join(app, "app", "_layout.tsx"))
-      .filter((file) => existsSync(file) && existsSync(join(dirname(file), "(tabs)")));
-    expect(layouts.length, "root layouts over a tab group found").toBeGreaterThan(0);
-    expect(tabRootScreens().size, "tab root screens found").toBeGreaterThan(0);
+  it("grants the menu exemption to the real Settings screen, and to nothing else it renders", () => {
+    const screen = appRoots()
+      .map((app) => join(app, "src", "settings-screen.tsx"))
+      .find((file) => existsSync(file));
+    expect(screen, "a Settings screen exists").toBeDefined();
+    if (screen === undefined) return;
+    const text = readFileSync(screen, "utf8");
+    expect(tabRootScreens().has(screen), "the Settings screen is a tab root").toBe(true);
 
-    for (const file of layouts) {
-      const source = readFileSync(file, "utf8");
-      const tag = tabsScreenTag(source);
-      expect(tag, `${rel(file)} decides the tab group's header`).toBeDefined();
-      expect(tabsHeaderHidden(source, ""), `${rel(file)} hides it`).toBe(true);
+    // The hop C1 is about: the panel's sole content is `<SettingsMenu/>`,
+    // and what it renders is a `Card`. Before `resolve` followed a named
+    // component into `packages/ui`, this was zero — the rule looking
+    // straight at its own subject and seeing nothing.
+    const cards = groundPanelBodies(text)
+      .flatMap((body) => soleContents(body, text))
+      .filter((child) => child.name === "Card");
+    expect(cards, "the Settings tab's panel resolves to exactly one Card").toHaveLength(1);
+    const card = cards[0];
+    if (card === undefined) return;
 
-      const flipped = source.replace(/(name="\(tabs\)"[\s\S]*?headerShown:\s*)false/, "$1true");
-      expect(flipped, "the flip rewrote the option").not.toBe(source);
-      expect(tabsHeaderHidden(flipped, "")).toBe(false);
+    // Four destinations, counted where they are declared — in the screen,
+    // not in the component that renders them.
+    expect(menuRowCount(text, card)).toBeGreaterThanOrEqual(2);
 
-      const deleted = source.replace(tag ?? "", "");
-      expect(deleted, "the deletion removed the line").not.toBe(source);
-      expect(tabsHeaderHidden(deleted, "")).toBe(false);
+    /**
+     * The rule's own expression, not a paraphrase of it — the same three
+     * clauses the offender loop above composes. Every break below is checked
+     * through this, so what is proven is that the *rule* fires, not that a
+     * predicate flipped.
+     */
+    const flagged = (source: string, candidate: Child) =>
+      candidate.name === "Card" && !isSkeletonCard(candidate) && !isMenuList(source, candidate);
+    expect(flagged(text, card), "the real screen keeps its exemption").toBe(false);
+
+    // 1 — one destination left. A card holding a single control is the shape
+    // the rule refuses everywhere else, and a menu of one is that.
+    const oneRow = text.replace(/(ORDER[^=]*=\s*\[)[\s\S]*?\]/, '$1"accounts"]');
+    expect(oneRow, "the cut rewrote the list").not.toBe(text);
+    expect(menuRowCount(oneRow, card)).toBe(1);
+    expect(flagged(oneRow, card), "a menu of one is an ordinary sole card").toBe(true);
+
+    // 2 — the card grows a title. The tab shell draws the screen's name, so
+    // a title here is that name twice, and the exemption is spent.
+    const menu = join(repoRoot, "packages/ui/src/settings/settings-menu.tsx");
+    const menuText = sourceOf(menu);
+    expect(menuText, "the menu component exists").not.toBe("");
+    const titled = rootCard(menuText.replace("<Card>", "<Card title={title}>"), "SettingsMenu");
+    expect(titled, "the mutation still renders a card").toBeDefined();
+    if (titled !== undefined) expect(flagged(text, titled)).toBe(true);
+
+    // 3 — the rows stop being a list. One written-out control in the card is
+    // not a menu, whatever the screen still passes it.
+    const single = rootCard(
+      menuText.replace(/<View style={styles.list}>[\s\S]*?<\/View>/, "<Button label={label} />"),
+      "SettingsMenu",
+    );
+    expect(single, "the mutation still renders a card").toBeDefined();
+    if (single !== undefined) expect(flagged(text, single)).toBe(true);
+
+    /**
+     * 4 — **rows that go nowhere.** §5.1 grants the exemption to *a list of
+     * destinations*, and a mapped collection is not one by being mapped: a
+     * tab root whose whole content is a card of seven `Text`s is the shape
+     * the rule was written to refuse, and an earlier version of this
+     * exemption let exactly that through — any of the five tab roots could
+     * have become a card of arbitrary mapped content with the suite green.
+     */
+    const textRows = `const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+      export default function CalendarStub() {
+        const t = useT();
+        return (
+          <GroundPanel>
+            <Card>
+              {DAYS.map((day) => (
+                <Text key={day}>{t("routes.calendar")}</Text>
+              ))}
+            </Card>
+          </GroundPanel>
+        );
+      }`;
+    const textCard = groundPanelBodies(textRows)
+      .flatMap((body) => soleContents(body, textRows))
+      .filter((child) => child.name === "Card")[0];
+    expect(textCard, "the probe renders one card").toBeDefined();
+    if (textCard !== undefined) {
+      expect(menuRowCount(textRows, textCard)).toBeUndefined();
+      expect(flagged(textRows, textCard), "seven words are not seven destinations").toBe(true);
     }
 
-    // Moved to the group's own layout — the one other place expo-router could
-    // take the option from, and only when the root layout names no screen.
-    expect(tabsHeaderHidden("<Stack />", "<Tabs screenOptions={{ headerShown: false }}>")).toBe(
-      true,
-    );
-    // A name match alone spends nothing: the option named, without the value.
-    expect(tabsHeaderHidden("<Stack />", "<Tabs screenOptions={{ headerShown }}>")).toBe(false);
+    /**
+     * 5 — **rows that press without going anywhere.** The exemption asked
+     * whether a row had an `onPress`, which is punctuation, not navigation:
+     * a tab root whose whole screen is one untitled card of two buttons
+     * calling local no-ops took it and passed. That is *"never a whole
+     * screen, never a single control"* with two controls in it, and no
+     * destinations at all.
+     */
+    const noop = `export default function ProbeScreen() {
+        const handleRefresh = () => {};
+        const handleSync = () => {};
+        return (
+          <GroundPanel>
+            <Card>
+              <Button label="Refresh" onPress={handleRefresh} />
+              <Button label="Sync now" onPress={handleSync} />
+            </Card>
+          </GroundPanel>
+        );
+      }`;
+    const noopCard = groundPanelBodies(noop)
+      .flatMap((body) => soleContents(body, noop))
+      .filter((child) => child.name === "Card")[0];
+    expect(noopCard, "the probe renders one card").toBeDefined();
+    if (noopCard !== undefined) {
+      expect(menuRowCount(noop, noopCard)).toBeUndefined();
+      expect(flagged(noop, noopCard), "two buttons that do nothing are not a menu").toBe(true);
+    }
+
+    // And the shape that *is* a list of destinations written out, rather
+    // than mapped, keeps it — the exemption's original wording, with the
+    // handlers that make it true.
+    const buttons = `export default function Menu() {
+        const handleAccounts = () => router.push("/accounts");
+        const handleCategories = () => router.push("/settings/categories");
+        return (
+          <GroundPanel>
+            <Card>
+              <Button label="Accounts" onPress={handleAccounts} />
+              <Button label="Categories" onPress={handleCategories} />
+            </Card>
+          </GroundPanel>
+        );
+      }`;
+    const buttonCard = groundPanelBodies(buttons)
+      .flatMap((body) => soleContents(body, buttons))
+      .filter((child) => child.name === "Card")[0];
+    expect(buttonCard).toBeDefined();
+    if (buttonCard !== undefined) expect(flagged(buttons, buttonCard)).toBe(false);
+  });
+
+  /**
+   * **The scanner's four blind spots, each broken once.** Every one of them
+   * decided the card rule's verdict on something that is not a behavioural
+   * difference — how a branch spelled its return, which keyword declared the
+   * component, what else the file exported, and what the file was called.
+   */
+  it("reads a card component whatever its shape, and whatever the disk's order", () => {
+    const card = (source: string, name: string) => rootCard(source, name)?.name;
+
+    // 1 — the spelling of a return. `SharedGroup`'s own `return null` is the
+    // real instance: a component that renders one card and otherwise nothing
+    // is a card, and the parentheses around the other branch are not a fact
+    // about it.
     expect(
-      tabsHeaderHidden('<Stack.Screen name="(tabs)" options={{ headerTitle: title }} />', ""),
-    ).toBe(false);
-    // A comment naming the option is prose, not a decision.
-    expect(tabsHeaderHidden("<Stack />", "// headerShown: false here\n<Tabs>")).toBe(false);
+      card(`export function A() { if (x) return null; return (<Card><Row /></Card>); }`, "A"),
+    ).toBe("Card");
+    expect(card(`export function A() { return <Card><Row /></Card>; }`, "A")).toBe("Card");
+    expect(
+      card(
+        `export function A() { if (x) { return (<View />); } return (<Card><Row /></Card>); }`,
+        "A",
+      ),
+      "a branch that renders something else is not a card",
+    ).toBeUndefined();
+    expect(
+      card(`export function A() { if (x) return <View />; return <Card><Row /></Card>; }`, "A"),
+      "and the same branch without parentheses is still not a card",
+    ).toBeUndefined();
+    // A `return` inside a callback is the callback's, not the component's.
+    expect(
+      card(
+        `export function A() { const f = useCallback(() => { return 1; }, []); return (<Card><Row /></Card>); }`,
+        "A",
+      ),
+    ).toBe("Card");
+    // The one this test exists to keep honest: the repo's own early-return card.
+    expect(
+      rootCard(
+        sourceOf(join(repoRoot, "packages/ui/src/accounts/shared-group.tsx")),
+        "SharedGroup",
+      ),
+    ).toBeDefined();
+
+    // 2 — the declaration keyword.
+    expect(card(`export const A = () => (<Card><Row /></Card>);`, "A")).toBe("Card");
+    expect(card(`export const A = () => { return (<Card><Row /></Card>); };`, "A")).toBe("Card");
+
+    // 3 — what else the file exports. The body ends at its own brace, not at
+    // the next `function` keyword, so a second component's return is not read
+    // as one of the first's.
+    expect(
+      card(
+        `export function A() { return (<Card><Row /></Card>); }
+         export function B() { return (<Text />); }`,
+        "A",
+      ),
+    ).toBe("Card");
+
+    // A named helper nested in a component is its own scope: its `return` is
+    // not the component's, and reading it as one dropped a component that
+    // renders exactly one card out of the map entirely — which is C1's own
+    // failure arriving through a different door.
+    expect(
+      card(
+        `export function A() { function helper() { return "not-a-card"; } return (<Card><Row /></Card>); }`,
+        "A",
+      ),
+    ).toBe("Card");
+
+    // 4 — the order the disk lists the files in. A card component written in
+    // terms of another one resolves the same either way; renaming a file is
+    // not a behavioural change.
+    const inner = {
+      name: "Inner",
+      source: `export function Inner() { return (<Card><Row /></Card>); }`,
+    };
+    const outer = { name: "Outer", source: `export function Outer() { return (<Inner />); }` };
+    expect([...cardMapOf([inner, outer]).keys()].sort()).toEqual(["Inner", "Outer"]);
+    expect([...cardMapOf([outer, inner]).keys()].sort()).toEqual(["Inner", "Outer"]);
+
+    // 5 — and the map is asserted whole, so a component dropping out of it
+    // is a red test rather than a rule quietly seeing less.
+    expect([...uiCards().keys()].sort()).toEqual(UI_CARD_COMPONENTS);
   });
 });
 
@@ -1439,8 +2017,12 @@ describe("every src/ is organised by domain, not by layer", () => {
       "transport",
     ],
     // Foundation (`primitives`, `fx`, `theme`, `i18n`) plus one folder per
-    // domain. The full target is thirteen; eight exist because eight have
-    // components — E5 adds `counterparties` (`SettleSheet`, S14). `i18n` is
+    // domain that has components — a folder arrives with the first component
+    // that belongs to it and never before, which is why this list is shorter
+    // than the screen catalogue. `counterparties` arrived with `SettleSheet`
+    // (S14); `settings` with `SettingsMenu`, the tab root's own list of
+    // destinations, which is furniture for a surface rather than a concept
+    // in the ledger and files under the surface it belongs to. `i18n` is
     // foundation by the same property as `fx`: a language is not a domain,
     // and every domain needs one.
     "packages/ui/src": [
@@ -1452,6 +2034,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "i18n",
       "primitives",
       "review",
+      "settings",
       "shell",
       "states",
       "theme",

@@ -15,9 +15,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneClearingAccount,
+  type PhoneCurrency,
   type PhoneNetWorth,
   type PhoneRecentTransaction,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
@@ -189,6 +191,11 @@ type FakeControllerOptions = {
    * `recent: []` describes.
    */
   transactionCount?: number;
+  /**
+   * What the replica holds. One capturable pivot by default — the ordinary
+   * ledger; a caller testing §14.6's gate hands a currency with no rate.
+   */
+  currencies?: readonly PhoneCurrency[];
 };
 
 function fakeController(options: FakeControllerOptions = {}) {
@@ -200,6 +207,16 @@ function fakeController(options: FakeControllerOptions = {}) {
     unsettled: unsettledOverride,
     recent: recentRows = [],
     transactionCount = 0,
+    currencies = [
+      {
+        code: currencyCode("PLN"),
+        name: "Polish Złoty",
+        symbol: "zł",
+        decimals: 2,
+        capturable: true,
+        isPivot: true,
+      },
+    ],
   } = options;
   let accounts = [...initialAccounts];
   let categoryTree: FakeCategory[] = [...initialCategories];
@@ -210,18 +227,23 @@ function fakeController(options: FakeControllerOptions = {}) {
   };
   const port = basePort({
     listAccounts: () => accounts,
-    listCurrencies: () => [
-      {
-        code: currencyCode("PLN"),
-        name: "Polish Złoty",
-        symbol: "zł",
-        decimals: 2,
-        capturable: true,
-        isPivot: true,
-      },
-    ],
+    listCurrencies: () => currencies,
     listRecent: () => recentRows,
     listFullCategoryTree: () => categoryTree,
+    // The picker's own read — archived-excluded, version-free — and the one
+    // `createCategory` folds its sibling-collision check over.
+    listCategoryTree: () =>
+      categoryTree
+        .filter((node) => !node.archived)
+        .map(({ id: nodeId, parentId, name, kind, isLeaf, sort, depth }) => ({
+          id: nodeId,
+          parentId,
+          name,
+          kind,
+          isLeaf,
+          sort,
+          depth,
+        })),
     listCategoryUsage: () => categoryUsage,
     listNetWorth: () => netWorthOf(accounts),
     readPeriodSpend: () => periodSpendRows,
@@ -255,6 +277,28 @@ function fakeController(options: FakeControllerOptions = {}) {
           memo: "",
           version: 1,
         },
+      ];
+    },
+    createCategory: (input) => {
+      // **Prepended, not appended.** `insertCategory` never sets `sort`, so a
+      // freshly created row can come back *before* the seeded taxonomy —
+      // which is exactly what broke code identifying `Uncategorized` as
+      // "the first root leaf". The fixture reproduces the hostile order so
+      // the screens are tested against it rather than against a convenience.
+      categoryTree = [
+        {
+          id: input.id,
+          parentId: input.parentId,
+          name: input.name,
+          kind: input.kind,
+          isLeaf: true,
+          archived: false,
+          sort: 0,
+          depth: input.parentId === null ? 0 : 1,
+          version: 1,
+          externalId: null,
+        },
+        ...categoryTree,
       ];
     },
     renameCategory: (input) => bumpCategory(input.id, { name: input.name }),
@@ -789,6 +833,39 @@ describe("NewAccount", () => {
     expect(screen.getByText(/PLN/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
   });
+
+  /**
+   * §14.6 — the account still opens in a currency with no rate; what it
+   * cannot do is carry transactions. The way out is S18, on that currency
+   * and on the day the form is already dated by.
+   */
+  it("names a currency with no rate and opens S18 on it", () => {
+    useLocalSearchParams.mockReturnValue({ returnTo: "today" });
+    withLedger(
+      <NewAccount />,
+      fakeController({
+        currencies: [
+          {
+            code: currencyCode("BYN"),
+            name: "Belarusian Ruble",
+            symbol: "Br",
+            decimals: 2,
+            capturable: false,
+            isPivot: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Set a BYN rate" }));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/settings/rates",
+      // The device's own calendar (§7.0a) — the same read the form's
+      // "Opening date" shortcut row makes, not the fixture's frozen clock.
+      params: { quote: "BYN", date: deviceRuntime().capture().date },
+    });
+  });
 });
 
 describe("Settings", () => {
@@ -827,6 +904,74 @@ describe("CategoriesScreen", () => {
     expect(screen.getByText("12 transactions")).toBeDefined();
     // Uncategorized is shown apart — not a second time inside the tree body.
     expect(screen.getAllByText("Uncategorized")).toHaveLength(1);
+  });
+
+  /**
+   * §6 said *"Empty — n/a, the taxonomy is seeded"*, and a phone-alone ledger
+   * seeds nothing: this was a search field and a toggle over a blank page.
+   */
+  it("offers an empty state and a way to create the first category", () => {
+    withLedger(<CategoriesScreen />, fakeController());
+
+    expect(screen.getByText("No categories yet")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Food" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText("Food")).toBeDefined();
+    expect(screen.queryByText("No categories yet")).toBeNull();
+  });
+
+  /**
+   * **`Uncategorized` is matched by what it *is*, never by where it sits.**
+   * A category created at top level is a root leaf too, and it can sort
+   * ahead of the seeded row — so "the first root leaf" names whichever was
+   * written last. The match here is the seed's own tag first
+   * (`externalId === "seed:uncategorized"`), and failing that the whole
+   * seeded shape *including the name*, which a new leaf cannot collide with:
+   * `create_category` refuses a duplicate name under the same parent and
+   * kind.
+   */
+  it("keeps Uncategorized apart when a new root leaf sorts ahead of it", () => {
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
+
+    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Snacks" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    // The new leaf is in the tree, with its own actions row.
+    expect(screen.getByRole("button", { name: "Snacks actions" })).toBeDefined();
+    // `Uncategorized` is still the row shown apart, with its own count — and
+    // still shown exactly once, not once apart and once inside the tree.
+    expect(screen.getAllByText("Uncategorized")).toHaveLength(1);
+    expect(screen.getByText("12 transactions")).toBeDefined();
+    // The row shown apart carries no actions button; the tree's rows do. A
+    // `Snacks` that had taken the Uncategorized slot would have neither.
+    expect(screen.queryByRole("button", { name: "Uncategorized actions" })).toBeNull();
+  });
+
+  /** The action stays on the ground once the tree exists — it is how the tree grows. */
+  it("creates a leaf under a chosen group, from the persistent action", () => {
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
+
+    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bakery" } });
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Food" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText("Bakery")).toBeDefined();
+  });
+
+  /** The sibling collision the controller refuses, on the field it is about. */
+  it("shows a create refusal inline, without closing the sheet", () => {
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
+
+    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Uncategorized" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText('"Uncategorized" already exists here')).toBeDefined();
   });
 
   it("filters the tree by search, keeping a matched leaf's group visible", () => {
