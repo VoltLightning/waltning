@@ -276,7 +276,13 @@ export function CategorySheet({
           ))}
         </ScrollView>
       )}
-      <ScrollView style={styles.gridScroll}>
+      {/*
+        `nestedScrollEnabled` on the inner list, never on the sheet body:
+        Android hands the gesture to the outer scrollable otherwise, and this
+        grid is bounded (`gridScroll`'s own `maxHeight`) exactly so it scrolls
+        within a sheet that also can.
+      */}
+      <ScrollView style={styles.gridScroll} nestedScrollEnabled>
         {visibleLeaves.length === 0 ? (
           emptyTree ? (
             createAction === undefined ? (

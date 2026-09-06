@@ -204,7 +204,14 @@ export function AccountPicker({
           placeholder={t("accounts.search", { count: live.length })}
         />
       ) : null}
-      <ScrollView style={styles.scroll}>
+      {/*
+        `nestedScrollEnabled` belongs on *this* list, not on the sheet body
+        around it: on Android a scrollable nested inside another scrollable
+        never receives the gesture without it, and the grid below is bounded
+        (`styles.scroll`'s own `maxHeight`) precisely so it scrolls inside a
+        sheet that also can.
+      */}
+      <ScrollView style={styles.scroll} nestedScrollEnabled>
         {recent === undefined ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("accounts.recent")}</Text>
