@@ -707,8 +707,6 @@ export const en = {
      * a person reading the sentence is looking for.
      */
     createFirst: "Create a category",
-    /** The create row's answer where no group exists to choose — S19's own sheet states it identically. */
-    noGroupsYet: "No groups yet — this will be a top-level category.",
     /** The pinned footer's create affordance. */
     new: "New",
     /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */

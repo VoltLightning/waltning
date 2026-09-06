@@ -353,7 +353,6 @@ export const pl: Messages = {
     pickerEmptyReadOnlyBody:
       "Nie ma jeszcze czego wybierać — transakcja może zostać bez kategorii.",
     createFirst: "Utwórz kategorię",
-    noGroupsYet: "Brak grup — to będzie kategoria najwyższego poziomu.",
     new: "Nowa",
     create: "Utwórz „{{query}}”",
     use: "Użyj",

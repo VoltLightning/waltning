@@ -235,7 +235,7 @@ function fakeController(options: FakeControllerOptions = {}) {
     listCategoryTree: () =>
       categoryTree
         .filter((node) => !node.archived)
-        .map(({ id: nodeId, parentId, name, kind, isLeaf, sort, depth }) => ({
+        .map(({ id: nodeId, parentId, name, kind, isLeaf, sort, depth, externalId }) => ({
           id: nodeId,
           parentId,
           name,
@@ -243,6 +243,7 @@ function fakeController(options: FakeControllerOptions = {}) {
           isLeaf,
           sort,
           depth,
+          externalId,
         })),
     listCategoryUsage: () => categoryUsage,
     listNetWorth: () => netWorthOf(accounts),
