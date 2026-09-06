@@ -81,7 +81,7 @@ export const WithShared: Story = { args: { accounts: SHARED } };
 
 /** The toggle open — archived accounts, muted, with their own count. */
 export const WithArchived: Story = {
-  args: { accounts: POPULATED, archivedAccounts: ARCHIVED },
+  args: { accounts: POPULATED, archivedAccounts: ARCHIVED, archivedLoaded: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const toggle = await canvas.findByRole("button", { name: "Archived" });
@@ -110,7 +110,7 @@ export const WithArchived: Story = {
  * cannot hide the heading in advance — it opens and says what it found.
  */
 export const ArchivedEmpty: Story = {
-  args: { accounts: POPULATED, archivedAccounts: [] },
+  args: { accounts: POPULATED, archivedAccounts: [], archivedLoaded: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const toggle = await canvas.findByRole("button", { name: "Archived" });

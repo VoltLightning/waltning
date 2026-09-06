@@ -27,18 +27,21 @@
 import * as money from "@waltning/core/money";
 import type { AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Amount } from "../fx/amount";
 import type { Messages } from "../i18n/en.ts";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { IconButton } from "../primitives/icon-button";
+import { useInteraction } from "../primitives/interaction.ts";
+import { usePressScale } from "../primitives/press-scale.ts";
 import { SearchField } from "../primitives/search-field";
 import { Card } from "../shell/card";
 import { EmptyState } from "../states/empty-state";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { radius, space } from "../tokens.ts";
+import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { BalanceRow } from "./balance-row";
 import { SharedGroup, type SharedGroupAccount } from "./shared-group";
 import { subtotalsOf } from "./subtotals.ts";
@@ -61,6 +64,17 @@ export type AccountRegisterProps = {
   accounts: readonly AccountRegisterAccount[];
   /** Empty until the toggle has been opened at least once (lazy load, S16 §6). */
   archivedAccounts: readonly AccountRegisterAccount[];
+  /**
+   * Whether `onLoadArchived` has delivered — **not** whether it was called.
+   *
+   * An empty `archivedAccounts` means two different things: nothing has been
+   * fetched, and nothing exists. Only the caller can tell them apart, and
+   * without the distinction the section says *you have no archived accounts*
+   * about a list it has not read. Absent means not loaded, so a caller that
+   * says nothing never draws that claim; the section stays collapsed
+   * instead, which is the honest picture of "not fetched".
+   */
+  archivedLoaded?: boolean;
   onSelectAccount: (id: string) => void;
   /** Fired whenever the archived section opens — the screen's `loadArchived()`. */
   onLoadArchived: () => void;
@@ -111,6 +125,7 @@ function matches(row: AccountRegisterAccount, query: string): boolean {
 export function AccountRegister({
   accounts,
   archivedAccounts,
+  archivedLoaded = false,
   onSelectAccount,
   onLoadArchived,
   onCreateAccount,
@@ -217,7 +232,7 @@ export function AccountRegister({
       </View>
 
       <ArchivedToggle
-        open={archivedOpen}
+        open={archivedOpen && archivedLoaded}
         accounts={filteredArchived}
         total={archivedAccounts.length}
         onToggle={handleToggleArchived}
@@ -334,25 +349,50 @@ type ArchivedToggleProps = {
 function ArchivedToggle({ open, accounts, total, onToggle }: ArchivedToggleProps) {
   const t = useT();
   const styles = useStyles();
-  // A count of nothing is not information, and the line below already states
-  // the fact — "Archived (0)" beside "No archived accounts." is one thing
-  // said twice.
-  const label =
-    open && accounts.length > 0
-      ? t("accounts.archivedCount", { count: accounts.length })
-      : t("accounts.archivedShow");
+  const { focused, handlers } = useInteraction();
+  const press = usePressScale();
+  /**
+   * **The label follows the control's state.** `archivedShow` is the
+   * collapsed string and `archivedCount` the expanded one — `en.ts` says so
+   * — and falling back to the collapsed one while open had the control read
+   * *Archived* at the moment tapping it would close the section. The count
+   * is the state; the line below is the content, so `Archived (0)` above
+   * *No archived accounts* is not one fact twice.
+   */
+  const label = open
+    ? t("accounts.archivedCount", { count: accounts.length })
+    : t("accounts.archivedShow");
 
   return (
     <View style={styles.archived}>
       {/*
-        Sized to its own label. A `Button` fills the column it sits in, so
-        the section heading painted a full-width filled band the moment it
-        was hovered or focused — a bar across the register for a control
-        that opens one section.
+        A disclosure heading, not a `Button` — the same `Pressable` shape
+        `LinesCard`'s own rows use, and for the same reason: it carries
+        `accessibilityState={{ expanded }}`, without which a reader is told
+        nothing about whether the section under it is open. It is also what
+        stops a full-width filled band appearing under the pointer for a
+        control that opens one section.
       */}
-      <View style={styles.inline}>
-        <Button label={label} onPress={onToggle} variant="ghost" />
-      </View>
+      <Animated.View style={[press.style, styles.inline]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={{ expanded: open }}
+          // The ARIA prop too: react-native-web drops `expanded` from a
+          // `Pressable`'s `accessibilityState`, the same gap `chip.tsx` and
+          // `radio.tsx` record for `checked`. Without it the state exists on
+          // the phone and vanishes on the web, which is the surface a
+          // screen-reader user is most likely to meet this section on.
+          aria-expanded={open}
+          onPress={onToggle}
+          onPressIn={press.onPressIn}
+          onPressOut={press.onPressOut}
+          {...handlers}
+          style={[styles.archivedHeading, focused ? styles.focused : null]}
+        >
+          <Text style={styles.archivedLabel}>{label}</Text>
+        </Pressable>
+      </Animated.View>
       {/*
         Distinguished by sitting under the "Archived (n)" heading — text, not
         tint (P5). `opacity` was tried here and failed `axe`'s own
@@ -361,13 +401,12 @@ function ArchivedToggle({ open, accounts, total, onToggle }: ArchivedToggleProps
         still want to read is not one.
       */}
       {/*
-        Opened onto nothing says so, and says *which* nothing. The rows load
-        lazily (S16 §6), so whether any exist is not known until the toggle
-        has run once — the heading cannot be hidden in advance, and a heading
-        over blank space is what these two lines replace. Which of them draws
-        is the whole point: "you have no archived accounts" is a categorical
-        claim about the ledger, and making it while three sit behind a search
-        query is a lie the reader has no way to check.
+        Opened onto nothing says so, and says *which* nothing. This renders
+        only once the rows have actually been loaded (`archivedLoaded`), so
+        neither sentence is ever a claim about a list nobody has read. Which
+        of the two draws is the rest of it: "you have no archived accounts"
+        is categorical, and making it while three sit behind a search query
+        is a lie the reader has no way to check.
       */}
       {open && accounts.length === 0 ? (
         <Text style={styles.noMatches}>
@@ -395,6 +434,14 @@ const useStyles = makeStyles((theme) => ({
   noMatches: { color: theme.textMuted, ...text.ui("body") },
   subtotals: { flexDirection: "row", flexWrap: "wrap", gap: space.lg },
   archived: { gap: space.md, marginTop: space.xl },
+  archivedHeading: { minHeight: touchTarget.min, justifyContent: "center" },
+  archivedLabel: { color: theme.text, ...text.ui("body", 600) },
+  focused: {
+    outlineWidth: focus.width,
+    outlineStyle: "solid",
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
   /** A control that must not stretch to the ground's own width. */
   inline: { alignSelf: "flex-start" },
   rowWithAction: { flexDirection: "row", alignItems: "center", gap: space.sm },

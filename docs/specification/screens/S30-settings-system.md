@@ -45,12 +45,13 @@ order:
 to look at their money rather than to configure something. The rest are
 reference data, in the order they depend on each other.
 
-The screen draws no title of its own: the tab shell carries the name above the
-ground, and a titled card under it would be the same word twice. Rows, not
-buttons — `design-system/05` §5.1's card of grouped rows is exactly a list of
-destinations, and three stacked buttons in a titled card was a card pretending
-to be a screen. A row is added here when the screen it leads to exists, never
-before: a menu entry to a placeholder is a promise the app cannot keep.
+The screen draws no title of its own: a title on the only card on a screen
+names the screen rather than the card, and the screen's name belongs to the
+header above the ground. Rows, not buttons — `design-system/05` §5.1's card of
+grouped rows is exactly a list of destinations, and three stacked buttons in a
+titled card was a card pretending to be a screen. A row is added here when the
+screen it leads to exists, never before: a menu entry to a placeholder is a
+promise the app cannot keep.
 
 ## 3. Layout
 

@@ -6,11 +6,11 @@
  * reachable only by typing a URL or by finishing an account creation that
  * started somewhere else.
  *
- * **No title, and no card built here.** `(tabs)/_layout.tsx` hides the
- * navigation header for every tab root and the tab shell draws the screen's
- * name above the ground, so a heading in this file would be the same word
- * twice. The card of rows is `SettingsMenu`'s (`packages/ui/src/settings`) —
- * a screen composes, it does not render.
+ * **No title, and no card built here.** A title on the only card on a screen
+ * names the screen rather than the card, and the screen's name belongs to the
+ * header above the ground — not to a heading drawn inside the panel. The card
+ * of rows is `SettingsMenu`'s (`packages/ui/src/settings`) — a screen
+ * composes, it does not render.
  */
 
 import { useT } from "@waltning/ui/i18n/provider";

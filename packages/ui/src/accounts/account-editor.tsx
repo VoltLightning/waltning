@@ -159,16 +159,23 @@ export function AccountEditor({
    * whose whole reason for existing is the comma. It also refuses a minus
    * sign on a figure that rounds to nothing, which a bare `toFixed` does not.
    *
-   * `parseAmount` accepts either mark and strips the group separator, so what
-   * is typed back is the same money. The state above still holds whatever the
-   * ledger handed over, so an untouched editor produces an empty patch rather
-   * than a write of the presented string.
+   * **Ungrouped, and only here.** `forDisplay` groups thousands, which is
+   * right for a figure that is read and wrong for one that is typed into: a
+   * field seeded `6 200.00` keeps that space through every later keystroke,
+   * so putting the cursor after `200` and typing `5` reads `6 2005.00` — a
+   * grouping that is now false for the number it holds, on a `decimal-pad`
+   * keyboard with no space key to repair it. The mark is the part that is a
+   * language property (§4.1); the grouping is a reading affordance, and this
+   * is not a place anyone reads.
+   *
+   * `parseAmount` accepts either mark and strips the separator either way, so
+   * what is typed back is the same money. The state above still holds
+   * whatever the ledger handed over, so an untouched editor produces an empty
+   * patch rather than a write of the presented string.
    */
-  const openingBalanceShown = money.forDisplay(
-    account.openingBalance,
-    account.decimals,
-    decimalMark(locale),
-  );
+  const openingBalanceShown = money
+    .forDisplay(account.openingBalance, account.decimals, decimalMark(locale))
+    .replace(/\s/g, "");
   /**
    * **Compared by value, not by spelling.** `"12.50"` typed back into a field
    * showing `"12.50"` is the same money as the stored `"12.50000000"`, and a

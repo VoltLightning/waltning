@@ -280,8 +280,12 @@ function fakeController(options: FakeControllerOptions = {}) {
       ];
     },
     createCategory: (input) => {
+      // **Prepended, not appended.** `insertCategory` never sets `sort`, so a
+      // freshly created row can come back *before* the seeded taxonomy —
+      // which is exactly what broke code identifying `Uncategorized` as
+      // "the first root leaf". The fixture reproduces the hostile order so
+      // the screens are tested against it rather than against a convenience.
       categoryTree = [
-        ...categoryTree,
         {
           id: input.id,
           parentId: input.parentId,
@@ -294,6 +298,7 @@ function fakeController(options: FakeControllerOptions = {}) {
           version: 1,
           externalId: null,
         },
+        ...categoryTree,
       ];
     },
     renameCategory: (input) => bumpCategory(input.id, { name: input.name }),
@@ -915,6 +920,34 @@ describe("CategoriesScreen", () => {
 
     expect(screen.getByText("Food")).toBeDefined();
     expect(screen.queryByText("No categories yet")).toBeNull();
+  });
+
+  /**
+   * **`Uncategorized` is matched by what it *is*, never by where it sits.**
+   * A category created at top level is a root leaf too, and it can sort
+   * ahead of the seeded row — so "the first root leaf" names whichever was
+   * written last. The match here is the seed's own tag first
+   * (`externalId === "seed:uncategorized"`), and failing that the whole
+   * seeded shape *including the name*, which a new leaf cannot collide with:
+   * `create_category` refuses a duplicate name under the same parent and
+   * kind.
+   */
+  it("keeps Uncategorized apart when a new root leaf sorts ahead of it", () => {
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
+
+    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Snacks" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    // The new leaf is in the tree, with its own actions row.
+    expect(screen.getByRole("button", { name: "Snacks actions" })).toBeDefined();
+    // `Uncategorized` is still the row shown apart, with its own count — and
+    // still shown exactly once, not once apart and once inside the tree.
+    expect(screen.getAllByText("Uncategorized")).toHaveLength(1);
+    expect(screen.getByText("12 transactions")).toBeDefined();
+    // The row shown apart carries no actions button; the tree's rows do. A
+    // `Snacks` that had taken the Uncategorized slot would have neither.
+    expect(screen.queryByRole("button", { name: "Uncategorized actions" })).toBeNull();
   });
 
   /** The action stays on the ground once the tree exists — it is how the tree grows. */

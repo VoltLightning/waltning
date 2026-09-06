@@ -213,12 +213,18 @@ it("shows the opening balance at the currency's own scale, in the reader's own m
   expect(openingBalanceIn("en", { openingBalance: money.toMoney("12.5") })).toBe("12.50");
 });
 
-it("groups thousands and gives a zero-decimal currency no fraction", () => {
-  // U+00A0, the one group separator every language shares (§4.1).
-  expect(openingBalanceIn("pl", { openingBalance: money.toMoney("6200") })).toBe("6\u00a0200,00");
+/**
+ * The mark follows the language; the grouping does not follow the figure into
+ * an editable field. A seeded `6 200,00` keeps that space through every later
+ * keystroke — type a digit inside it and the grouping is false for the number
+ * it now holds, with no space key on a `decimal-pad` to repair it.
+ */
+it("does not group a figure that is about to be typed into", () => {
+  expect(openingBalanceIn("pl", { openingBalance: money.toMoney("6200") })).toBe("6200,00");
   expect(
     openingBalanceIn("en", { currency: "JPY", decimals: 0, openingBalance: money.toMoney("1200") }),
-  ).toBe("1\u00a0200");
+  ).toBe("1200");
+  expect(openingBalanceIn("pl", { openingBalance: money.toMoney("-4000") })).toBe("-4000,00");
 });
 
 /** §4.1's own rule — a minus sign on a figure the reader sees as nothing is a lie. */

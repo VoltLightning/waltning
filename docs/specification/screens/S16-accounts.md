@@ -62,15 +62,23 @@ because a shared account being overdrawn is a real fact.
 Each group — kind or `SharedGroup` — is a card of grouped rows: the group name
 is the card's title, its per-currency subtotals the card's one header figure,
 and the balance rows the body. The search field above the groups stays on the
-ground, and so does **Add account**, the register's own primary, below the
-last group. It is offered whether or not the register is empty: an action that
-lives only in the empty state disappears the moment the first account exists,
-which leaves no way to open the second.
+ground, and so does **Add account**, the register's own primary, below the last
+group and **above** the archived section. It is offered whether or not the
+register is empty: an action that lives only in the empty state disappears the
+moment the first account exists, which leaves no way to open the second. Above
+the archived section, because a primary sitting under an opened archived list
+reads as belonging to it.
 
-The archived toggle sits under the groups and loads its rows lazily (§6), so
-whether any exist is not known until it has been opened once. Opened onto
-nothing it says so — *No archived accounts* — rather than leaving a heading
-standing over blank space.
+The archived toggle sits last and loads its rows lazily (§6), so whether any
+exist is not known until it has been opened once — and an empty result and an
+unread one are the same empty list. **It opens only once the rows have
+actually arrived**; until then the collapsed heading is all there is, because
+a section that opened first would have to say something about a list nobody
+had read. Opened, the heading carries the count it found, and opened onto
+nothing it says which nothing: *No archived accounts* when the ledger holds
+none, *No archived accounts match* when the search above is what emptied the
+section. The distinction is not decoration — the first is a claim about the
+ledger, and made over a filtered list it is false.
 
 A clearing account with a non-zero balance carries an amber marker — that is the
 invariant this screen exists to surface (§6.4).
@@ -154,7 +162,11 @@ why §8.4's gate exists and why editing one is an audited write with a confirm.
 The figure is stored at `numeric(20,8)` and **read at the currency's own
 scale, through the same formatter every other figure uses** (`design-system/04`
 §4.1): the editor shows `0,00` for an account opened at nothing — `0.00` for a
-reader whose language marks decimals with a dot — never `0.00000000`. What is
+reader whose language marks decimals with a dot — never `0.00000000`. Ungrouped,
+and that is the one place the formatter is trimmed: the mark is a language
+property, the thousands separator is a reading affordance, and a field that is
+about to be typed into keeps whatever grouping it was seeded with long after
+the number has changed under it. What is
 saved stays exact: the field is compared to the stored figure by value, so
 presenting it is not editing it and an editor nobody typed in produces no
 patch at all.
