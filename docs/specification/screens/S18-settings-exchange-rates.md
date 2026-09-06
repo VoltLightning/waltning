@@ -29,7 +29,7 @@ Both entries above are links, so both are parameters rather than screen state:
 | Parameter | Effect | Absent, or not resolvable |
 |---|---|---|
 | `quote` | Preselects the pair, when the code names one of this pivot's quote currencies | The first quote currency, as with no link — **and the editor does not open**, whatever `date` says |
-| `date` | Opens `RateEditor` on that single day, and **widens the range to contain it**, so the fix is one field away and the write it makes is visible behind the sheet | The editor stays closed |
+| `date` | Opens `RateEditor` on that single day, and **moves the range onto it** (the same 30-day span), so the fix is one field away and the write it makes is visible behind the sheet | The editor stays closed |
 
 **The editor opens on a pair the link named, or not at all** — which includes a
 `date` with no `quote` beside it, and a repeated `quote`, since an array names
@@ -42,12 +42,17 @@ already open on it*: two taps there write a manual rate for a pair nobody asked
 about, and the only thing between the reader and that write is a heading they
 arrived at by tapping a link naming a different currency.
 
-**The range follows the link, by widening rather than replacing.** Success is
+**The range follows the link, by moving rather than stretching.** Success is
 silent — the sheet closes and nothing else says so — so a write on a day the
 table does not show is a write that looks like nothing happened, and a
-backdated link lands outside the default 30-day window every time. The window
-grows to contain the linked day and keeps the recent days a person came in
-with.
+backdated link lands outside the default window every time. The window opens on
+the linked day instead, at **the same 30-day span** it opens with unlinked.
+
+A span, never a stretch back to today, because a parameter that sets the size
+of what gets drawn is a parameter with no bound: `?date=1000-01-01` would ask
+the table to fill 375,001 calendar days, and would hand *Clear manual* a
+millennium to delete across. A bound, not a refusal — the link still lands on
+its own day, and a preset is one tap back toward the present.
 
 `date` is checked against the **calendar**, not only the `YYYY-MM-DD` shape — a
 parameter is whatever a link put in the address bar, and `2026-02-31` has the
@@ -139,6 +144,7 @@ stay true and stay drawn.
 | `RateTable` | **Virtualized, and it is the page**: one row per calendar day, with this screen's own controls as its list header and its coverage card as its list footer. Gaps render as **explicit empty rows**, never as absence |
 | `RateEditor` | Single date **or a range**; states what it will overwrite before writing. Hosted in a `BottomSheet`, whose header carries the pair-and-range heading |
 | `BottomSheet` | The editor's host — a tapped row opens the editor where the tap was |
+| `ConfirmDialog` | *Clear manual* — the one irreversible act on this screen. Names the pair, the day count and the dates before deleting |
 | `SyncLog` | `succeeded` · `failed` · **`rate_limited`** — the third is distinct, because retrying a rate limit is futile |
 | `FxStatusChip` | Fresh · syncing · stale · failed |
 
@@ -167,6 +173,14 @@ Drag across dates in the table to select a range, which feeds `RateEditor`. A
 range write is one action producing many `manual` rows — the mechanism that
 makes RUB recoverable in one entry rather than 1,600.
 
+***Clear manual* names what it will delete, and then says what it did.** It is
+the one irreversible act on this screen: every hand-set rate across the loaded
+range, gone, with no undo. That range is not always one the reader chose — a
+deep link seeds it — so the confirmation states the **pair, the day count and
+the dates**, built from the same value the write receives, and the result is a
+toast carrying the count. Nothing found is its own sentence rather than a count
+of zero, which reads as a failure.
+
 ## 8. Rules this screen must obey
 
 - **§7.6** — `manual` outranks every synced source for that pair and date, is
@@ -182,6 +196,10 @@ makes RUB recoverable in one entry rather than 1,600.
   by an older build still replays.
 - The rate **table** never holds an invented figure. Estimates live on the
   transaction (§7.6).
+- **Nothing deletes a range nobody chose.** *Clear manual* confirms first,
+  naming the pair and the day count, because a link can set that range and the
+  action's whole visible effect is otherwise rows in a scrolled-past part of
+  the table quietly changing source.
 - **A write refused inside the editor is stated inside the editor.** The sheet
   is a modal; a toast on the page behind it is a refusal nobody can read. The
   refusal clears the moment the rate that caused it is retyped.

@@ -1166,6 +1166,29 @@ export const en = {
     rangeTo: "To",
     setRange: "Set a range",
     clearManual: "Clear manual",
+    /**
+     * *Clear manual* removes every hand-set rate across whatever range is
+     * loaded — and after a deep link that range is one the link chose, not the
+     * reader. So the confirmation names the pair, the dates and how many days
+     * it spans, in the count forms every day-count on this screen uses.
+     */
+    clearManualConfirmTitle: "Clear the rates you set by hand?",
+    clearManualConfirmBody_one:
+      "This removes every rate set by hand for {{quote}} per {{base}} on {{count}} day, {{from}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmBody_few:
+      "This removes every rate set by hand for {{quote}} per {{base}} across {{count}} days, {{from}} … {{to}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmBody_many:
+      "This removes every rate set by hand for {{quote}} per {{base}} across {{count}} days, {{from}} … {{to}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmBody_other:
+      "This removes every rate set by hand for {{quote}} per {{base}} across {{count}} days, {{from}} … {{to}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmSubmit: "Yes, clear them",
+    /** Said out loud: the visible effect is otherwise rows in a scrolled-past part of the table. */
+    clearManualCleared_one: "Cleared {{count}} manual rate.",
+    clearManualCleared_few: "Cleared {{count}} manual rates.",
+    clearManualCleared_many: "Cleared {{count}} manual rates.",
+    clearManualCleared_other: "Cleared {{count}} manual rates.",
+    /** Its own sentence — "Cleared 0 manual rates" reads as a failure. */
+    clearManualNone: "No rates set by hand in that range.",
     rateWriteFailed: "That didn't save.",
     rerateNotOffered: "Re-rate from the desk once a server exists.",
   },

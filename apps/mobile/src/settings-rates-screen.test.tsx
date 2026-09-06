@@ -13,7 +13,7 @@ import {
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
-import { accountingDate, addDays } from "@waltning/core/date";
+import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, unitsPerPivot } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
@@ -157,14 +157,16 @@ it("a ?date= that is not a calendar day behaves as an unparameterised visit", ()
  * device's day happens to be. Broken once by seeding `custom` unconditionally:
  * *From* reads the 30-day start and the row is not on the page.
  */
-it("R2 M1 — a backdated link widens the range to contain its own day", () => {
+it("R2 M1 — a backdated link moves the range onto its own day", () => {
   const today = deviceRuntime().capture().date;
   const linked = addDays(today, -365);
   withLedger({}, { quote: "PLN", date: linked });
 
   expect(screen.getByLabelText("From")).toHaveProperty("value", linked);
-  // Widened, not replaced — today is still its end.
-  expect(screen.getByLabelText("To")).toHaveProperty("value", today);
+  // R4 L2 — the window *moves*, it does not stretch back to today: 30 days,
+  // the same span the screen opens with, so the link cannot set the size of
+  // what gets drawn or of what *Clear manual* would delete.
+  expect(screen.getByLabelText("To")).toHaveProperty("value", addDays(linked, 29));
   // And the linked day is a row on the page behind the sheet, so the write
   // about to happen lands somewhere visible. (`FlatList` under jsdom mounts
   // only its first ten rows, and the widened range opens on this one. The
@@ -310,12 +312,79 @@ it("a range holding manual rows asks for a second confirmation before overwritin
   );
 });
 
-it("clear manual removes the manual rows in the current range", () => {
+/**
+ * R4 L3 — *Clear manual* deletes every hand-set rate across whatever range is
+ * loaded, and after a deep link that range is one the link chose. It names the
+ * pair, the day count and the dates first, and says what it did after.
+ *
+ * Broken once by calling the port straight from the button: the first
+ * assertion fails, because the write lands before anyone agrees to it.
+ */
+it("clear manual names the pair and the day count before it deletes anything", () => {
+  const clearManualRate = vi.fn(() => ({ deleted: 3 }));
+  withLedger({ clearManualRate });
+
+  fireEvent.click(screen.getByText("Clear manual"));
+  expect(clearManualRate).not.toHaveBeenCalled();
+  expect(
+    screen.getByText(
+      /removes every rate set by hand for PLN per USD across 30 days, .* … .*\. Rates from a source are left alone/,
+    ),
+  ).toBeDefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Yes, clear them" }));
+  expect(clearManualRate).toHaveBeenCalledWith(
+    expect.objectContaining({ base: "USD", quote: "PLN" }),
+    expect.anything(),
+  );
+  expect(screen.getByText("Cleared 3 manual rates.")).toBeDefined();
+});
+
+it("clear manual, declined, deletes nothing", () => {
   const clearManualRate = vi.fn(() => ({ deleted: 3 }));
   withLedger({ clearManualRate });
   fireEvent.click(screen.getByText("Clear manual"));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(clearManualRate).not.toHaveBeenCalled();
+});
+
+/**
+ * A destructive act whose whole visible effect is rows in a scrolled-past part
+ * of the table changing source is indistinguishable from a press that did
+ * nothing. Zero gets its own sentence rather than "Cleared 0".
+ */
+it("clear manual says what it did, and says nothing found in its own words", () => {
+  const clearManualRate = vi.fn(() => ({ deleted: 0 }));
+  withLedger({ clearManualRate });
+  fireEvent.click(screen.getByText("Clear manual"));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, clear them" }));
+  expect(screen.getByText("No rates set by hand in that range.")).toBeDefined();
+  expect(screen.queryByText(/Cleared 0/)).toBeNull();
+});
+
+/**
+ * R4 L3, the case that made it 310 days — a link seeds the range, so the
+ * confirmation is the only place the reader learns what they are about to
+ * delete. With the window clamped (R4 L2) that is 30 days rather than the span
+ * back to today, and the sentence says which 30.
+ */
+it("R4 L3 — a deep-linked range states its own day count before deleting", () => {
+  const today = deviceRuntime().capture().date;
+  const linked = addDays(today, -365);
+  const clearManualRate = vi.fn(() => ({ deleted: 7 }));
+  withLedger({ clearManualRate }, { quote: "PLN", date: linked });
+
+  fireEvent.click(screen.getByText("Clear manual"));
+  expect(
+    screen.getByText(
+      new RegExp(`PLN per USD across 30 days, ${linked} … ${addDays(linked, 29)}\\.`),
+    ),
+  ).toBeDefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Yes, clear them" }));
+  // Exactly the range the sentence named — never a wider one.
   expect(clearManualRate).toHaveBeenCalledWith(
-    expect.objectContaining({ base: "USD", quote: "PLN" }),
+    expect.objectContaining({ from: linked, to: addDays(linked, 29) }),
     expect.anything(),
   );
 });
@@ -394,6 +463,13 @@ it("R1 M1 — a multi-year range still draws and still clears", () => {
 
   expect(screen.getByText("Date")).toBeDefined();
   fireEvent.click(screen.getByText("Clear manual"));
+  // A range this person typed themselves — the confirmation states its size
+  // and then it clears, in one operation rather than six 366-day ones.
+  const typedDays = daysBetween(accountingDate("2020-01-01"), accountingDate("2026-09-03")) + 1;
+  expect(
+    screen.getByText(new RegExp(`across ${typedDays} days, 2020-01-01 … 2026-09-03`)),
+  ).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Yes, clear them" }));
   expect(clearManualRate).toHaveBeenCalledWith(
     expect.objectContaining({ from: "2020-01-01", to: "2026-09-03" }),
     expect.anything(),
@@ -483,4 +559,29 @@ it("R1 M3 — the rate field is the first control in the sheet", () => {
   // on the sheet having to be touched first.
   fireEvent.change(field, { target: { value: "3.7556" } });
   expect(submit).toHaveProperty("disabled", false);
+});
+
+/**
+ * R4 L2 — the extreme. `?date=1000-01-01` used to make the window stretch from
+ * the linked day to today: 375,001 calendar days, which `RateTable` fills in
+ * one synchronous loop before a `FlatList` gets to window anything — ~287 ms
+ * of frozen main thread measured on a laptop, and a *Clear manual* scoped to a
+ * millennium.
+ *
+ * A bound, not a refusal: the link still lands on its own day, with the same
+ * 30-day window the screen opens with.
+ *
+ * Broken once by restoring `to: today`: *To* reads today and the span is six
+ * figures.
+ */
+it("R4 L2 — a link a thousand years back still opens on its day, in a 30-day window", () => {
+  withLedger({}, { quote: "PLN", date: "1000-01-01" });
+
+  expect(screen.getByLabelText("From")).toHaveProperty("value", "1000-01-01");
+  expect(screen.getByLabelText("To")).toHaveProperty("value", "1000-01-30");
+  // The editor is open on the linked day itself, not on the window's end.
+  expect(screen.getByText("Set PLN per USD, 1000-01-01 … 1000-01-01")).toBeDefined();
+  // And the table drew that window: its first and last rows, and nothing past.
+  expect(screen.getByText("1000-01-01")).toBeDefined();
+  expect(screen.queryByText("1000-01-31")).toBeNull();
 });

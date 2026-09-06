@@ -614,6 +614,24 @@ export const pl: Messages = {
     rangeTo: "Do",
     setRange: "Ustaw zakres",
     clearManual: "Wyczyść ręczne",
+    clearManualConfirmTitle: "Usunąć kursy ustawione ręcznie?",
+    // 1 → dzień, 2–4 → dni, 5+ (and 0) → dni; the `_one` form names a single
+    // day, so it states one date rather than a range.
+    clearManualConfirmBody_one:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dnia, {{from}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmBody_few:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dni, {{from}} … {{to}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmBody_many:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dni, {{from}} … {{to}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmBody_other:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dni, {{from}} … {{to}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmSubmit: "Tak, wyczyść",
+    // 1 → kurs, 2–4 → kursy, 5+ (and 0) → kursów.
+    clearManualCleared_one: "Usunięto {{count}} ręczny kurs.",
+    clearManualCleared_few: "Usunięto {{count}} ręczne kursy.",
+    clearManualCleared_many: "Usunięto {{count}} ręcznych kursów.",
+    clearManualCleared_other: "Usunięto {{count}} ręcznych kursów.",
+    clearManualNone: "W tym zakresie nie ma ręcznie ustawionych kursów.",
     rateWriteFailed: "Nie udało się zapisać.",
     rerateNotOffered: "Przelicz ponownie z pulpitu, gdy powstanie serwer.",
   },

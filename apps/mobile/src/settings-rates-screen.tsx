@@ -65,6 +65,7 @@ import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import {
   type AccountingDate,
   addDays,
+  daysBetween,
   isAccountingDate,
   isRealCalendarDate,
 } from "@waltning/core/date";
@@ -79,6 +80,7 @@ import { Select, type SelectOption } from "@waltning/ui/primitives/select";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -87,6 +89,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
 type RangePreset = "30d" | "90d" | "year" | "custom";
+
+/** The span of the table's opening window, linked or not — one number, both cases. */
+const WINDOW_DAYS = 30;
 type Range = { from: AccountingDate; to: AccountingDate };
 
 /**
@@ -102,7 +107,7 @@ function presetRange(
   preset: RangePreset,
   custom: { from: string; to: string },
 ): Range | null {
-  if (preset === "30d") return { from: addDays(today, -29), to: today };
+  if (preset === "30d") return { from: addDays(today, -(WINDOW_DAYS - 1)), to: today };
   if (preset === "90d") return { from: addDays(today, -89), to: today };
   if (preset === "year") return { from: addDays(today, -364), to: today };
   if (!isAccountingDate(custom.from) || !isAccountingDate(custom.to)) return null;
@@ -112,29 +117,34 @@ function presetRange(
 }
 
 /**
- * The default 30-day window, widened to contain a linked day.
+ * The window the table opens on: the last `WINDOW_DAYS`, or the same span
+ * moved onto a linked day that falls before it.
  *
- * **Widened rather than replaced.** A write on a day the table does not show
- * is a success that looks like nothing happened — the sheet closes, success is
- * silent, and the row that changed is off-range. Replacing the window with the
- * single linked day would fix that and throw away the recent history the
- * screen is otherwise about.
+ * **A linked day is always in the window.** A write on a day the table does
+ * not show is a success that looks like nothing happened — the sheet closes,
+ * success is silent, and the row that changed is off-range.
  *
- * The end never actually moves today: a linked day is checked against `today`
- * before it reaches here. It is still written as a widen on both sides,
- * because a one-sided widen would silently stop containing the link the day
- * that guard changes.
+ * **And the window is a fixed span, never a stretch back to the link.**
+ * Stretching is what an unbounded parameter looks like: `?date=1000-01-01`
+ * asks the table to fill 375,001 calendar days, which is a third of a second
+ * of frozen main thread on a laptop before a `FlatList` gets to window
+ * anything — the fill is the cost, not the mount. It also hands *Clear
+ * manual* a thousand years to delete across. So the window *moves* to the
+ * linked day instead. A bound, not a refusal: the link still lands on its own
+ * day, and the presets are one tap away for anyone who wants to come back
+ * toward today.
  */
 function windowAround(
   today: AccountingDate,
   linked: AccountingDate | null,
-): {
-  from: string;
-  to: string;
-} {
-  const from = addDays(today, -29);
-  if (linked === null) return { from, to: today };
-  return { from: linked < from ? linked : from, to: linked > today ? linked : today };
+): { from: string; to: string } {
+  const from = addDays(today, -(WINDOW_DAYS - 1));
+  // Already inside the window the screen opens with — nothing to move. (A
+  // linked day is never after `today`; that is checked before it reaches here.)
+  if (linked === null || linked >= from) return { from, to: today };
+  // Older than that, so `linked + WINDOW_DAYS - 1` is always before `today`:
+  // the moved window is exactly `WINDOW_DAYS` and never runs past the present.
+  return { from: linked, to: addDays(linked, WINDOW_DAYS - 1) };
 }
 
 /**
@@ -216,6 +226,7 @@ export default function SettingsRatesScreen({
   );
   const [rate, setRate] = useState("");
   const [editorError, setEditorError] = useState<string | null>(null);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   // The toast's own re-arm token (`useTimer`/`useToastMotion`'s `resetKey`,
   // H1) — two shows can repeat an identical message (the same validation
@@ -323,7 +334,10 @@ export default function SettingsRatesScreen({
     [ledger, quote, pivot, editorRange, rate, t, today],
   );
 
-  const handleClearManual = useCallback(() => {
+  const handleOpenClearConfirm = useCallback(() => setClearConfirmOpen(true), []);
+  const handleCancelClearConfirm = useCallback(() => setClearConfirmOpen(false), []);
+  const handleConfirmClearManual = useCallback(() => {
+    setClearConfirmOpen(false);
     if (quote === null || pivot === undefined || range === null) return;
     const result = ledger.clearManualRate({
       base: pivot.code,
@@ -331,10 +345,20 @@ export default function SettingsRatesScreen({
       from: range.from,
       to: range.to,
     });
+    toastTokenRef.current += 1;
     if ("fieldErrors" in result) {
-      toastTokenRef.current += 1;
       setToast(result.fieldErrors[0]?.message ?? t("fx.rateWriteFailed"));
+      return;
     }
+    // Said out loud, because the alternative is a destructive act whose whole
+    // visible effect is some rows in a scrolled-past part of a table quietly
+    // changing source — indistinguishable from a press that did nothing. Zero
+    // gets its own sentence: "cleared 0" reads as a failure.
+    setToast(
+      result.deleted === 0
+        ? t("fx.clearManualNone")
+        : t("fx.clearManualCleared", { count: result.deleted }),
+    );
   }, [ledger, quote, pivot, range, t]);
 
   const coverage = ledger.readCoverage(today);
@@ -357,6 +381,19 @@ export default function SettingsRatesScreen({
   const noQuoteCurrency = quoteOptions.length === 0;
 
   const editorPair = quote !== null && pivot !== undefined ? { quote, base: pivot.code } : null;
+
+  // What *Clear manual* would delete, in the words the confirmation uses — one
+  // value, so the sentence a person agrees to and the range the write receives
+  // cannot become two different things.
+  const clearScope =
+    editorPair === null || range === null
+      ? null
+      : {
+          ...editorPair,
+          from: range.from,
+          to: range.to,
+          days: daysBetween(range.from, range.to) + 1,
+        };
 
   // An object literal here would be a fresh identity every render, which is
   // `RateTable`'s own `useMemo` dependency — the fill would rebuild on every
@@ -447,7 +484,7 @@ export default function SettingsRatesScreen({
         />
         <Button
           label={t("fx.clearManual")}
-          onPress={handleClearManual}
+          onPress={handleOpenClearConfirm}
           variant="ghost"
           disabled={quote === null || range === null}
         />
@@ -522,6 +559,32 @@ export default function SettingsRatesScreen({
           />
         )}
       </BottomSheet>
+
+      {/*
+        *Clear manual* deletes every rate a person set by hand across whatever
+        range is currently loaded — and the range is not always one they chose,
+        since a deep link seeds it. So it names the pair, the day count and the
+        dates before it deletes, the way every other irreversible act in this
+        system does (`design-system/05` §5).
+      */}
+      <ConfirmDialog
+        visible={clearConfirmOpen && clearScope !== null}
+        title={t("fx.clearManualConfirmTitle")}
+        body={
+          clearScope === null
+            ? ""
+            : t("fx.clearManualConfirmBody", {
+                count: clearScope.days,
+                quote: clearScope.quote,
+                base: clearScope.base,
+                from: clearScope.from,
+                to: clearScope.to,
+              })
+        }
+        confirmLabel={t("fx.clearManualConfirmSubmit")}
+        onConfirm={handleConfirmClearManual}
+        onCancel={handleCancelClearConfirm}
+      />
 
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
