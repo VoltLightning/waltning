@@ -62,6 +62,7 @@ import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { useFloatingClearance } from "@waltning/ui/shell/floating-clearance";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -261,6 +262,14 @@ export default function Ledger() {
   const t = useT();
   const locale = useLocale();
   const styles = useStyles();
+  /**
+   * This screen owns its list, so `GroundPanel scroll="own"` holds no
+   * clearance for it (`shell/floating-clearance.tsx`): padding the panel
+   * would only shorten the `FlatList` and leave a band of empty ground with
+   * the last transaction still under the add button at the end of the
+   * scroll. The clearance goes on the list's own content instead.
+   */
+  const floatClearance = useFloatingClearance();
   const breakpoint = useBreakpoint();
   const isDesk = breakpoint === "desk";
   const ledger = useLedgerController();
@@ -754,6 +763,8 @@ export default function Ledger() {
     );
   }
 
+  const listClearance = { paddingBottom: floatClearance };
+
   return (
     <GroundPanel scroll="own">
       <SearchField
@@ -825,6 +836,10 @@ export default function Ledger() {
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
           style={styles.list}
+          // A per-shell value rather than a theme constant, so it is
+          // composed here beside the JSX — `TabBar`'s own `clearance` and
+          // `FloatingAdd`'s dock frame take the same shape.
+          contentContainerStyle={listClearance}
         />
       )}
 

@@ -4,6 +4,9 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { View } from "react-native";
+import { makeStyles } from "../theme/styles.ts";
+import { space } from "../tokens.ts";
 import { Banner } from "./banner";
 
 function noop() {}
@@ -37,3 +40,36 @@ export const Negative: Story = {
     action: { label: "Retry", onPress: noop },
   },
 };
+
+/**
+ * The phone, at 390pt: the action goes under the message rather than beside
+ * it. Beside it, the button held its own width and left the sentence a column
+ * two words wide — four lines and 110pt of banner over a screen it was only
+ * meant to annotate. The frame is the story's subject, so it is fixed rather
+ * than left to the canvas.
+ */
+export const StackedAtPhoneWidth: Story = {
+  args: {
+    tone: "warn",
+    message: "No rate for EUR — add one before capturing",
+    action: { label: "Add rate", onPress: noop },
+  },
+  decorators: [withPhoneFrame],
+};
+
+function PhoneFrame({ children }: { children: React.ReactNode }) {
+  const styles = useStyles();
+  return <View style={styles.phone}>{children}</View>;
+}
+
+function withPhoneFrame(Story: React.ComponentType) {
+  return (
+    <PhoneFrame>
+      <Story />
+    </PhoneFrame>
+  );
+}
+
+const useStyles = makeStyles((theme) => ({
+  phone: { width: 390, padding: space.x5, backgroundColor: theme.ground },
+}));

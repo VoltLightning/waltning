@@ -1,16 +1,17 @@
 /**
  * S19's home tab — a list with one entry, *Categories*, for now.
  *
- * `(tabs)/_layout.tsx` hides the navigation header for every tab root (the
- * same reason `ledger-screen.tsx`'s stub carries its own title through
- * `EmptyState`), so the heading is `Card`'s own `title`, not a route option.
+ * `(tabs)/_layout.tsx` hides the navigation header for every tab root, and
+ * the screen's name is on the shell's own band above it (`TabHeader`, drawn
+ * from the active tab's label) — so this card carries **no title**. One with
+ * one would name the screen twice on the same phone.
  *
- * That is the one shape `design-system/05` §5.1 allows a whole screen to be
- * one card: *"a tab root without a navigation header may carry its menu list
- * in a titled card"*. `tests/architecture.test.ts` derives the exemption from
- * that sentence — a tab route's screen whose card holds only `Button`s —
- * rather than naming this file, so a second entry that is not a button, or a
- * route that grows a header, loses it the same day.
+ * A menu list is still the one shape `design-system/05` §5.1 allows a whole
+ * screen to be one card: *"a tab root's menu list is an untitled card"* — a
+ * list of routes is related rows, which is what earns a card at all.
+ * `tests/architecture.test.ts` derives the exemption from that sentence — a
+ * tab route's screen whose card holds only `Button`s — rather than naming
+ * this file, so a second entry that is not a button loses it the same day.
  */
 
 import { useT } from "@waltning/ui/i18n/provider";
@@ -35,7 +36,7 @@ export default function Settings() {
 
   return (
     <GroundPanel>
-      <Card title={t("routes.settings")}>
+      <Card>
         <Button label={t("routes.categories")} onPress={handleOpenCategories} variant="secondary" />
         <Button label={t("routes.currencies")} onPress={handleOpenCurrencies} variant="secondary" />
         <Button label={t("routes.rates")} onPress={handleOpenRates} variant="secondary" />

@@ -16,7 +16,15 @@
  * it.** `DESK1` (`02-tokens` §2.10): at `desk` width the app gets `DeskBand`
  * and neither the phone's `TabBar` nor the floating add button — the design
  * doc's flat rule, "no floating add button at desk width" — and below it the
- * phone composition is exactly what it always was.
+ * phone gets `TabHeader`, the slot, the bar and the button, in that order.
+ * The desk branch provides no floating clearance for the same reason it draws
+ * no button, rather than for a second reason of its own.
+ *
+ * **The header is the shell's on both sides of the breakpoint.** `DeskBand`
+ * already named the route; on the phone every tab but Today used to name
+ * nothing, so the same four screens read as titled at 1440 and untitled at
+ * 390. A screen drawing its own is what produced three different treatments
+ * in the first place.
  */
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
@@ -40,9 +48,12 @@ import { CommandBarPlaceholder, DeskBand, DeskNavItem } from "@waltning/ui/shell
 import { DualTotal } from "@waltning/ui/shell/dual-total";
 import type { FloatPosition } from "@waltning/ui/shell/float-geometry";
 import { FloatingAdd } from "@waltning/ui/shell/floating-add";
+import { FloatingClearanceProvider } from "@waltning/ui/shell/floating-clearance";
 import { TabBar, type TabBarItem } from "@waltning/ui/shell/tab-bar";
+import { TabHeader } from "@waltning/ui/shell/tab-header";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { floating } from "@waltning/ui/tokens";
 import { CommandBar, type CommandBarHandle } from "@waltning/ui/transactions/command-bar";
 import {
   KNOWN_PATHS,
@@ -90,6 +101,48 @@ function handleFloatPosition(next: FloatPosition) {
 /** Same category as the drop above — a lens on the ledger, not a write to it. */
 function handleDeskScope(next: string) {
   return deskScope.set(parseDeskScope(next) ?? DEFAULT_DESK_SCOPE);
+}
+
+/**
+ * The tab's own name, in the shell's band — `05-composites` §5.1's
+ * `TabHeader`, drawn here rather than by each screen.
+ *
+ * **Today is the one tab this skips**, because `TodayFrame` leads with a hero
+ * band and a hero is a better header than a word (§5.1: a 54pt total does not
+ * fit in a navigation bar). Every other tab root drew nothing at all, or a
+ * card whose title stood in for the page's, and three treatments for one
+ * thing is how an app comes to read as three.
+ *
+ * The label comes from `useTabBarItems`, so the header and the bar can never
+ * disagree about what the tab is called — including in Polish, where a
+ * second hardcoded string would be the thing that drifts.
+ */
+function PhoneHeader() {
+  const { items } = useTabBarItems();
+  const active = items.find((item) => item.active);
+  if (active === undefined || active.name === "today") return null;
+  return <TabHeader title={active.label} />;
+}
+
+/**
+ * The device chrome as the tab slot actually meets it — which is not what the
+ * device reports.
+ *
+ * `GroundPanel` clears the home-indicator inset because it is *"the screen's
+ * own bottom edge"*, and inside this shell it is not: the `TabBar` below it
+ * is, and the bar already pads itself by `insets.bottom`. Both are children
+ * of the same column, so the inset was being paid twice and every tab root's
+ * last row sat 34pt further up than anything asked for. Sides and top are the
+ * device's own — a landscape notch is still on one of them.
+ *
+ * The same shape `FloatingAddLayer` below already takes for its own layer,
+ * and for the same reason: what a child should clear is a property of where
+ * it sits, and this component is the only thing that knows where that is.
+ */
+function SlotInsets({ children }: { children: React.ReactNode }) {
+  const insets = useSafeArea();
+  const cleared = { top: insets.top, right: insets.right, left: insets.left, bottom: 0 };
+  return <SafeAreaProvider insets={cleared}>{children}</SafeAreaProvider>;
 }
 
 function VisibleTabBar({ onLayout }: { onLayout: (event: LayoutChangeEvent) => void }) {
@@ -389,7 +442,14 @@ export function TabsShell({ slot }: TabsShellProps) {
 
   return (
     <>
-      {slot}
+      <PhoneHeader />
+      {/* The one place the button is mounted is the one place a page under it
+          is told to leave room — `shell/floating-clearance.tsx`. Outside this
+          provider (the stack's own routes, the startup screen, desk width)
+          the answer is zero, which is what it always should have been. */}
+      <FloatingClearanceProvider value={floating.clearance}>
+        <SlotInsets>{slot}</SlotInsets>
+      </FloatingClearanceProvider>
       <VisibleTabBar onLayout={onBarLayout} />
       <FloatingAddLayer barHeight={barHeight} />
     </>

@@ -32,8 +32,14 @@ import { GroundPanel } from "./card";
 
 const ROWS = Array.from({ length: 40 }, (_, index) => index);
 const LAST_ROW_TEST_ID = "tall-content-last-row";
-/** `space.x5` (22), the panel's own clearance with no device inset in a story — a little headroom for sub-pixel rounding. */
-const CLEARANCE_FLOOR = 18;
+/**
+ * `space.x5` (22), the panel's own clearance with no device inset and no
+ * floating button over it in a story — a little headroom for sub-pixel
+ * rounding. Under the tab shell the panel adds `floating.clearance` on top of
+ * this (`shell/floating-clearance.tsx`); a story has no shell above it, which
+ * is the same answer every stack route gets.
+ */
+const CLEARANCE_FLOOR = space.x5 - 4;
 
 function TallContent() {
   const styles = useStyles();

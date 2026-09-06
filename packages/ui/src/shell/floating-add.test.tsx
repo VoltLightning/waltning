@@ -72,6 +72,34 @@ it("defaults to the bottom-right corner, inside the inset", () => {
 });
 
 /**
+ * The arithmetic above is one thing and the frame drawn from it is another:
+ * the shared values that carry the button started at `(0, 0)` and were moved
+ * to the corner by an effect, so the *rendered* button began at the layer's
+ * top-left and any still frame of it — a screenshot, a test, the first
+ * painted frame on a device — was of a button in the wrong corner. The
+ * position is the shared value's own initial value now, which is why this
+ * asserts the transform rather than calling `defaultFloat` a second time.
+ */
+it("renders at the bottom-right corner on its first frame", async () => {
+  render(
+    <FloatingAdd
+      onAdd={vi.fn()}
+      onSelectType={vi.fn()}
+      position={null}
+      onPositionChange={vi.fn()}
+    />,
+  );
+  await settleLayout();
+
+  const wrapper = screen.getByRole("button", { name: "Add" }).closest("[style*=translate]");
+  expect(wrapper).toBeInstanceOf(HTMLElement);
+  const home = defaultFloat({ width: 390, height: 844 }, { top: 0, right: 0, bottom: 0, left: 0 });
+  expect((wrapper as HTMLElement).style.transform).toBe(
+    `translateX(${home.x}px) translateY(${home.y}px)`,
+  );
+});
+
+/**
  * The long-press picker itself (S05 §9.1) — tested directly rather than
  * through a simulated `Gesture.LongPress`, which `react-native-gesture-handler`
  * drives from native touch timing that jsdom has no equivalent for.

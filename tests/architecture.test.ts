@@ -768,10 +768,11 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * The screens a tab route renders — read from `app/(tabs)/*.tsx`, not
    * listed. The tab group renders with no navigation header, which
    * `tabsHeaderHidden` above reads out of the option that decides it, so a
-   * tab root has nowhere but a card's own `title` to put the screen's name:
-   * `05-composites` §5.1 states the exception as a principle, *"a tab root
-   * without a navigation header may carry its menu list in a titled card"*,
-   * and this derives it rather than naming a file.
+   * tab root's own name is on the shell's band above it rather than in a
+   * navigation bar: `05-composites` §5.1 states the exception as a principle,
+   * *"a tab root's menu list is an untitled card"* — a list of routes is
+   * related rows, which is what earns a card at all — and this derives it
+   * rather than naming a file.
    *
    * **Both halves of the principle are read.** An app whose tab group is
    * given a header yields no roots at all — every screen under it is judged

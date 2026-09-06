@@ -1,13 +1,29 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { touchTarget } from "../tokens.ts";
 import { TabBar } from "./tab-bar";
+import {
+  DebtTabIcon,
+  LedgerTabIcon,
+  SettingsTabIcon,
+  TAB_ICON_SIZE,
+  TodayTabIcon,
+} from "./tab-icons";
 
+/** The four the phone wires today — Calendar returns with S11. */
 const ITEMS = [
   { name: "today", label: "Today", icon: null, active: true },
   { name: "ledger", label: "Ledger", icon: null, active: false },
-  { name: "calendar", label: "Calendar", icon: null, active: false },
   { name: "debt", label: "Debt", icon: null, active: false },
+  { name: "settings", label: "Settings", icon: null, active: false },
+];
+
+const WITH_GLYPHS = [
+  { name: "today", label: "Today", icon: <TodayTabIcon active />, active: true },
+  { name: "ledger", label: "Ledger", icon: <LedgerTabIcon />, active: false },
+  { name: "debt", label: "Debt", icon: <DebtTabIcon />, active: false },
+  { name: "settings", label: "Settings", icon: <SettingsTabIcon />, active: false },
 ];
 
 describe("TabBar", () => {
@@ -28,9 +44,30 @@ describe("TabBar", () => {
     expect(onSelect).toHaveBeenCalledWith("ledger");
   });
 
-  it("supports five targets, each clearing the touch-target floor", () => {
-    const five = [...ITEMS, { name: "settings", label: "Settings", icon: null, active: false }];
+  it("supports a fifth target, each clearing the touch-target floor", () => {
+    const five = [...ITEMS, { name: "calendar", label: "Calendar", icon: null, active: false }];
     render(<TabBar items={five} onSelect={vi.fn()} />);
-    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(5);
+    // The second half of the name, which used to be asserted by nobody.
+    for (const tab of tabs) {
+      expect(getComputedStyle(tab).minHeight).toBe(`${touchTarget.min}px`);
+    }
+  });
+
+  /**
+   * `Today`'s glyph was a bare 14px square while the other four drew at 20, so
+   * its label sat 3px above theirs. The box belongs to the bar now, and a
+   * glyph that draws smaller sits inside it rather than shortening the row.
+   */
+  it("reserves one icon box for every tab, whatever the glyph draws inside it", () => {
+    render(<TabBar items={WITH_GLYPHS} onSelect={vi.fn()} />);
+    for (const tab of screen.getAllByRole("tab")) {
+      const box = tab.firstElementChild;
+      expect(box).toBeInstanceOf(HTMLElement);
+      const style = getComputedStyle(box as HTMLElement);
+      expect(style.width).toBe(`${TAB_ICON_SIZE}px`);
+      expect(style.height).toBe(`${TAB_ICON_SIZE}px`);
+    }
   });
 });

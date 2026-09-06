@@ -1,10 +1,19 @@
 /**
- * The four tab glyphs `(tabs)/_layout.tsx` hands to `<TabBar>` — drawn the
+ * The tab glyphs `use-tab-bar-items.tsx` hands to `<TabBar>` — four of them
+ * wired today, and `CalendarTabIcon` waiting for S11 to build the screen it
+ * belongs to. Drawn the
  * same way `FloatingAdd`'s plus and `Select`'s chevron are, because no icon
  * library is installed yet. **§2.8 names Phosphor duotone via
  * `react-native-svg` for the real set — that install is its own card, not
  * this one.** Each glyph is a fixed 20×20 shape built from plain `View`s, so
  * it costs nothing to swap later — `TabBar` only ever sees a `ReactNode`.
+ *
+ * **One box for all five, and the mark is drawn inside it.** `Today` used to
+ * *be* its 14px square rather than sit in a 20px box, so its label rose 3px
+ * above the other four and the bar read as slightly broken without anyone
+ * being able to say why. The box is `TAB_ICON_SIZE`, which `TabBar` reserves
+ * for whatever node it is handed — a glyph is free to be smaller than the
+ * box; it is never free to change the row's height.
  *
  * **Soft rectangles, never a circle** — §2.4 reserves the circle for the
  * radio, the switch and the floating add button, and a round tab glyph reads
@@ -19,13 +28,24 @@ import { View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { radius, space } from "../tokens.ts";
 
-const SIZE = 20;
+/**
+ * The box every glyph is drawn in, and the box `TabBar` reserves for it.
+ * Exported so the two cannot drift: a bar reserving 24 for a 20px set is a
+ * 4px gap under every label, and nothing would say so.
+ */
+export const TAB_ICON_SIZE = 20;
+
+const SIZE = TAB_ICON_SIZE;
 
 export type TabIconProps = { active?: boolean };
 
 export function TodayTabIcon({ active = false }: TabIconProps) {
   const styles = useStyles();
-  return <View style={[styles.square, active ? styles.fillActive : styles.fillInactive]} />;
+  return (
+    <View style={styles.box}>
+      <View style={[styles.square, active ? styles.fillActive : styles.fillInactive]} />
+    </View>
+  );
 }
 
 export function LedgerTabIcon({ active = false }: TabIconProps) {
@@ -97,8 +117,10 @@ const useStyles = makeStyles((theme) => ({
   tintActive: { borderColor: theme.accentText },
   tintInactive: { borderColor: theme.textMuted },
 
-  /** `Today` — a plain filled soft rectangle, the simplest mark of the four. */
-  square: { width: 14, height: 14, borderRadius: radius.xs, alignSelf: "center" },
+  /** The 20px box the other four glyphs already are. */
+  box: { width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center" },
+  /** `Today` — a plain filled soft rectangle, the simplest mark of the five. */
+  square: { width: 14, height: 14, borderRadius: radius.xs },
 
   /** `Ledger` — three stacked rows, the list a ledger already is. */
   stack: {

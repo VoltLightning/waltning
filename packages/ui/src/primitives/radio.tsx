@@ -149,7 +149,12 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.x3,
     borderRadius: radius.sm,
-    paddingHorizontal: space.md,
+    // **No horizontal padding: the control's left edge is the form's.** A
+    // row inset by 8 put Own/Shared, Business and every checkbox list a
+    // step further in than the fields above and below them, which reads as
+    // a nested block rather than as the next question. The row's own hover
+    // fill runs the full width instead, which is what a full-width target
+    // should look like.
     paddingVertical: space.sm,
   },
   hovered: { backgroundColor: theme.hoverFill },

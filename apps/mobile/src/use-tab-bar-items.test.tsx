@@ -12,14 +12,13 @@ import { describe, expect, it, vi } from "vitest";
 const switchTab = {
   today: vi.fn(),
   ledger: vi.fn(),
-  calendar: vi.fn(),
   debt: vi.fn(),
   settings: vi.fn(),
 };
-let focused: "today" | "ledger" | "calendar" | "debt" | "settings" = "today";
+let focused: "today" | "ledger" | "debt" | "settings" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "calendar" | "debt" | "settings" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" | "settings" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -35,11 +34,10 @@ describe("useTabBarItems", () => {
     expect(result.current.items.map((i) => i.name)).toEqual([
       "today",
       "ledger",
-      "calendar",
       "debt",
       "settings",
     ]);
-    expect(result.current.items.map((i) => i.active)).toEqual([false, true, false, false, false]);
+    expect(result.current.items.map((i) => i.active)).toEqual([false, true, false, false]);
   });
 
   it("dispatches onSelect to the named tab's own switchTab", () => {
@@ -58,6 +56,19 @@ describe("useTabBarItems", () => {
       return <>{items.map((item) => item.label).join(" · ")}</>;
     }
     render(<Probe />);
-    expect(screen.getByText("Today · Ledger · Calendar · Debt · Settings")).toBeDefined();
+    expect(screen.getByText("Today · Ledger · Debt · Settings")).toBeDefined();
+  });
+
+  /**
+   * S11 is not built, and the route that stood in for it answered *"this
+   * screen isn't built yet"* — a fifth of the bar leading to a placeholder
+   * teaches the other four to be ignored. The screen, the route and the
+   * trigger are all gone; S11 adds the three of them and an entry here in
+   * one change.
+   */
+  it("does not list Calendar while S11 is unbuilt", () => {
+    focused = "today";
+    const { result } = renderHook(() => useTabBarItems());
+    expect(result.current.items.map((i) => i.name)).not.toContain("calendar");
   });
 });

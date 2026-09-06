@@ -408,6 +408,26 @@ setting, never a registry operation, never synced. It stays a button:
 focusable, labelled, and a keyboard user is never asked to drag; tap always
 adds, only a real drag moves it.
 
+**And the page under it leaves room for it.** Being over everything is what
+makes the button findable and what makes it cover things: a page whose bottom
+clearance was its own design padding ended every list with the last row under
+a circle. So a page with the button over it adds `floating.clearance` — the
+button's own height plus the inset it rests on, 72px — to its own bottom
+padding, on top of the device's inset.
+
+**Which pages those are is the shell's to say, and no page can know on its
+own.** The button is mounted once, in the tab shell, so it floats over the
+four tab roots and over nothing else: not over the routes the stack pushes on
+top of them, not over the startup screen, and not at desk width, where §2.10
+says there is no floating button at all. The shell hands the number down and
+the answer everywhere else is zero — a page that helps itself to the clearance
+is a page with 72px of dead ground under it.
+
+A screen that owns a virtualized list puts the same number in the list's own
+bottom padding, because clearance that lands on the panel rather than on the
+scrolling content only shortens the list and leaves that band of ground with
+the last row still under the button at the end of the scroll.
+
 **The header collapses.** Expanded: the title, a status tag, the hero total,
 the mine/ours line. Collapsed: title and tag at the left, the total at the
 right, one row tall. Scrolling down past a small threshold folds it; scrolling

@@ -17,7 +17,10 @@
  * already works, and `platform.test.tsx` would then have to check both.
  */
 
-import { SafeAreaProvider as InsetProvider } from "@waltning/ui/primitives/safe-area";
+import {
+  SafeAreaProvider as InsetProvider,
+  WindowInsetsProvider,
+} from "@waltning/ui/primitives/safe-area";
 import {
   SafeAreaProvider as DeviceInsetProvider,
   initialWindowMetrics,
@@ -57,16 +60,25 @@ function Bridge({ children }: { children: React.ReactNode }) {
   // `EdgeInsets` and `SafeAreaInsets` are the same four numbers, restated
   // rather than passed through: the library's type carries whatever else it
   // grows, and this is the boundary where that stops being our problem.
+  const measured = {
+    top: insets.top,
+    right: insets.right,
+    bottom: insets.bottom,
+    left: insets.left,
+  };
+
+  /*
+   * **Two contexts, one measurement.** The inner one is what a box clears and
+   * layers re-provide it — the tab shell zeroes the bottom because the tab bar
+   * below already cleared it, the floating button's layer hands itself the
+   * bar's height. The outer one is the *window*, which nothing re-provides,
+   * because an overlay that covers the whole window has no business inheriting
+   * the insets of the layer it happened to be opened from (`safe-area.tsx` has
+   * the two defects that taught this).
+   */
   return (
-    <InsetProvider
-      insets={{
-        top: insets.top,
-        right: insets.right,
-        bottom: insets.bottom,
-        left: insets.left,
-      }}
-    >
-      {children}
-    </InsetProvider>
+    <WindowInsetsProvider insets={measured}>
+      <InsetProvider insets={measured}>{children}</InsetProvider>
+    </WindowInsetsProvider>
   );
 }

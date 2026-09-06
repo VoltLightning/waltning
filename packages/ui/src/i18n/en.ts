@@ -31,6 +31,19 @@ export const en = {
     search: "Search…",
     /** A filter that matched nothing must say so — an empty panel reads as broken. */
     noMatches: "Nothing matches.",
+    /**
+     * The backdrop behind a `BottomSheet` — the sheet's own title is what
+     * says *which* sheet a screen reader is being offered a way out of, so
+     * the title is interpolated rather than the word "Close" repeated.
+     */
+    dismissSheet: "Dismiss {{title}}",
+    /**
+     * The backdrop behind `Select`'s option panel. Its own words rather than
+     * `close`: the panel overlays the page, so the one thing a tap outside it
+     * does is put the list away, and a screen reader meeting a second
+     * "Close" inside a sheet would have two of them and no way to tell.
+     */
+    dismissOptions: "Dismiss the options",
     /** A token's whole accessible name — the visible label plus the verb. */
     remove: "Remove {{value}}",
     /**
@@ -830,7 +843,6 @@ export const en = {
     accounts: "Accounts",
     editAccount: "Edit account",
     ledger: "Ledger",
-    calendar: "Calendar",
     debt: "Debt",
     /** S09's nav title — no page heading repeats it (`TransactionHero` already states the amount). */
     transaction: "Transaction",
@@ -1038,9 +1050,6 @@ export const en = {
     "rule.amountDrifted": "Amount drifted",
     "rule.overdue": "Overdue",
     "rule.neverPosted": "Never posted",
-    /** The tab stubs (Ledger · Calendar · Debt) until their own arcs build the real screen. */
-    "stub.body": "This screen isn't built yet.",
-    "stub.goToToday": "Go to Today",
   },
   startup: {
     /**

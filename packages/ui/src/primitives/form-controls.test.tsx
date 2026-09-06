@@ -141,6 +141,46 @@ describe("Select", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(2);
   });
 
+  /**
+   * The audit's own finding: the options used to lay out in the form's flow,
+   * so opening a select pushed everything under it down the page. The panel
+   * is an overlay now — mounted in a `Modal`, which `react-native-web`
+   * renders as a `dialog` outside the field's own subtree.
+   */
+  it("draws its options above the page, not inside the form's flow", () => {
+    render(
+      <Select
+        label="Currency"
+        placeholder="Choose"
+        options={CURRENCIES}
+        value={null}
+        onChange={vi.fn()}
+      />,
+    );
+    const field = screen.getByRole("button", { name: "Currency" });
+    fireEvent.click(field);
+
+    const option = screen.getByRole("radio", { name: "Polish Złoty" });
+    expect(option.closest('[role="dialog"]')).not.toBeNull();
+    expect(field.parentElement?.contains(option)).toBe(false);
+  });
+
+  /** A tap outside the panel means *never mind*, and the page never moved. */
+  it("closes from the backdrop behind the panel", () => {
+    render(
+      <Select
+        label="Currency"
+        placeholder="Choose"
+        options={CURRENCIES}
+        value={null}
+        onChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Currency" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss the options" }));
+    expect(screen.queryByRole("radio")).toBeNull();
+  });
+
   /** Picking is answering: the pick lands and the panel folds. */
   it("closes on a pick and restates the answer in the field", () => {
     const onChange = vi.fn();

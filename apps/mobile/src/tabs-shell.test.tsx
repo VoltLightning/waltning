@@ -20,7 +20,15 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import {
+  SafeAreaProvider,
+  useSafeArea,
+  WindowInsetsProvider,
+} from "@waltning/ui/primitives/safe-area";
+import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
+import { useFloatingClearance } from "@waltning/ui/shell/floating-clearance";
+import { floating } from "@waltning/ui/tokens";
 import { Text } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -33,14 +41,13 @@ installPhoneLayout();
 const switchTab = {
   today: vi.fn(),
   ledger: vi.fn(),
-  calendar: vi.fn(),
   debt: vi.fn(),
   settings: vi.fn(),
 };
-let focused: "today" | "ledger" | "calendar" | "debt" | "settings" = "today";
+let focused: "today" | "ledger" | "debt" | "settings" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "calendar" | "debt" | "settings" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" | "settings" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -188,6 +195,112 @@ describe("TabsShell", () => {
   });
 
   /**
+   * Every tab root but Today wears the shell's own title band
+   * (`05-composites` §5.1). Ledger and Debt used to draw nothing at all, so
+   * their content began 22px from the top of the device with no name on it.
+   * Two matches: the bar's own label, and the header above the slot.
+   */
+  it("titles every tab but Today from the shell", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getAllByText("Ledger")).toHaveLength(2);
+  });
+
+  /**
+   * H1: the clearance for the floating button used to be a `GroundPanel`
+   * default, which gave it to ten stack routes with no button anywhere near
+   * them and to the startup screen, which renders before a tab shell exists.
+   * It comes from the shell now, and only where the button is mounted — the
+   * phone branch, never the desk one, which draws no button at all (§2.10).
+   */
+  it("tells the page under it how much room the floating button needs, and only there", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<ClearanceProbe />} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText(`clearance: ${floating.clearance}`)).toBeDefined();
+
+    act(() => resizeTo(1440));
+
+    expect(screen.getByText("clearance: 0")).toBeDefined();
+  });
+
+  /**
+   * L1-new: `GroundPanel` clears the home-indicator inset because it is the
+   * screen's own bottom edge, and under this shell it is not — the `TabBar`
+   * is, and it already pads itself by the same number. The slot is handed a
+   * cleared bottom so the inset is paid once; the sides and the top stay the
+   * device's, because a landscape notch is still on one of them.
+   */
+  it("hands the slot a bottom the tab bar has already cleared", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <DeviceInsets insets={NOTCHED}>
+        <LedgerProvider controller={fakeController()}>
+          <TabsShell slot={<InsetProbe />} />
+        </LedgerProvider>
+      </DeviceInsets>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("insets: 59/0/0/0")).toBeDefined();
+  });
+
+  /**
+   * The composition nothing composed. `SlotInsets` is right for the page and
+   * wrong for an overlay: a `BottomSheet` opened from a tab screen is a
+   * `Modal` over the whole window, but its children are the same React tree,
+   * so it inherited the slot's zeroed bottom and stopped clearing the home
+   * indicator — 22pt where 56 was specified, and on Android a field behind
+   * the navigation bar's own buttons. The sheet's own unit tests could not
+   * see it: they handed the component the device's insets directly, which is
+   * a combination the shell never produces.
+   */
+  it("gives a sheet opened from a tab screen the device's bottom, not the slot's", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <DeviceInsets insets={NOTCHED}>
+        <LedgerProvider controller={fakeController()}>
+          <TabsShell slot={<SheetProbe />} />
+        </LedgerProvider>
+      </DeviceInsets>,
+    );
+    await settleLayout();
+
+    // space.x5 (22) + the device's 34 — the slot's own bottom is 0.
+    expect(screen.getByTestId("bottom-sheet").style.paddingBottom).toBe("56px");
+  });
+
+  /** Today's hero band is a better header than a word, so it keeps it. */
+  it("leaves Today to its own hero band", async () => {
+    focused = "today";
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    // The tab's own label, and nothing above the slot repeating it.
+    expect(screen.getAllByText("Today")).toHaveLength(1);
+  });
+
+  /**
    * **M9.** The landing route is one router tab and two screens — `S04 Today`
    * under 1024, `S01 Dashboard` at and above it. The band read `Today` above
    * a Dashboard, because the nav label came straight from `useTabBarItems`,
@@ -292,6 +405,44 @@ describe("TabsShell", () => {
     expect(screen.queryByText("mine")).toBeNull();
   });
 });
+
+/** A slot that reports what the shell told it — the clearance, as a string. */
+function ClearanceProbe() {
+  return <Text>clearance: {useFloatingClearance()}</Text>;
+}
+
+/** A slot that opens the overlay the page's own insets must not reach. */
+function SheetProbe() {
+  return (
+    <BottomSheet visible title="Filter" onDismiss={noop}>
+      <Text>rows</Text>
+    </BottomSheet>
+  );
+}
+
+function noop() {}
+
+/** A notched phone, as the device would report it. */
+const NOTCHED = { top: 59, right: 0, bottom: 34, left: 0 };
+
+/** The same, for the insets the slot is actually handed. */
+function InsetProbe() {
+  const insets = useSafeArea();
+  return (
+    <Text>
+      insets: {insets.top}/{insets.right}/{insets.bottom}/{insets.left}
+    </Text>
+  );
+}
+
+/** `apps/mobile`'s own provider is the platform read; this stands in for it. */
+function DeviceInsets({ insets, children }: { insets: typeof NOTCHED; children: React.ReactNode }) {
+  return (
+    <WindowInsetsProvider insets={insets}>
+      <SafeAreaProvider insets={insets}>{children}</SafeAreaProvider>
+    </WindowInsetsProvider>
+  );
+}
 
 const CASH: PhoneAccount = {
   id: id<"accounts">("33333333-3333-4333-8333-333333333333"),

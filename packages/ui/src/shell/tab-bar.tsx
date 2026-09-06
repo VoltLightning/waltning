@@ -1,17 +1,24 @@
 /**
- * `<TabBar>` — `design-system/05` §5.1. Five targets, duotone icons,
- * ≥44px targets. **The add button is not one of them** — it floats above
- * the whole screen and parks on the bottom edge (`02-tokens` §2.9), so the
- * bar never has to make room for it. `packages/ui` names no router: the
- * route file binds `items`/`activeName`/`onSelect` to `expo-router`'s own
- * `TabTrigger`, which is the only file allowed to name it.
+ * `<TabBar>` — `design-system/05` §5.1. Duotone icons, ≥44px targets.
+ * **The add button is not one of them** — it floats above the whole screen
+ * and parks on the bottom edge (`02-tokens` §2.9), so the bar never has to
+ * make room for it. `packages/ui` names no router: the route file binds
+ * `items`/`activeName`/`onSelect` to `expo-router`'s own `TabTrigger`, which
+ * is the only file allowed to name it.
  *
- * **The count is the caller's**, not a prop this component enforces — five
- * is what the phone build wires today (Today · Ledger · Calendar · Debt,
- * plus Settings once S19 lands), and a component that hardcoded the number
- * would have to change the day a sixth tab does. What *is* enforced: every
+ * **The count is the caller's**, not a prop this component enforces — four
+ * is what the phone build wires today (Today · Ledger · Debt · Settings;
+ * Calendar returns with S11), and a component that hardcoded the number
+ * would have to change the day a fifth tab does. What *is* enforced: every
  * target clears the §10 floor, and every tab carries `role="tab"` with
  * `aria-selected` so the active one is announced, not just painted.
+ *
+ * **The vertical rhythm is the bar's, not each glyph's.** 8 above the icon,
+ * the icon in a fixed `TAB_ICON_SIZE` box, 4 to the label, 8 under it, plus
+ * the device's bottom inset — 56pt of bar over whatever the phone reserves,
+ * against iOS's own 49pt + inset. It was 51 in total, with `Today`'s 14px
+ * mark leaving its label 3px higher than the other four, because the box was
+ * whatever each glyph happened to draw and the padding was 4.
  */
 
 import { useCallback } from "react";
@@ -21,6 +28,7 @@ import { useSafeArea } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, space, touchTarget } from "../tokens.ts";
+import { TAB_ICON_SIZE } from "./tab-icons";
 
 export type TabBarItem = {
   name: string;
@@ -41,7 +49,7 @@ export function TabBar({ items, onSelect }: TabBarProps) {
   // Computed rather than in `useStyles`: the inset is per-device — `dock.tsx`'s
   // own `clearance` is the same shape, a plain object beside the JSX.
   const clearance = {
-    paddingBottom: space.xs + insets.bottom,
+    paddingBottom: insets.bottom,
     paddingLeft: insets.left,
     paddingRight: insets.right,
   };
@@ -99,15 +107,21 @@ const useStyles = makeStyles((theme) => ({
     minHeight: touchTarget.min,
     alignItems: "center",
     justifyContent: "center",
-    gap: space.xxs,
-    paddingVertical: space.xs,
+    gap: space.xs,
+    paddingVertical: space.md,
   },
   targetFocused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
-  icon: { alignItems: "center", justifyContent: "center" },
+  /** The box, reserved by the bar — a glyph may be smaller, never taller. */
+  icon: {
+    width: TAB_ICON_SIZE,
+    height: TAB_ICON_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   label: { color: theme.textMuted, ...text.ui("caption", 600) },
   labelActive: { color: theme.accentText },
 }));

@@ -14,12 +14,19 @@
  *
  * `useTabTrigger`, called once per tab — a fixed set known at compile time,
  * never a loop, so the hook count never varies between renders.
+ *
+ * **Four, not five: there is no Calendar.** S11 is not built, and the route
+ * that stood in for it answered *"this screen isn't built yet"* — a tab that
+ * is one fifth of the app's whole navigation and leads to a placeholder
+ * teaches the bar's other four to be ignored too. The route is gone with it
+ * (`(tabs)/_layout.tsx`), because a registered route no tab points at has no
+ * header and no selected tab either. S11 adds the screen, the trigger and an
+ * entry here in one change.
  */
 
 import { useT } from "@waltning/ui/i18n/provider";
 import type { TabBarItem } from "@waltning/ui/shell/tab-bar";
 import {
-  CalendarTabIcon,
   DebtTabIcon,
   LedgerTabIcon,
   SettingsTabIcon,
@@ -28,7 +35,7 @@ import {
 import { useTabTrigger } from "expo-router/ui";
 import { useCallback } from "react";
 
-type TabName = "today" | "ledger" | "calendar" | "debt" | "settings";
+type TabName = "today" | "ledger" | "debt" | "settings";
 
 export function useTabBarItems(): {
   items: readonly TabBarItem[];
@@ -37,13 +44,11 @@ export function useTabBarItems(): {
   const t = useT();
   const today = useTabTrigger({ name: "today" });
   const ledger = useTabTrigger({ name: "ledger" });
-  const calendar = useTabTrigger({ name: "calendar" });
   const debt = useTabTrigger({ name: "debt" });
   const settings = useTabTrigger({ name: "settings" });
 
   const todayActive = today.trigger?.isFocused ?? false;
   const ledgerActive = ledger.trigger?.isFocused ?? false;
-  const calendarActive = calendar.trigger?.isFocused ?? false;
   const debtActive = debt.trigger?.isFocused ?? false;
   const settingsActive = settings.trigger?.isFocused ?? false;
 
@@ -59,12 +64,6 @@ export function useTabBarItems(): {
       label: t("routes.ledger"),
       icon: <LedgerTabIcon active={ledgerActive} />,
       active: ledgerActive,
-    },
-    {
-      name: "calendar",
-      label: t("routes.calendar"),
-      icon: <CalendarTabIcon active={calendarActive} />,
-      active: calendarActive,
     },
     {
       name: "debt",
@@ -85,13 +84,12 @@ export function useTabBarItems(): {
       const triggers: Record<TabName, (typeof today)["switchTab"]> = {
         today: today.switchTab,
         ledger: ledger.switchTab,
-        calendar: calendar.switchTab,
         debt: debt.switchTab,
         settings: settings.switchTab,
       };
       triggers[name as TabName]?.(name, {});
     },
-    [today, ledger, calendar, debt, settings],
+    [today, ledger, debt, settings],
   );
 
   return { items, onSelect };

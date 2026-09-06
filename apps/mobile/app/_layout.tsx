@@ -226,9 +226,17 @@ function AppStack() {
     >
       {/* The tab shell draws its own chrome — Today's header is the shell
           itself (a 54pt total does not fit in a navigation bar, §5.1), and
-          the other tabs are stubs with none yet. `quick-add`,
-          `account/new`, `transaction/[id]` and `settings/categories` stay
-          stack routes pushed *over* the tabs. */}
+          every other tab root wears `TabHeader`, drawn by `tabs-shell.tsx`.
+          `quick-add`, `account/new`, `transaction/[id]` and
+          `settings/categories` stay stack routes pushed *over* the tabs.
+
+          **The composers keep this navigator's header**, even though they
+          draw a title and a × of their own. Hiding it is right and it is not
+          this file's to do alone: `QuickAddComposer` and `TransferComposer`
+          read no safe-area inset, and `GroundPanel` deliberately never clears
+          the top, so a screen with no navigation bar puts its × under the
+          notch. The two lines come out when the composers clear the status
+          bar themselves, in the same change. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
       <Stack.Screen name="transfer" options={{ title: t("routes.transfer") }} />

@@ -7,12 +7,24 @@
  * should be read before choosing, use `RadioGroup`; if the choice is a filter
  * over a partition, `SegmentControl`.
  *
- * **Disclosure, not an overlay.** The options unfold in place, in the form's
- * own flow. An overlay needs a portal and a scrim — that machinery exists in
- * `shell/bottom-sheet`, which a *screen* may compose around any of these
- * controls; a primitive that reached for the shell would invert the foundation
- * (`tests/module-boundaries`). Unfolding costs a layout shift and buys a
- * control with no dependencies and no z-index to lose.
+ * **The panel is an overlay, and it is the page that must not move.** The
+ * options are drawn above the form, anchored under the field they belong to,
+ * because a panel laid out *in* the flow pushes the page down as it opens:
+ * disclosing "Rate source" on Currencies moved Edit, Archive and the next
+ * currency by some 200px and moved them back on close, which loses the
+ * reader's place on the one interaction whose whole job is to answer a
+ * question about the row in front of them.
+ *
+ * **A `Modal`, not a portal library and not a `z-index`.** React Native gives
+ * exactly one way out of the layout tree that behaves the same on iOS,
+ * Android and the web, and an absolutely-positioned panel is not it: on
+ * Android a child drawn outside its parent's bounds stops receiving touches,
+ * so the last field on a form would open a list nobody could tap. The
+ * geometry — under the field, flipped above it when below is the smaller
+ * room, never off the window — is `anchor.ts`, tested as arithmetic. The
+ * shell's own `BottomSheet` is still off limits: a primitive that reached
+ * for the shell would invert the foundation (`tests/module-boundaries`), and
+ * `Modal` is `react-native`'s, not the shell's.
  *
  * **The chevron turns; the panel fades.** Rotation is the state made visible
  * (`motion.move` — a visible thing moving); the panel arrives at `motion.fast`
@@ -38,23 +50,37 @@
  *
  * **The panel scrolls; it does not grow without bound.** Its height is capped
  * at six and a half rows — the half row is the signal that there is more, the
- * way a list edge does it everywhere else. `searchable` adds a filter row for
+ * way a list edge does it everywhere else — and narrowed again to whatever
+ * room the window actually leaves on the side it opened. `searchable` adds a filter row for
  * the lists where scrolling is not enough (52 accounts, S16's own number);
  * the query clears on close, because a filter that survives a closed panel is
  * an invisible reason the list looks short next time.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ViewStyle } from "react-native";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { text } from "../theme/fonts.ts";
 import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { type Anchor, panelPlacement, unanchoredPlacement, useAnchor } from "./anchor.ts";
 import { useDisclosureMotion } from "./disclosure-motion.ts";
 import { useInteraction } from "./interaction.ts";
+import { useWindowInsets } from "./safe-area";
+
+/** Six and a half rows — the half row is the signal that there is more. */
+const PANEL_CAP = touchTarget.min * 6.5;
 
 export type SelectOption = {
   value: string;
@@ -231,14 +257,18 @@ function Disclosure({
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
   const { chevron, panel: panelStyle } = useDisclosureMotion(open);
+  const { ref, anchor, measure } = useAnchor();
 
   const toggleOpen = useCallback(() => onOpenChange(!open), [onOpenChange, open]);
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const remeasure = useMeasureWhileOpen(open, measure);
   const filled = display !== undefined;
 
   return (
     <View style={styles.root}>
       <Text style={styles.label}>{label}</Text>
       <Pressable
+        ref={ref}
         accessibilityRole="button"
         accessibilityLabel={
           filled ? t("common.fieldValue", { field: label, value: display }) : label
@@ -246,6 +276,7 @@ function Disclosure({
         accessibilityState={{ expanded: open, disabled }}
         disabled={disabled}
         onPress={toggleOpen}
+        onLayout={remeasure}
         {...handlers}
         style={[
           styles.field,
@@ -262,40 +293,140 @@ function Disclosure({
           <View style={styles.chevronMark} />
         </Animated.View>
       </Pressable>
-      {open ? (
-        <PanelBlock reveal={panelStyle} search={search}>
-          {panel}
-        </PanelBlock>
-      ) : null}
+      <PanelOverlay
+        open={open}
+        onDismiss={close}
+        label={label}
+        anchor={anchor}
+        reveal={panelStyle}
+        search={search}
+      >
+        {panel}
+      </PanelOverlay>
     </View>
   );
 }
 
-type PanelBlockProps = {
+/**
+ * Re-measure the field on open, and on any layout change *while* open.
+ *
+ * Never while closed: `measureInWindow` answers on a later tick, and a
+ * control nobody has opened has nothing to do with the answer — measuring it
+ * anyway would set state for every `Select` on a form the moment it lays out.
+ */
+function useMeasureWhileOpen(open: boolean, measure: () => void): () => void {
+  useEffect(() => {
+    if (open) measure();
+  }, [open, measure]);
+  return useCallback(() => {
+    if (open) measure();
+  }, [open, measure]);
+}
+
+type PanelOverlayProps = {
+  open: boolean;
+  onDismiss: () => void;
+  /** The field's own name — see the component's note on the `dialog` role. */
+  label: string;
+  /** `null` until the field has reported itself — one tick, and every test. */
+  anchor: Anchor | null;
   reveal: AnimatedStyle<ViewStyle>;
   search: { query: string; onQueryChange: (query: string) => void } | undefined;
   children: React.ReactNode;
 };
 
-function PanelBlock({ reveal, search, children }: PanelBlockProps) {
+/**
+ * The options, above the page rather than in it.
+ *
+ * The backdrop is transparent and unmissable at once: a select is not a
+ * dialog, so it earns no scrim, but a `Modal` covers the window and something
+ * has to take the tap that means *never mind*. Escape does the same through
+ * `onRequestClose`.
+ *
+ * **The role is the `Modal`'s price, and the panel pays it by name.**
+ * `react-native-web` renders a modal as `role="dialog"` with `aria-modal`,
+ * so a screen reader announces a dialog whatever this component believes
+ * about scrims — an *unnamed* dialog, if nothing says otherwise. The panel
+ * therefore carries the field's own label, so what is announced is "Currency,
+ * dialog" rather than "dialog". `03-primitives` §3.8 records the same trade.
+ *
+ * **Invisible until measured, never mispositioned.** The field answers
+ * `measureInWindow` a tick *after* a paint — `react-native-web`'s
+ * implementation is a `setTimeout` — so a visible first frame at
+ * `unanchoredPlacement`'s fallback is not hypothetical. The transparency sits
+ * on the overlay rather than on the panel because the panel's own opacity is
+ * animated: Reanimated writes the animated value straight onto the view after
+ * the commit, so a static `opacity: 0` in the same style array is overwritten
+ * on the first animation frame. A parent's opacity is not. The content is
+ * mounted throughout — a screen reader, and a test, meet the options
+ * immediately either way.
+ */
+function PanelOverlay({
+  open,
+  onDismiss,
+  label,
+  anchor,
+  reveal,
+  search,
+  children,
+}: PanelOverlayProps) {
+  const t = useT();
   const styles = useStyles();
+  // The window's own, not the layer's: the panel is a `Modal` over the whole
+  // window, and `bottom-sheet.tsx` states the argument beside its own read.
+  const insets = useWindowInsets();
+  const frame = useWindowDimensions();
+
+  if (!open) return null;
+
+  // A per-render position, like `FloatingAdd`'s dock frame: computed beside
+  // the JSX rather than in `useStyles`, whose cache is keyed on the theme.
+  const placement =
+    anchor === null
+      ? unanchoredPlacement(frame, insets, PANEL_CAP)
+      : panelPlacement(anchor, frame, insets, PANEL_CAP);
+
   return (
-    <Animated.View style={[styles.panel, reveal]}>
-      {search === undefined ? null : (
-        <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
-      )}
-      {/* Capped, and the cap is deliberately six and a half rows: the half
-          row is the signal that there is more, the way a list edge says it
-          everywhere else. `maxHeight` is a bound, not an animation — the
-          §2.7 ban is on height *moving*. */}
-      {/* `nestedScrollEnabled` — `GroundPanel` is now the page scroller
-          everywhere `Select` opens, so this is a `ScrollView` inside a
-          `ScrollView` on Android, which without this prop swallows the
-          gesture into the outer one instead of scrolling the panel. */}
-      <ScrollView style={styles.panelScroll} nestedScrollEnabled>
-        {children}
-      </ScrollView>
-    </Animated.View>
+    // `statusBarTranslucent`/`navigationBarTranslucent` — under Android's
+    // edge-to-edge the app window includes the system bars but a `Modal`'s
+    // window does not, so `measureInWindow`'s coordinates would be read in a
+    // window whose origin is a status bar lower and the panel would sit
+    // 24–48px below its own field. iOS and the web ignore both props.
+    <Modal
+      // The field's own name, on the element that carries the role.
+      // `react-native-web` spreads a modal's props onto the `dialog` it
+      // renders; on the panel two levels in, this named a generic `div` and
+      // the dialog stayed anonymous — which is the announcement §3.8's
+      // sentence is about.
+      accessibilityLabel={label}
+      transparent
+      visible
+      onRequestClose={onDismiss}
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
+      <View style={[styles.overlay, anchor === null ? styles.overlayUnmeasured : null]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("common.dismissOptions")}
+          onPress={onDismiss}
+          style={styles.backdrop}
+        />
+        <Animated.View style={[styles.panel, placement, reveal]}>
+          {search === undefined ? null : (
+            <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
+          )}
+          {/* `nestedScrollEnabled` belongs on the *inner* scroller — it makes
+              the view it is set on a nested-scrolling child, which is what
+              lets this list take the gesture instead of an outer scroller
+              on Android. */}
+          <ScrollView style={styles.panelScroll} nestedScrollEnabled>
+            {children}
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -333,14 +464,19 @@ function MultiSelectField({
   const styles = useStyles();
   const { chevron, panel: panelStyle } = useDisclosureMotion(open);
   const { hovered, focused, handlers } = useInteraction();
+  const { ref, anchor, measure } = useAnchor();
 
   const toggleOpen = useCallback(() => onOpenChange(!open), [onOpenChange, open]);
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const remeasure = useMeasureWhileOpen(open, measure);
   const empty = chosen.length === 0;
 
   return (
     <View style={styles.root}>
       <Text style={styles.label}>{label}</Text>
       <View
+        ref={ref}
+        onLayout={remeasure}
         style={[
           styles.field,
           styles.tokenField,
@@ -375,11 +511,16 @@ function MultiSelectField({
           </Animated.View>
         </Pressable>
       </View>
-      {open ? (
-        <PanelBlock reveal={panelStyle} search={search}>
-          {panel}
-        </PanelBlock>
-      ) : null}
+      <PanelOverlay
+        open={open}
+        onDismiss={close}
+        label={label}
+        anchor={anchor}
+        reveal={panelStyle}
+        search={search}
+      >
+        {panel}
+      </PanelOverlay>
     </View>
   );
 }
@@ -601,14 +742,32 @@ const useStyles = makeStyles((theme) => ({
     transform: [{ rotate: "45deg" }],
     marginTop: -4,
   },
+  /** The `Modal`'s own frame — the panel positions itself absolutely inside it. */
+  overlay: { flex: 1 },
+  /**
+   * Transparent, and that is the point: a select is not a dialog and earns no
+   * scrim, but a `Modal` covers the window and a tap outside the panel has to
+   * mean *never mind* rather than nothing.
+   */
+  backdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   panel: {
     borderWidth: 1,
     borderColor: theme.border,
     borderRadius: radius.sm,
     backgroundColor: theme.surface,
     paddingVertical: space.xs,
+    shadowColor: theme.elevation.raised.shadowColor,
+    shadowOpacity: theme.elevation.raised.shadowOpacity,
+    shadowRadius: theme.elevation.raised.shadowRadius,
+    shadowOffset: theme.elevation.raised.shadowOffset,
   },
-  panelScroll: { maxHeight: touchTarget.min * 6.5 },
+  /**
+   * One frame at most, and never a visible one — on the overlay rather than
+   * the panel, whose own opacity is animated and would overwrite it.
+   */
+  overlayUnmeasured: { opacity: 0 },
+  /** The cap is the panel's; this only has to give way inside it. */
+  panelScroll: { flexShrink: 1 },
   /** The token field wraps and pads itself; the toggle inside carries the 44. */
   tokenField: {
     flexWrap: "wrap",

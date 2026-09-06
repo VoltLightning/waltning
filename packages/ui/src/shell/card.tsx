@@ -29,12 +29,25 @@
  * **It is also the thing that reaches the screen's edges**, so it is where the
  * device's chrome is cleared — bottom and sides, never the top.
  *
- * The top belongs to the header above it, and the app guarantees there is one:
- * `TodayFrame`'s shell on the ledger, a navigation header on every other route.
- * That is why `edges` came and went in the same change — the prop existed to
- * let a bare panel be a whole screen, and giving the form routes real headers
- * removed the case it was for. A prop whose only value is its default is a
- * decision the structure already made.
+ * The top belongs to whatever sits above it, and the app guarantees something
+ * always does — in one of three shapes, all of which clear the status bar
+ * themselves:
+ *
+ * - the shell's own band on a tab root: `TodayFrame`'s hero on Today,
+ *   `TabHeader` on the other three (`05-composites` §5.1);
+ * - the stack's navigation header on a route pushed over the tabs;
+ * - a composer's own band — a title and a × — on a screen that draws its
+ *   chrome instead of taking the navigator's, which is then the thing that
+ *   applies the top inset.
+ *
+ * Any of the three, never none. That is why `edges` came and went in the same
+ * change — the prop existed to let a bare panel be a whole screen, and giving
+ * every route one of these three removed the case it was for. A prop whose
+ * only value is its default is a decision the structure already made.
+ *
+ * **The guarantee is on the screen, not on this component**, and it cannot be
+ * otherwise: a panel cannot see what is above it. What this file promises is
+ * only that it will not clear the top itself, so nothing is cleared twice.
  *
  * Bottom, because the last card and the add button sat under the home
  * indicator on every gesture-navigation phone. Sides, because in landscape the
@@ -68,6 +81,23 @@
  * indicator itself, so the panel above it was never the thing clearing that
  * inset and `clearBottom={false}` says so; the design padding (`space.x5`)
  * stays regardless, since that is breathing room, not a device read.
+ *
+ * **A page under the floating button leaves room for it, and the shell is
+ * what says which pages those are.** The button is mounted once inside the
+ * tab shell, so it floats over the four tab roots and over nothing else — not
+ * over the routes the stack pushes on top of them, and not over
+ * `StartupFailed`, which renders before a tab shell exists. So the clearance
+ * arrives through `useFloatingClearance()` and is zero wherever no provider
+ * sits above (`shell/floating-clearance.tsx` has the argument in full). It is
+ * added to the panel's own padding rather than replacing it: breathing room
+ * and a circle overhead are two different measurements.
+ *
+ * **`scroll="own"` takes none of it**, because the clearance has to land on
+ * the *content that scrolls* and in that mode this component is not holding
+ * it. Padding the panel would only shorten the screen's own list and leave a
+ * band of empty ground with the last row still under the button at the end of
+ * the scroll. A screen that owns its list reads the same hook and puts the
+ * value in the list's own `contentContainerStyle`.
  */
 
 import { ScrollView, Text, View } from "react-native";
@@ -76,6 +106,7 @@ import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline, radius, space } from "../tokens.ts";
+import { useFloatingClearance } from "./floating-clearance";
 
 export type CardProps = {
   title?: string;
@@ -125,12 +156,12 @@ export type GroundPanelProps = {
    */
   scroll?: "page" | "own";
   /**
-   * `true` (default) — the panel clears the home-indicator inset at the
-   * bottom, same as it always has. `false` — for a panel that is not
-   * actually the screen's own bottom edge (`Dock` sits below it and clears
-   * that inset itself): the panel has no device inset of its own to clear
-   * there, so it does not add one. The design padding (`space.x5`) stays
-   * either way — that is breathing room, not a device read.
+   * `true` (default) — the panel is the screen's own bottom edge, so it
+   * clears the home-indicator inset and whatever clearance the shell says a
+   * floating button needs over it (`useFloatingClearance()`, zero outside the
+   * tab shell). `false` — for a panel that is not that edge (`Dock` sits
+   * below it and clears the inset itself): the design padding (`space.x5`) is
+   * all it adds.
    */
   clearBottom?: boolean;
 };
@@ -138,21 +169,30 @@ export type GroundPanelProps = {
 export function GroundPanel({ children, scroll = "page", clearBottom = true }: GroundPanelProps) {
   const styles = useStyles();
   const insets = useSafeArea();
+  const floatClearance = useFloatingClearance();
 
   // Not in `useStyles`: that cache is keyed on the theme, and these are keyed
   // on the device. The clearance lives on whichever style ends up carrying
   // the panel's padding — the scroll content in `"page"` mode, the panel
   // itself in `"own"` — so the last row clears the home indicator at the end
   // of the scroll, not at the fold.
-  const clearance = {
-    paddingBottom: space.x5 + (clearBottom ? insets.bottom : 0),
+  const deviceBottom = clearBottom ? insets.bottom : 0;
+  const sides = {
     paddingLeft: space.x5 + insets.left,
     paddingRight: space.x5 + insets.right,
   };
 
   if (scroll === "own") {
+    // The device only: the button's clearance belongs to the list this
+    // screen owns, not to a band of ground under it.
+    const clearance = { ...sides, paddingBottom: space.x5 + deviceBottom };
     return <View style={[styles.panel, styles.panelPadding, clearance]}>{children}</View>;
   }
+
+  const clearance = {
+    ...sides,
+    paddingBottom: space.x5 + deviceBottom + (clearBottom ? floatClearance : 0),
+  };
 
   return (
     <View style={styles.panel}>
