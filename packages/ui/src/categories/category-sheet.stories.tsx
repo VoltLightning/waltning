@@ -156,15 +156,28 @@ export const FilteredEmpty: Story = {
  * above: nothing has been excluded, so the sheet says so plainly rather than
  * counting leaves nobody has (*Search 0 categories*) or blaming a query for
  * an absence that predates it (*Nothing matches*).
- *
- * **And it offers nothing it cannot do.** R1 puts a leaf under a group, so a
- * tree with no groups has nowhere to create one — the state says where
- * categories come from instead of opening a create row whose chooser is
- * empty and whose Save no keystroke can enable. `+ New` is disabled for the
- * same reason.
  */
 export const EmptyTree: Story = {
   args: { ...WITH_CREATE, tree: [], usage: {} },
+};
+
+/**
+ * The same ledger, one step in. `create_category`'s `parentId` is nullable
+ * and R1 says nothing about parents, so the first category lands at the top
+ * level — the same write S19's own create sheet makes. No chooser where
+ * there is nothing to choose; the line says where it will land.
+ */
+export const EmptyTreeCreating: Story = {
+  args: { ...WITH_CREATE, tree: [], usage: {} },
+  play: async ({ canvasElement }) => {
+    // `<Modal>` portals to a sibling of `canvasElement` — `FilteredEmpty`
+    // above states the whole reason.
+    const canvas = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "Create a category" }));
+    await expect(
+      canvas.findByText("No groups yet — this will be a top-level category."),
+    ).resolves.toBeDefined();
+  },
 };
 
 /**

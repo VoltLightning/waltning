@@ -686,9 +686,14 @@ export const en = {
      * excluded everything. `noMatchTitle` below is the filtered one, and
      * saying *nothing matches* to someone who has never created a category
      * blames the query for the absence.
+     *
+     * Named for the **picker**: S19's own empty (`emptyTitle`/`emptyBody`)
+     * speaks from the screen that manages the taxonomy, and the two say
+     * different things to a person in different places — one word per key,
+     * never one key carrying two texts.
      */
-    emptyTitle: "No categories yet",
-    emptyBody: "Create one now, or save without a category and file it later.",
+    pickerEmptyTitle: "No categories yet",
+    pickerEmptyBody: "Create one now, or leave this transaction uncategorized.",
     /**
      * The empty state's own action — the pinned footer's *New*, named in
      * full. Two controls on one sheet cannot both be *New*: a screen reader
@@ -696,14 +701,8 @@ export const en = {
      * a person reading the sentence is looking for.
      */
     createFirst: "Create a category",
-    /**
-     * §6, R1: a leaf is created under a group, never at top level — so a
-     * tree with no groups has nowhere to put one, and the empty state says
-     * that instead of offering a create row whose chooser is empty and whose
-     * Save no keystroke can enable.
-     */
-    noGroupsYet:
-      "A category lives in a group, and there are none yet — save without one and file it later.",
+    /** The create row's answer where no group exists to choose — S19's own sheet states it identically. */
+    noGroupsYet: "No groups yet — this will be a top-level category.",
     /** The pinned footer's create affordance. */
     new: "New",
     /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */

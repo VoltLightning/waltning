@@ -71,7 +71,9 @@ page body rather than inside it, the way the dock sits below: a header that
 scrolls is not one, and the ✕ is the only way out of a composer.
 
 **`expense ▾` opens a menu, and the chevron is why.** Tapping it lists Expense
-and Income **with the draft's own kind marked**; picking one closes the sheet.
+and Income **with the draft's own kind marked**; any pick closes the sheet,
+including the one already marked — a menu's job is to answer and go, and the
+marked option is the one a thumb reaches for first.
 A control whose current value and whose action are the same word is only
 obvious to whoever wrote it, and someone tapping to read the options would find
 the draft's kind changed instead — which is also why the menu marks the current
@@ -235,7 +237,7 @@ voice entry and agent entry produce identical audit rows differing only in
 | Empty | The default. A blank amount is the resting state, not an empty state |
 | Error | **Four designed states, `design/gaps.dc.html` G3** — see below |
 | Offline | Full function. Writes go to the outbox with a client-generated UUID; Save reads as done, because it is |
-| Gated | **The account's currency has no rate** (`architecture/14`: holding a currency and capturing in it are two capabilities, and the second is gated). Save is disabled and a `Banner` says so, carrying the one action that ends it — *Set a ‹CUR› rate*, opening S18 already scoped to that currency and this draft's date. The account picker's own tiles carry a short *Needs a rate* tag instead of the sentence: the tile is a choice, the banner is the explanation, and repeating the sentence in every uncapturable cell says it in the one place nobody is stopped. `neutral`, never amber — P4 below reserves amber for the estimated-rate marker, and a currency with no rate is a missing capability rather than an asserted figure |
+| Gated | **The account's currency has no rate** (`architecture/14`: holding a currency and capturing in it are two capabilities, and the second is gated). Save is disabled and a `Banner` says so, carrying the one action that ends it — *Set a ‹CUR› rate*, opening S18 already scoped to that currency. The account picker's own tiles carry a short *Needs a rate* tag instead of the sentence: the tile is a choice, the banner is the explanation, and repeating the sentence in every uncapturable cell says it in the one place nobody is stopped. `neutral`, never amber — P4 below reserves amber for the estimated-rate marker, and a currency with no rate is a missing capability rather than an asserted figure |
 
 **The four error states**, all designed rather than described:
 

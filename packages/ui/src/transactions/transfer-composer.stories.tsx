@@ -9,6 +9,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { crossRate } from "@waltning/core/money";
+import { View } from "react-native";
 import { GroundPanel } from "../shell/card";
 import { TransferComposer } from "./transfer-composer";
 
@@ -127,6 +128,32 @@ export const NeedsRate: Story = {
     onSetRate: noop,
   },
 };
+
+/**
+ * **The same banner at 390pt**, the width the finding was raised at — the
+ * suite's viewport is 900px, so without this the transfer screen's copy of
+ * the refusal is photographed at a width no phone has.
+ * `quick-add-composer.stories.tsx`'s `NeedsRatePhone` is its twin, and the
+ * two frames are the evidence for `Banner`'s own row layout.
+ */
+export const NeedsRatePhone: Story = {
+  decorators: [withPhoneWidth],
+  args: {
+    accounts: [{ ...USD_ACCOUNT, capturable: false }, PLN_ACCOUNT, SAVINGS_ACCOUNT],
+    onSetRate: noop,
+  },
+};
+
+/** A phone's own column: 390pt (the audit's device) minus `GroundPanel`'s `space.x5` a side. */
+const PHONE_COLUMN = { width: 390 - 44 };
+
+function withPhoneWidth(Story: React.ComponentType) {
+  return (
+    <View style={PHONE_COLUMN}>
+      <Story />
+    </View>
+  );
+}
 
 /** Same account both sides, refused inline before Save (`transactions_transfer_distinct`). */
 export const SameAccountRefused: Story = {

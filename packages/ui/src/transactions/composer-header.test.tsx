@@ -44,6 +44,24 @@ it("marks the current kind inside the menu", () => {
   expect(screen.getByRole("radio", { name: "Expense" }).getAttribute("aria-checked")).toBe("false");
 });
 
+/**
+ * **The marked option is not a dead tap.** A radio group swallows a press on
+ * its own selected value — right for a form field, wrong for a menu, and it
+ * left the option a person is most likely to reach first (the draft's own
+ * kind, on the screen's default state) doing nothing at all, with the sheet
+ * still open over the composer. Every picker in this app closes on the
+ * current value; this one does too.
+ */
+it("closes on the kind already chosen, changing nothing (H1)", () => {
+  const onKindChange = vi.fn();
+  render(<ComposerHeader onCancel={vi.fn()} kind="expense" onKindChange={onKindChange} />);
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Expense" }));
+
+  fireEvent.click(screen.getByRole("radio", { name: "Expense" }));
+  expect(screen.queryByRole("radio", { name: "Expense" })).toBeNull();
+  expect(onKindChange).not.toHaveBeenCalled();
+});
+
 /** §9.1 — a transfer is a different shape, with its own composer and its own entry. */
 it("offers expense and income only — never a transfer (S05 §9.1)", () => {
   render(<ComposerHeader onCancel={vi.fn()} kind="expense" onKindChange={vi.fn()} />);

@@ -123,7 +123,7 @@ direction — read-only, because it is derived.
 | Empty | n/a |
 | Error | Same account both sides → refused inline (`transactions_transfer_distinct`). Save failed → draft retained |
 | Offline | Works. Reference rate from cache, marked stale; the destination amount stays editable, which is the point — the rate you actually got does not depend on the feed |
-| Gated | **The source account's currency has no rate** — the same §14.6 gate S05 §6 states, reached here from S16's *Transfer from here* on the very account that is blocked. Save is disabled and a `neutral` `Banner` says so, carrying the one action that ends it: *Set a ‹CUR› rate*, opening S18 scoped to that currency and this screen's date. One refusal, one treatment, on both composers |
+| Gated | **The source account's currency has no rate** — the same §14.6 gate S05 §6 states, reached here from S16's *Transfer from here* on the very account that is blocked. Save is disabled and a `neutral` `Banner` says so, carrying the one action that ends it: *Set a ‹CUR› rate*, opening S18 scoped to that currency. One refusal, one treatment, on both composers |
 
 ## 7. Interaction
 

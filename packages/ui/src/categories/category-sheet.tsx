@@ -174,7 +174,11 @@ export function CategorySheet({
   const handleCreateSave = useCallback(() => {
     if (!onCreate) return;
     const name = createName.trim();
-    if (name === "" || createGroupId === null) return;
+    // `parentId: null` is legal exactly where there is no group to name —
+    // the first category of an empty taxonomy. With groups on the tree the
+    // sheet asks which one, so a null parent there is an unanswered
+    // question rather than an answer.
+    if (name === "" || (createGroupId === null && groups.length > 0)) return;
     const result = onCreate({ name, kind, parentId: createGroupId });
     if ("error" in result) {
       setCreateError(result.error);
@@ -183,7 +187,7 @@ export function CategorySheet({
     setCreating(false);
     setCreateError(undefined);
     handlePick(result.id);
-  }, [createGroupId, createName, handlePick, kind, onCreate]);
+  }, [createGroupId, createName, groups.length, handlePick, kind, onCreate]);
 
   /**
    * The footer's `Use ‹leaf›` re-fires the same pick — §7: "for the case
@@ -206,15 +210,19 @@ export function CategorySheet({
 
   const emptyBody = t("categories.noMatchBody", { query: query.trim() });
   /**
-   * **R1, and the reason this is not simply `onCreate !== undefined`.** A
-   * leaf is created *under a group* (§6: never at top level, because a
-   * top-level leaf is `Uncategorized` and nothing else), so a tree holding
-   * no groups has nowhere to put one — and every affordance that says
-   * otherwise is a promise this sheet cannot keep: a create row whose group
-   * chooser is empty, above a Save no keystroke can enable. Groups arrive
-   * with the taxonomy, never from here.
+   * **A groupless tree is not a dead end.** `create_category`'s own
+   * `parentId` is nullable (`registry/inputs.ts`) and `TAXONOMY.md` R1 makes
+   * a node a group *or* a leaf without saying anything about parents — the
+   * seeded taxonomy itself holds a top-level leaf. So a ledger with no
+   * groups creates its first category at the top level, the same write
+   * `CreateCategorySheet` makes from S19; `convert_leaf_group` is what turns
+   * it into a group afterwards.
+   *
+   * §6's *"never at top level"* is the **filtered** empty's own rule — its
+   * `Create "…"` is scoped to the group that narrowed the sheet — and stays
+   * that: `canCreateHere` below is what it governs.
    */
-  const canCreate = onCreate !== undefined && groups.length > 0;
+  const canCreate = onCreate !== undefined;
   const canCreateHere = canCreate && groupId !== null;
   /**
    * §6's *other* empty: a tree with no ordinary leaves, which is what a
@@ -239,7 +247,14 @@ export function CategorySheet({
    * labelled *New* on one sheet is one button announced twice.
    */
   const createAction = canCreate
-    ? { label: t("categories.createFirst"), onPress: handleOpenCreate }
+    ? {
+        label: t("categories.createFirst"),
+        // L12 — a query typed into an empty sheet is what the person wants
+        // the category *called*; the filtered empty already prefills it, and
+        // throwing it away here made the two states behave differently for
+        // no reason a person could see.
+        onPress: searching ? handleCreateFromEmpty : handleOpenCreate,
+      }
     : undefined;
 
   return (
@@ -277,10 +292,12 @@ export function CategorySheet({
         </ScrollView>
       )}
       {/*
-        `nestedScrollEnabled` on the inner list, never on the sheet body:
-        Android hands the gesture to the outer scrollable otherwise, and this
-        grid is bounded (`gridScroll`'s own `maxHeight`) exactly so it scrolls
-        within a sheet that also can.
+        `nestedScrollEnabled` on the inner list — the bounded one
+        (`gridScroll`'s own `maxHeight`) — never on the sheet body. Inert
+        today: `BottomSheet`'s body is a plain `View` in a `Modal`, so there
+        is no outer scrollable to lose the gesture to. It is the Android
+        contract for the day that body scrolls, stated on the list it would
+        be about.
       */}
       <ScrollView style={styles.gridScroll} nestedScrollEnabled>
         {visibleLeaves.length === 0 ? (
@@ -290,15 +307,17 @@ export function CategorySheet({
               // nothing is offered: an `EmptyState` requires an action, and
               // the only honest action here is none. The body says where
               // categories come from and that a capture saves without one.
+              // A picker-only caller (`onCreate` absent): nothing to offer,
+              // and an `EmptyState` requires an action.
               <View style={styles.emptyTree}>
-                <Text style={styles.emptyTreeTitle}>{t("categories.emptyTitle")}</Text>
-                <Text style={styles.emptyTreeBody}>{t("categories.noGroupsYet")}</Text>
+                <Text style={styles.emptyTreeTitle}>{t("categories.pickerEmptyTitle")}</Text>
+                <Text style={styles.emptyTreeBody}>{t("categories.pickerEmptyBody")}</Text>
               </View>
             ) : (
               <EmptyState
                 variant="first-run"
-                title={t("categories.emptyTitle")}
-                body={t("categories.emptyBody")}
+                title={t("categories.pickerEmptyTitle")}
+                body={t("categories.pickerEmptyBody")}
                 primaryAction={createAction}
               />
             )
@@ -588,23 +607,40 @@ function CreateRow({
   const t = useT();
   const styles = useStyles();
   const lockedGroup = groups.find((group) => group.id === groupId);
-  const canSave = name.trim() !== "" && groupId !== null;
+  // A top-level category is a real answer where no group exists (R1, and
+  // `create_category`'s own nullable `parentId`); where groups do exist, the
+  // capture sheet still asks which one — §6's own rule for creating here.
+  const canSave = name.trim() !== "" && (groupId !== null || groups.length === 0);
   return (
     <View style={styles.createRow}>
       {groupLocked ? null : (
         <>
-          <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-            {groups.map((group) => (
-              <GroupChip
-                key={group.id}
-                id={group.id}
-                name={group.name}
-                selected={group.id === groupId}
-                onPress={onGroupChange}
-              />
-            ))}
-          </ScrollView>
+          {/*
+            **No chooser where there is nothing to choose** —
+            `CreateCategorySheet` (S19) states the same rule for the same
+            control: a picker at rest looks identical whether it holds three
+            groups or none, so the one state that needs explaining was the
+            one that looked ordinary. The line says where the category will
+            land instead.
+          */}
+          {groups.length === 0 ? (
+            <Text style={styles.noGroups}>{t("categories.noGroupsYet")}</Text>
+          ) : (
+            <>
+              <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {groups.map((group) => (
+                  <GroupChip
+                    key={group.id}
+                    id={group.id}
+                    name={group.name}
+                    selected={group.id === groupId}
+                    onPress={onGroupChange}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          )}
         </>
       )}
       {groupLocked && lockedGroup ? <Text style={styles.label}>{lockedGroup.name}</Text> : null}
@@ -641,6 +677,8 @@ const useStyles = makeStyles((theme) => ({
   emptyTree: { alignItems: "center", gap: space.x3, padding: space.x6 },
   emptyTreeTitle: { color: theme.text, ...text.display("displayTwo") },
   emptyTreeBody: { color: theme.textMuted, ...text.ui("body"), textAlign: "center" },
+  /** The create row's own note where the group chooser would be. */
+  noGroups: { color: theme.textMuted, ...text.ui("bodySm") },
   // Two columns (S06 §3: "leaves are short and groups are few") — `gap` on
   // the wrapping row does the column gutter, so each cell only needs to
   // clear just under half the row.

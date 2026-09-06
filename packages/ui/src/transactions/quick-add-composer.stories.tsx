@@ -213,6 +213,15 @@ function WithCounterpartyDemo(args: QuickAddComposerProps) {
  * estimated-rate marker, and a currency with no rate at all is a missing
  * capability rather than an asserted figure.
  */
+export const NeedsRate: Story = {
+  args: {
+    raw: "48,90",
+    accounts: [UNCAPTURABLE_PLN],
+    accountId: "account-pln",
+    onSetRate: noop,
+  },
+};
+
 /**
  * **The same refusal at 390pt**, the width the whole finding was raised at.
  * The visual suite's viewport is 900px wide, so without this decorator every
@@ -243,15 +252,6 @@ function withPhoneWidth(Story: React.ComponentType) {
     </View>
   );
 }
-
-export const NeedsRate: Story = {
-  args: {
-    raw: "48,90",
-    accounts: [UNCAPTURABLE_PLN],
-    accountId: "account-pln",
-    onSetRate: noop,
-  },
-};
 
 /** `create_transaction`'s own refusals, rendered under the chip they name. */
 export const FieldErrors: Story = {

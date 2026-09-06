@@ -22,14 +22,13 @@
  * top-right, out of the thumb zone). A composer never gets both.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { IconButton } from "../primitives/icon-button";
 import { useInteraction } from "../primitives/interaction.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
-import { RadioGroup, type RadioGroupProps } from "../primitives/radio";
 import { useSafeArea } from "../primitives/safe-area";
 import { BottomSheet } from "../shell/bottom-sheet";
 import { text } from "../theme/fonts.ts";
@@ -107,19 +106,21 @@ function KindControl({ kind, onChange }: KindControlProps) {
   const label = kind === "expense" ? t("transactions.expense") : t("transactions.income");
   const handleOpen = useCallback(() => setOpen(true), []);
   const handleDismiss = useCallback(() => setOpen(false), []);
-  const options = useMemo<RadioGroupProps["options"]>(
-    () => [
-      { value: "expense", label: t("transactions.expense") },
-      { value: "income", label: t("transactions.income") },
-    ],
-    [t],
-  );
+  /**
+   * **Every tap closes, including the one on the kind already chosen.**
+   * `RadioGroup` swallows a press on its selected option — correct for a form
+   * field, where re-picking is a no-op rather than a deselection, and wrong
+   * for a menu whose whole job is to answer and go: the draft's own kind is
+   * the marked one, so the option a person is most likely to tap first was
+   * the one that did nothing at all. `AccountPicker` states the same rule
+   * for the same reason — *picking commits, there is no Use button*.
+   */
   const handlePick = useCallback(
-    (next: string) => {
+    (next: ComposerKind) => {
       setOpen(false);
-      if (next === "expense" || next === "income") onChange(next);
+      if (next !== kind) onChange(next);
     },
-    [onChange],
+    [kind, onChange],
   );
 
   return (
@@ -144,13 +145,70 @@ function KindControl({ kind, onChange }: KindControlProps) {
         <View style={styles.kindControlChevron} />
       </Pressable>
       <BottomSheet visible={open} title={t("transactions.kind")} onDismiss={handleDismiss}>
-        <RadioGroup
-          label={t("transactions.kind")}
-          options={options}
-          value={kind}
-          onChange={handlePick}
-        />
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel={t("transactions.kind")}
+          style={styles.kindOptions}
+        >
+          <KindOption
+            kind="expense"
+            label={t("transactions.expense")}
+            selected={kind === "expense"}
+            onPick={handlePick}
+          />
+          <KindOption
+            kind="income"
+            label={t("transactions.income")}
+            selected={kind === "income"}
+            onPick={handlePick}
+          />
+        </View>
       </BottomSheet>
+    </Animated.View>
+  );
+}
+
+type KindOptionProps = {
+  kind: ComposerKind;
+  label: string;
+  selected: boolean;
+  onPick: (kind: ComposerKind) => void;
+};
+
+/**
+ * One row of the kind menu — `role="radio"` inside the group, marked when it
+ * is the draft's own kind, and **always** answering the tap.
+ * `AccountPicker`'s own tile, in miniature.
+ */
+function KindOption({ kind, label, selected, onPick }: KindOptionProps) {
+  const styles = useStyles();
+  const { hovered, focused, handlers } = useInteraction();
+  const press = usePressScale();
+  const handlePress = useCallback(() => onPick(kind), [kind, onPick]);
+
+  return (
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityLabel={label}
+        accessibilityState={{ checked: selected }}
+        aria-checked={selected}
+        onPress={handlePress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        {...handlers}
+        style={[
+          styles.kindOption,
+          selected ? styles.kindOptionSelected : null,
+          hovered && !selected ? styles.kindOptionHovered : null,
+          focused ? styles.focused : null,
+        ]}
+      >
+        <Text style={[styles.kindOptionLabel, selected ? styles.kindOptionLabelSelected : null]}>
+          {label}
+        </Text>
+        {selected ? <View style={styles.check} /> : null}
+      </Pressable>
     </Animated.View>
   );
 }
@@ -187,6 +245,31 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: radius.sm,
   },
   kindControlHovered: { backgroundColor: theme.hoverFill },
+  kindOptions: { gap: space.md },
+  kindOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: touchTarget.min,
+    paddingHorizontal: space.x3,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: radius.sm,
+    backgroundColor: theme.surface,
+  },
+  kindOptionHovered: { backgroundColor: theme.hoverFill },
+  kindOptionSelected: { borderWidth: 2, borderColor: theme.accent },
+  kindOptionLabel: { color: theme.text, ...text.ui("body") },
+  kindOptionLabelSelected: { color: theme.accentText, ...text.ui("body", 600) },
+  /** `AccountPicker`'s own drawn check, matched — never a font glyph. */
+  check: {
+    width: 11,
+    height: 6,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: theme.accentText,
+    transform: [{ rotate: "-45deg" }],
+  },
   kindControlLabel: { color: theme.text, ...text.ui("body", 600) },
   kindControlChevron: {
     width: 8,

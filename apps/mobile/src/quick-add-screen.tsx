@@ -18,6 +18,7 @@ import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
+import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { text } from "@waltning/ui/theme/fonts";
@@ -123,6 +124,10 @@ export default function QuickAdd() {
   const today = capture.date;
   const breakpoint = useBreakpoint();
   const styles = useStyles();
+  const insets = useSafeArea();
+  // Beside the JSX rather than in `useStyles`: that cache is keyed on the
+  // theme and this is keyed on the device (`ComposerHeader`'s own split).
+  const clearTop = { paddingTop: insets.top };
 
   /**
    * D4a: S06's sheet is composed here, not inside `QuickAddForm` or
@@ -563,8 +568,15 @@ export default function QuickAdd() {
             composer states its name in `ComposerHeader`'s band, and the desk
             fallback, which is a form rather than a composer, states it here.
             The same string the header showed, so the desk reads exactly as
-            it did. */}
-        <Text style={styles.deskTitle}>{t("routes.expense")}</Text>
+            it did.
+
+            It clears the top inset itself for the same reason the band does:
+            `GroundPanel` never clears the top, because it was written when
+            every route above it had a header. This one no longer has. Zero
+            on a browser and on every device that can reach this breakpoint
+            today (`app.json` pins portrait and no tablet), so this is the
+            guarantee holding rather than a number anyone will see move. */}
+        <Text style={[styles.deskTitle, clearTop]}>{t("routes.expense")}</Text>
         <QuickAddForm
           accounts={accounts}
           categories={snapshot.categories}

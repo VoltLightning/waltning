@@ -326,21 +326,62 @@ it("names an empty tree as empty, never as a filter that matched nothing (S06 §
   expect(screen.queryByText("Nothing matches.")).toBeNull();
   expect(screen.getByPlaceholderText("Search categories")).toBeDefined();
   expect(screen.queryByPlaceholderText("Search 0 categories")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Create a category" })).toBeNull();
-  expect(
-    screen.getByText(
-      "A category lives in a group, and there are none yet — save without one and file it later.",
-    ),
-  ).toBeDefined();
+  expect(screen.getByRole("button", { name: "Create a category" })).toBeDefined();
 });
 
 /**
- * R1 — a leaf is created *under a group*, so a tree with none has nowhere to
- * put one. Every affordance that says otherwise is a promise the sheet
- * cannot keep: the create row's chooser would be empty and its Save could
- * never enable, by any input a person can give.
+ * **A groupless tree is not a dead end.** `create_category`'s `parentId` is
+ * nullable and R1 says nothing about parents — the seeded taxonomy holds a
+ * top-level leaf itself — so the first category of an empty ledger is
+ * created at the top level, the same write S19's own create sheet makes. The
+ * row says where it will land instead of showing a chooser with nothing in
+ * it.
  */
-it("offers no create path at all when there is no group to create under (S06 §6)", () => {
+it("creates a top-level category when no group exists (S06 §6, R1)", () => {
+  const onCreate = vi.fn(() => ({ id: "cat-new" }));
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[]}
+      onPick={vi.fn()}
+      onCreate={onCreate}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
+  expect(screen.getByText("No groups yet — this will be a top-level category.")).toBeDefined();
+  expect(screen.queryByText("Choose a group")).toBeNull();
+
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Coffee" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onCreate).toHaveBeenCalledWith({ name: "Coffee", kind: "expense", parentId: null });
+});
+
+/** With groups on the tree the capture sheet still asks which one (§6). */
+it("still asks for a group when the tree has them", () => {
+  const onCreate = vi.fn(() => ({ id: "cat-new" }));
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[FOOD, TRANSPORT]}
+      onPick={vi.fn()}
+      onCreate={onCreate}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Coffee" } });
+  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+});
+
+/**
+ * L12 — a query typed into an empty sheet is what the person wants the
+ * category called. The filtered empty already prefills it; this one threw it
+ * away and opened a blank name field.
+ */
+it("carries a typed query into the create row it offers", () => {
   render(
     <CategorySheet
       visible
@@ -351,10 +392,14 @@ it("offers no create path at all when there is no group to create under (S06 §6
       onDismiss={vi.fn()}
     />,
   );
-  expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.change(screen.getByPlaceholderText("Search categories"), {
+    target: { value: "Coffee" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
+  expect((screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement).value).toBe("Coffee");
 });
 
-/** With a group to create under, the same empty state offers a create that can finish. */
+/** With groups on the tree, the same empty state opens a create locked to one. */
 it("offers create on an empty tree that has groups", () => {
   render(
     <CategorySheet

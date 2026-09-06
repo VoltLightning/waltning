@@ -348,11 +348,10 @@ export const pl: Messages = {
   categories: {
     search: "Szukaj wśród {{count}} kategorii",
     searchEmpty: "Szukaj kategorii",
-    emptyTitle: "Brak kategorii",
-    emptyBody: "Utwórz teraz albo zapisz bez kategorii i uporządkuj później.",
+    pickerEmptyTitle: "Brak kategorii",
+    pickerEmptyBody: "Utwórz teraz albo zostaw tę transakcję bez kategorii.",
     createFirst: "Utwórz kategorię",
-    noGroupsYet:
-      "Kategoria należy do grupy, a nie ma jeszcze żadnej — zapisz bez niej i uporządkuj później.",
+    noGroupsYet: "Brak grup — to będzie kategoria najwyższego poziomu.",
     new: "Nowa",
     create: "Utwórz „{{query}}”",
     use: "Użyj",
