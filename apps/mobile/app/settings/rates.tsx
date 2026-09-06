@@ -13,6 +13,12 @@ import { useLocalSearchParams } from "expo-router";
 import SettingsRatesScreen from "../../src/settings-rates-screen";
 
 export default function SettingsRatesRoute() {
-  const { quote, date } = useLocalSearchParams<{ quote?: string; date?: string }>();
+  // `string | string[]` is what expo-router actually answers — a repeated key
+  // (`?quote=PLN&quote=EUR`) is an array. Typed honestly here and narrowed by
+  // the screen, rather than a `string` that is a lie at the seam.
+  const { quote, date } = useLocalSearchParams<{
+    quote?: string | string[];
+    date?: string | string[];
+  }>();
   return <SettingsRatesScreen quote={quote} date={date} />;
 }

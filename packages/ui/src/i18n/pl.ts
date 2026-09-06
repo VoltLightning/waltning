@@ -528,9 +528,12 @@ export const pl: Messages = {
     rateTableCarriedUnknown: "Przeniesiony · wiek nie jest znany",
     rateEditorTitle: "Ustaw {{quote}} za {{base}}, {{from}} … {{to}}",
     rateEditorRateLabel: "Kurs · {{quote}} za {{base}}",
-    // 1 → dzień, 2–4 → dni, 5+ (and 0) → dni. Every line here counts days,
-    // so every line declines; `_other` (fractional) never renders for a whole
-    // count and carries the `_many` form rather than invent an untested one.
+    // Two axes decline here, not one. The noun: 1 → dzień, 2–4 and 5+ → dni.
+    // And the adjective agreeing with it: `few` (2–4) takes the nominative
+    // plural (przeniesione, ręczne), `many` (5+ and 0) the genitive
+    // (przeniesionych, ręcznych) — the same split `noRatesYetFuture` above
+    // already makes. `_other` (fractional) never renders for a whole count
+    // and carries the `_many` form rather than invent an untested one.
     rateEditorTotalDays_one: "{{count}} dzień",
     rateEditorTotalDays_few: "{{count}} dni",
     rateEditorTotalDays_many: "{{count}} dni",
@@ -540,11 +543,11 @@ export const pl: Messages = {
     rateEditorAbsent_many: "{{count}} dni obecnie bez kursu",
     rateEditorAbsent_other: "{{count}} dni obecnie bez kursu",
     rateEditorCarried_one: "{{count}} dzień obecnie przeniesiony",
-    rateEditorCarried_few: "{{count}} dni obecnie przeniesionych",
+    rateEditorCarried_few: "{{count}} dni obecnie przeniesione",
     rateEditorCarried_many: "{{count}} dni obecnie przeniesionych",
     rateEditorCarried_other: "{{count}} dni obecnie przeniesionych",
     rateEditorManual_one: "{{count}} dzień obecnie ręczny",
-    rateEditorManual_few: "{{count}} dni obecnie ręcznych",
+    rateEditorManual_few: "{{count}} dni obecnie ręczne",
     rateEditorManual_many: "{{count}} dni obecnie ręcznych",
     rateEditorManual_other: "{{count}} dni obecnie ręcznych",
     rateEditorConfirmOverwrite_one:
@@ -609,7 +612,6 @@ export const pl: Messages = {
     rangeYear: "Rok",
     rangeFrom: "Od",
     rangeTo: "Do",
-    rangeTooLong: "Zakres może obejmować najwyżej {{max}} dni.",
     setRange: "Ustaw zakres",
     clearManual: "Wyczyść ręczne",
     rateWriteFailed: "Nie udało się zapisać.",

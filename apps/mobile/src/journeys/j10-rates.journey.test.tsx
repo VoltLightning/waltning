@@ -91,6 +91,8 @@ type JourneyLedger = ReturnType<typeof createJourneyLedger>;
 const NOW = new Date("2026-09-10T09:00:00Z");
 
 const FRIDAY = "2026-09-04";
+/** A day the fixture leaves unrated — what a capture gate would link to. */
+const UNRATED = "2026-09-01";
 const SUNDAY = "2026-09-06";
 const MONDAY = "2026-09-07";
 
@@ -244,5 +246,49 @@ describe("J10 — currency and rates", () => {
     // What S18 itself shows for Sunday's own date — the same text read
     // above, off the real screen.
     expect(pricedRate).toBe(formatRate(FRIDAY_RATE));
+  });
+
+  /**
+   * R1 M4 — the capture gate's own link, driven end to end through the real
+   * route contract: `/settings/rates?quote=PLN&date=<day>` lands on the
+   * editor for that pair and that single day, and one write prices it.
+   *
+   * Proves: screens/S18 §2 (*Search parameters*), §3.
+   *
+   * **Through the harness's own params, not a prop passed by hand.** S18
+   * reads both through `app/settings/rates.tsx`; `journey-harness.tsx` stands
+   * in for that route and does the same read, so this journey exercises the
+   * interface `B-rates.md` promises PRs C and D rather than a shortcut around
+   * it.
+   */
+  it("R1 M4 — ?quote=&date= lands on the editor for that day, and one write prices it", async () => {
+    const { ledger, stub } = setupJourney();
+    stub.pushWithParams("rates", { quote: "PLN", date: UNRATED });
+
+    render(<JourneyHarness controller={ledger.controller} stub={stub} />);
+    await settleLayout();
+
+    // The sheet is already open, on the linked pair and the linked day — no
+    // table to hunt through, which is the whole point of the link.
+    expect(screen.getByText(`Set PLN per USD, ${UNRATED} … ${UNRATED}`)).toBeDefined();
+
+    const LINKED_RATE = "4.3210";
+    fireEvent.change(screen.getByLabelText("Rate · PLN per USD"), {
+      target: { value: LINKED_RATE },
+    });
+    // No manual row exists for that one day, so the write lands on the first
+    // press — no "Overwrite and set".
+    fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
+    await waitFor(() => expect(screen.queryByText(/^Set PLN per USD/)).toBeNull());
+
+    // And S18 now shows it for that date. Narrowed to the one day so the row
+    // is inside `FlatList`'s own initial window under jsdom.
+    fireEvent.change(screen.getByRole("textbox", { name: "From" }), {
+      target: { value: UNRATED },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "To" }), { target: { value: UNRATED } });
+
+    const row = screen.getByRole("button", { name: UNRATED });
+    expect(within(row).getByText(formatRate(LINKED_RATE))).toBeDefined();
   });
 });

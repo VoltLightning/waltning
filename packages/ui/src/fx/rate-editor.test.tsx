@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/provider";
 import { RateEditor } from "./rate-editor";
 
@@ -182,4 +182,69 @@ it('a one-day range declines every count line, never "1 days"', () => {
   expect(screen.getByText("0 days currently absent")).toBeDefined();
   expect(screen.getByText("1 day currently carried forward")).toBeDefined();
   expect(screen.queryByText("1 days")).toBeNull();
+});
+
+/**
+ * R1 L1 — two axes decline in Polish, not one. The noun follows the count
+ * (1 → dzień, otherwise dni); the adjective agreeing with it follows the
+ * *category*: `few` (2–4) takes the nominative plural, `many` (5+ and 0) the
+ * genitive. The catalogue shipped the genitive in both slots, so a two-day
+ * range read *"2 dni obecnie przeniesionych"*.
+ *
+ * `i18n.test.tsx` proves `Intl.PluralRules("pl")` resolves the four
+ * categories; this proves the four `rateEditor*` key sets say the right thing
+ * in each one, through the call sites this component actually makes.
+ */
+describe("R1 L1 — the Polish plurals of the count lines", () => {
+  function renderPl(from: string, to: string, carried: number, manual: number) {
+    const existingRows = [
+      ...Array.from({ length: carried }, (_, i) => ({
+        date: `2026-08-${String(i + 1).padStart(2, "0")}`,
+        source: "carried_forward",
+      })),
+      ...Array.from({ length: manual }, (_, i) => ({
+        date: `2026-09-${String(i + 1).padStart(2, "0")}`,
+        source: "manual",
+      })),
+    ];
+    render(
+      <I18nProvider locale="pl">
+        <RateEditor
+          {...BASE_PROPS}
+          from={from}
+          to={to}
+          existingRows={existingRows}
+          onSubmit={noop}
+        />
+      </I18nProvider>,
+    );
+  }
+
+  it("one — the singular noun, never 'dni'", () => {
+    renderPl("2026-08-01", "2026-08-01", 1, 0);
+    expect(screen.getByText("1 dzień")).toBeDefined();
+    expect(screen.getByText("1 dzień obecnie przeniesiony")).toBeDefined();
+  });
+
+  it("few (2–4) — the nominative plural adjective", () => {
+    renderPl("2026-08-01", "2026-08-03", 2, 0);
+    expect(screen.getByText("3 dni")).toBeDefined();
+    expect(screen.getByText("2 dni obecnie przeniesione")).toBeDefined();
+  });
+
+  it("many (5+) — the genitive plural adjective", () => {
+    renderPl("2026-08-01", "2026-08-06", 5, 0);
+    expect(screen.getByText("6 dni")).toBeDefined();
+    expect(screen.getByText("5 dni obecnie przeniesionych")).toBeDefined();
+  });
+
+  it("many (0) — the genitive again, which is what an empty count takes", () => {
+    renderPl("2026-08-01", "2026-08-06", 0, 0);
+    expect(screen.getByText("0 dni obecnie ręcznych")).toBeDefined();
+  });
+
+  it("few (2–4) manual rows take the nominative too", () => {
+    renderPl("2026-09-01", "2026-09-03", 0, 3);
+    expect(screen.getByText("3 dni obecnie ręczne")).toBeDefined();
+  });
 });

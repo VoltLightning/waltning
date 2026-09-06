@@ -28,20 +28,24 @@
  * — the platform's own face, unregistered and untested, which is a fallback
  * serif on more than one device this ships to.
  *
- * **Plain rows, and the page scroller carries them.** This table draws one
- * `View` per calendar day rather than a `FlatList`, because the screen that
- * hosts it (S18) has a pair select, a range control, action buttons, a note
- * and a coverage card around it — and a `FlatList` inside the page's own
- * `ScrollView` is React Native's double-scroll warning, which forced that
- * whole screen to stop scrolling and end flush with its last card. One
- * scroller per page; this is not the one.
+ * **A `FlatList`, and it is the page.** 2,080 days per pair from 2020-11 is
+ * exactly what virtualization is for, and `wave-4-shared.md`'s own rule
+ * ("no virtualisation library") means `FlatList`'s own windowing, not plain
+ * rows. But a `FlatList` inside the page's `ScrollView` is React Native's
+ * double-scroll warning — so the screen around it hands its *own* content in
+ * through `header` and `footer`, and this list becomes the page's one
+ * scroller. `GroundPanel scroll="own"` (a plain `View`) is what holds it.
  *
- * That trade is only safe because **the range is bounded**: S18 caps its own
- * range at `set_manual_rate`'s 366 days, so the most this ever renders is a
- * year of rows, not the 2,080-day history a pair accumulates. A caller that
- * hands it a wider range would render every day of it — the cap lives with
- * the control that picks the range, which is where a person can be told
- * about it.
+ * That is why there is no cap on the range: the table draws whatever it is
+ * given, a year or a decade, and only mounts the window that is on screen.
+ * It is also why the table is **not carded** — a card that *is* the whole
+ * screen is precisely what `design-system/05` §5.1 forbids. The per-currency
+ * coverage list is still a card, riding in `footer`.
+ *
+ * **`header` and `footer` are nodes, not components.** `ListHeaderComponent`
+ * accepts either; a node reconciles by element type, so the `TextInput`s a
+ * screen puts in its header keep focus and their caret across a re-render,
+ * which a component identity recreated each render would not.
  *
  * **No drag-select, and a tap rather than a long-press.** `S18` §7 describes
  * dragging across dates to seed `RateEditor`; that needs a gesture recognizer
@@ -58,7 +62,7 @@
 
 import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import { useCallback, useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { useLocale, useT } from "../i18n/provider";
 import { useInteraction } from "../primitives/interaction.ts";
 import { Tag } from "../primitives/tag";
@@ -96,7 +100,12 @@ type RenderRow = {
   carriedDays: number | null | undefined;
 };
 
-export type RateTableProps = {
+function keyExtractor(row: RenderRow): string {
+  return row.date;
+}
+
+/** The pair and range to table. `null` at the caller means there is nothing to table. */
+export type RateTablePair = {
   /** The pivot — never chosen here, only stated (`SPEC.md` §7.0). */
   base: string;
   quote: string;
@@ -109,16 +118,32 @@ export type RateTableProps = {
   onSelectRow?: (date: string) => void;
 };
 
-export function RateTable({ base, quote, from, to, rows, onSelectRow }: RateTableProps) {
+export type RateTableProps = {
+  /**
+   * `null` when the screen has nothing to table — no quote currency, no
+   * pivot, a range that does not parse. The list still renders, because it
+   * is the page's own scroller and `header`/`footer` still have to move.
+   */
+  pair: RateTablePair | null;
+  /** The hosting screen's own content, above the table, inside the one scroller. */
+  header?: React.ReactNode;
+  /** The hosting screen's own content, below the table, inside the one scroller. */
+  footer?: React.ReactNode;
+};
+
+const EMPTY_ROWS: RenderRow[] = [];
+
+export function RateTable({ pair, header, footer }: RateTableProps) {
   const t = useT();
   const styles = useStyles();
 
   const filled = useMemo(() => {
-    const byDate = new Map(rows.map((row) => [row.date, row]));
-    const fromDate = accountingDate(from);
-    const toDate = accountingDate(to);
+    if (pair === null) return EMPTY_ROWS;
+    const byDate = new Map(pair.rows.map((row) => [row.date, row]));
+    const fromDate = accountingDate(pair.from);
+    const toDate = accountingDate(pair.to);
     const span = daysBetween(fromDate, toDate);
-    if (span < 0) return [];
+    if (span < 0) return EMPTY_ROWS;
 
     const out: RenderRow[] = [];
     for (let n = 0; n <= span; n += 1) {
@@ -131,23 +156,52 @@ export function RateTable({ base, quote, from, to, rows, onSelectRow }: RateTabl
       );
     }
     return out;
-  }, [rows, from, to]);
+  }, [pair]);
 
-  if (filled.length === 0) {
-    return <Text style={styles.empty}>{t("fx.rateTableEmptyRange")}</Text>;
-  }
+  const onSelectRow = pair?.onSelectRow;
+  const renderItem = useCallback(
+    ({ item }: { item: RenderRow }) => <RateTableRowView row={item} onSelect={onSelectRow} />,
+    [onSelectRow],
+  );
+
+  // The column header rides *inside* the list header, so it scrolls with the
+  // screen's own controls above it rather than pinning a legend over nothing.
+  const listHeader = (
+    <>
+      {header}
+      {pair === null || filled.length === 0 ? null : (
+        <View style={styles.header}>
+          <Text style={styles.headerDate}>{t("fx.rateTableDateHeader")}</Text>
+          <Text style={styles.headerRate}>
+            {t("fx.rateTableRateHeader", { quote: pair.quote, base: pair.base })}
+          </Text>
+          <Text style={styles.headerSource}>{t("fx.rateTableSourceHeader")}</Text>
+        </View>
+      )}
+    </>
+  );
 
   return (
-    <>
-      <View style={styles.header}>
-        <Text style={styles.headerDate}>{t("fx.rateTableDateHeader")}</Text>
-        <Text style={styles.headerRate}>{t("fx.rateTableRateHeader", { quote, base })}</Text>
-        <Text style={styles.headerSource}>{t("fx.rateTableSourceHeader")}</Text>
-      </View>
-      {filled.map((row) => (
-        <RateTableRowView key={row.date} row={row} onSelect={onSelectRow} />
-      ))}
-    </>
+    <FlatList
+      data={filled}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      ListHeaderComponent={listHeader}
+      // Wrapped rather than passed through: `ListFooterComponent` takes an
+      // element or a component, and `ReactNode` is wider than either. The
+      // fragment's own type is stable across renders, so nothing remounts.
+      ListFooterComponent={footer === undefined ? null : <>{footer}</>}
+      ListEmptyComponent={
+        pair === null ? null : <Text style={styles.empty}>{t("fx.rateTableEmptyRange")}</Text>
+      }
+      style={styles.list}
+      // The screen's own fields live in `header`, so this list is what a tap
+      // has to reach past an open keyboard — the same two props `GroundPanel`
+      // sets on the page scroller it is standing in for here.
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      automaticallyAdjustKeyboardInsets
+    />
   );
 }
 
@@ -208,6 +262,8 @@ function RateTableRowView({
 }
 
 const useStyles = makeStyles((theme) => ({
+  /** This list is the page, so it takes the panel's whole box. */
+  list: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

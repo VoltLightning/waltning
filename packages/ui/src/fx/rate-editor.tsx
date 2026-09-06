@@ -26,6 +26,16 @@
  * saying the same thing, which is how it came to read as disabled chrome
  * rather than as the title of what is about to be written.
  *
+ * **The rate field is first, and this component does not avoid the
+ * keyboard.** First, because it is the only thing anyone opens this to type,
+ * and because a host that lifts its sheet by the keyboard's height lifts the
+ * top of the content — so whatever is at the top is what stays reachable.
+ * Not avoiding it, because **the sheet is the box that has to move**: two
+ * nested keyboard-avoiding views each add the keyboard's height and the
+ * content ends up twice as far off the bottom as it should be. `BottomSheet`
+ * owns that, and until it does, an iOS `decimal-pad` (which has no return
+ * key) covers everything here below the host's header.
+ *
  * **Two submits, not two components.** The first press states the count and,
  * only when `manualCount > 0`, waits for a second press before calling
  * `onSubmit(true)` — the "second, explicit confirmation" the spec asks for,
@@ -55,12 +65,14 @@ export type RateEditorRow = {
  * L11 — `setManualRateInput`'s own cap, restated here so the range is refused
  * before a submit round trip.
  *
- * Exported because S18 caps its *range control* at the same number: the table
- * draws one row per calendar day into the page scroller, so the range a
- * person can pick is the range a person can write, and one constant says so
- * in both places.
+ * **Deliberately not exported, and deliberately not the screen's business.**
+ * This is the cap on a *write*, so it belongs where the write is composed.
+ * The range control on S18 picks what to *look at*, `clear_manual_rate` has
+ * no cap of its own, and a table that draws whatever range it is handed needs
+ * none — a second copy of this number gating either of those would refuse
+ * work the ledger accepts.
  */
-export const MAX_RANGE_DAYS = 366;
+const MAX_RANGE_DAYS = 366;
 
 export type RateEditorProps = {
   /** The pivot — shown, never chosen here (`SPEC.md` §7.0). */

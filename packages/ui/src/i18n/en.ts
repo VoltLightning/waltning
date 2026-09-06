@@ -1164,13 +1164,6 @@ export const en = {
     rangeYear: "Year",
     rangeFrom: "From",
     rangeTo: "To",
-    /**
-     * S18 §3 — the table draws one row per calendar day and the page scroller
-     * carries them, so the range it will draw is bounded by the same cap
-     * `set_manual_rate` puts on a range write. Stated rather than silently
-     * truncated: a range that draws nothing needs a sentence saying why.
-     */
-    rangeTooLong: "A range can cover at most {{max}} days.",
     setRange: "Set a range",
     clearManual: "Clear manual",
     rateWriteFailed: "That didn't save.",

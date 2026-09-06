@@ -37,10 +37,11 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import type { FieldError } from "@waltning/client/transport/field-errors";
-import { CoverageStatus } from "@waltning/ui/fx/coverage-status";
+import { CoverageStatus, resolveCoverageStatus } from "@waltning/ui/fx/coverage-status";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
+import { Tag } from "@waltning/ui/primitives/tag";
 import { TextField } from "@waltning/ui/primitives/text-field";
 import { Toggle } from "@waltning/ui/primitives/toggle";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
@@ -127,6 +128,26 @@ function CurrencyRow({
   const handleEdit = useCallback(() => onEdit(row), [onEdit, row]);
   const handleViewRates = useCallback(() => onViewRates(row.code), [onViewRates, row.code]);
 
+  const detail = t("fx.currencyDetail", { symbol: row.symbol, decimals: row.decimals });
+  /**
+   * **The row's own accessible name, composed rather than overridden.** An
+   * `accessibilityLabel` replaces the name a reader would compose from the
+   * descendants, so a bare `row.code` made the name, the symbol, the coverage
+   * and the pinned state audible to nobody — coverage stated to sighted users
+   * only, which is exactly what S17 §6 refuses. Every fragment is already
+   * translated; the separator is the same `·` the pair `Select` on S18 joins
+   * a code and a name with.
+   */
+  const accessibilityLabel = [
+    row.code,
+    row.name,
+    detail,
+    coverage === undefined ? null : resolveCoverageStatus(t, coverage).label,
+    row.pinned ? t("fx.pinned") : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+
   return (
     <View style={styles.row}>
       {/*
@@ -136,7 +157,7 @@ function CurrencyRow({
       */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={row.code}
+        accessibilityLabel={accessibilityLabel}
         accessibilityState={{ expanded }}
         aria-expanded={expanded}
         onPress={handleExpand}
@@ -147,9 +168,7 @@ function CurrencyRow({
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
           </Text>
-          <Text style={styles.detail}>
-            {t("fx.currencyDetail", { symbol: row.symbol, decimals: row.decimals })}
-          </Text>
+          <Text style={styles.detail}>{detail}</Text>
         </View>
         <View style={styles.rowStatusLine}>
           {coverage ? (
@@ -163,11 +182,16 @@ function CurrencyRow({
             />
           ) : null}
           {/*
+            A `Tag`, where coverage beside it is a caption — the distinction
+            this screen's own rule draws: pinned is a **state** the currency
+            is in, coverage is a measurement of it. Two muted captions side by
+            side said the opposite.
+
             Only while closed: open, the `Toggle` below states the same fact
             and can change it, and one row saying "Pinned" twice is one of
             them that can go stale in a reader's eye.
           */}
-          {row.pinned && !expanded ? <Text style={styles.pinnedMark}>{t("fx.pinned")}</Text> : null}
+          {row.pinned && !expanded ? <Tag>{t("fx.pinned")}</Tag> : null}
         </View>
       </Pressable>
       {expanded ? (
@@ -578,7 +602,6 @@ const useStyles = makeStyles((theme) => ({
   code: { color: theme.text, ...text.ui("body", 600) },
   name: { color: theme.textMuted, ...text.ui("bodySm"), flex: 1 },
   detail: { color: theme.textMuted, ...text.ui("caption") },
-  pinnedMark: { color: theme.textMuted, ...text.ui("caption") },
   rowActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   pivotRow: {
     flexDirection: "row",

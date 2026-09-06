@@ -4,15 +4,16 @@
  * it holds 0.5% of its range is how GEL stayed broken."*
  *
  * **A caption, not a tag — which is why it is no longer called one.** `Tag`
- * is a filled, upper-cased pill (`03` §3.3's own `textTransform`), and every
- * coverage row wearing one turned a per-currency fact into a row of shouting
- * badges: *NO RATES YET · SET ONE BY HAND*, six times down a settings screen.
- * A `Tag` marks a **state** something is in — `manual`, `estimated`, a
- * business row — and coverage is not a state, it is a measurement. So it
- * renders as a muted caption in sentence case, and the one thing it keeps
- * from `04` §4.7's rule is the **ink**: amber below 100%, because a currency
- * resting on a coverage gap is the same claim as a row resting on an override
- * (P4). Colour is never the message (P5) — the sentence always says it.
+ * fills its background and upper-cases its text
+ * (`primitives/tag.tsx`'s own `textTransform`), and every coverage row
+ * wearing one turned a per-currency fact into a row of shouting badges: *NO
+ * RATES YET · SET ONE BY HAND*, six times down a settings screen. A `Tag`
+ * marks a **state** something is in — `03` §3.3's `warn` is "asserted rather
+ * than measured" — and coverage is measured. So it renders as a muted caption
+ * in sentence case, and the one thing it keeps from `04` §4.7's rule is the
+ * **ink**: amber below 100%, because a currency resting on a coverage gap is
+ * the same claim as a row resting on an override (P4). Colour is never the
+ * message (P5) — the sentence always says it.
  *
  * **Stated, never nudged (S17 §8's own open question, closed).** This
  * component draws the number and, below 100%, the date of the last quote it
@@ -56,16 +57,18 @@ export type CoverageStatusProps = {
   futureRows: number;
 };
 
-export function CoverageStatus({
-  days,
-  realDays,
-  calendarDays,
-  pct,
-  lastDate,
-  futureRows,
-}: CoverageStatusProps) {
-  const t = useT();
-  const styles = useStyles();
+/**
+ * The sentence and whether it is a complete one — resolved apart from the
+ * rendering, because a screen that puts this caption inside a pressable row
+ * needs the same words in the row's accessible name. `accessibilityLabel`
+ * overrides the name a reader would otherwise compose from the descendants,
+ * so without this the coverage a sighted user reads is a coverage a screen
+ * reader never hears (S17 §6: coverage is *stated* per currency).
+ */
+export function resolveCoverageStatus(
+  t: ReturnType<typeof useT>,
+  { days, realDays, calendarDays, pct, lastDate, futureRows }: CoverageStatusProps,
+): { label: string; complete: boolean } {
   // M3 — `complete` decides on real quotes over calendar days, never on
   // `days`, which a dead source carried every day to today fills without a
   // single fresh quote.
@@ -93,6 +96,14 @@ export function CoverageStatus({
         : complete || lastDate === undefined
           ? t("fx.coveragePct", { pct: String(pct) })
           : t("fx.coverageBelow", { pct: String(pct), date: lastDate });
+
+  return { label, complete };
+}
+
+export function CoverageStatus(props: CoverageStatusProps) {
+  const t = useT();
+  const styles = useStyles();
+  const { label, complete } = resolveCoverageStatus(t, props);
 
   return <Text style={[styles.status, complete ? null : styles.incomplete]}>{label}</Text>;
 }

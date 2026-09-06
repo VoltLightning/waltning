@@ -238,10 +238,17 @@ function EditableAmountField({
 
 const useStyles = makeStyles((theme) => ({
   block: { gap: space.xs },
+  /**
+   * Sentence case, like every other field label in this system
+   * (`primitives/text-field.tsx`'s own). `kicker` is already the eyebrow
+   * step — 11 px, 700, letter-spaced — and upper-casing it on top made
+   * *OPENING BALANCE* shout among the sentence-case labels beside it on the
+   * same form. Casing is what a `Tag` does to mark a state; a field label
+   * names a field.
+   */
   label: {
     color: theme.textMuted,
     ...text.ui("kicker"),
-    textTransform: "uppercase",
   },
   field: {
     flexDirection: "row",

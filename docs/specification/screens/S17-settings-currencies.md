@@ -52,7 +52,8 @@ Web adds columns rather than regions; the list is short and does not need two.
 | Component | Notes |
 |---|---|
 | `CurrencyChip` | Pinned set preview — what the header will show |
-| `Toggle` | Pinned |
+| `Toggle` | Pinned, in the row's expanded detail |
+| `Tag` | *Pinned*, on the collapsed row — pinned is a **state** the currency is in, which is what a tag marks. Coverage beside it is not, and is a caption |
 | `CoverageStatus` | Coverage per currency — a **muted caption in sentence case**, amber ink below 100%. Never a `Tag`: a tag is upper-cased and marks a *state* (`manual`, `estimated`), and coverage is a measurement. Six rows each wearing *NO RATES YET · SET ONE BY HAND* was a list of badges shouting a fact nobody had to act on |
 | `ConfirmDialog` | Pivot change only |
 | `ProgressBar` | Backfill when adding |
@@ -94,6 +95,11 @@ abroad requires.
   target, and a pressable inside a pressable is one gesture with two meanings.
   The link into S18 is one of the row's expanded actions instead — available at
   every coverage rather than only at zero.
+- **The row's accessible name is everything the row shows** — code, name,
+  symbol · decimals, coverage, and whether it is pinned. A pressable's own
+  label *replaces* the name a reader would compose from its contents, so a row
+  labelled with the bare code states its coverage to sighted users only, which
+  is the half of §6 a screen reader would never hear.
 - **Stated, never nudged.** The screen reports coverage and offers archiving; it
   does not recommend either. A currency stuck at 23% is a stable fact, and the
   system has no standing to guess whether you still hold it.

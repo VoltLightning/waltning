@@ -5,7 +5,7 @@
  * shared `basePort` (M4).
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneLedgerPort,
@@ -147,6 +147,57 @@ it("a ?date= that is not a calendar day behaves as an unparameterised visit", ()
   expect(screen.queryByText(/^Set PLN per USD/)).toBeNull();
 });
 
+/**
+ * R1 H1 — a `?quote=` this ledger cannot resolve (archived, renamed, or a
+ * capture gate that raced the ledger) used to fall through to the first quote
+ * currency **with the editor already open on it**, headed "Set PLN per USD"
+ * after a link that said GEL. Two taps from a manual rate on a pair nobody
+ * asked about.
+ *
+ * Broken once by gating `editorOpen` on `linkedDate` alone: the sheet opens
+ * on PLN and this fails on the first assertion.
+ */
+it("R1 H1 — an unresolvable ?quote= opens nothing, and does not move the selection", () => {
+  withLedger(
+    { listCurrencySettings: () => [PLN_ROW, EUR_ROW, USD_ROW] },
+    {
+      quote: "GEL",
+      date: "2026-08-30",
+    },
+  );
+  expect(screen.queryByText(/ per USD, /)).toBeNull();
+  // The selection falls back exactly as an unparameterised visit does — the
+  // first option (PLN) — rather than to whatever the link named.
+  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+});
+
+/**
+ * R1 L7 — `set_manual_rate` refuses a date that has not happened yet, so
+ * opening the editor on one only stages a refusal: the rate is typed, the
+ * button is pressed, and *then* it is impossible.
+ */
+it("R1 L7 — a ?date= in the future opens nothing", () => {
+  // The fixture's device date is 2026-09-03.
+  withLedger({}, { quote: "PLN", date: "2027-01-01" });
+  expect(screen.queryByText(/^Set PLN per USD/)).toBeNull();
+});
+
+/**
+ * R1 L8 — `expo-router` answers `string | string[]`; a repeated key is an
+ * array, and an array is not a currency code or a date.
+ */
+it("R1 L8 — repeated params are arrays, and behave as an unparameterised visit", () => {
+  withLedger(
+    { listCurrencySettings: () => [PLN_ROW, EUR_ROW, USD_ROW] },
+    {
+      quote: ["PLN", "EUR"],
+      date: ["2026-08-30"],
+    },
+  );
+  expect(screen.queryByText(/ per USD, /)).toBeNull();
+  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+});
+
 it("no params at all leaves the editor closed on the first option", () => {
   withLedger();
   expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
@@ -272,38 +323,57 @@ it("draws neither the table card nor the hint when the custom range does not par
 });
 
 /**
- * The table draws one row per calendar day into the page's own scroller, so
- * the range that can be picked is the range that can be written
- * (`MAX_RANGE_DAYS`, shared with `RateEditor`). Stated, never silently
- * truncated — and never a ten-year table nobody can scroll.
+ * R1 M1 — the range control caps nothing, because nothing it feeds is capped.
+ * `clear_manual_rate` carries only `rateRangeOrdered`, so a pair whose manual
+ * rows are spread across six years is cleared in one operation — not six the
+ * reader has to compose by hand. `RateTable` is virtualized, so drawing that
+ * range costs a window, not six years of views.
+ *
+ * Broken once by nulling `range` past 366 days: both buttons go disabled and
+ * this fails on the call count.
  */
-it("a custom range past the cap states the cap and draws no table", () => {
-  withLedger({});
-  expect(screen.getByText("Date")).toBeDefined();
+it("R1 M1 — a multi-year range still draws and still clears", () => {
+  const clearManualRate = vi.fn(() => ({ deleted: 812 }));
+  withLedger({ clearManualRate });
 
   fireEvent.change(screen.getByLabelText("From"), { target: { value: "2020-01-01" } });
   fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-09-03" } });
 
-  expect(screen.getByText("A range can cover at most 366 days.")).toBeDefined();
-  expect(screen.queryByText("Date")).toBeNull();
+  expect(screen.getByText("Date")).toBeDefined();
+  fireEvent.click(screen.getByText("Clear manual"));
+  expect(clearManualRate).toHaveBeenCalledWith(
+    expect.objectContaining({ from: "2020-01-01", to: "2026-09-03" }),
+    expect.anything(),
+  );
 });
 
-it("a custom range of exactly the cap still draws the table", () => {
+/**
+ * R1 L9 — `isAccountingDate` is shape-only by design, so `2026-02-31` used to
+ * reach `addDays`/`daysBetween`, which roll it into March: the table drew rows
+ * from 2026-03-03 while `listFxRates` filtered on the literal string. One
+ * field, three readings.
+ */
+it("R1 L9 — a shape-valid date that is not a calendar day draws no table", () => {
   withLedger({});
-  fireEvent.change(screen.getByLabelText("From"), { target: { value: "2025-09-03" } });
-  fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-09-03" } });
-
-  expect(screen.queryByText(/can cover at most/)).toBeNull();
   expect(screen.getByText("Date")).toBeDefined();
+
+  fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-02-31" } });
+
+  expect(screen.queryByText("Date")).toBeNull();
 });
 
 /**
  * The sheet is a modal: a `Toast` on the page behind it is a refusal nobody
- * can read. Broken once by routing this back through `setToast` — the message
- * renders outside the sheet and this still passes on text alone, which is why
- * the assertion is that the editor is *still open* around it.
+ * can read.
+ *
+ * R1 L6 — scoped **inside** the sheet, which `BottomSheet` labels with its own
+ * title. The earlier version asserted on `getByText` at document scope, and
+ * the toast path leaves the editor open too, so both of its assertions passed
+ * either way: it could not fail for the reason it named. Broken once by
+ * routing this back through `setToast` — the message lands outside the sheet
+ * and `within` no longer finds it.
  */
-it("a refused write states its reason inside the sheet, with the editor still open", () => {
+it("a refused write states its reason inside the sheet, not on a toast behind it", () => {
   const setManualRate = vi.fn(() => {
     throw new Error("A rate cannot be set for a future date.");
   });
@@ -313,6 +383,51 @@ it("a refused write states its reason inside the sheet, with the editor still op
   fireEvent.change(screen.getByLabelText("Rate · PLN per USD"), { target: { value: "3.7556" } });
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
 
+  const sheet = screen.getByLabelText(/^Set PLN per USD/);
+  expect(within(sheet).getByText("A rate cannot be set for a future date.")).toBeDefined();
+});
+
+/**
+ * R1 L5 — the refusal belongs to the rate that caused it. Left standing after
+ * a retype it reads as a live objection to what is on screen now, under a
+ * field that no longer causes it.
+ */
+it("R1 L5 — retyping the rate clears the refusal it caused", () => {
+  const setManualRate = vi.fn(() => {
+    throw new Error("A rate cannot be set for a future date.");
+  });
+  withLedger({ setManualRate });
+
+  fireEvent.click(screen.getByText("Set a range"));
+  const field = screen.getByLabelText("Rate · PLN per USD");
+  fireEvent.change(field, { target: { value: "3.7556" } });
+  fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
   expect(screen.getByText("A rate cannot be set for a future date.")).toBeDefined();
-  expect(screen.getByLabelText("Rate · PLN per USD")).toBeDefined();
+
+  fireEvent.change(field, { target: { value: "3.8000" } });
+  expect(screen.queryByText("A rate cannot be set for a future date.")).toBeNull();
+});
+
+/**
+ * R1 M3 — until `BottomSheet` avoids the keyboard, whatever sits at the top of
+ * the sheet is what stays reachable when the host lifts it. The rate field is
+ * the only thing anyone opens this to type, so it is first — before the count
+ * lines and before the actions.
+ *
+ * Broken once by moving the summary above the field: the field stops being
+ * the first control in the sheet and this fails on document order.
+ */
+it("R1 M3 — the rate field is the first control in the sheet", () => {
+  withLedger({});
+  fireEvent.click(screen.getByText("Set a range"));
+
+  const sheet = screen.getByLabelText(/^Set PLN per USD/);
+  const field = within(sheet).getByLabelText("Rate · PLN per USD");
+  const submit = within(sheet).getByRole("button", { name: "Set rate" });
+  expect(field.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  // And it is reachable: a typed rate enables the write without anything else
+  // on the sheet having to be touched first.
+  fireEvent.change(field, { target: { value: "3.7556" } });
+  expect(submit).toHaveProperty("disabled", false);
 });

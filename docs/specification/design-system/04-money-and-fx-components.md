@@ -131,16 +131,22 @@ everything, deliberately."*
 
 ### 4.7 `<RateTable>`
 
-The rate history for one pair, by date — one row per calendar day, drawn
-plainly. **The range is what bounds it, not virtualization**: the screen that
-hosts this (S18) caps its range control at `set_manual_rate`'s own 366 days, so
-the most this ever draws is a year of the 2,080-day history a pair has
-accumulated since 2020-11.
+The rate history for one pair, by date. Virtualized — 2,080 days per pair from
+2020-11, and growing daily.
 
-A `FlatList` here would be a second scroller inside the page's own, which is
-the double-scroll defect — and living with it cost the hosting screen its page
-scroll entirely, so its last card ran off the bottom of the device. One
-scroller per page; this is not the one.
+**And it is its screen's page scroller.** A virtualized list inside a page
+`ScrollView` is one scroller too many, so rather than give up either the
+windowing or the page scroll, the hosting screen hands its own content in
+through `header` and `footer` and this list carries the whole page. Both are
+nodes rather than components, so a `TextInput` a screen puts in its header
+keeps focus and its caret across a re-render.
+
+That is also why the table is **not carded**: a card that *is* the whole screen
+is what `design-system/05` §5.1 forbids. And why no caller needs to cap the
+range it hands over — a decade of days costs one window.
+
+The list renders even with **no pair to table**, because the header and footer
+still have to move.
 
 Columns: date · rate (4dp, tabular) · source · provenance marker. Each row's
 source is a `Tag`: `nbp` · `ecb` · `nbrb` · `nbg` render neutral;
@@ -161,6 +167,11 @@ level 2). The range form is what makes a dead source recoverable by hand: RUB
 has had no published quote since 2022-03-11, and covering that day by day would
 be some 1,600 entries.
 
+**A write is capped at 366 days**, so a gap that long is a handful of range
+writes rather than one — and the worked example below stays inside the cap for
+that reason. The cap lives here, where the write is composed, and nowhere else:
+reading a wider range is not capped, and neither is clearing one.
+
 Before writing, it states exactly what it will do — **which way the figure
 reads, always**: `fx_rates.rate` is units of the quote per one pivot (§4), so
 the heading and every confirmation say `{quote} per {base}`, never a `→` arrow
@@ -180,13 +191,20 @@ Polish has four categories where English has two.
 
 **A refusal from the write is stated here**, in the sheet, rather than on a
 toast: the sheet is a modal, and a toast on the page behind it is a message
-nobody sees.
+nobody sees. It clears when the rate that caused it is retyped.
+
+**The rate field is first, and this component does not avoid the keyboard.**
+First because it is the only thing anyone opens this to type, and because a
+host that lifts its sheet keeps the top of the content reachable. Not avoiding
+it, because the **sheet** is the box that has to move: two nested
+keyboard-avoiding views each add the keyboard's height, and the content ends up
+twice as far off the bottom as it should be.
 
 ```
-  Set RUB per USD, 2022-03-12 … 2026-08-07        ← the sheet's own header
+  Set RUB per USD, 2026-01-01 … 2026-08-07        ← the sheet's own header
 
-  1 610 days        1 464 days currently absent
-                      146 days currently carried forward
+  219 days            200 days currently absent
+                       19 days currently carried forward
                         0 days currently manual
                                         [ Cancel ]  [ Set rate ]
 ```

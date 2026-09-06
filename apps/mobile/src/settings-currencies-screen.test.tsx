@@ -111,7 +111,11 @@ function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
  * touches one of those opens the row first, the way a person does.
  */
 function expandRow(code: string) {
-  fireEvent.click(screen.getByRole("button", { name: code }));
+  // A regex, deliberately: the row's accessible name is everything in it —
+  // code, name, symbol · decimals, coverage, pinned. An exact match on the
+  // bare code would pass only while the name is an override that silences all
+  // of that, which is the bug R1 M5 names.
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${code} · `) }));
 }
 
 beforeEach(() => {
@@ -394,4 +398,54 @@ it("a row's Exchange rates action opens S18 with the pair preselected", () => {
     pathname: "/settings/rates",
     params: { quote: "PLN" },
   });
+});
+
+/**
+ * R1 M5 — `accessibilityLabel` **overrides** the name a reader would compose
+ * from a pressable's descendants. With the whole row header now a button, a
+ * bare `row.code` made the currency's name, its symbol and decimals, its
+ * coverage and its pinned state audible to nobody: a screen reader heard
+ * "PLN, button" and stopped. That is S17 §6's *"coverage is stated per
+ * currency"* stated to sighted users only.
+ *
+ * Broken once by putting `accessibilityLabel={row.code}` back — every
+ * assertion below fails at once.
+ */
+it("R1 M5 — the row's accessible name carries everything the row shows", () => {
+  withLedger({
+    readCoverage: () => [
+      {
+        code: PLN,
+        source: "nbp",
+        firstDate: accountingDate("2020-11-25"),
+        lastDate: accountingDate("2022-03-11"),
+        days: 23,
+        realDays: 23,
+        calendarDays: 100,
+        coveragePct: 23,
+        futureRows: 0,
+      },
+    ],
+  });
+
+  const row = screen.getByRole("button", { name: /^PLN · / });
+  const name = row.getAttribute("aria-label") ?? "";
+  expect(name).toContain("Polish Złoty");
+  expect(name).toContain("zł · 2dp");
+  expect(name).toContain("23% · last quote 2022-03-11");
+  // PLN_ROW is pinned.
+  expect(name).toContain("Pinned");
+});
+
+/**
+ * R1 L10 — *pinned* is a state the currency is in; coverage is a measurement
+ * of it. Rendering both as muted captions side by side said the opposite of
+ * the rule this screen's own spec states, so the state wears the `Tag` and the
+ * measurement does not.
+ */
+it("R1 L10 — pinned is tagged where coverage is a caption", () => {
+  withLedger();
+  const pinned = screen.getByText("Pinned");
+  expect(getComputedStyle(pinned).textTransform).toBe("uppercase");
+  expect(getComputedStyle(screen.getByText("100%")).textTransform).not.toBe("uppercase");
 });
