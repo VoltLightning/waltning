@@ -9,7 +9,12 @@ import { SafeAreaProvider } from "../primitives/safe-area";
  * and the state is the whole reason the footer is pinned.
  */
 let keyboardHeight = 0;
-vi.mock("./use-keyboard-height.ts", () => ({ useKeyboardHeight: () => keyboardHeight }));
+const dismissKeyboard = vi.fn();
+vi.mock("./keyboard.ts", () => ({
+  useKeyboardHeight: () => keyboardHeight,
+  dismissKeyboard: () => dismissKeyboard(),
+  KEYBOARD_AVOIDANCE: undefined,
+}));
 
 const { BottomSheet } = await import("./bottom-sheet");
 
@@ -33,6 +38,7 @@ function resizeTo(width: number, height: number) {
 
 beforeEach(() => {
   keyboardHeight = 0;
+  dismissKeyboard.mockClear();
   act(() => resizeTo(390, 793));
 });
 
@@ -92,6 +98,9 @@ it("yields to a top inset larger than the design offset", () => {
   expect(sheet.style.maxHeight).toBe(`${793 - 222}px`);
   // The home indicator is cleared by padding: the sheet still reaches the edge.
   expect(sheet.style.paddingBottom).toBe(`${22 + 34}px`);
+  // And exactly once — nothing inside the sheet clears it a second time.
+  const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
+  expect(getComputedStyle(content).paddingBottom).toBe("0px");
 });
 
 /** §5.1's third part: the footer is outside the scroller, so it cannot leave. */
@@ -114,7 +123,7 @@ it("pins a footer under the scrolling body", () => {
  * footer, the sheet's last child — lands on the keyboard's top edge instead
  * of a third of the way behind it.
  */
-it("lifts clear of the keyboard, footer and all", () => {
+it("makes room for the lift out from under the keyboard", () => {
   keyboardHeight = 336;
   render(
     <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
@@ -125,8 +134,37 @@ it("lifts clear of the keyboard, footer and all", () => {
   );
 
   const sheet = screen.getByLabelText("Settle");
-  expect(sheet.style.marginBottom).toBe("336px");
+  // `KeyboardAvoidingView` does the lifting; the cap is what stops the lift
+  // pushing the sheet's head off the top of the window.
   expect(sheet.style.maxHeight).toBe(`${793 - 170 - 336}px`);
   // The home indicator is behind the keyboard; clearing it there is twice.
   expect(sheet.style.paddingBottom).toBe("22px");
+});
+
+/**
+ * A tap outside with the keyboard up was aimed at the keyboard, and this
+ * sheet may be holding a rate someone has just typed. First press outside
+ * puts the keyboard away; the second closes the sheet.
+ */
+it("puts the keyboard away before it puts the sheet away", () => {
+  const onDismiss = vi.fn();
+  keyboardHeight = 336;
+  const { rerender } = render(
+    <BottomSheet visible title="Settle" onDismiss={onDismiss}>
+      <span>rows</span>
+    </BottomSheet>,
+  );
+
+  screen.getByRole("button", { name: "Dismiss Settle" }).click();
+  expect(dismissKeyboard).toHaveBeenCalledOnce();
+  expect(onDismiss).not.toHaveBeenCalled();
+
+  keyboardHeight = 0;
+  rerender(
+    <BottomSheet visible title="Settle" onDismiss={onDismiss}>
+      <span>rows</span>
+    </BottomSheet>,
+  );
+  screen.getByRole("button", { name: "Dismiss Settle" }).click();
+  expect(onDismiss).toHaveBeenCalledOnce();
 });

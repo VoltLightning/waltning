@@ -29,12 +29,25 @@
  * **It is also the thing that reaches the screen's edges**, so it is where the
  * device's chrome is cleared — bottom and sides, never the top.
  *
- * The top belongs to the header above it, and the app guarantees there is one:
- * `TodayFrame`'s shell on the ledger, a navigation header on every other route.
- * That is why `edges` came and went in the same change — the prop existed to
- * let a bare panel be a whole screen, and giving the form routes real headers
- * removed the case it was for. A prop whose only value is its default is a
- * decision the structure already made.
+ * The top belongs to whatever sits above it, and the app guarantees something
+ * always does — in one of three shapes, all of which clear the status bar
+ * themselves:
+ *
+ * - the shell's own band on a tab root: `TodayFrame`'s hero on Today,
+ *   `TabHeader` on the other three (`05-composites` §5.1);
+ * - the stack's navigation header on a route pushed over the tabs;
+ * - a composer's own band — a title and a × — on a screen that draws its
+ *   chrome instead of taking the navigator's, which is then the thing that
+ *   applies the top inset.
+ *
+ * Any of the three, never none. That is why `edges` came and went in the same
+ * change — the prop existed to let a bare panel be a whole screen, and giving
+ * every route one of these three removed the case it was for. A prop whose
+ * only value is its default is a decision the structure already made.
+ *
+ * **The guarantee is on the screen, not on this component**, and it cannot be
+ * otherwise: a panel cannot see what is above it. What this file promises is
+ * only that it will not clear the top itself, so nothing is cleared twice.
  *
  * Bottom, because the last card and the add button sat under the home
  * indicator on every gesture-navigation phone. Sides, because in landscape the

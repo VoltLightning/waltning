@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NO_INSETS } from "../primitives/safe-area";
-import { SHEET_TOP_OFFSET, sheetBottomEdge, sheetBounds } from "./sheet-geometry.ts";
+import { SHEET_TOP_OFFSET, sheetBounds, sheetTopEdge } from "./sheet-geometry.ts";
 
 /** iPhone 14 — the phone the keyboard case was worked through on. */
 const PHONE = { width: 390, height: 844 };
@@ -12,7 +12,6 @@ describe("sheetBounds", () => {
   it("caps at the window less §5.1's own top offset", () => {
     const bounds = sheetBounds(PHONE, NO_INSETS, 0);
     expect(bounds.maxHeight).toBe(844 - SHEET_TOP_OFFSET);
-    expect(bounds.marginBottom).toBe(0);
   });
 
   it("yields to a top inset larger than the design offset", () => {
@@ -31,27 +30,22 @@ describe("sheetBounds", () => {
 
 describe("sheetBounds, with the keyboard up", () => {
   /**
-   * H3, as a number. On iOS the window height does not change when the
-   * keyboard opens, so a sheet capped against the window alone kept drawing
-   * under it — and the pinned footer, which is the sheet's last child, is in
-   * the covered third. The footer's own bottom edge must land at or above the
-   * keyboard's top edge.
+   * H3, as a number. Where the keyboard overlays the window (`keyboard.ts`)
+   * the window height does not change, so a sheet capped against it alone
+   * kept drawing under the keyboard — with the pinned footer, its last child,
+   * in the covered third. `KeyboardAvoidingView` lifts the sheet to sit on
+   * the keyboard's top edge; this is the half that has to shrink with it, or
+   * the lift pushes the sheet's head straight off the top of the window.
    */
-  it("lifts the sheet so its footer sits above the keyboard rect", () => {
-    const bounds = sheetBounds(PHONE, NOTCHED, KEYBOARD);
-    const keyboardTop = PHONE.height - KEYBOARD;
-
-    expect(sheetBottomEdge(PHONE, bounds)).toBeLessThanOrEqual(keyboardTop);
-    expect(bounds.marginBottom).toBe(KEYBOARD);
-  });
-
-  /** Lifting alone would push the head off the top; the cap shrinks with it. */
-  it("shrinks the cap by the same amount it lifts", () => {
+  it("shrinks the cap by exactly what the lift will take", () => {
     const bounds = sheetBounds(PHONE, NOTCHED, KEYBOARD);
     expect(bounds.maxHeight).toBe(844 - SHEET_TOP_OFFSET - KEYBOARD);
-    // Head and foot both inside the window.
-    const top = sheetBottomEdge(PHONE, bounds) - (bounds.maxHeight as number);
-    expect(top).toBeGreaterThanOrEqual(SHEET_TOP_OFFSET);
+  });
+
+  it("leaves the lifted sheet's head inside the window", () => {
+    const bounds = sheetBounds(PHONE, NOTCHED, KEYBOARD);
+    // Lifted to the keyboard's top edge, the sheet still starts at the offset.
+    expect(sheetTopEdge(PHONE, KEYBOARD, bounds)).toBe(SHEET_TOP_OFFSET);
   });
 
   /** The home indicator is behind the keyboard — clearing it there clears it twice. */

@@ -20,12 +20,24 @@
  * `sheet-geometry.ts` holds that arithmetic and the argument for it: the cap
  * is the window less §5.1's 170px top offset (or the device's own top inset
  * plus breathing room, whichever leaves less), *and* less whatever the soft
- * keyboard covers — with the sheet lifted by the same amount, so its bottom
- * edge and the pinned footer land on the keyboard's top edge rather than
- * behind it. On iOS the window height does not change when the keyboard
- * opens, so a sheet that only capped against the window kept drawing under
- * it, which is exactly the third of the screen the footer and the field being
- * typed into occupy.
+ * keyboard covers.
+ *
+ * **The sheet moves out from under the keyboard; it does not scroll.** Where
+ * the keyboard overlays the window (`keyboard.ts` — iOS, where the window
+ * height does not change) a bottom-anchored sheet is simply behind it: an
+ * iOS `decimal-pad` has no return key and covers about 291 of a ~340px sheet,
+ * which leaves the header and 49px nobody can scroll their way out of. So the
+ * sheet — not the overlay, which must stay the full window for the backdrop —
+ * is wrapped in a `KeyboardAvoidingView`, and the cap above shrinks by the
+ * same height so the lift stops the sheet's head at the top of the window
+ * rather than pushing it through.
+ *
+ * **A backdrop press with the keyboard up puts the keyboard away, not the
+ * sheet.** The tap was aimed at the keyboard, and dismissing here would throw
+ * away what had just been typed. First press outside closes the keyboard,
+ * second closes the sheet. `keyboardShouldPersistTaps="handled"` on the body
+ * is the other half of the same rule: a tap on *Save* inside the sheet lands
+ * rather than being eaten by the dismissal.
  *
  * **Both Android windows are translucent.** Under edge-to-edge — mandatory
  * from Expo SDK 54 — the app window includes the system bars, but a `Modal`
@@ -46,15 +58,23 @@
 
 import { useCallback, useState } from "react";
 import type { ViewStyle } from "react-native";
-import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useSafeArea } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { dismissKeyboard, KEYBOARD_AVOIDANCE, useKeyboardHeight } from "./keyboard.ts";
 import { sheetBounds } from "./sheet-geometry.ts";
-import { useKeyboardHeight } from "./use-keyboard-height.ts";
 
 /**
  * `overscroll-behavior` is a web property `react-native-web` forwards to CSS
@@ -89,6 +109,15 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
   const handleFocus = useCallback(() => setBackdropFocused(true), []);
   const handleBlur = useCallback(() => setBackdropFocused(false), []);
 
+  // The keyboard first, the sheet second — see the header.
+  const handleBackdropPress = useCallback(() => {
+    if (keyboard > 0) {
+      dismissKeyboard();
+      return;
+    }
+    onDismiss();
+  }, [keyboard, onDismiss]);
+
   // Per-window, per-device and per-keyboard, so not in `useStyles` — that
   // cache is keyed on the theme alone and would hand the second device the
   // first one's window.
@@ -108,26 +137,31 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("common.dismissSheet", { title })}
-          onPress={onDismiss}
+          onPress={handleBackdropPress}
           onFocus={handleFocus}
           onBlur={handleBlur}
           style={[styles.backdrop, backdropFocused ? styles.backdropFocused : null]}
         />
-        <View accessibilityLabel={title} accessibilityViewIsModal style={[styles.sheet, bounds]}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <Button label={t("common.close")} onPress={onDismiss} variant="ghost" />
+        {/* Around the sheet, never around the overlay: the overlay is the
+            backdrop's own full-window target, and a `KeyboardAvoidingView`
+            there would shrink the thing that has to stay the window. */}
+        <KeyboardAvoidingView behavior={KEYBOARD_AVOIDANCE}>
+          <View accessibilityLabel={title} accessibilityViewIsModal style={[styles.sheet, bounds]}>
+            <View style={styles.header}>
+              <Text style={styles.title}>{title}</Text>
+              <Button label={t("common.close")} onPress={onDismiss} variant="ghost" />
+            </View>
+            <ScrollView
+              testID="bottom-sheet-body"
+              style={[styles.body, containOverscroll]}
+              contentContainerStyle={styles.bodyContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {children}
+            </ScrollView>
+            {footer === undefined ? null : <View style={styles.footer}>{footer}</View>}
           </View>
-          <ScrollView
-            testID="bottom-sheet-body"
-            style={[styles.body, containOverscroll]}
-            contentContainerStyle={styles.bodyContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {children}
-          </ScrollView>
-          {footer === undefined ? null : <View style={styles.footer}>{footer}</View>}
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

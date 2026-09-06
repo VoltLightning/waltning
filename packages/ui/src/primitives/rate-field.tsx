@@ -240,11 +240,14 @@ export function RateField({
 const useStyles = makeStyles((theme) => ({
   block: { gap: space.xs },
   labelRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  label: {
-    color: theme.textMuted,
-    ...text.ui("kicker"),
-    textTransform: "uppercase",
-  },
+  /**
+   * Sentence case, like `TextField`'s and `Select`'s. `kicker` is already the
+   * eyebrow step — 11px, tracked, weight 700 — and upper-casing it on top of
+   * that made this one field shout `PLN PER USD` in a form where every label
+   * beside it reads as a word. A step is four properties (`tokens.ts`); a
+   * fifth added at one call site is that call site deciding it is special.
+   */
+  label: { color: theme.textMuted, ...text.ui("kicker") },
   unit: { color: theme.textMuted, ...text.ui("caption") },
   value: {
     color: theme.text,
