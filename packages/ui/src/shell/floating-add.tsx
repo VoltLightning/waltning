@@ -95,12 +95,8 @@ export function FloatingAdd({
   position,
   onPositionChange,
 }: FloatingAddProps) {
-  const t = useT();
   const styles = useStyles();
-  const insets = useSafeArea();
-  const reduced = useReducedMotion();
   const [bounds, setBounds] = useState<FloatBounds | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [typePickerOpen, setTypePickerOpen] = useState(false);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
@@ -110,18 +106,75 @@ export function FloatingAdd({
     );
   }, []);
 
+  const openTypePicker = useCallback(() => setTypePickerOpen(true), []);
+  const closeTypePicker = useCallback(() => setTypePickerOpen(false), []);
+
+  return (
+    <View style={styles.layer} onLayout={onLayout}>
+      {bounds === null ? null : (
+        <FloatingButton
+          bounds={bounds}
+          position={position}
+          onPositionChange={onPositionChange}
+          onAdd={onAdd}
+          onLongPress={openTypePicker}
+          disabled={disabled}
+        />
+      )}
+      <TypePicker
+        visible={typePickerOpen}
+        onDismiss={closeTypePicker}
+        onSelectType={onSelectType}
+      />
+    </View>
+  );
+}
+
+type FloatingButtonProps = {
+  /** Measured, never null — which is what lets the position be right on frame one. */
+  bounds: FloatBounds;
+  position: FloatPosition | null;
+  onPositionChange: (next: FloatPosition) => void;
+  onAdd: () => void;
+  onLongPress: () => void;
+  disabled: boolean;
+};
+
+/**
+ * The button itself, mounted only once the layer has been measured.
+ *
+ * **That split is the reason the default position is right on the first
+ * frame.** The shared values that carry the button used to start at `(0, 0)`
+ * and be moved to the corner by an effect — so the first painted frame put a
+ * 56px circle at the layer's top-left, and any environment that evaluates an
+ * animated style once (a still frame, a screenshot, a test) saw the button
+ * where it never belonged rather than bottom-right where §2.9 puts it.
+ * Mounting after the measurement means `useSharedValue`'s own initial value
+ * *is* the resting position, and the effect below is left with what it was
+ * always for: a frame that changed under a button already on screen.
+ */
+function FloatingButton({
+  bounds,
+  position,
+  onPositionChange,
+  onAdd,
+  onLongPress,
+  disabled,
+}: FloatingButtonProps) {
+  const t = useT();
+  const styles = useStyles();
+  const insets = useSafeArea();
+  const reduced = useReducedMotion();
+  const [dragging, setDragging] = useState(false);
+
   const shown =
-    bounds === null
-      ? null
-      : position === null
-        ? defaultFloat(bounds, insets)
-        : clampFloat(position, bounds, insets);
+    position === null ? defaultFloat(bounds, insets) : clampFloat(position, bounds, insets);
 
   // The wrapper's translation, on the UI thread, for the whole life of the
   // component — across parked and floating, so a return can start from the
   // tab. `settling` is true while a spring or a slide owns them.
-  const tx = useSharedValue(0);
-  const ty = useSharedValue(0);
+  const tx = useSharedValue(shown.x);
+  const ty = useSharedValue(shown.y);
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
   const settling = useSharedValue(false);
@@ -129,7 +182,7 @@ export function FloatingAdd({
   // Rest the wrapper where the position says, unless a finger or a tween
   // owns it right now.
   useEffect(() => {
-    if (shown === null || shown.dock !== null || dragging || settling.value) return;
+    if (shown.dock !== null || dragging || settling.value) return;
     tx.value = shown.x;
     ty.value = shown.y;
   }, [shown, dragging, settling, tx, ty]);
@@ -141,7 +194,6 @@ export function FloatingAdd({
   const pan = useMemo(() => {
     const gesture = Gesture.Pan()
       .minDistance(DRAG_SLOP)
-      .enabled(bounds !== null && shown !== null)
       .onStart(() => {
         "worklet";
         startX.value = tx.value;
@@ -150,7 +202,6 @@ export function FloatingAdd({
       })
       .onUpdate((e) => {
         "worklet";
-        if (bounds === null) return;
         const r = dragRange(bounds, insets);
         tx.value = Math.min(Math.max(startX.value + e.translationX, r.minX), r.maxX);
         ty.value = Math.min(Math.max(startY.value + e.translationY, r.minY), r.maxY);
@@ -158,7 +209,6 @@ export function FloatingAdd({
       .onEnd((e) => {
         "worklet";
         runOnJS(setDragging)(false);
-        if (bounds === null || shown === null) return;
         const x = startX.value + e.translationX;
         const y = startY.value + e.translationY;
         const next = releaseAt(shown, x, y, bounds, insets);
@@ -213,9 +263,6 @@ export function FloatingAdd({
     settling,
   ]);
 
-  const openTypePicker = useCallback(() => setTypePickerOpen(true), []);
-  const closeTypePicker = useCallback(() => setTypePickerOpen(false), []);
-
   /**
    * **Exclusive with the pan, not simultaneous.** A finger that moves past
    * `DRAG_SLOP` before `LONG_PRESS_DURATION` is a drag, not a hold — pan's
@@ -226,18 +273,18 @@ export function FloatingAdd({
     () =>
       Gesture.LongPress()
         .minDuration(LONG_PRESS_DURATION)
-        .enabled(bounds !== null && shown !== null && !disabled)
+        .enabled(!disabled)
         .onStart(() => {
           "worklet";
-          runOnJS(openTypePicker)();
+          runOnJS(onLongPress)();
         }),
-    [bounds, shown, disabled, openTypePicker],
+    [disabled, onLongPress],
   );
 
   const composedGesture = useMemo(() => Gesture.Exclusive(pan, longPress), [pan, longPress]);
 
   const handleReturn = useCallback(() => {
-    if (shown === null || shown.dock === null || bounds === null) return;
+    if (shown.dock === null) return;
     const frame = dockFrame(shown.dock, bounds, insets);
     tx.value = frame.x + floating.tab.width / 2 - floating.size / 2;
     ty.value = frame.y + floating.tab.height - floating.size / 2;
@@ -259,32 +306,22 @@ export function FloatingAdd({
     [tx, ty],
   );
 
-  return (
-    <View style={styles.layer} onLayout={onLayout}>
-      {shown === null ? null : shown.dock !== null ? (
-        <DockTab
-          frame={dockFrame(shown.dock, bounds ?? { width: 0, height: 0 }, insets)}
-          onPress={handleReturn}
-          label={t("shell.showAdd")}
-        />
-      ) : (
-        <GestureDetector gesture={composedGesture}>
-          <Animated.View style={[styles.wrapper, wrapperMotion]}>
-            <AddButton
-              label={t("shell.add")}
-              onPress={onAdd}
-              disabled={disabled}
-              lifted={dragging}
-            />
-          </Animated.View>
-        </GestureDetector>
-      )}
-      <TypePicker
-        visible={typePickerOpen}
-        onDismiss={closeTypePicker}
-        onSelectType={onSelectType}
+  if (shown.dock !== null) {
+    return (
+      <DockTab
+        frame={dockFrame(shown.dock, bounds, insets)}
+        onPress={handleReturn}
+        label={t("shell.showAdd")}
       />
-    </View>
+    );
+  }
+
+  return (
+    <GestureDetector gesture={composedGesture}>
+      <Animated.View style={[styles.wrapper, wrapperMotion]}>
+        <AddButton label={t("shell.add")} onPress={onAdd} disabled={disabled} lifted={dragging} />
+      </Animated.View>
+    </GestureDetector>
   );
 }
 

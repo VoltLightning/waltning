@@ -494,12 +494,19 @@ export const motionFrequency = {
  * *at* the floor must float — otherwise putting the button back where it
  * started would park it. One tab-height past it, and the gesture is "push it
  * off the bottom" rather than a pixel-hunt for an invisible line.
+ *
+ * `clearance` is the other side of "nothing ever pushes it away": the button
+ * is over the page, so the page has to leave room for it under its own last
+ * row. The button's height, the inset it rests on, and the page's own
+ * breathing room above it — anything less and a list's final entry is under a
+ * circle, which is the one thing being on top of everything costs.
  */
 export const floating = {
   size: 56,
   inset: 16,
   tab: { width: 44, height: 22 },
   band: 22,
+  clearance: 16 + 56 + space.x5,
 } as const;
 
 /* ── 2.10 The desk breakpoint ────────────────────────────────────────────── */

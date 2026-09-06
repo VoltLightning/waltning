@@ -1,7 +1,7 @@
 /**
  * `TabBar` — `design-system/05` §5.1. Four targets today (Today · Ledger ·
- * Calendar · Debt); the add button is not one of them (§2.9) and Settings
- * arrives with S19.
+ * Debt · Settings); the add button is not one of them (§2.9) and Calendar
+ * returns with S11.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
@@ -23,8 +23,8 @@ const meta = {
     items: [
       { name: "today", label: "Today", icon: <TodayTabIcon active />, active: true },
       { name: "ledger", label: "Ledger", icon: <LedgerTabIcon />, active: false },
-      { name: "calendar", label: "Calendar", icon: <CalendarTabIcon />, active: false },
       { name: "debt", label: "Debt", icon: <DebtTabIcon />, active: false },
+      { name: "settings", label: "Settings", icon: <SettingsTabIcon />, active: false },
     ],
     onSelect: noop,
   },
@@ -35,7 +35,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
-/** A fifth target, to prove the bar is not hardcoded to four. */
+/** A fifth target — the shape S11 brings back, and proof of the count being the caller's. */
 export const FiveTabs: Story = {
   args: {
     items: [

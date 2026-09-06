@@ -226,12 +226,19 @@ function AppStack() {
     >
       {/* The tab shell draws its own chrome — Today's header is the shell
           itself (a 54pt total does not fit in a navigation bar, §5.1), and
-          the other tabs are stubs with none yet. `quick-add`,
+          every other tab root wears `TabHeader`, drawn by `tabs-shell.tsx`.
           `account/new`, `transaction/[id]` and `settings/categories` stay
           stack routes pushed *over* the tabs. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
-      <Stack.Screen name="transfer" options={{ title: t("routes.transfer") }} />
+      {/* **The composers draw their own header, so the stack draws none.**
+          Both carry a title and a × of their own — S05 §3's composer chrome
+          — and the stack's bar above it made two headers on one screen, the
+          upper one stale the moment the type toggle moved from Expense to
+          Income: a navigation title is fixed at registration and the
+          composer's is not. The `title` stays because it is also the
+          document title on the web, where the tab strip is the browser's. */}
+      <Stack.Screen name="quick-add" options={{ title: t("routes.expense"), headerShown: false }} />
+      <Stack.Screen name="transfer" options={{ title: t("routes.transfer"), headerShown: false }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
       <Stack.Screen name="transaction/[id]" options={{ title: t("routes.transaction") }} />
       <Stack.Screen name="accounts/index" options={{ title: t("routes.accounts") }} />

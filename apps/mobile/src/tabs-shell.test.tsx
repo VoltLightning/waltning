@@ -33,14 +33,13 @@ installPhoneLayout();
 const switchTab = {
   today: vi.fn(),
   ledger: vi.fn(),
-  calendar: vi.fn(),
   debt: vi.fn(),
   settings: vi.fn(),
 };
-let focused: "today" | "ledger" | "calendar" | "debt" | "settings" = "today";
+let focused: "today" | "ledger" | "debt" | "settings" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "calendar" | "debt" | "settings" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" | "settings" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -185,6 +184,40 @@ describe("TabsShell", () => {
     expect(screen.getByText("Route content")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.getByText("Add — press N")).toBeDefined();
+  });
+
+  /**
+   * Every tab root but Today wears the shell's own title band
+   * (`05-composites` §5.1). Ledger and Debt used to draw nothing at all, so
+   * their content began 22px from the top of the device with no name on it.
+   * Two matches: the bar's own label, and the header above the slot.
+   */
+  it("titles every tab but Today from the shell", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getAllByText("Ledger")).toHaveLength(2);
+  });
+
+  /** Today's hero band is a better header than a word, so it keeps it. */
+  it("leaves Today to its own hero band", async () => {
+    focused = "today";
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    // The tab's own label, and nothing above the slot repeating it.
+    expect(screen.getAllByText("Today")).toHaveLength(1);
   });
 
   /**

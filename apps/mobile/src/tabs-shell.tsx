@@ -16,7 +16,13 @@
  * it.** `DESK1` (`02-tokens` §2.10): at `desk` width the app gets `DeskBand`
  * and neither the phone's `TabBar` nor the floating add button — the design
  * doc's flat rule, "no floating add button at desk width" — and below it the
- * phone composition is exactly what it always was.
+ * phone gets `TabHeader`, the slot, the bar and the button, in that order.
+ *
+ * **The header is the shell's on both sides of the breakpoint.** `DeskBand`
+ * already named the route; on the phone every tab but Today used to name
+ * nothing, so the same four screens read as titled at 1440 and untitled at
+ * 390. A screen drawing its own is what produced three different treatments
+ * in the first place.
  */
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
@@ -41,6 +47,7 @@ import { DualTotal } from "@waltning/ui/shell/dual-total";
 import type { FloatPosition } from "@waltning/ui/shell/float-geometry";
 import { FloatingAdd } from "@waltning/ui/shell/floating-add";
 import { TabBar, type TabBarItem } from "@waltning/ui/shell/tab-bar";
+import { TabHeader } from "@waltning/ui/shell/tab-header";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { CommandBar, type CommandBarHandle } from "@waltning/ui/transactions/command-bar";
@@ -90,6 +97,27 @@ function handleFloatPosition(next: FloatPosition) {
 /** Same category as the drop above — a lens on the ledger, not a write to it. */
 function handleDeskScope(next: string) {
   return deskScope.set(parseDeskScope(next) ?? DEFAULT_DESK_SCOPE);
+}
+
+/**
+ * The tab's own name, in the shell's band — `05-composites` §5.1's
+ * `TabHeader`, drawn here rather than by each screen.
+ *
+ * **Today is the one tab this skips**, because `TodayFrame` leads with a hero
+ * band and a hero is a better header than a word (§5.1: a 54pt total does not
+ * fit in a navigation bar). Every other tab root drew nothing at all, or a
+ * card whose title stood in for the page's, and three treatments for one
+ * thing is how an app comes to read as three.
+ *
+ * The label comes from `useTabBarItems`, so the header and the bar can never
+ * disagree about what the tab is called — including in Polish, where a
+ * second hardcoded string would be the thing that drifts.
+ */
+function PhoneHeader() {
+  const { items } = useTabBarItems();
+  const active = items.find((item) => item.active);
+  if (active === undefined || active.name === "today") return null;
+  return <TabHeader title={active.label} />;
 }
 
 function VisibleTabBar({ onLayout }: { onLayout: (event: LayoutChangeEvent) => void }) {
@@ -389,6 +417,7 @@ export function TabsShell({ slot }: TabsShellProps) {
 
   return (
     <>
+      <PhoneHeader />
       {slot}
       <VisibleTabBar onLayout={onBarLayout} />
       <FloatingAddLayer barHeight={barHeight} />

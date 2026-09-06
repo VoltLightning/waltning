@@ -408,6 +408,16 @@ setting, never a registry operation, never synced. It stays a button:
 focusable, labelled, and a keyboard user is never asked to drag; tap always
 adds, only a real drag moves it.
 
+**And the page leaves room for it.** Being over everything is what makes the
+button findable and what makes it cover things: a page whose bottom clearance
+was its own design padding ended every list with the last row under a circle.
+So the page's own scroller clears the button under its last row — the button's
+height, the inset it rests on, and the design's breathing room above it, 94px
+(`floating.clearance`), plus the device's bottom inset. A screen that owns a
+virtualized list carries that clearance in the list's own bottom padding,
+because clearance that lands on the panel rather than the scrolling content
+only shortens the list and leaves a band of empty ground under it.
+
 **The header collapses.** Expanded: the title, a status tag, the hero total,
 the mine/ours line. Collapsed: title and tag at the left, the total at the
 right, one row tall. Scrolling down past a small threshold folds it; scrolling

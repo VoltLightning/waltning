@@ -14,6 +14,12 @@
  * at desk width, `DeskBand`'s nav — the pattern `expo-router/ui`'s docs call
  * a fully custom tab bar.
  *
+ * **Five registered, four listed.** `calendar` keeps its trigger — it is a
+ * real route, reachable by URL, and the router's map of this directory has
+ * to hold it either way — but `useTabBarItems` does not name it, so it draws
+ * no target until S11 builds the screen. Registration and presentation are
+ * separate decisions, and this is the file that only makes the first one.
+ *
  * **The `+` is not a tab, and it does not exist at desk width at all.** On
  * the phone it floats, mounted once inside `<TabsShell>` — above the whole
  * `<TabSlot>`, not per-screen — so it survives a tab switch instead of

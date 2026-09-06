@@ -82,7 +82,11 @@ export const WithCounterparty: Story = {
     ],
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    // `Select`'s option panel is an overlay in a `Modal` (`03-primitives`
+    // §3.8), which portals to `document.body` — the same reason
+    // `account-picker.stories.tsx` and `reconcile-sheet.stories.tsx` query
+    // the owner document rather than `canvasElement`.
+    const canvas = within(canvasElement.ownerDocument.body);
     await userEvent.click(await canvas.findByRole("button", { name: "More" }));
     await userEvent.click(await canvas.findByRole("button", { name: "Counterparty" }));
     await userEvent.click(await canvas.findByRole("radio", { name: "Counterparty A" }));

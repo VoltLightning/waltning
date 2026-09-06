@@ -31,6 +31,13 @@ export const en = {
     search: "Search…",
     /** A filter that matched nothing must say so — an empty panel reads as broken. */
     noMatches: "Nothing matches.",
+    /**
+     * The backdrop behind `Select`'s option panel. Its own words rather than
+     * `close`: the panel overlays the page, so the one thing a tap outside it
+     * does is put the list away, and a screen reader meeting a second
+     * "Close" inside a sheet would have two of them and no way to tell.
+     */
+    dismissOptions: "Dismiss the options",
     /** A token's whole accessible name — the visible label plus the verb. */
     remove: "Remove {{value}}",
     /**

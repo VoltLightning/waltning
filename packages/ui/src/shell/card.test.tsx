@@ -22,10 +22,33 @@ it('scroll="page" (the default) renders a ScrollView whose content carries the c
   const content = scroll.firstElementChild as HTMLElement;
   expect(content).not.toBeNull();
   const style = getComputedStyle(content);
-  expect(style.paddingBottom).toBe("22px");
+  // `floating.clearance` — the add button rests over this page's last row
+  // (`02-tokens` §2.9), so the bottom is its height plus its inset plus the
+  // design padding, not the design padding alone.
+  expect(style.paddingBottom).toBe("94px");
   expect(style.paddingLeft).toBe("22px");
   expect(style.paddingRight).toBe("22px");
   expect(style.flexGrow).toBe("1");
+});
+
+/**
+ * The carve-out, stated as a test so it cannot be quietly reversed: in
+ * `scroll="own"` the clearance would land on the *panel*, shortening the
+ * screen's own list and leaving a band of empty ground under it — with the
+ * last row still under the button at the end of the scroll. The screen that
+ * owns the list owns its bottom padding.
+ */
+it('scroll="own" clears the device but not the floating button', () => {
+  const { container } = render(
+    <SafeAreaProvider insets={NOTCHED}>
+      <GroundPanel scroll="own">
+        <Text>hello</Text>
+      </GroundPanel>
+    </SafeAreaProvider>,
+  );
+  const panel = container.firstElementChild as HTMLElement;
+  // space.x5 (22) + NOTCHED.bottom (34), and nothing for the button.
+  expect(getComputedStyle(panel).paddingBottom).toBe("56px");
 });
 
 it('scroll="own" renders no ScrollView', () => {
@@ -55,8 +78,9 @@ it("clearBottom (the default) adds the device's own bottom inset to the clearanc
   );
   const scroll = screen.getByTestId("ground-panel-scroll");
   const content = scroll.firstElementChild as HTMLElement;
-  // space.x5 (22) + NOTCHED.bottom (34).
-  expect(getComputedStyle(content).paddingBottom).toBe("56px");
+  // floating.clearance (94 — the button's height, its inset and the page's
+  // own breathing room) + NOTCHED.bottom (34).
+  expect(getComputedStyle(content).paddingBottom).toBe("128px");
 });
 
 it("clearBottom={false} — a panel that is not the screen's own bottom edge (a Dock is) carries no device inset", () => {

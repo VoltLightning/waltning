@@ -68,6 +68,23 @@
  * indicator itself, so the panel above it was never the thing clearing that
  * inset and `clearBottom={false}` says so; the design padding (`space.x5`)
  * stays regardless, since that is breathing room, not a device read.
+ *
+ * **What a bottom edge has to clear is the floating button, not only the
+ * device.** The add button rests `floating.inset` above the panel's own
+ * bottom edge and is `floating.size` tall (`02-tokens` §2.9), and it is over
+ * the page by design — so a page whose clearance was the design padding alone
+ * ended every list with its last row under a circle. `floating.clearance`
+ * is that arithmetic, named once: a panel that is the screen's bottom edge
+ * clears the button, and a panel that is not (`clearBottom={false}`) has no
+ * button over it to clear.
+ *
+ * **`scroll="own"` gets the device inset and not the button's clearance**,
+ * because the clearance has to land on the *content that scrolls* and in that
+ * mode this component is not holding it. Padding the panel itself by 94px
+ * would only shorten the screen's own list and leave a band of empty ground
+ * under it, with the last row still under the button at the end of the
+ * scroll. A screen that owns its list owns that list's own bottom padding —
+ * `floating.clearance` is exported for it.
  */
 
 import { ScrollView, Text, View } from "react-native";
@@ -75,7 +92,7 @@ import { useSafeArea } from "../primitives/safe-area";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { hairline, radius, space } from "../tokens.ts";
+import { floating, hairline, radius, space } from "../tokens.ts";
 
 export type CardProps = {
   title?: string;
@@ -125,12 +142,12 @@ export type GroundPanelProps = {
    */
   scroll?: "page" | "own";
   /**
-   * `true` (default) — the panel clears the home-indicator inset at the
-   * bottom, same as it always has. `false` — for a panel that is not
-   * actually the screen's own bottom edge (`Dock` sits below it and clears
-   * that inset itself): the panel has no device inset of its own to clear
-   * there, so it does not add one. The design padding (`space.x5`) stays
-   * either way — that is breathing room, not a device read.
+   * `true` (default) — the panel is the screen's own bottom edge, so it
+   * clears both the home-indicator inset and the floating add button resting
+   * above it (`floating.clearance`, `02-tokens` §2.9). `false` — for a panel
+   * that is not that edge (`Dock` sits below it and clears the inset itself,
+   * and no button floats over a composer): the design padding (`space.x5`)
+   * is all it adds.
    */
   clearBottom?: boolean;
 };
@@ -144,15 +161,23 @@ export function GroundPanel({ children, scroll = "page", clearBottom = true }: G
   // the panel's padding — the scroll content in `"page"` mode, the panel
   // itself in `"own"` — so the last row clears the home indicator at the end
   // of the scroll, not at the fold.
-  const clearance = {
-    paddingBottom: space.x5 + (clearBottom ? insets.bottom : 0),
+  const deviceBottom = clearBottom ? insets.bottom : 0;
+  const sides = {
     paddingLeft: space.x5 + insets.left,
     paddingRight: space.x5 + insets.right,
   };
 
   if (scroll === "own") {
+    // The device only: the button's clearance belongs to the list this
+    // screen owns, not to a band of ground under it.
+    const clearance = { ...sides, paddingBottom: space.x5 + deviceBottom };
     return <View style={[styles.panel, styles.panelPadding, clearance]}>{children}</View>;
   }
+
+  const clearance = {
+    ...sides,
+    paddingBottom: (clearBottom ? floating.clearance : space.x5) + deviceBottom,
+  };
 
   return (
     <View style={styles.panel}>
