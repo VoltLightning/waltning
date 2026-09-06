@@ -27,6 +27,11 @@
  * is inside the window, overlapping the field it belongs to. That is stated
  * here and in `03-primitives` §3.8 rather than left for a reader to discover
  * from a panel hanging off the top of a landscape phone.
+ *
+ * **`maxHeight` is a reservation, not a height.** The panel is content-sized
+ * under it, so nothing here may position it by the edge that depends on how
+ * tall it turned out to be — see `panelPlacement`'s own note on which edge
+ * anchors which side.
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -92,23 +97,43 @@ export function panelPlacement(
   const height = Math.max(MIN_HEIGHT, Math.min(cap, room));
 
   /**
-   * **Positioned by `top` on both sides, and clamped after the floor.**
-   * The two-row floor can be larger than the room it was given — that is what
-   * it is for — so a panel placed by its far edge would then hang off the
-   * window: 88px of panel above a field at y=40 starts at y=−52. The floor
-   * wins over the *room*, never over the window, so the panel is pushed back
-   * inside and overlaps its own field instead. An overlapped field is a
+   * **Each side is anchored by the edge that touches the field**, and clamped
+   * after the floor.
+   *
+   * Below, that is the panel's top edge, so `top` is the field's bottom plus
+   * the gap. Above, it is the panel's *bottom* edge — and it has to be,
+   * because `maxHeight` is a reservation, not a height: the panel is
+   * content-sized under it (`panelScroll` is `flexShrink: 1`), so a
+   * three-option list in a 286px reservation is 140px tall. Positioning that
+   * by `top = anchor.y − GAP − 286` would leave 146px of empty air between
+   * the list and the control it belongs to. Anchored by `bottom`, the panel
+   * grows upward from 4px above its field at whatever height it actually is.
+   *
+   * The clamp is the other half. The two-row floor can be larger than the
+   * room it was given — that is what it is for — so a floored panel would
+   * hang off the window: 88px above a field at y=40 starts at y=−52. The
+   * floor wins over the *room*, never over the window, so the panel is pushed
+   * back inside and overlaps its own field instead. An overlapped field is a
    * legible compromise; a list half off the screen is not. In a window too
    * short to hold two rows *and* both margins, the margin is what gives way
    * — it is breathing room, and the window is not.
    */
-  const preferred = below ? anchor.y + anchor.height + GAP : anchor.y - GAP - height;
   const highest = insets.top + MARGIN;
-  const lowest = Math.max(highest, frame.height - insets.bottom - MARGIN - height);
+
+  if (below) {
+    const lowest = Math.max(highest, frame.height - insets.bottom - MARGIN - height);
+    return {
+      position: "absolute",
+      top: clamp(anchor.y + anchor.height + GAP, highest, lowest),
+      left,
+      width,
+      maxHeight: height,
+    };
+  }
 
   return {
     position: "absolute",
-    top: clamp(preferred, highest, lowest),
+    bottom: Math.max(0, Math.min(frame.height - anchor.y + GAP, frame.height - highest - height)),
     left,
     width,
     maxHeight: height,

@@ -22,15 +22,17 @@
  * plus breathing room, whichever leaves less), *and* less whatever the soft
  * keyboard covers.
  *
- * **The sheet moves out from under the keyboard; it does not scroll.** Where
- * the keyboard overlays the window (`keyboard.ts` — iOS, where the window
- * height does not change) a bottom-anchored sheet is simply behind it: an
- * iOS `decimal-pad` has no return key and covers about 291 of a ~340px sheet,
+ * **The sheet moves out from under the keyboard; it does not scroll.** On a
+ * phone the keyboard covers the window rather than shrinking it — both
+ * phones, and `keyboard.ts` has the argument for why that is as true of
+ * Android as of iOS, and why `navigationBarTranslucent` below is part of the
+ * reason — so a bottom-anchored sheet is simply behind it: an iOS
+ * `decimal-pad` has no return key and covers about 291 of a ~340px sheet,
  * which leaves the header and 49px nobody can scroll their way out of. So the
  * sheet — not the overlay, which must stay the full window for the backdrop —
  * is wrapped in a `KeyboardAvoidingView`, and the cap above shrinks by the
- * same height so the lift stops the sheet's head at the top of the window
- * rather than pushing it through.
+ * same height, on the same keyboard event, so the lift stops the sheet's head
+ * at the top of the window rather than pushing it through.
  *
  * **A backdrop press with the keyboard up puts the keyboard away, not the
  * sheet.** The tap was aimed at the keyboard, and dismissing here would throw
@@ -47,6 +49,12 @@
  * `navigationBarTranslucent` make the modal's window the app's window, so the
  * insets this component reads are the ones it is actually sitting in. iOS and
  * the web ignore both props.
+ *
+ * That is also what makes the lift above Android's only keyboard mechanism:
+ * an edge-to-edge dialog window ignores `SOFT_INPUT_ADJUST_RESIZE`, so the
+ * resize that used to carry the sheet up for free is gone and this component
+ * has to carry it. One mechanism on both phones is the point; two would be
+ * two things to keep true.
  *
  * **Nested scrolling is the caller's, not this component's.**
  * `nestedScrollEnabled` makes the view it is set on a nested-scrolling
@@ -125,7 +133,16 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
 
   if (!visible) return null;
   return (
+    // **The name goes on the `Modal`, not on the sheet inside it.**
+    // `react-native-web` renders a modal as a `dialog` and spreads the props
+    // it was given onto that element, so this is the only placement that
+    // names the dialog a screen reader announces; on the sheet `View` two
+    // levels in, the label named a generic `div` and the dialog stayed
+    // anonymous. React Native's own `Modal` enumerates its props and takes no
+    // accessible name, so on a phone the sheet's own visible title is what is
+    // read — which is why `accessibilityViewIsModal` stays where it is.
     <Modal
+      accessibilityLabel={title}
       transparent
       visible
       onRequestClose={onDismiss}
@@ -146,7 +163,7 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
             backdrop's own full-window target, and a `KeyboardAvoidingView`
             there would shrink the thing that has to stay the window. */}
         <KeyboardAvoidingView behavior={KEYBOARD_AVOIDANCE}>
-          <View accessibilityLabel={title} accessibilityViewIsModal style={[styles.sheet, bounds]}>
+          <View testID="bottom-sheet" accessibilityViewIsModal style={[styles.sheet, bounds]}>
             <View style={styles.header}>
               <Text style={styles.title}>{title}</Text>
               <Button label={t("common.close")} onPress={onDismiss} variant="ghost" />

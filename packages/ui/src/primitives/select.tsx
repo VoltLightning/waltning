@@ -391,6 +391,12 @@ function PanelOverlay({
     // window whose origin is a status bar lower and the panel would sit
     // 24–48px below its own field. iOS and the web ignore both props.
     <Modal
+      // The field's own name, on the element that carries the role.
+      // `react-native-web` spreads a modal's props onto the `dialog` it
+      // renders; on the panel two levels in, this named a generic `div` and
+      // the dialog stayed anonymous — which is the announcement §3.8's
+      // sentence is about.
+      accessibilityLabel={label}
       transparent
       visible
       onRequestClose={onDismiss}
@@ -405,7 +411,7 @@ function PanelOverlay({
           onPress={onDismiss}
           style={styles.backdrop}
         />
-        <Animated.View accessibilityLabel={label} style={[styles.panel, placement, reveal]}>
+        <Animated.View style={[styles.panel, placement, reveal]}>
           {search === undefined ? null : (
             <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
           )}

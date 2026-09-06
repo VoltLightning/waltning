@@ -20,6 +20,7 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import { SafeAreaProvider, useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
 import { useFloatingClearance } from "@waltning/ui/shell/floating-clearance";
 import { floating } from "@waltning/ui/tokens";
@@ -231,6 +232,28 @@ describe("TabsShell", () => {
     expect(screen.getByText("clearance: 0")).toBeDefined();
   });
 
+  /**
+   * L1-new: `GroundPanel` clears the home-indicator inset because it is the
+   * screen's own bottom edge, and under this shell it is not — the `TabBar`
+   * is, and it already pads itself by the same number. The slot is handed a
+   * cleared bottom so the inset is paid once; the sides and the top stay the
+   * device's, because a landscape notch is still on one of them.
+   */
+  it("hands the slot a bottom the tab bar has already cleared", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <DeviceInsets insets={NOTCHED}>
+        <LedgerProvider controller={fakeController()}>
+          <TabsShell slot={<InsetProbe />} />
+        </LedgerProvider>
+      </DeviceInsets>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText("insets: 59/0/0/0")).toBeDefined();
+  });
+
   /** Today's hero band is a better header than a word, so it keeps it. */
   it("leaves Today to its own hero band", async () => {
     focused = "today";
@@ -355,6 +378,24 @@ describe("TabsShell", () => {
 /** A slot that reports what the shell told it — the clearance, as a string. */
 function ClearanceProbe() {
   return <Text>clearance: {useFloatingClearance()}</Text>;
+}
+
+/** A notched phone, as the device would report it. */
+const NOTCHED = { top: 59, right: 0, bottom: 34, left: 0 };
+
+/** The same, for the insets the slot is actually handed. */
+function InsetProbe() {
+  const insets = useSafeArea();
+  return (
+    <Text>
+      insets: {insets.top}/{insets.right}/{insets.bottom}/{insets.left}
+    </Text>
+  );
+}
+
+/** `apps/mobile`'s own provider is the platform read; this stands in for it. */
+function DeviceInsets({ insets, children }: { insets: typeof NOTCHED; children: React.ReactNode }) {
+  return <SafeAreaProvider insets={insets}>{children}</SafeAreaProvider>;
 }
 
 const CASH: PhoneAccount = {

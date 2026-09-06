@@ -27,7 +27,7 @@ import { makeStyles } from "../theme/styles.ts";
 import { CommandBarPlaceholder, CurrencyChip, DeskBand, DeskNavItem } from "./desk-band";
 import { DualTotal } from "./dual-total";
 
-const ROUTES = ["Today", "Ledger", "Calendar", "Debt"] as const;
+const ROUTES = ["Today", "Ledger", "Debt", "Settings"] as const;
 const SCOPES = [
   { value: "all", label: "All" },
   { value: "mine", label: "Mine" },

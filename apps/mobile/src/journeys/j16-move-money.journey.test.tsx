@@ -48,11 +48,11 @@ import type { JourneyRouterStub } from "./journey-harness";
 
 installPhoneLayout();
 
-const switchTab = { today: vi.fn(), ledger: vi.fn(), calendar: vi.fn(), debt: vi.fn() };
-const focused: "today" | "ledger" | "calendar" | "debt" = "today";
+const switchTab = { today: vi.fn(), ledger: vi.fn(), debt: vi.fn(), settings: vi.fn() };
+const focused: "today" | "ledger" | "debt" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "calendar" | "debt" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),

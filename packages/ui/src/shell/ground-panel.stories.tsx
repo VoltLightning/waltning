@@ -39,7 +39,7 @@ const LAST_ROW_TEST_ID = "tall-content-last-row";
  * this (`shell/floating-clearance.tsx`); a story has no shell above it, which
  * is the same answer every stack route gets.
  */
-const CLEARANCE_FLOOR = 18;
+const CLEARANCE_FLOOR = space.x5 - 4;
 
 function TallContent() {
   const styles = useStyles();

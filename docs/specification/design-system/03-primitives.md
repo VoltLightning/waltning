@@ -144,12 +144,15 @@ still free to compose a sheet around any of these controls. The backdrop
 behind the panel is transparent and takes the tap that means *never mind*: a
 select is not a dialog and earns no scrim.
 
-**The modal costs the role, and the panel pays it by name.** A modal is
-announced as a dialog whatever this design believes about scrims, so the panel
-carries the field's own label: what a screen reader reports is *"Currency,
-dialog"*, not *"dialog"*. That is the price of being the only overlay that
-behaves the same on three platforms, and it is stated rather than left for
-someone to hear.
+**The modal costs the role, and the modal is what pays it by name.** A modal
+is announced as a dialog whatever this design believes about scrims, so the
+field's own label goes on the modal itself — the element that carries the
+role — and what a screen reader reports on the web is *"Currency, dialog"*
+rather than *"dialog"*. On a label placed inside the modal it names a generic
+box and the dialog stays anonymous. On a phone the platform's modal takes no
+accessible name at all and the panel's own options are what is read. That is
+the price of being the only overlay that behaves the same on three platforms,
+and it is stated rather than left for someone to hear.
 
 States for every selection control:
 default · hover · focus · selected · disabled.

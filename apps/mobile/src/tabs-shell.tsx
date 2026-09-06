@@ -124,6 +124,27 @@ function PhoneHeader() {
   return <TabHeader title={active.label} />;
 }
 
+/**
+ * The device chrome as the tab slot actually meets it — which is not what the
+ * device reports.
+ *
+ * `GroundPanel` clears the home-indicator inset because it is *"the screen's
+ * own bottom edge"*, and inside this shell it is not: the `TabBar` below it
+ * is, and the bar already pads itself by `insets.bottom`. Both are children
+ * of the same column, so the inset was being paid twice and every tab root's
+ * last row sat 34pt further up than anything asked for. Sides and top are the
+ * device's own — a landscape notch is still on one of them.
+ *
+ * The same shape `FloatingAddLayer` below already takes for its own layer,
+ * and for the same reason: what a child should clear is a property of where
+ * it sits, and this component is the only thing that knows where that is.
+ */
+function SlotInsets({ children }: { children: React.ReactNode }) {
+  const insets = useSafeArea();
+  const cleared = { top: insets.top, right: insets.right, left: insets.left, bottom: 0 };
+  return <SafeAreaProvider insets={cleared}>{children}</SafeAreaProvider>;
+}
+
 function VisibleTabBar({ onLayout }: { onLayout: (event: LayoutChangeEvent) => void }) {
   const { items, onSelect } = useTabBarItems();
   return (
@@ -426,7 +447,9 @@ export function TabsShell({ slot }: TabsShellProps) {
           is told to leave room — `shell/floating-clearance.tsx`. Outside this
           provider (the stack's own routes, the startup screen, desk width)
           the answer is zero, which is what it always should have been. */}
-      <FloatingClearanceProvider value={floating.clearance}>{slot}</FloatingClearanceProvider>
+      <FloatingClearanceProvider value={floating.clearance}>
+        <SlotInsets>{slot}</SlotInsets>
+      </FloatingClearanceProvider>
       <VisibleTabBar onLayout={onBarLayout} />
       <FloatingAddLayer barHeight={barHeight} />
     </>

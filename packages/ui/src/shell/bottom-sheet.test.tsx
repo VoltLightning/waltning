@@ -13,7 +13,13 @@ const dismissKeyboard = vi.fn();
 vi.mock("./keyboard.ts", () => ({
   useKeyboardHeight: () => keyboardHeight,
   dismissKeyboard: () => dismissKeyboard(),
-  KEYBOARD_AVOIDANCE: undefined,
+  // `"padding"` rather than `undefined`: the height and the behaviour are one
+  // fact (`keyboard.test.ts` pins that they cannot drift apart), so a mock
+  // that reported a keyboard with the lift switched off would be a state the
+  // constants forbid. The lift itself is `KeyboardAvoidingView`'s and
+  // `react-native-web`'s `Keyboard` never fires, so it is inert here — what
+  // these tests own is the half that has to move with it.
+  KEYBOARD_AVOIDANCE: "padding",
 }));
 
 const { BottomSheet } = await import("./bottom-sheet");
@@ -58,7 +64,8 @@ it("labels visible content and dismisses from backdrop and Close", () => {
       <span>choices</span>
     </BottomSheet>,
   );
-  expect(screen.getByLabelText("Appearance")).toBeDefined();
+  // The name is on the `Modal`, which is the element carrying `role="dialog"`.
+  expect(screen.getByLabelText("Appearance").getAttribute("role")).toBe("dialog");
   screen.getByRole("button", { name: "Dismiss Appearance" }).click();
   screen.getByRole("button", { name: "Close" }).click();
   expect(onDismiss).toHaveBeenCalledTimes(2);
@@ -79,7 +86,7 @@ it("bounds its height against the window and scrolls its body", () => {
   );
 
   // §5.1's 170px top offset, measured against this window rather than guessed.
-  expect(screen.getByLabelText("Filter").style.maxHeight).toBe(`${793 - 170}px`);
+  expect(screen.getByTestId("bottom-sheet").style.maxHeight).toBe(`${793 - 170}px`);
   expect(getComputedStyle(screen.getByTestId("bottom-sheet-body")).overflowY).toBe("auto");
 });
 
@@ -93,7 +100,7 @@ it("yields to a top inset larger than the design offset", () => {
     </SafeAreaProvider>,
   );
 
-  const sheet = screen.getByLabelText("Filter");
+  const sheet = screen.getByTestId("bottom-sheet");
   // 200 + 22 (the design's own breathing room) beats the 170 offset.
   expect(sheet.style.maxHeight).toBe(`${793 - 222}px`);
   // The home indicator is cleared by padding: the sheet still reaches the edge.
@@ -133,7 +140,7 @@ it("makes room for the lift out from under the keyboard", () => {
     </SafeAreaProvider>,
   );
 
-  const sheet = screen.getByLabelText("Settle");
+  const sheet = screen.getByTestId("bottom-sheet");
   // `KeyboardAvoidingView` does the lifting; the cap is what stops the lift
   // pushing the sheet's head off the top of the window.
   expect(sheet.style.maxHeight).toBe(`${793 - 170 - 336}px`);

@@ -5,13 +5,13 @@
  *
  * Three inputs, and the third is the one a sheet is usually wrong about. The
  * window height and the device's insets are static facts; the **keyboard** is
- * not, and where it overlays the window rather than shrinking it (`keyboard.ts`
- * — iOS) the window height does not change when it opens. A sheet that is
- * bottom-anchored in a `Modal` and capped against the window alone therefore
- * keeps drawing under the keyboard: on a 390×844 phone the sheet occupies
- * y 170–844, an iOS `decimal-pad` covers roughly y 508–844, and the pinned
- * footer and the field being typed into are both in the covered third. That
- * falsifies the whole reason the footer is pinned.
+ * not, and on a phone it covers the window rather than shrinking it
+ * (`keyboard.ts` has the argument, and why that is as true of Android as of
+ * iOS). A sheet that is bottom-anchored in a `Modal` and capped against the
+ * window alone therefore keeps drawing under the keyboard: on a 390×844 phone
+ * the sheet occupies y 170–844, an iOS `decimal-pad` covers roughly y
+ * 508–844, and the pinned footer and the field being typed into are both in
+ * the covered third. That falsifies the whole reason the footer is pinned.
  *
  * **Scrolling is not the fix; the sheet has to move.** Scrolling inside the
  * ~49px the keyboard leaves is not reaching anything. So the sheet lifts —
@@ -22,8 +22,8 @@
  * inset is dropped while the keyboard is up, because the home indicator is
  * behind the keyboard and clearing it there would be clearing it twice.
  *
- * `keyboard` is already zero wherever the window resizes itself, so nothing
- * below has to ask which platform it is on.
+ * `keyboard` is already zero on the web, where the window resizes itself, so
+ * nothing below has to ask which platform it is on.
  *
  * **The home indicator is paid once, here.** The sheet reaches the bottom of
  * the screen and its *content* clears the device, so the inset is padding on

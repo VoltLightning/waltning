@@ -29,9 +29,38 @@ describe("panelPlacement", () => {
   it("flips above the field when below is the smaller room", () => {
     const low = { ...FIELD, y: 700 };
     const style = panelPlacement(low, WINDOW, NO_INSETS, CAP);
-    // Its own height and the gap, taken off the field's top edge.
-    expect(style.top).toBe(700 - 4 - CAP);
+    // Anchored by its bottom edge: the gap above the field's own top.
+    expect(style.bottom).toBe(793 - 700 + 4);
+    expect(style.top).toBeUndefined();
     expect(style.maxHeight).toBe(CAP);
+  });
+
+  /**
+   * The panel is content-sized under its `maxHeight`, so the flipped side has
+   * to be anchored by the edge that touches the field. The Filter sheet's own
+   * `MultiSelect`s are the reachable case: three options (expense · income ·
+   * transfer) in a 286px reservation is a ~140px list, and anchoring that by
+   * `top = y − GAP − 286` left 146px of air between the list and the control
+   * it belongs to, with the field fully visible underneath it.
+   */
+  it("keeps a short flipped panel attached to its field", () => {
+    const field = { x: 22, y: 600, width: 346, height: 44 };
+    const frame = { width: 390, height: 844 };
+    const style = panelPlacement(field, frame, NO_INSETS, CAP);
+
+    // Flips: 188px below against a 286px reservation, 588px above.
+    expect(style.bottom).toBe(frame.height - field.y + 4);
+    expect(style.top).toBeUndefined();
+
+    // The panel's foot, wherever its content leaves its head: 4px above the
+    // field, for a three-option list and for a full one alike. Anchoring by
+    // `top` off the reservation put the head at 310 and the foot at 450 —
+    // 150px of air above a field whose own top edge is at 600.
+    const foot = frame.height - (style.bottom as number);
+    expect(field.y - foot).toBe(4);
+    for (const realHeight of [140, 200, CAP]) {
+      expect(foot - realHeight).toBeGreaterThanOrEqual(0);
+    }
   });
 
   /**
@@ -65,11 +94,12 @@ describe("panelPlacement", () => {
     const squeezed = { x: 22, y: 40, width: 346, height: 44 };
     const frame = { width: 390, height: 100 };
     const style = panelPlacement(squeezed, frame, NO_INSETS, CAP);
-    const top = style.top as number;
+    const height = style.maxHeight as number;
+    const top = frame.height - (style.bottom as number) - height;
     // A 100px window cannot hold 88 rows *and* both 8px margins, so the
     // margin gives way — the window does not.
     expect(top).toBeGreaterThanOrEqual(0);
-    expect(top + (style.maxHeight as number)).toBeLessThanOrEqual(frame.height);
+    expect(top + height).toBeLessThanOrEqual(frame.height);
   });
 
   /** The mirror case, below a field with a little room under it. */

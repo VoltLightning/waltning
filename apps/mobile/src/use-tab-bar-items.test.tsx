@@ -60,11 +60,11 @@ describe("useTabBarItems", () => {
   });
 
   /**
-   * S11 is not built and its route answers *"this screen isn't built yet"*.
-   * The `<TabTrigger>` stays registered in `(tabs)/_layout.tsx` — `/calendar`
-   * is still a real URL — but a fifth of the bar leading to a placeholder
-   * teaches the other four to be ignored, so it draws no target until the
-   * screen exists.
+   * S11 is not built, and the route that stood in for it answered *"this
+   * screen isn't built yet"* — a fifth of the bar leading to a placeholder
+   * teaches the other four to be ignored. The screen, the route and the
+   * trigger are all gone; S11 adds the three of them and an entry here in
+   * one change.
    */
   it("does not list Calendar while S11 is unbuilt", () => {
     focused = "today";
