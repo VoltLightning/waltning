@@ -83,6 +83,10 @@ export default function AccountEditorScreen() {
       name: account.name,
       currency: account.currency,
       currencySymbol: currency?.symbol ?? "",
+      // The account's own scale, not the currency row's: an account carries
+      // the figure and the scale it is kept at together, and the currency
+      // may not be in the snapshot at all (an archived or unlisted code).
+      decimals: account.decimals,
       kind: account.kind,
       ownership: account.ownership,
       isBusiness: account.isBusiness,

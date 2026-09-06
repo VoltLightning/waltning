@@ -1439,10 +1439,11 @@ describe("every src/ is organised by domain, not by layer", () => {
       "transport",
     ],
     // Foundation (`primitives`, `fx`, `theme`, `i18n`) plus one folder per
-    // domain. The full target is thirteen; eight exist because eight have
-    // components — E5 adds `counterparties` (`SettleSheet`, S14). `i18n` is
-    // foundation by the same property as `fx`: a language is not a domain,
-    // and every domain needs one.
+    // domain. The full target is thirteen; nine exist because nine have
+    // components — E5 adds `counterparties` (`SettleSheet`, S14), and
+    // `settings` arrives with `SettingsMenu`, the tab root's own list of
+    // destinations. `i18n` is foundation by the same property as `fx`: a
+    // language is not a domain, and every domain needs one.
     "packages/ui/src": [
       "accounts",
       "categories",
@@ -1452,6 +1453,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "i18n",
       "primitives",
       "review",
+      "settings",
       "shell",
       "states",
       "theme",

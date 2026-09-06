@@ -24,6 +24,34 @@ not apply to it (`architecture/14` §14.3) — see §3.
 | J15 | Cutover precondition — the restore drill must have passed | J15 |
 | Push notification | Backups failed **twice consecutively** · a drill overdue past its quarter · a currency in active use more than a week behind (S18) | — |
 
+### The Settings menu itself
+
+Every settings screen names Settings as its entry — S16 §2 *Accounts*, S17
+*Currencies*, S18 *Exchange rates*, S19 *Categories*, this screen's *System*
+row above — and the tab root is the one list that has to carry all of them. It
+is a card of grouped rows, one row per destination, label and chevron, in this
+order:
+
+```
+  ┌─────────────────────────────────┐
+  │  Accounts                     › │
+  │  Categories                   › │
+  │  Currencies                   › │
+  │  Exchange rates               › │
+  └─────────────────────────────────┘
+```
+
+**The register comes first** because it is the only one of them a person opens
+to look at their money rather than to configure something. The rest are
+reference data, in the order they depend on each other.
+
+The screen draws no title of its own: the tab shell carries the name above the
+ground, and a titled card under it would be the same word twice. Rows, not
+buttons — `design-system/05` §5.1's card of grouped rows is exactly a list of
+destinations, and three stacked buttons in a titled card was a card pretending
+to be a screen. A row is added here when the screen it leads to exists, never
+before: a menu entry to a placeholder is a promise the app cannot keep.
+
 ## 3. Layout
 
 **Backup, drill and FX-coverage cards require a backend.** They report on the

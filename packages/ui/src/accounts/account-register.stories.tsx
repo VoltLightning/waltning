@@ -105,5 +105,28 @@ export const WithArchived: Story = {
   },
 };
 
+/**
+ * The toggle open with nothing behind it. The rows load lazily, so a register
+ * cannot hide the heading in advance — it opens and says what it found.
+ */
+export const ArchivedEmpty: Story = {
+  args: { accounts: POPULATED, archivedAccounts: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", { name: "Archived" });
+    await userEvent.click(toggle);
+    await canvas.findByText("No archived accounts.");
+    // The same `usePressScale` settle `WithArchived` waits out — see there.
+    const wrapper = toggle.parentElement;
+    await waitFor(() => {
+      if (wrapper === null) throw new Error("button has no Animated.View wrapper");
+      const { transform } = getComputedStyle(wrapper);
+      if (transform !== "none" && transform !== "matrix(1, 0, 0, 1, 0, 0)") {
+        throw new Error("press-scale still settling");
+      }
+    });
+  },
+};
+
 /** `EmptyState(first-run)` — S16 §6, reachable directly from the tab bar. */
 export const Empty: Story = { args: { accounts: [], archivedAccounts: [] } };

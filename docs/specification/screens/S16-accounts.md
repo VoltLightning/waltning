@@ -62,7 +62,15 @@ because a shared account being overdrawn is a real fact.
 Each group — kind or `SharedGroup` — is a card of grouped rows: the group name
 is the card's title, its per-currency subtotals the card's one header figure,
 and the balance rows the body. The search field above the groups stays on the
-ground.
+ground, and so does **Add account**, the register's own primary, below the
+last group. It is offered whether or not the register is empty: an action that
+lives only in the empty state disappears the moment the first account exists,
+which leaves no way to open the second.
+
+The archived toggle sits under the groups and loads its rows lazily (§6), so
+whether any exist is not known until it has been opened once. Opened onto
+nothing it says so — *No archived accounts* — rather than leaving a heading
+standing over blank space.
 
 A clearing account with a non-zero balance carries an amber marker — that is the
 invariant this screen exists to surface (§6.4).
@@ -121,12 +129,32 @@ the case the figure exists to illuminate.
 An account may have no group — it renders ungrouped, and its FX cost totals under
 *unattributed* rather than being dropped.
 
+### Choosing a currency the ledger cannot yet value
+
+Holding a currency and capturing in it are two capabilities, and only the
+second is gated (`architecture/14` §14.6). An account opens in any currency the
+replica holds; a *transaction* in a non-pivot currency needs a rate, and a
+replica that has never synced may have none.
+
+So the create form states it where the choice is made rather than letting the
+executor refuse one capture at a time later: under the currency grid, a
+currency whose `capturable` is false draws a line naming it — *"BYN has no
+exchange rate yet. The account opens fine; transactions in it cannot be
+recorded until one is set."* — and offers **Set a BYN rate**, which opens S18
+on that currency and on today's date. Save is never blocked by it: refusing an
+account for a missing rate would refuse the thing that is legal.
+
 ### Opening balance and opening date
 
 `opening_balance` is *as of* `opening_date`, and `computations.md` §2 sums every
 row from there. Both are set when the account is created and are ordinarily never
 touched again — after migration they carry nearly all the value (§8.0), which is
 why §8.4's gate exists and why editing one is an audited write with a confirm.
+
+The figure is stored at `numeric(20,8)` and **read at the currency's own
+scale**: the editor shows `0,00` for an account opened at nothing, not
+`0.00000000`. What is saved stays exact — presenting a figure is not editing
+it, so an editor nobody typed in produces no patch at all.
 
 **Changing an opening balance moves every balance from that date forward.** It is
 not a correction tool. Reconciling against an observed balance is the next

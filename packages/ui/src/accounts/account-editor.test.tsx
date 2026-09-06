@@ -16,10 +16,11 @@ const account: AccountEditorAccount = {
   name: "Bank A · PLN",
   currency: "PLN",
   currencySymbol: "zł",
+  decimals: 2,
   kind: "bank",
   ownership: "own",
   isBusiness: false,
-  openingBalance: "100.00000000",
+  openingBalance: money.toMoney("100"),
   openingDate: "2026-01-01",
   memo: "",
   groupId: null,
@@ -167,6 +168,90 @@ it("shows the opening-balance confirm line only once it changed", () => {
   expect(
     screen.getByText("Changing this moves every balance from this date forward."),
   ).toBeDefined();
+});
+
+/**
+ * `numeric(20,8)` is the storage form; the field is the reading form. An
+ * account opened at nothing showed `0.00000000` — eight decimals of a scale
+ * no złoty account is kept at.
+ */
+it("shows the opening balance at the currency's own scale", () => {
+  render(
+    <AccountEditor
+      account={{ ...account, openingBalance: money.toMoney("0") }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  expect((screen.getByLabelText("Opening balance") as HTMLInputElement).value).toBe("0.00");
+});
+
+it("shows a two-decimal figure whole, and a zero-decimal currency with none", () => {
+  const { unmount } = render(
+    <AccountEditor
+      account={{ ...account, openingBalance: money.toMoney("12.5") }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  expect((screen.getByLabelText("Opening balance") as HTMLInputElement).value).toBe("12.50");
+  unmount();
+
+  render(
+    <AccountEditor
+      account={{ ...account, currency: "JPY", decimals: 0, openingBalance: money.toMoney("1200") }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  expect((screen.getByLabelText("Opening balance") as HTMLInputElement).value).toBe("1200");
+});
+
+/**
+ * Presenting the figure must not become a write of it: the rounded string is
+ * the same money as the stored one, and `update_account` refuses an empty
+ * patch — so Save stays disabled until something actually changes.
+ */
+it("does not count the presented figure as an edit", () => {
+  const onSave = vi.fn();
+  render(
+    <AccountEditor
+      account={{ ...account, openingBalance: money.toMoney("100") }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={onSave}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+
+  // Retyping the same money, in the shape the field shows it, is still not a change.
+  fireEvent.change(screen.getByLabelText("Opening balance"), { target: { value: "100.00" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+
+  fireEvent.change(screen.getByLabelText("Opening balance"), { target: { value: "12,5" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ openingBalance: "12.5" });
 });
 
 it("Archive and Reconcile call their own handlers, not Save", () => {

@@ -17,6 +17,7 @@
     "./primitives/*": "./src/primitives/*.tsx",
     "./primitives/use-breakpoint": "./src/primitives/use-breakpoint.ts",
     "./review/*": "./src/review/*.tsx",
+    "./settings/*": "./src/settings/*.tsx",
     "./shell/*": "./src/shell/*.tsx",
     "./shell/float-geometry": "./src/shell/float-geometry.ts",
     "./shell/floating-add.test-support": "./src/shell/floating-add.test-support.ts",

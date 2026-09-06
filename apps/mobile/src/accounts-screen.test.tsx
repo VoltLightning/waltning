@@ -104,7 +104,27 @@ describe("Accounts", () => {
   it("shows the first-run empty state and pushes account/new with returnTo=accounts", () => {
     withLedger([]);
     expect(screen.getByText("No accounts yet")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Create account…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/account/new",
+      params: { returnTo: "accounts" },
+    });
+  });
+
+  /** S16 §3 — the register offers it with accounts present too, not only when empty. */
+  it("pushes account/new from the register's own primary", () => {
+    withLedger([
+      {
+        id: "acc-1",
+        name: "Bank A · PLN",
+        kind: "bank",
+        currency: PLN,
+        ownership: "own",
+        isBusiness: false,
+        balance: "100",
+      },
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/account/new",
       params: { returnTo: "accounts" },

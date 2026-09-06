@@ -174,7 +174,7 @@ export function AccountRegister({
         variant="first-run"
         title={t("shell.noAccounts")}
         body={t("shell.noAccountsBody")}
-        primaryAction={{ label: t("accounts.create"), onPress: onCreateAccount }}
+        primaryAction={{ label: t("accounts.add"), onPress: onCreateAccount }}
       />
     );
   }
@@ -208,6 +208,17 @@ export function AccountRegister({
         accounts={filteredArchived}
         onToggle={handleToggleArchived}
       />
+
+      {/*
+        On the ground, below every group — S16 §3 keeps the search field
+        there and this is the same rule: a card holds rows, and the one
+        action that creates a new one is not a row of the register. It was
+        offered only by the empty state before, so a ledger with one account
+        had no way to open its second.
+      */}
+      <View style={styles.inline}>
+        <Button label={t("accounts.add")} onPress={onCreateAccount} variant="primary" />
+      </View>
     </View>
   );
 }
@@ -318,7 +329,15 @@ function ArchivedToggle({ open, accounts, onToggle }: ArchivedToggleProps) {
 
   return (
     <View style={styles.archived}>
-      <Button label={label} onPress={onToggle} variant="ghost" />
+      {/*
+        Sized to its own label. A `Button` fills the column it sits in, so
+        the section heading painted a full-width filled band the moment it
+        was hovered or focused — a bar across the register for a control
+        that opens one section.
+      */}
+      <View style={styles.inline}>
+        <Button label={label} onPress={onToggle} variant="ghost" />
+      </View>
       {/*
         Distinguished by sitting under the "Archived (n)" heading — text, not
         tint (P5). `opacity` was tried here and failed `axe`'s own
@@ -326,6 +345,15 @@ function ArchivedToggle({ open, accounts, onToggle }: ArchivedToggleProps) {
         disabled *control* (`CLAUDE.md`), and a row of figures someone might
         still want to read is not one.
       */}
+      {/*
+        Opened onto nothing says so. The rows load lazily (S16 §6), so
+        whether any exist is not known until the toggle has run once — the
+        heading cannot be hidden in advance, and a heading over blank space
+        is what this line replaces.
+      */}
+      {open && accounts.length === 0 ? (
+        <Text style={styles.noMatches}>{t("accounts.archivedNone")}</Text>
+      ) : null}
       {open
         ? accounts.map((account) => (
             <BalanceRow
@@ -347,6 +375,8 @@ const useStyles = makeStyles((theme) => ({
   noMatches: { color: theme.textMuted, ...text.ui("body") },
   subtotals: { flexDirection: "row", flexWrap: "wrap", gap: space.lg },
   archived: { gap: space.md, marginTop: space.xl },
+  /** A control that must not stretch to the ground's own width. */
+  inline: { alignSelf: "flex-start" },
   rowWithAction: { flexDirection: "row", alignItems: "center", gap: space.sm },
   rowMain: { flex: 1 },
   transferGlyph: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },

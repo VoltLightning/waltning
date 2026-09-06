@@ -31,7 +31,7 @@ it("shows the first-run empty state with nothing to hold", () => {
     />,
   );
   expect(screen.getByText("No accounts yet")).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Create account…" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add account" }));
   expect(onCreateAccount).toHaveBeenCalledTimes(1);
 });
 
@@ -167,6 +167,41 @@ it("archived accounts stay hidden until the toggle opens, and the load fires onc
   expect(onLoadArchived).toHaveBeenCalledTimes(1);
   expect(screen.getByText("Old · PLN")).toBeDefined();
   expect(screen.getByText("Archived (1)")).toBeDefined();
+});
+
+/**
+ * The rows load lazily, so a register with nothing archived cannot know that
+ * until the toggle has run — the heading says what it found rather than
+ * standing over blank space.
+ */
+it("says so when the archived section opens onto nothing", () => {
+  render(
+    <AccountRegister
+      accounts={[account({})]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByText("Archived"));
+  expect(screen.getByText("No archived accounts.")).toBeDefined();
+});
+
+/** S16 §3 — the register's own primary, on the ground under every group. */
+it("offers Add account with accounts present, not only in the empty state", () => {
+  const onCreateAccount = vi.fn();
+  render(
+    <AccountRegister
+      accounts={[account({})]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={onCreateAccount}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+  expect(onCreateAccount).toHaveBeenCalledTimes(1);
 });
 
 it("tapping a row calls onSelectAccount with its id", () => {

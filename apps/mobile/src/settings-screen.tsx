@@ -1,46 +1,62 @@
 /**
- * S19's home tab — a list with one entry, *Categories*, for now.
+ * S19's home tab — the list of everything Settings leads to.
  *
- * `(tabs)/_layout.tsx` hides the navigation header for every tab root, and
- * the screen's name is on the shell's own band above it (`TabHeader`, drawn
- * from the active tab's label) — so this card carries **no title**. One with
- * one would name the screen twice on the same phone.
+ * **Accounts is first**, because S16 §2 names Settings as its entry ("From
+ * Settings · Accounts") and, until it was listed here, the register was
+ * reachable only by typing a URL or by finishing an account creation that
+ * started somewhere else.
  *
- * A menu list is still the one shape `design-system/05` §5.1 allows a whole
- * screen to be one card: *"a tab root's menu list is an untitled card"* — a
- * list of routes is related rows, which is what earns a card at all.
- * `tests/architecture.test.ts` derives the exemption from that sentence — a
- * tab route's screen whose card holds only `Button`s — rather than naming
- * this file, so a second entry that is not a button loses it the same day.
+ * **No title, and no card built here.** `(tabs)/_layout.tsx` hides the
+ * navigation header for every tab root and the tab shell draws the screen's
+ * name above the ground, so a heading in this file would be the same word
+ * twice. The card of rows is `SettingsMenu`'s (`packages/ui/src/settings`) —
+ * a screen composes, it does not render.
  */
 
 import { useT } from "@waltning/ui/i18n/provider";
-import { Button } from "@waltning/ui/primitives/button";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { SettingsMenu, type SettingsMenuItem } from "@waltning/ui/settings/settings-menu";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { router } from "expo-router";
+import { useCallback, useMemo } from "react";
 
-function handleOpenCategories() {
-  router.push("/settings/categories");
-}
+/**
+ * Every destination, keyed by its own `routes.*` label — so the menu's order
+ * and its wording are one declaration, and neither can drift from the other.
+ * The routes stay literal because expo-router types them: a `string` here
+ * would not compile, which is the check catching a typo.
+ */
+const ROUTES = {
+  accounts: "/accounts",
+  categories: "/settings/categories",
+  currencies: "/settings/currencies",
+  rates: "/settings/rates",
+} as const;
 
-function handleOpenCurrencies() {
-  router.push("/settings/currencies");
-}
+type Destination = keyof typeof ROUTES;
 
-function handleOpenRates() {
-  router.push("/settings/rates");
+/** The order they are offered in — the register first, the reference data after. */
+const ORDER: readonly Destination[] = ["accounts", "categories", "currencies", "rates"];
+
+function isDestination(id: string): id is Destination {
+  return id in ROUTES;
 }
 
 export default function Settings() {
   const t = useT();
 
+  const items = useMemo(
+    (): readonly SettingsMenuItem[] =>
+      ORDER.map((destination) => ({ id: destination, label: t(`routes.${destination}`) })),
+    [t],
+  );
+
+  const handleSelect = useCallback((id: string) => {
+    if (isDestination(id)) router.push(ROUTES[id]);
+  }, []);
+
   return (
     <GroundPanel>
-      <Card>
-        <Button label={t("routes.categories")} onPress={handleOpenCategories} variant="secondary" />
-        <Button label={t("routes.currencies")} onPress={handleOpenCurrencies} variant="secondary" />
-        <Button label={t("routes.rates")} onPress={handleOpenRates} variant="secondary" />
-      </Card>
+      <SettingsMenu items={items} onSelect={handleSelect} />
     </GroundPanel>
   );
 }

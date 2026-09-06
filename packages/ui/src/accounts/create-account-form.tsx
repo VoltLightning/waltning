@@ -46,7 +46,19 @@ import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 
-export type CreateAccountCurrency = { code: CurrencyCode; name: string; symbol: string };
+export type CreateAccountCurrency = {
+  code: CurrencyCode;
+  name: string;
+  symbol: string;
+  /**
+   * Whether a capture can be *valued* in this currency (§14.6) — a rate is
+   * asserted, or it is the pivot. Optional, and `true` when absent: a caller
+   * that has not resolved the question is not making the claim that a
+   * currency is unusable, and the note below is only ever drawn on a
+   * currency that has explicitly said `false`.
+   */
+  capturable?: boolean;
+};
 
 /** What the group picker needs — an id and a name, nothing S16's own reads use. */
 export type CreateAccountGroup = { id: string; name: string };
@@ -88,6 +100,13 @@ export type CreateAccountFormProps = {
   onCancel: () => void;
   onSave: (draft: CreateAccountDraft) => void;
   /**
+   * S18, opened on this currency and today's date — the way out of the note
+   * a non-capturable currency draws under the grid. **Optional**: a surface
+   * with no rate screen to send anyone to states the fact and offers nothing,
+   * rather than offering a dead link.
+   */
+  onSetRate?: (currency: CurrencyCode) => void;
+  /**
    * Start with *More details* disclosed. `Select`'s own `defaultOpen` for the
    * same reason: a screenshot suite cannot click, so the expanded state a
    * story wants to photograph has to be reachable through a prop.
@@ -120,6 +139,7 @@ export function CreateAccountForm({
   fieldErrors,
   onCancel,
   onSave,
+  onSetRate,
   defaultExpanded = false,
 }: CreateAccountFormProps) {
   const t = useT();
@@ -163,7 +183,22 @@ export function CreateAccountForm({
     [groups],
   );
 
+  /**
+   * §14.6 — **holding a currency and capturing in it are two capabilities.**
+   * The account opens either way; what a rateless currency costs is every
+   * transaction in it, which the executor would refuse one at a time,
+   * afterwards. Said here, once, at the moment the currency is chosen.
+   */
+  const chosen = useMemo(
+    () => currencies.find((row) => row.code === currency),
+    [currencies, currency],
+  );
+  const needsRate = chosen !== undefined && chosen.capturable === false;
+
   const handleToggleExpanded = useCallback(() => setExpanded((prior) => !prior), []);
+  const handleSetRate = useCallback(() => {
+    if (currency !== null) onSetRate?.(currency);
+  }, [currency, onSetRate]);
   const handleKindChange = useCallback((value: string) => setKind(value as AccountKind), []);
   const handleOwnershipChange = useCallback(
     (value: string) => setOwnership(value as Ownership),
@@ -228,11 +263,35 @@ export function CreateAccountForm({
       />
       {currencyError === undefined ? null : <Text style={styles.fieldError}>{currencyError}</Text>}
 
-      <Button
-        label={t(expanded ? "accounts.fewerDetails" : "accounts.moreDetails")}
-        onPress={handleToggleExpanded}
-        variant="ghost"
-      />
+      {needsRate && chosen !== undefined ? (
+        <View style={styles.gate}>
+          <Text style={styles.gateNote}>
+            {t("accounts.currencyNotCapturable", { currency: chosen.code })}
+          </Text>
+          {onSetRate === undefined ? null : (
+            <View style={styles.inline}>
+              <Button
+                label={t("accounts.setRate", { currency: chosen.code })}
+                onPress={handleSetRate}
+                variant="secondary"
+              />
+            </View>
+          )}
+        </View>
+      ) : null}
+
+      {/*
+        Sized to its own label. A `Button` fills the column it sits in, so a
+        ghost disclosure painted a full-width bar on hover — a filled band
+        across the form for a control that toggles seven fields.
+      */}
+      <View style={styles.inline}>
+        <Button
+          label={t(expanded ? "accounts.fewerDetails" : "accounts.moreDetails")}
+          onPress={handleToggleExpanded}
+          variant="ghost"
+        />
+      </View>
 
       {expanded ? (
         <View style={styles.more}>
@@ -306,5 +365,9 @@ const useStyles = makeStyles((theme) => ({
   formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   more: { gap: space.xl },
+  /** A control that must not stretch to the ground's own width. */
+  inline: { alignSelf: "flex-start" },
+  gate: { gap: space.md },
+  gateNote: { color: theme.textMuted, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
 }));

@@ -26,7 +26,7 @@
  */
 
 import { isAccountingDate } from "@waltning/core/date";
-import type * as money from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 import {
   ACCOUNT_KIND,
   type AccountKind,
@@ -58,10 +58,16 @@ export type AccountEditorAccount = {
   name: string;
   currency: string;
   currencySymbol: string;
+  /**
+   * The currency's own scale. The stored figure is `numeric(20,8)`, so an
+   * opening balance of nothing reads `0.00000000` in the field unless it is
+   * presented at the scale the account is actually kept in.
+   */
+  decimals: number;
   kind: AccountKind;
   ownership: Ownership;
   isBusiness: boolean;
-  openingBalance: string;
+  openingBalance: money.Money;
   openingDate: string | null;
   memo: string;
   groupId: string | null;
@@ -127,7 +133,7 @@ export function AccountEditor({
   const [kind, setKind] = useState<AccountKind>(account.kind);
   const [ownership, setOwnership] = useState<Ownership>(account.ownership);
   const [isBusiness, setIsBusiness] = useState(account.isBusiness);
-  const [openingBalance, setOpeningBalance] = useState(account.openingBalance);
+  const [openingBalance, setOpeningBalance] = useState<string>(account.openingBalance);
   const [openingDateText, setOpeningDateText] = useState(account.openingDate ?? "");
   const [memo, setMemo] = useState(account.memo);
   const [groupId, setGroupId] = useState<string | null>(account.groupId);
@@ -138,8 +144,25 @@ export function AccountEditor({
   const dateInvalid = openingDateText !== "" && !isAccountingDate(openingDateText);
   // §6.7 — forced off rather than merely warned, matching `CreateAccountForm`.
   const businessValue = ownership === "shared" ? false : isBusiness;
-  const openingChanged =
-    openingBalance !== account.openingBalance || (openingDateText || null) !== account.openingDate;
+  /**
+   * **Presented at the currency's own scale, saved exact.**
+   *
+   * `openingBalance` is stored as `numeric(20,8)` (`SPEC.md` §7.0), so an
+   * account opened at nothing arrives here as `"0.00000000"` — eight
+   * decimals of a scale no złoty account is ever kept in. `money.round` is
+   * the display form for this field; the state above still holds whatever
+   * the ledger handed over, so an untouched editor produces an empty patch
+   * rather than a write of the rounded string.
+   */
+  const openingBalanceShown = money.round(account.openingBalance, account.decimals);
+  /**
+   * **Compared by value, not by spelling.** `"12.50"` typed back into a field
+   * showing `"12.50"` is the same money as the stored `"12.50000000"`, and a
+   * string comparison would call it a change and offer Save on a patch that
+   * writes nothing new.
+   */
+  const openingBalanceChanged = !money.dec(openingBalance).eq(account.openingBalance);
+  const openingChanged = openingBalanceChanged || (openingDateText || null) !== account.openingDate;
 
   /**
    * Only what changed — `update_account`'s executor refuses an empty patch,
@@ -154,7 +177,7 @@ export function AccountEditor({
     if (ownership !== account.ownership) next.ownership = ownership;
     if (memo !== account.memo) next.memo = memo;
     if (businessValue !== account.isBusiness) next.isBusiness = businessValue;
-    if (openingBalance !== account.openingBalance) next.openingBalance = openingBalance;
+    if (openingBalanceChanged) next.openingBalance = openingBalance;
     const nextOpeningDate = openingDateText === "" ? null : openingDateText;
     if (nextOpeningDate !== account.openingDate) next.openingDate = nextOpeningDate;
     return next;
@@ -165,6 +188,7 @@ export function AccountEditor({
     kind,
     memo,
     openingBalance,
+    openingBalanceChanged,
     openingDateText,
     ownership,
     trimmed,
@@ -270,7 +294,7 @@ export function AccountEditor({
       />
       <AmountField
         label={t("accounts.openingBalance")}
-        initial={openingBalance}
+        initial={openingBalanceShown}
         onChange={handleOpeningBalanceChange}
         currency={account.currency}
       />
