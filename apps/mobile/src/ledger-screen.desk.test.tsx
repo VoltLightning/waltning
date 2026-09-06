@@ -128,6 +128,7 @@ function fakeController(search: FakeSearch, overrides: Partial<PhoneLedgerPort> 
         name: "Eating out",
         kind: "expense",
         isLeaf: true,
+        externalId: null,
         sort: 0,
       },
     ],
@@ -763,6 +764,7 @@ describe("Ledger at desk width", () => {
             name: "Salary",
             kind: "income",
             isLeaf: true,
+            externalId: null,
             sort: 0,
           },
           {
@@ -771,6 +773,7 @@ describe("Ledger at desk width", () => {
             name: "Eating out",
             kind: "expense",
             isLeaf: true,
+            externalId: null,
             sort: 1,
           },
         ],

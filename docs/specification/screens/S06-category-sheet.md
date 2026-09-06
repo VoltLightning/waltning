@@ -101,7 +101,7 @@ choosing to create a category has already decided, and a model has not.
 |---|---|
 | Loading | Cached; the tree is small and changes rarely. No skeleton in practice |
 | Populated | Browsing · searching · group-filtered |
-| Empty | **Two of them, and they are not the same absence.** `filtered` — a search or a group chip excluded everything: *No matching category*, offering *Create "…"* **only while a group chip is on**, scoped to that group: search covers every leaf and ignores the chip by design, so the chip is not what narrowed the result — it is the only thing on screen that says where a new leaf would go, and without one this empty says *Nothing matches* and offers no create at all. A first category with no group to name is the `first-run` empty's business, below. `first-run` — the tree holds nothing at all, which is what a ledger is before the taxonomy arrives: *No categories yet*, with *Create a category*. The search field says *Search categories* there rather than counting to zero, and nothing says *nothing matches* — no query is why the sheet is empty, and blaming one sends a person to retype instead of to create. **A tree with no groups is not a dead end**: `create_category`'s own `parentId` is nullable and `TAXONOMY.md` R1 makes a node a group *or* a leaf without saying anything about parents — the seeded taxonomy holds a top-level leaf itself — so the first category of an empty ledger is created **at the top level**, the same write S19's create sheet makes, and `convert_leaf_group` is what turns it into a group later. The create row says where it will land instead of offering a chooser with nothing in it. Where groups *do* exist this sheet still asks which one, which is the same scoping the `filtered` empty's *Create "…"* keeps. `Uncategorized` alone does not make a tree non-empty; it is the honest blank (§9.2), and it keeps its own row below either way — **known by the seed's own tag, never by being the root leaf**, now that a created category can be one too |
+| Empty | **Two of them, and they are not the same absence.** `filtered` — a search or a group chip excluded everything: *No matching category*, offering *Create "…"* **only while a group chip is on**, scoped to that group: search covers every leaf and ignores the chip by design, so the chip is not what narrowed the result — it is the only thing on screen that says where a new leaf would go, and without one this empty says *Nothing matches* and offers no create at all. A first category with no group to name is the `first-run` empty's business, below. `first-run` — the tree holds nothing at all, which is what a ledger is before the taxonomy arrives: *No categories yet*, with *Create a category*. The search field says *Search categories* there rather than counting to zero, and nothing says *nothing matches* — no query is why the sheet is empty, and blaming one sends a person to retype instead of to create. **A tree with no groups is not a dead end**: `create_category`'s own `parentId` is nullable and `TAXONOMY.md` R1 makes a node a group *or* a leaf without saying anything about parents — the seeded taxonomy holds a top-level leaf itself — so the first category of an empty ledger is created **at the top level**, the same write S19's create sheet makes, and `convert_leaf_group` is what turns it into a group later. The create row says where it will land instead of offering a chooser with nothing in it. Where groups *do* exist this sheet still asks which one, which is the same scoping the `filtered` empty's *Create "…"* keeps. The seeded `Uncategorized` alone does not make a tree non-empty; it is the honest blank (§9.2), and it keeps its own row below either way |
 | Error | Create failed (name collides with a sibling) → inline on the field, naming the existing sibling |
 | Offline | Fully functional from cache. `create_category` queues to the outbox and the leaf is usable immediately with a `pending` marker |
 | Gated | n/a |
@@ -117,6 +117,28 @@ refused, which are the same act described twice. Offline at a market you could
 create `Groceries › Market` from the capture sheet and be refused the identical
 thing from Settings — and a rule that looks arbitrary is how a person stops
 trusting every other refusal.
+
+**How the honest blank is known, now that a created category can also sit at
+the root.** By the seed's own tag (`seed:uncategorized`, which
+`read_category_tree` carries through) where a row has one; by the whole seeded
+*shape* — root, expense, leaf, the literal name — where none does, and only in
+a tree that also holds a **group**, because a seeded taxonomy arrives with its
+groups and a tree without one was never seeded. That second condition is what
+keeps a category a person named `Uncategorized` on a fresh ledger from being
+adopted as the blank and hidden from the grid.
+
+**Never by being the root leaf**, which is what the two rules replace: the
+first category of an empty taxonomy is a root leaf too, and it sorts ahead of
+the seeded row.
+
+**And when neither rule finds one, the sheet claims no blank at all** — every
+leaf is ordinary, under its own name, and the divider row is absent. A renamed
+seeded row lands there: nothing refuses renaming it today, and showing a leaf
+as itself is the safe direction. The rule that would remove the case belongs to
+`rename_category` / `archive_category` / `merge_categories` — a refusal on a
+row whose `external_id` begins `seed:`, with the constraint behind it — not to
+this screen.
+
 ## 7. Interaction
 
 ### Mobile

@@ -1557,8 +1557,24 @@ describe("phone ledger controller — createCategory", () => {
 
   function categoryHarness() {
     let tree: PhoneCategoryNode[] = [
-      { id: GROUP, parentId: null, name: "Food", kind: "expense", isLeaf: false, sort: 0 },
-      { id: LEAF, parentId: GROUP, name: "Groceries", kind: "expense", isLeaf: true, sort: 0 },
+      {
+        id: GROUP,
+        parentId: null,
+        name: "Food",
+        kind: "expense",
+        isLeaf: false,
+        sort: 0,
+        externalId: null,
+      },
+      {
+        id: LEAF,
+        parentId: GROUP,
+        name: "Groceries",
+        kind: "expense",
+        isLeaf: true,
+        sort: 0,
+        externalId: null,
+      },
     ];
     const createCategory = vi.fn<PhoneLedgerPort["createCategory"]>((input) => {
       tree = [
@@ -1570,6 +1586,9 @@ describe("phone ledger controller — createCategory", () => {
           kind: input.kind,
           isLeaf: true,
           sort: 0,
+          // `create_category` writes no tag: a row a phone creates itself is
+          // nobody's seed.
+          externalId: null,
         },
       ];
     });

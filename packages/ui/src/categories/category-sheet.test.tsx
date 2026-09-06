@@ -56,6 +56,17 @@ const SALARY: CategoryTreeNode = {
 
 const TREE = [FOOD, GROCERIES, EATING_OUT, TRANSPORT, FUEL, UNCATEGORIZED, SALARY];
 
+/**
+ * The same row as a seeded replica actually holds it — `readCategoryTree`
+ * carries the seed's tag through, so a real `Uncategorized` is known by that
+ * and not by its shape. `UNCATEGORIZED` above stays untagged on purpose:
+ * inside `TREE`, which has groups, it is what exercises the shape fallback.
+ */
+const SEEDED_UNCATEGORIZED: CategoryTreeNode = {
+  ...UNCATEGORIZED,
+  externalId: "seed:uncategorized",
+};
+
 it("shows every leaf across groups when browsing, and none of the other kind", () => {
   render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
   expect(screen.getByRole("radio", { name: "Groceries" })).toBeDefined();
@@ -396,7 +407,7 @@ it("still asks for a group when the tree has them", () => {
  * shape and can never see what the sheet does with the result.
  */
 it("keeps Uncategorized apart after creating a second root leaf (S06 §9.2)", () => {
-  const tree: CategoryTreeNode[] = [UNCATEGORIZED];
+  const tree: CategoryTreeNode[] = [SEEDED_UNCATEGORIZED];
   const onCreate = (draft: {
     name: string;
     kind: "income" | "expense";
@@ -447,6 +458,56 @@ it("keeps Uncategorized apart after creating a second root leaf (S06 §9.2)", ()
   expect(screen.getByRole("radio", { name: "Uncategorized" })).toBeDefined();
   // And the sheet is no longer empty — there is a category to pick now.
   expect(screen.queryByText("No categories yet")).toBeNull();
+});
+
+/**
+ * **A category a person named `Uncategorized` is not the honest blank.** On a
+ * fresh ledger — no seed, no groups, no tags — this sheet's own create makes
+ * a root leaf, and the shape match would have adopted the one row the ledger
+ * holds: hidden from the grid, sitting below the divider, under a sheet still
+ * saying *No categories yet*. A seeded taxonomy arrives with its groups, so a
+ * tree with none was never seeded and the shape stage does not run there.
+ */
+it("does not adopt a created category named Uncategorized as the blank (S06 §9.2)", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[
+        { id: "cat-made", parentId: null, name: "Uncategorized", kind: "expense", isLeaf: true },
+      ]}
+      onPick={vi.fn()}
+      onCreate={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  const grid = within(screen.getByRole("radiogroup", { name: "Category" }));
+  expect(grid.getByRole("radio", { name: /Uncategorized/ })).toBeDefined();
+  expect(screen.queryByText("No categories yet")).toBeNull();
+});
+
+/**
+ * **Renamed out of recognition, and the sheet says nothing it cannot know.**
+ * Nothing refuses renaming the seeded row today (`rename_category` has no
+ * `externalId` guard), so with no tag to fall back on the blank stops being
+ * identifiable. The safe direction is the one taken: the row is an ordinary
+ * leaf in the grid under its new name, and no divider row claims a blank the
+ * sheet cannot find.
+ */
+it("shows a renamed root leaf as itself rather than guessing (S06 §9.2)", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[FOOD, GROCERIES, { ...UNCATEGORIZED, name: "Unsorted" }]}
+      onPick={vi.fn()}
+      onCreate={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  const grid = within(screen.getByRole("radiogroup", { name: "Category" }));
+  expect(grid.getByRole("radio", { name: /Unsorted/ })).toBeDefined();
+  expect(screen.getAllByRole("radio", { name: /Unsorted/ })).toHaveLength(1);
 });
 
 /**
@@ -542,12 +603,12 @@ it("offers create on an empty tree that has groups", () => {
  * nothing else, so a predicate that counted it as content handed exactly
  * that ledger the two strings this state exists to remove.
  */
-it("treats a tree holding only Uncategorized as empty (S06 §9.2)", () => {
+it("treats a tree holding only the seeded Uncategorized as empty (S06 §9.2)", () => {
   render(
     <CategorySheet
       visible
       kind="expense"
-      tree={[UNCATEGORIZED]}
+      tree={[SEEDED_UNCATEGORIZED]}
       onPick={vi.fn()}
       onCreate={vi.fn()}
       onDismiss={vi.fn()}

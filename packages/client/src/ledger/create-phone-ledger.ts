@@ -281,9 +281,11 @@ export type PhoneCategory = {
  *
  * Structural, matching `PhoneCategory`: the port is what keeps this package
  * free of the storage engine behind it. **`parentId: null` names a root** —
- * ordinarily a group (`isLeaf: false`), except `Uncategorized`, the one leaf
- * `TAXONOMY.md` seeds at the root (R1/R2: a category is a group or a leaf,
- * two levels, never deeper).
+ * ordinarily a group (`isLeaf: false`), and a leaf whenever the taxonomy has
+ * no group to put one under: `create_category`'s own `parentId` is nullable,
+ * and S06's sheet creates exactly that for the first category of an empty
+ * ledger. `TAXONOMY.md` seeds one root leaf (`Uncategorized`) and R1/R2 hold
+ * either way — a category is a group or a leaf, two levels, never deeper.
  */
 export type PhoneCategoryNode = {
   id: Id<"categories">;
@@ -292,6 +294,15 @@ export type PhoneCategoryNode = {
   kind: "income" | "expense";
   isLeaf: boolean;
   sort: number;
+  /**
+   * The seed's own tag (`seed:uncategorized`) — see `LocalCategory`.
+   * `readCategoryTree` has always selected it and `listCategoryTree` has
+   * always passed it through; only this type left it out, which is what kept
+   * S06's sheet identifying the honest blank by shape when a tag was right
+   * there. Nullable rather than optional: a row either carries one or does
+   * not, and `null` is the answer for every row a phone writes itself.
+   */
+  externalId: string | null;
 };
 
 /**

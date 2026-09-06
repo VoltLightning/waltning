@@ -26,11 +26,18 @@
  * leaf at the root and every seeded leaf under a group, but nothing refuses a
  * second root leaf — `create_category`'s `parentId` is nullable, and this
  * sheet's own create makes one whenever the taxonomy holds no group to name.
- * So the honest blank is identified by *what it is* (`isSeededUncategorized`
- * below), never by *where it sits*: matching the first root leaf handed the
- * Uncategorized row to whichever category was created first and put
- * `Uncategorized` itself in the grid, which is exactly the place §9.2 says it
- * never goes.
+ * So the honest blank is identified by *what it is*
+ * (`findSeededUncategorized` below), never by *where it sits*: matching the
+ * first root leaf handed the Uncategorized row to whichever category was
+ * created first and put `Uncategorized` itself in the grid, which is exactly
+ * the place §9.2 says it never goes.
+ *
+ * **And when neither stage finds one, there is no blank row — deliberately.**
+ * A renamed seeded row (nothing refuses that today) or a tree that never held
+ * one both land there: every leaf is ordinary, the divider row is absent, and
+ * the sheet claims nothing about a row it cannot identify. That is the safe
+ * direction — a leaf shown as itself, rather than a category silently wearing
+ * the blank's place.
  *
  * **Search always covers every leaf, ignoring the chosen group (§9's open
  * question, decided).** Positions never move — no recency, no usage
@@ -112,30 +119,51 @@ export type CategorySheetProps = {
   onDismiss: () => void;
 };
 
+/** The seed's own handle for the honest blank — `packages/db/src/seed/run.ts` writes `seed:<key>`. */
+const SEED_UNCATEGORIZED = "seed:uncategorized";
+
 /**
- * **The seeded honest blank, by identity rather than by position.**
- * `categories-screen.tsx`'s own `isUncategorized` is this rule, and this is
- * the same two stages for the same reasons: the seed's tag first
- * (`packages/db/src/seed/run.ts` writes `seed:<key>`), which names the exact
- * row once sync carries `externalId` down to the replica; the whole seeded
- * *shape* second, which is what actually matches today, because arc-phone has
- * no sync and nothing sets an `externalId` on a phone's own categories.
+ * The whole seeded *shape*, for a tree that came from a seed carrying no tags
+ * — a replica filled before `externalId` reached it.
  *
- * The shape has to be all four parts. Sibling uniqueness is `(parent, kind,
- * name)`, so an income leaf named "Uncategorized" is a legal, reachable row
- * that is **not** this one — matching on name and root alone would swallow it.
- * And `parentId === null && isLeaf` alone is not the blank at all any more:
- * this sheet creates root leaves whenever the taxonomy has no group, and the
- * first one created would otherwise take the blank's place.
+ * All four parts, and each earns its place. Sibling uniqueness is `(parent,
+ * kind, name)`, so an income leaf named "Uncategorized" is a legal, reachable
+ * row that is **not** this one, and matching on name and root alone would
+ * swallow it. The comparison is against the fixed English literal the seed
+ * writes, never `t(...)`: a stored name matched against a translated string
+ * would stop matching the moment the device's language changed.
  */
-function isSeededUncategorized(node: CategoryTreeNode): boolean {
-  if (node.externalId === "seed:uncategorized") return true;
+function hasSeededShape(node: CategoryTreeNode): boolean {
   return (
     node.parentId === null &&
     node.kind === "expense" &&
     node.isLeaf &&
     node.name.trim().toLowerCase() === "uncategorized"
   );
+}
+
+/**
+ * **The seeded honest blank, by identity rather than by position.**
+ * `categories-screen.tsx`'s own `isUncategorized` is this rule, in the same
+ * two stages for the same reasons — with one guard that screen does not need.
+ *
+ * **Stage 1, the seed's tag.** `readCategoryTree` selects `externalId` and
+ * `listCategoryTree` passes it through, so the moment a row carries a tag
+ * this names the exact row and nothing else can be mistaken for it.
+ *
+ * **Stage 2, the seeded shape — but only where a seed could have put it.** A
+ * seeded taxonomy arrives with its groups; a tree holding no group at all was
+ * never seeded, so a root leaf named "Uncategorized" in *that* tree is a
+ * category a person created here (this sheet creates root leaves whenever
+ * there is no group to name), and adopting it would hide it from the grid and
+ * make a sheet that holds one category say it holds none. Corroboration is
+ * what tells the two apart while no row carries a tag.
+ */
+function findSeededUncategorized(nodes: readonly CategoryTreeNode[]): CategoryTreeNode | undefined {
+  const tagged = nodes.find((node) => node.externalId === SEED_UNCATEGORIZED);
+  if (tagged !== undefined) return tagged;
+  if (!nodes.some((node) => !node.isLeaf)) return undefined;
+  return nodes.find(hasSeededShape);
 }
 
 export function CategorySheet({
@@ -160,7 +188,7 @@ export function CategorySheet({
 
   const nodes = useMemo(() => tree.filter((node) => node.kind === kind), [tree, kind]);
   const groups = useMemo(() => nodes.filter((node) => !node.isLeaf), [nodes]);
-  const uncategorized = useMemo(() => nodes.find(isSeededUncategorized), [nodes]);
+  const uncategorized = useMemo(() => findSeededUncategorized(nodes), [nodes]);
   const ordinaryLeaves = useMemo(
     () => nodes.filter((node) => node.isLeaf && node !== uncategorized),
     [nodes, uncategorized],
