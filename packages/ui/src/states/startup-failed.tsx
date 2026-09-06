@@ -47,14 +47,20 @@ export function StartupFailed({ error, onRetry }: StartupFailedProps) {
   const t = useT();
   const styles = useStyles();
 
-  // The two claims, built as whole prop sets rather than three independent
-  // ternaries: `variant`, `cost` and `action` are one decision, and under
+  // The two claims, built as whole prop sets rather than independent
+  // ternaries: `variant` and `action` are one decision, and under
   // `exactOptionalPropertyTypes` an absent prop is absent rather than
   // `undefined` — which is also what the type says.
+  //
+  // **No `cost` line, on either branch.** `<ErrorState>`'s `cost` is a claim
+  // about what this failure took from you, and nothing here knows: a
+  // pre-journal rebuild deletes both stores *before* it can fail, so a
+  // constant "nothing was lost" would be false on exactly the path most
+  // worth being honest about. A sentence that cannot be true on every branch
+  // that renders it does not belong in a constant.
   const claim = onRetry
     ? ({
         variant: "recoverable",
-        cost: t("startup.ledgerFailedRetryCost"),
         action: { label: t("common.retry"), onPress: onRetry },
       } as const)
     : ({ variant: "terminal" } as const);

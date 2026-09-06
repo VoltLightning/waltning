@@ -70,19 +70,42 @@ export function describeDiagnosticError<Caught>(
 /**
  * A caught value as an `Error`, keeping whatever the thrower said.
  *
- * `new Error(String(caught))` is the shape this replaces, and it is where
- * `[object Object]` reached a user-facing screen: the web SQLite worker
- * rejects with a plain object, `String` renders it as that constant, and a
- * failure screen then explained nothing at all. Routing through
- * `describeDiagnosticError` means one description of a thrown value, used both
- * by the logs and by whatever renders the failure.
+ * `new Error(String(caught))` is the shape this replaces — a plain object
+ * becomes the constant `[object Object]` and the screen above it then explains
+ * nothing. Routing through `describeDiagnosticError` means one description of
+ * a thrown value, used both by the logs and by whatever renders the failure.
+ *
+ * **The two platform ledgers, not every call site.** Nine other places still
+ * write `String(error)` — `use-query.ts`, three readers in
+ * `create-phone-ledger.ts`, `use-transaction-search.ts`, `recover.ts`,
+ * `migrate.ts`, `db.ts` — and nothing lints for the shape. This is the better
+ * default, not an enforced invariant, and sweeping them is its own change.
+ *
+ * **An `Error` is returned unchanged, except that it must say something.** An
+ * empty `message` renders as an empty line on a failure screen — the tag, the
+ * title, a blank, and a button — which is worse than a code, so a message this
+ * function cannot show is replaced by one naming what it had. `code` is
+ * appended for the same reason: it is often the only identifying field, and
+ * the screen reads the message and nothing else.
  */
 export function errorFromThrown<Caught>(caught: Caught): Error {
-  if (caught instanceof Error) return caught;
   const described = describeDiagnosticError(caught);
-  const error = new Error(described.message);
+  const message = presentableMessage(described);
+  if (caught instanceof Error) {
+    if (message === caught.message) return caught;
+    const restated = new Error(message, { cause: caught });
+    restated.name = caught.name;
+    return restated;
+  }
+  const error = new Error(message);
   error.name = described.name;
   return error;
+}
+
+function presentableMessage(described: DiagnosticError): string {
+  const code = described.code === undefined ? "" : ` (${described.code})`;
+  if (described.message.length > 0) return `${described.message}${code}`;
+  return `${described.name} with no message${code}`;
 }
 
 /** Diagnostics are evidence about an operation, never part of its outcome. */
@@ -107,7 +130,14 @@ function codeOf(error: Error): string | number | undefined {
 function describeThrownValue<Caught>(caught: Caught): DiagnosticError {
   if (caught === null) return { name: "ThrownValue", message: "[null thrown]" };
   if (caught === undefined) return { name: "ThrownValue", message: "[undefined thrown]" };
-  if (typeof caught === "string") return { name: "ThrownValue", message: boundedMessage(caught) };
+  if (typeof caught === "string") {
+    // An empty message renders as an empty line on a failure screen — the
+    // tag, the title, a blank, and a button — so it is named instead.
+    return {
+      name: "ThrownValue",
+      message: caught.length > 0 ? boundedMessage(caught) : "[empty string thrown]",
+    };
+  }
   if (typeof caught !== "object" && typeof caught !== "function") {
     // Numbers, booleans, bigints and symbols render themselves in full and
     // hold no fields, so the value is the whole of what there is to say.
@@ -141,14 +171,26 @@ function describeThrownObject(caught: object): DiagnosticError {
 /**
  * What was thrown, without saying what was in it: the constructor's name and
  * the field names, never a field value.
+ *
+ * **A key is only reported when it looks like a declared field.** The claim
+ * that a name is schema and a value is the ledger holds for an object someone
+ * wrote a type for; it does not hold for a dictionary *keyed* by data —
+ * `{ "Some Counterparty": "duplicate" }` would otherwise put a real name into
+ * the logs and onto the screen. So a key that is not a plain identifier is
+ * counted rather than printed, and an array is only ever counted, its indices
+ * being noise.
  */
+const SCHEMA_KEY = /^[A-Za-z_$][A-Za-z0-9_$]{0,39}$/u;
+
 function describeShape(caught: object): string {
   const label = constructorNameOf(caught);
+  if (Array.isArray(caught)) return `[Array(${caught.length}) thrown]`;
   const keys = Object.keys(caught);
   if (keys.length === 0) return `[${label} thrown, no fields]`;
-  const shown = keys.slice(0, MAX_SHAPE_KEYS);
-  const rest = keys.length - shown.length;
-  return `[${label} thrown with ${shown.join(", ")}${rest > 0 ? `, +${rest} more` : ""}]`;
+  const named = keys.filter((key) => SCHEMA_KEY.test(key)).slice(0, MAX_SHAPE_KEYS);
+  const rest = keys.length - named.length;
+  if (named.length === 0) return `[${label} thrown with ${rest} unnamed field(s)]`;
+  return `[${label} thrown with ${named.join(", ")}${rest > 0 ? `, +${rest} more` : ""}]`;
 }
 
 /** `"object"` for a null-prototype value, which has no constructor to name. */

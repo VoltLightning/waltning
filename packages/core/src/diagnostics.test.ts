@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeDiagnosticError, emitDiagnostic } from "./diagnostics.ts";
+import { describeDiagnosticError, emitDiagnostic, errorFromThrown } from "./diagnostics.ts";
 
 describe("diagnostic errors", () => {
   it("keeps native cause chains and codes while removing URL queries", () => {
@@ -75,6 +75,16 @@ describe("diagnostic errors", () => {
     expect(described.message.endsWith("…")).toBe(true);
   });
 
+  it("counts a key that is not a plain identifier rather than printing it", () => {
+    // A dictionary keyed by data, not by schema — the one shape where a field
+    // *name* is itself the ledger.
+    const described = describeDiagnosticError({ "Some Counterparty": "duplicate" });
+
+    expect(described.message).toBe("[Object thrown with 1 unnamed field(s)]");
+    expect(JSON.stringify(described)).not.toContain("Some Counterparty");
+    expect(describeDiagnosticError(["a", "b", "c"]).message).toBe("[Array(3) thrown]");
+  });
+
   it("does not let a broken sink affect its caller", () => {
     expect(() =>
       emitDiagnostic(
@@ -84,5 +94,54 @@ describe("diagnostic errors", () => {
         { safe: true },
       ),
     ).not.toThrow();
+  });
+});
+
+describe("errorFromThrown", () => {
+  /**
+   * The failure screen renders `error.message` and nothing else, so a message
+   * that says nothing is a screen that says nothing.
+   */
+  it("never returns an error with an empty message", () => {
+    expect(errorFromThrown(new Error("")).message).toBe("Error with no message");
+    expect(errorFromThrown("").message).toBe("[empty string thrown]");
+    expect(errorFromThrown({}).message).toBe("[Object thrown, no fields]");
+  });
+
+  /** `code` is often the only identifying field, and the log had it while the screen did not. */
+  it("carries the code into the message the screen shows", () => {
+    expect(errorFromThrown({ code: "SQLITE_BUSY" }).message).toBe(
+      "[Object thrown with code] (SQLITE_BUSY)",
+    );
+    expect(errorFromThrown(Object.assign(new Error("is locked"), { code: 5 })).message).toBe(
+      "is locked (5)",
+    );
+  });
+
+  it("returns an error that already says everything unchanged", () => {
+    const error = new Error("the pre-journal rebuild did not take");
+
+    expect(errorFromThrown(error)).toBe(error);
+  });
+
+  it("keeps the name, and the original as the cause, when it has to restate", () => {
+    const error = Object.assign(new Error("is locked"), { code: "SQLITE_BUSY" });
+    error.name = "NoModificationAllowedError";
+
+    const restated = errorFromThrown(error);
+
+    expect(restated.name).toBe("NoModificationAllowedError");
+    expect(restated.cause).toBe(error);
+  });
+
+  /**
+   * The exact string the browser used to show. It cannot arrive any more —
+   * the driver patch sends the worker's own `name`/`message` — but nothing
+   * here should be able to produce it either.
+   */
+  it("never produces the string that started all this", () => {
+    for (const thrown of [{ a: 1 }, {}, [], Object.create(null), "", 0]) {
+      expect(errorFromThrown(thrown).message).not.toContain("[object Object]");
+    }
   });
 });

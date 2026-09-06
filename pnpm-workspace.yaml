@@ -32,11 +32,26 @@ patchedDependencies:
   # installed stable release does that itself and
   # `tests/dependency-patches.test.ts` has been updated first.
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
-  # expo-sqlite's web worker channel writes the result length with a typed-array
-  # `set`, which copies *elements*, not bytes — the length arrives as
-  # `length & 0xFF` and every synchronous result over 255 bytes is truncated
-  # (two outbox rows is enough). Still present on upstream `main`; the patch
-  # is one `DataView.setUint32`. `tests/dependency-patches.test.ts` pins it.
+  # Three browser bugs, all still present on upstream `main`, all pinned by
+  # `tests/dependency-patches.test.ts` — the last two with deterministic Node
+  # reproductions against the installed files.
+  #
+  # 1. `web/WorkerChannel.ts` writes the result length with a typed-array
+  #    `set`, which copies *elements*, not bytes — the length arrives as
+  #    `length & 0xFF` and every synchronous result over 255 bytes is
+  #    truncated (two outbox rows is enough). One `DataView.setUint32`.
+  # 2. The same file serialises a worker failure as `JSON.stringify({ error })`,
+  #    and an `Error` has no own enumerable properties — so every synchronous
+  #    failure in the browser reached the app as the message `[object Object]`.
+  #    The patch sends `{ name, message, stack, code }` and rebuilds the error.
+  # 3. A failed OPFS pool acquisition was permanent for the life of the page:
+  #    `web/worker.ts` assigned `_sqlite3` before the VFS that can throw, so
+  #    every later call fell through to `Invalid VFS state`, and
+  #    `wa-sqlite/AccessHandlePoolVFS.js` used `Promise.all`, which left the
+  #    handles it *did* win open inside an unreachable instance. A page that
+  #    lost the race to the document it replaced could not recover without a
+  #    reload. The patch publishes the VFS trio together and releases a partial
+  #    acquisition, so the next attempt is a real attempt.
   expo-sqlite@57.0.1: patches/expo-sqlite@57.0.1.patch
 
 # Expo supports pnpm's isolated installs from SDK 54 onward, and Metro

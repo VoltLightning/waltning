@@ -28,7 +28,6 @@ it("offers the attempt, and runs it, when the failure is one a retry can clear",
   render(<StartupFailed error={new Error("placeholder failure reason")} onRetry={onRetry} />);
 
   expect(screen.getByText("Temporary")).toBeDefined();
-  expect(screen.getByText("Nothing was lost — the ledger is still on this device.")).toBeDefined();
 
   fireEvent.click(screen.getByText("Try again"));
   expect(onRetry).toHaveBeenCalledTimes(1);

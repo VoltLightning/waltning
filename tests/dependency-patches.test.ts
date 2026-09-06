@@ -10,15 +10,25 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const drizzlePatch = join(repoRoot, "patches/drizzle-orm@0.45.2.patch");
 const sqlitePatch = join(repoRoot, "patches/expo-sqlite@57.0.1.patch");
 const workspace = join(repoRoot, "pnpm-workspace.yaml");
+
+/**
+ * The installed copy Metro actually bundles, through `apps/mobile`'s own
+ * resolution and `realpathSync` past pnpm's symlink — never a hard-coded
+ * `.pnpm` directory, whose name carries the patch hash and changes with the
+ * patch.
+ */
+const expoSqliteUrl = pathToFileURL(
+  realpathSync(join(repoRoot, "apps/mobile/node_modules/expo-sqlite")),
+).href;
 
 const expoDriverProbe = `
 const { ExpoSQLiteSession } = require("drizzle-orm/expo-sqlite/session");
@@ -104,6 +114,155 @@ if (completions !== 2) throw new Error("a reusable get left its cursor in progre
 if (finalizations !== 3) throw new Error("a reusable get was finalized after one use");
 `;
 
+/**
+ * Run with `--import tsx`: `WorkerChannel.ts` is TypeScript with
+ * extension-less relative imports, which plain Node ESM cannot resolve.
+ */
+const workerChannelProbe = `
+globalThis.__DEV__ = false;
+const channel = await import(process.env.CHANNEL_URL);
+
+// A worker that answers synchronously: \`invokeWorkerSync\` posts, this stores
+// the result into the shared buffer before \`postMessage\` returns, and the
+// Atomics spin therefore exits on its first read.
+const worker = {
+  postMessage(message) {
+    const thrown = new Error('NoModificationAllowedError: pool is held');
+    thrown.name = 'NoModificationAllowedError';
+    thrown.code = 'SQLITE_BUSY';
+    channel.sendWorkerResult({
+      id: message.id,
+      result: null,
+      error: thrown,
+      syncTrait: { lockBuffer: message.lockBuffer, resultBuffer: message.resultBuffer },
+    });
+  },
+};
+
+let caught = null;
+try {
+  channel.invokeWorkerSync(worker, 'open', {});
+} catch (e) {
+  caught = e;
+}
+if (!caught) throw new Error('the channel swallowed a worker failure');
+console.log(JSON.stringify({ name: caught.name, message: caught.message, code: caught.code }));
+`;
+
+/** Plain Node ESM: every import under `wa-sqlite/` carries its `.js`. */
+const accessHandlePoolProbe = `
+const { AccessHandlePoolVFS } = await import(process.env.VFS_URL);
+
+/** Enough of \`FileSystemSyncAccessHandle\` for the pool's own header reads. */
+class FakeAccessHandle {
+  constructor(file) {
+    this.file = file;
+    this.closed = false;
+  }
+  read(view, { at = 0 } = {}) {
+    const out = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    const src = this.file.bytes.subarray(at, Math.min(this.file.bytes.length, at + out.length));
+    out.set(src);
+    return src.length;
+  }
+  write(view, { at = 0 } = {}) {
+    const src = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    if (at + src.length > this.file.bytes.length) {
+      const grown = new Uint8Array(at + src.length);
+      grown.set(this.file.bytes);
+      this.file.bytes = grown;
+    }
+    this.file.bytes.set(src, at);
+    return src.length;
+  }
+  truncate(size) {
+    const next = new Uint8Array(size);
+    next.set(this.file.bytes.subarray(0, Math.min(size, this.file.bytes.length)));
+    this.file.bytes = next;
+  }
+  flush() {}
+  getSize() {
+    return this.file.bytes.length;
+  }
+  close() {
+    this.closed = true;
+  }
+}
+
+const files = [
+  { name: 'aaa', bytes: new Uint8Array(0), refuse: false },
+  // Still held by the document being replaced.
+  { name: 'bbb', bytes: new Uint8Array(0), refuse: true },
+  { name: 'ccc', bytes: new Uint8Array(0), refuse: false },
+];
+const handles = [];
+
+function fileHandle(file) {
+  return {
+    kind: 'file',
+    async createSyncAccessHandle() {
+      if (file.refuse) {
+        const error = new Error('The access handle is already held.');
+        error.name = 'NoModificationAllowedError';
+        throw error;
+      }
+      const handle = new FakeAccessHandle(file);
+      handles.push(handle);
+      return handle;
+    },
+  };
+}
+
+const directory = {
+  kind: 'directory',
+  async getFileHandle(name) {
+    let file = files.find((f) => f.name === name);
+    if (!file) {
+      file = { name, bytes: new Uint8Array(0), refuse: false };
+      files.push(file);
+    }
+    return fileHandle(file);
+  },
+  async getDirectoryHandle() {
+    return directory;
+  },
+  async removeEntry(name) {
+    const index = files.findIndex((f) => f.name === name);
+    if (index >= 0) files.splice(index, 1);
+  },
+  async *[Symbol.asyncIterator]() {
+    for (const file of files) yield [file.name, fileHandle(file)];
+  },
+};
+
+Object.defineProperty(globalThis, 'navigator', {
+  value: { storage: { getDirectory: async () => directory } },
+  configurable: true,
+});
+
+let refusal = null;
+try {
+  await AccessHandlePoolVFS.create('expo-sqlite', {});
+} catch (e) {
+  refusal = e;
+}
+if (!refusal) throw new Error('a held pool did not refuse the first acquisition');
+if (refusal.name !== 'NoModificationAllowedError') {
+  throw new Error('the refusal lost its identity: ' + refusal.name);
+}
+
+const leaked = handles.filter((handle) => !handle.closed);
+if (leaked.length > 0) {
+  throw new Error(leaked.length + ' access handle(s) left open by a failed acquisition');
+}
+
+// The other document has gone. The pool must now be acquirable.
+files[1].refuse = false;
+const vfs = await AccessHandlePoolVFS.create('expo-sqlite', {});
+if (vfs == null) throw new Error('a second attempt did not build a VFS');
+console.log('ok');
+`;
+
 describe("the Expo SQLite Drizzle patch", () => {
   it("completes every get and finalizes only one-shot statements", () => {
     const patch = readFileSync(drizzlePatch, "utf8");
@@ -140,5 +299,88 @@ describe("the Expo SQLite web channel patch", () => {
     expect(patch).toContain("+    new DataView(resultBuffer).setUint32(0, length, true);");
     expect(patch).toContain("-    resultArray.set(new Uint32Array([length]), 0);");
     expect(workspaceConfig).toContain("expo-sqlite@57.0.1: patches/expo-sqlite@57.0.1.patch");
+  });
+
+  /**
+   * **The `[object Object]` startup screen, reproduced.** `serialize` is
+   * `JSON.stringify` and an `Error` has no own enumerable properties, so
+   * `serialize({ error })` was `{"error":{}}`; the main thread deserialised
+   * `{}` and `new Error({})` gave the message `"[object Object]"`. Every
+   * synchronous failure in the browser — a held OPFS pool included — arrived
+   * saying nothing.
+   *
+   * The probe drives the **real, patched** module: a fake worker whose
+   * `postMessage` answers synchronously through `sendWorkerResult`, so
+   * `invokeWorkerSync`'s `Atomics` spin resolves on its first read and the
+   * whole round trip runs under Node with no browser. Pointed at the
+   * unpatched build it prints `{"name":"Error","message":"[object Object]"}`,
+   * which is why this is a reproduction rather than a restatement.
+   */
+  it("carries a worker error's name, message and code across the sync channel", () => {
+    const stdout = execFileSync(process.execPath, ["--import", "tsx", "-e", workerChannelProbe], {
+      cwd: repoRoot,
+      env: { ...process.env, CHANNEL_URL: `${expoSqliteUrl}/web/WorkerChannel.ts` },
+      stdio: "pipe",
+      encoding: "utf8",
+    });
+
+    expect(JSON.parse(stdout.trim())).toEqual({
+      name: "NoModificationAllowedError",
+      message: "NoModificationAllowedError: pool is held",
+      code: "SQLITE_BUSY",
+    });
+  });
+});
+
+/**
+ * The browser's other half: **a document that loses the race for the OPFS
+ * access-handle pool has to be able to try again.**
+ *
+ * The pool is acquired for the whole directory at once, per worker, and the
+ * worker is a module singleton that is never terminated — so an acquisition
+ * that failed used to be permanent for the life of the page. Two things made
+ * it so, and the patch fixes both: `worker.ts` assigned `_sqlite3` before the
+ * VFS existed, after which every later call fell through to
+ * `Invalid VFS state`; and `AccessHandlePoolVFS` acquired its handles with
+ * `Promise.all`, which rejects on the first refusal while the rest are still
+ * in flight, leaving handles open inside an instance nothing can reach —
+ * so the next attempt was blocked by us rather than by whoever held the pool.
+ */
+describe("the Expo SQLite pool-acquisition patch", () => {
+  /**
+   * A deterministic reproduction, against the real patched file: a fake OPFS
+   * directory of three files whose middle one refuses its access handle the
+   * way a browser does while another document holds it. Against the unpatched
+   * build the probe reports two handles left open.
+   */
+  it("releases what a failed acquisition took, and acquires on the next attempt", () => {
+    const stdout = execFileSync(process.execPath, ["-e", accessHandlePoolProbe], {
+      cwd: repoRoot,
+      env: { ...process.env, VFS_URL: `${expoSqliteUrl}/web/wa-sqlite/AccessHandlePoolVFS.js` },
+      stdio: "pipe",
+      encoding: "utf8",
+    });
+
+    expect(stdout.trim().endsWith("ok")).toBe(true);
+  });
+
+  /**
+   * `worker.ts` imports the wasm binary, so no probe under Node can reach it.
+   * The pin is the patch's text: the trio published together, the retry that
+   * a null `_vfs` now allows, and the release that stops a half-built attempt
+   * from blocking the next one.
+   */
+  it("leaves no half-built VFS behind for the next attempt to trip over", () => {
+    const patch = readFileSync(sqlitePatch, "utf8");
+
+    // The bug: `_sqlite3` assigned before the VFS that may throw.
+    expect(patch).toContain("-    _sqlite3 = SQLite.Factory(module) as SQLiteAPI;");
+    // The fix: locals, published as a trio only once all three exist.
+    expect(patch).toContain("+  _sqlite3 = sqlite3;");
+    expect(patch).toContain("+  _vfs = vfs;");
+    expect(patch).toContain("+  _vfsMemory = vfsMemory;");
+    // And a failure releases rather than lingers.
+    expect(patch).toContain("+async function releaseVfsAsync(): Promise<void> {");
+    expect(patch).toContain("+  await releaseVfsAsync();");
   });
 });

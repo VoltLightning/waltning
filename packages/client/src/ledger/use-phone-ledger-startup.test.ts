@@ -71,6 +71,44 @@ describe("usePhoneLedgerStartup", () => {
   });
 
   /**
+   * The header claims the retry keeps every property the guard had, StrictMode
+   * included — and a StrictMode test that never presses the button is not
+   * evidence of that. The retried render is double-invoked like any other, so
+   * a guard that reset itself and then re-read stale state would call `start`
+   * twice here and nowhere else.
+   */
+  it("starts once per retry under StrictMode's double-invoked render too", () => {
+    const start = vi.fn(() => FAILED);
+    const { result } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {
+      initialProps: { ready: true },
+      wrapper: StrictMode,
+    });
+
+    expect(start).toHaveBeenCalledTimes(1);
+
+    act(result.current.retry);
+    expect(start).toHaveBeenCalledTimes(2);
+
+    act(result.current.retry);
+    expect(start).toHaveBeenCalledTimes(3);
+  });
+
+  /** Two presses before React can re-render: both writes are idempotent. */
+  it("collapses two retries in one tick into a single start", () => {
+    const start = vi.fn(() => FAILED);
+    const { result } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {
+      initialProps: { ready: true },
+    });
+
+    act(() => {
+      result.current.retry();
+      result.current.retry();
+    });
+
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  /**
    * The failure screen's own "Try again". A held SQLite worker in the browser
    * clears by itself, so the guard has to be resettable — and resettable
    * exactly once per press, or a screen that re-renders on anything else would

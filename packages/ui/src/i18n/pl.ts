@@ -658,6 +658,5 @@ export const pl: Messages = {
   startup: {
     ledgerFailedTitle: "Nie udało się otworzyć księgi",
     ledgerFailedBody: "{{message}}",
-    ledgerFailedRetryCost: "Nic nie zostało utracone — księga wciąż jest na tym urządzeniu.",
   },
 };

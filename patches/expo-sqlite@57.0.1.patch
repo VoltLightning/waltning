@@ -1,9 +1,65 @@
 diff --git a/web/WorkerChannel.ts b/web/WorkerChannel.ts
-index 7fba380845e3338b7d8d253013fbf73896070cde..d7a5715f199898f0c375597b720eae5589065b34 100644
+index 7fba380845e3338b7d8d253013fbf73896070cde..e193ca9e6a2391f761d3035102ddb9a352347327 100644
 --- a/web/WorkerChannel.ts
 +++ b/web/WorkerChannel.ts
-@@ -40,7 +40,9 @@ export function sendWorkerResult({
-     const resultJson = error != null ? serialize({ error }) : serialize({ result });
+@@ -16,6 +16,45 @@ const RESOLVED = 2;
+ 
+ let hasWarnedSync = false;
+ 
++/**
++ * What crosses the worker boundary in place of an `Error`.
++ *
++ * `name` is the field that carries a `DOMException`'s identity — the OPFS
++ * access-handle pool rejects with `NoModificationAllowedError` when another
++ * document still holds it, and that name is the only way a caller can tell a
++ * transient failure from a permanent one.
++ */
++type ChannelError = { name: string; message: string; stack?: string; code?: string | number };
++
++function describeChannelError(error: Error | null): ChannelError {
++  if (error == null) return { name: 'Error', message: 'unknown worker failure' };
++  const code = (error as { code?: unknown }).code;
++  return {
++    name: typeof error.name === 'string' && error.name ? error.name : 'Error',
++    message: typeof error.message === 'string' ? error.message : String(error),
++    ...(typeof error.stack === 'string' ? { stack: error.stack } : {}),
++    ...(typeof code === 'string' || typeof code === 'number' ? { code } : {}),
++  };
++}
++
++function channelErrorToError(described: ChannelError | string): Error {
++  // A bare string is what an unpatched worker would send; accepted so a
++  // mismatched pair degrades to the old behaviour rather than throwing here.
++  if (typeof described === 'string') return new Error(described);
++  const error = new Error(described.message);
++  error.name = described.name;
++  if (described.stack != null) error.stack = described.stack;
++  if (described.code != null) {
++    Object.defineProperty(error, 'code', {
++      value: described.code,
++      enumerable: false,
++      writable: true,
++      configurable: true,
++    });
++  }
++  return error;
++}
++
+ /**
+  * For worker to send result to the main thread.
+  */
+@@ -37,17 +76,29 @@ export function sendWorkerResult({
+     const { lockBuffer, resultBuffer } = syncTrait;
+     const lock = new Int32Array(lockBuffer);
+     const resultArray = new Uint8Array(resultBuffer);
+-    const resultJson = error != null ? serialize({ error }) : serialize({ result });
++    // `serialize` is `JSON.stringify`, and an `Error` has no own enumerable
++    // properties — so `serialize({ error })` was literally `{"error":{}}`, the
++    // main thread deserialised `{}` and `new Error({})` produced the message
++    // "[object Object]". Every synchronous failure in the browser arrived
++    // saying nothing at all. Serialise the fields off the error instead.
++    const resultJson =
++      error != null ? serialize({ error: describeChannelError(error) }) : serialize({ result });
      const resultBytes = new TextEncoder().encode(resultJson);
      const length = resultBytes.length;
 -    resultArray.set(new Uint32Array([length]), 0);
@@ -13,3 +69,192 @@ index 7fba380845e3338b7d8d253013fbf73896070cde..d7a5715f199898f0c375597b720eae55
      resultArray.set(resultBytes, 4);
      Atomics.store(lock, 0, RESOLVED);
    } else {
+     if (result) {
+       self.postMessage({ id, result });
+     } else {
+-      self.postMessage({ id, error });
++      // The same description the synchronous path sends, so both channels
++      // hand the main thread one shape. A structured-clone of an `Error`
++      // survives, but `new Error(clonedError)` on the far side stringifies it
++      // into the message — which loses `name` and any `code`.
++      self.postMessage({ id, error: describeChannelError(error) });
+     }
+   }
+ }
+@@ -61,7 +112,7 @@ export function workerMessageHandler(event: MessageEvent) {
+     const deferred = deferredMap.get(id);
+     if (deferred) {
+       if (error) {
+-        deferred.reject(new Error(error));
++        deferred.reject(channelErrorToError(error));
+       } else {
+         deferred.resolve(result);
+       }
+@@ -141,7 +192,10 @@ export function invokeWorkerSync<T extends SQLiteWorkerMessageType & keyof Resul
+   const resultCopy = new Uint8Array(length);
+   resultCopy.set(new Uint8Array(resultArray.buffer, 4, length));
+   const resultJson = new TextDecoder().decode(resultCopy);
+-  const { result, error } = deserialize<{ result: ResultTypeMap[T]; error?: string }>(resultJson);
+-  if (error) throw new Error(error);
++  const { result, error } = deserialize<{
++    result: ResultTypeMap[T];
++    error?: ChannelError | string;
++  }>(resultJson);
++  if (error) throw channelErrorToError(error);
+   return result;
+ }
+diff --git a/web/wa-sqlite/AccessHandlePoolVFS.js b/web/wa-sqlite/AccessHandlePoolVFS.js
+index 046fe6f2d119babd02e292e31a7dbdb24747e66a..206df5c06d77c32a10d17b8f0c74a319aac9219e 100644
+--- a/web/wa-sqlite/AccessHandlePoolVFS.js
++++ b/web/wa-sqlite/AccessHandlePoolVFS.js
+@@ -302,7 +302,17 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+     }
+ 
+     // Open access handles in parallel, separating associated and unassociated.
+-    await Promise.all(
++    //
++    // `allSettled`, not `all`, and the failure released rather than rethrown
++    // bare: the pool is acquired for the whole directory at once, and while
++    // another document still holds any file `createSyncAccessHandle` rejects
++    // with `NoModificationAllowedError`. `Promise.all` rejects on the first
++    // one while the rest are still in flight, so the handles this attempt did
++    // win stayed open inside an instance nobody can reach — and every later
++    // attempt in this document was then blocked by us rather than by whoever
++    // held the pool. Waiting for all of them to settle means everything
++    // acquired is in the map, and `#releaseAccessHandles` can give it back.
++    const outcomes = await Promise.allSettled(
+       files.map(async ([name, handle]) => {
+         const accessHandle = await handle.createSyncAccessHandle();
+         this.#mapAccessHandleToName.set(accessHandle, name);
+@@ -314,6 +324,11 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+         }
+       })
+     );
++    const failed = outcomes.find((outcome) => outcome.status === 'rejected');
++    if (failed) {
++      this.#releaseAccessHandles();
++      throw failed.reason;
++    }
+   }
+ 
+   #releaseAccessHandles() {
+diff --git a/web/worker.ts b/web/worker.ts
+index deaf7218f98add013b73876130f2c496ec3820fa..61b1b21a996ffa17afa96c014045e77fa675877a 100644
+--- a/web/worker.ts
++++ b/web/worker.ts
+@@ -772,40 +772,89 @@ async function maybeFinalizeAllStatements(nativeDatabaseId: number) {
+   if (error) throw error;
+ }
+ 
+-async function maybeInitAsync(): Promise<{
++type WorkerVfsState = {
+   sqlite3: SQLiteAPI;
+   vfs: AccessHandlePoolVFS;
+   vfsMemory: MemoryVFS;
+-}> {
+-  if (!_sqlite3) {
+-    const module = await WaSQLiteFactory({
+-      locateFile: () => wasmModule,
++};
++
++/** The attempt in flight, so concurrent callers share one initialization. */
++let _initPromise: Promise<WorkerVfsState> | null = null;
++
++/**
++ * **A failed initialization must not be permanent.** `_sqlite3` used to be
++ * assigned before `AccessHandlePoolVFS.create`, which throws while another
++ * document still holds the OPFS access-handle pool. Every later call then
++ * found `_sqlite3` truthy, skipped the whole init block, and fell through to
++ * `throw new Error('Invalid VFS state')` — for the life of the worker, which
++ * is a module singleton that is never terminated. A page that lost the race
++ * for the pool could not recover without a reload, and any retry above this
++ * layer was dead by construction.
++ *
++ * So the trio is built into locals and published together, and a failure
++ * leaves all three null: the next call tries again, cleanly.
++ */
++async function maybeInitAsync(): Promise<WorkerVfsState> {
++  if (_sqlite3 != null && _vfs != null && _vfsMemory != null) {
++    return { sqlite3: _sqlite3, vfs: _vfs, vfsMemory: _vfsMemory };
++  }
++  if (_initPromise == null) {
++    _initPromise = initVfsAsync().finally(() => {
++      _initPromise = null;
+     });
+-    _sqlite3 = SQLite.Factory(module) as SQLiteAPI;
+-    if (!_sqlite3) {
+-      throw new Error('Failed to initialize wa-sqlite');
+-    }
++  }
++  return _initPromise;
++}
+ 
+-    if (_vfs == null) {
+-      _vfs = await AccessHandlePoolVFS.create(VFS_NAME_PERSISTENT, module);
+-      if (_vfs == null) {
+-        throw new Error('Failed to initialize AccessHandlePoolVFS');
+-      }
+-    }
+-    _sqlite3.vfs_register(_vfs, true);
++async function initVfsAsync(): Promise<WorkerVfsState> {
++  // A previous attempt may have built part of the trio. Release it first: a
++  // second AccessHandlePoolVFS over a directory the first one still holds can
++  // never acquire it, so the retry would fail on us rather than on whoever
++  // held the pool.
++  await releaseVfsAsync();
+ 
+-    if (_vfsMemory == null) {
+-      _vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
+-      if (_vfsMemory == null) {
+-        throw new Error('Failed to initialize MemoryVFS');
+-      }
+-    }
+-    _sqlite3.vfs_register(_vfsMemory, false);
++  const module = await WaSQLiteFactory({
++    locateFile: () => wasmModule,
++  });
++  const sqlite3 = SQLite.Factory(module) as SQLiteAPI;
++  if (!sqlite3) {
++    throw new Error('Failed to initialize wa-sqlite');
+   }
+-  if (_vfs == null || _vfsMemory == null) {
+-    throw new Error('Invalid VFS state');
++
++  const vfs = await AccessHandlePoolVFS.create(VFS_NAME_PERSISTENT, module);
++  if (vfs == null) {
++    throw new Error('Failed to initialize AccessHandlePoolVFS');
++  }
++  sqlite3.vfs_register(vfs, true);
++
++  const vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
++  if (vfsMemory == null) {
++    throw new Error('Failed to initialize MemoryVFS');
++  }
++  sqlite3.vfs_register(vfsMemory, false);
++
++  _sqlite3 = sqlite3;
++  _vfs = vfs;
++  _vfsMemory = vfsMemory;
++  return { sqlite3, vfs, vfsMemory };
++}
++
++async function releaseVfsAsync(): Promise<void> {
++  const vfs = _vfs;
++  const vfsMemory = _vfsMemory;
++  _sqlite3 = null;
++  _vfs = null;
++  _vfsMemory = null;
++  try {
++    await vfs?.close();
++  } catch {
++    // Closing a VFS that never finished opening is not a new failure.
++  }
++  try {
++    await vfsMemory?.close();
++  } catch {
++    // Same.
+   }
+-  return { sqlite3: _sqlite3, vfs: _vfs, vfsMemory: _vfsMemory };
+ }
+ 
+ //#endregion Internal helpers

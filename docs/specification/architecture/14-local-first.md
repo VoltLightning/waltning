@@ -91,30 +91,51 @@ durability rather than deciding whether the phone works:
   filesystem (`packages/ledger/src/open.ts` verifies the claim in both
   directions).
 
-  **The pool admits one document at a time, and a page swap is not
-  instantaneous.** The access handles a document holds are not returned the
-  moment the next one starts running, so a load a second or two after the last
-  one opens against the previous page's worker and is refused. That is a
-  statement about a moment rather than about the ledger, and the startup path
-  treats it as one: the readiness gate the browser already waits on — the same
-  one that keeps the first synchronous call off a cold worker — opens on an
-  **async open of the real replica file, retried with a short backoff**, so the
-  synchronous open runs only once the pool can answer. A `:memory:` database
-  proves the worker is running and can say nothing about who holds the pool, so
-  it boots the worker and the file probe decides readiness.
+  **The pool is acquired once per worker, for the whole directory, and a page
+  swap is not instantaneous.** Not per file and not per open: the worker takes
+  a sync access handle on every file in its pool directory before it looks at
+  the path it was asked for, so a `:memory:` open contends for the pool exactly
+  as a file open does. A document being replaced does not return its handles
+  the moment the next one starts running, so a load a second or two after the
+  last one is refused — a statement about a moment, not about the ledger.
 
-  **Startup failure is therefore two claims, not one.** An open that failed is
-  *transient* — the next attempt usually clears it — so the failure screen
-  offers **Try again**, which runs the whole start again, and the platform seam
-  caches no such failure (`architecture/11`: a success is a singleton worth
-  keeping, a held pool is not). A migration that refused is *terminal*: it
-  refused on the content of a file that the next attempt finds unchanged, so
-  the screen states the migrator's own sentence and offers nothing
-  (`design-system/08` §8.8). On the device the distinction is real and always
-  answers terminal — one process, one document directory, no second holder.
-  Whatever the failing layer threw is rendered as written, a thrown non-`Error`
-  included: the worker rejects with a plain `{ code, message }`, and a screen
-  whose whole content is `[object Object]` explains nothing.
+  **A refused acquisition has to stay recoverable, and upstream it did not.**
+  `expo-sqlite`'s worker is a module singleton that is never terminated, and it
+  published its SQLite handle before the VFS that can throw — so one lost race
+  left every later call in that document failing on `Invalid VFS state`, while
+  the access handles the failed attempt had already won stayed open inside an
+  instance nothing could reach. A page that lost the race could not recover
+  without a reload, and any retry above that layer was dead by construction.
+  Both are patched at the package-manager boundary (`pnpm-workspace.yaml`,
+  pinned by `tests/dependency-patches.test.ts`), which is what makes the rest
+  of this paragraph true rather than aspirational.
+
+  On that base, **the readiness gate retries.** The gate the browser already
+  waits on — the one that keeps the first synchronous call off a cold worker —
+  opens on an async `:memory:` open, retried with a short backoff, because that
+  one call answers both questions: the worker is running, and the pool is free.
+  It opens after the last attempt either way: a gate that waited for success
+  would hang the app behind a blank frame on a worker that is genuinely broken,
+  so the synchronous open runs, fails loudly, and the failure screen explains
+  it.
+
+  **Startup failure is therefore two claims, not one.** *Transient* means the
+  cause can be named as one another attempt clears — the browser's refusal for
+  a held pool, and that alone — and the failure screen then offers **Try
+  again**, which runs the whole start again; the platform seam caches no such
+  failure (`architecture/11`: a success is a singleton worth keeping, a held
+  pool is not). Everything else is *terminal* by default, a refused migration
+  and an unreadable file alike: the screen states the failing layer's own
+  sentence and offers nothing (`design-system/08` §8.8). Classifying by which
+  call threw rather than by the named cause is what turns a corrupt file into a
+  button someone presses forever. On the device every failure is terminal —
+  one process, one document directory, no second holder.
+
+  The sentence on that screen is the failing layer's own, and the browser had
+  none: the worker serialised its error as JSON, an `Error` has no enumerable
+  properties, and every synchronous failure arrived as the literal string
+  `[object Object]`. The channel now carries `name`, `message` and `code`
+  across — the third patch, and the reason a cause can be named at all.
 
 **The honest cost:** durability is not optional. The phone's self-backup is real
 but weaker; once a backend exists, durability stops being solely the owner's

@@ -1236,13 +1236,6 @@ export const en = {
     ledgerFailedTitle: "The ledger could not open",
     /** The migrator's own sentence, shown verbatim — it is written for a person. */
     ledgerFailedBody: "{{message}}",
-    /**
-     * `<ErrorState>`'s `cost` on the retryable failure only — what it cost
-     * you, which here is nothing. The browser's SQLite worker holds its files
-     * for one document at a time, so a reload landing on the last page's
-     * worker fails on timing and not on anything in the ledger.
-     */
-    ledgerFailedRetryCost: "Nothing was lost — the ledger is still on this device.",
   },
 } as const;
 

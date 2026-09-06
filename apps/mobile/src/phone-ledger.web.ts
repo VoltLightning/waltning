@@ -62,38 +62,40 @@ type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
 const openHandles = new Map<string, SQLiteDatabase>();
 
 /**
- * Set by `openDatabase` below, read by `startPhoneLedger` — **which half of a
- * startup failure this was.**
+ * **The one failure another attempt can clear, named rather than guessed.**
  *
- * Opening and migrating fail for opposite reasons. The pool is held by one
- * document at a time, so an open that lands while the previous page's worker
- * still holds the access handles fails on a condition that clears by itself in
- * under a second; a migration refuses on the *content* of a file, which the
- * next attempt finds unchanged. One is worth another attempt and the other is
- * not, and that is the whole of what the failure screen needs to know.
+ * The browser rejects `createSyncAccessHandle` with a `DOMException` called
+ * `NoModificationAllowedError` while another document still holds the OPFS
+ * access-handle pool — and that name is the whole signal. It survives the
+ * worker boundary because the patched channel sends `name` alongside `message`
+ * (`pnpm-workspace.yaml`, patch 2); before that every synchronous failure in
+ * the browser arrived as the message `[object Object]` and nothing downstream
+ * could tell one from another.
+ *
+ * **Which line threw is not the question.** An earlier version answered
+ * "did the throw come from an open call?", which classifies a corrupt replica
+ * (`SQLITE_NOTADB`) and an exhausted pool (`SQLITE_CANTOPEN` past the pool's
+ * six slots) as retryable — both permanent, both then offered a button that
+ * re-runs the whole open/migrate path forever. The safe default is the
+ * opposite one: offer a retry only where the cause can be named.
  */
-let openFailed = false;
+const POOL_CONTENTION = "NoModificationAllowedError";
 
-/**
- * Every `openDatabaseSync` in this module goes through here, so nothing can
- * open a file without the transient/terminal question being answered for it.
- */
-function openDatabase(filename: string): SQLiteDatabase {
-  try {
-    return openDatabaseSync(filename);
-  } catch (caught) {
-    openFailed = true;
-    throw caught;
+/** The cause chain too — `session.ts` wraps a rebuild failure and keeps `cause`. */
+function isPoolContention(error: Error): boolean {
+  for (let step: Error | undefined = error, depth = 0; step && depth < 8; depth += 1) {
+    if (step.name === POOL_CONTENTION || step.message.includes(POOL_CONTENTION)) return true;
+    step = step.cause instanceof Error ? step.cause : undefined;
   }
+  return false;
 }
 
 /**
  * Close whatever this module opened before a startup gave up.
  *
- * A retry re-opens the same two files, and the pool admits one holder per
- * file — so a handle left over from the failed attempt would be the thing that
- * refused the next one, turning a transient failure into a permanent one this
- * module caused itself.
+ * A retry re-opens the same two files, so a handle left over from the failed
+ * attempt would be the thing that refused the next one, turning a transient
+ * failure into a permanent one this module caused itself.
  */
 function releaseOpenHandles(): void {
   for (const handle of openHandles.values()) {
@@ -110,7 +112,7 @@ function releaseOpenHandles(): void {
 // The same pnpm-specialization cast `phone-ledger.native.ts` documents: two
 // Drizzle instances of one version, nominally distinct to TypeScript.
 const openPhoneDatabase = ((filename: string) => {
-  const sqlite = openDatabase(filename);
+  const sqlite = openDatabaseSync(filename);
   openHandles.set(filename, sqlite);
   return {
     db: drizzle(sqlite, { schema: ledgerSchema }),
@@ -131,7 +133,7 @@ const openPhoneDatabase = ((filename: string) => {
  * least one page) and a pre-migration copy is a backup of one.
  */
 function probeExists(path: string): boolean {
-  const probe = openDatabase(path);
+  const probe = openDatabaseSync(path);
   let pages = 0;
   try {
     pages = probe.getFirstSync<{ page_count: number }>("PRAGMA page_count")?.page_count ?? 0;
@@ -149,7 +151,7 @@ function copyDatabase(from: string, to: string): void {
   if (!source) {
     throw new Error(`cannot copy ${from} — it is not open, and the pool hides closed files`);
   }
-  const destination = openDatabase(to);
+  const destination = openDatabaseSync(to);
   try {
     backupDatabaseSync({ sourceDatabase: source, destDatabase: destination });
   } finally {
@@ -160,29 +162,35 @@ function copyDatabase(from: string, to: string): void {
 export const PHONE_LEDGER_AVAILABLE = true as const;
 
 /**
- * Two conditions have to hold before the first synchronous call, and the gate
- * below waits for **both**.
+ * **One async open answers both questions the first synchronous call depends
+ * on**, because in the worker they are the same question.
  *
- * 1. **The worker has to be running.** `invokeWorkerSync` spins a bounded
+ * 1. **Is the worker running?** `invokeWorkerSync` spins a bounded
  *    `Atomics.pause` loop measured in tens of milliseconds, while a cold
  *    worker has to fetch its bundle and compile the wasm — so
  *    `openDatabaseSync` as the first-ever SQLite call on web times out by
- *    construction. One `:memory:` open through the async API boots the same
- *    singleton worker with no timeout on the wait.
- * 2. **The OPFS access-handle pool has to be free.** It admits one holder per
- *    file, and a document that has just been replaced does not give its
- *    handles back the instant the next one starts running — so two full loads
- *    a second or two apart put the new page's open against the old page's
- *    worker, and the open throws. That is a *timing* condition, not a broken
- *    ledger: the same load a moment later succeeds, which is exactly why it
- *    belongs in the gate rather than on the failure screen.
+ *    construction. An open through the async API waits without that timeout.
+ * 2. **Is the OPFS access-handle pool free?** It is acquired for the **whole
+ *    pool directory at once, per worker** — not per file, and not per open:
+ *    the worker's `maybeInitAsync` runs `AccessHandlePoolVFS.create` before it
+ *    so much as looks at the path, and that call takes a sync access handle on
+ *    every file in the directory. So `:memory:` is not a way around it; a
+ *    `:memory:` open acquires the pool exactly as a file open does. Which is
+ *    what makes it the right probe: it asks the real question and creates no
+ *    file while asking.
  *
- * So the gate opens on an **async open of the real replica file**, retried
- * with a short backoff. It is the only probe that answers the question being
- * asked — a `:memory:` database is not in the pool and can tell nothing about
- * who holds it — and closing it again leaves the pool as it was found.
- * Opening a file that does not exist yet creates an empty one, which
- * `probeExists` above already treats as "no" and deletes.
+ * A document being replaced does not return its handles the instant the next
+ * one starts running, so two loads a second or two apart put the new page's
+ * acquisition against the old page's worker and it is refused. That is a
+ * timing condition, not a broken ledger.
+ *
+ * **This loop only means anything because of patch 3** (`pnpm-workspace.yaml`).
+ * Upstream, a refused acquisition was permanent for the life of the document —
+ * `_sqlite3` was assigned before the VFS, so every later call fell through to
+ * `Invalid VFS state`, and the handles the failed attempt *had* won stayed open
+ * inside an unreachable instance. Retrying against that worker was five more
+ * certain failures. The patch publishes the VFS trio together and releases a
+ * partial acquisition, so each attempt here is a real attempt.
  */
 const OPEN_BACKOFF_MS = [0, 150, 300, 600, 1200] as const;
 
@@ -199,24 +207,18 @@ function after(ms: number): Promise<void> {
 }
 
 /**
- * A failure here is not swallowed and the gate opens either way — five
- * attempts over ~2 s is long enough for a page swap and short enough that a
- * genuinely broken worker is reported by the real open below, loudly, rather
- * than the app hanging on a gate that never opens. `startPhoneLedger` then
- * classifies that failure as retryable, and the failure screen offers the
- * attempt this loop ran out of.
+ * **The gate opens after the last attempt whether or not it succeeded**, and
+ * that is deliberate: a gate that waited for success would hang the app on a
+ * genuinely broken worker with nothing on screen. Five attempts over ~2 s is
+ * longer than a page swap; past that the synchronous open below runs, fails
+ * loudly, and the failure screen says what happened — with a retry when the
+ * cause is one another attempt can clear (`isPoolContention`).
  */
 async function prepareWorker(): Promise<void> {
-  try {
-    const boot = await openDatabaseAsync(":memory:");
-    await boot.closeAsync();
-  } catch {
-    // A worker that cannot open `:memory:` will say so again below.
-  }
   for (const delay of OPEN_BACKOFF_MS) {
     if (delay > 0) await after(delay);
     try {
-      const probe = await openDatabaseAsync(LEDGER_PATHS.replica);
+      const probe = await openDatabaseAsync(":memory:");
       await probe.closeAsync();
       return;
     } catch {
@@ -244,8 +246,9 @@ export function usePhoneLedgerReady(): boolean {
 export type PhoneLedgerStartup =
   | { status: "ready"; controller: PhoneLedgerController }
   /**
-   * `retryable` is the open/migrate distinction `openFailed` records: another
-   * attempt can clear a held pool and can never clear a refused migration.
+   * `true` only for the one cause `isPoolContention` can name — a document
+   * that lost the race for the OPFS pool. Everything else, corrupt file and
+   * refused migration alike, is terminal by default.
    */
   | { status: "failed"; error: Error; retryable: boolean };
 
@@ -269,7 +272,6 @@ let startup: PhoneLedgerStartup | null = null;
 export function startPhoneLedger(): PhoneLedgerStartup {
   if (startup) return startup;
 
-  openFailed = false;
   try {
     const session = createLocalLedgerSession({
       open: openPhoneDatabase,
@@ -308,14 +310,14 @@ export function startPhoneLedger(): PhoneLedgerStartup {
     startup = { status: "ready", controller };
     return startup;
   } catch (caught) {
-    // `catch` bindings are `unknown` because the language gives no choice —
-    // and the worker rejects with a plain object rather than an `Error`, which
-    // `errorFromThrown` reads instead of rendering it as `[object Object]`.
-    const failure = {
-      status: "failed",
-      error: errorFromThrown(caught),
-      retryable: openFailed,
-    } as const;
+    // `catch` bindings are `unknown` because the language gives no choice.
+    // What crosses the worker boundary is always an `Error` — the driver
+    // normalises it — so what matters is that it now carries the *worker's*
+    // name and message rather than the constant `[object Object]` the channel
+    // used to produce (`pnpm-workspace.yaml`, patch 2). `errorFromThrown`
+    // covers the non-`Error` throws that reach here from everywhere else.
+    const error = errorFromThrown(caught);
+    const failure = { status: "failed", error, retryable: isPoolContention(error) } as const;
     releaseOpenHandles();
     if (!failure.retryable) startup = failure;
     return failure;
