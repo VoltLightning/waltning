@@ -22,8 +22,12 @@
  *
  * **An uncapturable account is never hidden (S05).** No exchange rate held
  * for its currency is a fact about *now*, not about the account, so the tile
- * stays tappable — muted, with `transactions.needsRate` printed under it
- * rather than behind a `disabled` state nobody can ask about.
+ * stays tappable — muted, with a *Needs a rate* `Tag` rather than behind a
+ * `disabled` state nobody can ask about. A tag, not the whole sentence: a
+ * tile is a name, a currency and a balance, and `needsRate`'s full sentence
+ * repeated in every uncapturable cell was longer than everything it sat
+ * under. The sentence, and the way out of it, belong to the one place a
+ * person is stopped — the composer's own banner (S05 §6).
  *
  * **Composed by the screen, never by a sibling domain.** The same rule
  * `CategorySheet`'s own doc states: `transactions/` and `counterparties/` do
@@ -200,7 +204,15 @@ export function AccountPicker({
           placeholder={t("accounts.search", { count: live.length })}
         />
       ) : null}
-      <ScrollView style={styles.scroll}>
+      {/*
+        `nestedScrollEnabled` belongs on *this* list — the bounded one
+        (`styles.scroll`'s own `maxHeight`) — never on the sheet body around
+        it. It is inert today, because `BottomSheet`'s body is a plain
+        `View` inside a `Modal` and there is no outer scrollable to lose the
+        gesture to; it is the Android contract for the day that body does
+        scroll, stated where it will still be right.
+      */}
+      <ScrollView style={styles.scroll} nestedScrollEnabled>
         {recent === undefined ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("accounts.recent")}</Text>
@@ -277,9 +289,7 @@ function AccountTile({ account, selected, machineFilled, caption, onPick }: Acco
   const { hovered, focused, handlers } = useInteraction();
   const press = usePressScale();
   const handlePress = useCallback(() => onPick(account.id), [account.id, onPick]);
-  const needsRate = !account.capturable
-    ? t("transactions.needsRate", { currency: account.currency })
-    : undefined;
+  const needsRate = !account.capturable;
 
   return (
     <Animated.View style={[press.style, styles.cellWrap]}>
@@ -325,7 +335,7 @@ function AccountTile({ account, selected, machineFilled, caption, onPick }: Acco
           <Tag variant="neutral">{t("accounts.shared")}</Tag>
         ) : null}
         {caption === undefined ? null : <Text style={styles.hint}>{caption}</Text>}
-        {needsRate === undefined ? null : <Text style={styles.needsRate}>{needsRate}</Text>}
+        {needsRate ? <Tag variant="neutral">{t("transactions.needsRateTag")}</Tag> : null}
         {selected ? <View style={styles.check} /> : null}
       </Pressable>
     </Animated.View>
@@ -382,7 +392,6 @@ const useStyles = makeStyles((theme) => ({
   // contrast headroom at 12px anywhere in this palette.
   cellCurrency: { color: theme.textMuted, ...text.ui("bodySm") },
   hint: { color: theme.assertedText, ...text.ui("caption") },
-  needsRate: { color: theme.textMuted, ...text.ui("bodySm") },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,

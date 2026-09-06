@@ -29,6 +29,7 @@ import { useT } from "@waltning/ui/i18n/provider";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
+import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
 import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import {
@@ -503,6 +504,22 @@ export default function Transfer() {
     t,
   ]);
 
+  /**
+   * §14.6's way out, the same door `quick-add-screen.tsx` opens: S18, scoped
+   * to the *source* currency — the leg `create_transaction` refuses on — and
+   * to this screen's own accounting date. One refusal, one treatment, on
+   * both composers.
+   */
+  const needsRateCurrency =
+    fromAccount !== undefined && !fromAccount.capturable ? fromAccount.currency : undefined;
+  const handleSetRate = useCallback(() => {
+    if (needsRateCurrency === undefined) return;
+    router.push({
+      pathname: "/settings/rates",
+      params: { quote: needsRateCurrency, date: today },
+    });
+  }, [needsRateCurrency, today]);
+
   const handleMode = useCallback(() => {}, []);
   const modes = useMemo<readonly [DockModeOption, DockModeOption, ...DockModeOption[]]>(
     () => [
@@ -516,6 +533,11 @@ export default function Transfer() {
 
   return (
     <View style={styles.root}>
+      {/* The ✕ and the title, in a fixed band above the page scroller — this
+          route carries no navigation header (`app/_layout.tsx`), and a
+          header inside `GroundPanel`'s own `ScrollView` scrolls under the
+          notch the moment the column overflows. */}
+      <ComposerHeader onCancel={handleCancel} title={t("transactions.transfer")} />
       {/* `clearBottom={false}` — this panel is not the screen's own bottom
           edge, `Dock` below it is, and `Dock` already clears the home
           indicator itself. */}
@@ -540,7 +562,7 @@ export default function Transfer() {
           note={note}
           onNoteChange={setNote}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
-          onCancel={handleCancel}
+          onSetRate={handleSetRate}
         />
       </GroundPanel>
       <Dock

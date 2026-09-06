@@ -34,7 +34,6 @@ const TODAY = "2026-09-03";
 const BASE_PROPS: QuickAddComposerProps = {
   raw: "",
   type: "expense",
-  onTypeChange: vi.fn(),
   accounts: ACCOUNTS,
   accountId: null,
   accountMachineFilled: false,
@@ -56,7 +55,6 @@ const BASE_PROPS: QuickAddComposerProps = {
   onCounterpartyChange: vi.fn(),
   counterpartyRole: null,
   onCounterpartyRoleChange: vi.fn(),
-  onCancel: vi.fn(),
 };
 
 function props(overrides: Partial<QuickAddComposerProps> = {}): QuickAddComposerProps {
@@ -316,11 +314,59 @@ it("shows the needsRate caption the moment an uncapturable account is picked (SP
   ).toBeDefined();
 });
 
-it("flips expense and income on one tap — the keypad path's only escape hatch (S05 §9.1)", () => {
-  const onTypeChange = vi.fn();
-  render(<QuickAddComposer {...props({ onTypeChange })} />);
-  fireEvent.click(screen.getByRole("button", { name: "Expense" }));
-  expect(onTypeChange).toHaveBeenCalledWith("income");
+/**
+ * The refusal is a product, not a caption. A fresh install holding one PLN
+ * account with the pivot elsewhere cannot record anything at all, and a muted
+ * line under the chips left the person to find S18 unaided — so the banner
+ * carries the one action that ends the refusal.
+ */
+it("offers the way out of the refusal, scoped to the currency (S05 §6)", () => {
+  const onSetRate = vi.fn();
+  render(
+    <QuickAddComposer
+      {...props({
+        accounts: [
+          {
+            id: "account-a",
+            name: "Cash · PLN",
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            capturable: false,
+            ownership: "own",
+          },
+        ],
+        accountId: "account-a",
+        onSetRate,
+      })}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Set a PLN rate" }));
+  expect(onSetRate).toHaveBeenCalledOnce();
+});
+
+/** No caller, no offer — `packages/ui` names no router, so the action is the screen's to give. */
+it("states the refusal without an action when the caller has nowhere to send it", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        accounts: [
+          {
+            id: "account-a",
+            name: "Cash · PLN",
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            capturable: false,
+            ownership: "own",
+          },
+        ],
+        accountId: "account-a",
+      })}
+    />,
+  );
+  expect(
+    screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
+  ).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Set a PLN rate" })).toBeNull();
 });
 
 it("shows the scope chip's own value from the account's ownership and isBusiness", () => {
@@ -449,9 +495,32 @@ it("renders a controller refusal on counterpartyRole under the counterparty chip
   expect(screen.getByText("a counterparty and its role travel together (§6.6)")).toBeDefined();
 });
 
-it("calls onCancel from the ✕", () => {
-  const onCancel = vi.fn();
-  render(<QuickAddComposer {...props({ onCancel })} />);
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(onCancel).toHaveBeenCalledOnce();
+/**
+ * L2 — the controller's own `accountId` refusal resolves to the same
+ * sentence the banner already carries (`field-error-messages.ts` maps
+ * `transactions.needsRate`). A save attempt followed by a switch to an
+ * uncapturable account reaches both at once; the banner keeps it, because
+ * the banner is the half with the way out.
+ */
+it("states the refusal once when the field error repeats the banner's own sentence", () => {
+  const message = "PLN needs an exchange rate before a transaction can be recorded in it.";
+  render(
+    <QuickAddComposer
+      {...props({
+        accounts: [
+          {
+            id: "account-a",
+            name: "Cash · PLN",
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            capturable: false,
+            ownership: "own",
+          },
+        ],
+        accountId: "account-a",
+        fieldErrors: { byField: { accountId: [message] }, formLevel: [] },
+      })}
+    />,
+  );
+  expect(screen.getAllByText(message)).toHaveLength(1);
 });

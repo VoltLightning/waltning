@@ -21,9 +21,13 @@ moment of entry rather than in a report months later.
 | From | Via | Back to |
 |---|---|---|
 | Any tab | `+` long-press → Transfer | The tab you came from |
-| S05 | Type selector → Transfer | Opens here; the amount carries over |
 | S16 | An account row → *Transfer from here* | S16, source prefilled |
 | S09 | Editing an existing transfer | S09 |
+
+**Quick add's kind menu offers Expense and Income only** (S05 §9.1). A transfer
+is two accounts, two amounts and a live rate; the one entry point that offers
+all three kinds is `+`, because that is the choice made *before* a draft
+exists rather than in the middle of one.
 
 ## 3. Layout
 
@@ -61,6 +65,20 @@ looking at it (§14.1).
 **The rate is never the input.** Two amounts are, because two amounts are what a
 statement shows and a rate is not (§7.6). The realized rate is derived and
 displayed, never typed.
+
+**Which is why the realized figure is absent until both amounts are.** A rate
+derived from a figure nobody has typed is not a reading — `realized 0,0000` on
+an untouched screen is the absence of one wearing a figure's clothes, on the
+screen whose whole purpose is making the real rate visible. The realized rate
+and the margin appear together, once both sides hold a non-zero amount.
+
+**The reference rate is the opposite case and stays.** It is not derived from
+anything typed — it is a fact the ledger already holds — so it shows from the
+moment a pair is chosen, on its own line, with its source, its date and its
+staleness (§6). Withholding it while the destination amount is being retyped
+would hide the figure at exactly the moment §7 calls primary: backspacing
+`565,20` to type what the bank actually gave is the whole interaction, and the
+reference is what it is compared against.
 
 Same-currency transfers collapse: one amount, no rate panel, no spread.
 
@@ -105,7 +123,7 @@ direction — read-only, because it is derived.
 | Empty | n/a |
 | Error | Same account both sides → refused inline (`transactions_transfer_distinct`). Save failed → draft retained |
 | Offline | Works. Reference rate from cache, marked stale; the destination amount stays editable, which is the point — the rate you actually got does not depend on the feed |
-| Gated | n/a |
+| Gated | **The source account's currency has no rate** — the same §14.6 gate S05 §6 states, reached here from S16's *Transfer from here* on the very account that is blocked. Save is disabled and a `neutral` `Banner` says so, carrying the one action that ends it: *Set a ‹CUR› rate*, opening S18 scoped to that currency. One refusal, one treatment, on both composers |
 
 ## 7. Interaction
 

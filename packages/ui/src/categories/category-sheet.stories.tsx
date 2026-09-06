@@ -15,8 +15,13 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { useCallback, useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
-import { CategorySheet, type CategoryTreeNode } from "./category-sheet";
+import {
+  CategorySheet,
+  type CategorySheetCreateDraft,
+  type CategoryTreeNode,
+} from "./category-sheet";
 
 function noop() {}
 function createLeaf() {
@@ -40,6 +45,16 @@ const TRANSPORT: CategoryTreeNode = {
   kind: "expense",
   isLeaf: false,
 };
+/** The seed's own root leaf — `run.ts` writes `seed:<key>`, and that is how it is known. */
+const UNCATEGORIZED: CategoryTreeNode = {
+  id: "uncategorized",
+  parentId: null,
+  name: "Uncategorized",
+  kind: "expense",
+  isLeaf: true,
+  externalId: "seed:uncategorized",
+};
+
 const TREE: CategoryTreeNode[] = [
   FOOD,
   { id: "groceries", parentId: "food", name: "Groceries", kind: "expense", isLeaf: true },
@@ -73,8 +88,18 @@ type Story = StoryObj<typeof meta>;
 /** The default: every leaf across every group, `Uncategorized` last and muted. */
 export const Browsing: Story = { args: WITH_CREATE };
 
-/** A picker-only caller — `+ New` is refused rather than opening a dead end. */
+/** A picker-only caller — the footer holds *Use* alone, since nothing here can create. */
 export const NoCreate: Story = {};
+
+/**
+ * The same picker-only caller on a ledger whose taxonomy has not arrived
+ * (S10's categorize path). It offers nothing to create with, so it says
+ * nothing about creating — the copy names what *can* happen: the row stays
+ * uncategorized.
+ */
+export const NoCreateEmpty: Story = {
+  args: { tree: [], usage: {} },
+};
 
 /** Live, and covering every leaf regardless of the group chip (S06 §9). */
 export const Searching: Story = {
@@ -149,6 +174,91 @@ export const FilteredEmpty: Story = {
     await userEvent.type(await canvas.findByLabelText("Search…"), "Snacks");
     await expect(canvas.findByRole("button", { name: 'Create "Snacks"' })).resolves.toBeDefined();
   },
+};
+
+/**
+ * **A fresh ledger, before any category exists.** Not the filtered empty
+ * above: nothing has been excluded, so the sheet says so plainly rather than
+ * counting leaves nobody has (*Search 0 categories*) or blaming a query for
+ * an absence that predates it (*Nothing matches*).
+ */
+export const EmptyTree: Story = {
+  args: { ...WITH_CREATE, tree: [], usage: {} },
+};
+
+/**
+ * The same ledger, one step in. `create_category`'s `parentId` is nullable
+ * and R1 says nothing about parents, so the first category lands at the top
+ * level — the same write S19's own create sheet makes. No chooser where
+ * there is nothing to choose; the line says where it will land.
+ */
+export const EmptyTreeCreating: Story = {
+  args: { ...WITH_CREATE, tree: [], usage: {} },
+  play: async ({ canvasElement }) => {
+    // `<Modal>` portals to a sibling of `canvasElement` — `FilteredEmpty`
+    // above states the whole reason.
+    const canvas = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "Create a category" }));
+    await expect(
+      canvas.findByText("No groups yet — this will be a top-level category."),
+    ).resolves.toBeDefined();
+  },
+};
+
+/**
+ * **The write, and what the sheet does with it.** The story holds the tree in
+ * state and appends the row `create_category` would write — a leaf, at the
+ * parent it was given, with no `sort` of its own — so the frame after Save is
+ * the real one rather than a stub's return value. `Coffee` is an ordinary
+ * cell; the seeded blank keeps its own row below the divider, which is the
+ * thing identifying it *by position* used to get wrong.
+ */
+export const EmptyTreeCreated: Story = {
+  args: { tree: [UNCATEGORIZED], usage: {} },
+  render: (args) => <CreatingDemo {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "Create a category" }));
+    await userEvent.type(await canvas.findByLabelText("Name"), "Coffee");
+    await userEvent.click(await canvas.findByRole("button", { name: "Save" }));
+    const grid = within(await canvas.findByRole("radiogroup", { name: "Category" }));
+    await expect(grid.findByRole("radio", { name: /Coffee/ })).resolves.toBeDefined();
+  },
+};
+
+/** The tree as state, so a create lands in it — `quick-add-composer.stories.tsx`'s own `WithCounterpartyDemo` shape. */
+function CreatingDemo(args: React.ComponentProps<typeof CategorySheet>) {
+  const [tree, setTree] = useState<readonly CategoryTreeNode[]>(args.tree);
+  const handleCreate = useCallback((draft: CategorySheetCreateDraft) => {
+    const id = `cat-${draft.name.toLowerCase()}`;
+    setTree((current) => [
+      { id, parentId: draft.parentId, name: draft.name, kind: draft.kind, isLeaf: true },
+      ...current,
+    ]);
+    return { id };
+  }, []);
+  return <CategorySheet {...args} tree={tree} onCreate={handleCreate} />;
+}
+
+/**
+ * The seeded shape of a fresh **expense** tree: `Uncategorized` and nothing
+ * else. Still the empty state — one honest blank is not a taxonomy — and the
+ * row itself stays pickable below it.
+ */
+export const OnlyUncategorized: Story = {
+  args: {
+    ...WITH_CREATE,
+    tree: [UNCATEGORIZED],
+    usage: { uncategorized: 3 },
+  },
+};
+
+/**
+ * A tree that has groups but no leaves — a taxonomy mid-build. Here the
+ * create path *can* complete, so the empty state offers it.
+ */
+export const EmptyTreeWithGroups: Story = {
+  args: { ...WITH_CREATE, tree: [FOOD, TRANSPORT], usage: {} },
 };
 
 /** The pinned `+ New` row — group locked to the chip already narrowing the sheet. */

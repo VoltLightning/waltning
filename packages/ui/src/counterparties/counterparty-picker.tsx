@@ -156,10 +156,16 @@ function PickerRow({ counterparty, onPick }: PickerRowProps) {
             {counterparty.name}
           </Text>
           <Text style={styles.kind}>
+            {/*
+              The `…Label` pair: this word renders *alone* under the name,
+              with no sentence around it, so it is a label — the lowercase
+              fragments belong to a meta line that continues (*person ·
+              settles in PLN*).
+            */}
             {t(
               counterparty.kind === "company"
-                ? "counterparties.kindCompany"
-                : "counterparties.kindPerson",
+                ? "counterparties.kindCompanyLabel"
+                : "counterparties.kindPersonLabel",
             )}
           </Text>
         </View>

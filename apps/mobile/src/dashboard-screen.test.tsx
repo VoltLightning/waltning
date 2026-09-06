@@ -152,6 +152,7 @@ function fakeController(options: {
         name: "Groceries",
         kind: "expense",
         isLeaf: true,
+        externalId: null,
         sort: 0,
       },
     ],

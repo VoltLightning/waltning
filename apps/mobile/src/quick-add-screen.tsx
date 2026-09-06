@@ -18,10 +18,14 @@ import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
+import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { GroundPanel } from "@waltning/ui/shell/card";
+import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
+import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
 import {
   KNOWN_PATHS,
@@ -35,7 +39,7 @@ import {
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
@@ -121,6 +125,10 @@ export default function QuickAdd() {
   const today = capture.date;
   const breakpoint = useBreakpoint();
   const styles = useStyles();
+  const insets = useSafeArea();
+  // Beside the JSX rather than in `useStyles`: that cache is keyed on the
+  // theme and this is keyed on the device (`ComposerHeader`'s own split).
+  const clearTop = { paddingTop: space.x5 + insets.top };
 
   /**
    * D4a: S06's sheet is composed here, not inside `QuickAddForm` or
@@ -371,6 +379,25 @@ export default function QuickAdd() {
       },
     });
   }, [composerAmountRaw, effectiveAccountId]);
+  const needsRateCurrency =
+    selectedComposerAccount !== undefined && !selectedComposerAccount.capturable
+      ? selectedComposerAccount.currency
+      : undefined;
+  /**
+   * §14.6's refusal, with a way out. The composer states *"PLN needs an
+   * exchange rate…"* and this is the door it opens: S18, already scoped to
+   * the currency that is blocking the save and to the draft's own accounting
+   * date (§7.0a — the device's calendar, a bare `YYYY-MM-DD`, never a
+   * `Date`). The route lives here because `packages/ui` names no router
+   * (`architecture/11`); the composer only ever asks.
+   */
+  const handleSetRate = useCallback(() => {
+    if (needsRateCurrency === undefined) return;
+    router.push({
+      pathname: "/settings/rates",
+      params: { quote: needsRateCurrency, date: today },
+    });
+  }, [needsRateCurrency, today]);
   const handleComposerOpenCategoryPicker = useCallback(
     () => setComposerCategorySheet({ open: true, kind: composerType }),
     [composerType],
@@ -536,46 +563,72 @@ export default function QuickAdd() {
 
   if (breakpoint === "desk") {
     return (
-      <GroundPanel>
-        {/* No title: the navigation header carries it, and the same
-            string twice on one screen reads as two sections. */}
-        <QuickAddForm
-          accounts={accounts}
-          categories={snapshot.categories}
-          counterparties={snapshot.counterparties}
-          today={today}
-          initialAmount={draft.amount}
-          accountId={deskAccountId}
-          onOpenAccountPicker={handleOpenDeskAccountPicker}
-          categoryId={categoryId}
-          onOpenCategoryPicker={handleOpenCategoryPicker}
-          {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
-          onCancel={handleDeskCancel}
-          onSave={handleDeskSave}
-        />
-        <CategorySheet
-          visible={categorySheet.open}
-          kind={categorySheet.kind}
-          tree={snapshot.categoryTree}
-          onPick={handlePickCategory}
-          onCreate={handleCreateCategory}
-          onDismiss={handleDismissCategorySheet}
-        />
-        <AccountPicker
-          visible={deskAccountPicker.open}
-          accounts={pickerAccounts}
-          groups={pickerGroups}
-          accountId={deskAccountId}
-          onPick={handlePickDeskAccount}
-          onCreateAccount={handleDeskAccountPickerCreateAccount}
-          onDismiss={handleDismissDeskAccountPicker}
-        />
-      </GroundPanel>
+      <View style={styles.root}>
+        {/* The route's own name, in a band beside the panel — not inside it.
+            The navigation header used to carry it and this route no longer
+            has one; the phone's composer states its name in
+            `ComposerHeader`'s band, and the desk fallback, which is a form
+            rather than a composer, states it here. The same string the
+            header showed, so the desk reads exactly as it did.
+
+            Beside, because clearance that scrolls is not clearance:
+            `GroundPanel` is the page scroller and never clears the top,
+            having been written when every route above it had a header. Zero
+            on a browser and on every device that can reach this breakpoint
+            today (`app.json` pins portrait and no tablet), so this is the
+            shape being right rather than a number anyone will see move. */}
+        <View style={[styles.deskBand, clearTop]}>
+          <Text style={styles.deskTitle}>{t("routes.expense")}</Text>
+        </View>
+        <GroundPanel>
+          <QuickAddForm
+            accounts={accounts}
+            categories={snapshot.categories}
+            counterparties={snapshot.counterparties}
+            today={today}
+            initialAmount={draft.amount}
+            accountId={deskAccountId}
+            onOpenAccountPicker={handleOpenDeskAccountPicker}
+            categoryId={categoryId}
+            onOpenCategoryPicker={handleOpenCategoryPicker}
+            {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
+            onCancel={handleDeskCancel}
+            onSave={handleDeskSave}
+          />
+          <CategorySheet
+            visible={categorySheet.open}
+            kind={categorySheet.kind}
+            tree={snapshot.categoryTree}
+            onPick={handlePickCategory}
+            onCreate={handleCreateCategory}
+            onDismiss={handleDismissCategorySheet}
+          />
+          <AccountPicker
+            visible={deskAccountPicker.open}
+            accounts={pickerAccounts}
+            groups={pickerGroups}
+            accountId={deskAccountId}
+            onPick={handlePickDeskAccount}
+            onCreateAccount={handleDeskAccountPickerCreateAccount}
+            onDismiss={handleDismissDeskAccountPicker}
+          />
+        </GroundPanel>
+      </View>
     );
   }
 
   return (
     <View style={styles.root}>
+      {/* The ✕ and the kind menu, in a fixed band above the page scroller:
+          `app/_layout.tsx` hides the navigation header on this route, so
+          this is the header, and a header inside `GroundPanel`'s own
+          `ScrollView` scrolls under the notch the moment the column
+          overflows. */}
+      <ComposerHeader
+        onCancel={handleComposerCancel}
+        kind={composerType}
+        onKindChange={handleComposerTypeChange}
+      />
       {/* `clearBottom={false}` — this panel is not the screen's own bottom
           edge, `Dock` below it is, and `Dock` already clears the home
           indicator itself. */}
@@ -583,11 +636,11 @@ export default function QuickAdd() {
         <QuickAddComposer
           raw={composerAmountRaw}
           type={composerType}
-          onTypeChange={handleComposerTypeChange}
           accounts={composerAccounts}
           accountId={effectiveAccountId}
           accountMachineFilled={accountMachineFilled}
           onOpenAccountPicker={handleOpenComposerAccountPicker}
+          onSetRate={handleSetRate}
           categories={snapshot.categories}
           categoryId={effectiveCategoryId}
           /*
@@ -623,7 +676,6 @@ export default function QuickAdd() {
           onCounterpartyRoleChange={handleComposerCounterpartyRoleChange}
           onCreateCounterparty={handleComposerCreateCounterparty}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
-          onCancel={handleComposerCancel}
         />
       </GroundPanel>
       <Dock
@@ -662,4 +714,12 @@ export default function QuickAdd() {
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, backgroundColor: theme.ground },
+  /** The desk fallback's own header band — `ComposerHeader`'s shape, without a ✕ the form already carries as *Cancel*. */
+  deskBand: {
+    backgroundColor: theme.ground,
+    paddingHorizontal: space.x5,
+    paddingBottom: space.x3,
+  },
+  /** Its heading — the navigation header's own face (`_layout.tsx`'s `headerTitleStyle`). */
+  deskTitle: { color: theme.text, ...text.ui("displayThree") },
 }));

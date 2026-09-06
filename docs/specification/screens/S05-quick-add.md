@@ -63,6 +63,24 @@ mid-draft never discards what is there.
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed.
 
+**The top row is the screen's own header, and it is a fixed band.** This route
+carries no navigation header (`headerShown: false`) — the ✕ and the kind
+control are the whole of it — so the band clears the device's top inset itself
+rather than inheriting one from a bar that is not there. It sits *beside* the
+page body rather than inside it, the way the dock sits below: a header that
+scrolls is not one, and the ✕ is the only way out of a composer.
+
+**`expense ▾` opens a menu, and the chevron is why.** Tapping it lists Expense
+and Income **with the draft's own kind marked**; any pick closes the sheet,
+including the one already marked — a menu's job is to answer and go, and the
+marked option is the one a thumb reaches for first.
+A control whose current value and whose action are the same word is only
+obvious to whoever wrote it, and someone tapping to read the options would find
+the draft's kind changed instead — which is also why the menu marks the current
+kind: being read is what it is for, and a menu that answers nothing the trigger
+already said is a tap spent on nothing. **Transfer is not among them** (§9.1) —
+it is a different shape with its own composer.
+
 **The chip row is the whole model.** Account, category, payee, date, scope,
 note, and counterparty when attached. Each chip is empty (placeholder),
 filled, or **machine-filled** — the third carries the trail marker (P2). The
@@ -192,6 +210,7 @@ still, and a numeric keypad on screen would be slower than typing.
 | `Keypad` | 0–9, comma decimal, delete. Bottom-anchored (Fitts) |
 | `AmountField` | `display-hero`, tabular lining numerals, comma decimal, currency affix |
 | `Chip` | Account · category · date · scope · note · counterparty. **≥44px** (Q3). The account chip fills from last-used **only within a short window**, and is otherwise empty with Save disabled — a stale default reads as an answer rather than a question (§9) |
+| `Banner` | `neutral`, under the chip row, when the chosen account's currency has no rate — the refusal, and its one action, *Set a ‹CUR› rate* → S18 |
 | `TrailRow` | *"Heard: forty-eight ninety, cash, coffee"* + **Undo**. The P2 component |
 | `SegmentControl` | Scope — Mine · Shared · Business |
 | `ThinkingIndicator` | While a voice utterance or photo is being parsed |
@@ -218,7 +237,7 @@ voice entry and agent entry produce identical audit rows differing only in
 | Empty | The default. A blank amount is the resting state, not an empty state |
 | Error | **Four designed states, `design/gaps.dc.html` G3** — see below |
 | Offline | Full function. Writes go to the outbox with a client-generated UUID; Save reads as done, because it is |
-| Gated | n/a |
+| Gated | **The account's currency has no rate** (`architecture/14`: holding a currency and capturing in it are two capabilities, and the second is gated). Save is disabled and a `Banner` says so, carrying the one action that ends it — *Set a ‹CUR› rate*, opening S18 already scoped to that currency. The account picker's own tiles carry a short *Needs a rate* tag instead of the sentence: the tile is a choice, the banner is the explanation, and repeating the sentence in every uncapturable cell says it in the one place nobody is stopped. `neutral`, never amber — P4 below reserves amber for the estimated-rate marker, and a currency with no rate is a missing capability rather than an asserted figure |
 
 **The four error states**, all designed rather than described:
 
@@ -273,7 +292,9 @@ fact.
    **Decided: yes — and transfers get their own entry point.** The selector
    stays top-right as an escape hatch, deliberately out of the thumb zone,
    because most entries are expenses and the rare case should not occupy prime
-   space.
+   space. It is a **menu of two**, opened by the tap: a choice of two is still
+   a choice, and a control that changes the draft's kind when someone taps it
+   to see what the kinds are is a trap wearing a chevron.
 
    **The real answer is that Quick add is an expense composer.** A transfer is a
    different shape — two accounts, two amounts, a live rate, and a spread shown

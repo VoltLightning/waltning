@@ -117,7 +117,7 @@ act on, and that is what keeps the filter drainable to zero.
 |---|---|
 | Loading | Skeleton rows in the row's shape; the running total resolves last and shows a skeleton meanwhile rather than a wrong number |
 | Populated | Virtualized, both surfaces |
-| Empty | **Two distinct states.** `filtered` — *Scope · Business is excluding 1,284 rows*, clear-this beside clear-all. `first-run` — nothing exists, offers S05 and import |
+| Empty | **Two distinct states.** `filtered` — *Scope · Business is excluding 1,284 rows*, clear-this beside clear-all. `first-run` — nothing exists, and offers S05 under S04's own word for it, *Add*: one act reached from two screens is one label, never two. The import path is S29's, and arrives with it — until then this state offers capture alone rather than an action with nowhere to go, the same rule S16's own first-run empty already keeps |
 | Error | Query failed → `ErrorState(recoverable)` with retry; the filter bar stays usable so you can narrow and retry |
 | Offline | Cached page with its age. Search works over the cache and **says so** — an incomplete result presented as complete is worse than a stated limit |
 | Gated | n/a |

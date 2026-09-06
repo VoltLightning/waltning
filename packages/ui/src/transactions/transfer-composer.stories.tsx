@@ -9,6 +9,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { crossRate } from "@waltning/core/money";
+import { View } from "react-native";
 import { GroundPanel } from "../shell/card";
 import { TransferComposer } from "./transfer-composer";
 
@@ -64,7 +65,6 @@ const meta = {
     today: "2026-08-12",
     note: "",
     onNoteChange: noop,
-    onCancel: noop,
   },
   // `transfer-screen.tsx` never renders `TransferComposer` flush to the
   // device edge — it wraps it in its own `space.x5` horizontal clearance,
@@ -106,6 +106,62 @@ export const NoRateOffline: Story = {
 export const Fee: Story = {
   args: { fee: "5,00" },
 };
+
+/**
+ * **The screen as it opens — nothing typed.** The rate panel is absent, not
+ * zeroed: the realized rate is derived from two amounts (§3), so before both
+ * exist there is no rate to state and `realized 0,0000` was the first thing
+ * this screen said on open.
+ */
+export const Untouched: Story = {
+  args: { amountRaw: "", toAmountRaw: "" },
+};
+
+/**
+ * §14.6 on the transfer screen — the source account is held and cannot be
+ * captured in. The same `Banner` quick add carries, with the same one action:
+ * one refusal, one treatment.
+ */
+export const NeedsRate: Story = {
+  args: {
+    accounts: [{ ...USD_ACCOUNT, capturable: false }, PLN_ACCOUNT, SAVINGS_ACCOUNT],
+    // `capturable` is `pivot !== undefined && (isPivot || quoted.has(code))`
+    // (`read-currencies.ts`), so an uncapturable USD is a USD nothing quotes
+    // — and a pair with no quote has no cross rate to reference. A frame
+    // showing the refusal above a live reference is a state the app cannot
+    // produce.
+    referenceRate: undefined,
+    onSetRate: noop,
+  },
+};
+
+/**
+ * **The same banner at 390pt**, the width the finding was raised at — the
+ * suite's viewport is 900px, so without this the transfer screen's copy of
+ * the refusal is photographed at a width no phone has.
+ * `quick-add-composer.stories.tsx`'s `NeedsRatePhone` is its twin, and the
+ * two frames are the evidence for `Banner`'s own row layout.
+ */
+export const NeedsRatePhone: Story = {
+  decorators: [withPhoneWidth],
+  args: {
+    accounts: [{ ...USD_ACCOUNT, capturable: false }, PLN_ACCOUNT, SAVINGS_ACCOUNT],
+    // Same reason as `NeedsRate` above: no quote, so no reference rate.
+    referenceRate: undefined,
+    onSetRate: noop,
+  },
+};
+
+/** A phone's own column: 390pt (the audit's device) minus `GroundPanel`'s `space.x5` a side. */
+const PHONE_COLUMN = { width: 390 - 44 };
+
+function withPhoneWidth(Story: React.ComponentType) {
+  return (
+    <View style={PHONE_COLUMN}>
+      <Story />
+    </View>
+  );
+}
 
 /** Same account both sides, refused inline before Save (`transactions_transfer_distinct`). */
 export const SameAccountRefused: Story = {

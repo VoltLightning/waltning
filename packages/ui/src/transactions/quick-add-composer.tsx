@@ -1,6 +1,12 @@
 /**
- * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3 mobile: the header,
- * the hero amount, and "the whole model" — the chip row.
+ * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3 mobile: the hero
+ * amount and "the whole model" — the chip row.
+ *
+ * **The header is not here either.** `ComposerHeader` (`composer-header.tsx`)
+ * is a *fixed band* the screen composes above `GroundPanel`, because this
+ * component renders inside the page scroller and a header that scrolls is not
+ * one — the ✕ would slide under the notch the moment this column overflows.
+ * Everything here scrolls; the ✕ and the kind control do not.
  *
  * **The keypad is not here.** `Dock` owns the mode row, the keypad and Save
  * (`dock.tsx`'s own doc: "the keypad is `children`, not a prop this component
@@ -36,25 +42,22 @@ import {
 } from "@waltning/core/capture/payee-memory";
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import Animated from "react-native-reanimated";
+import { Text, View } from "react-native";
 import { AmountField } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
-import { IconButton } from "../primitives/icon-button";
-import { useInteraction } from "../primitives/interaction.ts";
-import { usePressScale } from "../primitives/press-scale.ts";
 import { RadioGroup, type RadioGroupProps } from "../primitives/radio";
 import { type Segment, SegmentControl } from "../primitives/segment-control";
 import { Select } from "../primitives/select";
 import { TextField } from "../primitives/text-field";
 import { BottomSheet } from "../shell/bottom-sheet";
+import { Banner } from "../states/banner";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { space } from "../tokens.ts";
 
 const NOTE_CHIP_PREVIEW = 24;
 const COUNTERPARTY_ROLES = ["debt", "contribution", "reference"] as const;
@@ -76,14 +79,25 @@ export type QuickAddComposerCounterparty = { id: string; name: string };
 export type QuickAddComposerProps = {
   /** The raw string `Keypad` edits — `AmountField(hero)`'s own value. */
   raw: string;
+  /**
+   * The draft's kind — read here (the category chip only ever offers this
+   * kind's own leaves), chosen in `ComposerHeader`'s kind menu, which the
+   * screen owns because the header is a fixed band beside the page scroller.
+   */
   type: "expense" | "income";
-  onTypeChange: (type: "expense" | "income") => void;
   accounts: readonly QuickAddComposerAccount[];
   accountId: string | null;
   /** The account chip fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
   /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
   onOpenAccountPicker: () => void;
+  /**
+   * The uncapturable-account banner's own way out — S18, for the picked
+   * account's currency and this draft's own `today`. The screen owns the
+   * route (`architecture/11`: this package names no router), so the banner
+   * carries no action at all when a caller has nowhere to send it.
+   */
+  onSetRate?: () => void;
   categories: readonly QuickAddComposerCategory[];
   /**
    * The draft's effective category — the screen's own pick, or (H1) a
@@ -127,7 +141,6 @@ export type QuickAddComposerProps = {
   onCreateCounterparty?: () => void;
   /** `create_transaction`'s own field paths — same keys `QuickAddForm` resolves. */
   fieldErrors?: FieldErrorMap;
-  onCancel: () => void;
 };
 
 type OpenSheet = "date" | "scope" | "payee" | "note" | "counterparty" | null;
@@ -135,11 +148,11 @@ type OpenSheet = "date" | "scope" | "payee" | "note" | "counterparty" | null;
 export function QuickAddComposer({
   raw,
   type,
-  onTypeChange,
   accounts,
   accountId,
   accountMachineFilled,
   onOpenAccountPicker,
+  onSetRate,
   categories,
   categoryId,
   categoryProposal,
@@ -162,7 +175,6 @@ export function QuickAddComposer({
   onCounterpartyRoleChange,
   onCreateCounterparty,
   fieldErrors,
-  onCancel,
 }: QuickAddComposerProps) {
   const t = useT();
   const styles = useStyles();
@@ -287,17 +299,39 @@ export function QuickAddComposer({
         : pickedCounterparty.name;
 
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
-  // §14.6 — the same proactive caption `QuickAddForm`'s own `blocked` text
+  // §14.6 — the same proactive statement `QuickAddForm`'s own `blocked` text
   // already carries on the desk fallback: an uncapturable account is a fact
   // knowable the moment it is picked, not only after `create_transaction`
   // bounces it. `accountError` stays the fallback for whatever else
-  // `byField.accountId` might carry.
-  const accountError = fieldErrors?.byField["accountId"]?.[0];
+  // `byField.accountId` might carry, and now renders as the field error it
+  // is rather than sharing the muted caption with a refusal that has a way
+  // out.
+  /**
+   * L2 — `resolveFieldErrorMessage` maps the controller's own
+   * `transactions.needsRate` key onto `byField.accountId`, so a refusal left
+   * over from an earlier save attempt can carry the exact sentence the
+   * banner below is already showing. One fact, stated once: the banner keeps
+   * it, because the banner is the half that carries the way out.
+   */
+  const rawAccountError = fieldErrors?.byField["accountId"]?.[0];
   const accountNeedsRate =
     selectedAccount !== undefined && !selectedAccount.capturable
       ? t("transactions.needsRate", { currency: selectedAccount.currency })
       : undefined;
-  const accountCaption = accountNeedsRate ?? accountError;
+  const accountError = rawAccountError === accountNeedsRate ? undefined : rawAccountError;
+  /**
+   * `neutral`, not `warn` — S05 §8's P4: *the estimated-rate marker is the
+   * only amber here*. A currency with no rate at all is not an asserted
+   * figure, it is a capability this ledger does not have yet, and painting
+   * it amber would teach the one colour P4 reserves to mean two things.
+   */
+  const setRateAction =
+    onSetRate === undefined || selectedAccount === undefined
+      ? undefined
+      : {
+          label: t("transactions.needsRateAction", { currency: selectedAccount.currency }),
+          onPress: onSetRate,
+        };
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
   const payeeError = fieldErrors?.byField["payee"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
@@ -308,13 +342,6 @@ export function QuickAddComposer({
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
-        <IconButton label={t("common.cancel")} onPress={onCancel}>
-          <CrossMark />
-        </IconButton>
-        <TypeToggle type={type} onChange={onTypeChange} />
-      </View>
-
       <AmountField
         variant="hero"
         label={t("transactions.amount")}
@@ -369,7 +396,14 @@ export function QuickAddComposer({
           />
         )}
       </View>
-      {accountCaption === undefined ? null : <Text style={styles.needsRate}>{accountCaption}</Text>}
+      {accountNeedsRate === undefined ? null : (
+        <Banner
+          tone="neutral"
+          message={accountNeedsRate}
+          {...(setRateAction === undefined ? {} : { action: setRateAction })}
+        />
+      )}
+      {accountError === undefined ? null : <Text style={styles.fieldError}>{accountError}</Text>}
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
       {!categoryLowConfidence ? null : (
         <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
@@ -472,61 +506,6 @@ function scopeLabel(
   if (account === undefined) return undefined;
   if (account.ownership === "shared") return t("shell.scopeShared");
   return isBusiness ? t("shell.scopeBusiness") : t("shell.scopeMine");
-}
-
-type TypeToggleProps = {
-  type: "expense" | "income";
-  onChange: (type: "expense" | "income") => void;
-};
-
-/**
- * S05 §9's decided escape hatch — top-right, deliberately out of the thumb
- * zone. Two values only (§9.1: a transfer gets its own composer via `+`
- * long-press), so a tap toggles rather than opening a picker for a choice of
- * one alternative.
- */
-function TypeToggle({ type, onChange }: TypeToggleProps) {
-  const t = useT();
-  const styles = useStyles();
-  const { hovered, focused, handlers } = useInteraction();
-  const press = usePressScale();
-  const label = type === "expense" ? t("transactions.expense") : t("transactions.income");
-  const handlePress = useCallback(
-    () => onChange(type === "expense" ? "income" : "expense"),
-    [onChange, type],
-  );
-
-  return (
-    <Animated.View style={press.style}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        onPress={handlePress}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
-        {...handlers}
-        style={[
-          styles.typeToggle,
-          hovered ? styles.typeToggleHovered : null,
-          focused ? styles.focused : null,
-        ]}
-      >
-        <Text style={styles.typeToggleLabel}>{label}</Text>
-        <View style={styles.typeToggleChevron} />
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-/** The drawn ✕ — a literal glyph would be the one icon depending on a font shipping it (`keypad.tsx`'s own rule). */
-function CrossMark() {
-  const styles = useStyles();
-  return (
-    <View style={styles.crossMark}>
-      <View style={[styles.crossMarkBar, styles.crossMarkBarA]} />
-      <View style={[styles.crossMarkBar, styles.crossMarkBarB]} />
-    </View>
-  );
 }
 
 type ScopeSegmentsProps = {
@@ -652,43 +631,12 @@ function isCounterpartyRole(value: string): value is CounterpartyRole {
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   /** §14 — text, not tint alone (P5); `theme.textMuted`, the same colour `CategorySheet`'s own caption uses. */
   lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
-  /** §14.6's own caption — a fact about now, not an error (`quick-add-form.tsx`'s `blocked`, matched). */
-  needsRate: { color: theme.textMuted, ...text.ui("caption") },
   /** H1, S05 §8's P2 trail row — the caption and Undo beside it. */
   trailRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   counterparty: { gap: space.x3 },
-  typeToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    minHeight: touchTarget.min,
-    paddingHorizontal: space.x2,
-    borderRadius: radius.sm,
-  },
-  typeToggleHovered: { backgroundColor: theme.hoverFill },
-  typeToggleLabel: { color: theme.text, ...text.ui("body", 600) },
-  typeToggleChevron: {
-    width: 8,
-    height: 8,
-    borderRightWidth: 1.5,
-    borderBottomWidth: 1.5,
-    borderColor: theme.textMuted,
-    transform: [{ rotate: "45deg" }],
-    marginTop: -4,
-  },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
-  crossMark: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
-  crossMarkBar: { position: "absolute", width: 17, height: 2, backgroundColor: theme.text },
-  crossMarkBarA: { transform: [{ rotate: "45deg" }] },
-  crossMarkBarB: { transform: [{ rotate: "-45deg" }] },
 }));

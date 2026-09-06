@@ -117,6 +117,10 @@ export const pl: Messages = {
     amount: "Kwota",
     account: "Konto",
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",
+    needsRateAction: "Ustaw kurs {{currency}}",
+    needsRateTag: "Wymaga kursu",
+    kind: "Rodzaj",
+    kindValue: "Rodzaj: {{kind}}",
     deferredNoRate:
       "Zapisano — zostanie wycenione, gdy tylko będzie znany kurs wymiany dla {{currency}}.",
     tooManyDecimals:
@@ -279,6 +283,8 @@ export const pl: Messages = {
     settled: "rozliczone",
     kindPerson: "osoba",
     kindCompany: "firma",
+    kindPersonLabel: "Osoba",
+    kindCompanyLabel: "Firma",
     settlesIn: "rozlicza się w {{currency}}",
     settlementLabel: "Rozlicza się w",
     noSettlementCurrency: "Brak preferencji",
@@ -341,6 +347,12 @@ export const pl: Messages = {
   },
   categories: {
     search: "Szukaj wśród {{count}} kategorii",
+    searchEmpty: "Szukaj kategorii",
+    pickerEmptyTitle: "Brak kategorii",
+    pickerEmptyBody: "Utwórz teraz albo zostaw tę transakcję bez kategorii.",
+    pickerEmptyReadOnlyBody:
+      "Nie ma jeszcze czego wybierać — transakcja może zostać bez kategorii.",
+    createFirst: "Utwórz kategorię",
     new: "Nowa",
     create: "Utwórz „{{query}}”",
     use: "Użyj",

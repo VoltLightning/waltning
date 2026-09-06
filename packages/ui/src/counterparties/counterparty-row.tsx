@@ -120,11 +120,20 @@ export function CounterpartyRow({
               <DebtDirectionTag balance={settlement.value} decimals={settlement.decimals ?? 2} />
             )}
           </View>
+          {/*
+            The lowercase pair is a sentence *fragment* — it only reads as
+            one while the line continues into `settlesIn`. With ageing shown
+            that half is empty and the word stands alone, which is a label,
+            so the `…Label` pair is what belongs there.
+          */}
           <Text style={styles.meta}>
-            {t(kind === "company" ? "counterparties.kindCompany" : "counterparties.kindPerson")}
             {showAgeing
-              ? ""
-              : ` · ${t("counterparties.settlesIn", { currency: settlement.currency })}`}
+              ? t(
+                  kind === "company"
+                    ? "counterparties.kindCompanyLabel"
+                    : "counterparties.kindPersonLabel",
+                )
+              : `${t(kind === "company" ? "counterparties.kindCompany" : "counterparties.kindPerson")} · ${t("counterparties.settlesIn", { currency: settlement.currency })}`}
           </Text>
           {showAgeing && ageDays != null && ageBucket != null ? (
             <AgeingBar ageDays={ageDays} bucket={ageBucket} />

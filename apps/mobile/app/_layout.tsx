@@ -162,8 +162,12 @@ export default function RootLayout() {
           everything. The ledger is unaffected — `TodayFrame`'s root is
           `ground` and covers it.
 
-          `shell` rather than `ground` because green is the colour of every
-          top strip in the app, and the top strip is the only place this shows.
+          `shell` rather than `ground` because green is the colour of the top
+          strip on every route that has a navigation header, and that strip
+          is the only place this shows. The two composers are the exception —
+          `quick-add` and `transfer` hide the header and draw their own band
+          in `ground`, so on those two the strip behind the status bar is
+          `ground` and this fill never shows at all.
         */}
           <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
             {/* The one place the platform-resolved ledger meets the tree: every
@@ -238,8 +242,9 @@ function AppStack() {
           notch. The two lines come out when the composers clear the status
           bar themselves, in the same change. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
-      <Stack.Screen name="transfer" options={{ title: t("routes.transfer") }} />
+      {/* Both composers draw their own header (`ComposerHeader`, S05 §3). */}
+      <Stack.Screen name="quick-add" options={{ title: t("routes.expense"), headerShown: false }} />
+      <Stack.Screen name="transfer" options={{ title: t("routes.transfer"), headerShown: false }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
       <Stack.Screen name="transaction/[id]" options={{ title: t("routes.transaction") }} />
       <Stack.Screen name="accounts/index" options={{ title: t("routes.accounts") }} />
@@ -303,9 +308,19 @@ const useStyles = makeStyles((theme) => ({
    * background under the inset — so the strip fell through to the window, which
    * is black.
    *
-   * `shell` rather than `ground` because green is the colour of every top strip
-   * in the app, and the top strip is the only place this shows. The ledger is
-   * unaffected: `TodayFrame`'s root is `ground` and covers it.
+   * `shell` rather than `ground` because green is the colour of the top strip
+   * on every route that has a navigation header, and that strip is the only
+   * place this shows. The ledger is unaffected: `TodayFrame`'s root is
+   * `ground` and covers it.
+   *
+   * **Two routes now have no header of their own to paint that strip.**
+   * `quick-add` and `transfer` draw `ComposerHeader`'s band in `ground`, so
+   * what sits under the status bar there is light in the light theme, while
+   * `app.json` pins the status-bar icons to `light`. The four tab roots that
+   * render a bare `GroundPanel` are already in that state; naming it here
+   * because this is the file that would fix it, with a per-route
+   * `statusBarStyle`, and because a comment claiming otherwise is worse than
+   * the contrast.
    */
   root: { flex: 1, backgroundColor: theme.shell },
 }));

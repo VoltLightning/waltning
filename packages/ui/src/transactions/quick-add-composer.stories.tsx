@@ -10,6 +10,7 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { currencyCode } from "@waltning/core/money";
 import { useCallback, useState } from "react";
+import { View } from "react-native";
 import { expect, userEvent, within } from "storybook/test";
 import { QuickAddComposer, type QuickAddComposerProps } from "./quick-add-composer";
 
@@ -39,6 +40,16 @@ const CATEGORIES = [
   { id: "cat-salary", name: "Salary", kind: "income" as const },
 ];
 
+/** §14.6 — held, and nothing can be captured in it: the pivot holds no PLN rate. */
+const UNCAPTURABLE_PLN = {
+  id: "account-pln",
+  name: "Cash · PLN",
+  currency: currencyCode("PLN"),
+  decimals: 2,
+  capturable: false,
+  ownership: "own" as const,
+};
+
 const TODAY = "2026-09-03";
 
 const meta = {
@@ -47,7 +58,6 @@ const meta = {
   args: {
     raw: "",
     type: "expense",
-    onTypeChange: noop,
     accounts: ACCOUNTS,
     accountId: null,
     accountMachineFilled: false,
@@ -69,7 +79,6 @@ const meta = {
     onCounterpartyChange: noop,
     counterpartyRole: null,
     onCounterpartyRoleChange: noop,
-    onCancel: noop,
   },
 } satisfies Meta<typeof QuickAddComposer>;
 
@@ -191,6 +200,56 @@ function WithCounterpartyDemo(args: QuickAddComposerProps) {
       counterpartyRole={counterpartyRole}
       onCounterpartyRoleChange={handleCounterpartyRoleChange}
     />
+  );
+}
+
+/**
+ * §14.6 — the account is held, and nothing can be captured in it because the
+ * pivot holds no rate for its currency. The banner is the whole state of a
+ * fresh install with one PLN account and a USD pivot: Save is disabled, and
+ * this is both the reason and the way out (S05 §6).
+ *
+ * `neutral`, not amber: P4 reserves amber on this screen for the
+ * estimated-rate marker, and a currency with no rate at all is a missing
+ * capability rather than an asserted figure.
+ */
+export const NeedsRate: Story = {
+  args: {
+    raw: "48,90",
+    accounts: [UNCAPTURABLE_PLN],
+    accountId: "account-pln",
+    onSetRate: noop,
+  },
+};
+
+/**
+ * **The same refusal at 390pt**, the width the whole finding was raised at.
+ * The visual suite's viewport is 900px wide, so without this decorator every
+ * baseline in this file photographs a layout no phone renders — and `Banner`
+ * is a row that shares one line at desk width and wraps at phone width.
+ */
+export const NeedsRatePhone: Story = {
+  decorators: [withPhoneWidth],
+  args: {
+    raw: "48,90",
+    accounts: [UNCAPTURABLE_PLN],
+    accountId: "account-pln",
+    onSetRate: noop,
+  },
+};
+
+/**
+ * A phone's own column width, 390pt (the audit's device) minus
+ * `GroundPanel`'s own `space.x5` on each side — what a composer actually
+ * gets, rather than the suite's 900px viewport.
+ */
+const PHONE_COLUMN = { width: 390 - 44 };
+
+function withPhoneWidth(Story: React.ComponentType) {
+  return (
+    <View style={PHONE_COLUMN}>
+      <Story />
+    </View>
   );
 }
 

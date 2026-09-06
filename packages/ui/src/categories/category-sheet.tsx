@@ -20,8 +20,24 @@
  * **Two levels, one rule (`TAXONOMY.md` R1/R2).** A group chip *narrows*; it
  * is never itself pickable — the taxonomy enforces that a category is a group
  * or a leaf, never both, so this component does not have to guard against a
- * group id reaching `onPick`. `Uncategorized` is the one leaf the taxonomy
- * seeds at the root (`parentId: null`); every other leaf sits under a group.
+ * group id reaching `onPick`.
+ *
+ * **A root leaf is not the same thing as `Uncategorized`.** The seed puts one
+ * leaf at the root and every seeded leaf under a group, but nothing refuses a
+ * second root leaf — `create_category`'s `parentId` is nullable, and this
+ * sheet's own create makes one whenever the taxonomy holds no group to name.
+ * So the honest blank is identified by *what it is*
+ * (`findSeededUncategorized` below), never by *where it sits*: matching the
+ * first root leaf handed the Uncategorized row to whichever category was
+ * created first and put `Uncategorized` itself in the grid, which is exactly
+ * the place §9.2 says it never goes.
+ *
+ * **And when neither stage finds one, there is no blank row — deliberately.**
+ * A renamed seeded row (nothing refuses that today) or a tree that never held
+ * one both land there: every leaf is ordinary, the divider row is absent, and
+ * the sheet claims nothing about a row it cannot identify. That is the safe
+ * direction — a leaf shown as itself, rather than a category silently wearing
+ * the blank's place.
  *
  * **Search always covers every leaf, ignoring the chosen group (§9's open
  * question, decided).** Positions never move — no recency, no usage
@@ -60,9 +76,24 @@ export type CategoryTreeNode = {
   name: string;
   kind: "income" | "expense";
   isLeaf: boolean;
+  /**
+   * The seed's own tag (`seed:uncategorized`) — never rendered, carried only
+   * so identifying the honest blank does not have to fall back to matching
+   * by shape. `category-tree.tsx` carries the same field for the same
+   * reason. Optional: `PhoneCategoryNode` does not set it yet (arc-phone has
+   * no sync, so nothing writes an `externalId` on the phone's own rows), and
+   * a fixture that does not care omits it.
+   */
+  externalId?: string | null;
 };
 
-/** What the create-in-place row can save. `parentId: null` is refused above the root leaf, `Uncategorized`. */
+/**
+ * What the create-in-place row can save. `parentId: null` is a real answer —
+ * the first category of a taxonomy with no group to put it under, the same
+ * write S19's own create sheet makes (`TAXONOMY.md` R1 is about a node being
+ * a group or a leaf, not about parents). With groups on the tree this sheet
+ * asks which one.
+ */
 export type CategorySheetCreateDraft = {
   name: string;
   kind: "income" | "expense";
@@ -88,6 +119,53 @@ export type CategorySheetProps = {
   onDismiss: () => void;
 };
 
+/** The seed's own handle for the honest blank — `packages/db/src/seed/run.ts` writes `seed:<key>`. */
+const SEED_UNCATEGORIZED = "seed:uncategorized";
+
+/**
+ * The whole seeded *shape*, for a tree that came from a seed carrying no tags
+ * — a replica filled before `externalId` reached it.
+ *
+ * All four parts, and each earns its place. Sibling uniqueness is `(parent,
+ * kind, name)`, so an income leaf named "Uncategorized" is a legal, reachable
+ * row that is **not** this one, and matching on name and root alone would
+ * swallow it. The comparison is against the fixed English literal the seed
+ * writes, never `t(...)`: a stored name matched against a translated string
+ * would stop matching the moment the device's language changed.
+ */
+function hasSeededShape(node: CategoryTreeNode): boolean {
+  return (
+    node.parentId === null &&
+    node.kind === "expense" &&
+    node.isLeaf &&
+    node.name.trim().toLowerCase() === "uncategorized"
+  );
+}
+
+/**
+ * **The seeded honest blank, by identity rather than by position.**
+ * `categories-screen.tsx`'s own `isUncategorized` is this rule, in the same
+ * two stages for the same reasons — with one guard that screen does not need.
+ *
+ * **Stage 1, the seed's tag.** `readCategoryTree` selects `externalId` and
+ * `listCategoryTree` passes it through, so the moment a row carries a tag
+ * this names the exact row and nothing else can be mistaken for it.
+ *
+ * **Stage 2, the seeded shape — but only where a seed could have put it.** A
+ * seeded taxonomy arrives with its groups; a tree holding no group at all was
+ * never seeded, so a root leaf named "Uncategorized" in *that* tree is a
+ * category a person created here (this sheet creates root leaves whenever
+ * there is no group to name), and adopting it would hide it from the grid and
+ * make a sheet that holds one category say it holds none. Corroboration is
+ * what tells the two apart while no row carries a tag.
+ */
+function findSeededUncategorized(nodes: readonly CategoryTreeNode[]): CategoryTreeNode | undefined {
+  const tagged = nodes.find((node) => node.externalId === SEED_UNCATEGORIZED);
+  if (tagged !== undefined) return tagged;
+  if (!nodes.some((node) => !node.isLeaf)) return undefined;
+  return nodes.find(hasSeededShape);
+}
+
 export function CategorySheet({
   visible,
   kind,
@@ -110,10 +188,7 @@ export function CategorySheet({
 
   const nodes = useMemo(() => tree.filter((node) => node.kind === kind), [tree, kind]);
   const groups = useMemo(() => nodes.filter((node) => !node.isLeaf), [nodes]);
-  const uncategorized = useMemo(
-    () => nodes.find((node) => node.isLeaf && node.parentId === null),
-    [nodes],
-  );
+  const uncategorized = useMemo(() => findSeededUncategorized(nodes), [nodes]);
   const ordinaryLeaves = useMemo(
     () => nodes.filter((node) => node.isLeaf && node !== uncategorized),
     [nodes, uncategorized],
@@ -174,7 +249,11 @@ export function CategorySheet({
   const handleCreateSave = useCallback(() => {
     if (!onCreate) return;
     const name = createName.trim();
-    if (name === "" || createGroupId === null) return;
+    // `parentId: null` is legal exactly where there is no group to name —
+    // the first category of an empty taxonomy. With groups on the tree the
+    // sheet asks which one, so a null parent there is an unanswered
+    // question rather than an answer.
+    if (name === "" || (createGroupId === null && groups.length > 0)) return;
     const result = onCreate({ name, kind, parentId: createGroupId });
     if ("error" in result) {
       setCreateError(result.error);
@@ -183,7 +262,7 @@ export function CategorySheet({
     setCreating(false);
     setCreateError(undefined);
     handlePick(result.id);
-  }, [createGroupId, createName, handlePick, kind, onCreate]);
+  }, [createGroupId, createName, groups.length, handlePick, kind, onCreate]);
 
   /**
    * The footer's `Use ‹leaf›` re-fires the same pick — §7: "for the case
@@ -205,7 +284,53 @@ export function CategorySheet({
       : undefined;
 
   const emptyBody = t("categories.noMatchBody", { query: query.trim() });
-  const canCreateHere = onCreate !== undefined && groupId !== null;
+  /**
+   * **A groupless tree is not a dead end.** `create_category`'s own
+   * `parentId` is nullable (`registry/inputs.ts`) and `TAXONOMY.md` R1 makes
+   * a node a group *or* a leaf without saying anything about parents — the
+   * seeded taxonomy itself holds a top-level leaf. So a ledger with no
+   * groups creates its first category at the top level, the same write
+   * `CreateCategorySheet` makes from S19; `convert_leaf_group` is what turns
+   * it into a group afterwards.
+   *
+   * §6's *"never at top level"* is the **filtered** empty's own rule — its
+   * `Create "…"` is scoped to the group that narrowed the sheet — and stays
+   * that: `canCreateHere` below is what it governs.
+   */
+  const canCreate = onCreate !== undefined;
+  const canCreateHere = canCreate && groupId !== null;
+  /**
+   * §6's *other* empty: a tree with no ordinary leaves, which is what a
+   * fresh ledger is until the taxonomy arrives. It is not a filter that
+   * excluded everything, so it says neither *Search 0 categories* (a count
+   * of something nobody has) nor *Nothing matches* (which blames a query for
+   * an absence that predates it). `searching` cannot be the test — a query
+   * typed into an empty sheet still finds nothing, and the reason is still
+   * that there is nothing.
+   *
+   * **`Uncategorized` does not make the tree non-empty.** It is the seeded
+   * honest blank (§9.2) and renders in its own row below regardless; the
+   * seeded shape of a fresh expense tree is *exactly* that leaf and no
+   * others, so counting it here would hand that ledger "Search 0
+   * categories" and "Nothing matches" — the two strings this state exists to
+   * remove.
+   */
+  const emptyTree = ordinaryLeaves.length === 0;
+  /**
+   * The footer's own *New*, offered again from the empty state where a
+   * person is actually reading — named in full there, because two controls
+   * labelled *New* on one sheet is one button announced twice.
+   */
+  const createAction = canCreate
+    ? {
+        label: t("categories.createFirst"),
+        // L12 — a query typed into an empty sheet is what the person wants
+        // the category *called*; the filtered empty already prefills it, and
+        // throwing it away here made the two states behave differently for
+        // no reason a person could see.
+        onPress: searching ? handleCreateFromEmpty : handleOpenCreate,
+      }
+    : undefined;
 
   return (
     <BottomSheet visible={visible} title={t("transactions.category")} onDismiss={handleDismiss}>
@@ -221,7 +346,11 @@ export function CategorySheet({
         label={t("common.search")}
         value={query}
         onChangeText={setQuery}
-        placeholder={t("categories.search", { count: ordinaryLeaves.length })}
+        placeholder={
+          emptyTree
+            ? t("categories.searchEmpty")
+            : t("categories.search", { count: ordinaryLeaves.length })
+        }
         hideLabel
       />
       {searching ? null : (
@@ -237,9 +366,36 @@ export function CategorySheet({
           ))}
         </ScrollView>
       )}
-      <ScrollView style={styles.gridScroll}>
+      {/*
+        `nestedScrollEnabled` on the inner list — the bounded one
+        (`gridScroll`'s own `maxHeight`) — never on the sheet body. Inert
+        today: `BottomSheet`'s body is a plain `View` in a `Modal`, so there
+        is no outer scrollable to lose the gesture to. It is the Android
+        contract for the day that body scrolls, stated on the list it would
+        be about.
+      */}
+      <ScrollView style={styles.gridScroll} nestedScrollEnabled>
         {visibleLeaves.length === 0 ? (
-          canCreateHere ? (
+          emptyTree ? (
+            createAction === undefined ? (
+              // **A picker-only caller** (`onCreate` absent — S10's
+              // categorize path). There is nothing here that can create, so
+              // the copy offers nothing: an `EmptyState` requires an action,
+              // and inviting one this sheet cannot perform is the promise
+              // this state exists to avoid.
+              <View style={styles.emptyTree}>
+                <Text style={styles.emptyTreeTitle}>{t("categories.pickerEmptyTitle")}</Text>
+                <Text style={styles.emptyTreeBody}>{t("categories.pickerEmptyReadOnlyBody")}</Text>
+              </View>
+            ) : (
+              <EmptyState
+                variant="first-run"
+                title={t("categories.pickerEmptyTitle")}
+                body={t("categories.pickerEmptyBody")}
+                primaryAction={createAction}
+              />
+            )
+          ) : canCreateHere ? (
             <EmptyState
               variant="filtered"
               title={t("categories.noMatchTitle")}
@@ -292,12 +448,16 @@ export function CategorySheet({
         />
       ) : null}
       <View style={styles.footer}>
-        <Button
-          label={t("categories.new")}
-          onPress={handleOpenCreate}
-          variant="secondary"
-          disabled={onCreate === undefined}
-        />
+        {/*
+          Absent, not disabled, for a caller that passes no `onCreate`: a
+          control that can never enable is chrome shaped like an offer, and
+          the sheet already says in words that this one only picks.
+        */}
+        {canCreate ? (
+          <Button label={t("categories.new")} onPress={handleOpenCreate} variant="secondary" />
+        ) : (
+          <View />
+        )}
         <Button
           label={
             highlightedLeaf === undefined
@@ -525,23 +685,40 @@ function CreateRow({
   const t = useT();
   const styles = useStyles();
   const lockedGroup = groups.find((group) => group.id === groupId);
-  const canSave = name.trim() !== "" && groupId !== null;
+  // A top-level category is a real answer where no group exists (R1, and
+  // `create_category`'s own nullable `parentId`); where groups do exist, the
+  // capture sheet still asks which one — §6's own rule for creating here.
+  const canSave = name.trim() !== "" && (groupId !== null || groups.length === 0);
   return (
     <View style={styles.createRow}>
       {groupLocked ? null : (
         <>
-          <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-            {groups.map((group) => (
-              <GroupChip
-                key={group.id}
-                id={group.id}
-                name={group.name}
-                selected={group.id === groupId}
-                onPress={onGroupChange}
-              />
-            ))}
-          </ScrollView>
+          {/*
+            **No chooser where there is nothing to choose** —
+            `CreateCategorySheet` (S19) states the same rule for the same
+            control: a picker at rest looks identical whether it holds three
+            groups or none, so the one state that needs explaining was the
+            one that looked ordinary. The line says where the category will
+            land instead.
+          */}
+          {groups.length === 0 ? (
+            <Text style={styles.noGroups}>{t("categories.noGroupsYet")}</Text>
+          ) : (
+            <>
+              <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {groups.map((group) => (
+                  <GroupChip
+                    key={group.id}
+                    id={group.id}
+                    name={group.name}
+                    selected={group.id === groupId}
+                    onPress={onGroupChange}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          )}
         </>
       )}
       {groupLocked && lockedGroup ? <Text style={styles.label}>{lockedGroup.name}</Text> : null}
@@ -574,6 +751,12 @@ const useStyles = makeStyles((theme) => ({
   gridScroll: { maxHeight: touchTarget.min * 8 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   noMatches: { color: theme.textMuted, ...text.ui("body"), textAlign: "center", padding: space.x5 },
+  /** `EmptyState`'s own shape, without the button it requires and this state cannot offer. */
+  emptyTree: { alignItems: "center", gap: space.x3, padding: space.x6 },
+  emptyTreeTitle: { color: theme.text, ...text.display("displayTwo") },
+  emptyTreeBody: { color: theme.textMuted, ...text.ui("body"), textAlign: "center" },
+  /** The create row's own note where the group chooser would be. */
+  noGroups: { color: theme.textMuted, ...text.ui("bodySm") },
   // Two columns (S06 §3: "leaves are short and groups are few") — `gap` on
   // the wrapping row does the column gutter, so each cell only needs to
   // clear just under half the row.

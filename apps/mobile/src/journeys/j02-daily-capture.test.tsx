@@ -418,8 +418,11 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
       screen.getByRole("button", { name: "Category: Eating out, filled automatically" }),
     ).toBeDefined();
 
-    // The type toggle — top-right, S05 §9.1's own escape hatch.
-    fireEvent.click(screen.getByRole("button", { name: "Expense" }));
+    // The kind menu — top-right in `ComposerHeader`'s fixed band, S05 §9.1's
+    // own escape hatch. `▾` opens the sheet listing both kinds, marked, so
+    // switching is two taps: the control, then the kind.
+    fireEvent.click(screen.getByRole("button", { name: "Kind: Expense" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Income" }));
 
     // The chip goes back to plain, unfilled — `Eating out` is an expense
     // category and no longer matches `type: "income"`.

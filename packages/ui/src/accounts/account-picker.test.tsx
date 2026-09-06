@@ -164,13 +164,20 @@ it("shows an empty state when the search matches nothing", () => {
   expect(screen.getByText("No matching account")).toBeDefined();
 });
 
-it("never hides an uncapturable account, and explains why beside it", () => {
+/**
+ * A tag, not the sentence: the tile is a name, a currency and a balance, and
+ * `needsRate`'s full sentence repeated in every uncapturable cell was longer
+ * than everything it described. The sentence — and the way out of it — is the
+ * composer's own banner (S05 §6), stated once where the person is stopped.
+ */
+it("never hides an uncapturable account, and tags it rather than explaining in every tile", () => {
   renderPicker();
   const tile = screen.getByRole("radio", { name: "Cash · BYN" });
   expect(tile).toBeDefined();
+  expect(screen.getByText("Needs a rate")).toBeDefined();
   expect(
-    screen.getByText("BYN needs an exchange rate before a transaction can be recorded in it."),
-  ).toBeDefined();
+    screen.queryByText("BYN needs an exchange rate before a transaction can be recorded in it."),
+  ).toBeNull();
 });
 
 it("fires the pick callback with the account id, from any section", () => {

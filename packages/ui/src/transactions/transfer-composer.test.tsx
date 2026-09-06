@@ -40,7 +40,6 @@ const BASE_PROPS: TransferComposerProps = {
   today: "2026-08-12",
   note: "",
   onNoteChange: vi.fn(),
-  onCancel: vi.fn(),
 };
 
 function renderComposer(overrides: Partial<TransferComposerProps> = {}) {
@@ -133,7 +132,7 @@ it("opens the from/to account picker through a callback rather than a sheet of i
  * `H` — the composer used to destructure every other `byField` entry and
  * silently drop this one.
  */
-it("shows the needsRate caption under the From chip when its account can't be captured (SPEC.md §14.6)", () => {
+it("states the needsRate refusal when the From account can't be captured (SPEC.md §14.6)", () => {
   renderComposer({
     accounts: [
       { id: "acc-usd", name: "Household · USD", currency: "USD", decimals: 2, capturable: false },
@@ -145,6 +144,24 @@ it("shows the needsRate caption under the From chip when its account can't be ca
   ).toBeDefined();
 });
 
+/**
+ * One refusal, one treatment. A person reaches this screen from S16's
+ * *Transfer from here* on the very account that is blocked, so the muted
+ * caption with no way out was the worst place in the app to keep it.
+ */
+it("offers the way out of the refusal, scoped to the source currency (S05 §6)", () => {
+  const onSetRate = vi.fn();
+  renderComposer({
+    accounts: [
+      { id: "acc-usd", name: "Household · USD", currency: "USD", decimals: 2, capturable: false },
+      { id: "acc-pln", name: "Cash · PLN", currency: "PLN", decimals: 2, capturable: true },
+    ],
+    onSetRate,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Set a USD rate" }));
+  expect(onSetRate).toHaveBeenCalledOnce();
+});
+
 it("renders byField.accountId under the From chip when the controller refuses it", () => {
   renderComposer({
     fieldErrors: { byField: { accountId: ["Some other refusal"] }, formLevel: [] },
@@ -152,9 +169,55 @@ it("renders byField.accountId under the From chip when the controller refuses it
   expect(screen.getByText("Some other refusal")).toBeDefined();
 });
 
-it("cancels through the header ✕", () => {
-  const onCancel = vi.fn();
-  renderComposer({ onCancel });
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(onCancel).toHaveBeenCalledOnce();
+/**
+ * S31 §3 — the realized rate is derived from two amounts, so before both
+ * exist there is nothing to derive. The screen used to open stating
+ * *realized 0,0000*, which is not a reading: it is the absence of one
+ * wearing a figure's clothes, on the one screen whose whole purpose is
+ * making the real rate visible.
+ */
+it("states no realized rate until both amounts are typed (S31 §3)", () => {
+  const { rerender } = render(<TransferComposer {...BASE_PROPS} amountRaw="" toAmountRaw="" />);
+  expect(screen.queryByText("Realized")).toBeNull();
+  expect(screen.queryByText("0.0000")).toBeNull();
+
+  // The source alone is not enough either — the destination is what the
+  // realized rate is *of*, and offline with nothing held it stays empty.
+  rerender(<TransferComposer {...BASE_PROPS} amountRaw="150" toAmountRaw="" />);
+  expect(screen.queryByText("Realized")).toBeNull();
+
+  rerender(<TransferComposer {...BASE_PROPS} amountRaw="150" toAmountRaw="565,20" />);
+  expect(screen.getByText("3.7680")).toBeDefined();
+});
+
+/** The margin is the same derivation — a destination of zero is not a full spread. */
+it("states no margin until the destination amount is real", () => {
+  render(<TransferComposer {...BASE_PROPS} amountRaw="150" toAmountRaw="" />);
+  expect(screen.queryByText("Margin")).toBeNull();
+});
+
+/**
+ * M5 — the *reference* rate is not derived from anything typed, and S31 §7
+ * names editing the destination amount as the primary interaction:
+ * backspacing it to retype it must not take the reference line, its source
+ * and its staleness with it, mid-comparison. Nor should opening the screen
+ * with a rate held hide a fact that is already known (§6: "reference rate
+ * from cache, marked stale").
+ */
+it("keeps the reference rate while the amounts are empty (S31 §6, P1)", () => {
+  const { rerender } = render(<TransferComposer {...BASE_PROPS} amountRaw="" toAmountRaw="" />);
+  expect(
+    screen.getByText(
+      (_, element) => element?.textContent === "reference 3.8100 · nbp · 2026-08-12",
+    ),
+  ).toBeDefined();
+  expect(screen.queryByText("Realized")).toBeNull();
+
+  // Mid-edit of the destination amount — the reference stays put.
+  rerender(<TransferComposer {...BASE_PROPS} amountRaw="150" toAmountRaw="" />);
+  expect(
+    screen.getByText(
+      (_, element) => element?.textContent === "reference 3.8100 · nbp · 2026-08-12",
+    ),
+  ).toBeDefined();
 });
