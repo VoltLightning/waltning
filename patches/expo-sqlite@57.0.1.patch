@@ -1,9 +1,101 @@
+diff --git a/web/SQLiteModule.ts b/web/SQLiteModule.ts
+index a25679db42bf8b72896ea277be378e2a1a13d957..dd9d3c7dd177706182d7c2ed7760b024a31e0146 100644
+--- a/web/SQLiteModule.ts
++++ b/web/SQLiteModule.ts
+@@ -2,7 +2,12 @@
+ 
+ import { registerWebModule, NativeModule } from 'expo';
+ 
+-import { invokeWorkerAsync, invokeWorkerSync, workerMessageHandler } from './WorkerChannel';
++import {
++  failPendingWorkerCalls,
++  invokeWorkerAsync,
++  invokeWorkerSync,
++  workerMessageHandler,
++} from './WorkerChannel';
+ import { type SQLiteOpenOptions } from '../src/NativeDatabase';
+ import { type Changeset, type NativeChangeset } from '../src/NativeSession';
+ import {
+@@ -21,6 +26,17 @@ let nextNativeSessionId = 0;
+ function getWorker(): Worker {
+   if (!worker) {
+     worker = new Worker(new URL('./worker', window.location.href));
++    // **A worker that fails to load is a failure, not a silence.** Without
++    // this every pending call waits forever and the application shows nothing
++    // at all — no message, no log — when its script or its wasm asset does not
++    // load, or when the cross-origin isolation headers are missing. The handle
++    // is dropped too, so the next call builds a fresh worker rather than
++    // posting into one that never evaluated.
++    worker.addEventListener('error', (event) => {
++      worker = null;
++      const detail = event.message ? `: ${event.message}` : '';
++      failPendingWorkerCalls(new Error(`the SQLite worker failed to load${detail}`));
++    });
+     worker.addEventListener('message', (event) => {
+       if (event.data.type === 'onDatabaseChange') {
+         // @ts-expect-error EventEmitter type for NativeModule is not inferred correctly on web.
 diff --git a/web/WorkerChannel.ts b/web/WorkerChannel.ts
-index 7fba380845e3338b7d8d253013fbf73896070cde..d7a5715f199898f0c375597b720eae5589065b34 100644
+index 7fba380845e3338b7d8d253013fbf73896070cde..3ff487ca7fc4a696ca65fb212d340435d38f45d6 100644
 --- a/web/WorkerChannel.ts
 +++ b/web/WorkerChannel.ts
-@@ -40,7 +40,9 @@ export function sendWorkerResult({
-     const resultJson = error != null ? serialize({ error }) : serialize({ result });
+@@ -16,6 +16,45 @@ const RESOLVED = 2;
+ 
+ let hasWarnedSync = false;
+ 
++/**
++ * What crosses the worker boundary in place of an `Error`.
++ *
++ * `name` is the field that carries a `DOMException`'s identity — the OPFS
++ * access-handle pool rejects with `NoModificationAllowedError` when another
++ * document still holds it, and that name is the only way a caller can tell a
++ * transient failure from a permanent one.
++ */
++type ChannelError = { name: string; message: string; stack?: string; code?: string | number };
++
++function describeChannelError(error: Error | null): ChannelError {
++  if (error == null) return { name: 'Error', message: 'unknown worker failure' };
++  const code = (error as { code?: unknown }).code;
++  return {
++    name: typeof error.name === 'string' && error.name ? error.name : 'Error',
++    message: typeof error.message === 'string' ? error.message : String(error),
++    ...(typeof error.stack === 'string' ? { stack: error.stack } : {}),
++    ...(typeof code === 'string' || typeof code === 'number' ? { code } : {}),
++  };
++}
++
++function channelErrorToError(described: ChannelError | string): Error {
++  // A bare string is what an unpatched worker would send; accepted so a
++  // mismatched pair degrades to the old behaviour rather than throwing here.
++  if (typeof described === 'string') return new Error(described);
++  const error = new Error(described.message);
++  error.name = described.name;
++  if (described.stack != null) error.stack = described.stack;
++  if (described.code != null) {
++    Object.defineProperty(error, 'code', {
++      value: described.code,
++      enumerable: false,
++      writable: true,
++      configurable: true,
++    });
++  }
++  return error;
++}
++
+ /**
+  * For worker to send result to the main thread.
+  */
+@@ -37,18 +76,36 @@ export function sendWorkerResult({
+     const { lockBuffer, resultBuffer } = syncTrait;
+     const lock = new Int32Array(lockBuffer);
+     const resultArray = new Uint8Array(resultBuffer);
+-    const resultJson = error != null ? serialize({ error }) : serialize({ result });
++    // `serialize` is `JSON.stringify`, and an `Error` has no own enumerable
++    // properties — so `serialize({ error })` was literally `{"error":{}}`, the
++    // main thread deserialised `{}` and `new Error({})` produced the message
++    // "[object Object]". Every synchronous failure in the browser arrived
++    // saying nothing at all. Serialise the fields off the error instead.
++    const resultJson =
++      error != null ? serialize({ error: describeChannelError(error) }) : serialize({ result });
      const resultBytes = new TextEncoder().encode(resultJson);
      const length = resultBytes.length;
 -    resultArray.set(new Uint32Array([length]), 0);
@@ -12,4 +104,327 @@ index 7fba380845e3338b7d8d253013fbf73896070cde..d7a5715f199898f0c375597b720eae55
 +    new DataView(resultBuffer).setUint32(0, length, true);
      resultArray.set(resultBytes, 4);
      Atomics.store(lock, 0, RESOLVED);
++  } else if (error != null) {
++    // The same description the synchronous path sends, so both channels hand
++    // the main thread one shape. A structured-clone of an `Error` survives,
++    // but `new Error(clonedError)` on the far side stringifies it into the
++    // message — which loses `name` and any `code`.
++    //
++    // **Keyed on the error, the way the synchronous branch above is.** This
++    // read `if (result)` upstream, which was harmless only while a failure was
++    // posted as a bare `null`: most worker operations — `open`, `close`,
++    // `exec`, every `session*` call — return nothing at all, and `false` and
++    // `null` are ordinary results for `isInTransaction` and `step`. Posting a
++    // *described* error down that branch turns every one of them into a
++    // rejection, because an object is always truthy.
++    self.postMessage({ id, error: describeChannelError(error) });
    } else {
+-    if (result) {
+-      self.postMessage({ id, result });
+-    } else {
+-      self.postMessage({ id, error });
+-    }
++    self.postMessage({ id, result });
+   }
+ }
+ 
+@@ -61,7 +118,7 @@ export function workerMessageHandler(event: MessageEvent) {
+     const deferred = deferredMap.get(id);
+     if (deferred) {
+       if (error) {
+-        deferred.reject(new Error(error));
++        deferred.reject(channelErrorToError(error));
+       } else {
+         deferred.resolve(result);
+       }
+@@ -70,6 +127,23 @@ export function workerMessageHandler(event: MessageEvent) {
+   }
+ }
+ 
++/**
++ * **A worker that cannot load answers nothing, and nothing times it out.**
++ * `invokeWorkerAsync` parks a `Deferred` here and posts; if the worker's own
++ * module never evaluates — its script 404s, the wasm asset is missing, the
++ * `Cross-Origin-Embedder-Policy` header is gone — `self.onmessage` is never
++ * installed and the message lands nowhere. Every caller then awaits forever,
++ * which renders as an application hanging with no error on any channel.
++ * `SQLiteModule`'s `error` listener calls this, so a load failure becomes a
++ * rejection a caller can report.
++ */
++export function failPendingWorkerCalls(error: Error): void {
++  for (const [id, deferred] of deferredMap) {
++    deferredMap.delete(id);
++    deferred.reject(error);
++  }
++}
++
+ /**
+  * For main thread to invoke worker function asynchronously.
+  */
+@@ -137,11 +211,17 @@ export function invokeWorkerSync<T extends SQLiteWorkerMessageType & keyof Resul
+     }
+   }
+ 
+-  const length = new Uint32Array(resultArray.buffer, 0, 1)[0];
++  // Little-endian, the same way `sendWorkerResult` writes it — a native-order
++  // read agrees with an LE write on every shipping engine and on no stated
++  // guarantee.
++  const length = new DataView(resultArray.buffer).getUint32(0, true);
+   const resultCopy = new Uint8Array(length);
+   resultCopy.set(new Uint8Array(resultArray.buffer, 4, length));
+   const resultJson = new TextDecoder().decode(resultCopy);
+-  const { result, error } = deserialize<{ result: ResultTypeMap[T]; error?: string }>(resultJson);
+-  if (error) throw new Error(error);
++  const { result, error } = deserialize<{
++    result: ResultTypeMap[T];
++    error?: ChannelError | string;
++  }>(resultJson);
++  if (error) throw channelErrorToError(error);
+   return result;
+ }
+diff --git a/web/wa-sqlite/AccessHandlePoolVFS.js b/web/wa-sqlite/AccessHandlePoolVFS.js
+index 046fe6f2d119babd02e292e31a7dbdb24747e66a..b3de2140f890d98aa0d2980da3d0a658af9e0cb4 100644
+--- a/web/wa-sqlite/AccessHandlePoolVFS.js
++++ b/web/wa-sqlite/AccessHandlePoolVFS.js
+@@ -22,7 +22,25 @@ const PERSISTENT_FILE_TYPES =
+   VFS.SQLITE_OPEN_SUPER_JOURNAL |
+   VFS.SQLITE_OPEN_WAL;
+ 
+-const DEFAULT_CAPACITY = 6;
++/**
++ * **Sized for the application, not for a demonstration.**
++ *
++ * A slot is one OPFS file, and `jOpen` refuses a path it has no slot for with
++ * `SQLITE_CANTOPEN`. Six is the upstream number and the consuming app's own
++ * peak is six: two stores (`replica`, `outbox`), the two `.pre-migration`
++ * copies the migrator takes — which do coexist, since a copy is discarded only
++ * once the session has opened cleanly — one rollback journal, because the
++ * stores migrate one after the other and only one write transaction is live at
++ * a time, and the file the existence probe opens to answer `fs.exists`. The
++ * seventh open in that window is refused. Deleting a store frees its slot — a
++ * consumer's existence probe does exactly that on every launch — but the open
++ * that was refused frees nothing and is not retried, so the file that did not
++ * fit simply does not exist.
++ *
++ * Sixteen is that peak with nine slots of headroom. The cost is sixteen 4 KB
++ * headers and sixteen sync access handles held for the life of the page.
++ */
++const DEFAULT_CAPACITY = 16;
+ 
+ /**
+  * This VFS uses the updated Access Handle API with all synchronous methods
+@@ -229,9 +247,39 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+       }
+       this.#directoryHandle = handle;
+ 
+-      await this.#acquireAccessHandles();
+-      if (this.getCapacity() === 0) {
+-        await this.addCapacity(DEFAULT_CAPACITY);
++      try {
++        await this.#acquireAccessHandles();
++      } catch (e) {
++        // `#directoryHandle` is the only guard on this whole block, so leaving
++        // it set on a failure would make a second `isReady()` return `true`
++        // over an empty pool — every `jOpen` then `SQLITE_CANTOPEN`, on a VFS
++        // that is simply not built. Unreachable today (`create` constructs a
++        // fresh instance and is `isReady`'s only caller) and one line, on a
++        // state machine this fork now leans on.
++        this.#directoryHandle = undefined;
++        throw e;
++      }
++      // **Everything past the acquisition is guarded, because the acquisition
++      // is what there is to lose.** `addCapacity` creates a file and takes a
++      // handle per missing slot, and `getFileHandle(create:true)` and the
++      // header write it does are both documented to fail under an exhausted
++      // origin quota. A throw there used to reject `create` with the handles
++      // `#acquireAccessHandles` had already won still open inside an instance
++      // nothing could reach — the document holding the pool against itself,
++      // which then reads as another document holding it and offers a retry
++      // that can never succeed.
++      try {
++        // Topped up to the floor rather than filled only when empty: an
++        // install created under a smaller capacity keeps that capacity
++        // forever otherwise, which is the same cliff on an older device.
++        const missing = DEFAULT_CAPACITY - this.getCapacity();
++        if (missing > 0) {
++          await this.addCapacity(missing);
++        }
++      } catch (e) {
++        this.#releaseAccessHandles();
++        this.#directoryHandle = undefined;
++        throw e;
+       }
+     }
+     return true;
+@@ -302,7 +350,17 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+     }
+ 
+     // Open access handles in parallel, separating associated and unassociated.
+-    await Promise.all(
++    //
++    // `allSettled`, not `all`, and the failure released rather than rethrown
++    // bare: the pool is acquired for the whole directory at once, and while
++    // another document still holds any file `createSyncAccessHandle` rejects
++    // with `NoModificationAllowedError`. `Promise.all` rejects on the first
++    // one while the rest are still in flight, so the handles this attempt did
++    // win stayed open inside an instance nobody can reach — and every later
++    // attempt in this document was then blocked by us rather than by whoever
++    // held the pool. Waiting for all of them to settle means everything
++    // acquired is in the map, and `#releaseAccessHandles` can give it back.
++    const outcomes = await Promise.allSettled(
+       files.map(async ([name, handle]) => {
+         const accessHandle = await handle.createSyncAccessHandle();
+         this.#mapAccessHandleToName.set(accessHandle, name);
+@@ -314,11 +372,29 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+         }
+       })
+     );
++    const failed = outcomes.find((outcome) => outcome.status === 'rejected');
++    if (failed) {
++      this.#releaseAccessHandles();
++      throw failed.reason;
++    }
+   }
+ 
++  /**
++   * **Every close is attempted, and a close that throws is not an error this
++   * function reports.** This is the path every failed acquisition routes
++   * through, and it runs while an exception is already in flight: a throw from
++   * the first handle would otherwise leave the rest open, leave the three maps
++   * populated, and replace the original failure — the
++   * `NoModificationAllowedError` that is the only signal saying another
++   * document holds the pool — with whatever `close()` threw.
++   */
+   #releaseAccessHandles() {
+     for (const accessHandle of this.#mapAccessHandleToName.keys()) {
+-      accessHandle.close();
++      try {
++        accessHandle.close();
++      } catch (e) {
++        console.warn('failed to release an access handle', e);
++      }
+     }
+     this.#mapAccessHandleToName.clear();
+     this.#mapPathToAccessHandle.clear();
+diff --git a/web/worker.ts b/web/worker.ts
+index deaf7218f98add013b73876130f2c496ec3820fa..a995a84aed74165687ede3cea35da86d716988ed 100644
+--- a/web/worker.ts
++++ b/web/worker.ts
+@@ -772,40 +772,92 @@ async function maybeFinalizeAllStatements(nativeDatabaseId: number) {
+   if (error) throw error;
+ }
+ 
+-async function maybeInitAsync(): Promise<{
++type WorkerVfsState = {
+   sqlite3: SQLiteAPI;
+   vfs: AccessHandlePoolVFS;
+   vfsMemory: MemoryVFS;
+-}> {
+-  if (!_sqlite3) {
+-    const module = await WaSQLiteFactory({
+-      locateFile: () => wasmModule,
++};
++
++/** The attempt in flight, so concurrent callers share one initialization. */
++let _initPromise: Promise<WorkerVfsState> | null = null;
++
++/**
++ * **A failed initialization must not be permanent.** `_sqlite3` used to be
++ * assigned before `AccessHandlePoolVFS.create`, which throws while another
++ * document still holds the OPFS access-handle pool. Every later call then
++ * found `_sqlite3` truthy, skipped the whole init block, and fell through to
++ * `throw new Error('Invalid VFS state')` — for the life of the worker, which
++ * is a module singleton that is never terminated. A page that lost the race
++ * for the pool could not recover without a reload, and any retry above this
++ * layer was dead by construction.
++ *
++ * So the trio is built into locals and published together, and a failure
++ * leaves all three null: the next call tries again, cleanly.
++ */
++async function maybeInitAsync(): Promise<WorkerVfsState> {
++  if (_sqlite3 != null && _vfs != null && _vfsMemory != null) {
++    return { sqlite3: _sqlite3, vfs: _vfs, vfsMemory: _vfsMemory };
++  }
++  if (_initPromise == null) {
++    _initPromise = initVfsAsync().finally(() => {
++      _initPromise = null;
+     });
+-    _sqlite3 = SQLite.Factory(module) as SQLiteAPI;
+-    if (!_sqlite3) {
+-      throw new Error('Failed to initialize wa-sqlite');
+-    }
++  }
++  return _initPromise;
++}
+ 
+-    if (_vfs == null) {
+-      _vfs = await AccessHandlePoolVFS.create(VFS_NAME_PERSISTENT, module);
+-      if (_vfs == null) {
+-        throw new Error('Failed to initialize AccessHandlePoolVFS');
+-      }
++async function initVfsAsync(): Promise<WorkerVfsState> {
++  // Rebuilt per attempt rather than hoisted: a retry that reused one
++  // `sqlite3` would register a second VFS under the same name, and what
++  // `sqlite3_vfs_find` then returns is not something this fork can test. The
++  // cost is on the contended path only — a ~620 KB wasm instantiated again,
++  // tens of milliseconds, and only while another document holds the pool.
++  const module = await WaSQLiteFactory({
++    locateFile: () => wasmModule,
++  });
++  const sqlite3 = SQLite.Factory(module) as SQLiteAPI;
++  if (!sqlite3) {
++    throw new Error('Failed to initialize wa-sqlite');
++  }
++
++  // **Everything after the pool is acquired runs inside this `try`.**
++  // `AccessHandlePoolVFS.create` takes a sync access handle on every file in
++  // the pool directory, and `vfs_register` and `MemoryVFS.create` can both
++  // throw after it — leaving those handles held by a local nothing can reach.
++  // The document would then be holding the pool against *itself*, and every
++  // retry, in this module or above it, would fail on us rather than on
++  // whoever we were racing.
++  let vfs: AccessHandlePoolVFS | null = null;
++  let vfsMemory: MemoryVFS | null = null;
++  try {
++    vfs = await AccessHandlePoolVFS.create(VFS_NAME_PERSISTENT, module);
++    if (vfs == null) {
++      throw new Error('Failed to initialize AccessHandlePoolVFS');
+     }
+-    _sqlite3.vfs_register(_vfs, true);
++    sqlite3.vfs_register(vfs, true);
+ 
+-    if (_vfsMemory == null) {
+-      _vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
+-      if (_vfsMemory == null) {
+-        throw new Error('Failed to initialize MemoryVFS');
+-      }
++    vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
++    if (vfsMemory == null) {
++      throw new Error('Failed to initialize MemoryVFS');
+     }
+-    _sqlite3.vfs_register(_vfsMemory, false);
+-  }
+-  if (_vfs == null || _vfsMemory == null) {
+-    throw new Error('Invalid VFS state');
++    sqlite3.vfs_register(vfsMemory, false);
++  } catch (caught) {
++    try {
++      await vfs?.close();
++      await vfsMemory?.close();
++    } catch {
++      // Closing what never finished opening is not a new failure, and the
++      // original one is the one worth reporting.
++    }
++    throw caught;
+   }
+-  return { sqlite3: _sqlite3, vfs: _vfs, vfsMemory: _vfsMemory };
++
++  // Published together, never one at a time: `_sqlite3` assigned ahead of the
++  // VFS is what made a single lost race permanent for the life of the worker.
++  _sqlite3 = sqlite3;
++  _vfs = vfs;
++  _vfsMemory = vfsMemory;
++  return { sqlite3, vfs, vfsMemory };
+ }
+ 
+ //#endregion Internal helpers

@@ -102,6 +102,7 @@
  */
 
 import { fold } from "@waltning/core/capture/names";
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import { RATE_MAX_EXCLUSIVE, RATE_MIN_EXCLUSIVE } from "@waltning/core/money";
 import { type SQL, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
@@ -1213,7 +1214,10 @@ function runOrReleaseCopy<TRun, TSchema extends LedgerSchema>(
       throw error;
     }
 
-    const cause = error instanceof Error ? error.message : String(error);
+    // `errorFromThrown`, not `String(error)`: this sentence is rendered by
+    // `<StartupFailed>`, and `String` over a thrown object is the literal
+    // "[object Object]" on a screen whose only content is this line.
+    const cause = errorFromThrown(error).message;
     throw new Error(
       `the ${store} migration failed and did not roll back cleanly — it reports version ${after ?? "unreadable"}, not the ${found} it started at, so the pre-migration copy at ${copy.path} has been kept. The cause was: ${cause}`,
       { cause: error },

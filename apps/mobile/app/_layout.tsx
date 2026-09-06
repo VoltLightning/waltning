@@ -30,7 +30,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { DeviceInsets } from "../src/device-insets";
 import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
-import { startPhoneLedger, usePhoneLedgerReady } from "../src/phone-ledger";
+import { retryPhoneLedger, startPhoneLedger, usePhoneLedgerReady } from "../src/phone-ledger";
 import { appearance, DEVICE_LOCALES, displayCurrency, floatPosition } from "../src/platform";
 
 export default function RootLayout() {
@@ -48,7 +48,12 @@ export default function RootLayout() {
   // `null` until `ledgerReady`, then the session's own outcome — see the
   // hook's header for why this runs inside render rather than at module
   // scope: a throw there used to break this module's own evaluation.
-  const startup = usePhoneLedgerStartup(ledgerReady, startPhoneLedger);
+  // `retry` runs the whole start again, and is offered only for a failure
+  // another attempt could clear (`startup.retryable`).
+  // `retryPhoneLedger` re-opens the platform's own gate before the hook starts
+  // again — on the browser that means re-probing the SQLite worker, which is
+  // what makes "Try again" an attempt rather than a re-render.
+  const { startup, retry } = usePhoneLedgerStartup(ledgerReady, startPhoneLedger, retryPhoneLedger);
 
   useEffect(() => {
     void appearance.hydrate();
@@ -182,7 +187,11 @@ export default function RootLayout() {
                   <AppShell />
                 </LedgerProvider>
               ) : (
-                <StartupFailed error={startup.error} />
+                <StartupFailed
+                  error={startup.error}
+                  cause={startup.cause}
+                  onRetry={startup.retryable ? retry : undefined}
+                />
               )
             ) : (
               <StartupBlank />

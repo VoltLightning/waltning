@@ -1230,12 +1230,33 @@ export const en = {
   startup: {
     /**
      * `apps/mobile/app/_layout.tsx` — the ledger session could not open at
-     * all. No `action`: the retry is relaunching the app, which nothing in
-     * this screen can trigger for someone.
+     * all. The same title either way: what failed is the same thing whether
+     * or not another attempt could clear it.
      */
     ledgerFailedTitle: "The ledger could not open",
-    /** The migrator's own sentence, shown verbatim — it is written for a person. */
+    /**
+     * The failing layer's own sentence, shown verbatim on the terminal branch
+     * — the migrator writes for a person, so replacing it would lose the one
+     * account of what is wrong.
+     */
     ledgerFailedBody: "{{message}}",
+    /**
+     * The recoverable branch, which has exactly one producer: the browser
+     * refusing the OPFS pool while the document being replaced still holds it.
+     * A sentence of this app's own rather than the browser's — that one is
+     * ~180 characters about `createSyncAccessHandle`, in English on a Polish
+     * phone, and `design-system/08` §8.2 asks for words a reader can act on.
+     * The `DOMException` itself reaches the development log instead.
+     */
+    ledgerBusyBody: "Another tab still has the ledger open. Close it and try again.",
+    /**
+     * The other way the platform fails before the ledger is reached: the
+     * storage engine never came up at all — no answer within the deadline,
+     * a worker whose module could not load, cross-origin isolation headers
+     * missing. None of those has a sentence worth showing (a timeout, or a
+     * `CompileError`), and reloading is the one thing that helps.
+     */
+    ledgerUnavailableBody: "The ledger engine did not start. Reloading usually fixes it.",
   },
 } as const;
 

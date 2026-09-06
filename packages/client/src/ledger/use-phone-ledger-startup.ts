@@ -30,18 +30,66 @@
  * than in an effect: `started` flips before `start()` is called, so the
  * second of a StrictMode double-render sees it already true and skips the
  * call; `result` holds what the first call returned, for every render after.
+ *
+ * **`retry` is "once" made repeatable, not abandoned.** Some startup failures
+ * clear by themselves — the browser's SQLite worker holds its files for one
+ * document at a time, so a page loaded seconds after the last one can find
+ * the pool still held and open again fine a moment later — and a screen that
+ * can only tell someone to relaunch is the wrong answer to that. So the
+ * guard is resettable: `retry()` clears both refs and asks React for another
+ * render, and the render that follows takes the same "at most once" path it
+ * always did. Everything about the hook's shape survives it, including the
+ * StrictMode property: the second of the pair still sees `started` already
+ * flipped by the first.
+ *
+ * **`prepare` is what makes a retry a real attempt rather than a re-render.**
+ * `ready` is the platform's own gate, and on the browser it is *false* again
+ * while the worker is being re-probed — so a retry that only reset the guard
+ * would call `start` against exactly the state that just failed. `prepare`
+ * asks the platform to re-open its gate; `ready` then falls, the caller
+ * renders its blank frame, and `start` runs once when the gate settles. It is
+ * called synchronously and its result ignored on purpose: the platform's own
+ * `ready` signal is what this hook follows, and awaiting anything inside a
+ * render is what this hook exists to avoid. Omitted (the device), `retry` is
+ * the plain reset it always was, because `ready` there is constant `true`.
  */
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
-export function usePhoneLedgerStartup<T>(ready: boolean, start: () => T): T | null {
+export type PhoneLedgerStartupState<T> = {
+  /** `null` until `ready`, then whatever `start` last returned. */
+  startup: T | null;
+  /** Discard that answer and start once more, on the next render. */
+  retry: () => void;
+};
+
+export function usePhoneLedgerStartup<T>(
+  ready: boolean,
+  start: () => T,
+  prepare?: () => void,
+): PhoneLedgerStartupState<T> {
   const started = useRef(false);
   const result = useRef<T | null>(null);
+  // The refs alone would change nothing anyone can see — a ref write is not a
+  // render. This counter's only job is to ask for the render that re-runs the
+  // guard below; its value is never read.
+  const [, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    started.current = false;
+    result.current = null;
+    prepare?.();
+    setAttempt(nextAttempt);
+  }, [prepare]);
 
   if (ready && !started.current) {
     started.current = true;
     result.current = start();
   }
 
-  return result.current;
+  return { startup: result.current, retry };
+}
+
+function nextAttempt(attempt: number): number {
+  return attempt + 1;
 }
