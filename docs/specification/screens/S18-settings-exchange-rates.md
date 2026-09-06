@@ -70,25 +70,27 @@ Pair selector and date range above a `RateTable`. `SyncLog` beneath, carrying
 **coverage per currency** rather than only events. Web places them side by side;
 mobile stacks.
 
-The pair selector, presets, date range and action buttons sit on the ground;
-`RateTable` is the one grouped-rows card, and the per-currency coverage list is
-a second, separate card. **With no quote currency to compare against the pivot
-there is no table, so there is no card** — the hint saying so is a hint, and
-renders on the ground where every other hint on this screen does.
-
 **`RateTable` is the page's one scroller, and everything else rides in it.**
 The table is virtualized, and a virtualized list inside a page `ScrollView` is
 one scroller too many — so the pair select, presets, range control and hint are
 handed to the table as its **list header**, and the action buttons, the re-rate
-note and the coverage card as its **list footer**. The whole page then scrolls,
-through the list, and clears the bottom inset. Neither half is given up: the
-table stays cheap for a 2,080-day pair, and the coverage card no longer runs
-off the bottom edge with no way to reach it.
+note and the per-currency coverage list as its **list footer**. The whole page
+then scrolls, through the list, and clears the bottom inset. Neither half is
+given up: the table stays cheap for a 2,080-day pair, and the coverage list no
+longer runs off the bottom edge with no way to reach it.
 
-**The table is therefore not carded.** A card that *is* the whole screen is
-exactly what `design-system/05` §5.1 forbids, and a page-scrolling list is the
-whole screen. The per-currency coverage list is still a card, riding in the
-footer.
+**There is one card on this screen, and it is the coverage list.** A card
+groups related rows — and the table's rows *are* the page, so carding them
+would make a card of the whole screen, which `design-system/05` §5.1 forbids.
+The table is drawn on the ground; the per-currency coverage list, a short group
+of rows inside the footer, is the card. Everything else — pair select, presets,
+date range, action buttons and every hint — sits on the ground too, in the
+list's header and footer.
+
+**With no quote currency to compare against the pivot there is no table and no
+card.** The coverage list holds exactly one row per quote currency, so the same
+absence empties both; the hint saying so is a hint, and renders on the ground
+where every other hint on this screen does.
 
 **The list still renders when there is nothing to table.** No quote currency,
 no pivot, a range that does not parse — the header and footer still have to
@@ -119,21 +121,21 @@ like it did nothing at all. The sheet's own header states the sentence naming
 the pair and the range — *"Set PLN per USD, 2026-08-08 … 2026-08-08"* — so that
 title is a heading rather than a body line under one.
 
-**One state decides both cards.** *No quote currency* is the same fact for the
-table and for the coverage list — the list holds exactly one row per quote
-currency — so the hint and the coverage card are drawn from one value rather
-than from two conditions that happen to agree. A date range that does not parse
-is a different state, and so is a ledger that names no pivot: each leaves
-nothing to table, so each drops the table card and draws **no hint** — neither
-may claim there is no quote currency when there is one. The coverage card is
-not theirs to drop: coverage is per currency, not per range and not per pivot,
-so its rows stay true and stay drawn.
+**One state decides the table and the card.** *No quote currency* is the same
+fact for both — the coverage list holds exactly one row per quote currency — so
+the hint and the coverage card are drawn from one value rather than from two
+conditions that happen to agree. A date range that does not parse is a
+different state, and so is a ledger that names no pivot: each leaves nothing to
+table, so each drops the table and draws **no hint** — neither may claim there
+is no quote currency when there is one. The coverage card is not theirs to
+drop: coverage is per currency, not per range and not per pivot, so its rows
+stay true and stay drawn.
 
 ## 4. Components
 
 | Component | Notes |
 |---|---|
-| `Card` | **One** — the per-currency coverage list, riding in the table's footer. The table itself is not carded (it is the page), and everything else — pair select, presets, date range, action buttons and the no-quote hint — sits on the ground, in the table's header and footer |
+| `Card` | **One** — the per-currency coverage list, a short group of rows riding in the table's footer. The table is the page and is drawn on the ground, as are the pair select, presets, date range, action buttons and the no-quote hint, in the list's header and footer |
 | `RateTable` | **Virtualized, and it is the page**: one row per calendar day, with this screen's own controls as its list header and its coverage card as its list footer. Gaps render as **explicit empty rows**, never as absence |
 | `RateEditor` | Single date **or a range**; states what it will overwrite before writing. Hosted in a `BottomSheet`, whose header carries the pair-and-range heading |
 | `BottomSheet` | The editor's host — a tapped row opens the editor where the tap was |
