@@ -48,7 +48,9 @@ export default function RootLayout() {
   // `null` until `ledgerReady`, then the session's own outcome — see the
   // hook's header for why this runs inside render rather than at module
   // scope: a throw there used to break this module's own evaluation.
-  const startup = usePhoneLedgerStartup(ledgerReady, startPhoneLedger);
+  // `retry` runs the whole start again, and is offered only for a failure
+  // another attempt could clear (`startup.retryable`).
+  const { startup, retry } = usePhoneLedgerStartup(ledgerReady, startPhoneLedger);
 
   useEffect(() => {
     void appearance.hydrate();
@@ -182,7 +184,10 @@ export default function RootLayout() {
                   <AppShell />
                 </LedgerProvider>
               ) : (
-                <StartupFailed error={startup.error} />
+                <StartupFailed
+                  error={startup.error}
+                  onRetry={startup.retryable ? retry : undefined}
+                />
               )
             ) : (
               <StartupBlank />

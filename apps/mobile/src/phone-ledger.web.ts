@@ -30,6 +30,7 @@ import {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { currencies } from "@waltning/core/currencies";
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import type { SqliteOpener } from "@waltning/ledger/open";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
 import { createLocalLedgerSession } from "@waltning/ledger/session";
@@ -60,10 +61,56 @@ type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
  */
 const openHandles = new Map<string, SQLiteDatabase>();
 
+/**
+ * Set by `openDatabase` below, read by `startPhoneLedger` — **which half of a
+ * startup failure this was.**
+ *
+ * Opening and migrating fail for opposite reasons. The pool is held by one
+ * document at a time, so an open that lands while the previous page's worker
+ * still holds the access handles fails on a condition that clears by itself in
+ * under a second; a migration refuses on the *content* of a file, which the
+ * next attempt finds unchanged. One is worth another attempt and the other is
+ * not, and that is the whole of what the failure screen needs to know.
+ */
+let openFailed = false;
+
+/**
+ * Every `openDatabaseSync` in this module goes through here, so nothing can
+ * open a file without the transient/terminal question being answered for it.
+ */
+function openDatabase(filename: string): SQLiteDatabase {
+  try {
+    return openDatabaseSync(filename);
+  } catch (caught) {
+    openFailed = true;
+    throw caught;
+  }
+}
+
+/**
+ * Close whatever this module opened before a startup gave up.
+ *
+ * A retry re-opens the same two files, and the pool admits one holder per
+ * file — so a handle left over from the failed attempt would be the thing that
+ * refused the next one, turning a transient failure into a permanent one this
+ * module caused itself.
+ */
+function releaseOpenHandles(): void {
+  for (const handle of openHandles.values()) {
+    try {
+      handle.closeSync();
+    } catch {
+      // Already closed, or closing on a broken worker — either way there is
+      // nothing left to do with it and the retry is what matters.
+    }
+  }
+  openHandles.clear();
+}
+
 // The same pnpm-specialization cast `phone-ledger.native.ts` documents: two
 // Drizzle instances of one version, nominally distinct to TypeScript.
 const openPhoneDatabase = ((filename: string) => {
-  const sqlite = openDatabaseSync(filename);
+  const sqlite = openDatabase(filename);
   openHandles.set(filename, sqlite);
   return {
     db: drizzle(sqlite, { schema: ledgerSchema }),
@@ -84,7 +131,7 @@ const openPhoneDatabase = ((filename: string) => {
  * least one page) and a pre-migration copy is a backup of one.
  */
 function probeExists(path: string): boolean {
-  const probe = openDatabaseSync(path);
+  const probe = openDatabase(path);
   let pages = 0;
   try {
     pages = probe.getFirstSync<{ page_count: number }>("PRAGMA page_count")?.page_count ?? 0;
@@ -102,7 +149,7 @@ function copyDatabase(from: string, to: string): void {
   if (!source) {
     throw new Error(`cannot copy ${from} — it is not open, and the pool hides closed files`);
   }
-  const destination = openDatabaseSync(to);
+  const destination = openDatabase(to);
   try {
     backupDatabaseSync({ sourceDatabase: source, destDatabase: destination });
   } finally {
@@ -113,62 +160,116 @@ function copyDatabase(from: string, to: string): void {
 export const PHONE_LEDGER_AVAILABLE = true as const;
 
 /**
- * The worker is warmed **asynchronously, before the first synchronous call** —
- * and this is a requirement, not an optimization. `invokeWorkerSync` spins a
- * bounded `Atomics.pause` loop measured in tens of milliseconds, while a cold
- * worker has to fetch its bundle and compile the wasm — so `openDatabaseSync`
- * as the first-ever SQLite call on web times out by construction. One
- * `:memory:` open through the async API boots the same singleton worker with
- * no timeout on the wait; once it answers, every sync call is a round-trip to
- * a warm worker and lands inside the spin.
+ * Two conditions have to hold before the first synchronous call, and the gate
+ * below waits for **both**.
+ *
+ * 1. **The worker has to be running.** `invokeWorkerSync` spins a bounded
+ *    `Atomics.pause` loop measured in tens of milliseconds, while a cold
+ *    worker has to fetch its bundle and compile the wasm — so
+ *    `openDatabaseSync` as the first-ever SQLite call on web times out by
+ *    construction. One `:memory:` open through the async API boots the same
+ *    singleton worker with no timeout on the wait.
+ * 2. **The OPFS access-handle pool has to be free.** It admits one holder per
+ *    file, and a document that has just been replaced does not give its
+ *    handles back the instant the next one starts running — so two full loads
+ *    a second or two apart put the new page's open against the old page's
+ *    worker, and the open throws. That is a *timing* condition, not a broken
+ *    ledger: the same load a moment later succeeds, which is exactly why it
+ *    belongs in the gate rather than on the failure screen.
+ *
+ * So the gate opens on an **async open of the real replica file**, retried
+ * with a short backoff. It is the only probe that answers the question being
+ * asked — a `:memory:` database is not in the pool and can tell nothing about
+ * who holds it — and closing it again leaves the pool as it was found.
+ * Opening a file that does not exist yet creates an empty one, which
+ * `probeExists` above already treats as "no" and deletes.
  */
-let warmed = false;
-const warmListeners = new Set<() => void>();
+const OPEN_BACKOFF_MS = [0, 150, 300, 600, 1200] as const;
 
-function markWarmed() {
-  warmed = true;
-  for (const listener of warmListeners) listener();
+let ready = false;
+const readyListeners = new Set<() => void>();
+
+function markReady() {
+  ready = true;
+  for (const listener of readyListeners) listener();
 }
 
-// A failure here is not swallowed: the gate opens either way, and the real
-// `openDatabaseSync` below then reports the same broken worker loudly instead
-// of the app hanging on a gate that never opens.
-void openDatabaseAsync(":memory:")
-  .then((probe) => probe.closeAsync())
-  .catch(() => undefined)
-  .finally(markWarmed);
-
-function subscribeWarm(listener: () => void): () => void {
-  warmListeners.add(listener);
-  return () => warmListeners.delete(listener);
+function after(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function readWarm(): boolean {
-  return warmed;
+/**
+ * A failure here is not swallowed and the gate opens either way — five
+ * attempts over ~2 s is long enough for a page swap and short enough that a
+ * genuinely broken worker is reported by the real open below, loudly, rather
+ * than the app hanging on a gate that never opens. `startPhoneLedger` then
+ * classifies that failure as retryable, and the failure screen offers the
+ * attempt this loop ran out of.
+ */
+async function prepareWorker(): Promise<void> {
+  try {
+    const boot = await openDatabaseAsync(":memory:");
+    await boot.closeAsync();
+  } catch {
+    // A worker that cannot open `:memory:` will say so again below.
+  }
+  for (const delay of OPEN_BACKOFF_MS) {
+    if (delay > 0) await after(delay);
+    try {
+      const probe = await openDatabaseAsync(LEDGER_PATHS.replica);
+      await probe.closeAsync();
+      return;
+    } catch {
+      // The previous document's worker still holds the pool. Wait and ask again.
+    }
+  }
+}
+
+void prepareWorker().finally(markReady);
+
+function subscribeReady(listener: () => void): () => void {
+  readyListeners.add(listener);
+  return () => readyListeners.delete(listener);
+}
+
+function readReady(): boolean {
+  return ready;
 }
 
 /** `true` once the worker can answer a synchronous call. The root layout gates on it. */
 export function usePhoneLedgerReady(): boolean {
-  return useSyncExternalStore(subscribeWarm, readWarm, readWarm);
+  return useSyncExternalStore(subscribeReady, readReady, readReady);
 }
 
 export type PhoneLedgerStartup =
   | { status: "ready"; controller: PhoneLedgerController }
-  | { status: "failed"; error: Error };
+  /**
+   * `retryable` is the open/migrate distinction `openFailed` records: another
+   * attempt can clear a held pool and can never clear a refused migration.
+   */
+  | { status: "failed"; error: Error; retryable: boolean };
 
 let startup: PhoneLedgerStartup | null = null;
 
 /**
  * Built on first use rather than at module scope — module evaluation happens
  * before the warm-up above can possibly have finished, and the first caller
- * is the root layout, which waits for `usePhoneLedgerReady()`. Cached after
- * the first call, failure included: the only way out of a failed startup is
- * relaunching the app, and `createLocalLedgerSession` has already emitted its
- * own `ledger_startup` failure diagnostic, so nothing more is logged here.
+ * is the root layout, which waits for `usePhoneLedgerReady()`.
+ * `createLocalLedgerSession` has already emitted its own `ledger_startup`
+ * failure diagnostic, so nothing more is logged here.
+ *
+ * **A success is cached and a retryable failure is not.** A session is a
+ * singleton and a migration refusal is a fact about a file, so both are
+ * answers this function keeps. A held pool is neither: it is a statement about
+ * a moment that has already passed by the time anyone reads it, and caching it
+ * would make the failure screen's own "Try again" a button that re-renders the
+ * same sentence. Every retryable attempt releases the handles it took before
+ * it returns, so the next one meets the pool it would have met anyway.
  */
 export function startPhoneLedger(): PhoneLedgerStartup {
   if (startup) return startup;
 
+  openFailed = false;
   try {
     const session = createLocalLedgerSession({
       open: openPhoneDatabase,
@@ -205,13 +306,18 @@ export function startPhoneLedger(): PhoneLedgerStartup {
     void initializeDisplayCurrencyFromLedger(displayCurrency, session.listCurrencySettings);
 
     startup = { status: "ready", controller };
+    return startup;
   } catch (caught) {
-    // `catch` bindings are `unknown` because the language gives no choice.
-    startup = {
+    // `catch` bindings are `unknown` because the language gives no choice —
+    // and the worker rejects with a plain object rather than an `Error`, which
+    // `errorFromThrown` reads instead of rendering it as `[object Object]`.
+    const failure = {
       status: "failed",
-      error: caught instanceof Error ? caught : new Error(String(caught)),
-    };
+      error: errorFromThrown(caught),
+      retryable: openFailed,
+    } as const;
+    releaseOpenHandles();
+    if (!failure.retryable) startup = failure;
+    return failure;
   }
-
-  return startup;
 }

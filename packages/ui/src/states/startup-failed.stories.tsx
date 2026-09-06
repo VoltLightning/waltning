@@ -47,6 +47,17 @@ type Story = StoryObj<typeof meta>;
 
 export const Failed: Story = {};
 
+/**
+ * The browser's transient failure: the SQLite worker still holds its files for
+ * the document being replaced, which the next attempt usually clears — so this
+ * one is `recoverable`, carries what it cost (nothing), and offers the button.
+ */
+export const Retryable: Story = {
+  args: { error: new Error("placeholder failure reason"), onRetry: noop },
+};
+
+function noop() {}
+
 const useStyles = makeStyles((theme) => ({
   frame: { width: 390, height: 600, backgroundColor: theme.ground },
 }));

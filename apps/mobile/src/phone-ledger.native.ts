@@ -6,6 +6,7 @@ import {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { currencies } from "@waltning/core/currencies";
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import type { SqliteOpener } from "@waltning/ledger/open";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
 import { createLocalLedgerSession } from "@waltning/ledger/session";
@@ -46,7 +47,16 @@ export const PHONE_LEDGER_AVAILABLE = true as const;
 
 export type PhoneLedgerStartup =
   | { status: "ready"; controller: PhoneLedgerController }
-  | { status: "failed"; error: Error };
+  /**
+   * **`retryable` is constantly `false` here, and that is a fact about the
+   * device rather than an omission.** The browser's failure worth retrying is
+   * the OPFS access-handle pool still held by the document being replaced
+   * (`phone-ledger.web.ts`); a phone has one process, one document directory
+   * and no second holder, so an open that fails here fails the same way on the
+   * next attempt. The field exists so the three variants describe one shape
+   * and `_layout.tsx` reads one field.
+   */
+  | { status: "failed"; error: Error; retryable: false };
 
 let startup: PhoneLedgerStartup | null = null;
 
@@ -111,11 +121,10 @@ export function startPhoneLedger(): PhoneLedgerStartup {
 
     startup = { status: "ready", controller };
   } catch (caught) {
-    // `catch` bindings are `unknown` because the language gives no choice.
-    startup = {
-      status: "failed",
-      error: caught instanceof Error ? caught : new Error(String(caught)),
-    };
+    // `catch` bindings are `unknown` because the language gives no choice —
+    // `errorFromThrown` keeps whatever a non-`Error` thrower said instead of
+    // rendering it as `[object Object]` on the failure screen.
+    startup = { status: "failed", error: errorFromThrown(caught), retryable: false };
   }
 
   return startup;

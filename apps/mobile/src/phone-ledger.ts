@@ -10,7 +10,15 @@ export const PHONE_LEDGER_AVAILABLE = false as const;
 
 export type PhoneLedgerStartup =
   | { status: "ready"; controller: PhoneLedgerController }
-  | { status: "failed"; error: Error };
+  /**
+   * `retryable` says whether another attempt could clear the failure — the
+   * browser's held OPFS pool can, a migration refusal cannot
+   * (`phone-ledger.web.ts`). Declared here because this is the file
+   * `_layout.tsx` typechecks against, so it carries the whole `boolean` even
+   * though this variant only ever answers `false`; `.native.ts` narrows it to
+   * `false` and `.web.ts` decides it per attempt.
+   */
+  | { status: "failed"; error: Error; retryable: boolean };
 
 let startup: PhoneLedgerStartup | null = null;
 
@@ -19,6 +27,7 @@ export function startPhoneLedger(): PhoneLedgerStartup {
   if (!startup) {
     startup = {
       status: "failed",
+      retryable: false,
       error: new Error(
         `no bundler resolved a platform ledger for ${Platform.OS} — tests inject a controller via <LedgerProvider>`,
       ),

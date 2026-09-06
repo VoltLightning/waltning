@@ -19,15 +19,60 @@ describe("diagnostic errors", () => {
     expect(JSON.stringify(described)).not.toContain("input=private");
   });
 
-  it("does not inspect arbitrary thrown objects", () => {
-    expect(describeDiagnosticError({ accountName: "Private account" })).toEqual({
+  /**
+   * The web SQLite worker rejects with a plain object, and every one of them
+   * used to reach the startup failure screen as `[object Object]` — the whole
+   * explanation of why the ledger would not open.
+   */
+  it("reads the error-shaped fields of a thrown non-Error", () => {
+    expect(describeDiagnosticError({ code: "SQLITE_BUSY", message: "database is locked" })).toEqual(
+      {
+        name: "ThrownValue",
+        message: "database is locked",
+        code: "SQLITE_BUSY",
+      },
+    );
+    expect(
+      describeDiagnosticError({ name: "WorkerError", message: "worker did not answer" }),
+    ).toEqual({ name: "WorkerError", message: "worker did not answer" });
+  });
+
+  /** A thrown string is its own message — there is no other field it could be. */
+  it("carries a thrown string through as the message", () => {
+    expect(describeDiagnosticError("database is locked")).toEqual({
       name: "ThrownValue",
-      message: "[object Object]",
+      message: "database is locked",
     });
-    expect(describeDiagnosticError("Private account")).toEqual({
+    expect(describeDiagnosticError(404)).toEqual({
       name: "ThrownValue",
-      message: "[string thrown]",
+      message: "[number thrown: 404]",
     });
+  });
+
+  it("names the shape of an object with no message, and never its values", () => {
+    const described = describeDiagnosticError({ accountName: "Private account", balance: "12.00" });
+
+    expect(described).toEqual({
+      name: "ThrownValue",
+      message: "[Object thrown with accountName, balance]",
+    });
+    expect(JSON.stringify(described)).not.toContain("Private account");
+    expect(JSON.stringify(described)).not.toContain("12.00");
+    expect(described.message).not.toContain("[object Object]");
+  });
+
+  it("survives a null prototype and an empty object", () => {
+    expect(describeDiagnosticError(Object.create(null)).message).toBe("[object thrown, no fields]");
+    expect(describeDiagnosticError({}).message).toBe("[Object thrown, no fields]");
+    expect(describeDiagnosticError(null).message).toBe("[null thrown]");
+    expect(describeDiagnosticError(undefined).message).toBe("[undefined thrown]");
+  });
+
+  it("bounds a message that would otherwise be a transcript", () => {
+    const described = describeDiagnosticError(new Error("x".repeat(1000)));
+
+    expect(described.message).toHaveLength(301);
+    expect(described.message.endsWith("…")).toBe(true);
   });
 
   it("does not let a broken sink affect its caller", () => {

@@ -30,18 +30,53 @@
  * than in an effect: `started` flips before `start()` is called, so the
  * second of a StrictMode double-render sees it already true and skips the
  * call; `result` holds what the first call returned, for every render after.
+ *
+ * **`retry` is "once" made repeatable, not abandoned.** Some startup failures
+ * clear by themselves — the browser's SQLite worker holds its files for one
+ * document at a time, so a page loaded seconds after the last one can find
+ * the pool still held and open again fine a moment later — and a screen that
+ * can only tell someone to relaunch is the wrong answer to that. So the
+ * guard is resettable: `retry()` clears both refs and asks React for another
+ * render, and the render that follows takes the same "at most once" path it
+ * always did. Everything about the hook's shape survives it, including the
+ * StrictMode property: the second of the pair still sees `started` already
+ * flipped by the first.
  */
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
-export function usePhoneLedgerStartup<T>(ready: boolean, start: () => T): T | null {
+export type PhoneLedgerStartupState<T> = {
+  /** `null` until `ready`, then whatever `start` last returned. */
+  startup: T | null;
+  /** Discard that answer and start once more, on the next render. */
+  retry: () => void;
+};
+
+export function usePhoneLedgerStartup<T>(
+  ready: boolean,
+  start: () => T,
+): PhoneLedgerStartupState<T> {
   const started = useRef(false);
   const result = useRef<T | null>(null);
+  // The refs alone would change nothing anyone can see — a ref write is not a
+  // render. This counter's only job is to ask for the render that re-runs the
+  // guard below; its value is never read.
+  const [, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    started.current = false;
+    result.current = null;
+    setAttempt(nextAttempt);
+  }, []);
 
   if (ready && !started.current) {
     started.current = true;
     result.current = start();
   }
 
-  return result.current;
+  return { startup: result.current, retry };
+}
+
+function nextAttempt(attempt: number): number {
+  return attempt + 1;
 }

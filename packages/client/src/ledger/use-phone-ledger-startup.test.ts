@@ -5,7 +5,7 @@
  * hook's own contract with a stub, never a real ledger.
  */
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { usePhoneLedgerStartup } from "./use-phone-ledger-startup.ts";
@@ -21,11 +21,11 @@ describe("usePhoneLedgerStartup", () => {
       initialProps: { ready: false },
     });
 
-    expect(result.current).toBeNull();
+    expect(result.current.startup).toBeNull();
     expect(start).not.toHaveBeenCalled();
 
     rerender({ ready: false });
-    expect(result.current).toBeNull();
+    expect(result.current.startup).toBeNull();
     expect(start).not.toHaveBeenCalled();
   });
 
@@ -36,11 +36,11 @@ describe("usePhoneLedgerStartup", () => {
     });
 
     rerender({ ready: true });
-    expect(result.current).toBe(FAILED);
+    expect(result.current.startup).toBe(FAILED);
     expect(start).toHaveBeenCalledTimes(1);
 
     rerender({ ready: true });
-    expect(result.current).toBe(FAILED);
+    expect(result.current.startup).toBe(FAILED);
     expect(start).toHaveBeenCalledTimes(1);
   });
 
@@ -58,15 +58,55 @@ describe("usePhoneLedgerStartup", () => {
       wrapper: StrictMode,
     });
 
-    expect(result.current).toBeNull();
+    expect(result.current.startup).toBeNull();
     expect(start).not.toHaveBeenCalled();
 
     rerender({ ready: true });
-    expect(result.current).toBe(FAILED);
+    expect(result.current.startup).toBe(FAILED);
     expect(start).toHaveBeenCalledTimes(1);
 
     rerender({ ready: true });
-    expect(result.current).toBe(FAILED);
+    expect(result.current.startup).toBe(FAILED);
     expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The failure screen's own "Try again". A held SQLite worker in the browser
+   * clears by itself, so the guard has to be resettable — and resettable
+   * exactly once per press, or a screen that re-renders on anything else would
+   * quietly reopen the ledger behind whoever is looking at it.
+   */
+  it("starts again exactly once per retry, and keeps the new answer", () => {
+    const SECOND: StubStartup = { status: "failed", error: new Error("placeholder second") };
+    const start = vi
+      .fn(() => FAILED)
+      .mockReturnValueOnce(FAILED)
+      .mockReturnValue(SECOND);
+    const { result, rerender } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {
+      initialProps: { ready: true },
+    });
+
+    expect(result.current.startup).toBe(FAILED);
+    expect(start).toHaveBeenCalledTimes(1);
+
+    act(result.current.retry);
+    expect(result.current.startup).toBe(SECOND);
+    expect(start).toHaveBeenCalledTimes(2);
+
+    rerender({ ready: true });
+    expect(result.current.startup).toBe(SECOND);
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not start on retry while the platform is not ready", () => {
+    const start = vi.fn(() => FAILED);
+    const { result } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {
+      initialProps: { ready: false },
+    });
+
+    act(result.current.retry);
+
+    expect(result.current.startup).toBeNull();
+    expect(start).not.toHaveBeenCalled();
   });
 });

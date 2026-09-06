@@ -91,6 +91,31 @@ durability rather than deciding whether the phone works:
   filesystem (`packages/ledger/src/open.ts` verifies the claim in both
   directions).
 
+  **The pool admits one document at a time, and a page swap is not
+  instantaneous.** The access handles a document holds are not returned the
+  moment the next one starts running, so a load a second or two after the last
+  one opens against the previous page's worker and is refused. That is a
+  statement about a moment rather than about the ledger, and the startup path
+  treats it as one: the readiness gate the browser already waits on — the same
+  one that keeps the first synchronous call off a cold worker — opens on an
+  **async open of the real replica file, retried with a short backoff**, so the
+  synchronous open runs only once the pool can answer. A `:memory:` database
+  proves the worker is running and can say nothing about who holds the pool, so
+  it boots the worker and the file probe decides readiness.
+
+  **Startup failure is therefore two claims, not one.** An open that failed is
+  *transient* — the next attempt usually clears it — so the failure screen
+  offers **Try again**, which runs the whole start again, and the platform seam
+  caches no such failure (`architecture/11`: a success is a singleton worth
+  keeping, a held pool is not). A migration that refused is *terminal*: it
+  refused on the content of a file that the next attempt finds unchanged, so
+  the screen states the migrator's own sentence and offers nothing
+  (`design-system/08` §8.8). On the device the distinction is real and always
+  answers terminal — one process, one document directory, no second holder.
+  Whatever the failing layer threw is rendered as written, a thrown non-`Error`
+  included: the worker rejects with a plain `{ code, message }`, and a screen
+  whose whole content is `[object Object]` explains nothing.
+
 **The honest cost:** durability is not optional. The phone's self-backup is real
 but weaker; once a backend exists, durability stops being solely the owner's
 job.
