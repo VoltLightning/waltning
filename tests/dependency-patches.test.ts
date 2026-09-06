@@ -149,6 +149,45 @@ if (!caught) throw new Error('the channel swallowed a worker failure');
 console.log(JSON.stringify({ name: caught.name, message: caught.message, code: caught.code }));
 `;
 
+/**
+ * The other half of the same channel. Run with `--import tsx` for the same
+ * reason as the probe above.
+ */
+const workerChannelAsyncProbe = `
+globalThis.__DEV__ = false;
+const channel = await import(process.env.CHANNEL_URL);
+
+// The worker as \`worker.ts\`'s own \`self.onmessage\` writes it: \`result\` is
+// undefined for a void operation — \`open\`, \`close\`, \`exec\`, every
+// \`session*\` call — \`error\` is null, and there is no syncTrait.
+const posted = [];
+globalThis.self = { postMessage: (message) => posted.push(message) };
+
+function workerFor(error) {
+  return {
+    postMessage(message) {
+      channel.sendWorkerResult({ id: message.id, result: null, error });
+      const sent = posted.pop();
+      queueMicrotask(() => channel.workerMessageHandler({ data: { ...sent, isSync: false } }));
+    },
+  };
+}
+
+async function outcomeOf(error) {
+  try {
+    return { resolved: true, value: await channel.invokeWorkerAsync(workerFor(error), 'open', {}) };
+  } catch (e) {
+    return { resolved: false, name: e.name, message: e.message, code: e.code };
+  }
+}
+
+const refusal = new Error('NoModificationAllowedError: pool is held');
+refusal.name = 'NoModificationAllowedError';
+refusal.code = 'SQLITE_BUSY';
+
+console.log(JSON.stringify({ success: await outcomeOf(null), failure: await outcomeOf(refusal) }));
+`;
+
 /** Plain Node ESM: every import under `wa-sqlite/` carries its `.js`. */
 const accessHandlePoolProbe = `
 const { AccessHandlePoolVFS } = await import(process.env.VFS_URL);
@@ -260,6 +299,17 @@ if (leaked.length > 0) {
 files[1].refuse = false;
 const vfs = await AccessHandlePoolVFS.create('expo-sqlite', {});
 if (vfs == null) throw new Error('a second attempt did not build a VFS');
+
+// A slot is one OPFS file, and \`jOpen\` refuses a path it has no slot for
+// with \`SQLITE_CANTOPEN\` — permanently, since nothing tops the pool up
+// afterwards. Six was the upstream number and this app's own peak is six.
+if (vfs.getCapacity() < 16) {
+  throw new Error('pool capacity is ' + vfs.getCapacity() + ', below this app own peak plus room');
+}
+
+// An install created under the old capacity has to grow, not stay small: the
+// directory here already held three files before the first acquisition.
+if (files.length < 16) throw new Error('an existing pool directory was not topped up');
 console.log('ok');
 `;
 
@@ -330,6 +380,43 @@ describe("the Expo SQLite web channel patch", () => {
       code: "SQLITE_BUSY",
     });
   });
+
+  /**
+   * **The half a text pin cannot see.** `sendWorkerResult`'s asynchronous
+   * branch keyed on `result` being truthy, which was harmless only while a
+   * failure was posted as a bare `null` — most worker operations return
+   * nothing at all, and `false` and `null` are ordinary results. Posting a
+   * *described* error down that branch made every successful async call
+   * reject with "unknown worker failure": the readiness gate's own
+   * `openDatabaseAsync(":memory:")` could never succeed, so every browser
+   * load ran the whole backoff and learned nothing. It failed silently — the
+   * app still started, two seconds later.
+   *
+   * Both directions in one probe, because keying on the wrong variable breaks
+   * exactly one of them and a test that checks only failures stays green.
+   */
+  it("resolves a void async result and rejects a described async failure", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      ["--import", "tsx", "-e", workerChannelAsyncProbe],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, CHANNEL_URL: `${expoSqliteUrl}/web/WorkerChannel.ts` },
+        stdio: "pipe",
+        encoding: "utf8",
+      },
+    );
+
+    expect(JSON.parse(stdout.trim())).toEqual({
+      success: { resolved: true, value: null },
+      failure: {
+        resolved: false,
+        name: "NoModificationAllowedError",
+        message: "NoModificationAllowedError: pool is held",
+        code: "SQLITE_BUSY",
+      },
+    });
+  });
 });
 
 /**
@@ -366,9 +453,11 @@ describe("the Expo SQLite pool-acquisition patch", () => {
 
   /**
    * `worker.ts` imports the wasm binary, so no probe under Node can reach it.
-   * The pin is the patch's text: the trio published together, the retry that
-   * a null `_vfs` now allows, and the release that stops a half-built attempt
-   * from blocking the next one.
+   * The pin is the patch's text: the trio published only once all three
+   * exist, and every step *after* the pool is acquired inside a `try` that
+   * closes the VFS on the way out — `vfs_register` and `MemoryVFS.create` can
+   * both throw, and the handles a local holds are handles nothing else can
+   * give back.
    */
   it("leaves no half-built VFS behind for the next attempt to trip over", () => {
     const patch = readFileSync(sqlitePatch, "utf8");
@@ -379,8 +468,11 @@ describe("the Expo SQLite pool-acquisition patch", () => {
     expect(patch).toContain("+  _sqlite3 = sqlite3;");
     expect(patch).toContain("+  _vfs = vfs;");
     expect(patch).toContain("+  _vfsMemory = vfsMemory;");
-    // And a failure releases rather than lingers.
-    expect(patch).toContain("+async function releaseVfsAsync(): Promise<void> {");
-    expect(patch).toContain("+  await releaseVfsAsync();");
+    // And the acquisition is released on any throw that follows it.
+    expect(patch).toContain("+  let vfs: AccessHandlePoolVFS | null = null;");
+    expect(patch).toContain("+      await vfs?.close();");
+    // The reachable partial state is the one guarded — no dead reset of a
+    // trio that is only ever all-null or all-set.
+    expect(patch).not.toContain("releaseVfsAsync");
   });
 });

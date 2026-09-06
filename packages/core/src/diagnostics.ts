@@ -13,25 +13,24 @@ export type DiagnosticSink<Event> = (event: Event) => void;
 const MAX_CAUSE_DEPTH = 8;
 /** A message is evidence, not a transcript — long ones are truncated, never dropped. */
 const MAX_MESSAGE_LENGTH = 300;
-/** How many field *names* a shape description lists before it says "+n more". */
-const MAX_SHAPE_KEYS = 12;
-
 /**
- * Preserve causal errors, and the three error-shaped fields of a thrown
- * non-`Error`, without inspecting arbitrary object *values*, which may contain
- * ledger data. URL queries are stripped because tRPC GET inputs live there and
- * native network errors sometimes repeat the complete URL.
+ * Preserve causal errors, and the error-shaped fields of a thrown non-`Error`,
+ * without inspecting arbitrary object *values*, which may contain ledger data.
+ * URL queries are stripped because tRPC GET inputs live there and native
+ * network errors sometimes repeat the complete URL.
  *
  * **`name` · `message` · `code` are read off a thrown object; nothing else
- * is.** The web SQLite worker rejects with a plain `{ code, message }` rather
- * than an `Error`, and `Object.prototype.toString` rendered every one of them
- * as `[object Object]` — which reached the startup failure screen as the whole
- * explanation of why the ledger would not open. Those three names mean the
- * same thing on every error-like value in the language, so reading them is not
- * inspection of someone's data; it is reading the error. When they are absent
- * the fallback names the value's constructor and its field *names* — a shape,
- * never a value, because a field called `accountName` is schema and what is
- * inside it is the ledger.
+ * is.** Those three names mean the same thing on every error-like value in the
+ * language, so reading them is not inspection of someone's data; it is reading
+ * the error. A thrown value that is not an `Error` and carries none of them
+ * is described by `describeShape`, which prints a field name only from a fixed
+ * list and counts the rest — see its own header for why a *shape* test on the
+ * key is not enough.
+ *
+ * Not everything that throws is an `Error`, and the ones that are not are the
+ * ones worth handling well: a `catch` binding is `unknown` by construction, a
+ * rejected promise carries whatever was passed to `reject`, and JSON off a
+ * wire is whatever the far side wrote.
  *
  * A thrown string is its own message by construction — there is no other field
  * it could be — so it is carried through the same bounding and redaction an
@@ -76,10 +75,11 @@ export function describeDiagnosticError<Caught>(
  * a thrown value, used both by the logs and by whatever renders the failure.
  *
  * **The two platform ledgers, not every call site.** Nine other places still
- * write `String(error)` — `use-query.ts`, three readers in
+ * write `String(error)`: `use-query.ts`, three readers in
  * `create-phone-ledger.ts`, `use-transaction-search.ts`, `recover.ts`,
- * `migrate.ts`, `db.ts` — and nothing lints for the shape. This is the better
- * default, not an enforced invariant, and sweeping them is its own change.
+ * `migrate.ts`, `db.ts` and `tools/e2e/src/smoke.ts`. Nothing lints for the
+ * shape. This is the better default, not an enforced invariant, and sweeping
+ * them is its own change.
  *
  * **An `Error` is returned unchanged, except that it must say something.** An
  * empty `message` renders as an empty line on a failure screen — the tag, the
@@ -169,28 +169,49 @@ function describeThrownObject(caught: object): DiagnosticError {
 }
 
 /**
- * What was thrown, without saying what was in it: the constructor's name and
- * the field names, never a field value.
- *
- * **A key is only reported when it looks like a declared field.** The claim
- * that a name is schema and a value is the ledger holds for an object someone
- * wrote a type for; it does not hold for a dictionary *keyed* by data —
- * `{ "Some Counterparty": "duplicate" }` would otherwise put a real name into
- * the logs and onto the screen. So a key that is not a plain identifier is
- * counted rather than printed, and an array is only ever counted, its indices
- * being noise.
+ * The field names on an error-shaped value, closed. A key is printed **only**
+ * if it is one of these, so a printed key is never derived from data.
  */
-const SCHEMA_KEY = /^[A-Za-z_$][A-Za-z0-9_$]{0,39}$/u;
+const REPORTABLE_KEYS: ReadonlySet<string> = new Set([
+  "cause",
+  "code",
+  "detail",
+  "errno",
+  "error",
+  "message",
+  "name",
+  "reason",
+  "stack",
+  "status",
+  "statusCode",
+  "type",
+]);
 
+/**
+ * What was thrown, without saying what was in it: the constructor's name, the
+ * field names from a fixed list, and a count of everything else.
+ *
+ * **A shape test on the key is not enough, and that was the earlier bug.** The
+ * claim that a name is schema and a value is the ledger holds for an object
+ * someone wrote a type for; it does not hold for a dictionary *keyed* by data.
+ * A regex over key syntax cannot separate `accountName` from `Acme` — most
+ * counterparty and account labels in a ledger are one ASCII word, and one
+ * ASCII word is a plain identifier, so `{ "Acme": "duplicate" }` printed the
+ * name. An allowlist can separate them, because it does not ask what the key
+ * looks like: a key that prints is one of twelve, and none of the twelve can
+ * be a label.
+ *
+ * An array is only ever counted, its indices being noise.
+ */
 function describeShape(caught: object): string {
   const label = constructorNameOf(caught);
   if (Array.isArray(caught)) return `[Array(${caught.length}) thrown]`;
   const keys = Object.keys(caught);
   if (keys.length === 0) return `[${label} thrown, no fields]`;
-  const named = keys.filter((key) => SCHEMA_KEY.test(key)).slice(0, MAX_SHAPE_KEYS);
+  const named = keys.filter((key) => REPORTABLE_KEYS.has(key));
   const rest = keys.length - named.length;
-  if (named.length === 0) return `[${label} thrown with ${rest} unnamed field(s)]`;
-  return `[${label} thrown with ${named.join(", ")}${rest > 0 ? `, +${rest} more` : ""}]`;
+  if (named.length === 0) return `[${label} thrown with ${rest} field(s)]`;
+  return `[${label} thrown with ${named.join(", ")}${rest > 0 ? `, +${rest} other field(s)` : ""}]`;
 }
 
 /** `"object"` for a null-prototype value, which has no constructor to name. */

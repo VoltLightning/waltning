@@ -49,12 +49,12 @@ describe("diagnostic errors", () => {
     });
   });
 
-  it("names the shape of an object with no message, and never its values", () => {
+  it("counts the shape of an object with no message, and never its values", () => {
     const described = describeDiagnosticError({ accountName: "Private account", balance: "12.00" });
 
     expect(described).toEqual({
       name: "ThrownValue",
-      message: "[Object thrown with accountName, balance]",
+      message: "[Object thrown with 2 field(s)]",
     });
     expect(JSON.stringify(described)).not.toContain("Private account");
     expect(JSON.stringify(described)).not.toContain("12.00");
@@ -75,13 +75,24 @@ describe("diagnostic errors", () => {
     expect(described.message.endsWith("…")).toBe(true);
   });
 
-  it("counts a key that is not a plain identifier rather than printing it", () => {
-    // A dictionary keyed by data, not by schema — the one shape where a field
-    // *name* is itself the ledger.
-    const described = describeDiagnosticError({ "Some Counterparty": "duplicate" });
+  /**
+   * A dictionary keyed by data, not by schema — the one shape where a field
+   * *name* is itself the ledger. A regex over key syntax passed the two-word
+   * case and printed every one-word label; only a fixed list can tell them
+   * apart, so the single ASCII token is the case that matters here.
+   */
+  it("prints a key only from the fixed list, never one derived from data", () => {
+    for (const label of ["Some Counterparty", "Acme", "Zabka", "acct_1234567890"]) {
+      const described = describeDiagnosticError({ [label]: "duplicate" });
 
-    expect(described.message).toBe("[Object thrown with 1 unnamed field(s)]");
-    expect(JSON.stringify(described)).not.toContain("Some Counterparty");
+      expect(described.message).toBe("[Object thrown with 1 field(s)]");
+      expect(JSON.stringify(described)).not.toContain(label);
+    }
+
+    // A reportable name still prints, and what sits beside it is only counted.
+    expect(describeDiagnosticError({ errno: 1, Acme: "dup" }).message).toBe(
+      "[Object thrown with errno, +1 other field(s)]",
+    );
     expect(describeDiagnosticError(["a", "b", "c"]).message).toBe("[Array(3) thrown]");
   });
 
@@ -113,6 +124,7 @@ describe("errorFromThrown", () => {
     expect(errorFromThrown({ code: "SQLITE_BUSY" }).message).toBe(
       "[Object thrown with code] (SQLITE_BUSY)",
     );
+    expect(errorFromThrown({ Acme: "dup" }).message).toBe("[Object thrown with 1 field(s)]");
     expect(errorFromThrown(Object.assign(new Error("is locked"), { code: 5 })).message).toBe(
       "is locked (5)",
     );

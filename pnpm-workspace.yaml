@@ -32,26 +32,39 @@ patchedDependencies:
   # installed stable release does that itself and
   # `tests/dependency-patches.test.ts` has been updated first.
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
-  # Three browser bugs, all still present on upstream `main`, all pinned by
-  # `tests/dependency-patches.test.ts` — the last two with deterministic Node
-  # reproductions against the installed files.
+  # Four browser defects, all still present on upstream `main`, all pinned by
+  # `tests/dependency-patches.test.ts` — three of them with deterministic Node
+  # reproductions driving the installed files, one (`web/worker.ts`, which
+  # imports the wasm binary and so cannot be loaded under Node) by patch text.
   #
   # 1. `web/WorkerChannel.ts` writes the result length with a typed-array
   #    `set`, which copies *elements*, not bytes — the length arrives as
   #    `length & 0xFF` and every synchronous result over 255 bytes is
-  #    truncated (two outbox rows is enough). One `DataView.setUint32`.
+  #    truncated (two outbox rows is enough). One `DataView.setUint32`, and
+  #    the read beside it made little-endian to match.
   # 2. The same file serialises a worker failure as `JSON.stringify({ error })`,
   #    and an `Error` has no own enumerable properties — so every synchronous
-  #    failure in the browser reached the app as the message `[object Object]`.
-  #    The patch sends `{ name, message, stack, code }` and rebuilds the error.
-  # 3. A failed OPFS pool acquisition was permanent for the life of the page:
-  #    `web/worker.ts` assigned `_sqlite3` before the VFS that can throw, so
-  #    every later call fell through to `Invalid VFS state`, and
-  #    `wa-sqlite/AccessHandlePoolVFS.js` used `Promise.all`, which left the
-  #    handles it *did* win open inside an unreachable instance. A page that
-  #    lost the race to the document it replaced could not recover without a
-  #    reload. The patch publishes the VFS trio together and releases a partial
-  #    acquisition, so the next attempt is a real attempt.
+  #    failure in the browser reaches the app as the message `[object Object]`.
+  #    The patch sends `{ name, message, stack, code }` and rebuilds the error
+  #    on the far side, on both the synchronous and the `postMessage` channel.
+  #    The asynchronous branch is keyed on the error rather than on a truthy
+  #    result, because most worker operations return nothing at all and `false`
+  #    and `null` are ordinary results — posting a described error down that
+  #    branch turns every successful call into a rejection.
+  # 3. A failed OPFS pool acquisition is otherwise permanent for the life of
+  #    the page: `web/worker.ts` assigns `_sqlite3` before the VFS that can
+  #    throw, so every later call falls through to `Invalid VFS state`, and
+  #    `wa-sqlite/AccessHandlePoolVFS.js` acquires with `Promise.all`, which
+  #    leaves the handles it *did* win open inside an unreachable instance. A
+  #    page that lost the race to the document it replaced could not recover
+  #    without a reload. The patch publishes the VFS trio only once all three
+  #    exist, releases the pool if anything after the acquisition throws, and
+  #    releases a partial acquisition inside the VFS itself.
+  # 4. The pool holds six files and grows only on a virgin directory, while
+  #    this app's own peak is six (`apps/mobile/src/phone-ledger.web.ts` carries
+  #    the arithmetic) — so the next new file is `SQLITE_CANTOPEN` forever and
+  #    the install is bricked. The patch raises the capacity to sixteen and
+  #    tops up a directory created under a smaller one.
   expo-sqlite@57.0.1: patches/expo-sqlite@57.0.1.patch
 
 # Expo supports pnpm's isolated installs from SDK 54 onward, and Metro

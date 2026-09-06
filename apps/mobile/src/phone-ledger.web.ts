@@ -47,6 +47,20 @@ import { useSyncExternalStore } from "react";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform";
 
+/**
+ * The two stores, and — through the pre-migration copies and journals they
+ * imply — the number the OPFS pool has to be sized for.
+ *
+ * A pool slot is one OPFS file, and the VFS refuses a path it has no slot for
+ * with `SQLITE_CANTOPEN`, permanently: nothing tops the pool up afterwards, so
+ * an install that hits the ceiling is bricked with no way back but clearing
+ * site data. The peak here is six — `replica`, `outbox`, their two
+ * `.pre-migration` copies, one rollback journal per store while a migration
+ * runs, and the file `probeExists` opens to answer `fs.exists` — which is
+ * exactly the upstream capacity. The fork raises it to sixteen
+ * (`pnpm-workspace.yaml`, hunk 4) and tops up an install created under a
+ * smaller one. Adding a third store here means checking that number.
+ */
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
   outbox: "waltning-outbox.db",
@@ -74,10 +88,15 @@ const openHandles = new Map<string, SQLiteDatabase>();
  *
  * **Which line threw is not the question.** An earlier version answered
  * "did the throw come from an open call?", which classifies a corrupt replica
- * (`SQLITE_NOTADB`) and an exhausted pool (`SQLITE_CANTOPEN` past the pool's
- * six slots) as retryable — both permanent, both then offered a button that
- * re-runs the whole open/migrate path forever. The safe default is the
- * opposite one: offer a retry only where the cause can be named.
+ * (`SQLITE_NOTADB`) and an exhausted pool (`SQLITE_CANTOPEN`) as retryable —
+ * both permanent, both then offered a button that re-runs the whole
+ * open/migrate path forever. The safe default is the opposite one: offer a
+ * retry only where the cause can be named.
+ *
+ * **An exhausted pool stays terminal, and the mitigation is capacity.** A
+ * refused slot is refused on every later attempt, so a button would be a lie;
+ * the answer is that the pool is sized for this app's own peak in the first
+ * place (see `LEDGER_PATHS`), not that the failure is retried.
  */
 const POOL_CONTENTION = "NoModificationAllowedError";
 
@@ -184,13 +203,19 @@ export const PHONE_LEDGER_AVAILABLE = true as const;
  * acquisition against the old page's worker and it is refused. That is a
  * timing condition, not a broken ledger.
  *
- * **This loop only means anything because of patch 3** (`pnpm-workspace.yaml`).
- * Upstream, a refused acquisition was permanent for the life of the document —
- * `_sqlite3` was assigned before the VFS, so every later call fell through to
- * `Invalid VFS state`, and the handles the failed attempt *had* won stayed open
- * inside an unreachable instance. Retrying against that worker was five more
- * certain failures. The patch publishes the VFS trio together and releases a
- * partial acquisition, so each attempt here is a real attempt.
+ * **This loop depends on two properties of the vendored driver that only the
+ * fork provides** (`pnpm-workspace.yaml` states all four hunks and why):
+ *
+ * - **A refused acquisition leaves the worker able to try again** — the VFS
+ *   trio is published only once all three exist, and a partial acquisition is
+ *   released. Without that, one refusal is permanent for the life of the page
+ *   and every attempt below is certain to fail.
+ * - **A successful async call resolves** — the channel keys its `postMessage`
+ *   on the error rather than on a truthy result, so a void operation like
+ *   `open` is not reported as a failure. Without that, the loop's early
+ *   `return` is unreachable, every load pays the whole backoff, and the gate
+ *   distinguishes nothing. `tests/dependency-patches.test.ts` drives both
+ *   directions of that channel.
  */
 const OPEN_BACKOFF_MS = [0, 150, 300, 600, 1200] as const;
 

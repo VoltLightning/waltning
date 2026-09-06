@@ -1,5 +1,5 @@
 diff --git a/web/WorkerChannel.ts b/web/WorkerChannel.ts
-index 7fba380845e3338b7d8d253013fbf73896070cde..e193ca9e6a2391f761d3035102ddb9a352347327 100644
+index 7fba380845e3338b7d8d253013fbf73896070cde..9c12679ebfb16a7b41ed09dbbf4a9b14d293a71e 100644
 --- a/web/WorkerChannel.ts
 +++ b/web/WorkerChannel.ts
 @@ -16,6 +16,45 @@ const RESOLVED = 2;
@@ -48,7 +48,7 @@ index 7fba380845e3338b7d8d253013fbf73896070cde..e193ca9e6a2391f761d3035102ddb9a3
  /**
   * For worker to send result to the main thread.
   */
-@@ -37,17 +76,29 @@ export function sendWorkerResult({
+@@ -37,18 +76,36 @@ export function sendWorkerResult({
      const { lockBuffer, resultBuffer } = syncTrait;
      const lock = new Int32Array(lockBuffer);
      const resultArray = new Uint8Array(resultBuffer);
@@ -68,20 +68,31 @@ index 7fba380845e3338b7d8d253013fbf73896070cde..e193ca9e6a2391f761d3035102ddb9a3
 +    new DataView(resultBuffer).setUint32(0, length, true);
      resultArray.set(resultBytes, 4);
      Atomics.store(lock, 0, RESOLVED);
++  } else if (error != null) {
++    // The same description the synchronous path sends, so both channels hand
++    // the main thread one shape. A structured-clone of an `Error` survives,
++    // but `new Error(clonedError)` on the far side stringifies it into the
++    // message — which loses `name` and any `code`.
++    //
++    // **Keyed on the error, the way the synchronous branch above is.** This
++    // read `if (result)` upstream, which was harmless only while a failure was
++    // posted as a bare `null`: most worker operations — `open`, `close`,
++    // `exec`, every `session*` call — return nothing at all, and `false` and
++    // `null` are ordinary results for `isInTransaction` and `step`. Posting a
++    // *described* error down that branch turns every one of them into a
++    // rejection, because an object is always truthy.
++    self.postMessage({ id, error: describeChannelError(error) });
    } else {
-     if (result) {
-       self.postMessage({ id, result });
-     } else {
+-    if (result) {
+-      self.postMessage({ id, result });
+-    } else {
 -      self.postMessage({ id, error });
-+      // The same description the synchronous path sends, so both channels
-+      // hand the main thread one shape. A structured-clone of an `Error`
-+      // survives, but `new Error(clonedError)` on the far side stringifies it
-+      // into the message — which loses `name` and any `code`.
-+      self.postMessage({ id, error: describeChannelError(error) });
-     }
+-    }
++    self.postMessage({ id, result });
    }
  }
-@@ -61,7 +112,7 @@ export function workerMessageHandler(event: MessageEvent) {
+ 
+@@ -61,7 +118,7 @@ export function workerMessageHandler(event: MessageEvent) {
      const deferred = deferredMap.get(id);
      if (deferred) {
        if (error) {
@@ -90,7 +101,15 @@ index 7fba380845e3338b7d8d253013fbf73896070cde..e193ca9e6a2391f761d3035102ddb9a3
        } else {
          deferred.resolve(result);
        }
-@@ -141,7 +192,10 @@ export function invokeWorkerSync<T extends SQLiteWorkerMessageType & keyof Resul
+@@ -137,11 +194,17 @@ export function invokeWorkerSync<T extends SQLiteWorkerMessageType & keyof Resul
+     }
+   }
+ 
+-  const length = new Uint32Array(resultArray.buffer, 0, 1)[0];
++  // Little-endian, the same way `sendWorkerResult` writes it — a native-order
++  // read agrees with an LE write on every shipping engine and on no stated
++  // guarantee.
++  const length = new DataView(resultArray.buffer).getUint32(0, true);
    const resultCopy = new Uint8Array(length);
    resultCopy.set(new Uint8Array(resultArray.buffer, 4, length));
    const resultJson = new TextDecoder().decode(resultCopy);
@@ -104,10 +123,50 @@ index 7fba380845e3338b7d8d253013fbf73896070cde..e193ca9e6a2391f761d3035102ddb9a3
    return result;
  }
 diff --git a/web/wa-sqlite/AccessHandlePoolVFS.js b/web/wa-sqlite/AccessHandlePoolVFS.js
-index 046fe6f2d119babd02e292e31a7dbdb24747e66a..206df5c06d77c32a10d17b8f0c74a319aac9219e 100644
+index 046fe6f2d119babd02e292e31a7dbdb24747e66a..cbb751597cff6e738fefabb6bc0a12cd2ec986c4 100644
 --- a/web/wa-sqlite/AccessHandlePoolVFS.js
 +++ b/web/wa-sqlite/AccessHandlePoolVFS.js
-@@ -302,7 +302,17 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+@@ -22,7 +22,23 @@ const PERSISTENT_FILE_TYPES =
+   VFS.SQLITE_OPEN_SUPER_JOURNAL |
+   VFS.SQLITE_OPEN_WAL;
+ 
+-const DEFAULT_CAPACITY = 6;
++/**
++ * **Sized for the application, not for a demonstration.**
++ *
++ * A slot is one OPFS file, and `jOpen` refuses a path it has no slot for with
++ * `SQLITE_CANTOPEN` — permanently, because nothing calls `addCapacity` again
++ * once the directory exists. Six was the upstream number and this app's own
++ * peak is six: two stores (`replica`, `outbox`), the two `.pre-migration`
++ * copies the migrator takes, one rollback journal per store while a migration
++ * runs, and the file the existence probe opens to answer `fs.exists`. The
++ * seventh open in that window would brick the install with no way back but
++ * clearing site data.
++ *
++ * Sixteen is that peak with room for the writes that follow it. The cost is
++ * sixteen 4 KB headers and sixteen sync access handles held for the life of
++ * the page.
++ */
++const DEFAULT_CAPACITY = 16;
+ 
+ /**
+  * This VFS uses the updated Access Handle API with all synchronous methods
+@@ -230,8 +246,12 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+       this.#directoryHandle = handle;
+ 
+       await this.#acquireAccessHandles();
+-      if (this.getCapacity() === 0) {
+-        await this.addCapacity(DEFAULT_CAPACITY);
++      // Topped up to the floor rather than filled only when empty: an install
++      // created under a smaller capacity keeps that capacity forever
++      // otherwise, which is the same cliff on an older device.
++      const missing = DEFAULT_CAPACITY - this.getCapacity();
++      if (missing > 0) {
++        await this.addCapacity(missing);
+       }
+     }
+     return true;
+@@ -302,7 +322,17 @@ export class AccessHandlePoolVFS extends FacadeVFS {
      }
  
      // Open access handles in parallel, separating associated and unassociated.
@@ -126,7 +185,7 @@ index 046fe6f2d119babd02e292e31a7dbdb24747e66a..206df5c06d77c32a10d17b8f0c74a319
        files.map(async ([name, handle]) => {
          const accessHandle = await handle.createSyncAccessHandle();
          this.#mapAccessHandleToName.set(accessHandle, name);
-@@ -314,6 +324,11 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+@@ -314,6 +344,11 @@ export class AccessHandlePoolVFS extends FacadeVFS {
          }
        })
      );
@@ -139,10 +198,10 @@ index 046fe6f2d119babd02e292e31a7dbdb24747e66a..206df5c06d77c32a10d17b8f0c74a319
  
    #releaseAccessHandles() {
 diff --git a/web/worker.ts b/web/worker.ts
-index deaf7218f98add013b73876130f2c496ec3820fa..61b1b21a996ffa17afa96c014045e77fa675877a 100644
+index deaf7218f98add013b73876130f2c496ec3820fa..a995a84aed74165687ede3cea35da86d716988ed 100644
 --- a/web/worker.ts
 +++ b/web/worker.ts
-@@ -772,40 +772,89 @@ async function maybeFinalizeAllStatements(nativeDatabaseId: number) {
+@@ -772,40 +772,92 @@ async function maybeFinalizeAllStatements(nativeDatabaseId: number) {
    if (error) throw error;
  }
  
@@ -194,67 +253,69 @@ index deaf7218f98add013b73876130f2c496ec3820fa..61b1b21a996ffa17afa96c014045e77f
 -      if (_vfs == null) {
 -        throw new Error('Failed to initialize AccessHandlePoolVFS');
 -      }
--    }
--    _sqlite3.vfs_register(_vfs, true);
 +async function initVfsAsync(): Promise<WorkerVfsState> {
-+  // A previous attempt may have built part of the trio. Release it first: a
-+  // second AccessHandlePoolVFS over a directory the first one still holds can
-+  // never acquire it, so the retry would fail on us rather than on whoever
-+  // held the pool.
-+  await releaseVfsAsync();
- 
--    if (_vfsMemory == null) {
--      _vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
--      if (_vfsMemory == null) {
--        throw new Error('Failed to initialize MemoryVFS');
--      }
--    }
--    _sqlite3.vfs_register(_vfsMemory, false);
++  // Rebuilt per attempt rather than hoisted: a retry that reused one
++  // `sqlite3` would register a second VFS under the same name, and what
++  // `sqlite3_vfs_find` then returns is not something this fork can test. The
++  // cost is on the contended path only — a ~620 KB wasm instantiated again,
++  // tens of milliseconds, and only while another document holds the pool.
 +  const module = await WaSQLiteFactory({
 +    locateFile: () => wasmModule,
 +  });
 +  const sqlite3 = SQLite.Factory(module) as SQLiteAPI;
 +  if (!sqlite3) {
 +    throw new Error('Failed to initialize wa-sqlite');
-   }
++  }
++
++  // **Everything after the pool is acquired runs inside this `try`.**
++  // `AccessHandlePoolVFS.create` takes a sync access handle on every file in
++  // the pool directory, and `vfs_register` and `MemoryVFS.create` can both
++  // throw after it — leaving those handles held by a local nothing can reach.
++  // The document would then be holding the pool against *itself*, and every
++  // retry, in this module or above it, would fail on us rather than on
++  // whoever we were racing.
++  let vfs: AccessHandlePoolVFS | null = null;
++  let vfsMemory: MemoryVFS | null = null;
++  try {
++    vfs = await AccessHandlePoolVFS.create(VFS_NAME_PERSISTENT, module);
++    if (vfs == null) {
++      throw new Error('Failed to initialize AccessHandlePoolVFS');
+     }
+-    _sqlite3.vfs_register(_vfs, true);
++    sqlite3.vfs_register(vfs, true);
+ 
+-    if (_vfsMemory == null) {
+-      _vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
+-      if (_vfsMemory == null) {
+-        throw new Error('Failed to initialize MemoryVFS');
+-      }
++    vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
++    if (vfsMemory == null) {
++      throw new Error('Failed to initialize MemoryVFS');
+     }
+-    _sqlite3.vfs_register(_vfsMemory, false);
+-  }
 -  if (_vfs == null || _vfsMemory == null) {
 -    throw new Error('Invalid VFS state');
++    sqlite3.vfs_register(vfsMemory, false);
++  } catch (caught) {
++    try {
++      await vfs?.close();
++      await vfsMemory?.close();
++    } catch {
++      // Closing what never finished opening is not a new failure, and the
++      // original one is the one worth reporting.
++    }
++    throw caught;
+   }
+-  return { sqlite3: _sqlite3, vfs: _vfs, vfsMemory: _vfsMemory };
 +
-+  const vfs = await AccessHandlePoolVFS.create(VFS_NAME_PERSISTENT, module);
-+  if (vfs == null) {
-+    throw new Error('Failed to initialize AccessHandlePoolVFS');
-+  }
-+  sqlite3.vfs_register(vfs, true);
-+
-+  const vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
-+  if (vfsMemory == null) {
-+    throw new Error('Failed to initialize MemoryVFS');
-+  }
-+  sqlite3.vfs_register(vfsMemory, false);
-+
++  // Published together, never one at a time: `_sqlite3` assigned ahead of the
++  // VFS is what made a single lost race permanent for the life of the worker.
 +  _sqlite3 = sqlite3;
 +  _vfs = vfs;
 +  _vfsMemory = vfsMemory;
 +  return { sqlite3, vfs, vfsMemory };
-+}
-+
-+async function releaseVfsAsync(): Promise<void> {
-+  const vfs = _vfs;
-+  const vfsMemory = _vfsMemory;
-+  _sqlite3 = null;
-+  _vfs = null;
-+  _vfsMemory = null;
-+  try {
-+    await vfs?.close();
-+  } catch {
-+    // Closing a VFS that never finished opening is not a new failure.
-+  }
-+  try {
-+    await vfsMemory?.close();
-+  } catch {
-+    // Same.
-   }
--  return { sqlite3: _sqlite3, vfs: _vfs, vfsMemory: _vfsMemory };
  }
  
  //#endregion Internal helpers

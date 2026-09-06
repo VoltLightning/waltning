@@ -99,16 +99,18 @@ durability rather than deciding whether the phone works:
   the moment the next one starts running, so a load a second or two after the
   last one is refused — a statement about a moment, not about the ledger.
 
-  **A refused acquisition has to stay recoverable, and upstream it did not.**
-  `expo-sqlite`'s worker is a module singleton that is never terminated, and it
-  published its SQLite handle before the VFS that can throw — so one lost race
-  left every later call in that document failing on `Invalid VFS state`, while
-  the access handles the failed attempt had already won stayed open inside an
-  instance nothing could reach. A page that lost the race could not recover
-  without a reload, and any retry above that layer was dead by construction.
-  Both are patched at the package-manager boundary (`pnpm-workspace.yaml`,
-  pinned by `tests/dependency-patches.test.ts`), which is what makes the rest
-  of this paragraph true rather than aspirational.
+  **A refused acquisition is recoverable, and that is a property of the fork.**
+  Three things have to hold, none of which the published `expo-sqlite` provides:
+  a worker whose SQLite handle is published only once its VFS exists, so one
+  lost race does not leave every later call failing on `Invalid VFS state`; a
+  pool that releases the handles a failed acquisition already won, so the
+  document does not end up holding the pool against itself; and a worker
+  channel whose successful asynchronous calls resolve, so a probe can tell a
+  free pool from a held one at all. All three are patched at the
+  package-manager boundary — `pnpm-workspace.yaml` states each defect,
+  `tests/dependency-patches.test.ts` reproduces them against the installed
+  files. The size of that fork is the honest cost of running this engine in a
+  browser.
 
   On that base, **the readiness gate retries.** The gate the browser already
   waits on — the one that keeps the first synchronous call off a cold worker —
@@ -118,6 +120,15 @@ durability rather than deciding whether the phone works:
   would hang the app behind a blank frame on a worker that is genuinely broken,
   so the synchronous open runs, fails loudly, and the failure screen explains
   it.
+
+  **The pool's capacity is a number this app owns.** A slot is one OPFS file
+  and a path with no slot is refused permanently, so the ceiling is a cliff
+  rather than a limit: the peak here is six — two stores, their two
+  pre-migration copies, a rollback journal per store during a migration, and
+  the file the existence probe opens — which is exactly what the library
+  defaults to. The fork raises it and tops up an install created under a
+  smaller one; `phone-ledger.web.ts` carries the arithmetic beside the paths
+  that drive it, because adding a third store changes the number.
 
   **Startup failure is therefore two claims, not one.** *Transient* means the
   cause can be named as one another attempt clears — the browser's refusal for
@@ -131,11 +142,12 @@ durability rather than deciding whether the phone works:
   button someone presses forever. On the device every failure is terminal —
   one process, one document directory, no second holder.
 
-  The sentence on that screen is the failing layer's own, and the browser had
-  none: the worker serialised its error as JSON, an `Error` has no enumerable
-  properties, and every synchronous failure arrived as the literal string
-  `[object Object]`. The channel now carries `name`, `message` and `code`
-  across — the third patch, and the reason a cause can be named at all.
+  The sentence on that screen is the failing layer's own, which in the browser
+  means the worker's: it crosses the boundary carrying `name`, `message` and
+  `code`, and naming a cause at all depends on that. Serialised the way the
+  published driver does it — `JSON.stringify` over an `Error`, which has no
+  enumerable properties — every synchronous failure arrives as the literal
+  string `[object Object]`, and no classification downstream is possible.
 
 **The honest cost:** durability is not optional. The phone's self-backup is real
 but weaker; once a backend exists, durability stops being solely the owner's
