@@ -203,22 +203,25 @@ export function AccountRegister({
 
       <SharedGroup accounts={sharedForGroup} onSelectAccount={onSelectAccount} />
 
-      <ArchivedToggle
-        open={archivedOpen}
-        accounts={filteredArchived}
-        onToggle={handleToggleArchived}
-      />
-
       {/*
-        On the ground, below every group — S16 §3 keeps the search field
-        there and this is the same rule: a card holds rows, and the one
-        action that creates a new one is not a row of the register. It was
+        On the ground, below the last group and **above** the archived
+        section — S16 §3 keeps the search field on the ground and this is the
+        same rule: a card holds rows, and the one action that creates a new
+        row is not a row of the register. Above, because a primary sitting
+        under an opened archived list reads as belonging to it. It was
         offered only by the empty state before, so a ledger with one account
         had no way to open its second.
       */}
       <View style={styles.inline}>
         <Button label={t("accounts.add")} onPress={onCreateAccount} variant="primary" />
       </View>
+
+      <ArchivedToggle
+        open={archivedOpen}
+        accounts={filteredArchived}
+        total={archivedAccounts.length}
+        onToggle={handleToggleArchived}
+      />
     </View>
   );
 }
@@ -316,16 +319,28 @@ function TransferGlyph() {
 
 type ArchivedToggleProps = {
   open: boolean;
+  /** What the search left — the rows this section actually draws. */
   accounts: readonly AccountRegisterAccount[];
+  /**
+   * How many archived accounts the ledger holds, before the search. The
+   * *empty* message is a claim about the ledger and the *no matches* one is
+   * a claim about the query, and only this figure tells them apart: filtering
+   * every archived row out of view is not the same fact as having none.
+   */
+  total: number;
   onToggle: () => void;
 };
 
-function ArchivedToggle({ open, accounts, onToggle }: ArchivedToggleProps) {
+function ArchivedToggle({ open, accounts, total, onToggle }: ArchivedToggleProps) {
   const t = useT();
   const styles = useStyles();
-  const label = open
-    ? t("accounts.archivedCount", { count: accounts.length })
-    : t("accounts.archivedShow");
+  // A count of nothing is not information, and the line below already states
+  // the fact — "Archived (0)" beside "No archived accounts." is one thing
+  // said twice.
+  const label =
+    open && accounts.length > 0
+      ? t("accounts.archivedCount", { count: accounts.length })
+      : t("accounts.archivedShow");
 
   return (
     <View style={styles.archived}>
@@ -346,13 +361,18 @@ function ArchivedToggle({ open, accounts, onToggle }: ArchivedToggleProps) {
         still want to read is not one.
       */}
       {/*
-        Opened onto nothing says so. The rows load lazily (S16 §6), so
-        whether any exist is not known until the toggle has run once — the
-        heading cannot be hidden in advance, and a heading over blank space
-        is what this line replaces.
+        Opened onto nothing says so, and says *which* nothing. The rows load
+        lazily (S16 §6), so whether any exist is not known until the toggle
+        has run once — the heading cannot be hidden in advance, and a heading
+        over blank space is what these two lines replace. Which of them draws
+        is the whole point: "you have no archived accounts" is a categorical
+        claim about the ledger, and making it while three sit behind a search
+        query is a lie the reader has no way to check.
       */}
       {open && accounts.length === 0 ? (
-        <Text style={styles.noMatches}>{t("accounts.archivedNone")}</Text>
+        <Text style={styles.noMatches}>
+          {t(total === 0 ? "accounts.archivedNone" : "accounts.archivedNoMatches")}
+        </Text>
       ) : null}
       {open
         ? accounts.map((account) => (

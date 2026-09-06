@@ -3,6 +3,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
+import { en } from "../i18n/en.ts";
+import { pl } from "../i18n/pl.ts";
+import { I18nProvider } from "../i18n/provider";
 import {
   AccountEditor,
   type AccountEditorAccount,
@@ -174,52 +177,53 @@ it("shows the opening-balance confirm line only once it changed", () => {
  * `numeric(20,8)` is the storage form; the field is the reading form. An
  * account opened at nothing showed `0.00000000` — eight decimals of a scale
  * no złoty account is kept at.
+ *
+ * **Both languages, explicitly.** The mark is a language property
+ * (`design-system/04` §4.1), and a suite that only ever rendered the default
+ * would assert nothing about the one component whose whole reason for
+ * existing is the comma — S16 §5's own example is written `0,00`.
  */
-it("shows the opening balance at the currency's own scale", () => {
-  render(
-    <AccountEditor
-      account={{ ...account, openingBalance: money.toMoney("0") }}
-      today={TODAY}
-      groups={groups}
-      onCancel={noop}
-      onSave={noop}
-      onArchive={noop}
-      onReconcile={noop}
-      onCreateGroup={noopCreateGroup}
-    />,
+function openingBalanceIn(locale: "en" | "pl", overrides: Partial<AccountEditorAccount>): string {
+  const { unmount } = render(
+    <I18nProvider locale={locale}>
+      <AccountEditor
+        account={{ ...account, ...overrides }}
+        today={TODAY}
+        groups={groups}
+        onCancel={noop}
+        onSave={noop}
+        onArchive={noop}
+        onReconcile={noop}
+        onCreateGroup={noopCreateGroup}
+      />
+    </I18nProvider>,
   );
-  expect((screen.getByLabelText("Opening balance") as HTMLInputElement).value).toBe("0.00");
+  // The field's own accessible name is translated too — read from the
+  // catalogue rather than written out, so the query cannot drift from it.
+  const field = (locale === "pl" ? pl : en).accounts.openingBalance;
+  const value = (screen.getByLabelText(field) as HTMLInputElement).value;
+  unmount();
+  return value;
+}
+
+it("shows the opening balance at the currency's own scale, in the reader's own mark", () => {
+  expect(openingBalanceIn("pl", { openingBalance: money.toMoney("0") })).toBe("0,00");
+  expect(openingBalanceIn("en", { openingBalance: money.toMoney("0") })).toBe("0.00");
+  expect(openingBalanceIn("pl", { openingBalance: money.toMoney("12.5") })).toBe("12,50");
+  expect(openingBalanceIn("en", { openingBalance: money.toMoney("12.5") })).toBe("12.50");
 });
 
-it("shows a two-decimal figure whole, and a zero-decimal currency with none", () => {
-  const { unmount } = render(
-    <AccountEditor
-      account={{ ...account, openingBalance: money.toMoney("12.5") }}
-      today={TODAY}
-      groups={groups}
-      onCancel={noop}
-      onSave={noop}
-      onArchive={noop}
-      onReconcile={noop}
-      onCreateGroup={noopCreateGroup}
-    />,
-  );
-  expect((screen.getByLabelText("Opening balance") as HTMLInputElement).value).toBe("12.50");
-  unmount();
+it("groups thousands and gives a zero-decimal currency no fraction", () => {
+  // U+00A0, the one group separator every language shares (§4.1).
+  expect(openingBalanceIn("pl", { openingBalance: money.toMoney("6200") })).toBe("6\u00a0200,00");
+  expect(
+    openingBalanceIn("en", { currency: "JPY", decimals: 0, openingBalance: money.toMoney("1200") }),
+  ).toBe("1\u00a0200");
+});
 
-  render(
-    <AccountEditor
-      account={{ ...account, currency: "JPY", decimals: 0, openingBalance: money.toMoney("1200") }}
-      today={TODAY}
-      groups={groups}
-      onCancel={noop}
-      onSave={noop}
-      onArchive={noop}
-      onReconcile={noop}
-      onCreateGroup={noopCreateGroup}
-    />,
-  );
-  expect((screen.getByLabelText("Opening balance") as HTMLInputElement).value).toBe("1200");
+/** §4.1's own rule — a minus sign on a figure the reader sees as nothing is a lie. */
+it("drops the sign from dust that rounds to zero", () => {
+  expect(openingBalanceIn("en", { openingBalance: money.toMoney("-0.004") })).toBe("0.00");
 });
 
 /**
@@ -252,6 +256,31 @@ it("does not count the presented figure as an edit", () => {
   fireEvent.change(screen.getByLabelText("Opening balance"), { target: { value: "12,5" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave).toHaveBeenCalledWith({ openingBalance: "12.5" });
+});
+
+/**
+ * `update_account`'s scale refusal is about one field, and under *Could not
+ * save* it read as a defect of the whole form.
+ */
+it("puts an opening-balance refusal on the opening-balance field", () => {
+  render(
+    <AccountEditor
+      account={account}
+      today={TODAY}
+      groups={groups}
+      fieldErrors={{
+        byField: { openingBalance: ["PLN holds 2 decimal places — this amount has more."] },
+        formLevel: [],
+      }}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  expect(screen.getByText("PLN holds 2 decimal places — this amount has more.")).toBeDefined();
+  expect(screen.queryByText("Couldn't save")).toBeNull();
 });
 
 it("Archive and Reconcile call their own handlers, not Save", () => {

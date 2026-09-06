@@ -233,6 +233,8 @@ export function CreateAccountForm({
   ]);
   const nameError = fieldErrors?.byField["name"]?.[0];
   const currencyError = fieldErrors?.byField["currency"]?.[0];
+  /** `create_account`'s scale refusal is about this field — see `account-editor.tsx`. */
+  const openingBalanceError = fieldErrors?.byField["openingBalance"]?.[0];
 
   return (
     <View style={styles.root}>
@@ -264,7 +266,7 @@ export function CreateAccountForm({
       {currencyError === undefined ? null : <Text style={styles.fieldError}>{currencyError}</Text>}
 
       {needsRate && chosen !== undefined ? (
-        <View style={styles.gate}>
+        <View style={styles.gate} accessibilityRole="alert">
           <Text style={styles.gateNote}>
             {t("accounts.currencyNotCapturable", { currency: chosen.code })}
           </Text>
@@ -318,6 +320,7 @@ export function CreateAccountForm({
             label={t("accounts.openingBalance")}
             onChange={setOpeningBalance}
             {...(currency === null ? {} : { currency })}
+            {...(openingBalanceError === undefined ? {} : { error: openingBalanceError })}
           />
           <DateField
             label={t("accounts.openingDate")}

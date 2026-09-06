@@ -172,7 +172,8 @@ it("archived accounts stay hidden until the toggle opens, and the load fires onc
 /**
  * The rows load lazily, so a register with nothing archived cannot know that
  * until the toggle has run — the heading says what it found rather than
- * standing over blank space.
+ * standing over blank space. With none it also drops the `(0)`: a count of
+ * nothing beside a sentence saying so is one fact stated twice.
  */
 it("says so when the archived section opens onto nothing", () => {
   render(
@@ -186,6 +187,32 @@ it("says so when the archived section opens onto nothing", () => {
   );
   fireEvent.click(screen.getByText("Archived"));
   expect(screen.getByText("No archived accounts.")).toBeDefined();
+  expect(screen.queryByText("Archived (0)")).toBeNull();
+});
+
+/**
+ * *No archived accounts* is a claim about the ledger. Made while three sit
+ * behind a search query it is simply false — the query is what excluded
+ * them, and that is a different sentence.
+ */
+it("says the query excluded them, not that there are none", () => {
+  render(
+    <AccountRegister
+      accounts={[account({})]}
+      archivedAccounts={[
+        account({ id: "old-1", name: "Old · PLN" }),
+        account({ id: "old-2", name: "Older · PLN" }),
+      ]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "zzz" } });
+  fireEvent.click(screen.getByText("Archived"));
+
+  expect(screen.getByText("No archived accounts match.")).toBeDefined();
+  expect(screen.queryByText("No archived accounts.")).toBeNull();
 });
 
 /** S16 §3 — the register's own primary, on the ground under every group. */

@@ -20,13 +20,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { RadioGroup } from "../primitives/radio";
 import { Select, type SelectOption } from "../primitives/select";
 import { TextField } from "../primitives/text-field";
 import { BottomSheet } from "../shell/bottom-sheet";
+import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 
@@ -122,14 +123,26 @@ export function CreateCategorySheet({
           value={kind}
           onChange={handleKindChange}
         />
-        <Select
-          label={t("categories.moveTargetLabel")}
-          placeholder={t("categories.noParent")}
-          options={options}
-          value={parentId}
-          onChange={setParentId}
-          searchable
-        />
+        {/*
+          **No picker where there is nothing to pick.** A `Select` at rest
+          shows the same placeholder whether it holds three groups or none,
+          so an empty taxonomy was offered a control that could not answer —
+          and the state that most needs explaining was the one that looked
+          identical to every other. The line says where the category will
+          land instead.
+        */}
+        {options.length === 0 ? (
+          <Text style={styles.note}>{t("categories.noGroupsYet")}</Text>
+        ) : (
+          <Select
+            label={t("categories.moveTargetLabel")}
+            placeholder={t("categories.noParent")}
+            options={options}
+            value={parentId}
+            onChange={setParentId}
+            searchable
+          />
+        )}
         <Button
           label={t("common.save")}
           onPress={handleSave}
@@ -141,6 +154,7 @@ export function CreateCategorySheet({
   );
 }
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((theme) => ({
   body: { gap: space.x3 },
+  note: { color: theme.textMuted, ...text.ui("caption") },
 }));

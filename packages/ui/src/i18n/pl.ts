@@ -60,6 +60,7 @@ export const pl: Messages = {
     create: "Utwórz konto…",
     add: "Dodaj konto",
     archivedNone: "Brak zarchiwizowanych kont.",
+    archivedNoMatches: "Brak pasujących zarchiwizowanych kont.",
     currencyNotCapturable:
       "Waluta {{currency}} nie ma jeszcze kursu wymiany. Konto założysz bez przeszkód; transakcji w tej walucie nie zapiszesz, dopóki kurs nie zostanie ustawiony.",
     setRate: "Ustaw kurs waluty {{currency}}",
@@ -354,8 +355,9 @@ export const pl: Messages = {
     newCategory: "Nowa kategoria",
     kind: "Rodzaj",
     noParent: "Brak — kategoria najwyższego poziomu",
+    noGroupsYet: "Brak grup — to będzie kategoria najwyższego poziomu.",
     emptyTitle: "Brak kategorii",
-    emptyBody: "Utwórz pierwszą, a każdy wydatek będzie miał gdzie trafić.",
+    emptyBody: "Utwórz pierwszą, a każdy zapis będzie miał gdzie trafić.",
     archived: "Zarchiwizowana",
     unused: "Nieużywana",
     usageOne: "{{count}} transakcja",

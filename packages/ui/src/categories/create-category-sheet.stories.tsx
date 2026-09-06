@@ -26,7 +26,11 @@ type Story = StoryObj<typeof meta>;
 /** The ordinary open — expense, no parent chosen yet. */
 export const Open: Story = {};
 
-/** A ledger with nothing in it: the parent picker has nothing to offer, and says so. */
+/**
+ * A ledger with nothing in it. The parent picker is gone rather than closed
+ * over an empty list — a `Select` at rest looks the same either way — and the
+ * line in its place says where the category will land.
+ */
 export const EmptyTaxonomy: Story = { args: { groups: [] } };
 
 /** The sibling collision the controller refuses, landing on the field it is about. */

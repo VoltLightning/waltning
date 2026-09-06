@@ -36,6 +36,32 @@ it("saves a top-level category when no parent is chosen", () => {
   expect(onSave).toHaveBeenCalledWith({ name: "Food", kind: "expense", parentId: null });
 });
 
+/**
+ * A `Select` at rest shows the same placeholder holding three options or
+ * none, so an empty taxonomy was handed a control that could not answer.
+ */
+it("drops the parent picker where there is nothing to pick, and says where it lands", () => {
+  render(<CreateCategorySheet visible groups={[]} onSave={vi.fn()} onDismiss={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "Group" })).toBeNull();
+  expect(screen.getByText("No groups yet — this will be a top-level category.")).toBeDefined();
+});
+
+/** The other side of it: a kind whose own half of the taxonomy is empty. */
+it("drops the picker when the chosen kind has no groups", () => {
+  render(
+    <CreateCategorySheet
+      visible
+      groups={[{ id: "food", name: "Food", kind: "expense" }]}
+      onSave={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Group" })).toBeDefined();
+  fireEvent.click(screen.getByRole("radio", { name: "Income" }));
+  expect(screen.queryByRole("button", { name: "Group" })).toBeNull();
+  expect(screen.getByText("No groups yet — this will be a top-level category.")).toBeDefined();
+});
+
 /** A group of the other kind is not a legal parent — the pick does not survive the switch. */
 it("offers only the chosen kind's groups, and drops a parent on the switch", () => {
   const onSave = vi.fn();

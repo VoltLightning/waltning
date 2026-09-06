@@ -35,24 +35,26 @@ const ROUTES = {
 type Destination = keyof typeof ROUTES;
 
 /** The order they are offered in — the register first, the reference data after. */
-const ORDER: readonly Destination[] = ["accounts", "categories", "currencies", "rates"];
-
-function isDestination(id: string): id is Destination {
-  return id in ROUTES;
-}
+const ORDER = [
+  "accounts",
+  "categories",
+  "currencies",
+  "rates",
+] as const satisfies readonly Destination[];
 
 export default function Settings() {
   const t = useT();
 
   const items = useMemo(
-    (): readonly SettingsMenuItem[] =>
+    (): readonly SettingsMenuItem<Destination>[] =>
       ORDER.map((destination) => ({ id: destination, label: t(`routes.${destination}`) })),
     [t],
   );
 
-  const handleSelect = useCallback((id: string) => {
-    if (isDestination(id)) router.push(ROUTES[id]);
-  }, []);
+  // No runtime guard: `SettingsMenu` is generic in its id type, so what comes
+  // back is one of the four keys above and the compiler carries it. A row
+  // with a typo'd id is a type error rather than a tap that does nothing.
+  const handleSelect = useCallback((id: Destination) => router.push(ROUTES[id]), []);
 
   return (
     <GroundPanel>

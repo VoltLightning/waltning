@@ -105,6 +105,13 @@ export const en = {
      */
     archivedNone: "No archived accounts.",
     /**
+     * The same section, opened while a search is on. The sentence above is a
+     * claim about the ledger; this one is a claim about the query, and
+     * saying the first while three archived accounts sit behind a filter is
+     * a statement the reader has no way to check.
+     */
+    archivedNoMatches: "No archived accounts match.",
+    /**
      * §14.6 — holding a currency and capturing in it are two capabilities,
      * and only the second is gated. Shown under the currency grid once a
      * currency with no rate is chosen: the account is still creatable, so
@@ -676,6 +683,8 @@ export const en = {
      * under — so "none" is a real answer, not a missing one.
      */
     noParent: "None — a top-level category",
+    /** The same answer, where it is the only one: no group exists to choose. */
+    noGroupsYet: "No groups yet — this will be a top-level category.",
     /** S19 §6 — a ledger whose taxonomy has not been seeded yet. */
     emptyTitle: "No categories yet",
     emptyBody: "Create the first one, and every capture can be filed under it.",

@@ -152,9 +152,12 @@ touched again — after migration they carry nearly all the value (§8.0), which
 why §8.4's gate exists and why editing one is an audited write with a confirm.
 
 The figure is stored at `numeric(20,8)` and **read at the currency's own
-scale**: the editor shows `0,00` for an account opened at nothing, not
-`0.00000000`. What is saved stays exact — presenting a figure is not editing
-it, so an editor nobody typed in produces no patch at all.
+scale, through the same formatter every other figure uses** (`design-system/04`
+§4.1): the editor shows `0,00` for an account opened at nothing — `0.00` for a
+reader whose language marks decimals with a dot — never `0.00000000`. What is
+saved stays exact: the field is compared to the stored figure by value, so
+presenting it is not editing it and an editor nobody typed in produces no
+patch at all.
 
 **Changing an opening balance moves every balance from that date forward.** It is
 not a correction tool. Reconciling against an observed balance is the next
