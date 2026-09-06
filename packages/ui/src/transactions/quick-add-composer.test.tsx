@@ -34,7 +34,6 @@ const TODAY = "2026-09-03";
 const BASE_PROPS: QuickAddComposerProps = {
   raw: "",
   type: "expense",
-  onTypeChange: vi.fn(),
   accounts: ACCOUNTS,
   accountId: null,
   accountMachineFilled: false,
@@ -56,7 +55,6 @@ const BASE_PROPS: QuickAddComposerProps = {
   onCounterpartyChange: vi.fn(),
   counterpartyRole: null,
   onCounterpartyRoleChange: vi.fn(),
-  onCancel: vi.fn(),
 };
 
 function props(overrides: Partial<QuickAddComposerProps> = {}): QuickAddComposerProps {
@@ -371,30 +369,6 @@ it("states the refusal without an action when the caller has nowhere to send it"
   expect(screen.queryByRole("button", { name: "Set a PLN rate" })).toBeNull();
 });
 
-/**
- * S05 §9.1's escape hatch, and `▾` meaning what it draws: the header names
- * the draft's kind and opens a sheet listing both, rather than flipping on a
- * tap while wearing a menu's chevron. The trigger's own name carries the
- * value so it never collides with the option of the same name inside.
- */
-it("opens a kind menu rather than flipping on one tap (S05 §9.1)", () => {
-  const onTypeChange = vi.fn();
-  render(<QuickAddComposer {...props({ onTypeChange })} />);
-  fireEvent.click(screen.getByRole("button", { name: "Kind: Expense" }));
-  expect(onTypeChange).not.toHaveBeenCalled();
-
-  fireEvent.click(screen.getByRole("button", { name: "Income" }));
-  expect(onTypeChange).toHaveBeenCalledWith("income");
-});
-
-/** §9.1 again: a transfer is a different shape and never one of these two. */
-it("offers expense and income only — never a transfer (S05 §9.1)", () => {
-  render(<QuickAddComposer {...props({})} />);
-  fireEvent.click(screen.getByRole("button", { name: "Kind: Expense" }));
-  expect(screen.getByRole("button", { name: "Expense" })).toBeDefined();
-  expect(screen.queryByRole("button", { name: "Transfer" })).toBeNull();
-});
-
 it("shows the scope chip's own value from the account's ownership and isBusiness", () => {
   const { rerender } = render(<QuickAddComposer {...props({ accountId: "account-a" })} />);
   expect(screen.getByText("Mine")).toBeDefined();
@@ -521,9 +495,32 @@ it("renders a controller refusal on counterpartyRole under the counterparty chip
   expect(screen.getByText("a counterparty and its role travel together (§6.6)")).toBeDefined();
 });
 
-it("calls onCancel from the ✕", () => {
-  const onCancel = vi.fn();
-  render(<QuickAddComposer {...props({ onCancel })} />);
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(onCancel).toHaveBeenCalledOnce();
+/**
+ * L2 — the controller's own `accountId` refusal resolves to the same
+ * sentence the banner already carries (`field-error-messages.ts` maps
+ * `transactions.needsRate`). A save attempt followed by a switch to an
+ * uncapturable account reaches both at once; the banner keeps it, because
+ * the banner is the half with the way out.
+ */
+it("states the refusal once when the field error repeats the banner's own sentence", () => {
+  const message = "PLN needs an exchange rate before a transaction can be recorded in it.";
+  render(
+    <QuickAddComposer
+      {...props({
+        accounts: [
+          {
+            id: "account-a",
+            name: "Cash · PLN",
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            capturable: false,
+            ownership: "own",
+          },
+        ],
+        accountId: "account-a",
+        fieldErrors: { byField: { accountId: [message] }, formLevel: [] },
+      })}
+    />,
+  );
+  expect(screen.getAllByText(message)).toHaveLength(1);
 });

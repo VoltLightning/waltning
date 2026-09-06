@@ -351,7 +351,8 @@ export const pl: Messages = {
     emptyTitle: "Brak kategorii",
     emptyBody: "Utwórz teraz albo zapisz bez kategorii i uporządkuj później.",
     createFirst: "Utwórz kategorię",
-    noGroupsYet: "Kategoria potrzebuje grupy, a nie ma jeszcze żadnej.",
+    noGroupsYet:
+      "Kategoria należy do grupy, a nie ma jeszcze żadnej — zapisz bez niej i uporządkuj później.",
     new: "Nowa",
     create: "Utwórz „{{query}}”",
     use: "Użyj",

@@ -697,11 +697,13 @@ export const en = {
      */
     createFirst: "Create a category",
     /**
-     * §6, R1: a leaf is created under a group, never at top level — so on a
-     * tree with no groups at all the create row has nothing to offer and
-     * says so, rather than showing an empty chooser above a dead Save.
+     * §6, R1: a leaf is created under a group, never at top level — so a
+     * tree with no groups has nowhere to put one, and the empty state says
+     * that instead of offering a create row whose chooser is empty and whose
+     * Save no keystroke can enable.
      */
-    noGroupsYet: "A category needs a group, and there are none yet.",
+    noGroupsYet:
+      "A category lives in a group, and there are none yet — save without one and file it later.",
     /** The pinned footer's create affordance. */
     new: "New",
     /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */

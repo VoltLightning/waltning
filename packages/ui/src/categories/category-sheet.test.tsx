@@ -326,11 +326,21 @@ it("names an empty tree as empty, never as a filter that matched nothing (S06 §
   expect(screen.queryByText("Nothing matches.")).toBeNull();
   expect(screen.getByPlaceholderText("Search categories")).toBeDefined();
   expect(screen.queryByPlaceholderText("Search 0 categories")).toBeNull();
-  expect(screen.getByRole("button", { name: "Create a category" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Create a category" })).toBeNull();
+  expect(
+    screen.getByText(
+      "A category lives in a group, and there are none yet — save without one and file it later.",
+    ),
+  ).toBeDefined();
 });
 
-/** R1 — a leaf is created under a group, and an empty tree has none to offer. */
-it("says why the create row has no group to offer on an empty tree", () => {
+/**
+ * R1 — a leaf is created *under a group*, so a tree with none has nowhere to
+ * put one. Every affordance that says otherwise is a promise the sheet
+ * cannot keep: the create row's chooser would be empty and its Save could
+ * never enable, by any input a person can give.
+ */
+it("offers no create path at all when there is no group to create under (S06 §6)", () => {
   render(
     <CategorySheet
       visible
@@ -341,6 +351,53 @@ it("says why the create row has no group to offer on an empty tree", () => {
       onDismiss={vi.fn()}
     />,
   );
+  expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-disabled")).toBe("true");
+});
+
+/** With a group to create under, the same empty state offers a create that can finish. */
+it("offers create on an empty tree that has groups", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[FOOD, TRANSPORT]}
+      onPick={vi.fn()}
+      onCreate={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  // The group chip first, so the create row opens locked to it — the
+  // ordinary path, and the one that keeps this assertion about Save rather
+  // than about which of two identically-named chips was tapped.
+  fireEvent.click(screen.getByRole("button", { name: "Food" }));
   fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
-  expect(screen.getByText("A category needs a group, and there are none yet.")).toBeDefined();
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+    target: { value: "Groceries" },
+  });
+  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).not.toBe(
+    "true",
+  );
+});
+
+/**
+ * L3 — the seeded shape of a fresh expense tree is `Uncategorized` and
+ * nothing else, so a predicate that counted it as content handed exactly
+ * that ledger the two strings this state exists to remove.
+ */
+it("treats a tree holding only Uncategorized as empty (S06 §9.2)", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[UNCATEGORIZED]}
+      onPick={vi.fn()}
+      onCreate={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("No categories yet")).toBeDefined();
+  expect(screen.queryByText("Nothing matches.")).toBeNull();
+  expect(screen.queryByPlaceholderText("Search 0 categories")).toBeNull();
+  // The row itself still stands — it is the honest blank, not a category.
+  expect(screen.getByRole("radio", { name: /Uncategorized/ })).toBeDefined();
 });

@@ -64,7 +64,6 @@ const meta = {
     today: "2026-08-12",
     note: "",
     onNoteChange: noop,
-    onCancel: noop,
   },
   // `transfer-screen.tsx` never renders `TransferComposer` flush to the
   // device edge — it wraps it in its own `space.x5` horizontal clearance,
@@ -115,6 +114,18 @@ export const Fee: Story = {
  */
 export const Untouched: Story = {
   args: { amountRaw: "", toAmountRaw: "" },
+};
+
+/**
+ * §14.6 on the transfer screen — the source account is held and cannot be
+ * captured in. The same `Banner` quick add carries, with the same one action:
+ * one refusal, one treatment.
+ */
+export const NeedsRate: Story = {
+  args: {
+    accounts: [{ ...USD_ACCOUNT, capturable: false }, PLN_ACCOUNT, SAVINGS_ACCOUNT],
+    onSetRate: noop,
+  },
 };
 
 /** Same account both sides, refused inline before Save (`transactions_transfer_distinct`). */

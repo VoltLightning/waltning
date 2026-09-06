@@ -63,17 +63,21 @@ mid-draft never discards what is there.
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed.
 
-**The top row is the screen's own header.** This route carries no navigation
-header — the ✕ and the kind control are the whole of it — so the row clears the
-device's top inset itself rather than inheriting one from a bar that is not
-there.
+**The top row is the screen's own header, and it is a fixed band.** This route
+carries no navigation header (`headerShown: false`) — the ✕ and the kind
+control are the whole of it — so the band clears the device's top inset itself
+rather than inheriting one from a bar that is not there. It sits *beside* the
+page body rather than inside it, the way the dock sits below: a header that
+scrolls is not one, and the ✕ is the only way out of a composer.
 
 **`expense ▾` opens a menu, and the chevron is why.** Tapping it lists Expense
-and Income; picking one closes the sheet. A control whose current value and
-whose action are the same word is only obvious to whoever wrote it, and someone
-tapping to read the options would find the draft's kind changed instead.
-**Transfer is not among them** (§9.1) — it is a different shape with its own
-composer.
+and Income **with the draft's own kind marked**; picking one closes the sheet.
+A control whose current value and whose action are the same word is only
+obvious to whoever wrote it, and someone tapping to read the options would find
+the draft's kind changed instead — which is also why the menu marks the current
+kind: being read is what it is for, and a menu that answers nothing the trigger
+already said is a tap spent on nothing. **Transfer is not among them** (§9.1) —
+it is a different shape with its own composer.
 
 **The chip row is the whole model.** Account, category, payee, date, scope,
 note, and counterparty when attached. Each chip is empty (placeholder),

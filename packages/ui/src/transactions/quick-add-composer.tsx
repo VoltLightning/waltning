@@ -1,6 +1,12 @@
 /**
- * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3 mobile: the header,
- * the hero amount, and "the whole model" — the chip row.
+ * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3 mobile: the hero
+ * amount and "the whole model" — the chip row.
+ *
+ * **The header is not here either.** `ComposerHeader` (`composer-header.tsx`)
+ * is a *fixed band* the screen composes above `GroundPanel`, because this
+ * component renders inside the page scroller and a header that scrolls is not
+ * one — the ✕ would slide under the notch the moment this column overflows.
+ * Everything here scrolls; the ✕ and the kind control do not.
  *
  * **The keypad is not here.** `Dock` owns the mode row, the keypad and Save
  * (`dock.tsx`'s own doc: "the keypad is `children`, not a prop this component
@@ -36,19 +42,14 @@ import {
 } from "@waltning/core/capture/payee-memory";
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import Animated from "react-native-reanimated";
+import { Text, View } from "react-native";
 import { AmountField } from "../fx/amount-field";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
-import { IconButton } from "../primitives/icon-button";
-import { useInteraction } from "../primitives/interaction.ts";
-import { usePressScale } from "../primitives/press-scale.ts";
 import { RadioGroup, type RadioGroupProps } from "../primitives/radio";
-import { useSafeArea } from "../primitives/safe-area";
 import { type Segment, SegmentControl } from "../primitives/segment-control";
 import { Select } from "../primitives/select";
 import { TextField } from "../primitives/text-field";
@@ -56,7 +57,7 @@ import { BottomSheet } from "../shell/bottom-sheet";
 import { Banner } from "../states/banner";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../tokens.ts";
+import { space } from "../tokens.ts";
 
 const NOTE_CHIP_PREVIEW = 24;
 const COUNTERPARTY_ROLES = ["debt", "contribution", "reference"] as const;
@@ -78,8 +79,12 @@ export type QuickAddComposerCounterparty = { id: string; name: string };
 export type QuickAddComposerProps = {
   /** The raw string `Keypad` edits — `AmountField(hero)`'s own value. */
   raw: string;
+  /**
+   * The draft's kind — read here (the category chip only ever offers this
+   * kind's own leaves), chosen in `ComposerHeader`'s kind menu, which the
+   * screen owns because the header is a fixed band beside the page scroller.
+   */
   type: "expense" | "income";
-  onTypeChange: (type: "expense" | "income") => void;
   accounts: readonly QuickAddComposerAccount[];
   accountId: string | null;
   /** The account chip fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
@@ -136,15 +141,13 @@ export type QuickAddComposerProps = {
   onCreateCounterparty?: () => void;
   /** `create_transaction`'s own field paths — same keys `QuickAddForm` resolves. */
   fieldErrors?: FieldErrorMap;
-  onCancel: () => void;
 };
 
-type OpenSheet = "kind" | "date" | "scope" | "payee" | "note" | "counterparty" | null;
+type OpenSheet = "date" | "scope" | "payee" | "note" | "counterparty" | null;
 
 export function QuickAddComposer({
   raw,
   type,
-  onTypeChange,
   accounts,
   accountId,
   accountMachineFilled,
@@ -172,34 +175,13 @@ export function QuickAddComposer({
   onCounterpartyRoleChange,
   onCreateCounterparty,
   fieldErrors,
-  onCancel,
 }: QuickAddComposerProps) {
   const t = useT();
   const styles = useStyles();
-  const insets = useSafeArea();
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
-
-  /**
-   * **This row is the screen's header**, so it clears the device's own top
-   * inset — the composer route carries no navigation header, and
-   * `GroundPanel` deliberately never clears the top (its own doc: *"the top
-   * belongs to the header above it"*). Not in `useStyles`: that cache is
-   * keyed on the theme and this is keyed on the device, the same split
-   * `GroundPanel`'s `clearance` and `Dock`'s own bottom clearance make.
-   */
-  const clearTop = { paddingTop: insets.top };
 
   const selectedAccount = accounts.find((account) => account.id === accountId);
   const closeSheet = useCallback(() => setOpenSheet(null), []);
-  const handleOpenKindSheet = useCallback(() => setOpenSheet("kind"), []);
-  const handlePickExpense = useCallback(() => {
-    setOpenSheet(null);
-    onTypeChange("expense");
-  }, [onTypeChange]);
-  const handlePickIncome = useCallback(() => {
-    setOpenSheet(null);
-    onTypeChange("income");
-  }, [onTypeChange]);
   const handleOpenDateSheet = useCallback(() => setOpenSheet("date"), []);
   const handleOpenScopeSheet = useCallback(() => setOpenSheet("scope"), []);
   const handleOpenPayeeSheet = useCallback(() => setOpenSheet("payee"), []);
@@ -324,11 +306,19 @@ export function QuickAddComposer({
   // `byField.accountId` might carry, and now renders as the field error it
   // is rather than sharing the muted caption with a refusal that has a way
   // out.
-  const accountError = fieldErrors?.byField["accountId"]?.[0];
+  /**
+   * L2 — `resolveFieldErrorMessage` maps the controller's own
+   * `transactions.needsRate` key onto `byField.accountId`, so a refusal left
+   * over from an earlier save attempt can carry the exact sentence the
+   * banner below is already showing. One fact, stated once: the banner keeps
+   * it, because the banner is the half that carries the way out.
+   */
+  const rawAccountError = fieldErrors?.byField["accountId"]?.[0];
   const accountNeedsRate =
     selectedAccount !== undefined && !selectedAccount.capturable
       ? t("transactions.needsRate", { currency: selectedAccount.currency })
       : undefined;
+  const accountError = rawAccountError === accountNeedsRate ? undefined : rawAccountError;
   /**
    * `neutral`, not `warn` — S05 §8's P4: *the estimated-rate marker is the
    * only amber here*. A currency with no rate at all is not an asserted
@@ -352,13 +342,6 @@ export function QuickAddComposer({
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, clearTop]}>
-        <IconButton label={t("common.cancel")} onPress={onCancel}>
-          <CrossMark />
-        </IconButton>
-        <KindControl type={type} onPress={handleOpenKindSheet} />
-      </View>
-
       <AmountField
         variant="hero"
         label={t("transactions.amount")}
@@ -444,27 +427,6 @@ export function QuickAddComposer({
       )}
 
       <BottomSheet
-        visible={openSheet === "kind"}
-        title={t("transactions.kind")}
-        onDismiss={closeSheet}
-      >
-        <View style={styles.kindOptions}>
-          <Button
-            label={t("transactions.expense")}
-            onPress={handlePickExpense}
-            variant="secondary"
-            size="lg"
-          />
-          <Button
-            label={t("transactions.income")}
-            onPress={handlePickIncome}
-            variant="secondary"
-            size="lg"
-          />
-        </View>
-      </BottomSheet>
-
-      <BottomSheet
         visible={openSheet === "date"}
         title={t("transactions.date")}
         onDismiss={closeSheet}
@@ -544,69 +506,6 @@ function scopeLabel(
   if (account === undefined) return undefined;
   if (account.ownership === "shared") return t("shell.scopeShared");
   return isBusiness ? t("shell.scopeBusiness") : t("shell.scopeMine");
-}
-
-type KindControlProps = {
-  type: "expense" | "income";
-  onPress: () => void;
-};
-
-/**
- * S05 §9's decided escape hatch — top-right, deliberately out of the thumb
- * zone, and with the composer's own route carrying no navigation header it
- * is also the only thing naming what is being captured. So it states the
- * kind, and `▾` means what it draws: it **opens the sheet listing both
- * kinds**, rather than flipping on a tap while wearing a menu's chevron.
- *
- * A choice of two is still a menu, because the alternative is a control
- * whose current value and whose action are the same word — tapping
- * *Expense* to get income is only obvious to whoever wrote it, and a person
- * who taps to read the options finds the draft's kind silently changed.
- *
- * **Transfer is not among them** (§9.1): a transfer is a different shape and
- * has its own composer, reached from `FloatingAdd`'s own picker.
- */
-function KindControl({ type, onPress }: KindControlProps) {
-  const t = useT();
-  const styles = useStyles();
-  const { hovered, focused, handlers } = useInteraction();
-  const press = usePressScale();
-  const label = type === "expense" ? t("transactions.expense") : t("transactions.income");
-
-  return (
-    <Animated.View style={press.style}>
-      <Pressable
-        accessibilityRole="button"
-        // The field and its value — the sheet this opens holds a button
-        // named for each kind, and two controls sharing one accessible name
-        // is a screen reader announcing the same thing twice.
-        accessibilityLabel={t("transactions.kindValue", { kind: label })}
-        onPress={onPress}
-        onPressIn={press.onPressIn}
-        onPressOut={press.onPressOut}
-        {...handlers}
-        style={[
-          styles.kindControl,
-          hovered ? styles.kindControlHovered : null,
-          focused ? styles.focused : null,
-        ]}
-      >
-        <Text style={styles.kindControlLabel}>{label}</Text>
-        <View style={styles.kindControlChevron} />
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-/** The drawn ✕ — a literal glyph would be the one icon depending on a font shipping it (`keypad.tsx`'s own rule). */
-function CrossMark() {
-  const styles = useStyles();
-  return (
-    <View style={styles.crossMark}>
-      <View style={[styles.crossMarkBar, styles.crossMarkBarA]} />
-      <View style={[styles.crossMarkBar, styles.crossMarkBarB]} />
-    </View>
-  );
 }
 
 type ScopeSegmentsProps = {
@@ -732,7 +631,6 @@ function isCounterpartyRole(value: string): value is CounterpartyRole {
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   /** §14 — text, not tint alone (P5); `theme.textMuted`, the same colour `CategorySheet`'s own caption uses. */
@@ -741,34 +639,4 @@ const useStyles = makeStyles((theme) => ({
   trailRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   counterparty: { gap: space.x3 },
-  /** The kind sheet's two options — `FloatingAdd`'s own type picker, same shape. */
-  kindOptions: { gap: space.x3 },
-  kindControl: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    minHeight: touchTarget.min,
-    paddingHorizontal: space.x2,
-    borderRadius: radius.sm,
-  },
-  kindControlHovered: { backgroundColor: theme.hoverFill },
-  kindControlLabel: { color: theme.text, ...text.ui("body", 600) },
-  kindControlChevron: {
-    width: 8,
-    height: 8,
-    borderRightWidth: 1.5,
-    borderBottomWidth: 1.5,
-    borderColor: theme.textMuted,
-    transform: [{ rotate: "45deg" }],
-    marginTop: -4,
-  },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
-  crossMark: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
-  crossMarkBar: { position: "absolute", width: 17, height: 2, backgroundColor: theme.text },
-  crossMarkBarA: { transform: [{ rotate: "45deg" }] },
-  crossMarkBarB: { transform: [{ rotate: "-45deg" }] },
 }));

@@ -238,8 +238,9 @@ function AppStack() {
           notch. The two lines come out when the composers clear the status
           bar themselves, in the same change. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
-      <Stack.Screen name="transfer" options={{ title: t("routes.transfer") }} />
+      {/* Both composers draw their own header (`ComposerHeader`, S05 §3). */}
+      <Stack.Screen name="quick-add" options={{ title: t("routes.expense"), headerShown: false }} />
+      <Stack.Screen name="transfer" options={{ title: t("routes.transfer"), headerShown: false }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
       <Stack.Screen name="transaction/[id]" options={{ title: t("routes.transaction") }} />
       <Stack.Screen name="accounts/index" options={{ title: t("routes.accounts") }} />

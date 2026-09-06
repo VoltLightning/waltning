@@ -175,12 +175,17 @@ export const WithLastUsed: Story = {
 };
 
 /**
- * No rate held for BYN — shown, muted, and it says why rather than
- * disappearing (S05). `TWENTY`'s own BYN tile sits in the CASH group, below
- * the list's `maxHeight` scroll cut, so its baseline was indistinguishable
- * from `TwentyAccounts`; this fixture is four accounts total — no scroll cut
- * to clear — so the tile and its "needs a rate" caption land inside the
- * captured frame regardless of which group it sits in.
+ * No rate held for BYN — shown, muted, and tagged *Needs a rate* rather than
+ * disappearing (S05). A tag, not the sentence: the tile is a name, a currency
+ * and a balance, and the whole refusal repeated in every uncapturable cell
+ * was longer than everything it described; the sentence and its way out
+ * belong to the composer's own banner, where a person is actually stopped.
+ *
+ * `TWENTY`'s own BYN tile sits in the CASH group, below the list's
+ * `maxHeight` scroll cut, so its baseline was indistinguishable from
+ * `TwentyAccounts`; this fixture is four accounts total — no scroll cut to
+ * clear — so the tile and its tag land inside the captured frame regardless
+ * of which group it sits in.
  */
 const UNCAPTURABLE: AccountPickerAccount[] = [
   {

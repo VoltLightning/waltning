@@ -156,27 +156,38 @@ export const FilteredEmpty: Story = {
  * above: nothing has been excluded, so the sheet says so plainly rather than
  * counting leaves nobody has (*Search 0 categories*) or blaming a query for
  * an absence that predates it (*Nothing matches*).
+ *
+ * **And it offers nothing it cannot do.** R1 puts a leaf under a group, so a
+ * tree with no groups has nowhere to create one — the state says where
+ * categories come from instead of opening a create row whose chooser is
+ * empty and whose Save no keystroke can enable. `+ New` is disabled for the
+ * same reason.
  */
 export const EmptyTree: Story = {
   args: { ...WITH_CREATE, tree: [], usage: {} },
 };
 
 /**
- * The same ledger, one step in — `New` opens the create row, and R1 refuses a
- * leaf at top level, so the row says why it has no group to offer rather
- * than showing an empty chooser above a Save that never enables.
+ * The seeded shape of a fresh **expense** tree: `Uncategorized` and nothing
+ * else. Still the empty state — one honest blank is not a taxonomy — and the
+ * row itself stays pickable below it.
  */
-export const EmptyTreeCreating: Story = {
-  args: { ...WITH_CREATE, tree: [], usage: {} },
-  play: async ({ canvasElement }) => {
-    // `<Modal>` portals to a sibling of `canvasElement` — `FilteredEmpty`
-    // above states the whole reason.
-    const canvas = within(canvasElement.ownerDocument.body);
-    await userEvent.click(await canvas.findByRole("button", { name: "Create a category" }));
-    await expect(
-      canvas.findByText("A category needs a group, and there are none yet."),
-    ).resolves.toBeDefined();
+export const OnlyUncategorized: Story = {
+  args: {
+    ...WITH_CREATE,
+    tree: [
+      { id: "uncategorized", parentId: null, name: "Uncategorized", kind: "expense", isLeaf: true },
+    ],
+    usage: { uncategorized: 3 },
   },
+};
+
+/**
+ * A tree that has groups but no leaves — a taxonomy mid-build. Here the
+ * create path *can* complete, so the empty state offers it.
+ */
+export const EmptyTreeWithGroups: Story = {
+  args: { ...WITH_CREATE, tree: [FOOD, TRANSPORT], usage: {} },
 };
 
 /** The pinned `+ New` row — group locked to the chip already narrowing the sheet. */

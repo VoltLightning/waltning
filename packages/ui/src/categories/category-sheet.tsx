@@ -205,26 +205,42 @@ export function CategorySheet({
       : undefined;
 
   const emptyBody = t("categories.noMatchBody", { query: query.trim() });
-  const canCreateHere = onCreate !== undefined && groupId !== null;
   /**
-   * §6's *other* empty: a tree with no leaves at all, which is what a fresh
-   * ledger is until the taxonomy arrives. It is not a filter that excluded
-   * everything, so it says neither *Search 0 categories* (a count of
-   * something nobody has) nor *Nothing matches* (which blames a query for
+   * **R1, and the reason this is not simply `onCreate !== undefined`.** A
+   * leaf is created *under a group* (§6: never at top level, because a
+   * top-level leaf is `Uncategorized` and nothing else), so a tree holding
+   * no groups has nowhere to put one — and every affordance that says
+   * otherwise is a promise this sheet cannot keep: a create row whose group
+   * chooser is empty, above a Save no keystroke can enable. Groups arrive
+   * with the taxonomy, never from here.
+   */
+  const canCreate = onCreate !== undefined && groups.length > 0;
+  const canCreateHere = canCreate && groupId !== null;
+  /**
+   * §6's *other* empty: a tree with no ordinary leaves, which is what a
+   * fresh ledger is until the taxonomy arrives. It is not a filter that
+   * excluded everything, so it says neither *Search 0 categories* (a count
+   * of something nobody has) nor *Nothing matches* (which blames a query for
    * an absence that predates it). `searching` cannot be the test — a query
    * typed into an empty sheet still finds nothing, and the reason is still
    * that there is nothing.
+   *
+   * **`Uncategorized` does not make the tree non-empty.** It is the seeded
+   * honest blank (§9.2) and renders in its own row below regardless; the
+   * seeded shape of a fresh expense tree is *exactly* that leaf and no
+   * others, so counting it here would hand that ledger "Search 0
+   * categories" and "Nothing matches" — the two strings this state exists to
+   * remove.
    */
-  const emptyTree = ordinaryLeaves.length === 0 && uncategorized === undefined;
+  const emptyTree = ordinaryLeaves.length === 0;
   /**
    * The footer's own *New*, offered again from the empty state where a
    * person is actually reading — named in full there, because two controls
    * labelled *New* on one sheet is one button announced twice.
    */
-  const createAction =
-    onCreate === undefined
-      ? undefined
-      : { label: t("categories.createFirst"), onPress: handleOpenCreate };
+  const createAction = canCreate
+    ? { label: t("categories.createFirst"), onPress: handleOpenCreate }
+    : undefined;
 
   return (
     <BottomSheet visible={visible} title={t("transactions.category")} onDismiss={handleDismiss}>
@@ -264,7 +280,14 @@ export function CategorySheet({
         {visibleLeaves.length === 0 ? (
           emptyTree ? (
             createAction === undefined ? (
-              <Text style={styles.noMatches}>{t("categories.emptyTitle")}</Text>
+              // Nowhere to create (no group, or a picker-only caller), so
+              // nothing is offered: an `EmptyState` requires an action, and
+              // the only honest action here is none. The body says where
+              // categories come from and that a capture saves without one.
+              <View style={styles.emptyTree}>
+                <Text style={styles.emptyTreeTitle}>{t("categories.emptyTitle")}</Text>
+                <Text style={styles.emptyTreeBody}>{t("categories.noGroupsYet")}</Text>
+              </View>
             ) : (
               <EmptyState
                 variant="first-run"
@@ -330,7 +353,7 @@ export function CategorySheet({
           label={t("categories.new")}
           onPress={handleOpenCreate}
           variant="secondary"
-          disabled={onCreate === undefined}
+          disabled={!canCreate}
         />
         <Button
           label={
@@ -565,27 +588,17 @@ function CreateRow({
       {groupLocked ? null : (
         <>
           <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
-          {/*
-            R1: a leaf is created *under a group*, so a tree with no groups
-            has nothing to offer here — and an empty chooser above a Save
-            that never enables is the same silence this sheet's own empty
-            state exists to break.
-          */}
-          {groups.length === 0 ? (
-            <Text style={styles.noMatches}>{t("categories.noGroupsYet")}</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {groups.map((group) => (
-                <GroupChip
-                  key={group.id}
-                  id={group.id}
-                  name={group.name}
-                  selected={group.id === groupId}
-                  onPress={onGroupChange}
-                />
-              ))}
-            </ScrollView>
-          )}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+            {groups.map((group) => (
+              <GroupChip
+                key={group.id}
+                id={group.id}
+                name={group.name}
+                selected={group.id === groupId}
+                onPress={onGroupChange}
+              />
+            ))}
+          </ScrollView>
         </>
       )}
       {groupLocked && lockedGroup ? <Text style={styles.label}>{lockedGroup.name}</Text> : null}
@@ -618,6 +631,10 @@ const useStyles = makeStyles((theme) => ({
   gridScroll: { maxHeight: touchTarget.min * 8 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   noMatches: { color: theme.textMuted, ...text.ui("body"), textAlign: "center", padding: space.x5 },
+  /** `EmptyState`'s own shape, without the button it requires and this state cannot offer. */
+  emptyTree: { alignItems: "center", gap: space.x3, padding: space.x6 },
+  emptyTreeTitle: { color: theme.text, ...text.display("displayTwo") },
+  emptyTreeBody: { color: theme.textMuted, ...text.ui("body"), textAlign: "center" },
   // Two columns (S06 §3: "leaves are short and groups are few") — `gap` on
   // the wrapping row does the column gutter, so each cell only needs to
   // clear just under half the row.

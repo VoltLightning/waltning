@@ -22,11 +22,9 @@
  * `amount_original`"*.
  *
  * **`Dock` is the screen's, not this component's** — the same split
- * `QuickAddComposer`/`quick-add-screen.tsx` already draws: this renders
- * everything above the keypad, the screen composes `Dock` (mode row, keypad,
- * full-width Save) below it. `onCancel` is this component's own header ✕,
- * `QuickAddComposer`'s own escape for the same reason — Save belongs to
- * `Dock`, Cancel does not.
+ * `QuickAddComposer`/`quick-add-screen.tsx` already draws: this renders the
+ * scrolling body, the screen composes `ComposerHeader` (the fixed ✕/title
+ * band) above it and `Dock` (mode row, keypad, full-width Save) below.
  *
  * **`from`/`to` are opened, never rendered, here.** `AccountPicker`
  * (`accounts/`) is a sibling domain, the same rule `QuickAddComposer` keeps
@@ -40,18 +38,20 @@ import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../fx/amount";
 import { AmountField, parseAmount } from "../fx/amount-field";
-import { useT } from "../i18n/provider";
+import { formatRate } from "../fx/format-rate.ts";
+import { useLocale, useT } from "../i18n/provider";
 import { Chip } from "../primitives/chip";
 import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { IconButton } from "../primitives/icon-button";
 import { RateField } from "../primitives/rate-field";
-import { useSafeArea } from "../primitives/safe-area";
+import { Tag } from "../primitives/tag";
 import { TextField } from "../primitives/text-field";
 import { BottomSheet } from "../shell/bottom-sheet";
+import { Banner } from "../states/banner";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { radius, space } from "../tokens.ts";
+import { radius, space, tabularNums } from "../tokens.ts";
 
 export type TransferComposerAccount = {
   id: string;
@@ -110,7 +110,13 @@ export type TransferComposerProps = {
   onNoteChange: (note: string) => void;
 
   fieldErrors?: FieldErrorMap;
-  onCancel: () => void;
+  /**
+   * §14.6's way out, the same one `QuickAddComposer` carries: one refusal,
+   * one treatment. The screen owns the route (`architecture/11` — this
+   * package names no router), so a caller with nowhere to send a person
+   * passes nothing and the banner states the refusal alone.
+   */
+  onSetRate?: () => void;
 };
 
 type OpenSheet = "date" | "note" | null;
@@ -135,21 +141,11 @@ export function TransferComposer({
   note,
   onNoteChange,
   fieldErrors,
-  onCancel,
+  onSetRate,
 }: TransferComposerProps) {
   const t = useT();
   const styles = useStyles();
-  const insets = useSafeArea();
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
-
-  /**
-   * **This row is the screen's header** — the transfer route carries no
-   * navigation header, and `GroundPanel` deliberately never clears the top
-   * inset (its own doc: *"the top belongs to the header above it"*). Built
-   * beside the JSX rather than in `useStyles`, which is keyed on the theme
-   * while this is keyed on the device.
-   */
-  const clearTop = { paddingTop: insets.top };
 
   const from = accounts.find((account) => account.id === fromAccountId);
   const to = accounts.find((account) => account.id === toAccountId);
@@ -238,23 +234,32 @@ export function TransferComposer({
   // refusal is ever rendered. `fromNeedsRate` covers it proactively, the
   // moment the picker names an uncapturable account; `accountIdError` is the
   // fallback for whatever else `byField.accountId` might carry.
-  const accountIdError = fieldErrors?.byField["accountId"]?.[0];
+  const rawAccountIdError = fieldErrors?.byField["accountId"]?.[0];
   const fromNeedsRate =
     from !== undefined && !from.capturable
       ? t("transactions.needsRate", { currency: from.currency })
       : undefined;
-  const fromCaption = fromNeedsRate ?? accountIdError;
+  /**
+   * S05 §6's treatment, on the composer that reaches the same gate: a
+   * `Banner` with the one action that ends it, never a muted line with no way
+   * out — a person arrives here from S16's *Transfer from here* on the very
+   * account that is blocked. `neutral`, never amber: P4 reserves amber for
+   * the estimated-rate marker, which this screen actually renders.
+   */
+  // L2 — the controller's own refusal carries the same `needsRate` sentence
+  // the banner states; one fact, stated once, on the half that carries the
+  // way out.
+  const accountIdError = rawAccountIdError === fromNeedsRate ? undefined : rawAccountIdError;
+  const setRateAction =
+    onSetRate === undefined || from === undefined
+      ? undefined
+      : {
+          label: t("transactions.needsRateAction", { currency: from.currency }),
+          onPress: onSetRate,
+        };
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, clearTop]}>
-        <IconButton label={t("common.cancel")} onPress={onCancel}>
-          <CrossMark />
-        </IconButton>
-        <Text style={styles.title}>{t("transactions.transfer")}</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
       <View style={styles.chipRow}>
         <View style={styles.fromColumn}>
           <Chip
@@ -263,7 +268,9 @@ export function TransferComposer({
             onPress={onOpenFromAccountPicker}
             machineFilled={false}
           />
-          {fromCaption === undefined ? null : <Text style={styles.needsRate}>{fromCaption}</Text>}
+          {accountIdError === undefined ? null : (
+            <Text style={styles.fieldError}>{accountIdError}</Text>
+          )}
         </View>
         <IconButton label={t("transactions.swapDirection")} onPress={onSwap}>
           <SwapArrow />
@@ -275,6 +282,13 @@ export function TransferComposer({
           machineFilled={false}
         />
       </View>
+      {fromNeedsRate === undefined ? null : (
+        <Banner
+          tone="neutral"
+          message={fromNeedsRate}
+          {...(setRateAction === undefined ? {} : { action: setRateAction })}
+        />
+      )}
       {toAccountError === undefined && !sameAccount ? null : (
         <Text style={styles.fieldError}>
           {toAccountError ?? t("transactions.sameAccountRefused")}
@@ -305,6 +319,9 @@ export function TransferComposer({
             <Text style={styles.fieldError}>{toAmountError}</Text>
           )}
 
+          {realizedRate !== undefined || referenceRate === undefined ? null : (
+            <ReferenceOnly reference={referenceRate} />
+          )}
           {realizedRate === undefined ? null : (
             <RateField
               label={t("transactions.realized")}
@@ -393,14 +410,50 @@ export function TransferComposer({
   );
 }
 
-/** The drawn ✕ — `QuickAddComposer`'s own construction, matched rather than shared (one more use, still under the third). */
-function CrossMark() {
+/**
+ * **The reference rate, standing alone.** S31 §3 draws two lines, and only
+ * one of them is derived: *realized* needs both amounts (§7.5), *reference*
+ * needs neither. `RateField` renders the pair and takes its `value`
+ * unconditionally, so it has no shape for "the reference exists and the
+ * realized figure does not" — which is the state this screen opens in, and
+ * the state it returns to for as long as someone is backspacing the
+ * destination amount to retype it (S31 §7: *"editing the destination amount
+ * is the primary interaction"*). Withholding a fact that is already known,
+ * mid-way through the one interaction that fact exists for, is the opposite
+ * defect from the `0,0000` this gate fixes.
+ *
+ * The line is `RateField`'s own, through the same two keys and the same
+ * `formatRate` — a caller-side copy of one `<Text>`, not a second definition
+ * of what a reference rate *is*.
+ */
+function ReferenceOnly({ reference }: { reference: TransferComposerReferenceRate }) {
+  const t = useT();
   const styles = useStyles();
-  return (
-    <View style={styles.crossMark}>
-      <View style={[styles.crossMarkBar, styles.crossMarkBarA]} />
-      <View style={[styles.crossMarkBar, styles.crossMarkBarB]} />
+  const locale = useLocale();
+  const line =
+    reference.carriedDays > 0
+      ? t("transactions.referenceRateCarried", {
+          rate: formatRate(reference.rate, locale, 4),
+          source: reference.source,
+          count: reference.carriedDays,
+          date: reference.date,
+        })
+      : t("transactions.referenceRate", {
+          rate: formatRate(reference.rate, locale, 4),
+          source: reference.source,
+          date: reference.date,
+        });
+
+  // `RateField`'s own construction, matched: a bare `<Text>` unless the pair
+  // carries a person's own correction, in which case the `Tag` needs a row
+  // to sit in.
+  return reference.manual ? (
+    <View style={styles.referenceRow}>
+      <Text style={styles.reference}>{line}</Text>
+      <Tag variant="warn">{t("transactions.manualRate")}</Tag>
     </View>
+  ) : (
+    <Text style={styles.reference}>{line}</Text>
   );
 }
 
@@ -417,14 +470,6 @@ function SwapArrow() {
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { color: theme.text, ...text.ui("displayThree") },
-  /** Balances the header ✕ so the title stays centred. */
-  headerSpacer: { width: 44 },
-  crossMark: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
-  crossMarkBar: { position: "absolute", width: 17, height: 2, backgroundColor: theme.text },
-  crossMarkBarA: { transform: [{ rotate: "45deg" }] },
-  crossMarkBarB: { transform: [{ rotate: "-45deg" }] },
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -433,9 +478,14 @@ const useStyles = makeStyles((theme) => ({
   },
   fromColumn: { gap: space.xs },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
-  /** §14.6's own caption — a fact about now, not an error (`quick-add-form.tsx`'s `blocked`, matched). */
-  needsRate: { color: theme.textMuted, ...text.ui("caption") },
   marginRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  /** `RateField`'s own reference line, matched — mono, tabular, muted. */
+  referenceRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  reference: {
+    color: theme.textMuted,
+    ...text.mono("caption"),
+    fontVariant: [...tabularNums],
+  },
   marginLabel: { color: theme.textMuted, ...text.ui("body") },
   swap: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   swapBar: { position: "absolute", width: 14, height: 2, backgroundColor: theme.text },

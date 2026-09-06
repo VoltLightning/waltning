@@ -20,8 +20,10 @@ import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { useT } from "@waltning/ui/i18n/provider";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { GroundPanel } from "@waltning/ui/shell/card";
+import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
+import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
 import {
   KNOWN_PATHS,
@@ -35,7 +37,7 @@ import {
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
@@ -361,25 +363,6 @@ export default function QuickAdd() {
    * unmounts on the push, so the amount and account come back through the
    * route rather than surviving in state that no longer exists.
    */
-  /**
-   * §14.6's refusal, with a way out. The composer states *"PLN needs an
-   * exchange rate…"* and this is the door it opens: S18, already scoped to
-   * the currency that is blocking the save and to the draft's own accounting
-   * date (§7.0a — the device's calendar, a bare `YYYY-MM-DD`, never a
-   * `Date`). The route lives here because `packages/ui` names no router
-   * (`architecture/11`); the composer only ever asks.
-   */
-  const needsRateCurrency =
-    selectedComposerAccount !== undefined && !selectedComposerAccount.capturable
-      ? selectedComposerAccount.currency
-      : undefined;
-  const handleSetRate = useCallback(() => {
-    if (needsRateCurrency === undefined) return;
-    router.push({
-      pathname: "/settings/rates",
-      params: { quote: needsRateCurrency, date: today },
-    });
-  }, [needsRateCurrency, today]);
   const handleComposerCreateCounterparty = useCallback(() => {
     router.push({
       pathname: "/counterparty/new",
@@ -390,6 +373,25 @@ export default function QuickAdd() {
       },
     });
   }, [composerAmountRaw, effectiveAccountId]);
+  const needsRateCurrency =
+    selectedComposerAccount !== undefined && !selectedComposerAccount.capturable
+      ? selectedComposerAccount.currency
+      : undefined;
+  /**
+   * §14.6's refusal, with a way out. The composer states *"PLN needs an
+   * exchange rate…"* and this is the door it opens: S18, already scoped to
+   * the currency that is blocking the save and to the draft's own accounting
+   * date (§7.0a — the device's calendar, a bare `YYYY-MM-DD`, never a
+   * `Date`). The route lives here because `packages/ui` names no router
+   * (`architecture/11`); the composer only ever asks.
+   */
+  const handleSetRate = useCallback(() => {
+    if (needsRateCurrency === undefined) return;
+    router.push({
+      pathname: "/settings/rates",
+      params: { quote: needsRateCurrency, date: today },
+    });
+  }, [needsRateCurrency, today]);
   const handleComposerOpenCategoryPicker = useCallback(
     () => setComposerCategorySheet({ open: true, kind: composerType }),
     [composerType],
@@ -556,8 +558,13 @@ export default function QuickAdd() {
   if (breakpoint === "desk") {
     return (
       <GroundPanel>
-        {/* No title: the navigation header carries it, and the same
-            string twice on one screen reads as two sections. */}
+        {/* The route's own name, on the ground. The navigation header used
+            to carry it and this route no longer has one — the phone's
+            composer states its name in `ComposerHeader`'s band, and the desk
+            fallback, which is a form rather than a composer, states it here.
+            The same string the header showed, so the desk reads exactly as
+            it did. */}
+        <Text style={styles.deskTitle}>{t("routes.expense")}</Text>
         <QuickAddForm
           accounts={accounts}
           categories={snapshot.categories}
@@ -595,6 +602,16 @@ export default function QuickAdd() {
 
   return (
     <View style={styles.root}>
+      {/* The ✕ and the kind menu, in a fixed band above the page scroller:
+          `app/_layout.tsx` hides the navigation header on this route, so
+          this is the header, and a header inside `GroundPanel`'s own
+          `ScrollView` scrolls under the notch the moment the column
+          overflows. */}
+      <ComposerHeader
+        onCancel={handleComposerCancel}
+        kind={composerType}
+        onKindChange={handleComposerTypeChange}
+      />
       {/* `clearBottom={false}` — this panel is not the screen's own bottom
           edge, `Dock` below it is, and `Dock` already clears the home
           indicator itself. */}
@@ -602,7 +619,6 @@ export default function QuickAdd() {
         <QuickAddComposer
           raw={composerAmountRaw}
           type={composerType}
-          onTypeChange={handleComposerTypeChange}
           accounts={composerAccounts}
           accountId={effectiveAccountId}
           accountMachineFilled={accountMachineFilled}
@@ -643,7 +659,6 @@ export default function QuickAdd() {
           onCounterpartyRoleChange={handleComposerCounterpartyRoleChange}
           onCreateCounterparty={handleComposerCreateCounterparty}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
-          onCancel={handleComposerCancel}
         />
       </GroundPanel>
       <Dock
@@ -682,4 +697,6 @@ export default function QuickAdd() {
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, backgroundColor: theme.ground },
+  /** The desk fallback's own heading — the navigation header's own face (`_layout.tsx`'s `headerTitleStyle`). */
+  deskTitle: { color: theme.text, ...text.ui("displayThree") },
 }));

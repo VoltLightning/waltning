@@ -66,11 +66,19 @@ looking at it (§14.1).
 statement shows and a rate is not (§7.6). The realized rate is derived and
 displayed, never typed.
 
-**Which is why it is absent until both amounts are.** A rate derived from a
-figure nobody has typed is not a reading — `realized 0,0000` on an untouched
-screen is the absence of one wearing a figure's clothes, on the screen whose
-whole purpose is making the real rate visible. The rate panel and the margin
-appear together, once both sides hold a non-zero amount.
+**Which is why the realized figure is absent until both amounts are.** A rate
+derived from a figure nobody has typed is not a reading — `realized 0,0000` on
+an untouched screen is the absence of one wearing a figure's clothes, on the
+screen whose whole purpose is making the real rate visible. The realized rate
+and the margin appear together, once both sides hold a non-zero amount.
+
+**The reference rate is the opposite case and stays.** It is not derived from
+anything typed — it is a fact the ledger already holds — so it shows from the
+moment a pair is chosen, on its own line, with its source, its date and its
+staleness (§6). Withholding it while the destination amount is being retyped
+would hide the figure at exactly the moment §7 calls primary: backspacing
+`565,20` to type what the bank actually gave is the whole interaction, and the
+reference is what it is compared against.
 
 Same-currency transfers collapse: one amount, no rate panel, no spread.
 
@@ -115,7 +123,7 @@ direction — read-only, because it is derived.
 | Empty | n/a |
 | Error | Same account both sides → refused inline (`transactions_transfer_distinct`). Save failed → draft retained |
 | Offline | Works. Reference rate from cache, marked stale; the destination amount stays editable, which is the point — the rate you actually got does not depend on the feed |
-| Gated | n/a |
+| Gated | **The source account's currency has no rate** — the same §14.6 gate S05 §6 states, reached here from S16's *Transfer from here* on the very account that is blocked. Save is disabled and a `neutral` `Banner` says so, carrying the one action that ends it: *Set a ‹CUR› rate*, opening S18 scoped to that currency and this screen's date. One refusal, one treatment, on both composers |
 
 ## 7. Interaction
 
