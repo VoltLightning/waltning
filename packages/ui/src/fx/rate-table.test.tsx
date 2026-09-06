@@ -126,10 +126,14 @@ it("an inverted range renders no rows", () => {
 
 /**
  * This list is the hosting screen's one scroller, so the screen's own content
- * rides in it. Broken once by rendering `header`/`footer` outside the
- * `FlatList` — the page stops scrolling with the table and the last card ends
- * flush with the device's bottom edge, which is the defect this shape exists
- * to fix.
+ * rides **inside** it. Broken once by rendering `header`/`footer` as siblings
+ * of the `FlatList` — the page stops scrolling with the table and the last
+ * card ends flush with the device's bottom edge, which is the defect this
+ * shape exists to fix.
+ *
+ * Asserted by *containment*, not presence: a sibling arrangement satisfies
+ * `getByText` at document scope unchanged, so a presence assertion could not
+ * fail for the reason it names.
  */
 it("carries the screen's own header and footer inside the one list", () => {
   render(
@@ -139,9 +143,10 @@ it("carries the screen's own header and footer inside the one list", () => {
       footer={<Text>the coverage card</Text>}
     />,
   );
-  expect(screen.getByText("the screen's controls")).toBeDefined();
-  expect(screen.getByText("the coverage card")).toBeDefined();
-  expect(screen.getByText("3.7556")).toBeDefined();
+  const list = screen.getByTestId("rate-table");
+  expect(list.contains(screen.getByText("the screen's controls"))).toBe(true);
+  expect(list.contains(screen.getByText("the coverage card"))).toBe(true);
+  expect(list.contains(screen.getByText("3.7556"))).toBe(true);
 });
 
 /**
@@ -158,8 +163,9 @@ it("with no pair, keeps the scroller and its header and footer, and states nothi
       footer={<Text>the coverage card</Text>}
     />,
   );
-  expect(screen.getByText("the screen's controls")).toBeDefined();
-  expect(screen.getByText("the coverage card")).toBeDefined();
+  const list = screen.getByTestId("rate-table");
+  expect(list.contains(screen.getByText("the screen's controls"))).toBe(true);
+  expect(list.contains(screen.getByText("the coverage card"))).toBe(true);
   expect(screen.queryByText("PLN per USD")).toBeNull();
   expect(screen.queryByText("The range must not end before it starts.")).toBeNull();
 });

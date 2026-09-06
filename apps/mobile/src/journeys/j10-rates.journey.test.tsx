@@ -91,8 +91,14 @@ type JourneyLedger = ReturnType<typeof createJourneyLedger>;
 const NOW = new Date("2026-09-10T09:00:00Z");
 
 const FRIDAY = "2026-09-04";
-/** A day the fixture leaves unrated — what a capture gate would link to. */
-const UNRATED = "2026-09-01";
+/**
+ * A day the fixture leaves unrated — what a capture gate links to. Chosen
+ * **before** the screen's default 30-day window (which opens on 2026-08-12
+ * from this journey's `NOW`), because the point of the step below is that the
+ * link widens the range to contain its own day: land on a day inside the
+ * default window and the assertion proves nothing.
+ */
+const UNRATED = "2026-07-15";
 const SUNDAY = "2026-09-06";
 const MONDAY = "2026-09-07";
 
@@ -281,12 +287,13 @@ describe("J10 — currency and rates", () => {
     fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
     await waitFor(() => expect(screen.queryByText(/^Set PLN per USD/)).toBeNull());
 
-    // And S18 now shows it for that date. Narrowed to the one day so the row
-    // is inside `FlatList`'s own initial window under jsdom.
-    fireEvent.change(screen.getByRole("textbox", { name: "From" }), {
-      target: { value: UNRATED },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "To" }), { target: { value: UNRATED } });
+    // And S18 shows it, on the page the link landed on — **without** driving
+    // the range by hand. The link widened the window to open on its own day
+    // (R2 M1), so the row it just wrote is the first one, inside `FlatList`'s
+    // own initial window under jsdom. Before that fix this assertion needed
+    // two `DateField` edits a person arriving from a link has no reason to
+    // make, which is what "a success that looks like nothing happened" means.
+    expect(screen.getByRole("textbox", { name: "From" })).toHaveProperty("value", UNRATED);
 
     const row = screen.getByRole("button", { name: UNRATED });
     expect(within(row).getByText(formatRate(LINKED_RATE))).toBeDefined();

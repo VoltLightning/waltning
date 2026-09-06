@@ -29,14 +29,25 @@ Both entries above are links, so both are parameters rather than screen state:
 | Parameter | Effect | Absent, or not resolvable |
 |---|---|---|
 | `quote` | Preselects the pair, when the code names one of this pivot's quote currencies | The first quote currency, as with no link — **and the editor does not open**, whatever `date` says |
-| `date` | Opens `RateEditor` on that single day, so the fix is one field away | The editor stays closed |
+| `date` | Opens `RateEditor` on that single day, and **widens the range to contain it**, so the fix is one field away and the write it makes is visible behind the sheet | The editor stays closed |
 
-**An unresolvable `quote` opens nothing.** A code this ledger does not quote —
-archived, renamed, or a gate that raced the ledger — must never fall through to
-whichever pair sorts first *with the editor already open on it*: two taps there
-write a manual rate for a pair nobody asked about, and the only thing between
-the reader and that write is a heading they arrived at by tapping a link naming
-a different currency.
+**The editor opens on a pair the link named, or not at all** — which includes a
+`date` with no `quote` beside it, and a repeated `quote`, since an array names
+no pair. Both are links that never said which currency; opening on whichever
+one sorts first is the same wrong-pair write an unresolvable code would cause.
+
+A code this ledger does not quote — archived, renamed, or a gate that raced the
+ledger — must never fall through to whichever pair sorts first *with the editor
+already open on it*: two taps there write a manual rate for a pair nobody asked
+about, and the only thing between the reader and that write is a heading they
+arrived at by tapping a link naming a different currency.
+
+**The range follows the link, by widening rather than replacing.** Success is
+silent — the sheet closes and nothing else says so — so a write on a day the
+table does not show is a write that looks like nothing happened, and a
+backdated link lands outside the default 30-day window every time. The window
+grows to contain the linked day and keeps the recent days a person came in
+with.
 
 `date` is checked against the **calendar**, not only the `YYYY-MM-DD` shape — a
 parameter is whatever a link put in the address bar, and `2026-02-31` has the
@@ -122,7 +133,7 @@ so its rows stay true and stay drawn.
 
 | Component | Notes |
 |---|---|
-| `Card` | Two — `RateTable` alone (only when there is a pair to table), and the per-currency coverage list. Everything else — pair select, presets, date range, action buttons and the no-quote hint — sits on the ground |
+| `Card` | **One** — the per-currency coverage list, riding in the table's footer. The table itself is not carded (it is the page), and everything else — pair select, presets, date range, action buttons and the no-quote hint — sits on the ground, in the table's header and footer |
 | `RateTable` | **Virtualized, and it is the page**: one row per calendar day, with this screen's own controls as its list header and its coverage card as its list footer. Gaps render as **explicit empty rows**, never as absence |
 | `RateEditor` | Single date **or a range**; states what it will overwrite before writing. Hosted in a `BottomSheet`, whose header carries the pair-and-range heading |
 | `BottomSheet` | The editor's host — a tapped row opens the editor where the tap was |

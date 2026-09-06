@@ -8,9 +8,27 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { Text } from "react-native";
+import { text } from "../theme/fonts.ts";
+import { makeStyles } from "../theme/styles.ts";
 import { RateTable } from "./rate-table";
 
 function noop() {}
+
+/**
+ * The hint S18 puts in `header` when there is no pair to table — through the
+ * theme, like the screen's own, rather than a bare `<Text>`: unstyled text is
+ * black on both grounds, which is a 1.2:1 contrast violation in the dark
+ * theme and a picture of a state this product never renders.
+ */
+function NoQuoteHint() {
+  const styles = useStyles();
+  return <Text style={styles.hint}>No currency to compare against the pivot yet.</Text>;
+}
+
+const useStyles = makeStyles((theme) => ({
+  hint: { color: theme.textMuted, ...text.ui("body") },
+}));
 
 const meta = {
   title: "FX/RateTable",
@@ -74,6 +92,12 @@ export const AllGaps: Story = {
 /**
  * *Nothing to table* — no quote currency, no pivot, or a range that does not
  * parse. The scroller stays, because it is the page; the hosting screen's own
- * hint rides in `header`.
+ * hint rides in `header`, which is why this story has one: the state never
+ * occurs without it, and a picture of an empty list documents nothing.
  */
-export const NoPair: Story = { args: { pair: null } };
+export const NoPair: Story = {
+  args: {
+    pair: null,
+    header: <NoQuoteHint />,
+  },
+};

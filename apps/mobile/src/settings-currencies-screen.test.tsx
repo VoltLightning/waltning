@@ -449,3 +449,21 @@ it("R1 L10 — pinned is tagged where coverage is a caption", () => {
   expect(getComputedStyle(pinned).textTransform).toBe("uppercase");
   expect(getComputedStyle(screen.getByText("100%")).textTransform).not.toBe("uppercase");
 });
+
+/**
+ * R2 L9 — the visible *Pinned* mark is hidden while the row is open, because
+ * the `Toggle` immediately below states the same fact and can change it. The
+ * accessible name said it regardless, so a screen-reader user got the exact
+ * duplication the sighted row avoids: "… Pinned" followed by "Pinned, on".
+ */
+it("R2 L9 — the accessible name drops Pinned once the Toggle below states it", () => {
+  withLedger();
+  const closed = screen.getByRole("button", { name: /^PLN · / });
+  expect(closed.getAttribute("aria-label")).toContain("Pinned");
+
+  expandRow("PLN");
+  const open = screen.getByRole("button", { name: /^PLN · / });
+  expect(open.getAttribute("aria-label")).not.toContain("Pinned");
+  // The Toggle is what states it now.
+  expect(screen.getByLabelText("Pinned")).toBeDefined();
+});

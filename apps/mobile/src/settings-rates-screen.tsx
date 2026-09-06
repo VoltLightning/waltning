@@ -35,14 +35,21 @@
  * `quote` preselects the pair, `date` opens the editor on that single day, so
  * a capture blocked for want of a rate can link straight at the fix.
  *
- * **A parameter this ledger cannot resolve opens nothing.** `quote` naming a
- * currency that is not one of this pivot's quotes leaves the editor closed —
- * it must never fall through to the first currency with the editor already
- * open, because two taps there write a manual rate for a pair nobody asked
- * about. `date` must be a real calendar day, and one that has already
- * happened: `set_manual_rate` refuses a future date, so opening the editor on
- * one would only stage a refusal. Any of those, and the visit is an
- * unparameterised visit.
+ * **The editor opens only on a pair the link actually named.** Not "a quote
+ * that failed to resolve" — a `quote` that *resolves*, which also means a
+ * `?date=` with no quote at all, or with a repeated one (an array is not a
+ * currency code), opens nothing. Falling through to whichever pair sorts
+ * first puts a rate field two taps from a manual write on a pair nobody asked
+ * about, and the only warning is a heading the reader arrived at by tapping a
+ * link that named something else. `date` must also be a real calendar day and
+ * one that has already happened: `set_manual_rate` refuses a future date, so
+ * opening on one would only stage a refusal.
+ *
+ * **And the range widens to contain the linked day.** A write on a day the
+ * table does not show is a success that looks like nothing happened: the sheet
+ * closes, there is no toast on success, and the default 30-day window on a
+ * backdated link contains no row that changed. The window is widened rather
+ * than replaced, so the recent days a person came in with are still there.
  *
  * **Re-rate is not offered**, per S18 §3/§7: `rerate_transactions` is
  * server-only (`offlineEligible: false`, `wave-4-shared.md`'s own excluded
@@ -105,6 +112,32 @@ function presetRange(
 }
 
 /**
+ * The default 30-day window, widened to contain a linked day.
+ *
+ * **Widened rather than replaced.** A write on a day the table does not show
+ * is a success that looks like nothing happened — the sheet closes, success is
+ * silent, and the row that changed is off-range. Replacing the window with the
+ * single linked day would fix that and throw away the recent history the
+ * screen is otherwise about.
+ *
+ * The end never actually moves today: a linked day is checked against `today`
+ * before it reaches here. It is still written as a widen on both sides,
+ * because a one-sided widen would silently stop containing the link the day
+ * that guard changes.
+ */
+function windowAround(
+  today: AccountingDate,
+  linked: AccountingDate | null,
+): {
+  from: string;
+  to: string;
+} {
+  const from = addDays(today, -29);
+  if (linked === null) return { from, to: today };
+  return { from: linked < from ? linked : from, to: linked > today ? linked : today };
+}
+
+/**
  * `expo-router` answers `string | string[]` — a repeated key (`?quote=PLN&
  * quote=EUR`) is an array, and an array is not a value this screen can use.
  * Typed honestly at the seam and narrowed here, the same way
@@ -129,7 +162,7 @@ export default function SettingsRatesScreen({
   const styles = useStyles();
   const breakpoint = useBreakpoint();
   const ledger = useLedgerController();
-  usePhoneLedger(ledger);
+  const snapshot = usePhoneLedger(ledger);
 
   const today = deviceRuntime().capture().date;
   const settings = ledger.listCurrencySettings();
@@ -145,11 +178,12 @@ export default function SettingsRatesScreen({
   // over the plain first-option default, but only when that code is actually
   // one of this pivot's quote currencies.
   const preselected = quoteOptions.find((option) => option.value === quoteParam);
-  // A `?quote=` this ledger cannot resolve — archived, renamed, or a gate that
-  // raced the ledger — must not open the editor on whichever pair happened to
-  // sort first. The selection falls back as it always did; the editor does not
-  // open at all.
-  const quoteResolved = quoteParam === undefined || preselected !== undefined;
+  // The editor opens on a **resolved** pair or not at all. `preselected`, not
+  // "the param did not fail to resolve": a bare `?date=`, and a repeated
+  // `?quote=` (which `oneParam` reduces to `undefined`), are both links that
+  // never named a pair, and opening on whichever one sorts first is the same
+  // wrong-pair write an unresolvable code would have caused. Both real
+  // callers — S17's row action and the capture gate — always send one.
   // `?date=` — the day a capture could not be priced. Checked against the
   // calendar, not only the shape (`isAccountingDate` accepts `2026-02-31` by
   // design), and against today, because `set_manual_rate` refuses a date that
@@ -161,7 +195,7 @@ export default function SettingsRatesScreen({
     dateParam <= today
       ? dateParam
       : null;
-  const linkOpensEditor = linkedDate !== null && quoteResolved;
+  const linkOpensEditor = linkedDate !== null && preselected !== undefined;
 
   const [quote, setQuote] = useState<CurrencyCode | null>(
     preselected
@@ -170,11 +204,10 @@ export default function SettingsRatesScreen({
         ? currencyCode(quoteOptions[0].value)
         : null,
   );
-  const [preset, setPreset] = useState<RangePreset>("30d");
-  const [custom, setCustom] = useState({
-    from: addDays(today, -29) as string,
-    to: today as string,
-  });
+  const [preset, setPreset] = useState<RangePreset>(linkOpensEditor ? "custom" : "30d");
+  const [custom, setCustom] = useState<{ from: string; to: string }>(
+    windowAround(today, linkOpensEditor ? linkedDate : null),
+  );
   const [editorOpen, setEditorOpen] = useState(linkOpensEditor);
   const [editorRange, setEditorRange] = useState<Range>(
     linkOpensEditor && linkedDate !== null
@@ -208,10 +241,23 @@ export default function SettingsRatesScreen({
     setCustom((prev) => ({ ...prev, to: value }));
   }, []);
 
-  const rows =
-    quote === null || pivot === undefined || range === null
-      ? []
-      : ledger.listFxRates({ base: pivot.code, quote, from: range.from, to: range.to });
+  // Memoised on the primitives, not on an object rebuilt every render: this
+  // read spans whatever range is typed, and `RateTable` fills every calendar
+  // day in it. Without this, a keystroke in *From* re-queried the replica and
+  // rebuilt the whole span — bounded by nothing now that the range is not
+  // capped. `snapshot.revision` is the snapshot's own invalidation key: a
+  // write bumps it exactly when a memoised read has gone stale.
+  const base = pivot?.code;
+  const from = range?.from;
+  const to = range?.to;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot.revision` invalidates this memo by identity, not by being read in the body.
+  const rows = useMemo(
+    () =>
+      quote === null || base === undefined || from === undefined || to === undefined
+        ? []
+        : ledger.listFxRates({ base, quote, from, to }),
+    [ledger, snapshot.revision, quote, base, from, to],
+  );
 
   const handleSelectRow = useCallback((date: string) => {
     if (!isAccountingDate(date)) return;
@@ -239,10 +285,19 @@ export default function SettingsRatesScreen({
     setEditorError(null);
   }, []);
 
-  const editorRows =
-    quote === null || pivot === undefined || !editorOpen
-      ? []
-      : ledger.listFxRates({ base: pivot.code, quote, from: editorRange.from, to: editorRange.to });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot.revision` invalidates this memo by identity, not by being read in the body.
+  const editorRows = useMemo(
+    () =>
+      quote === null || base === undefined || !editorOpen
+        ? []
+        : ledger.listFxRates({
+            base,
+            quote,
+            from: editorRange.from,
+            to: editorRange.to,
+          }),
+    [ledger, snapshot.revision, quote, base, editorOpen, editorRange.from, editorRange.to],
+  );
 
   const handleSubmitEditor = useCallback(
     (overwriteManual: boolean) => {
@@ -303,17 +358,16 @@ export default function SettingsRatesScreen({
 
   const editorPair = quote !== null && pivot !== undefined ? { quote, base: pivot.code } : null;
 
-  const tablePair: RateTablePair | null =
-    quote === null || pivot === undefined || range === null
-      ? null
-      : {
-          base: pivot.code,
-          quote,
-          from: range.from,
-          to: range.to,
-          rows,
-          onSelectRow: handleSelectRow,
-        };
+  // An object literal here would be a fresh identity every render, which is
+  // `RateTable`'s own `useMemo` dependency — the fill would rebuild on every
+  // keystroke however cheap the read above became.
+  const tablePair: RateTablePair | null = useMemo(
+    () =>
+      quote === null || base === undefined || from === undefined || to === undefined
+        ? null
+        : { base, quote, from, to, rows, onSelectRow: handleSelectRow },
+    [quote, base, from, to, rows, handleSelectRow],
+  );
 
   const header = (
     <View style={styles.headerBlock}>

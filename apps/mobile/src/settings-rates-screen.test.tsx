@@ -13,7 +13,7 @@ import {
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, addDays } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, unitsPerPivot } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
@@ -148,6 +148,39 @@ it("a ?date= that is not a calendar day behaves as an unparameterised visit", ()
 });
 
 /**
+ * R2 M1 — a write on a day the table does not show is a success that looks
+ * like nothing happened: the sheet closes, success is silent, and the default
+ * 30-day window on a backdated link holds no row that changed. The window
+ * widens to contain the linked day and keeps the recent days with it.
+ *
+ * The linked day is a year back, well outside the default window whatever the
+ * device's day happens to be. Broken once by seeding `custom` unconditionally:
+ * *From* reads the 30-day start and the row is not on the page.
+ */
+it("R2 M1 — a backdated link widens the range to contain its own day", () => {
+  const today = deviceRuntime().capture().date;
+  const linked = addDays(today, -365);
+  withLedger({}, { quote: "PLN", date: linked });
+
+  expect(screen.getByLabelText("From")).toHaveProperty("value", linked);
+  // Widened, not replaced — today is still its end.
+  expect(screen.getByLabelText("To")).toHaveProperty("value", today);
+  // And the linked day is a row on the page behind the sheet, so the write
+  // about to happen lands somewhere visible. (`FlatList` under jsdom mounts
+  // only its first ten rows, and the widened range opens on this one. The
+  // fixture holds no rate for it, so it is a gap row — the date cell is the
+  // thing to look for, not a rate.)
+  expect(screen.getByText(linked)).toBeDefined();
+});
+
+it("R2 M1 — with no link, the range is the plain 30-day window", () => {
+  const today = deviceRuntime().capture().date;
+  withLedger();
+  expect(screen.getByLabelText("From")).toHaveProperty("value", addDays(today, -29));
+  expect(screen.getByLabelText("To")).toHaveProperty("value", today);
+});
+
+/**
  * R1 H1 — a `?quote=` this ledger cannot resolve (archived, renamed, or a
  * capture gate that raced the ledger) used to fall through to the first quote
  * currency **with the editor already open on it**, headed "Set PLN per USD"
@@ -177,22 +210,42 @@ it("R1 H1 — an unresolvable ?quote= opens nothing, and does not move the selec
  * button is pressed, and *then* it is impossible.
  */
 it("R1 L7 — a ?date= in the future opens nothing", () => {
-  // The fixture's device date is 2026-09-03.
-  withLedger({}, { quote: "PLN", date: "2027-01-01" });
+  // `today` on this screen is the *device's* own day (`deviceRuntime()`), not
+  // the controller's fixture — so the future date is derived from it rather
+  // than written down and left to expire.
+  const tomorrow = addDays(deviceRuntime().capture().date, 1);
+  withLedger({}, { quote: "PLN", date: tomorrow });
   expect(screen.queryByText(/^Set PLN per USD/)).toBeNull();
 });
 
 /**
- * R1 L8 — `expo-router` answers `string | string[]`; a repeated key is an
- * array, and an array is not a currency code or a date.
+ * R2 H1 — the editor opens on a pair the link **named**, not on "a quote that
+ * failed to resolve". Round 1 gated it on `quoteParam === undefined ||
+ * preselected !== undefined`, which reads a link that named no pair at all as
+ * resolved — so a bare `?date=` opened the sheet on whichever currency sorted
+ * first, headed *Set PLN per USD* after a link that said nothing about PLN.
+ * Two taps from the wrong-pair write H1 was raised for, reached through the
+ * other half of the same expression.
+ *
+ * Broken once by restoring the `quoteParam === undefined ||` disjunct: both
+ * cases below open the sheet.
  */
-it("R1 L8 — repeated params are arrays, and behave as an unparameterised visit", () => {
+it("R2 H1 — ?date= with no ?quote= opens nothing", () => {
+  withLedger({ listCurrencySettings: () => [PLN_ROW, EUR_ROW, USD_ROW] }, { date: "2026-08-30" });
+  expect(screen.queryByText(/ per USD, /)).toBeNull();
+  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+});
+
+/**
+ * R2 H1 / R1 L8 — a repeated key is an array, and `oneParam` reduces it to
+ * `undefined`. Deliberately paired with a **string** date: making both params
+ * arrays hid this, because the date failed first and the editor stayed shut
+ * for the wrong reason.
+ */
+it("R2 H1 — a repeated ?quote= names no pair, so it opens nothing", () => {
   withLedger(
     { listCurrencySettings: () => [PLN_ROW, EUR_ROW, USD_ROW] },
-    {
-      quote: ["PLN", "EUR"],
-      date: ["2026-08-30"],
-    },
+    { quote: ["PLN", "EUR"], date: "2026-08-30" },
   );
   expect(screen.queryByText(/ per USD, /)).toBeNull();
   expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();

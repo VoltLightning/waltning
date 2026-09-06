@@ -37,7 +37,11 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import type { FieldError } from "@waltning/client/transport/field-errors";
-import { CoverageStatus, resolveCoverageStatus } from "@waltning/ui/fx/coverage-status";
+import {
+  CoverageStatus,
+  type CoverageStatusProps,
+  resolveCoverageStatus,
+} from "@waltning/ui/fx/coverage-status";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
@@ -66,14 +70,13 @@ type CurrencyRowData = {
   version: number;
 };
 
-type CurrencyRowCoverage = {
-  days: number;
-  realDays: number;
-  calendarDays: number;
-  futureRows: number;
-  pct: number;
-  lastDate?: string;
-};
+/**
+ * Exactly `CoverageStatusProps` — declared as it, rather than restated, so the
+ * caption and the row's accessible name cannot be handed different shapes.
+ * (`readCoverage` calls the percentage `coveragePct`; the mapping to `pct`
+ * happens once, where `coverageByCode` is built.)
+ */
+type CurrencyRowCoverage = CoverageStatusProps;
 
 type CurrencyRowProps = {
   row: CurrencyRowData;
@@ -143,7 +146,10 @@ function CurrencyRow({
     row.name,
     detail,
     coverage === undefined ? null : resolveCoverageStatus(t, coverage).label,
-    row.pinned ? t("fx.pinned") : null,
+    // Gated on `!expanded` for the same reason the visible mark is: open, the
+    // `Toggle` below states it and can change it, and a reader hearing "…
+    // Pinned" then "Pinned, on" gets the duplication the sighted row avoids.
+    row.pinned && !expanded ? t("fx.pinned") : null,
   ]
     .filter((part): part is string => part !== null)
     .join(" · ");
@@ -171,16 +177,14 @@ function CurrencyRow({
           <Text style={styles.detail}>{detail}</Text>
         </View>
         <View style={styles.rowStatusLine}>
-          {coverage ? (
-            <CoverageStatus
-              days={coverage.days}
-              realDays={coverage.realDays}
-              calendarDays={coverage.calendarDays}
-              futureRows={coverage.futureRows}
-              pct={coverage.pct}
-              lastDate={coverage.lastDate}
-            />
-          ) : null}
+          {/*
+            Spread, not six hand-mapped fields: the row's accessible name above
+            resolves the same sentence from the same object, and two argument
+            lists for one fact is one edit away from the caption and the name
+            disagreeing. `CurrencyRowCoverage` is `CoverageStatusProps`, so the
+            agreement is a construction rather than a convention.
+          */}
+          {coverage ? <CoverageStatus {...coverage} /> : null}
           {/*
             A `Tag`, where coverage beside it is a caption — the distinction
             this screen's own rule draws: pinned is a **state** the currency

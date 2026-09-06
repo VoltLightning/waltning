@@ -47,6 +47,13 @@
  * screen puts in its header keep focus and their caret across a re-render,
  * which a component identity recreated each render would not.
  *
+ * **A note for whoever tests a screen that renders this.** jsdom fires no
+ * layout, so a `FlatList` there mounts `initialNumToRender` rows (10) and
+ * never windows further — a test asserting on the 20th row of a 30-day range
+ * finds nothing, and the failure looks like a data bug. Narrow the range under
+ * test until the row you want is inside the first ten, the way
+ * `j10-rates.journey.test.tsx` does.
+ *
  * **No drag-select, and a tap rather than a long-press.** `S18` §7 describes
  * dragging across dates to seed `RateEditor`; that needs a gesture recognizer
  * this table does not yet have, and the plan's own fallback — "long-press a
@@ -194,6 +201,10 @@ export function RateTable({ pair, header, footer }: RateTableProps) {
       ListEmptyComponent={
         pair === null ? null : <Text style={styles.empty}>{t("fx.rateTableEmptyRange")}</Text>
       }
+      // Named so a test can assert *containment* rather than presence: the
+      // header and footer riding inside this list rather than beside it is the
+      // whole shape, and `getByText` at document scope cannot tell them apart.
+      testID="rate-table"
       style={styles.list}
       // The screen's own fields live in `header`, so this list is what a tap
       // has to reach past an open keyboard — the same two props `GroundPanel`

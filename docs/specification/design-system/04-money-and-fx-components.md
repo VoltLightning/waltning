@@ -172,6 +172,12 @@ writes rather than one — and the worked example below stays inside the cap for
 that reason. The cap lives here, where the write is composed, and nowhere else:
 reading a wider range is not capped, and neither is clearing one.
 
+The example is **all absent**, and that is the point rather than a simplified
+picture: carry-forward is capped at 10 days (`SPEC.md` §7.7), so any carry from
+RUB's last published quote in 2022 expired ten days later. A source dead for
+years leaves gaps, not carried rows — which is exactly why the range form has
+to exist.
+
 Before writing, it states exactly what it will do — **which way the figure
 reads, always**: `fx_rates.rate` is units of the quote per one pivot (§4), so
 the heading and every confirmation say `{quote} per {base}`, never a `→` arrow
@@ -203,8 +209,8 @@ twice as far off the bottom as it should be.
 ```
   Set RUB per USD, 2026-01-01 … 2026-08-07        ← the sheet's own header
 
-  219 days            200 days currently absent
-                       19 days currently carried forward
+  219 days            219 days currently absent
+                        0 days currently carried forward
                         0 days currently manual
                                         [ Cancel ]  [ Set rate ]
 ```
