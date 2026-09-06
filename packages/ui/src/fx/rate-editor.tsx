@@ -19,6 +19,13 @@
  * the breakdown this component shows before submitting is this component's
  * job, not a server round trip's.
  *
+ * **The sentence naming the pair and the range is the host's heading, not a
+ * line inside this component.** S18 opens this in a `BottomSheet` whose own
+ * header states *"Set PLN per USD, 2026-08-08 … 2026-08-08"* as a real
+ * heading; a second copy of it here was a body-weight line under a heading
+ * saying the same thing, which is how it came to read as disabled chrome
+ * rather than as the title of what is about to be written.
+ *
  * **Two submits, not two components.** The first press states the count and,
  * only when `manualCount > 0`, waits for a second press before calling
  * `onSubmit(true)` — the "second, explicit confirmation" the spec asks for,
@@ -44,8 +51,16 @@ export type RateEditorRow = {
   source: string;
 };
 
-/** L11 — `setManualRateInput`'s own cap, restated here so the range is refused before a submit round trip. */
-const MAX_RANGE_DAYS = 366;
+/**
+ * L11 — `setManualRateInput`'s own cap, restated here so the range is refused
+ * before a submit round trip.
+ *
+ * Exported because S18 caps its *range control* at the same number: the table
+ * draws one row per calendar day into the page scroller, so the range a
+ * person can pick is the range a person can write, and one constant says so
+ * in both places.
+ */
+export const MAX_RANGE_DAYS = 366;
 
 export type RateEditorProps = {
   /** The pivot — shown, never chosen here (`SPEC.md` §7.0). */
@@ -62,6 +77,12 @@ export type RateEditorProps = {
   onSubmit: (overwriteManual: boolean) => void;
   onCancel: () => void;
   disabled?: boolean;
+  /**
+   * The host's own refusal — `set_manual_rate`'s first field error. It renders
+   * here rather than on a `Toast`, because this component lives inside a
+   * modal sheet: a toast on the page behind it is a message nobody can see.
+   */
+  error?: string;
 };
 
 export function RateEditor({
@@ -75,6 +96,7 @@ export function RateEditor({
   onSubmit,
   onCancel,
   disabled = false,
+  error,
 }: RateEditorProps) {
   const t = useT();
   const locale = useLocale();
@@ -109,8 +131,6 @@ export function RateEditor({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>{t("fx.rateEditorTitle", { quote, base, from, to })}</Text>
-
       <RateField
         label={t("fx.rateEditorRateLabel", { quote, base })}
         value={rate}
@@ -130,6 +150,8 @@ export function RateEditor({
           {t("fx.rateEditorManual", { count: counts.manual })}
         </Text>
       </View>
+
+      {error === undefined ? null : <Text style={styles.warning}>{error}</Text>}
 
       {rangeTooLong ? (
         <Text style={styles.warning}>
@@ -165,7 +187,6 @@ export function RateEditor({
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
-  title: { color: theme.text, ...text.ui("body", 600) },
   summary: { gap: space.xs },
   summaryLine: { color: theme.textMuted, ...text.ui("bodySm") },
   summaryManual: { color: theme.assertedText },

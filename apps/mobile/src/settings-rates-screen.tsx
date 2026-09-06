@@ -2,12 +2,37 @@
  * S18 · Settings · Exchange rates — `screens/S18`.
  *
  * Pair `Select` (quote; base is the pivot) and range chips over `RateTable`.
- * A tapped row or *Set a range* opens `RateEditor` → `setManualRate` — first
- * without `overwriteManual`, and a second confirmation when the range holds
- * existing manual rows (`RateEditor`'s own gate). *Clear manual* removes the
- * manual rows in the same range. Coverage per currency beneath, from
- * `readCoverage` — `SyncLog`'s coverage half; the event log (`sync_fx_rates`
- * history) is arc 2's, once a server sync exists to log.
+ * A tapped row or *Set a range* opens `RateEditor` **in a `BottomSheet`** →
+ * `setManualRate` — first without `overwriteManual`, and a second
+ * confirmation when the range holds existing manual rows (`RateEditor`'s own
+ * gate). *Clear manual* removes the manual rows in the same range. Coverage
+ * per currency beneath, from `readCoverage` — `SyncLog`'s coverage half; the
+ * event log (`sync_fx_rates` history) is arc 2's, once a server sync exists
+ * to log.
+ *
+ * **The editor is a sheet because the table is long.** It used to render
+ * below the table, which on a phone put it some 1,300 px past the row that
+ * opened it: tapping a date looked like it did nothing at all. A sheet is
+ * where the tapped row is, and it is also what makes the editor's own
+ * heading a heading (the sheet's header states the pair and the range).
+ *
+ * **The range control stacks on a phone and pairs at desk width.** Each
+ * `DateField` carries its own row of quick-day chips, so two of them side by
+ * side is four controls and six chips across 390 px — the *To* field and half
+ * its chips ran off the right edge. `useBreakpoint()` decides, at the top,
+ * the same way every other layout branch in this app does.
+ *
+ * **And the range is capped at `MAX_RANGE_DAYS`.** The table draws one row
+ * per calendar day into the page's own scroller, so the range that can be
+ * *picked* is the range that can be *written* — one constant, shared with
+ * `RateEditor`, rather than a table that quietly renders ten years of rows.
+ *
+ * **Deep link — `?quote=<code>&date=<YYYY-MM-DD>`.** The route reads both and
+ * hands them in as props (`app/settings/rates.tsx`; routes compose only).
+ * `quote` preselects the pair, `date` opens the editor on that single day, so
+ * a capture blocked for want of a rate can link straight at the fix. Either
+ * missing, or naming something this ledger has no currency or no calendar day
+ * for, behaves exactly as an unparameterised visit.
  *
  * **Re-rate is not offered**, per S18 §3/§7: `rerate_transactions` is
  * server-only (`offlineEligible: false`, `wave-4-shared.md`'s own excluded
@@ -20,21 +45,28 @@
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import { type AccountingDate, addDays, isAccountingDate } from "@waltning/core/date";
+import {
+  type AccountingDate,
+  addDays,
+  daysBetween,
+  isAccountingDate,
+  isRealCalendarDate,
+} from "@waltning/core/date";
 import { type CurrencyCode, currencyCode } from "@waltning/core/money";
-import { CoverageTag } from "@waltning/ui/fx/coverage-tag";
-import { RateEditor } from "@waltning/ui/fx/rate-editor";
+import { CoverageStatus } from "@waltning/ui/fx/coverage-status";
+import { MAX_RANGE_DAYS, RateEditor } from "@waltning/ui/fx/rate-editor";
 import { RateTable } from "@waltning/ui/fx/rate-table";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { DateField } from "@waltning/ui/primitives/date-field";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
+import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
+import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
-import { useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
@@ -55,9 +87,20 @@ function presetRange(
   return { from: custom.from, to: custom.to };
 }
 
-export default function SettingsRatesScreen() {
+export type SettingsRatesScreenProps = {
+  /** `?quote=<code>` — preselects the pair when it names one of this pivot's quote currencies. */
+  quote?: string | undefined;
+  /** `?date=<YYYY-MM-DD>` — opens the editor on that single day when it is a real calendar date. */
+  date?: string | undefined;
+};
+
+export default function SettingsRatesScreen({
+  quote: quoteParam,
+  date: dateParam,
+}: SettingsRatesScreenProps = {}) {
   const t = useT();
   const styles = useStyles();
+  const breakpoint = useBreakpoint();
   const ledger = useLedgerController();
   usePhoneLedger(ledger);
 
@@ -68,11 +111,18 @@ export default function SettingsRatesScreen() {
     .filter((row) => !row.isPivot)
     .map((row) => ({ value: row.code, label: `${row.code} · ${row.name}` }));
 
-  // S17's own link at 0% coverage (`CoverageTag.onPress`) preselects the pair
-  // — `?quote=<code>` — over the plain first-option default, but only when
+  // S17's own link at 0% coverage, and PRs C/D's capture gate — `?quote=`
+  // preselects the pair over the plain first-option default, but only when
   // that code is actually one of this pivot's quote currencies.
-  const { quote: quoteParam } = useLocalSearchParams<{ quote?: string }>();
   const preselected = quoteOptions.find((option) => option.value === quoteParam);
+  // `?date=` — the day a capture could not be priced. Checked against the
+  // calendar, not only the shape: a param is whatever a link put in the
+  // address bar, and `isAccountingDate` accepts `2026-02-31` by design (its
+  // own doc: "a real calendar check happens where a date is chosen").
+  const linkedDate =
+    dateParam !== undefined && isAccountingDate(dateParam) && isRealCalendarDate(dateParam)
+      ? dateParam
+      : null;
 
   const [quote, setQuote] = useState<CurrencyCode | null>(
     preselected
@@ -86,9 +136,12 @@ export default function SettingsRatesScreen() {
     from: addDays(today, -29) as string,
     to: today as string,
   });
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorRange, setEditorRange] = useState<Range>({ from: today, to: today });
+  const [editorOpen, setEditorOpen] = useState(linkedDate !== null);
+  const [editorRange, setEditorRange] = useState<Range>(
+    linkedDate === null ? { from: today, to: today } : { from: linkedDate, to: linkedDate },
+  );
   const [rate, setRate] = useState("");
+  const [editorError, setEditorError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   // The toast's own re-arm token (`useTimer`/`useToastMotion`'s `resetKey`,
   // H1) — two shows can repeat an identical message (the same validation
@@ -97,7 +150,14 @@ export default function SettingsRatesScreen() {
   // current by the time it's read.
   const toastTokenRef = useRef(0);
 
-  const range = presetRange(today, preset, custom);
+  const parsedRange = presetRange(today, preset, custom);
+  // The table renders one row per calendar day into the page scroller, so the
+  // range it will draw is bounded by the same cap `set_manual_rate` puts on a
+  // range write. Stated below rather than silently truncated.
+  const rangeTooLong =
+    parsedRange !== null && daysBetween(parsedRange.from, parsedRange.to) + 1 > MAX_RANGE_DAYS;
+  const range = rangeTooLong ? null : parsedRange;
+
   const handleDismissToast = useCallback(() => setToast(null), []);
 
   const handleChangeQuote = useCallback((value: string) => setQuote(currencyCode(value)), []);
@@ -122,15 +182,20 @@ export default function SettingsRatesScreen() {
     if (!isAccountingDate(date)) return;
     setEditorRange({ from: date, to: date });
     setRate("");
+    setEditorError(null);
     setEditorOpen(true);
   }, []);
   const handleOpenRangeEditor = useCallback(() => {
     if (range === null) return;
     setEditorRange(range);
     setRate("");
+    setEditorError(null);
     setEditorOpen(true);
   }, [range]);
-  const handleCloseEditor = useCallback(() => setEditorOpen(false), []);
+  const handleCloseEditor = useCallback(() => {
+    setEditorOpen(false);
+    setEditorError(null);
+  }, []);
   const handleChangeRate = useCallback((value: string | null) => setRate(value ?? ""), []);
 
   const editorRows =
@@ -151,10 +216,12 @@ export default function SettingsRatesScreen() {
         today,
       });
       if ("fieldErrors" in result) {
-        toastTokenRef.current += 1;
-        setToast(result.fieldErrors[0]?.message ?? t("fx.rateWriteFailed"));
+        // Inside the sheet, not on a `Toast`: the sheet is a modal, and a
+        // toast on the page behind it is a refusal nobody sees.
+        setEditorError(result.fieldErrors[0]?.message ?? t("fx.rateWriteFailed"));
         return;
       }
+      setEditorError(null);
       setEditorOpen(false);
     },
     [ledger, quote, pivot, editorRange, rate, t, today],
@@ -193,8 +260,10 @@ export default function SettingsRatesScreen() {
    */
   const noQuoteCurrency = quoteOptions.length === 0;
 
+  const editorPair = quote !== null && pivot !== undefined ? { quote, base: pivot.code } : null;
+
   return (
-    <GroundPanel scroll="own">
+    <GroundPanel>
       {pivot === undefined ? null : (
         <Select
           label={t("fx.pairLabel", { base: pivot.code })}
@@ -225,20 +294,32 @@ export default function SettingsRatesScreen() {
           size="sm"
         />
       </View>
-      <View style={styles.customRow}>
-        <DateField
-          label={t("fx.rangeFrom")}
-          value={custom.from}
-          onChange={handleChangeCustomFrom}
-          today={today}
-        />
-        <DateField
-          label={t("fx.rangeTo")}
-          value={custom.to}
-          onChange={handleChangeCustomTo}
-          today={today}
-        />
+      {/*
+        Stacked on a phone, paired at desk width. Each `DateField` brings its
+        own Today/Yesterday/weekday chip row, and two of those side by side is
+        what ran off a 390 px screen.
+      */}
+      <View style={[styles.rangeRow, breakpoint === "desk" ? styles.rangeRowDesk : null]}>
+        <View style={breakpoint === "desk" ? styles.rangeCell : null}>
+          <DateField
+            label={t("fx.rangeFrom")}
+            value={custom.from}
+            onChange={handleChangeCustomFrom}
+            today={today}
+          />
+        </View>
+        <View style={breakpoint === "desk" ? styles.rangeCell : null}>
+          <DateField
+            label={t("fx.rangeTo")}
+            value={custom.to}
+            onChange={handleChangeCustomTo}
+            today={today}
+          />
+        </View>
       </View>
+      {rangeTooLong ? (
+        <Text style={styles.hint}>{t("fx.rangeTooLong", { max: String(MAX_RANGE_DAYS) })}</Text>
+      ) : null}
 
       {/*
         S18 §3 — the card is the table, and with no quote currency there is no
@@ -248,8 +329,8 @@ export default function SettingsRatesScreen() {
 
         `noQuoteCurrency` decides the hint; the nulls beside it are the
         remaining narrowing this branch needs (a custom range that does not
-        parse, a ledger with no pivot) and draw nothing rather than claiming
-        there is no quote currency.
+        parse or runs past the cap, a ledger with no pivot) and draw nothing
+        rather than claiming there is no quote currency.
       */}
       {noQuoteCurrency ? (
         <Text style={styles.empty}>{t("fx.noQuoteCurrency")}</Text>
@@ -281,20 +362,6 @@ export default function SettingsRatesScreen() {
         />
       </View>
 
-      {editorOpen && quote !== null && pivot !== undefined ? (
-        <RateEditor
-          base={pivot.code}
-          quote={quote}
-          from={editorRange.from}
-          to={editorRange.to}
-          rate={rate}
-          onRateChange={handleChangeRate}
-          existingRows={editorRows}
-          onSubmit={handleSubmitEditor}
-          onCancel={handleCloseEditor}
-        />
-      ) : null}
-
       <Text style={styles.rerateNote}>{t("fx.rerateNotOffered")}</Text>
 
       {/*
@@ -311,7 +378,7 @@ export default function SettingsRatesScreen() {
           {shownCoverage.map((row) => (
             <View key={row.code} style={styles.coverageRow}>
               <Text style={styles.coverageCode}>{row.code}</Text>
-              <CoverageTag
+              <CoverageStatus
                 days={row.days}
                 realDays={row.realDays}
                 calendarDays={row.calendarDays}
@@ -324,6 +391,41 @@ export default function SettingsRatesScreen() {
         </Card>
       )}
 
+      {/*
+        The sheet's own header is the editor's heading — "Set PLN per USD,
+        2026-08-08 … 2026-08-08" — which is why `RateEditor` no longer draws a
+        title of its own.
+      */}
+      <BottomSheet
+        visible={editorOpen && editorPair !== null}
+        title={
+          editorPair === null
+            ? ""
+            : t("fx.rateEditorTitle", {
+                quote: editorPair.quote,
+                base: editorPair.base,
+                from: editorRange.from,
+                to: editorRange.to,
+              })
+        }
+        onDismiss={handleCloseEditor}
+      >
+        {editorPair === null ? null : (
+          <RateEditor
+            base={editorPair.base}
+            quote={editorPair.quote}
+            from={editorRange.from}
+            to={editorRange.to}
+            rate={rate}
+            onRateChange={handleChangeRate}
+            existingRows={editorRows}
+            onSubmit={handleSubmitEditor}
+            onCancel={handleCloseEditor}
+            {...(editorError === null ? {} : { error: editorError })}
+          />
+        )}
+      </BottomSheet>
+
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
       )}
@@ -332,10 +434,14 @@ export default function SettingsRatesScreen() {
 }
 
 const useStyles = makeStyles((theme) => ({
-  presetRow: { flexDirection: "row", gap: space.sm },
-  customRow: { flexDirection: "row", gap: space.sm },
+  presetRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  /** Phone: one column, so each field keeps its own chip row on its own line. */
+  rangeRow: { gap: space.x3 },
+  rangeRowDesk: { flexDirection: "row", gap: space.sm },
+  rangeCell: { flex: 1 },
   actionsRow: { flexDirection: "row", justifyContent: "space-between", gap: space.sm },
   empty: { color: theme.textMuted, ...text.ui("body") },
+  hint: { color: theme.textMuted, ...text.ui("caption") },
   rerateNote: { color: theme.textMuted, ...text.ui("caption") },
   coverageRow: {
     flexDirection: "row",

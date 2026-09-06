@@ -1,18 +1,16 @@
 /**
- * `CoverageTag` — `screens/S17` §6/§8. Amber below 100%, with the last
- * quote date it holds.
+ * `CoverageStatus` — `screens/S17` §6/§8. A muted caption in sentence case,
+ * amber below 100%, with the last quote date it holds.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
-import { CoverageTag } from "./coverage-tag";
-
-function noop() {}
+import { CoverageStatus } from "./coverage-status";
 
 const meta = {
-  title: "FX/CoverageTag",
-  component: CoverageTag,
+  title: "FX/CoverageStatus",
+  component: CoverageStatus,
   args: { days: 100, realDays: 100, calendarDays: 100, futureRows: 0, pct: 100 },
-} satisfies Meta<typeof CoverageTag>;
+} satisfies Meta<typeof CoverageStatus>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -29,14 +27,14 @@ export const NearlyEmpty: Story = {
   args: { days: 1, realDays: 1, calendarDays: 100, pct: 1, lastDate: "2020-12-06" },
 };
 
-/** A currency just added — never a bare "0%". Tappable, wired by S17's own row. */
+/** A currency just added — never a bare "0%", and never a pill either. */
 export const NoRatesYet: Story = {
-  args: { days: 0, realDays: 0, calendarDays: 0, pct: 0, onPress: noop },
+  args: { days: 0, realDays: 0, calendarDays: 0, pct: 0 },
 };
 
 /** L7 — nothing due yet is not nothing set: rates are held, just future-dated. */
 export const NoRatesYetFuture: Story = {
-  args: { days: 0, realDays: 0, calendarDays: 0, futureRows: 3, pct: 0, onPress: noop },
+  args: { days: 0, realDays: 0, calendarDays: 0, futureRows: 3, pct: 0 },
 };
 
 /** M1/M3 — a dead source carried every day to today: filled by count, amber by real quotes. */

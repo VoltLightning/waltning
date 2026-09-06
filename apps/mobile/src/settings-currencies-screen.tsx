@@ -1,21 +1,35 @@
 /**
  * S17 · Settings · Currencies — `screens/S17`.
  *
- * Row per currency: code, name, symbol, decimals, rate source, pinned
- * toggle, coverage, archive — symbol and decimals editable behind the row's
- * own detail sheet (S17 §9.2, `update_currency`). Pivot shown read-only at
- * the bottom, its one write (`change_pivot`) behind `ConfirmDialog` — E3's
- * executor refuses it once any transaction exists, and the dialog now says
- * so before offering (S17 §7).
+ * **A list, not six open editors.** Each currency is one compact row — code,
+ * name, symbol · decimals, its coverage, and *Pinned* when it is — and
+ * tapping the row expands that one row's controls in place: the pinned
+ * toggle, the rate source, and the row's own actions. Every row carrying its
+ * whole editor open was some 200 px each, which made a six-currency screen
+ * three screens tall and unscannable; one open at a time is what a list of
+ * six things is for. Symbol and decimals stay behind their own detail sheet
+ * (S17 §9.2, `update_currency`) — §9.2's "editable, but not prominent".
+ *
+ * **The card is the rows, and nothing else.** The list of rows is the one
+ * grouped-rows card; *Add currency*, the pivot block and the screen's own
+ * title sit on the ground (`design-system/05` §5.1). The card carries no
+ * title of its own — the navigation header already says *Currencies*, and
+ * saying it twice, 40 px apart, is chrome.
+ *
+ * Pivot shown read-only at the bottom, its one write (`change_pivot`) behind
+ * `ConfirmDialog` — E3's executor refuses it once any transaction exists, and
+ * the dialog now says so before offering (S17 §7).
  *
  * **No backfill progress.** S17 §2's own text: "No backfill progress on the
  * phone (nothing to fetch)" — `add_currency` here writes the row alone;
  * `sync_fx_rates` is server-side (`wave-4-shared.md`'s own excluded list).
  *
- * **A 0% row is not "0%".** `CoverageTag` states `fx.noRatesYet` instead,
- * and this screen is the one place that wires its `onPress` — tapping opens
- * S18 with the pair preselected (`?quote=<code>`), because "set one by hand"
- * is a place, not just a sentence.
+ * **A 0% row is not "0%".** `CoverageStatus` states `fx.noRatesYet` instead,
+ * as a muted caption rather than a pill — and *Exchange rates*, in the row's
+ * expanded actions, is where that sentence becomes a place: S18 with the pair
+ * preselected (`?quote=<code>`). It sits with the other actions rather than
+ * on the coverage line itself, because the row is now the tap target and a
+ * pressable inside a pressable is one gesture with two meanings.
  */
 
 import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger";
@@ -23,7 +37,7 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import type { FieldError } from "@waltning/client/transport/field-errors";
-import { CoverageTag } from "@waltning/ui/fx/coverage-tag";
+import { CoverageStatus } from "@waltning/ui/fx/coverage-status";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
@@ -35,10 +49,10 @@ import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
+import { space, touchTarget } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 type CurrencyRowData = {
   code: string;
@@ -63,6 +77,9 @@ type CurrencyRowCoverage = {
 type CurrencyRowProps = {
   row: CurrencyRowData;
   coverage: CurrencyRowCoverage | undefined;
+  /** One row is open at a time — the screen owns which, so opening one closes the last. */
+  expanded: boolean;
+  onToggleExpanded: (code: string) => void;
   onTogglePinned: (code: string, version: number, next: boolean) => void;
   onChangeSource: (code: string, version: number, source: string) => void;
   onArchive: (code: string, version: number) => void;
@@ -73,6 +90,8 @@ type CurrencyRowProps = {
 function CurrencyRow({
   row,
   coverage,
+  expanded,
+  onToggleExpanded,
   onTogglePinned,
   onChangeSource,
   onArchive,
@@ -92,7 +111,8 @@ function CurrencyRow({
     [t],
   );
 
-  const handleToggle = useCallback(
+  const handleExpand = useCallback(() => onToggleExpanded(row.code), [onToggleExpanded, row.code]);
+  const handleTogglePinned = useCallback(
     (next: boolean) => onTogglePinned(row.code, row.version, next),
     [onTogglePinned, row.code, row.version],
   );
@@ -109,46 +129,74 @@ function CurrencyRow({
 
   return (
     <View style={styles.row}>
-      <View style={styles.rowHeader}>
-        <Text style={styles.code}>{row.code}</Text>
-        <Text style={styles.name}>{row.name}</Text>
-        <Text style={styles.detail}>
-          {t("fx.currencyDetail", { symbol: row.symbol, decimals: row.decimals })}
-        </Text>
-        {coverage ? (
-          <CoverageTag
-            days={coverage.days}
-            realDays={coverage.realDays}
-            calendarDays={coverage.calendarDays}
-            futureRows={coverage.futureRows}
-            pct={coverage.pct}
-            lastDate={coverage.lastDate}
-            {...(coverage.days === 0 ? { onPress: handleViewRates } : {})}
+      {/*
+        The whole header is the target — a disclosure chevron alone would be a
+        10 px button on a 44 px row, the same reasoning `Toggle` states for
+        making its label part of the switch.
+      */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={row.code}
+        accessibilityState={{ expanded }}
+        aria-expanded={expanded}
+        onPress={handleExpand}
+        style={styles.rowHeader}
+      >
+        <View style={styles.rowHeaderLine}>
+          <Text style={styles.code}>{row.code}</Text>
+          <Text style={styles.name} numberOfLines={1}>
+            {row.name}
+          </Text>
+          <Text style={styles.detail}>
+            {t("fx.currencyDetail", { symbol: row.symbol, decimals: row.decimals })}
+          </Text>
+        </View>
+        <View style={styles.rowStatusLine}>
+          {coverage ? (
+            <CoverageStatus
+              days={coverage.days}
+              realDays={coverage.realDays}
+              calendarDays={coverage.calendarDays}
+              futureRows={coverage.futureRows}
+              pct={coverage.pct}
+              lastDate={coverage.lastDate}
+            />
+          ) : null}
+          {/*
+            Only while closed: open, the `Toggle` below states the same fact
+            and can change it, and one row saying "Pinned" twice is one of
+            them that can go stale in a reader's eye.
+          */}
+          {row.pinned && !expanded ? <Text style={styles.pinnedMark}>{t("fx.pinned")}</Text> : null}
+        </View>
+      </Pressable>
+      {expanded ? (
+        <View style={styles.rowDetail}>
+          <Toggle label={t("fx.pinned")} value={row.pinned} onChange={handleTogglePinned} />
+          <Select
+            label={t("fx.rateSource")}
+            placeholder={t("fx.rateSourceNone")}
+            options={rateSources}
+            value={row.rateSource}
+            onChange={handleSource}
           />
-        ) : null}
-      </View>
-      <Toggle label={t("fx.pinned")} value={row.pinned} onChange={handleToggle} />
-      <Select
-        label={t("fx.rateSource")}
-        placeholder={t("fx.rateSourceNone")}
-        options={rateSources}
-        value={row.rateSource}
-        onChange={handleSource}
-      />
-      <View style={styles.rowActions}>
-        <Button
-          label={t("fx.editCurrency", { code: row.code })}
-          onPress={handleEdit}
-          variant="ghost"
-          size="sm"
-        />
-        <Button
-          label={t("fx.archiveCurrency")}
-          onPress={handleArchive}
-          variant="secondary"
-          size="sm"
-        />
-      </View>
+          <View style={styles.rowActions}>
+            <Button label={t("fx.viewRates")} onPress={handleViewRates} variant="ghost" size="sm" />
+            <Button
+              label={t("fx.editCurrency", { code: row.code })}
+              onPress={handleEdit}
+              variant="ghost"
+              size="sm"
+            />
+            <Button
+              label={t("fx.archiveCurrency")}
+              onPress={handleArchive}
+              variant="secondary"
+              size="sm"
+            />
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -215,6 +263,9 @@ export default function SettingsCurrenciesScreen() {
   const [pivotConfirmOpen, setPivotConfirmOpen] = useState(false);
   const [pivotTargetCode, setPivotTargetCode] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  // One row open at a time — held here rather than per row, which is what
+  // makes opening one close the last.
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
   const symbolPositionOptions: SelectOption[] = useMemo(
     () => [
@@ -225,6 +276,10 @@ export default function SettingsCurrenciesScreen() {
   );
 
   const handleDismissToast = useCallback(() => setToast(null), []);
+  const handleToggleExpanded = useCallback(
+    (code: string) => setExpandedCode((prev) => (prev === code ? null : code)),
+    [],
+  );
 
   const pivotRow = rows.find((row) => row.isPivot);
   const otherRows = rows.filter((row) => !row.isPivot);
@@ -386,26 +441,25 @@ export default function SettingsCurrenciesScreen() {
     setPivotTargetCode(null);
   }, [ledger, selectedPivotTarget, t]);
 
-  const addAction = (
-    <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
-  );
-
   return (
     <GroundPanel>
       {/*
         The card is the group of currency rows, so with no rows there is no
-        group — and a titled card holding nothing is chrome claiming a list
-        exists. Only the pivot is set up in that state; *Add currency* is the
-        one thing to do about it, and it is a button, so it sits on the
-        ground (`design-system/05` §5.1).
+        group — and a card holding nothing is chrome claiming a list exists.
+        Only the pivot is set up in that state; *Add currency* is the one
+        thing to do about it, and it is a button, so it sits on the ground
+        either way (`design-system/05` §5.1) — as does the screen's own name,
+        which the navigation header already carries.
       */}
       {otherRows.length > 0 ? (
-        <Card title={t("routes.currencies")} action={addAction}>
+        <Card>
           {otherRows.map((row) => (
             <CurrencyRow
               key={row.code}
               row={row}
               coverage={coverageByCode.get(row.code)}
+              expanded={expandedCode === row.code}
+              onToggleExpanded={handleToggleExpanded}
               onTogglePinned={handleTogglePinned}
               onChangeSource={handleChangeSource}
               onArchive={handleArchive}
@@ -414,9 +468,9 @@ export default function SettingsCurrenciesScreen() {
             />
           ))}
         </Card>
-      ) : (
-        addAction
-      )}
+      ) : null}
+
+      <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
 
       {pivotRow ? (
         <View style={styles.pivotRow}>
@@ -513,16 +567,19 @@ const DECIMALS_OPTIONS: SelectOption[] = Array.from({ length: 9 }, (_, decimals)
 
 const useStyles = makeStyles((theme) => ({
   row: {
-    gap: space.sm,
-    paddingVertical: space.x2,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  rowHeader: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  /** §10's 44 pt floor — the whole header is the disclosure target. */
+  rowHeader: { gap: space.xs, paddingVertical: space.x2, minHeight: touchTarget.min },
+  rowHeaderLine: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  rowStatusLine: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  rowDetail: { gap: space.sm, paddingBottom: space.x2 },
   code: { color: theme.text, ...text.ui("body", 600) },
   name: { color: theme.textMuted, ...text.ui("bodySm"), flex: 1 },
   detail: { color: theme.textMuted, ...text.ui("caption") },
-  rowActions: { flexDirection: "row", gap: space.sm },
+  pinnedMark: { color: theme.textMuted, ...text.ui("caption") },
+  rowActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   pivotRow: {
     flexDirection: "row",
     alignItems: "center",

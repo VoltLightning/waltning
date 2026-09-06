@@ -131,8 +131,16 @@ everything, deliberately."*
 
 ### 4.7 `<RateTable>`
 
-The rate history for one pair, by date. Virtualized — 2,080 days per pair from
-2020-11, and growing daily.
+The rate history for one pair, by date — one row per calendar day, drawn
+plainly. **The range is what bounds it, not virtualization**: the screen that
+hosts this (S18) caps its range control at `set_manual_rate`'s own 366 days, so
+the most this ever draws is a year of the 2,080-day history a pair has
+accumulated since 2020-11.
+
+A `FlatList` here would be a second scroller inside the page's own, which is
+the double-scroll defect — and living with it cost the hosting screen its page
+scroll entirely, so its last card ran off the bottom of the device. One
+scroller per page; this is not the one.
 
 Columns: date · rate (4dp, tabular) · source · provenance marker. Each row's
 source is a `Tag`: `nbp` · `ecb` · `nbrb` · `nbg` render neutral;
@@ -155,16 +163,31 @@ be some 1,600 entries.
 
 Before writing, it states exactly what it will do — **which way the figure
 reads, always**: `fx_rates.rate` is units of the quote per one pivot (§4), so
-the title and every confirmation say `{quote} per {base}`, never a `→` arrow
+the heading and every confirmation say `{quote} per {base}`, never a `→` arrow
 (that reads as a conversion direction, and is exactly backwards for this
 figure — RUB per USD is roughly 96, not 0,0104).
 
-```
-  Set RUB per USD, 2022-03-12 … 2026-08-07
+**Hosted in a `BottomSheet`, whose header is that heading.** The sentence naming
+the pair and the range belongs to the host, not to a second line inside the
+component — a body-weight copy of it under a heading saying the same thing read
+as disabled chrome. And a sheet is where the row that opened it was: rendered
+below a table of up to a year of rows, this editor was 1,300 px away and a tap
+looked like it had done nothing.
 
-  1 610 days        1 464 currently absent
-                      146 currently carried forward
-                        0 currently manual
+**Every count declines.** The summary counts days, so *1 day* / *2 days*, never
+`1 days` and never a `(s)` in a sentence — plural forms in the catalogue, since
+Polish has four categories where English has two.
+
+**A refusal from the write is stated here**, in the sheet, rather than on a
+toast: the sheet is a modal, and a toast on the page behind it is a message
+nobody sees.
+
+```
+  Set RUB per USD, 2022-03-12 … 2026-08-07        ← the sheet's own header
+
+  1 610 days        1 464 days currently absent
+                      146 days currently carried forward
+                        0 days currently manual
                                         [ Cancel ]  [ Set rate ]
 ```
 

@@ -1005,12 +1005,16 @@ export const en = {
   fx: {
     /** `CurrencyChip` — `04` §4.5's accessible name; the visible face is the codes themselves. */
     currencyChipLabel: "Display currency: {{currency}}. Tap to change.",
-    /** `CoverageTag` — S17 §6/§8. */
+    /**
+     * `CoverageStatus` — S17 §6/§8. A muted caption in sentence case, never a
+     * shouting pill: coverage is a fact about a currency, not a state anyone
+     * has to act on, and `Tag` upper-cases everything it is handed.
+     */
     coveragePct: "{{pct}}%",
     coverageBelow: "{{pct}}% · last quote {{date}}",
     coverageTitle: "Coverage",
     /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
-    noRatesYet: "no rates yet · set one by hand",
+    noRatesYet: "No rates yet · set one by hand",
     /**
      * L7 — the only rows held are future-dated (M4 excludes them from
      * `days`): rates are set, just none due yet.
@@ -1023,12 +1027,12 @@ export const en = {
      * language with more grammar than English needs the same key set here,
      * even where English has nothing new to say for it.
      */
-    noRatesYetFuture_one: "no rates yet · {{count}} set for later",
-    noRatesYetFuture_few: "no rates yet · {{count}} set for later",
-    noRatesYetFuture_many: "no rates yet · {{count}} set for later",
-    noRatesYetFuture_other: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_one: "No rates yet · {{count}} set for later",
+    noRatesYetFuture_few: "No rates yet · {{count}} set for later",
+    noRatesYetFuture_many: "No rates yet · {{count}} set for later",
+    noRatesYetFuture_other: "No rates yet · {{count}} set for later",
     /** H2 — rows held, but none a real quote (every one `carried_forward`): no date exists to state. */
-    noQuoteYet: "no quote yet",
+    noQuoteYet: "No quote yet",
     /** `RateField` — `03` §3.7. */
     rateFieldSynced: "Synced: {{rate}}",
     /** `parseRate`'s own refusal — 0, negative, or anything not a positive decimal. */
@@ -1053,12 +1057,37 @@ export const en = {
      */
     rateEditorTitle: "Set {{quote}} per {{base}}, {{from}} … {{to}}",
     rateEditorRateLabel: "Rate · {{quote}} per {{base}}",
-    rateEditorTotalDays: "{{count}} days",
-    rateEditorAbsent: "{{count}} currently absent",
-    rateEditorCarried: "{{count}} currently carried forward",
-    rateEditorManual: "{{count}} currently manual",
-    rateEditorConfirmOverwrite:
-      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rate(s) set by hand.",
+    /**
+     * Every line below counts days, so every line below declines — i18next's
+     * real `count`-driven suffixes, `noRatesYetFuture`'s own precedent. "1
+     * days" is the defect this replaces, and a `(s)` in a sentence is the
+     * same defect wearing a bracket: English collapses onto two forms here,
+     * Polish onto four, and only the suffixed keys can hold four.
+     */
+    rateEditorTotalDays_one: "{{count}} day",
+    rateEditorTotalDays_few: "{{count}} days",
+    rateEditorTotalDays_many: "{{count}} days",
+    rateEditorTotalDays_other: "{{count}} days",
+    rateEditorAbsent_one: "{{count}} day currently absent",
+    rateEditorAbsent_few: "{{count}} days currently absent",
+    rateEditorAbsent_many: "{{count}} days currently absent",
+    rateEditorAbsent_other: "{{count}} days currently absent",
+    rateEditorCarried_one: "{{count}} day currently carried forward",
+    rateEditorCarried_few: "{{count}} days currently carried forward",
+    rateEditorCarried_many: "{{count}} days currently carried forward",
+    rateEditorCarried_other: "{{count}} days currently carried forward",
+    rateEditorManual_one: "{{count}} day currently manual",
+    rateEditorManual_few: "{{count}} days currently manual",
+    rateEditorManual_many: "{{count}} days currently manual",
+    rateEditorManual_other: "{{count}} days currently manual",
+    rateEditorConfirmOverwrite_one:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rate set by hand.",
+    rateEditorConfirmOverwrite_few:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rates set by hand.",
+    rateEditorConfirmOverwrite_many:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rates set by hand.",
+    rateEditorConfirmOverwrite_other:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rates set by hand.",
     rateEditorSubmit: "Set rate",
     rateEditorConfirmSubmit: "Overwrite and set",
     /** L11 — `setManualRateInput`'s own cap, restated where the range is picked. */
@@ -1079,6 +1108,13 @@ export const en = {
     /** L8 — an unrecognised source, plainly, never the `manual` fallback it used to be. */
     sourceUnknown: "Unknown",
     archiveCurrency: "Archive",
+    /**
+     * S17's own link into S18, from a row's expanded detail — *"set one by
+     * hand"* is a place, not just a sentence. It sits beside the row's other
+     * actions rather than on the coverage line, so the line stays a plain,
+     * unpressable statement of fact.
+     */
+    viewRates: "Exchange rates",
     currencyArchiveRefused: "Couldn't archive this currency.",
     currencyWriteFailed: "That didn't save.",
     /** S17 §9.2 — a row's own symbol and decimals, and the sheet that edits them. */
@@ -1128,6 +1164,13 @@ export const en = {
     rangeYear: "Year",
     rangeFrom: "From",
     rangeTo: "To",
+    /**
+     * S18 §3 — the table draws one row per calendar day and the page scroller
+     * carries them, so the range it will draw is bounded by the same cap
+     * `set_manual_rate` puts on a range write. Stated rather than silently
+     * truncated: a range that draws nothing needs a sentence saying why.
+     */
+    rangeTooLong: "A range can cover at most {{max}} days.",
     setRange: "Set a range",
     clearManual: "Clear manual",
     rateWriteFailed: "That didn't save.",

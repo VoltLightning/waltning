@@ -190,13 +190,10 @@ describe("J10 — currency and rates", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Quote, against USD/ }));
     fireEvent.click(screen.getByRole("radio", { name: "PLN · Polish Złoty" }));
 
-    // The default 30-day range renders through a bare `FlatList`
-    // (`rate-table.tsx`'s own doc: "no virtualisation library"), which
-    // still only mounts its own initial window under jsdom — Sunday, 4
-    // days back, is well inside 30 rows but not inside that window. A
-    // tight custom range (`fx.rangeFrom`/`fx.rangeTo`) sidesteps the
-    // question entirely rather than asserting on `FlatList`'s own
-    // internals.
+    // A tight custom range (`fx.rangeFrom`/`fx.rangeTo`) rather than the
+    // default 30-day preset: this journey is about *which* rate Sunday's own
+    // row states, so it narrows to the four days it seeded rather than
+    // scanning thirty for one date.
     fireEvent.change(screen.getByRole("textbox", { name: "From" }), {
       target: { value: FRIDAY },
     });

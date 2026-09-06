@@ -28,9 +28,20 @@
  * — the platform's own face, unregistered and untested, which is a fallback
  * serif on more than one device this ships to.
  *
- * **A `FlatList`, per `wave-4-shared.md`'s own rule — no virtualisation
- * library.** 2,080 days is comfortably within what `FlatList`'s own windowing
- * handles; the spec's "Virtualized" is the behaviour, not a dependency.
+ * **Plain rows, and the page scroller carries them.** This table draws one
+ * `View` per calendar day rather than a `FlatList`, because the screen that
+ * hosts it (S18) has a pair select, a range control, action buttons, a note
+ * and a coverage card around it — and a `FlatList` inside the page's own
+ * `ScrollView` is React Native's double-scroll warning, which forced that
+ * whole screen to stop scrolling and end flush with its last card. One
+ * scroller per page; this is not the one.
+ *
+ * That trade is only safe because **the range is bounded**: S18 caps its own
+ * range at `set_manual_rate`'s 366 days, so the most this ever renders is a
+ * year of rows, not the 2,080-day history a pair accumulates. A caller that
+ * hands it a wider range would render every day of it — the cap lives with
+ * the control that picks the range, which is where a person can be told
+ * about it.
  *
  * **No drag-select, and a tap rather than a long-press.** `S18` §7 describes
  * dragging across dates to seed `RateEditor`; that needs a gesture recognizer
@@ -47,7 +58,7 @@
 
 import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import { useCallback, useMemo } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useLocale, useT } from "../i18n/provider";
 import { useInteraction } from "../primitives/interaction.ts";
 import { Tag } from "../primitives/tag";
@@ -98,10 +109,6 @@ export type RateTableProps = {
   onSelectRow?: (date: string) => void;
 };
 
-function keyExtractor(row: RenderRow): string {
-  return row.date;
-}
-
 export function RateTable({ base, quote, from, to, rows, onSelectRow }: RateTableProps) {
   const t = useT();
   const styles = useStyles();
@@ -126,11 +133,6 @@ export function RateTable({ base, quote, from, to, rows, onSelectRow }: RateTabl
     return out;
   }, [rows, from, to]);
 
-  const renderItem = useCallback(
-    ({ item }: { item: RenderRow }) => <RateTableRowView row={item} onSelect={onSelectRow} />,
-    [onSelectRow],
-  );
-
   if (filled.length === 0) {
     return <Text style={styles.empty}>{t("fx.rateTableEmptyRange")}</Text>;
   }
@@ -142,12 +144,9 @@ export function RateTable({ base, quote, from, to, rows, onSelectRow }: RateTabl
         <Text style={styles.headerRate}>{t("fx.rateTableRateHeader", { quote, base })}</Text>
         <Text style={styles.headerSource}>{t("fx.rateTableSourceHeader")}</Text>
       </View>
-      <FlatList
-        data={filled}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        style={styles.list}
-      />
+      {filled.map((row) => (
+        <RateTableRowView key={row.date} row={row} onSelect={onSelectRow} />
+      ))}
     </>
   );
 }
@@ -209,7 +208,6 @@ function RateTableRowView({
 }
 
 const useStyles = makeStyles((theme) => ({
-  list: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

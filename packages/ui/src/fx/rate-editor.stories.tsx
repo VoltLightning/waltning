@@ -1,6 +1,11 @@
 /**
  * `RateEditor` — `design-system/04` §4.8. States what it will overwrite
  * before writing; never silently replaces a manual entry.
+ *
+ * **No title here, because the host carries it.** S18 opens this inside a
+ * `BottomSheet` whose header states *"Set RUB per USD, 2022-03-12 …
+ * 2026-08-07"* as a real heading — these stories show the component as its
+ * host renders it, which is without one.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";

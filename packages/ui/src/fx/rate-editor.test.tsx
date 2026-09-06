@@ -17,10 +17,26 @@ const BASE_PROPS = {
   onCancel: noop,
 };
 
+// The sentence naming the pair and the range belongs to the host's heading
+// (S18's own `BottomSheet` title), so this component states the direction on
+// the one label it owns — never a `→` arrow, which reads backwards for a
+// figure that is units of the quote per one pivot.
 it("states which way the rate reads — quote per base, never a conversion arrow", () => {
   render(<RateEditor {...BASE_PROPS} existingRows={[]} onSubmit={noop} />);
-  expect(screen.getByText("Set RUB per USD, 2026-08-01 … 2026-08-05")).toBeDefined();
   expect(screen.getByLabelText("Rate · RUB per USD")).toBeDefined();
+  expect(screen.queryByText(/Set RUB per USD/)).toBeNull();
+});
+
+it("states the host's own refusal in the sheet, where a toast behind a modal would not be seen", () => {
+  render(
+    <RateEditor
+      {...BASE_PROPS}
+      existingRows={[]}
+      onSubmit={noop}
+      error="A rate cannot be set for a future date."
+    />,
+  );
+  expect(screen.getByText("A rate cannot be set for a future date.")).toBeDefined();
 });
 
 it("the second confirmation restates the typed value with its unit", () => {
@@ -33,7 +49,7 @@ it("the second confirmation restates the typed value with its unit", () => {
   );
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
   expect(
-    screen.getByText("This sets 0.0104 RUB per USD, replacing 1 manual rate(s) set by hand."),
+    screen.getByText("This sets 0.0104 RUB per USD, replacing 1 manual rate set by hand."),
   ).toBeDefined();
 });
 
@@ -41,8 +57,8 @@ it("counts the range and states nothing needs a second confirmation with no manu
   const onSubmit = vi.fn();
   render(<RateEditor {...BASE_PROPS} existingRows={[]} onSubmit={onSubmit} />);
   expect(screen.getByText("5 days")).toBeDefined();
-  expect(screen.getByText("5 currently absent")).toBeDefined();
-  expect(screen.getByText("0 currently manual")).toBeDefined();
+  expect(screen.getByText("5 days currently absent")).toBeDefined();
+  expect(screen.getByText("0 days currently manual")).toBeDefined();
 
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
   expect(onSubmit).toHaveBeenCalledWith(false);
@@ -57,7 +73,7 @@ it("a manual row in range asks for a second, explicit confirmation before writin
       onSubmit={onSubmit}
     />,
   );
-  expect(screen.getByText("1 currently manual")).toBeDefined();
+  expect(screen.getByText("1 day currently manual")).toBeDefined();
 
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
   expect(onSubmit).not.toHaveBeenCalled();
@@ -126,8 +142,8 @@ it("carried-forward rows count separately from manual and absent", () => {
       onSubmit={noop}
     />,
   );
-  expect(screen.getByText("2 currently carried forward")).toBeDefined();
-  expect(screen.getByText("3 currently absent")).toBeDefined();
+  expect(screen.getByText("2 days currently carried forward")).toBeDefined();
+  expect(screen.getByText("3 days currently absent")).toBeDefined();
 });
 
 it("refuses to submit with no rate typed", () => {
@@ -145,4 +161,25 @@ it("cancel calls back without submitting", () => {
   render(<RateEditor {...BASE_PROPS} existingRows={[]} onSubmit={noop} onCancel={onCancel} />);
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(onCancel).toHaveBeenCalledTimes(1);
+});
+
+/**
+ * The defect the `_one`/`_other` forms exist for: a one-day range read
+ * "1 days". Broken once by collapsing the four keys back to a single
+ * `rateEditorTotalDays` — every line below reverts to the plural noun.
+ */
+it('a one-day range declines every count line, never "1 days"', () => {
+  render(
+    <RateEditor
+      {...BASE_PROPS}
+      from="2026-08-01"
+      to="2026-08-01"
+      existingRows={[{ date: "2026-08-01", source: "carried_forward" }]}
+      onSubmit={noop}
+    />,
+  );
+  expect(screen.getByText("1 day")).toBeDefined();
+  expect(screen.getByText("0 days currently absent")).toBeDefined();
+  expect(screen.getByText("1 day currently carried forward")).toBeDefined();
+  expect(screen.queryByText("1 days")).toBeNull();
 });

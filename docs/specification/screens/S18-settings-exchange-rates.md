@@ -19,6 +19,25 @@ when a source has stopped working.
 | `FxStatusChip` | Any header, when stale or failed | Where you were |
 | S30 | *Re-run a backfill* | S30 |
 | S09 | A row's rate provenance | S09 |
+| S17 | A row's *Exchange rates* | S17 |
+| A capture that has no rate | *"{code} needs an exchange rate — set one"* | The capture |
+
+### Search parameters
+
+Both entries above are links, so both are parameters rather than screen state:
+
+| Parameter | Effect | Absent, or not resolvable |
+|---|---|---|
+| `quote` | Preselects the pair, when the code names one of this pivot's quote currencies | The first quote currency, as with no link |
+| `date` | Opens `RateEditor` on that single day, so the fix is one field away | The editor stays closed |
+
+`date` is checked against the **calendar**, not only the `YYYY-MM-DD` shape — a
+parameter is whatever a link put in the address bar, and `2026-02-31` has the
+shape of a date without being one.
+
+**The route reads them; the screen takes them as props.** A route composes, and
+a screen that is a function of its props is a screen its tests and the journey
+harness drive without a router to stand in for.
 
 ## 3. Layout
 
@@ -34,6 +53,30 @@ a second, separate card. **With no quote currency to compare against the pivot
 there is no table, so there is no card** — the hint saying so is a hint, and
 renders on the ground where every other hint on this screen does.
 
+**The whole page scrolls, through `GroundPanel`, and clears the bottom inset.**
+Nothing on this screen owns a scroller of its own — which is why `RateTable`
+draws plain rows rather than a virtualized list. It used to be the other way
+round: the table scrolled, the page did not, and the coverage card ran off the
+bottom edge of the device with no way to reach it.
+
+**The range control stacks on a phone and pairs at desk width** (`useBreakpoint`,
+never a raw width read). Each date field carries its own row of relative-day
+chips, so *From* and *To* side by side is two fields and six chips across a
+390 px screen — the *To* field and half its chips ran off the right edge.
+
+**The range is capped at the same 366 days `set_manual_rate` caps a write at.**
+The table draws one row per calendar day into the page's own scroller, so the
+range that can be *picked* is the range that can be *written* — one constant,
+shared with `RateEditor`. A custom range past it draws no table and states the
+cap; it is not silently truncated to a window nobody asked for.
+
+**`RateEditor` opens in a `BottomSheet`, not below the table.** A tapped row is
+what opens it, and rendering it under a table of up to a year of rows put it
+some 1,300 px past the row that was tapped: on a phone, tapping a date looked
+like it did nothing at all. The sheet's own header states the sentence naming
+the pair and the range — *"Set PLN per USD, 2026-08-08 … 2026-08-08"* — so that
+title is a heading rather than a body line under one.
+
 **One state decides both cards.** *No quote currency* is the same fact for the
 table and for the coverage list — the list holds exactly one row per quote
 currency — so the hint and the coverage card are drawn from one value rather
@@ -48,9 +91,10 @@ so its rows stay true and stay drawn.
 
 | Component | Notes |
 |---|---|
-| `Card` | Two — `RateTable` alone (only when there is a pair to table), and the per-currency coverage list. Everything else — pair select, presets, date range, action buttons, `RateEditor`, and the no-quote hint — sits on the ground |
-| `RateTable` | Virtualized. Gaps render as **explicit empty rows**, never as absence |
-| `RateEditor` | Single date **or a range**; states what it will overwrite before writing |
+| `Card` | Two — `RateTable` alone (only when there is a pair to table), and the per-currency coverage list. Everything else — pair select, presets, date range, action buttons and the no-quote hint — sits on the ground |
+| `RateTable` | One row per calendar day, drawn plainly into the page scroller — the range is capped, so this is bounded. Gaps render as **explicit empty rows**, never as absence |
+| `RateEditor` | Single date **or a range**; states what it will overwrite before writing. Hosted in a `BottomSheet`, whose header carries the pair-and-range heading |
+| `BottomSheet` | The editor's host — a tapped row opens the editor where the tap was |
 | `SyncLog` | `succeeded` · `failed` · **`rate_limited`** — the third is distinct, because retrying a rate limit is futile |
 | `FxStatusChip` | Fresh · syncing · stale · failed |
 
@@ -68,7 +112,7 @@ so its rows stay true and stay drawn.
 |---|---|
 | Loading | Virtualized rows resolve as scrolled |
 | Populated | Fresh · stale · syncing · has overrides |
-| Empty | A pair with no rates at all — states the source and its last attempt. No quote currency at all: no table card, no coverage card, and the hint on the ground saying why. **No pivot**, or a custom range that does not parse: no table card and **no hint** either — there is a currency to compare against, so the hint would be false; the coverage card stays |
+| Empty | A pair with no rates at all — states the source and its last attempt. No quote currency at all: no table card, no coverage card, and the hint on the ground saying why. **No pivot**, or a custom range that does not parse: no table card and **no hint** either — there is a currency to compare against, so the hint would be false; the coverage card stays. A custom range **past the cap**: no table card, and its own hint naming the cap — a range that draws nothing needs a sentence saying why |
 | Error | Sync failed → `ErrorState(recoverable)`. **Rate-limited → paced retry**, not immediate |
 | Offline | Read-only from cache; overrides queue |
 | Gated | n/a |
@@ -94,6 +138,8 @@ makes RUB recoverable in one entry rather than 1,600.
   by an older build still replays.
 - The rate **table** never holds an invented figure. Estimates live on the
   transaction (§7.6).
+- **A write refused inside the editor is stated inside the editor.** The sheet
+  is a modal; a toast on the page behind it is a refusal nobody can read.
 
 ## 9. Open questions
 
