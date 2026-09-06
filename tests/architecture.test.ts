@@ -713,16 +713,18 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * name was given. `panelFrames` already performs the same hop for a
    * component that is a `GroundPanel`; this is its other half.
    *
-   * `seen` carries the component name too, so a card component that renders
-   * itself cannot loop.
+   * **Nothing about `seen` guards this hop**, and it does not need to:
+   * `uiCards()` is resolved to a fixed point before anyone looks anything up,
+   * and this returns that answer without recursing. A card component written
+   * in terms of itself resolves to nothing in the first round and never
+   * enters the map — the round counter there is the guard, and the sentence
+   * that used to claim one here described code that was never written.
    */
   function resolve(child: Child, source: string, seen: ReadonlySet<string>): Child[] {
     if (child.name === "View" || child.name === FRAGMENT)
       return soleContents(innerOf(child), source, seen);
-    if (!seen.has(child.name)) {
-      const found = uiCards().get(child.name);
-      if (found !== undefined) return [found.card];
-    }
+    const found = uiCards().get(child.name);
+    if (found !== undefined) return [found.card];
     return [child];
   }
 
@@ -947,11 +949,24 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   }
 
   /**
+   * A brace that opens a **function's** body rather than a block's — an arrow
+   * callback, or a nested named `function`.
+   *
+   * The parameter list is matched with no nested parens (`[^()]*`), which is
+   * what keeps `if (x) {` out of it: reaching back to a `function` keyword
+   * would have to cross that function's own `()`, and it cannot. A named
+   * nested helper was the version this test caught — its `return` was read as
+   * the component's, and a component that renders one card fell out of the
+   * map for having a helper in it.
+   */
+  const OPENS_A_FUNCTION = /(?:=>|\bfunction\s*[\w$]*\s*\([^()]*\))\s*$/;
+
+  /**
    * Every value a component can return, `null` included.
    *
-   * **Braces opened by an arrow are skipped**, so a `return` inside a
-   * `useCallback` or a `.map` callback is that callback's, not the
-   * component's. Reading them all was how a scanner came to depend on
+   * **Braces opened by a function are skipped**, so a `return` inside a
+   * `useCallback`, a `.map` callback or a named helper is that function's,
+   * not the component's. Reading them all was how a scanner came to depend on
    * whether a branch happened to wrap its JSX in parentheses.
    */
   function componentReturns(body: string): string[] {
@@ -959,7 +974,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     const stack: boolean[] = [];
     for (let i = 0; i < body.length; i++) {
       const c = body[i];
-      if (c === "{") stack.push(/=>\s*$/.test(body.slice(Math.max(0, i - 40), i)));
+      if (c === "{") stack.push(OPENS_A_FUNCTION.test(body.slice(Math.max(0, i - 120), i)));
       else if (c === "}") stack.pop();
       else if (body.startsWith("return", i) && !/[\w$]/.test(body[i - 1] ?? " ")) {
         if (stack.some(Boolean)) continue;
@@ -1175,8 +1190,17 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     if (/\b(?:title|tag|action)\s*=/.test(card.raw.slice(0, open?.end ?? 0))) return undefined;
 
     const children = topLevelChildren(unwrap(innerOf(card))).filter(isRealContent);
-    // Written out: every child is a control that goes somewhere.
-    if (children.length > 1 && children.every((child) => navigates(screenSource, child)))
+    // Written out: every child is a control, and every one of them goes
+    // somewhere. Both halves — a row that has a handler and a row that
+    // navigates are not the same claim, and §5.1 grants the exemption to the
+    // second.
+    if (
+      children.length > 1 &&
+      children.every(
+        (child) =>
+          isControl(screenSource, child) && navigatesTo(screenSource, pressHandlerOf(child)),
+      )
+    )
       return children.length;
 
     const only = children.length === 1 ? children[0] : undefined;
@@ -1188,33 +1212,79 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     const owner = component === undefined ? screenSource : (uiCards().get(component)?.source ?? "");
     // **What the collection is mapped *to*.** Seven `Text`s in a card are
     // seven rows and no destinations, and §5.1 grants the exemption to a
-    // list of destinations — so the row itself has to be something that
-    // navigates, resolved in the file that writes it.
+    // list of destinations — so the row itself has to be a control,
+    // resolved in the file that writes it.
     const row = topLevelChildren(only.raw.slice(1, -1)).find((child) => child.name !== EXPRESSION);
-    if (row === undefined || !navigates(owner, row)) return undefined;
+    if (row === undefined || !isControl(owner, row)) return undefined;
 
-    // The rows are written here and counted there: the mapped name is the
-    // component's own prop, and its value is whatever the screen passed.
-    if (component === undefined) return listLength(screenSource, mapped[1] ?? "");
-    const value = propValue(tagOf(screenSource, component) ?? "", mapped[1] ?? "");
+    if (component === undefined) {
+      // The card is the screen's own, so the row's handler is too.
+      if (!navigatesTo(screenSource, pressHandlerOf(row))) return undefined;
+      return listLength(screenSource, mapped[1] ?? "");
+    }
+
+    /**
+     * **A named menu's destinations are the screen's, not the menu's.** The
+     * component maps a prop to a row and calls another prop on press; both
+     * values are written at the call site, so that is where both questions
+     * are asked — does anything this screen hands the menu actually
+     * navigate, and how many entries did it hand over.
+     */
+    const tag = tagOf(screenSource, component) ?? "";
+    if (!propsOf(tag).some((prop) => navigatesTo(screenSource, propValue(tag, prop))))
+      return undefined;
+    const value = propValue(tag, mapped[1] ?? "");
     return value === undefined ? undefined : listLength(screenSource, value.trim());
   }
 
+  /** Every prop a tag names — `onSelect={…}` and friends, not string props. */
+  function propsOf(tag: string): string[] {
+    return [...tag.matchAll(/\b([a-zA-Z_$][\w$]*)\s*=\s*\{/g)].flatMap((m) => m[1] ?? []);
+  }
+
+  /** The `onPress` a control is given, as written. */
+  function pressHandlerOf(element: Child): string | undefined {
+    const open = openTagEnd(element.raw, 0);
+    return propValue(element.raw.slice(0, open?.end ?? 0), "onPress");
+  }
+
   /**
-   * Whether an element is a row that goes somewhere — a control with a press
-   * handler, or a component whose own render is one.
-   *
-   * This is the clause that keeps the exemption to the sentence
-   * `design-system/05` §5.1 actually grants: *a list of destinations*. A
-   * mapped `<Text>` is a list of words, and a whole tab root made of one
-   * used to take the exemption and pass.
+   * Whether an element is a control at all — a pressable, or a component
+   * whose own render is one. The *shape* half of "a row that navigates".
    */
-  function navigates(source: string, element: Child): boolean {
+  function isControl(source: string, element: Child): boolean {
     if (element.name === "Button" || element.name === "Pressable")
       return /\bonPress\s*=/.test(element.raw);
     const found = componentBody(source, element.name);
     if (found === undefined) return false;
     return /<(?:Button|Pressable|IconButton)\b[^>]*\bonPress\s*=/.test(found.body);
+  }
+
+  /** A navigation, however this app spells one. */
+  const NAVIGATION = /\brouter\s*\.\s*(?:push|replace|navigate|dismissTo)\s*\(|<Link\b|\bhref\s*=/;
+
+  /**
+   * Whether a handler expression reaches a **destination**.
+   *
+   * This is the clause that keeps the exemption to the sentence
+   * `design-system/05` §5.1 actually grants: *a list of destinations, rows
+   * that navigate*. Checking for `onPress=` alone was checking punctuation —
+   * a tab root of two buttons calling local no-op handlers is one whole-screen
+   * card and no destinations at all, and it passed.
+   *
+   * **A named reference is the only shape it has to read.**
+   * `architecture/11` bans an inline function in a JSX prop and Biome refuses
+   * one, so every handler in this repository is a name — resolved to its own
+   * declaration in the same file, which is where a screen keeps them. The
+   * inline form is read as written anyway, for the day that ban is what
+   * changes.
+   */
+  function navigatesTo(source: string, expression: string | undefined): boolean {
+    if (expression === undefined) return false;
+    const written = stripComments(expression).trim();
+    if (written === "") return false;
+    const body = IDENTIFIER.test(written) ? declarationOf(source, written) : written;
+    return body !== undefined && NAVIGATION.test(body);
   }
 
   /** Views and fragments around a card's contents are not contents. */
@@ -1489,9 +1559,41 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
       expect(flagged(textRows, textCard), "seven words are not seven destinations").toBe(true);
     }
 
+    /**
+     * 5 — **rows that press without going anywhere.** The exemption asked
+     * whether a row had an `onPress`, which is punctuation, not navigation:
+     * a tab root whose whole screen is one untitled card of two buttons
+     * calling local no-ops took it and passed. That is *"never a whole
+     * screen, never a single control"* with two controls in it, and no
+     * destinations at all.
+     */
+    const noop = `export default function ProbeScreen() {
+        const handleRefresh = () => {};
+        const handleSync = () => {};
+        return (
+          <GroundPanel>
+            <Card>
+              <Button label="Refresh" onPress={handleRefresh} />
+              <Button label="Sync now" onPress={handleSync} />
+            </Card>
+          </GroundPanel>
+        );
+      }`;
+    const noopCard = groundPanelBodies(noop)
+      .flatMap((body) => soleContents(body, noop))
+      .filter((child) => child.name === "Card")[0];
+    expect(noopCard, "the probe renders one card").toBeDefined();
+    if (noopCard !== undefined) {
+      expect(menuRowCount(noop, noopCard)).toBeUndefined();
+      expect(flagged(noop, noopCard), "two buttons that do nothing are not a menu").toBe(true);
+    }
+
     // And the shape that *is* a list of destinations written out, rather
-    // than mapped, keeps it — the exemption's original wording.
+    // than mapped, keeps it — the exemption's original wording, with the
+    // handlers that make it true.
     const buttons = `export default function Menu() {
+        const handleAccounts = () => router.push("/accounts");
+        const handleCategories = () => router.push("/settings/categories");
         return (
           <GroundPanel>
             <Card>
@@ -1562,6 +1664,17 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
       card(
         `export function A() { return (<Card><Row /></Card>); }
          export function B() { return (<Text />); }`,
+        "A",
+      ),
+    ).toBe("Card");
+
+    // A named helper nested in a component is its own scope: its `return` is
+    // not the component's, and reading it as one dropped a component that
+    // renders exactly one card out of the map entirely — which is C1's own
+    // failure arriving through a different door.
+    expect(
+      card(
+        `export function A() { function helper() { return "not-a-card"; } return (<Card><Row /></Card>); }`,
         "A",
       ),
     ).toBe("Card");
