@@ -11,6 +11,7 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { currencyCode } from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
+import { type SafeAreaInsets, SafeAreaProvider } from "../primitives/safe-area";
 import { QuickAddComposer, type QuickAddComposerProps } from "./quick-add-composer";
 
 function noop() {}
@@ -192,6 +193,77 @@ function WithCounterpartyDemo(args: QuickAddComposerProps) {
       onCounterpartyRoleChange={handleCounterpartyRoleChange}
     />
   );
+}
+
+/**
+ * §14.6 — the account is held, and nothing can be captured in it because the
+ * pivot holds no rate for its currency. The banner is the whole state of a
+ * fresh install with one PLN account and a USD pivot: Save is disabled, and
+ * this is both the reason and the way out (S05 §6).
+ *
+ * `neutral`, not amber: P4 reserves amber on this screen for the
+ * estimated-rate marker, and a currency with no rate at all is a missing
+ * capability rather than an asserted figure.
+ */
+export const NeedsRate: Story = {
+  args: {
+    raw: "48,90",
+    accounts: [
+      {
+        id: "account-pln",
+        name: "Cash · PLN",
+        currency: currencyCode("PLN"),
+        decimals: 2,
+        capturable: false,
+        ownership: "own" as const,
+      },
+    ],
+    accountId: "account-pln",
+    onSetRate: noop,
+  },
+};
+
+/**
+ * The kind menu open — S05 §9.1's escape hatch, and `▾` meaning what it
+ * draws. Two options, and a transfer is not one of them: it is a different
+ * shape with its own composer.
+ */
+export const KindMenu: Story = {
+  args: { raw: "48,90", accountId: "account-a" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: "Kind: Expense" }));
+    // `BottomSheet` portals to a sibling of `canvasElement` on the web —
+    // `WithCounterparty` below states the same reason.
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(body.findByRole("button", { name: "Income" })).resolves.toBeDefined();
+  },
+};
+
+/**
+ * **The composer on a phone with a Dynamic Island.** This route carries no
+ * navigation header, so this row *is* the header and clears the device's top
+ * inset itself — the one layout no machine in this suite can report, because
+ * `useSafeAreaInsets()` says zero on all of them. An iPhone 15 Pro in
+ * portrait: 59 above, 34 below.
+ */
+export const NotchedPhone: Story = {
+  decorators: [withInsets({ top: 59, right: 0, bottom: 34, left: 0 })],
+  args: { raw: "48,90", accountId: "account-a" },
+};
+
+/**
+ * A decorator rather than a wrapper in `render`, so the story still renders
+ * the component through its args — `today-frame.stories.tsx`'s own reason.
+ */
+function withInsets(insets: SafeAreaInsets) {
+  return function InsetDecorator(Story: React.ComponentType) {
+    return (
+      <SafeAreaProvider insets={insets}>
+        <Story />
+      </SafeAreaProvider>
+    );
+  };
 }
 
 /** `create_transaction`'s own refusals, rendered under the chip they name. */

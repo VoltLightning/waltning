@@ -209,6 +209,32 @@ export const en = {
      */
     needsRate: "{{currency}} needs an exchange rate before a transaction can be recorded in it.",
     /**
+     * The refusal's own way out, on the `Banner` that states it: a fresh
+     * install holding one account in a currency the pivot has no rate for
+     * cannot record anything, and a caption alone left the person to find
+     * Settings › Exchange rates on their own. The currency is named because
+     * that is the rate the composer is waiting for.
+     */
+    needsRateAction: "Set a {{currency}} rate",
+    /**
+     * The same fact as `needsRate`, on an `AccountPicker` tile — a short tag
+     * rather than the whole sentence repeated inside every uncapturable
+     * cell, where it was longer than the account it described.
+     */
+    needsRateTag: "Needs a rate",
+    /**
+     * The header control's own sheet title (S05 §9.1) — Expense or Income.
+     * A transfer is a different shape and has its own composer, so it is
+     * never one of these two.
+     */
+    kind: "Kind",
+    /**
+     * The control's accessible name — the field *and* its current value, so
+     * the header trigger and the *Expense* button inside the sheet it opens
+     * are two different names rather than one repeated.
+     */
+    kindValue: "Kind: {{kind}}",
+    /**
      * R4 L2 — `create_transaction`'s `LocalDeferral`: unlike `needsRate`
      * above (refused before the write, nothing saved), this fires *after*
      * the outbox entry has already committed — a currency added while
@@ -551,8 +577,17 @@ export const en = {
     owesYou: "owes you",
     youOwe: "you owe",
     settled: "settled",
+    /**
+     * The lowercase pair is a *sentence fragment* — the meta line under a
+     * name, read as "person · settles in PLN". A control's own label is not
+     * that, which is why `kindPersonLabel` below exists rather than one key
+     * doing both jobs badly.
+     */
     kindPerson: "person",
     kindCompany: "company",
+    /** S15's kind `SegmentControl` — a label, sentence-cased like every other control in the editor. */
+    kindPersonLabel: "Person",
+    kindCompanyLabel: "Company",
     settlesIn: "settles in {{currency}}",
     /** `CounterpartyForm`'s field label — distinct from `settlesIn`'s sentence fragment above. */
     settlementLabel: "Settles in",
@@ -640,6 +675,33 @@ export const en = {
   categories: {
     /** The search field's placeholder, doubling as the leaf count (§3 mobile). */
     search: "Search {{count}} categories",
+    /**
+     * The same placeholder on a tree with no leaves at all: *Search 0
+     * categories* counts something nobody has yet, which reads as a broken
+     * screen rather than an empty one (§6).
+     */
+    searchEmpty: "Search categories",
+    /**
+     * §6's second empty — a tree with nothing in it, not a filter that
+     * excluded everything. `noMatchTitle` below is the filtered one, and
+     * saying *nothing matches* to someone who has never created a category
+     * blames the query for the absence.
+     */
+    emptyTitle: "No categories yet",
+    emptyBody: "Create one now, or save without a category and file it later.",
+    /**
+     * The empty state's own action — the pinned footer's *New*, named in
+     * full. Two controls on one sheet cannot both be *New*: a screen reader
+     * would announce the same button twice, and the empty state's is the one
+     * a person reading the sentence is looking for.
+     */
+    createFirst: "Create a category",
+    /**
+     * §6, R1: a leaf is created under a group, never at top level — so on a
+     * tree with no groups at all the create row has nothing to offer and
+     * says so, rather than showing an empty chooser above a dead Save.
+     */
+    noGroupsYet: "A category needs a group, and there are none yet.",
     /** The pinned footer's create affordance. */
     new: "New",
     /** `EmptyState(filtered)`'s primary action — scoped to the chosen group, never at top level (§6). */

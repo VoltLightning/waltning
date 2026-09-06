@@ -101,8 +101,11 @@ export function CounterpartyForm({
       { value: CounterpartyKind; label: string },
       { value: CounterpartyKind; label: string },
     ] => [
-      { value: "person", label: t("counterparties.kindPerson") },
-      { value: "company", label: t("counterparties.kindCompany") },
+      // The `…Label` pair, not the lowercase fragments the meta lines use:
+      // a segment is a control's own label, and `person`/`company` there
+      // read as an unfinished sentence rather than a choice.
+      { value: "person", label: t("counterparties.kindPersonLabel") },
+      { value: "company", label: t("counterparties.kindCompanyLabel") },
     ],
     [t],
   );

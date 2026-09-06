@@ -316,11 +316,83 @@ it("shows the needsRate caption the moment an uncapturable account is picked (SP
   ).toBeDefined();
 });
 
-it("flips expense and income on one tap — the keypad path's only escape hatch (S05 §9.1)", () => {
+/**
+ * The refusal is a product, not a caption. A fresh install holding one PLN
+ * account with the pivot elsewhere cannot record anything at all, and a muted
+ * line under the chips left the person to find S18 unaided — so the banner
+ * carries the one action that ends the refusal.
+ */
+it("offers the way out of the refusal, scoped to the currency (S05 §6)", () => {
+  const onSetRate = vi.fn();
+  render(
+    <QuickAddComposer
+      {...props({
+        accounts: [
+          {
+            id: "account-a",
+            name: "Cash · PLN",
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            capturable: false,
+            ownership: "own",
+          },
+        ],
+        accountId: "account-a",
+        onSetRate,
+      })}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Set a PLN rate" }));
+  expect(onSetRate).toHaveBeenCalledOnce();
+});
+
+/** No caller, no offer — `packages/ui` names no router, so the action is the screen's to give. */
+it("states the refusal without an action when the caller has nowhere to send it", () => {
+  render(
+    <QuickAddComposer
+      {...props({
+        accounts: [
+          {
+            id: "account-a",
+            name: "Cash · PLN",
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            capturable: false,
+            ownership: "own",
+          },
+        ],
+        accountId: "account-a",
+      })}
+    />,
+  );
+  expect(
+    screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
+  ).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Set a PLN rate" })).toBeNull();
+});
+
+/**
+ * S05 §9.1's escape hatch, and `▾` meaning what it draws: the header names
+ * the draft's kind and opens a sheet listing both, rather than flipping on a
+ * tap while wearing a menu's chevron. The trigger's own name carries the
+ * value so it never collides with the option of the same name inside.
+ */
+it("opens a kind menu rather than flipping on one tap (S05 §9.1)", () => {
   const onTypeChange = vi.fn();
   render(<QuickAddComposer {...props({ onTypeChange })} />);
-  fireEvent.click(screen.getByRole("button", { name: "Expense" }));
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Expense" }));
+  expect(onTypeChange).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Income" }));
   expect(onTypeChange).toHaveBeenCalledWith("income");
+});
+
+/** §9.1 again: a transfer is a different shape and never one of these two. */
+it("offers expense and income only — never a transfer (S05 §9.1)", () => {
+  render(<QuickAddComposer {...props({})} />);
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Expense" }));
+  expect(screen.getByRole("button", { name: "Expense" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Transfer" })).toBeNull();
 });
 
 it("shows the scope chip's own value from the account's ownership and isBusiness", () => {

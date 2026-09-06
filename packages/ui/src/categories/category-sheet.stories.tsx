@@ -151,6 +151,34 @@ export const FilteredEmpty: Story = {
   },
 };
 
+/**
+ * **A fresh ledger, before any category exists.** Not the filtered empty
+ * above: nothing has been excluded, so the sheet says so plainly rather than
+ * counting leaves nobody has (*Search 0 categories*) or blaming a query for
+ * an absence that predates it (*Nothing matches*).
+ */
+export const EmptyTree: Story = {
+  args: { ...WITH_CREATE, tree: [], usage: {} },
+};
+
+/**
+ * The same ledger, one step in — `New` opens the create row, and R1 refuses a
+ * leaf at top level, so the row says why it has no group to offer rather
+ * than showing an empty chooser above a Save that never enables.
+ */
+export const EmptyTreeCreating: Story = {
+  args: { ...WITH_CREATE, tree: [], usage: {} },
+  play: async ({ canvasElement }) => {
+    // `<Modal>` portals to a sibling of `canvasElement` — `FilteredEmpty`
+    // above states the whole reason.
+    const canvas = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "Create a category" }));
+    await expect(
+      canvas.findByText("A category needs a group, and there are none yet."),
+    ).resolves.toBeDefined();
+  },
+};
+
 /** The pinned `+ New` row — group locked to the chip already narrowing the sheet. */
 export const Creating: Story = {
   args: WITH_CREATE,

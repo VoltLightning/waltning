@@ -113,6 +113,18 @@ function handlePressRoute(id: string) {
 }
 
 /**
+ * S10 §6's `first-run` empty — *nothing exists, offers S05*. The action was
+ * the filter sheet under a label naming a transaction type, which is the one
+ * offer a ledger holding no rows cannot mean: there is nothing to filter, and
+ * capture is what makes the first row. `shell.add` is the label S04's own
+ * first-run empty already uses for the same destination — the same act
+ * reached from two screens is one word, not two.
+ */
+function handleAddTransaction() {
+  router.push("/quick-add");
+}
+
+/**
  * A `PhoneSearchTransaction` reshaped into `<LedgerTable>`'s own row —
  * `packages/ui` may not import `@waltning/client` (the architecture floor:
  * siblings), so this join happens here, the one layer that already depends
@@ -632,7 +644,7 @@ export default function Ledger() {
           variant="first-run"
           title={t("transactions.emptyFirstRunTitle")}
           body={t("transactions.emptyFirstRunBody")}
-          primaryAction={{ label: t("routes.expense"), onPress: handleOpenSheet }}
+          primaryAction={{ label: t("shell.add"), onPress: handleAddTransaction }}
         />
       );
 
@@ -825,7 +837,7 @@ export default function Ledger() {
             variant="first-run"
             title={t("transactions.emptyFirstRunTitle")}
             body={t("transactions.emptyFirstRunBody")}
-            primaryAction={{ label: t("routes.expense"), onPress: handleOpenSheet }}
+            primaryAction={{ label: t("shell.add"), onPress: handleAddTransaction }}
           />
         )
       ) : (

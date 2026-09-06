@@ -83,6 +83,7 @@ is not a better one.
 | `Chip` | Group filter. ≥44px |
 | `Button` | `secondary` *+ New* beside `primary` *Use ‹leaf›* — never two primaries (§3.1) |
 | `EmptyState(filtered)` | No match — offers *Create "…"* scoped to the selected group |
+| `EmptyState(first-run)` | No categories at all — *No categories yet*, offering *Create a category* |
 
 ## 5. Data
 
@@ -100,7 +101,7 @@ choosing to create a category has already decided, and a model has not.
 |---|---|
 | Loading | Cached; the tree is small and changes rarely. No skeleton in practice |
 | Populated | Browsing · searching · group-filtered |
-| Empty | `EmptyState(filtered)` on no search match, offering *Create "…"* under the current group — **never at top level**, because a top-level leaf is `Uncategorized` and nothing else |
+| Empty | **Two of them, and they are not the same absence.** `filtered` — a search or a group chip excluded everything: *No matching category*, offering *Create "…"* under the current group, **never at top level**, because a top-level leaf is `Uncategorized` and nothing else. `first-run` — the tree holds nothing at all, which is what a ledger is before the taxonomy arrives: *No categories yet*, with *Create a category*. The search field says *Search categories* there rather than counting to zero, and nothing says *nothing matches* — no query is why the sheet is empty, and blaming one sends a person to retype instead of to create. The create row is honest about R1 in the same state: a leaf is created under a group, so with no groups it says so rather than offering an empty chooser above a Save that never enables |
 | Error | Create failed (name collides with a sibling) → inline on the field, naming the existing sibling |
 | Offline | Fully functional from cache. `create_category` queues to the outbox and the leaf is usable immediately with a `pending` marker |
 | Gated | n/a |

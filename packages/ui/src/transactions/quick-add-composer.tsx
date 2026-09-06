@@ -48,10 +48,12 @@ import { IconButton } from "../primitives/icon-button";
 import { useInteraction } from "../primitives/interaction.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { RadioGroup, type RadioGroupProps } from "../primitives/radio";
+import { useSafeArea } from "../primitives/safe-area";
 import { type Segment, SegmentControl } from "../primitives/segment-control";
 import { Select } from "../primitives/select";
 import { TextField } from "../primitives/text-field";
 import { BottomSheet } from "../shell/bottom-sheet";
+import { Banner } from "../states/banner";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
@@ -84,6 +86,13 @@ export type QuickAddComposerProps = {
   accountMachineFilled: boolean;
   /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
   onOpenAccountPicker: () => void;
+  /**
+   * The uncapturable-account banner's own way out — S18, for the picked
+   * account's currency and this draft's own `today`. The screen owns the
+   * route (`architecture/11`: this package names no router), so the banner
+   * carries no action at all when a caller has nowhere to send it.
+   */
+  onSetRate?: () => void;
   categories: readonly QuickAddComposerCategory[];
   /**
    * The draft's effective category — the screen's own pick, or (H1) a
@@ -130,7 +139,7 @@ export type QuickAddComposerProps = {
   onCancel: () => void;
 };
 
-type OpenSheet = "date" | "scope" | "payee" | "note" | "counterparty" | null;
+type OpenSheet = "kind" | "date" | "scope" | "payee" | "note" | "counterparty" | null;
 
 export function QuickAddComposer({
   raw,
@@ -140,6 +149,7 @@ export function QuickAddComposer({
   accountId,
   accountMachineFilled,
   onOpenAccountPicker,
+  onSetRate,
   categories,
   categoryId,
   categoryProposal,
@@ -166,10 +176,30 @@ export function QuickAddComposer({
 }: QuickAddComposerProps) {
   const t = useT();
   const styles = useStyles();
+  const insets = useSafeArea();
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
+
+  /**
+   * **This row is the screen's header**, so it clears the device's own top
+   * inset — the composer route carries no navigation header, and
+   * `GroundPanel` deliberately never clears the top (its own doc: *"the top
+   * belongs to the header above it"*). Not in `useStyles`: that cache is
+   * keyed on the theme and this is keyed on the device, the same split
+   * `GroundPanel`'s `clearance` and `Dock`'s own bottom clearance make.
+   */
+  const clearTop = { paddingTop: insets.top };
 
   const selectedAccount = accounts.find((account) => account.id === accountId);
   const closeSheet = useCallback(() => setOpenSheet(null), []);
+  const handleOpenKindSheet = useCallback(() => setOpenSheet("kind"), []);
+  const handlePickExpense = useCallback(() => {
+    setOpenSheet(null);
+    onTypeChange("expense");
+  }, [onTypeChange]);
+  const handlePickIncome = useCallback(() => {
+    setOpenSheet(null);
+    onTypeChange("income");
+  }, [onTypeChange]);
   const handleOpenDateSheet = useCallback(() => setOpenSheet("date"), []);
   const handleOpenScopeSheet = useCallback(() => setOpenSheet("scope"), []);
   const handleOpenPayeeSheet = useCallback(() => setOpenSheet("payee"), []);
@@ -287,17 +317,31 @@ export function QuickAddComposer({
         : pickedCounterparty.name;
 
   const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
-  // §14.6 — the same proactive caption `QuickAddForm`'s own `blocked` text
+  // §14.6 — the same proactive statement `QuickAddForm`'s own `blocked` text
   // already carries on the desk fallback: an uncapturable account is a fact
   // knowable the moment it is picked, not only after `create_transaction`
   // bounces it. `accountError` stays the fallback for whatever else
-  // `byField.accountId` might carry.
+  // `byField.accountId` might carry, and now renders as the field error it
+  // is rather than sharing the muted caption with a refusal that has a way
+  // out.
   const accountError = fieldErrors?.byField["accountId"]?.[0];
   const accountNeedsRate =
     selectedAccount !== undefined && !selectedAccount.capturable
       ? t("transactions.needsRate", { currency: selectedAccount.currency })
       : undefined;
-  const accountCaption = accountNeedsRate ?? accountError;
+  /**
+   * `neutral`, not `warn` — S05 §8's P4: *the estimated-rate marker is the
+   * only amber here*. A currency with no rate at all is not an asserted
+   * figure, it is a capability this ledger does not have yet, and painting
+   * it amber would teach the one colour P4 reserves to mean two things.
+   */
+  const setRateAction =
+    onSetRate === undefined || selectedAccount === undefined
+      ? undefined
+      : {
+          label: t("transactions.needsRateAction", { currency: selectedAccount.currency }),
+          onPress: onSetRate,
+        };
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
   const payeeError = fieldErrors?.byField["payee"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
@@ -308,11 +352,11 @@ export function QuickAddComposer({
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, clearTop]}>
         <IconButton label={t("common.cancel")} onPress={onCancel}>
           <CrossMark />
         </IconButton>
-        <TypeToggle type={type} onChange={onTypeChange} />
+        <KindControl type={type} onPress={handleOpenKindSheet} />
       </View>
 
       <AmountField
@@ -369,7 +413,14 @@ export function QuickAddComposer({
           />
         )}
       </View>
-      {accountCaption === undefined ? null : <Text style={styles.needsRate}>{accountCaption}</Text>}
+      {accountNeedsRate === undefined ? null : (
+        <Banner
+          tone="neutral"
+          message={accountNeedsRate}
+          {...(setRateAction === undefined ? {} : { action: setRateAction })}
+        />
+      )}
+      {accountError === undefined ? null : <Text style={styles.fieldError}>{accountError}</Text>}
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
       {!categoryLowConfidence ? null : (
         <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
@@ -391,6 +442,27 @@ export function QuickAddComposer({
       {counterpartyRoleError === undefined ? null : (
         <Text style={styles.fieldError}>{counterpartyRoleError}</Text>
       )}
+
+      <BottomSheet
+        visible={openSheet === "kind"}
+        title={t("transactions.kind")}
+        onDismiss={closeSheet}
+      >
+        <View style={styles.kindOptions}>
+          <Button
+            label={t("transactions.expense")}
+            onPress={handlePickExpense}
+            variant="secondary"
+            size="lg"
+          />
+          <Button
+            label={t("transactions.income")}
+            onPress={handlePickIncome}
+            variant="secondary"
+            size="lg"
+          />
+        </View>
+      </BottomSheet>
 
       <BottomSheet
         visible={openSheet === "date"}
@@ -474,45 +546,53 @@ function scopeLabel(
   return isBusiness ? t("shell.scopeBusiness") : t("shell.scopeMine");
 }
 
-type TypeToggleProps = {
+type KindControlProps = {
   type: "expense" | "income";
-  onChange: (type: "expense" | "income") => void;
+  onPress: () => void;
 };
 
 /**
  * S05 §9's decided escape hatch — top-right, deliberately out of the thumb
- * zone. Two values only (§9.1: a transfer gets its own composer via `+`
- * long-press), so a tap toggles rather than opening a picker for a choice of
- * one alternative.
+ * zone, and with the composer's own route carrying no navigation header it
+ * is also the only thing naming what is being captured. So it states the
+ * kind, and `▾` means what it draws: it **opens the sheet listing both
+ * kinds**, rather than flipping on a tap while wearing a menu's chevron.
+ *
+ * A choice of two is still a menu, because the alternative is a control
+ * whose current value and whose action are the same word — tapping
+ * *Expense* to get income is only obvious to whoever wrote it, and a person
+ * who taps to read the options finds the draft's kind silently changed.
+ *
+ * **Transfer is not among them** (§9.1): a transfer is a different shape and
+ * has its own composer, reached from `FloatingAdd`'s own picker.
  */
-function TypeToggle({ type, onChange }: TypeToggleProps) {
+function KindControl({ type, onPress }: KindControlProps) {
   const t = useT();
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
   const press = usePressScale();
   const label = type === "expense" ? t("transactions.expense") : t("transactions.income");
-  const handlePress = useCallback(
-    () => onChange(type === "expense" ? "income" : "expense"),
-    [onChange, type],
-  );
 
   return (
     <Animated.View style={press.style}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={label}
-        onPress={handlePress}
+        // The field and its value — the sheet this opens holds a button
+        // named for each kind, and two controls sharing one accessible name
+        // is a screen reader announcing the same thing twice.
+        accessibilityLabel={t("transactions.kindValue", { kind: label })}
+        onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
         {...handlers}
         style={[
-          styles.typeToggle,
-          hovered ? styles.typeToggleHovered : null,
+          styles.kindControl,
+          hovered ? styles.kindControlHovered : null,
           focused ? styles.focused : null,
         ]}
       >
-        <Text style={styles.typeToggleLabel}>{label}</Text>
-        <View style={styles.typeToggleChevron} />
+        <Text style={styles.kindControlLabel}>{label}</Text>
+        <View style={styles.kindControlChevron} />
       </Pressable>
     </Animated.View>
   );
@@ -657,13 +737,13 @@ const useStyles = makeStyles((theme) => ({
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   /** §14 — text, not tint alone (P5); `theme.textMuted`, the same colour `CategorySheet`'s own caption uses. */
   lowConfidence: { color: theme.textMuted, ...text.ui("caption") },
-  /** §14.6's own caption — a fact about now, not an error (`quick-add-form.tsx`'s `blocked`, matched). */
-  needsRate: { color: theme.textMuted, ...text.ui("caption") },
   /** H1, S05 §8's P2 trail row — the caption and Undo beside it. */
   trailRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   counterparty: { gap: space.x3 },
-  typeToggle: {
+  /** The kind sheet's two options — `FloatingAdd`'s own type picker, same shape. */
+  kindOptions: { gap: space.x3 },
+  kindControl: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
@@ -671,9 +751,9 @@ const useStyles = makeStyles((theme) => ({
     paddingHorizontal: space.x2,
     borderRadius: radius.sm,
   },
-  typeToggleHovered: { backgroundColor: theme.hoverFill },
-  typeToggleLabel: { color: theme.text, ...text.ui("body", 600) },
-  typeToggleChevron: {
+  kindControlHovered: { backgroundColor: theme.hoverFill },
+  kindControlLabel: { color: theme.text, ...text.ui("body", 600) },
+  kindControlChevron: {
     width: 8,
     height: 8,
     borderRightWidth: 1.5,

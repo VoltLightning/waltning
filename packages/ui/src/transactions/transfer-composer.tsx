@@ -46,6 +46,7 @@ import { DateField } from "../primitives/date-field";
 import type { FieldErrorMap } from "../primitives/field-errors.ts";
 import { IconButton } from "../primitives/icon-button";
 import { RateField } from "../primitives/rate-field";
+import { useSafeArea } from "../primitives/safe-area";
 import { TextField } from "../primitives/text-field";
 import { BottomSheet } from "../shell/bottom-sheet";
 import { text } from "../theme/fonts.ts";
@@ -138,7 +139,17 @@ export function TransferComposer({
 }: TransferComposerProps) {
   const t = useT();
   const styles = useStyles();
+  const insets = useSafeArea();
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
+
+  /**
+   * **This row is the screen's header** — the transfer route carries no
+   * navigation header, and `GroundPanel` deliberately never clears the top
+   * inset (its own doc: *"the top belongs to the header above it"*). Built
+   * beside the JSX rather than in `useStyles`, which is keyed on the theme
+   * while this is keyed on the device.
+   */
+  const clearTop = { paddingTop: insets.top };
 
   const from = accounts.find((account) => account.id === fromAccountId);
   const to = accounts.find((account) => account.id === toAccountId);
@@ -160,13 +171,22 @@ export function TransferComposer({
   const amount = money.toMoney(amountRaw === "" ? "0" : amountRaw.replace(",", "."));
   const toAmount = money.toMoney(toAmountRaw === "" ? "0" : toAmountRaw.replace(",", "."));
 
-  // M2 — `toAmount ÷ amount` needs neither a reference rate nor the pivot;
-  // gating it behind `referenceRate` rendered `0,0000` offline with nothing
-  // held (S31 §6), even though both figures typed are enough on their own.
-  // Guarded only against dividing by zero, the same as `margin`'s own guard.
-  const realizedRate = money.isZero(amount)
-    ? undefined
-    : money.toMoney(money.dec(toAmount).dividedBy(amount));
+  /**
+   * M2 — `toAmount ÷ amount` needs neither a reference rate nor the pivot;
+   * gating it behind `referenceRate` rendered `0,0000` offline with nothing
+   * held (S31 §6), even though both figures typed are enough on their own.
+   *
+   * **Both figures, though.** The rate is *derived from two amounts* (§3:
+   * "the realized rate is derived and displayed, never typed"), so before
+   * both exist there is no rate to state and `0,0000` is the absence of one
+   * wearing a reading's clothes — the first thing the screen said, on open,
+   * with nothing typed. `undefined` here is what removes the whole rate
+   * panel below rather than filling it with a zero.
+   */
+  const realizedRate =
+    money.isZero(amount) || money.isZero(toAmount)
+      ? undefined
+      : money.toMoney(money.dec(toAmount).dividedBy(amount));
 
   // §7.5's own worked example, generalised: `amount` valued at `1` (this
   // leg's own currency, treated as the common ground), `toAmount` valued at
@@ -174,7 +194,7 @@ export function TransferComposer({
   // pivot (§7.0 — invisible past `readCrossRate`), and `margin` does not need
   // it to be: the formula only needs both legs expressed in one shared unit.
   const marginResult =
-    referenceRate === undefined || money.isZero(amount)
+    referenceRate === undefined || realizedRate === undefined
       ? undefined
       : money.margin({
           amountOriginal: amount,
@@ -227,7 +247,7 @@ export function TransferComposer({
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, clearTop]}>
         <IconButton label={t("common.cancel")} onPress={onCancel}>
           <CrossMark />
         </IconButton>
@@ -285,27 +305,29 @@ export function TransferComposer({
             <Text style={styles.fieldError}>{toAmountError}</Text>
           )}
 
-          <RateField
-            label={t("transactions.realized")}
-            value={realizedRate ?? money.ZERO}
-            // L9 — a rate has no unit of its own (`RateField`'s own doc);
-            // the realized rate reads destination per source, the same
-            // `{{quote}} per {{base}}` `RateTable`'s header states.
-            {...(from && to
-              ? { unit: t("fx.rateTableRateHeader", { quote: to.currency, base: from.currency }) }
-              : {})}
-            {...(referenceRate
-              ? {
-                  reference: {
-                    rate: referenceRate.rate,
-                    source: referenceRate.source,
-                    date: referenceRate.date,
-                    carriedDays: referenceRate.carriedDays,
-                    manual: referenceRate.manual,
-                  },
-                }
-              : {})}
-          />
+          {realizedRate === undefined ? null : (
+            <RateField
+              label={t("transactions.realized")}
+              value={realizedRate}
+              // L9 — a rate has no unit of its own (`RateField`'s own doc);
+              // the realized rate reads destination per source, the same
+              // `{{quote}} per {{base}}` `RateTable`'s header states.
+              {...(from && to
+                ? { unit: t("fx.rateTableRateHeader", { quote: to.currency, base: from.currency }) }
+                : {})}
+              {...(referenceRate
+                ? {
+                    reference: {
+                      rate: referenceRate.rate,
+                      source: referenceRate.source,
+                      date: referenceRate.date,
+                      carriedDays: referenceRate.carriedDays,
+                      manual: referenceRate.manual,
+                    },
+                  }
+                : {})}
+            />
+          )}
 
           {marginInDestination === undefined || to === undefined ? null : (
             <View style={styles.marginRow}>

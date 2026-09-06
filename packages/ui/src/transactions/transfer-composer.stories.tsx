@@ -107,6 +107,16 @@ export const Fee: Story = {
   args: { fee: "5,00" },
 };
 
+/**
+ * **The screen as it opens — nothing typed.** The rate panel is absent, not
+ * zeroed: the realized rate is derived from two amounts (§3), so before both
+ * exist there is no rate to state and `realized 0,0000` was the first thing
+ * this screen said on open.
+ */
+export const Untouched: Story = {
+  args: { amountRaw: "", toAmountRaw: "" },
+};
+
 /** Same account both sides, refused inline before Save (`transactions_transfer_distinct`). */
 export const SameAccountRefused: Story = {
   args: { toAccountId: "acc-usd", toAmountRaw: "150", referenceRate: undefined },

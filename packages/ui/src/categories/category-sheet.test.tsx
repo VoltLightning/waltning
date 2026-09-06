@@ -304,3 +304,43 @@ it("dismisses from the sheet's own close control", () => {
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(onDismiss).toHaveBeenCalledTimes(1);
 });
+
+/**
+ * §6's other empty — a tree with nothing in it, which is what a fresh ledger
+ * is. *Search 0 categories* counts something nobody has, and *Nothing
+ * matches* blames a query for an absence that predates it; both read as a
+ * broken sheet rather than an empty one.
+ */
+it("names an empty tree as empty, never as a filter that matched nothing (S06 §6)", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[]}
+      onPick={vi.fn()}
+      onCreate={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("No categories yet")).toBeDefined();
+  expect(screen.queryByText("Nothing matches.")).toBeNull();
+  expect(screen.getByPlaceholderText("Search categories")).toBeDefined();
+  expect(screen.queryByPlaceholderText("Search 0 categories")).toBeNull();
+  expect(screen.getByRole("button", { name: "Create a category" })).toBeDefined();
+});
+
+/** R1 — a leaf is created under a group, and an empty tree has none to offer. */
+it("says why the create row has no group to offer on an empty tree", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={[]}
+      onPick={vi.fn()}
+      onCreate={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
+  expect(screen.getByText("A category needs a group, and there are none yet.")).toBeDefined();
+});

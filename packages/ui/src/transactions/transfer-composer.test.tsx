@@ -158,3 +158,30 @@ it("cancels through the header ✕", () => {
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(onCancel).toHaveBeenCalledOnce();
 });
+
+/**
+ * S31 §3 — the realized rate is derived from two amounts, so before both
+ * exist there is nothing to derive. The screen used to open stating
+ * *realized 0,0000*, which is not a reading: it is the absence of one
+ * wearing a figure's clothes, on the one screen whose whole purpose is
+ * making the real rate visible.
+ */
+it("states no realized rate until both amounts are typed (S31 §3)", () => {
+  const { rerender } = render(<TransferComposer {...BASE_PROPS} amountRaw="" toAmountRaw="" />);
+  expect(screen.queryByText("Realized")).toBeNull();
+  expect(screen.queryByText("0.0000")).toBeNull();
+
+  // The source alone is not enough either — the destination is what the
+  // realized rate is *of*, and offline with nothing held it stays empty.
+  rerender(<TransferComposer {...BASE_PROPS} amountRaw="150" toAmountRaw="" />);
+  expect(screen.queryByText("Realized")).toBeNull();
+
+  rerender(<TransferComposer {...BASE_PROPS} amountRaw="150" toAmountRaw="565,20" />);
+  expect(screen.getByText("3.7680")).toBeDefined();
+});
+
+/** The margin is the same derivation — a destination of zero is not a full spread. */
+it("states no margin until the destination amount is real", () => {
+  render(<TransferComposer {...BASE_PROPS} amountRaw="150" toAmountRaw="" />);
+  expect(screen.queryByText("Margin")).toBeNull();
+});

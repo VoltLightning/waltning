@@ -206,6 +206,25 @@ export function CategorySheet({
 
   const emptyBody = t("categories.noMatchBody", { query: query.trim() });
   const canCreateHere = onCreate !== undefined && groupId !== null;
+  /**
+   * §6's *other* empty: a tree with no leaves at all, which is what a fresh
+   * ledger is until the taxonomy arrives. It is not a filter that excluded
+   * everything, so it says neither *Search 0 categories* (a count of
+   * something nobody has) nor *Nothing matches* (which blames a query for
+   * an absence that predates it). `searching` cannot be the test — a query
+   * typed into an empty sheet still finds nothing, and the reason is still
+   * that there is nothing.
+   */
+  const emptyTree = ordinaryLeaves.length === 0 && uncategorized === undefined;
+  /**
+   * The footer's own *New*, offered again from the empty state where a
+   * person is actually reading — named in full there, because two controls
+   * labelled *New* on one sheet is one button announced twice.
+   */
+  const createAction =
+    onCreate === undefined
+      ? undefined
+      : { label: t("categories.createFirst"), onPress: handleOpenCreate };
 
   return (
     <BottomSheet visible={visible} title={t("transactions.category")} onDismiss={handleDismiss}>
@@ -221,7 +240,11 @@ export function CategorySheet({
         label={t("common.search")}
         value={query}
         onChangeText={setQuery}
-        placeholder={t("categories.search", { count: ordinaryLeaves.length })}
+        placeholder={
+          emptyTree
+            ? t("categories.searchEmpty")
+            : t("categories.search", { count: ordinaryLeaves.length })
+        }
         hideLabel
       />
       {searching ? null : (
@@ -239,7 +262,18 @@ export function CategorySheet({
       )}
       <ScrollView style={styles.gridScroll}>
         {visibleLeaves.length === 0 ? (
-          canCreateHere ? (
+          emptyTree ? (
+            createAction === undefined ? (
+              <Text style={styles.noMatches}>{t("categories.emptyTitle")}</Text>
+            ) : (
+              <EmptyState
+                variant="first-run"
+                title={t("categories.emptyTitle")}
+                body={t("categories.emptyBody")}
+                primaryAction={createAction}
+              />
+            )
+          ) : canCreateHere ? (
             <EmptyState
               variant="filtered"
               title={t("categories.noMatchTitle")}
@@ -531,17 +565,27 @@ function CreateRow({
       {groupLocked ? null : (
         <>
           <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-            {groups.map((group) => (
-              <GroupChip
-                key={group.id}
-                id={group.id}
-                name={group.name}
-                selected={group.id === groupId}
-                onPress={onGroupChange}
-              />
-            ))}
-          </ScrollView>
+          {/*
+            R1: a leaf is created *under a group*, so a tree with no groups
+            has nothing to offer here — and an empty chooser above a Save
+            that never enables is the same silence this sheet's own empty
+            state exists to break.
+          */}
+          {groups.length === 0 ? (
+            <Text style={styles.noMatches}>{t("categories.noGroupsYet")}</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+              {groups.map((group) => (
+                <GroupChip
+                  key={group.id}
+                  id={group.id}
+                  name={group.name}
+                  selected={group.id === groupId}
+                  onPress={onGroupChange}
+                />
+              ))}
+            </ScrollView>
+          )}
         </>
       )}
       {groupLocked && lockedGroup ? <Text style={styles.label}>{lockedGroup.name}</Text> : null}

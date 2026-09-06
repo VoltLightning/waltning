@@ -36,7 +36,7 @@ who is the same person.
   │  [ These are different    ]         │
   └─────────────────────────────────────┘
 
-  Kind             ( ) person  ( ) company
+  Kind             ( ) Person  ( ) Company
   Settles in       [ EUR ▾ ]         their preference
   Contact          [                 ]
   Note             [                 ]
@@ -55,7 +55,7 @@ decision, so the pair is never queried again.
 |---|---|
 | `MatchWarning` | Fires on save, normalized near-match. Never auto-merges, never silently allows |
 | `TextField` | Name, contact, note |
-| `SegmentControl` | Person / company — governs whether ageing applies at all |
+| `SegmentControl` | Person / Company — governs whether ageing applies at all. Sentence-cased, like every other control here; the lowercase pair belongs to the *meta line* under a name (*person · settles in PLN*), where it is a sentence fragment rather than a label |
 | `CurrencyChip` | Settlement currency — **their** preference, not a system concept |
 
 ## 5. Data

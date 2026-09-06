@@ -21,9 +21,13 @@ moment of entry rather than in a report months later.
 | From | Via | Back to |
 |---|---|---|
 | Any tab | `+` long-press → Transfer | The tab you came from |
-| S05 | Type selector → Transfer | Opens here; the amount carries over |
 | S16 | An account row → *Transfer from here* | S16, source prefilled |
 | S09 | Editing an existing transfer | S09 |
+
+**Quick add's kind menu offers Expense and Income only** (S05 §9.1). A transfer
+is two accounts, two amounts and a live rate; the one entry point that offers
+all three kinds is `+`, because that is the choice made *before* a draft
+exists rather than in the middle of one.
 
 ## 3. Layout
 
@@ -61,6 +65,12 @@ looking at it (§14.1).
 **The rate is never the input.** Two amounts are, because two amounts are what a
 statement shows and a rate is not (§7.6). The realized rate is derived and
 displayed, never typed.
+
+**Which is why it is absent until both amounts are.** A rate derived from a
+figure nobody has typed is not a reading — `realized 0,0000` on an untouched
+screen is the absence of one wearing a figure's clothes, on the screen whose
+whole purpose is making the real rate visible. The rate panel and the margin
+appear together, once both sides hold a non-zero amount.
 
 Same-currency transfers collapse: one amount, no rate panel, no spread.
 

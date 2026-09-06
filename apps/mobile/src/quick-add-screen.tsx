@@ -361,6 +361,25 @@ export default function QuickAdd() {
    * unmounts on the push, so the amount and account come back through the
    * route rather than surviving in state that no longer exists.
    */
+  /**
+   * §14.6's refusal, with a way out. The composer states *"PLN needs an
+   * exchange rate…"* and this is the door it opens: S18, already scoped to
+   * the currency that is blocking the save and to the draft's own accounting
+   * date (§7.0a — the device's calendar, a bare `YYYY-MM-DD`, never a
+   * `Date`). The route lives here because `packages/ui` names no router
+   * (`architecture/11`); the composer only ever asks.
+   */
+  const needsRateCurrency =
+    selectedComposerAccount !== undefined && !selectedComposerAccount.capturable
+      ? selectedComposerAccount.currency
+      : undefined;
+  const handleSetRate = useCallback(() => {
+    if (needsRateCurrency === undefined) return;
+    router.push({
+      pathname: "/settings/rates",
+      params: { quote: needsRateCurrency, date: today },
+    });
+  }, [needsRateCurrency, today]);
   const handleComposerCreateCounterparty = useCallback(() => {
     router.push({
       pathname: "/counterparty/new",
@@ -588,6 +607,7 @@ export default function QuickAdd() {
           accountId={effectiveAccountId}
           accountMachineFilled={accountMachineFilled}
           onOpenAccountPicker={handleOpenComposerAccountPicker}
+          onSetRate={handleSetRate}
           categories={snapshot.categories}
           categoryId={effectiveCategoryId}
           /*
