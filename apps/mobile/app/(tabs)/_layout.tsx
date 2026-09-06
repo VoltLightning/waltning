@@ -14,11 +14,12 @@
  * at desk width, `DeskBand`'s nav — the pattern `expo-router/ui`'s docs call
  * a fully custom tab bar.
  *
- * **Five registered, four listed.** `calendar` keeps its trigger — it is a
- * real route, reachable by URL, and the router's map of this directory has
- * to hold it either way — but `useTabBarItems` does not name it, so it draws
- * no target until S11 builds the screen. Registration and presentation are
- * separate decisions, and this is the file that only makes the first one.
+ * **Four routes, and Calendar is not one of them.** S11 is unbuilt, and the
+ * placeholder that stood in for it was a real route with a real trigger and
+ * no way to reach it — no tab target, no header and no selected tab in the
+ * bar, because nothing in the shell knew about it any more. A route nobody
+ * can arrive at and nothing can render correctly is worse than an absent
+ * one, so the screen and its trigger are gone; S11 adds both back together.
  *
  * **The `+` is not a tab, and it does not exist at desk width at all.** On
  * the phone it floats, mounted once inside `<TabsShell>` — above the whole
@@ -40,7 +41,6 @@ export default function TabsLayout() {
       <TabList style={styles.hiddenList}>
         <TabTrigger name="today" href="/" />
         <TabTrigger name="ledger" href="/ledger" />
-        <TabTrigger name="calendar" href="/calendar" />
         <TabTrigger name="debt" href="/debt" />
         <TabTrigger name="settings" href="/settings" />
       </TabList>

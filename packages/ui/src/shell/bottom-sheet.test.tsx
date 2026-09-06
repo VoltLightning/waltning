@@ -2,7 +2,16 @@
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SafeAreaProvider } from "../primitives/safe-area";
-import { BottomSheet } from "./bottom-sheet";
+
+/**
+ * The keyboard, injected. `react-native-web`'s `Keyboard` never fires, so
+ * there is no other way to render this component in the state H3 is about —
+ * and the state is the whole reason the footer is pinned.
+ */
+let keyboardHeight = 0;
+vi.mock("./use-keyboard-height.ts", () => ({ useKeyboardHeight: () => keyboardHeight }));
+
+const { BottomSheet } = await import("./bottom-sheet");
 
 /**
  * `react-native-web`'s `Dimensions` reads `document.documentElement`, which
@@ -23,6 +32,7 @@ function resizeTo(width: number, height: number) {
 }
 
 beforeEach(() => {
+  keyboardHeight = 0;
   act(() => resizeTo(390, 793));
 });
 
@@ -50,9 +60,10 @@ it("labels visible content and dismisses from backdrop and Close", () => {
 
 /**
  * The defect this component was rebuilt for: a form-shaped sheet grew to the
- * height of its content, off the top of the window, and nothing in it scrolled.
- * Both halves are asserted — a cap without a scroller clips, and a scroller
- * without a cap never scrolls.
+ * height of its content, off the top of the window, and nothing in it
+ * scrolled. Both halves are asserted — a cap without a scroller clips, and a
+ * scroller without a cap never scrolls. The body's own `overflow-y` is what
+ * separates a real `ScrollView` from a `View` with a test id.
  */
 it("bounds its height against the window and scrolls its body", () => {
   render(
@@ -63,7 +74,7 @@ it("bounds its height against the window and scrolls its body", () => {
 
   // §5.1's 170px top offset, measured against this window rather than guessed.
   expect(screen.getByLabelText("Filter").style.maxHeight).toBe(`${793 - 170}px`);
-  expect(screen.getByTestId("bottom-sheet-body")).toBeDefined();
+  expect(getComputedStyle(screen.getByTestId("bottom-sheet-body")).overflowY).toBe("auto");
 });
 
 /** A status bar taller than the design's offset pushes the cap down, not up. */
@@ -95,4 +106,27 @@ it("pins a footer under the scrolling body", () => {
   expect(body.textContent).toContain("rows");
   expect(body.textContent).not.toContain("Settle now");
   expect(screen.getByText("Settle now")).toBeDefined();
+});
+
+/**
+ * H3. On iOS the window height does not change when the keyboard opens, so
+ * the sheet has to lift itself: its bottom edge — and with it the pinned
+ * footer, the sheet's last child — lands on the keyboard's top edge instead
+ * of a third of the way behind it.
+ */
+it("lifts clear of the keyboard, footer and all", () => {
+  keyboardHeight = 336;
+  render(
+    <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
+      <BottomSheet visible title="Settle" onDismiss={vi.fn()} footer={<span>Settle now</span>}>
+        <span>rows</span>
+      </BottomSheet>
+    </SafeAreaProvider>,
+  );
+
+  const sheet = screen.getByLabelText("Settle");
+  expect(sheet.style.marginBottom).toBe("336px");
+  expect(sheet.style.maxHeight).toBe(`${793 - 170 - 336}px`);
+  // The home indicator is behind the keyboard; clearing it there is twice.
+  expect(sheet.style.paddingBottom).toBe("22px");
 });

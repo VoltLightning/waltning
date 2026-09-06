@@ -47,7 +47,6 @@ vi.mock("expo-router", () => ({
 }));
 
 import NewAccount from "./account-creation-screen";
-import CalendarStub from "./calendar-screen";
 import CategoriesScreen from "./categories-screen";
 import QuickAdd from "./quick-add-screen";
 import SettingsScreen from "./settings-screen";
@@ -789,21 +788,6 @@ describe("NewAccount", () => {
 
     expect(screen.getByText(/PLN/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
-  });
-});
-
-/**
- * The remaining tab stub — S11 until its own arc builds the real screen. It
- * names itself and offers the one honest way out: Today. `Ledger` graduated
- * out of this list at C4 (S10, `ledger-screen.test.tsx`); `Debt` graduated at
- * E4 (S12, `debt-screen.test.tsx`).
- */
-describe("tab stubs", () => {
-  it.each([["Calendar", CalendarStub]])("%s names itself and returns to Today", (title, Stub) => {
-    render(<Stub />);
-    expect(screen.getByText(title)).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Go to Today" }));
-    expect(router.push).toHaveBeenCalledWith("/");
   });
 });
 

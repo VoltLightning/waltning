@@ -21,6 +21,8 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
+import { useFloatingClearance } from "@waltning/ui/shell/floating-clearance";
+import { floating } from "@waltning/ui/tokens";
 import { Text } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -205,6 +207,30 @@ describe("TabsShell", () => {
     expect(screen.getAllByText("Ledger")).toHaveLength(2);
   });
 
+  /**
+   * H1: the clearance for the floating button used to be a `GroundPanel`
+   * default, which gave it to ten stack routes with no button anywhere near
+   * them and to the startup screen, which renders before a tab shell exists.
+   * It comes from the shell now, and only where the button is mounted — the
+   * phone branch, never the desk one, which draws no button at all (§2.10).
+   */
+  it("tells the page under it how much room the floating button needs, and only there", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<ClearanceProbe />} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getByText(`clearance: ${floating.clearance}`)).toBeDefined();
+
+    act(() => resizeTo(1440));
+
+    expect(screen.getByText("clearance: 0")).toBeDefined();
+  });
+
   /** Today's hero band is a better header than a word, so it keeps it. */
   it("leaves Today to its own hero band", async () => {
     focused = "today";
@@ -325,6 +351,11 @@ describe("TabsShell", () => {
     expect(screen.queryByText("mine")).toBeNull();
   });
 });
+
+/** A slot that reports what the shell told it — the clearance, as a string. */
+function ClearanceProbe() {
+  return <Text>clearance: {useFloatingClearance()}</Text>;
+}
 
 const CASH: PhoneAccount = {
   id: id<"accounts">("33333333-3333-4333-8333-333333333333"),

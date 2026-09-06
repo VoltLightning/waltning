@@ -143,15 +143,23 @@ type FloatingButtonProps = {
 /**
  * The button itself, mounted only once the layer has been measured.
  *
- * **That split is the reason the default position is right on the first
- * frame.** The shared values that carry the button used to start at `(0, 0)`
- * and be moved to the corner by an effect — so the first painted frame put a
+ * **That split is what puts the button in the right place on the first
+ * frame it is drawn at all.** The shared values that carry it used to start
+ * at `(0, 0)` and be moved by an effect, so the first painted frame put a
  * 56px circle at the layer's top-left, and any environment that evaluates an
- * animated style once (a still frame, a screenshot, a test) saw the button
- * where it never belonged rather than bottom-right where §2.9 puts it.
- * Mounting after the measurement means `useSharedValue`'s own initial value
- * *is* the resting position, and the effect below is left with what it was
- * always for: a frame that changed under a button already on screen.
+ * animated style once — a still frame, a screenshot, a test — saw it there
+ * rather than at the corner §2.9 puts it in. Mounting after the measurement
+ * makes `useSharedValue`'s own initial value the position the frame is drawn
+ * at, and leaves the effect below what it was always for: a frame that
+ * changed under a button already on screen.
+ *
+ * **Which is a flash, not the resting position.** Two of the three inputs to
+ * `shown` are still provisional at mount — `position` is `null` until the
+ * device preference hydrates off disk, and the bottom inset the tab shell
+ * passes is the measured bar's height, which is zero until the bar's own
+ * `onLayout` fires. Both arrive through the effect. A button that settles
+ * somewhere unexpected seconds after launch is a *stored* position, and
+ * nothing here can or should overrule that.
  */
 function FloatingButton({
   bounds,

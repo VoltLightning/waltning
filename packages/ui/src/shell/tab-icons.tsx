@@ -1,5 +1,7 @@
 /**
- * The four tab glyphs `(tabs)/_layout.tsx` hands to `<TabBar>` — drawn the
+ * The tab glyphs `use-tab-bar-items.tsx` hands to `<TabBar>` — four of them
+ * wired today, and `CalendarTabIcon` waiting for S11 to build the screen it
+ * belongs to. Drawn the
  * same way `FloatingAdd`'s plus and `Select`'s chevron are, because no icon
  * library is installed yet. **§2.8 names Phosphor duotone via
  * `react-native-svg` for the real set — that install is its own card, not

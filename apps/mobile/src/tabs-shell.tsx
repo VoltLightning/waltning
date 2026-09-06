@@ -17,6 +17,8 @@
  * and neither the phone's `TabBar` nor the floating add button — the design
  * doc's flat rule, "no floating add button at desk width" — and below it the
  * phone gets `TabHeader`, the slot, the bar and the button, in that order.
+ * The desk branch provides no floating clearance for the same reason it draws
+ * no button, rather than for a second reason of its own.
  *
  * **The header is the shell's on both sides of the breakpoint.** `DeskBand`
  * already named the route; on the phone every tab but Today used to name
@@ -46,10 +48,12 @@ import { CommandBarPlaceholder, DeskBand, DeskNavItem } from "@waltning/ui/shell
 import { DualTotal } from "@waltning/ui/shell/dual-total";
 import type { FloatPosition } from "@waltning/ui/shell/float-geometry";
 import { FloatingAdd } from "@waltning/ui/shell/floating-add";
+import { FloatingClearanceProvider } from "@waltning/ui/shell/floating-clearance";
 import { TabBar, type TabBarItem } from "@waltning/ui/shell/tab-bar";
 import { TabHeader } from "@waltning/ui/shell/tab-header";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { floating } from "@waltning/ui/tokens";
 import { CommandBar, type CommandBarHandle } from "@waltning/ui/transactions/command-bar";
 import {
   KNOWN_PATHS,
@@ -418,7 +422,11 @@ export function TabsShell({ slot }: TabsShellProps) {
   return (
     <>
       <PhoneHeader />
-      {slot}
+      {/* The one place the button is mounted is the one place a page under it
+          is told to leave room — `shell/floating-clearance.tsx`. Outside this
+          provider (the stack's own routes, the startup screen, desk width)
+          the answer is zero, which is what it always should have been. */}
+      <FloatingClearanceProvider value={floating.clearance}>{slot}</FloatingClearanceProvider>
       <VisibleTabBar onLayout={onBarLayout} />
       <FloatingAddLayer barHeight={barHeight} />
     </>

@@ -496,17 +496,24 @@ export const motionFrequency = {
  * off the bottom" rather than a pixel-hunt for an invisible line.
  *
  * `clearance` is the other side of "nothing ever pushes it away": the button
- * is over the page, so the page has to leave room for it under its own last
- * row. The button's height, the inset it rests on, and the page's own
- * breathing room above it — anything less and a list's final entry is under a
- * circle, which is the one thing being on top of everything costs.
+ * is over the page, so a page *with a button over it* has to leave room for
+ * it under its own last row. The button's own height plus the inset it rests
+ * on — what the circle occupies above the page's bottom edge, which a scroller
+ * adds to its own padding rather than instead of it. Anything less and a
+ * list's final entry is under a circle, which is the one thing being on top of
+ * everything costs.
+ *
+ * **It is a number, not a policy.** *Which* pages have a button over them is
+ * the shell's to say and no page can know on its own — `shell/floating-clearance`
+ * is where that is decided, and it hands this value down only where the button
+ * is actually mounted.
  */
 export const floating = {
   size: 56,
   inset: 16,
   tab: { width: 44, height: 22 },
   band: 22,
-  clearance: 16 + 56 + space.x5,
+  clearance: 16 + 56,
 } as const;
 
 /* ── 2.10 The desk breakpoint ────────────────────────────────────────────── */

@@ -142,13 +142,26 @@ nobody could tap. Not `BottomSheet` either — that is the shell's, and a
 primitive reaching for the shell would invert the foundation; a *screen* is
 still free to compose a sheet around any of these controls. The backdrop
 behind the panel is transparent and takes the tap that means *never mind*: a
-select is not a dialog and earns no scrim. States for every selection control:
+select is not a dialog and earns no scrim.
+
+**The modal costs the role, and the panel pays it by name.** A modal is
+announced as a dialog whatever this design believes about scrims, so the panel
+carries the field's own label: what a screen reader reports is *"Currency,
+dialog"*, not *"dialog"*. That is the price of being the only overlay that
+behaves the same on three platforms, and it is stated rather than left for
+someone to hear.
+
+States for every selection control:
 default · hover · focus · selected · disabled.
 
 **The panel scrolls at six and a half rows**, or at whatever room the window
 leaves on the side it opened, whichever is less — the half row is the signal
 that there is more, the way a list edge says it everywhere else. Two rows is
-the floor, for a field with little room on either side of it. **`searchable`**
+the floor, for a field with little room on either side of it — and where the
+floor is larger than the room, the floor wins and the panel overlaps its own
+field rather than hanging off the window. An overlapped field is a legible
+compromise; a list half off the screen is not. Where even that does not fit,
+the margin off the window's edge gives way before the window does. **`searchable`**
 adds a filter row for the lists scrolling cannot carry (52 accounts is S16's
 own number): case-blind, matching the *label* — the person filters what they
 see, and matching hidden values reads as haunted. The query clears when the

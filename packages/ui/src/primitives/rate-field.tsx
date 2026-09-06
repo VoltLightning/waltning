@@ -79,6 +79,15 @@ export type RateFieldProps = {
   error?: string;
   /** The direction stated beside the label, e.g. `"PLN per USD"` (`04` §4.7/§4.8) — a rate has no unit of its own otherwise. */
   unit?: string;
+  /**
+   * Take the keyboard on mount. For a screen arrived at *in order to* fix one
+   * rate — the rates deep link lands on the row it was sent to, and asking
+   * the person to tap the field they were just navigated to is asking them to
+   * repeat themselves. Ignored while not `editable`: there is nothing to
+   * focus, and a read-only figure that stole the keyboard would be a bug
+   * wearing a prop's name.
+   */
+  autoFocus?: boolean;
 };
 
 /** How many digits follow the decimal mark in a stored decimal string — `0` for a whole number. */
@@ -126,6 +135,7 @@ export function RateField({
   manual = false,
   error,
   unit,
+  autoFocus = false,
 }: RateFieldProps) {
   const t = useT();
   const styles = useStyles();
@@ -207,6 +217,7 @@ export function RateField({
           value={displayed}
           onChangeText={handleChangeText}
           keyboardType="decimal-pad"
+          autoFocus={autoFocus}
           {...handlers}
           style={[styles.input, focused ? styles.focused : null, message ? styles.invalid : null]}
         />

@@ -21,6 +21,12 @@
  * site — and the rules (prefer below, flip above when below is the smaller
  * room, never leave the window, never collapse under two rows) are testable
  * as arithmetic rather than only visible in a screenshot.
+ *
+ * **Two of those rules can disagree, and the window wins.** A panel held to
+ * two rows in a space with room for one has to go somewhere, and the answer
+ * is inside the window, overlapping the field it belongs to. That is stated
+ * here and in `03-primitives` §3.8 rather than left for a reader to discover
+ * from a panel hanging off the top of a landscape phone.
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -81,21 +87,31 @@ export function panelPlacement(
 
   // Below unless above is genuinely roomier: a panel that jumps sides for a
   // few pixels reads as a different control each time it opens.
-  if (roomBelow >= Math.min(cap, roomAbove)) {
-    return {
-      position: "absolute",
-      top: anchor.y + anchor.height + GAP,
-      left,
-      width,
-      maxHeight: Math.max(MIN_HEIGHT, Math.min(cap, roomBelow)),
-    };
-  }
+  const below = roomBelow >= Math.min(cap, roomAbove);
+  const room = below ? roomBelow : roomAbove;
+  const height = Math.max(MIN_HEIGHT, Math.min(cap, room));
+
+  /**
+   * **Positioned by `top` on both sides, and clamped after the floor.**
+   * The two-row floor can be larger than the room it was given — that is what
+   * it is for — so a panel placed by its far edge would then hang off the
+   * window: 88px of panel above a field at y=40 starts at y=−52. The floor
+   * wins over the *room*, never over the window, so the panel is pushed back
+   * inside and overlaps its own field instead. An overlapped field is a
+   * legible compromise; a list half off the screen is not. In a window too
+   * short to hold two rows *and* both margins, the margin is what gives way
+   * — it is breathing room, and the window is not.
+   */
+  const preferred = below ? anchor.y + anchor.height + GAP : anchor.y - GAP - height;
+  const highest = insets.top + MARGIN;
+  const lowest = Math.max(highest, frame.height - insets.bottom - MARGIN - height);
+
   return {
     position: "absolute",
-    bottom: frame.height - anchor.y + GAP,
+    top: clamp(preferred, highest, lowest),
     left,
     width,
-    maxHeight: Math.max(MIN_HEIGHT, Math.min(cap, roomAbove)),
+    maxHeight: height,
   };
 }
 

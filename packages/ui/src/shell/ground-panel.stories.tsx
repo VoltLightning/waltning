@@ -27,18 +27,19 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { Text, View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
-import { floating, hairline, space } from "../tokens.ts";
+import { hairline, space } from "../tokens.ts";
 import { GroundPanel } from "./card";
 
 const ROWS = Array.from({ length: 40 }, (_, index) => index);
 const LAST_ROW_TEST_ID = "tall-content-last-row";
 /**
- * `floating.clearance` (94), the panel's own bottom clearance with no device
- * inset in a story — the floating button's height, the inset it rests on and
- * the page's own breathing room (`02-tokens` §2.9). A little headroom off it
- * for sub-pixel rounding.
+ * `space.x5` (22), the panel's own clearance with no device inset and no
+ * floating button over it in a story — a little headroom for sub-pixel
+ * rounding. Under the tab shell the panel adds `floating.clearance` on top of
+ * this (`shell/floating-clearance.tsx`); a story has no shell above it, which
+ * is the same answer every stack route gets.
  */
-const CLEARANCE_FLOOR = floating.clearance - 4;
+const CLEARANCE_FLOOR = 18;
 
 function TallContent() {
   const styles = useStyles();

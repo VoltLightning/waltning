@@ -15,13 +15,13 @@
  * `useTabTrigger`, called once per tab — a fixed set known at compile time,
  * never a loop, so the hook count never varies between renders.
  *
- * **Four, not five: Calendar is registered and unlisted.** S11 is not built,
- * and the route it would occupy answers *"this screen isn't built yet"* — a
- * tab that is one fifth of the app's whole navigation and leads to a
- * placeholder teaches the bar's other four to be ignored too. The
- * `<TabTrigger>` stays in `(tabs)/_layout.tsx`, so `/calendar` is still a
- * real route reachable by URL and nothing about the router changes when S11
- * arrives — only this list grows an entry back.
+ * **Four, not five: there is no Calendar.** S11 is not built, and the route
+ * that stood in for it answered *"this screen isn't built yet"* — a tab that
+ * is one fifth of the app's whole navigation and leads to a placeholder
+ * teaches the bar's other four to be ignored too. The route is gone with it
+ * (`(tabs)/_layout.tsx`), because a registered route no tab points at has no
+ * header and no selected tab either. S11 adds the screen, the trigger and an
+ * entry here in one change.
  */
 
 import { useT } from "@waltning/ui/i18n/provider";

@@ -1,0 +1,66 @@
+/**
+ * How tall a bottom sheet is and where its bottom edge sits, as arithmetic —
+ * `float-geometry.ts`'s shape, for the other object that has to live inside a
+ * window it does not own.
+ *
+ * Three inputs, and the third is the one a sheet is usually wrong about. The
+ * window height and the device's insets are static facts; the **keyboard** is
+ * not, and on iOS the window height does not change when it opens. A sheet
+ * that is bottom-anchored in a `Modal` and capped against the window alone
+ * therefore keeps drawing under the keyboard: on a 390×844 phone the sheet
+ * occupies y 170–844, the keyboard covers roughly y 508–844, and the pinned
+ * footer and the field being typed into are both in the covered third. That
+ * falsifies the whole reason the footer is pinned.
+ *
+ * So the keyboard is subtracted twice over: the sheet is **lifted** by it
+ * (`marginBottom`), which puts its bottom edge exactly on the keyboard's top
+ * edge, and the cap **shrinks** by it, so the lift never pushes the sheet's
+ * head off the top of the window instead. The device's bottom inset is
+ * dropped while the keyboard is up, because the home indicator is behind the
+ * keyboard and clearing it there would be clearing it twice.
+ *
+ * On the web nothing happens: `react-native-web`'s `Keyboard` never fires, so
+ * the height is zero and every value below is what it was.
+ */
+
+import type { ViewStyle } from "react-native";
+import type { SafeAreaInsets } from "../primitives/safe-area";
+import { space, touchTarget } from "../tokens.ts";
+
+/** `05-composites` §5.1: the sheet may reach to 170px from the top of the window. */
+export const SHEET_TOP_OFFSET = 170;
+
+/**
+ * The floor, for a window shorter than the offset — a landscape phone, a small
+ * browser, a keyboard eating two thirds of the screen. Three targets: the
+ * header, one row, and the footer under it. Without it the arithmetic can
+ * return a negative height and the sheet vanishes.
+ */
+export const SHEET_MIN_HEIGHT = touchTarget.min * 3;
+
+export type Frame = { width: number; height: number };
+
+/**
+ * The sheet's own box: how tall it may be, how far it is lifted off the
+ * bottom of the window, and what it pads inside itself.
+ */
+export function sheetBounds(frame: Frame, insets: SafeAreaInsets, keyboard: number): ViewStyle {
+  const top = Math.max(SHEET_TOP_OFFSET, insets.top + space.x5);
+  return {
+    maxHeight: Math.max(SHEET_MIN_HEIGHT, frame.height - top - keyboard),
+    marginBottom: keyboard,
+    // The home indicator is behind the keyboard while it is up.
+    paddingBottom: space.x5 + (keyboard > 0 ? 0 : insets.bottom),
+  };
+}
+
+/**
+ * Where the sheet's bottom edge lands, in window coordinates — which is where
+ * the pinned footer's own bottom edge lands, since the footer is the sheet's
+ * last child. Exists so the promise ("the footer is reachable with the
+ * keyboard up") can be asserted as a number rather than looked at.
+ */
+export function sheetBottomEdge(frame: Frame, bounds: ViewStyle): number {
+  const lift = typeof bounds.marginBottom === "number" ? bounds.marginBottom : 0;
+  return frame.height - lift;
+}

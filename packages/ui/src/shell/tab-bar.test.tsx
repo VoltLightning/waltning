@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { touchTarget } from "../tokens.ts";
 import { TabBar } from "./tab-bar";
 import {
   DebtTabIcon,
@@ -46,7 +47,12 @@ describe("TabBar", () => {
   it("supports a fifth target, each clearing the touch-target floor", () => {
     const five = [...ITEMS, { name: "calendar", label: "Calendar", icon: null, active: false }];
     render(<TabBar items={five} onSelect={vi.fn()} />);
-    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(5);
+    // The second half of the name, which used to be asserted by nobody.
+    for (const tab of tabs) {
+      expect(getComputedStyle(tab).minHeight).toBe(`${touchTarget.min}px`);
+    }
   });
 
   /**

@@ -16,19 +16,32 @@
  * sheet — the fix cannot be opt-in, because the sheets that needed it are
  * exactly the ones that never asked.
  *
- * **The bound is the window, not a constant.** `maxHeight` is the window
- * height less the greater of §5.1's 170px top offset and the device's own top
- * inset plus breathing room — a phone whose status bar is taller than the
- * design's offset still gets a sheet under it rather than behind it. The
- * bottom inset is padding rather than a subtraction: the sheet reaches the
- * edge of the screen, and it is the *content* that clears the home indicator.
+ * **The bound is the window and the keyboard, not a constant.**
+ * `sheet-geometry.ts` holds that arithmetic and the argument for it: the cap
+ * is the window less §5.1's 170px top offset (or the device's own top inset
+ * plus breathing room, whichever leaves less), *and* less whatever the soft
+ * keyboard covers — with the sheet lifted by the same amount, so its bottom
+ * edge and the pinned footer land on the keyboard's top edge rather than
+ * behind it. On iOS the window height does not change when the keyboard
+ * opens, so a sheet that only capped against the window kept drawing under
+ * it, which is exactly the third of the screen the footer and the field being
+ * typed into occupy.
  *
- * **Nested scrolling stays a caller's option.** `AccountPicker` and
- * `CategorySheet` bring their own bounded lists; those still lay out at their
- * own height inside this body, and `nestedScrollEnabled` is what keeps
- * Android from swallowing the inner gesture into this one. On web the body
- * carries `overscroll-behavior: contain`, so reaching the end of the list
- * stops there instead of scrolling the page behind the sheet.
+ * **Both Android windows are translucent.** Under edge-to-edge — mandatory
+ * from Expo SDK 54 — the app window includes the system bars, but a `Modal`
+ * defaults to a window *inset* by them. Left alone, this sheet would pay the
+ * navigation-bar inset twice: once because the modal window already stops
+ * above it, and again in its own `paddingBottom`. `statusBarTranslucent` and
+ * `navigationBarTranslucent` make the modal's window the app's window, so the
+ * insets this component reads are the ones it is actually sitting in. iOS and
+ * the web ignore both props.
+ *
+ * **Nested scrolling is the caller's, not this component's.**
+ * `nestedScrollEnabled` makes the view it is set on a nested-scrolling
+ * *child*, so a bounded list inside this body carries it — the sheet body
+ * does not. On web the body carries `overscroll-behavior: contain`, so
+ * reaching the end of it stops there instead of scrolling the page behind the
+ * sheet.
  */
 
 import { useCallback, useState } from "react";
@@ -40,16 +53,8 @@ import { useSafeArea } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
-
-/** §5.1's own number: the sheet may reach to 170px from the top of the window. */
-const TOP_OFFSET = 170;
-
-/**
- * The floor, for a window shorter than the offset — a landscape phone, a small
- * browser. Three targets: the header, one row, and the footer under it. Without
- * it the arithmetic can return a negative height and the sheet vanishes.
- */
-const MIN_HEIGHT = touchTarget.min * 3;
+import { sheetBounds } from "./sheet-geometry.ts";
+import { useKeyboardHeight } from "./use-keyboard-height.ts";
 
 /**
  * `overscroll-behavior` is a web property `react-native-web` forwards to CSS
@@ -79,24 +84,30 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
   const [backdropFocused, setBackdropFocused] = useState(false);
   const styles = useStyles();
   const insets = useSafeArea();
-  const { height } = useWindowDimensions();
+  const frame = useWindowDimensions();
+  const keyboard = useKeyboardHeight();
   const handleFocus = useCallback(() => setBackdropFocused(true), []);
   const handleBlur = useCallback(() => setBackdropFocused(false), []);
 
-  // Per-window and per-device, so not in `useStyles` — that cache is keyed on
-  // the theme alone and would hand the second device the first one's window.
-  const bounds = {
-    maxHeight: Math.max(MIN_HEIGHT, height - Math.max(TOP_OFFSET, insets.top + space.x5)),
-    paddingBottom: space.x5 + insets.bottom,
-  };
+  // Per-window, per-device and per-keyboard, so not in `useStyles` — that
+  // cache is keyed on the theme alone and would hand the second device the
+  // first one's window.
+  const bounds = sheetBounds(frame, insets, keyboard);
 
   if (!visible) return null;
   return (
-    <Modal transparent visible onRequestClose={onDismiss} animationType="none">
+    <Modal
+      transparent
+      visible
+      onRequestClose={onDismiss}
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
       <View style={styles.overlay}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Dismiss ${title}`}
+          accessibilityLabel={t("common.dismissSheet", { title })}
           onPress={onDismiss}
           onFocus={handleFocus}
           onBlur={handleBlur}
@@ -112,8 +123,6 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
             style={[styles.body, containOverscroll]}
             contentContainerStyle={styles.bodyContent}
             keyboardShouldPersistTaps="handled"
-            // A caller's own bounded list lives inside this one on Android.
-            nestedScrollEnabled
           >
             {children}
           </ScrollView>

@@ -296,6 +296,7 @@ function Disclosure({
       <PanelOverlay
         open={open}
         onDismiss={close}
+        label={label}
         anchor={anchor}
         reveal={panelStyle}
         search={search}
@@ -325,6 +326,8 @@ function useMeasureWhileOpen(open: boolean, measure: () => void): () => void {
 type PanelOverlayProps = {
   open: boolean;
   onDismiss: () => void;
+  /** The field's own name — see the component's note on the `dialog` role. */
+  label: string;
   /** `null` until the field has reported itself — one tick, and every test. */
   anchor: Anchor | null;
   reveal: AnimatedStyle<ViewStyle>;
@@ -340,13 +343,33 @@ type PanelOverlayProps = {
  * has to take the tap that means *never mind*. Escape does the same through
  * `onRequestClose`.
  *
+ * **The role is the `Modal`'s price, and the panel pays it by name.**
+ * `react-native-web` renders a modal as `role="dialog"` with `aria-modal`,
+ * so a screen reader announces a dialog whatever this component believes
+ * about scrims — an *unnamed* dialog, if nothing says otherwise. The panel
+ * therefore carries the field's own label, so what is announced is "Currency,
+ * dialog" rather than "dialog". `03-primitives` §3.8 records the same trade.
+ *
  * **Invisible until measured, never mispositioned.** The field answers
- * `measureInWindow` a tick after the panel opens, so the first frame would
- * otherwise be drawn at `unanchoredPlacement`'s fallback and jump. The
- * content is mounted throughout — a screen reader, and a test, meet the
- * options immediately either way.
+ * `measureInWindow` a tick *after* a paint — `react-native-web`'s
+ * implementation is a `setTimeout` — so a visible first frame at
+ * `unanchoredPlacement`'s fallback is not hypothetical. The transparency sits
+ * on the overlay rather than on the panel because the panel's own opacity is
+ * animated: Reanimated writes the animated value straight onto the view after
+ * the commit, so a static `opacity: 0` in the same style array is overwritten
+ * on the first animation frame. A parent's opacity is not. The content is
+ * mounted throughout — a screen reader, and a test, meet the options
+ * immediately either way.
  */
-function PanelOverlay({ open, onDismiss, anchor, reveal, search, children }: PanelOverlayProps) {
+function PanelOverlay({
+  open,
+  onDismiss,
+  label,
+  anchor,
+  reveal,
+  search,
+  children,
+}: PanelOverlayProps) {
   const t = useT();
   const styles = useStyles();
   const insets = useSafeArea();
@@ -362,23 +385,34 @@ function PanelOverlay({ open, onDismiss, anchor, reveal, search, children }: Pan
       : panelPlacement(anchor, frame, insets, PANEL_CAP);
 
   return (
-    <Modal transparent visible onRequestClose={onDismiss} animationType="none">
-      <View style={styles.overlay}>
+    // `statusBarTranslucent`/`navigationBarTranslucent` — under Android's
+    // edge-to-edge the app window includes the system bars but a `Modal`'s
+    // window does not, so `measureInWindow`'s coordinates would be read in a
+    // window whose origin is a status bar lower and the panel would sit
+    // 24–48px below its own field. iOS and the web ignore both props.
+    <Modal
+      transparent
+      visible
+      onRequestClose={onDismiss}
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
+      <View style={[styles.overlay, anchor === null ? styles.overlayUnmeasured : null]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("common.dismissOptions")}
           onPress={onDismiss}
           style={styles.backdrop}
         />
-        <Animated.View
-          style={[styles.panel, placement, reveal, anchor === null ? styles.panelUnmeasured : null]}
-        >
+        <Animated.View accessibilityLabel={label} style={[styles.panel, placement, reveal]}>
           {search === undefined ? null : (
             <SearchRow query={search.query} onQueryChange={search.onQueryChange} />
           )}
-          {/* `nestedScrollEnabled` — a caller's own `ScrollView` may sit
-              outside this `Modal`, and on Android a list inside one swallows
-              the gesture into the nearest outer scroller without it. */}
+          {/* `nestedScrollEnabled` belongs on the *inner* scroller — it makes
+              the view it is set on a nested-scrolling child, which is what
+              lets this list take the gesture instead of an outer scroller
+              on Android. */}
           <ScrollView style={styles.panelScroll} nestedScrollEnabled>
             {children}
           </ScrollView>
@@ -472,6 +506,7 @@ function MultiSelectField({
       <PanelOverlay
         open={open}
         onDismiss={close}
+        label={label}
         anchor={anchor}
         reveal={panelStyle}
         search={search}
@@ -718,8 +753,11 @@ const useStyles = makeStyles((theme) => ({
     shadowRadius: theme.elevation.raised.shadowRadius,
     shadowOffset: theme.elevation.raised.shadowOffset,
   },
-  /** One frame at most, and never a visible one — see `PanelOverlay`. */
-  panelUnmeasured: { opacity: 0 },
+  /**
+   * One frame at most, and never a visible one — on the overlay rather than
+   * the panel, whose own opacity is animated and would overwrite it.
+   */
+  overlayUnmeasured: { opacity: 0 },
   /** The cap is the panel's; this only has to give way inside it. */
   panelScroll: { flexShrink: 1 },
   /** The token field wraps and pads itself; the toggle inside carries the 44. */

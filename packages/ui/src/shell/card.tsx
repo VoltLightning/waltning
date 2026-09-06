@@ -69,22 +69,22 @@
  * inset and `clearBottom={false}` says so; the design padding (`space.x5`)
  * stays regardless, since that is breathing room, not a device read.
  *
- * **What a bottom edge has to clear is the floating button, not only the
- * device.** The add button rests `floating.inset` above the panel's own
- * bottom edge and is `floating.size` tall (`02-tokens` §2.9), and it is over
- * the page by design — so a page whose clearance was the design padding alone
- * ended every list with its last row under a circle. `floating.clearance`
- * is that arithmetic, named once: a panel that is the screen's bottom edge
- * clears the button, and a panel that is not (`clearBottom={false}`) has no
- * button over it to clear.
+ * **A page under the floating button leaves room for it, and the shell is
+ * what says which pages those are.** The button is mounted once inside the
+ * tab shell, so it floats over the four tab roots and over nothing else — not
+ * over the routes the stack pushes on top of them, and not over
+ * `StartupFailed`, which renders before a tab shell exists. So the clearance
+ * arrives through `useFloatingClearance()` and is zero wherever no provider
+ * sits above (`shell/floating-clearance.tsx` has the argument in full). It is
+ * added to the panel's own padding rather than replacing it: breathing room
+ * and a circle overhead are two different measurements.
  *
- * **`scroll="own"` gets the device inset and not the button's clearance**,
- * because the clearance has to land on the *content that scrolls* and in that
- * mode this component is not holding it. Padding the panel itself by 94px
- * would only shorten the screen's own list and leave a band of empty ground
- * under it, with the last row still under the button at the end of the
- * scroll. A screen that owns its list owns that list's own bottom padding —
- * `floating.clearance` is exported for it.
+ * **`scroll="own"` takes none of it**, because the clearance has to land on
+ * the *content that scrolls* and in that mode this component is not holding
+ * it. Padding the panel would only shorten the screen's own list and leave a
+ * band of empty ground with the last row still under the button at the end of
+ * the scroll. A screen that owns its list reads the same hook and puts the
+ * value in the list's own `contentContainerStyle`.
  */
 
 import { ScrollView, Text, View } from "react-native";
@@ -92,7 +92,8 @@ import { useSafeArea } from "../primitives/safe-area";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
-import { floating, hairline, radius, space } from "../tokens.ts";
+import { hairline, radius, space } from "../tokens.ts";
+import { useFloatingClearance } from "./floating-clearance";
 
 export type CardProps = {
   title?: string;
@@ -143,11 +144,11 @@ export type GroundPanelProps = {
   scroll?: "page" | "own";
   /**
    * `true` (default) — the panel is the screen's own bottom edge, so it
-   * clears both the home-indicator inset and the floating add button resting
-   * above it (`floating.clearance`, `02-tokens` §2.9). `false` — for a panel
-   * that is not that edge (`Dock` sits below it and clears the inset itself,
-   * and no button floats over a composer): the design padding (`space.x5`)
-   * is all it adds.
+   * clears the home-indicator inset and whatever clearance the shell says a
+   * floating button needs over it (`useFloatingClearance()`, zero outside the
+   * tab shell). `false` — for a panel that is not that edge (`Dock` sits
+   * below it and clears the inset itself): the design padding (`space.x5`) is
+   * all it adds.
    */
   clearBottom?: boolean;
 };
@@ -155,6 +156,7 @@ export type GroundPanelProps = {
 export function GroundPanel({ children, scroll = "page", clearBottom = true }: GroundPanelProps) {
   const styles = useStyles();
   const insets = useSafeArea();
+  const floatClearance = useFloatingClearance();
 
   // Not in `useStyles`: that cache is keyed on the theme, and these are keyed
   // on the device. The clearance lives on whichever style ends up carrying
@@ -176,7 +178,7 @@ export function GroundPanel({ children, scroll = "page", clearBottom = true }: G
 
   const clearance = {
     ...sides,
-    paddingBottom: (clearBottom ? floating.clearance : space.x5) + deviceBottom,
+    paddingBottom: space.x5 + deviceBottom + (clearBottom ? floatClearance : 0),
   };
 
   return (

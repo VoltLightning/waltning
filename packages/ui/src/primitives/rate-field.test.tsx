@@ -240,3 +240,28 @@ describe("RateField", () => {
     expect(screen.queryByLabelText("Manual rate")).toBeNull();
   });
 });
+
+/**
+ * The rates deep link lands on the row it was sent to fix. Asking for a tap
+ * on the field someone was just navigated to is asking them to repeat
+ * themselves — and a read-only figure must never take the keyboard, which is
+ * the half a bare `autoFocus` pass-through would have got wrong.
+ */
+describe("RateField, autoFocus", () => {
+  it("takes the keyboard on mount when asked, and only while editable", () => {
+    const { unmount } = render(
+      <I18nProvider locale="en">
+        <RateField label="Rate" value="4.2000" editable onChange={vi.fn()} autoFocus />
+      </I18nProvider>,
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText("Rate"));
+    unmount();
+
+    render(
+      <I18nProvider locale="en">
+        <RateField label="Rate" value={pivotPerUnit("4.2000")} autoFocus />
+      </I18nProvider>,
+    );
+    expect(screen.queryByLabelText("Rate")).toBeNull();
+  });
+});

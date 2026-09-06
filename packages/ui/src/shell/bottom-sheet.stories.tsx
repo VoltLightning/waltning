@@ -61,8 +61,14 @@ function TallBody() {
 
 /**
  * The picker shape: a caller's own bounded `ScrollView`, laid out inside the
- * sheet's body rather than instead of it — `AccountPicker` and
- * `CategorySheet` are both built this way.
+ * sheet's body rather than instead of it — `AccountPicker`,
+ * `CategorySheet` and `CounterpartyPicker` are all built this way.
+ *
+ * **`nestedScrollEnabled` is drawn here because it is the caller's to set.**
+ * The prop makes the view it is on a nested-scrolling *child*, so an inner
+ * list carries it and the sheet body does not. The three callers above do not
+ * yet, which is the Android half of "pickers keep working" and is being fixed
+ * where those files live; this story is the shape they are moving to.
  */
 function OwnListBody() {
   const styles = useStyles();

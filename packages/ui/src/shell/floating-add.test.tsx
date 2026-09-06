@@ -72,9 +72,9 @@ it("defaults to the bottom-right corner, inside the inset", () => {
 });
 
 /**
- * The arithmetic above was always right; what shipped was not. The shared
- * values that carry the button started at `(0, 0)` and were moved to the
- * corner by an effect, so the *rendered* button began at the layer's
+ * The arithmetic above is one thing and the frame drawn from it is another:
+ * the shared values that carry the button started at `(0, 0)` and were moved
+ * to the corner by an effect, so the *rendered* button began at the layer's
  * top-left and any still frame of it — a screenshot, a test, the first
  * painted frame on a device — was of a button in the wrong corner. The
  * position is the shared value's own initial value now, which is why this
