@@ -1,7 +1,30 @@
 /** @vitest-environment jsdom */
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import { SafeAreaProvider } from "../primitives/safe-area";
+import type { SafeAreaInsets } from "../primitives/safe-area";
+import { SafeAreaProvider, WindowInsetsProvider } from "../primitives/safe-area";
+
+/**
+ * The composition the tab shell actually produces: the device's insets on the
+ * window, and a *layer* that has re-provided a different bottom because the
+ * tab bar below it already cleared the home indicator. Handing the sheet
+ * `NOTCHED` directly — which these tests used to do — is a combination that
+ * cannot occur under the shell, and it was passing while the shipped sheet
+ * paid the indicator zero times.
+ */
+function UnderTheTabShell({
+  insets,
+  children,
+}: {
+  insets: SafeAreaInsets;
+  children: React.ReactNode;
+}) {
+  return (
+    <WindowInsetsProvider insets={insets}>
+      <SafeAreaProvider insets={{ ...insets, bottom: 0 }}>{children}</SafeAreaProvider>
+    </WindowInsetsProvider>
+  );
+}
 
 /**
  * The keyboard, injected. `react-native-web`'s `Keyboard` never fires, so
@@ -93,17 +116,18 @@ it("bounds its height against the window and scrolls its body", () => {
 /** A status bar taller than the design's offset pushes the cap down, not up. */
 it("yields to a top inset larger than the design offset", () => {
   render(
-    <SafeAreaProvider insets={{ top: 200, right: 0, bottom: 34, left: 0 }}>
+    <UnderTheTabShell insets={{ top: 200, right: 0, bottom: 34, left: 0 }}>
       <BottomSheet visible title="Filter" onDismiss={vi.fn()}>
         <span>rows</span>
       </BottomSheet>
-    </SafeAreaProvider>,
+    </UnderTheTabShell>,
   );
 
   const sheet = screen.getByTestId("bottom-sheet");
   // 200 + 22 (the design's own breathing room) beats the 170 offset.
   expect(sheet.style.maxHeight).toBe(`${793 - 222}px`);
-  // The home indicator is cleared by padding: the sheet still reaches the edge.
+  // The home indicator is cleared by padding — the window's 34, not the
+  // layer's 0. A sheet is the window; the box it was opened from is not.
   expect(sheet.style.paddingBottom).toBe(`${22 + 34}px`);
   // And exactly once — nothing inside the sheet clears it a second time.
   const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
@@ -133,11 +157,11 @@ it("pins a footer under the scrolling body", () => {
 it("makes room for the lift out from under the keyboard", () => {
   keyboardHeight = 336;
   render(
-    <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
+    <UnderTheTabShell insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
       <BottomSheet visible title="Settle" onDismiss={vi.fn()} footer={<span>Settle now</span>}>
         <span>rows</span>
       </BottomSheet>
-    </SafeAreaProvider>,
+    </UnderTheTabShell>,
   );
 
   const sheet = screen.getByTestId("bottom-sheet");
@@ -174,4 +198,25 @@ it("puts the keyboard away before it puts the sheet away", () => {
   );
   screen.getByRole("button", { name: "Dismiss Settle" }).click();
   expect(onDismiss).toHaveBeenCalledOnce();
+});
+
+/**
+ * The other layer that lies to an overlay, and the one that made the type
+ * picker pay 112. `FloatingAddLayer` re-provides `bottom: barHeight` so the
+ * circle parks on the tab bar rather than on the device; a sheet opened from
+ * inside it is still the window, and still clears the device.
+ */
+it("ignores a layer that has re-provided the tab bar's height", () => {
+  render(
+    <WindowInsetsProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
+      <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 90, left: 0 }}>
+        <BottomSheet visible title="Add" onDismiss={vi.fn()}>
+          <span>rows</span>
+        </BottomSheet>
+      </SafeAreaProvider>
+    </WindowInsetsProvider>,
+  );
+
+  // 22 + the device's 34 — not 22 + the bar's 90.
+  expect(screen.getByTestId("bottom-sheet").style.paddingBottom).toBe("56px");
 });

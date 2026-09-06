@@ -20,7 +20,12 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
-import { SafeAreaProvider, useSafeArea } from "@waltning/ui/primitives/safe-area";
+import {
+  SafeAreaProvider,
+  useSafeArea,
+  WindowInsetsProvider,
+} from "@waltning/ui/primitives/safe-area";
+import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
 import { useFloatingClearance } from "@waltning/ui/shell/floating-clearance";
 import { floating } from "@waltning/ui/tokens";
@@ -254,6 +259,32 @@ describe("TabsShell", () => {
     expect(screen.getByText("insets: 59/0/0/0")).toBeDefined();
   });
 
+  /**
+   * The composition nothing composed. `SlotInsets` is right for the page and
+   * wrong for an overlay: a `BottomSheet` opened from a tab screen is a
+   * `Modal` over the whole window, but its children are the same React tree,
+   * so it inherited the slot's zeroed bottom and stopped clearing the home
+   * indicator — 22pt where 56 was specified, and on Android a field behind
+   * the navigation bar's own buttons. The sheet's own unit tests could not
+   * see it: they handed the component the device's insets directly, which is
+   * a combination the shell never produces.
+   */
+  it("gives a sheet opened from a tab screen the device's bottom, not the slot's", async () => {
+    focused = "ledger";
+    resizeTo(390);
+    render(
+      <DeviceInsets insets={NOTCHED}>
+        <LedgerProvider controller={fakeController()}>
+          <TabsShell slot={<SheetProbe />} />
+        </LedgerProvider>
+      </DeviceInsets>,
+    );
+    await settleLayout();
+
+    // space.x5 (22) + the device's 34 — the slot's own bottom is 0.
+    expect(screen.getByTestId("bottom-sheet").style.paddingBottom).toBe("56px");
+  });
+
   /** Today's hero band is a better header than a word, so it keeps it. */
   it("leaves Today to its own hero band", async () => {
     focused = "today";
@@ -380,6 +411,17 @@ function ClearanceProbe() {
   return <Text>clearance: {useFloatingClearance()}</Text>;
 }
 
+/** A slot that opens the overlay the page's own insets must not reach. */
+function SheetProbe() {
+  return (
+    <BottomSheet visible title="Filter" onDismiss={noop}>
+      <Text>rows</Text>
+    </BottomSheet>
+  );
+}
+
+function noop() {}
+
 /** A notched phone, as the device would report it. */
 const NOTCHED = { top: 59, right: 0, bottom: 34, left: 0 };
 
@@ -395,7 +437,11 @@ function InsetProbe() {
 
 /** `apps/mobile`'s own provider is the platform read; this stands in for it. */
 function DeviceInsets({ insets, children }: { insets: typeof NOTCHED; children: React.ReactNode }) {
-  return <SafeAreaProvider insets={insets}>{children}</SafeAreaProvider>;
+  return (
+    <WindowInsetsProvider insets={insets}>
+      <SafeAreaProvider insets={insets}>{children}</SafeAreaProvider>
+    </WindowInsetsProvider>
+  );
 }
 
 const CASH: PhoneAccount = {

@@ -77,7 +77,7 @@ import {
 } from "react-native";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
-import { useSafeArea } from "../primitives/safe-area";
+import { useWindowInsets } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
@@ -111,7 +111,13 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
   const t = useT();
   const [backdropFocused, setBackdropFocused] = useState(false);
   const styles = useStyles();
-  const insets = useSafeArea();
+  // **The window's insets, not the layer's.** A sheet is a `Modal` — it covers
+  // the whole window and the box it was opened from is irrelevant to it. Read
+  // through `useSafeArea` it inherited whatever the nearest layer had
+  // re-provided: a zeroed bottom under the tab shell (which is right for the
+  // page, whose bottom edge is the tab bar) and the tab bar's whole height
+  // inside the floating button's own layer.
+  const insets = useWindowInsets();
   const frame = useWindowDimensions();
   const keyboard = useKeyboardHeight();
   const handleFocus = useCallback(() => setBackdropFocused(true), []);

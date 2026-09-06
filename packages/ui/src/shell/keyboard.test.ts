@@ -1,5 +1,11 @@
+import type { KeyboardMetrics } from "react-native";
 import { describe, expect, it } from "vitest";
-import { keyboardAvoidance, keyboardEvents, keyboardOverlapsWindow } from "./keyboard.ts";
+import {
+  keyboardAvoidance,
+  keyboardEvents,
+  keyboardHeightFrom,
+  keyboardOverlapsWindow,
+} from "./keyboard.ts";
 
 /**
  * The three platform answers, pinned per platform rather than per *this*
@@ -71,5 +77,34 @@ describe("keyboardEvents", () => {
       const { show, hide } = keyboardEvents(os);
       expect(show.replace("Show", "")).toBe(hide.replace("Hide", ""));
     }
+  });
+});
+
+/**
+ * The cap has to shrink by the quantity `KeyboardAvoidingView` lifts by, and
+ * that is `frame.height − screenY`. On Android `endCoordinates.height` is a
+ * different number — `ReactRootView.java` builds it as `ime().bottom −
+ * systemBars().bottom`, net of the navigation bar — so reading it left the
+ * cap short by the nav-bar inset and §5.1's 170px offset became 170 − N.
+ */
+describe("keyboardHeightFrom", () => {
+  /** Pixel 8, 892dp tall, 300dp IME over a 48dp three-button nav bar. */
+  it("reads screenY, not the height field, where the two disagree", () => {
+    const android: KeyboardMetrics = { screenX: 0, screenY: 592, width: 412, height: 252 };
+    expect(keyboardHeightFrom(892, android)).toBe(300);
+    expect(keyboardHeightFrom(892, android)).not.toBe(android.height);
+  });
+
+  /** iPhone 14: a docked keyboard's `screenY + height` is the window, so both agree. */
+  it("is the same number on iOS, where the two fields agree", () => {
+    const ios: KeyboardMetrics = { screenX: 0, screenY: 508, width: 390, height: 336 };
+    expect(keyboardHeightFrom(844, ios)).toBe(336);
+    expect(keyboardHeightFrom(844, ios)).toBe(ios.height);
+  });
+
+  /** A keyboard already off the bottom of the window covers none of it. */
+  it("never reports a negative cover", () => {
+    const gone: KeyboardMetrics = { screenX: 0, screenY: 900, width: 390, height: 0 };
+    expect(keyboardHeightFrom(844, gone)).toBe(0);
   });
 });

@@ -77,7 +77,7 @@ import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { type Anchor, panelPlacement, unanchoredPlacement, useAnchor } from "./anchor.ts";
 import { useDisclosureMotion } from "./disclosure-motion.ts";
 import { useInteraction } from "./interaction.ts";
-import { useSafeArea } from "./safe-area";
+import { useWindowInsets } from "./safe-area";
 
 /** Six and a half rows — the half row is the signal that there is more. */
 const PANEL_CAP = touchTarget.min * 6.5;
@@ -372,7 +372,9 @@ function PanelOverlay({
 }: PanelOverlayProps) {
   const t = useT();
   const styles = useStyles();
-  const insets = useSafeArea();
+  // The window's own, not the layer's: the panel is a `Modal` over the whole
+  // window, and `bottom-sheet.tsx` states the argument beside its own read.
+  const insets = useWindowInsets();
   const frame = useWindowDimensions();
 
   if (!open) return null;
