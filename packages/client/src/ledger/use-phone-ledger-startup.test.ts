@@ -136,6 +136,59 @@ describe("usePhoneLedgerStartup", () => {
     expect(start).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * The browser's whole retry path, composed. `prepare` re-opens the
+   * platform's gate, so `ready` falls while the worker is re-probed — a retry
+   * that only reset the guard would call `start` against exactly the state
+   * that just failed, and on the browser that is a synchronous open against a
+   * worker known to be cold.
+   */
+  it("asks the platform to re-open its gate, and starts once it settles again", () => {
+    const SECOND: StubStartup = { status: "failed", error: new Error("placeholder second") };
+    const start = vi
+      .fn(() => FAILED)
+      .mockReturnValueOnce(FAILED)
+      .mockReturnValue(SECOND);
+    // The gate as the platform drives it: `prepare` closes it there and then,
+    // the way `retryPhoneLedger` sets the module back to "still probing" and
+    // notifies its `useSyncExternalStore` subscribers.
+    let gateOpen = true;
+    const prepare = vi.fn(() => {
+      gateOpen = false;
+    });
+    const { result, rerender } = renderHook(() => usePhoneLedgerStartup(gateOpen, start, prepare));
+
+    expect(result.current.startup).toBe(FAILED);
+
+    act(result.current.retry);
+
+    // Re-probing: nothing has started again, and the caller renders its blank
+    // frame rather than the stale failure.
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(result.current.startup).toBeNull();
+    expect(start).toHaveBeenCalledTimes(1);
+
+    // It settles; exactly one new attempt.
+    gateOpen = true;
+    rerender();
+    expect(result.current.startup).toBe(SECOND);
+    expect(start).toHaveBeenCalledTimes(2);
+
+    rerender();
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it("is the plain reset it always was when no platform gate is passed", () => {
+    const start = vi.fn(() => FAILED);
+    const { result } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {
+      initialProps: { ready: true },
+    });
+
+    act(result.current.retry);
+
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
   it("does not start on retry while the platform is not ready", () => {
     const start = vi.fn(() => FAILED);
     const { result } = renderHook(({ ready }) => usePhoneLedgerStartup(ready, start), {

@@ -19,13 +19,14 @@ const MAX_MESSAGE_LENGTH = 300;
  * URL queries are stripped because tRPC GET inputs live there and native
  * network errors sometimes repeat the complete URL.
  *
- * **`name` · `message` · `code` are read off a thrown object; nothing else
- * is.** Those three names mean the same thing on every error-like value in the
- * language, so reading them is not inspection of someone's data; it is reading
- * the error. A thrown value that is not an `Error` and carries none of them
- * is described by `describeShape`, which prints a field name only from a fixed
- * list and counts the rest — see its own header for why a *shape* test on the
- * key is not enough.
+ * **`code` is read off any thrown object; `name` and `message` only from one
+ * that proves it is an error.** A `code` is a field a ledger record does not
+ * have, so reading it is reading the error. `name` and `message` are not
+ * self-evidencing in the same way — a record can be called `name` and hold a
+ * counterparty — so they are trusted only when a `code` or a `stack` sits
+ * beside them, and otherwise the value is described by `describeShape`, which
+ * prints a field name only from a fixed list and counts the rest. Both of
+ * those functions carry the argument in full.
  *
  * Not everything that throws is an `Error`, and the ones that are not are the
  * ones worth handling well: a `catch` binding is `unknown` by construction, a
@@ -74,14 +75,18 @@ export function describeDiagnosticError<Caught>(
  * nothing. Routing through `describeDiagnosticError` means one description of
  * a thrown value, used both by the logs and by whatever renders the failure.
  *
- * **The two platform ledgers, not every call site.** Eleven other places still
- * write `String(error)`: `packages/client/src/query/use-query.ts`, three
- * readers in `create-phone-ledger.ts`, `use-transaction-search.ts`,
- * `packages/ledger/src/recover.ts`, `packages/ledger/src/migrate.ts`,
- * `apps/api/src/infra/db.ts`, `tools/e2e/src/smoke.ts`,
+ * **Every site whose string reaches a screen, and no others.** Besides the two
+ * platform ledgers those are `packages/ledger/src/migrate.ts` (a migration
+ * refusal, on this very startup screen), the three refusal readers in
+ * `create-phone-ledger.ts`, `use-transaction-search.ts` and
+ * `packages/client/src/query/use-query.ts` — all routed through here.
+ *
+ * Five `String(error)` sites remain, and all five are log or tooling paths
+ * where the worst case is a line in a console: `packages/ledger/src/recover.ts`
+ * (a stored halt reason), `apps/api/src/infra/db.ts`, `tools/e2e/src/smoke.ts`,
  * `tools/e2e/specs/00-smoke.spec.ts` and `packages/ui/visual/stories.spec.ts`.
- * Nothing lints for the shape. This is the better default, not an enforced
- * invariant, and sweeping them is its own change.
+ * Nothing lints for the shape, so this is a rule about where the output goes,
+ * not one a test enforces.
  *
  * **An `Error` is returned unchanged, except that it must say something.** An
  * empty `message` renders as an empty line on a failure screen — the tag, the
@@ -104,10 +109,24 @@ export function errorFromThrown<Caught>(caught: Caught): Error {
   return error;
 }
 
+/**
+ * `code` fills in where the thrower said nothing, and never decorates what it
+ * did say.
+ *
+ * A `DOMException` carries its legacy numeric code — `7` for
+ * `NoModificationAllowedError` — and appending that to a sentence someone is
+ * meant to read puts a bare number on a screen for no reader's benefit
+ * (`design-system/08` §8.2: never a bare code). Where there is no sentence,
+ * the code is the most identifying thing there is, so it is kept.
+ *
+ * "Said nothing" is every message this module wrote itself, which are exactly
+ * the bracketed ones — `[Object thrown with …]`, `[null thrown]` — and an
+ * empty one. A message from the thrower never starts with `[`.
+ */
 function presentableMessage(described: DiagnosticError): string {
   const code = described.code === undefined ? "" : ` (${described.code})`;
-  if (described.message.length > 0) return `${described.message}${code}`;
-  return `${described.name} with no message${code}`;
+  if (described.message.length === 0) return `${described.name} with no message${code}`;
+  return described.message.startsWith("[") ? `${described.message}${code}` : described.message;
 }
 
 /** Diagnostics are evidence about an operation, never part of its outcome. */

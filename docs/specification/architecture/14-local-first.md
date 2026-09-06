@@ -112,18 +112,28 @@ durability rather than deciding whether the phone works:
   files. The size of that fork is the honest cost of running this engine in a
   browser.
 
-  On that base, **the readiness gate retries.** The gate the browser already
-  waits on — the one that keeps the first synchronous call off a cold worker —
-  opens on an async `:memory:` open, retried with a short backoff, because that
-  one call answers both questions: the worker is running, and the pool is free.
-  It opens after the last attempt either way: a gate that waited for success
-  would hang the app behind a blank frame on a worker that is genuinely broken,
-  so the synchronous open runs, fails loudly, and the failure screen explains
-  it.
+  On that base, **the readiness gate retries, and it opens on an answer rather
+  than on a clock.** The gate the browser already waits on — the one that keeps
+  the first synchronous call off a cold worker — probes with an async
+  `:memory:` open, retried with a short backoff, because that one call answers
+  both questions: the worker is running, and the pool is free.
+
+  **When the retries run out, the synchronous open is not attempted at all.**
+  The driver's synchronous API is a spin on a `SharedArrayBuffer` with a
+  bounded iteration budget — single-digit milliseconds on a current engine —
+  and a worker that never warmed needs orders of magnitude more to instantiate
+  its wasm and take its handles. So a synchronous open against one does not
+  fail with the reason it failed; it fails with a driver timeout, which names
+  no cause and can be classified as none. The probe's own refusal is the
+  readable account of the same condition, so that is the startup outcome. This
+  is why the gate has to distinguish *answered* from *gave up*: a gate that
+  only measured time would hand a cold worker to a synchronous caller and lose
+  the only diagnosis there was.
 
   **The pool's capacity is a number this app owns.** A slot is one OPFS file
-  and a path with no slot is refused until something frees one, which nothing
-  on the startup path does — so the ceiling is a cliff rather than a limit. The
+  and a path with no slot is refused. Deleting a store frees its slot, and the
+  startup path does delete; what it does not do is retry the open that was
+  refused, so a file that did not fit simply is not there. The
   peak here is six: two stores, their two pre-migration copies (both live at
   once), one rollback journal, since the stores migrate one after the other,
   and the file the existence probe opens. That is exactly what the library
@@ -137,18 +147,27 @@ durability rather than deciding whether the phone works:
   **Startup failure is therefore two claims, not one.** *Transient* means the
   cause can be named as one another attempt clears — the browser's refusal for
   a held pool, and that alone — and the failure screen then offers **Try
-  again**, which runs the whole start again; the platform seam caches no such
-  failure (`architecture/11`: a success is a singleton worth keeping, a held
-  pool is not). Everything else is *terminal* by default, a refused migration
-  and an unreadable file alike: the screen states the failing layer's own
-  sentence and offers nothing (`design-system/08` §8.8). Classifying by which
-  call threw rather than by the named cause is what turns a corrupt file into a
+  again**, which re-opens the platform's gate before starting again, because
+  starting against the state that just failed is not an attempt. The platform
+  seam caches no such failure (`architecture/11`: a success is a singleton
+  worth keeping, a held pool is not). Everything else is *terminal* by default,
+  a refused migration and an unreadable file alike. Classifying by which call
+  threw rather than by the named cause is what turns a corrupt file into a
   button someone presses forever. On the device every failure is terminal —
   one process, one document directory, no second holder.
 
-  The sentence on that screen is the failing layer's own, which in the browser
-  means the worker's: it crosses the boundary carrying `name`, `message` and
-  `code`, and naming a cause at all depends on that. Serialised the way the
+  **The two claims say different things, because they know different amounts.**
+  A terminal failure shows the failing layer's own sentence: the migrator
+  writes for a person, and replacing it would throw away the only account of
+  what is wrong. A transient one does not — its single producer is the
+  browser, whose refusal is a long English paragraph naming a File System
+  Access API method, which is neither translated nor actionable
+  (`design-system/08` §8.2: never a bare code, always words a reader can act
+  on). So that branch says the app's own sentence, in the reader's own
+  language, and the `DOMException` goes to the development log.
+
+  Naming a cause at all depends on the worker's error crossing the boundary
+  with its `name`, `message` and `code` intact. Serialised the way the
   published driver does it — `JSON.stringify` over an `Error`, which has no
   enumerable properties — every synchronous failure arrives as the literal
   string `[object Object]`, and no classification downstream is possible.

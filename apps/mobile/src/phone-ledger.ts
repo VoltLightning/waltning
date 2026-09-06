@@ -36,6 +36,11 @@ export function startPhoneLedger(): PhoneLedgerStartup {
   return startup;
 }
 
+/** No platform ledger was resolved, so there is nothing to warm — see above. */
+export function retryPhoneLedger(): void {
+  startup = null;
+}
+
 /** Always "ready": the fallback's job is to typecheck, and to throw if rendered. */
 export function usePhoneLedgerReady(): boolean {
   return true;

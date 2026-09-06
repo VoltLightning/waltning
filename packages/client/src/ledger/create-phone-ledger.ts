@@ -3,6 +3,7 @@ import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
 import type { DiagnosticError } from "@waltning/core/diagnostics";
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
 import type { JsonValue } from "@waltning/core/json";
 import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
@@ -1484,7 +1485,8 @@ export type PhoneLedgerController = {
  * ahead of a decision to keep the wording.
  */
 function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
-  const message = error instanceof Error ? error.message : String(error);
+  // Rendered at form level, so `errorFromThrown` rather than `String`.
+  const message = errorFromThrown(error).message;
   return message.includes("stale version")
     ? [{ path: "", message, messageKey: "transactions.changedElsewhere" }]
     : [{ path: "", message }];
@@ -1644,7 +1646,7 @@ function amountScaleRefusal(error: unknown): FieldError | null {
   if (column === undefined) return null;
   const path = AMOUNT_SCALE_COLUMN_PATH[column];
   if (path === undefined) return null;
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorFromThrown(error).message;
   const params = paramsOf(error);
   // `messageKey` is set only once real `params` are in hand — a `LocalRefusal`
   // carries its own currency/decimals, the values `transactions.tooManyDecimals`
@@ -1769,7 +1771,7 @@ function unmergeCounterpartiesRefusal(error: unknown): FieldError | null {
  * instead.
  */
 function settleDebtRefusal(error: unknown): FieldError {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorFromThrown(error).message;
   if (message.includes("no counterparty")) {
     return { path: "counterpartyId", message, messageKey: "settleDebt.noCounterparty" };
   }

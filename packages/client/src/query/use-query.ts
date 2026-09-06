@@ -22,6 +22,7 @@
  * possible while it stays this small.
  */
 
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import { useEffect, useState } from "react";
 
 export type Query<T> =
@@ -68,7 +69,9 @@ export function useQuery<T>(run: () => Promise<T>, deps: readonly unknown[]): Qu
         if (live) {
           setState({
             status: "failed",
-            error: error instanceof Error ? error : new Error(String(error)),
+            // Every failed query renders this; `String` over a thrown
+            // object would put "[object Object]" in the error state.
+            error: errorFromThrown(error),
           });
         }
       });

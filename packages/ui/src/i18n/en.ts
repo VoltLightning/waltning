@@ -1234,8 +1234,21 @@ export const en = {
      * or not another attempt could clear it.
      */
     ledgerFailedTitle: "The ledger could not open",
-    /** The migrator's own sentence, shown verbatim — it is written for a person. */
+    /**
+     * The failing layer's own sentence, shown verbatim on the terminal branch
+     * — the migrator writes for a person, so replacing it would lose the one
+     * account of what is wrong.
+     */
     ledgerFailedBody: "{{message}}",
+    /**
+     * The recoverable branch, which has exactly one producer: the browser
+     * refusing the OPFS pool while the document being replaced still holds it.
+     * A sentence of this app's own rather than the browser's — that one is
+     * ~180 characters about `createSyncAccessHandle`, in English on a Polish
+     * phone, and `design-system/08` §8.2 asks for words a reader can act on.
+     * The `DOMException` itself reaches the development log instead.
+     */
+    ledgerBusyBody: "Another tab still has the ledger open. Close it and try again.",
   },
 } as const;
 

@@ -79,6 +79,7 @@
  * `document.visibilityState` here. Stated rather than silently skipped.
  */
 
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   PhoneLedgerController,
@@ -157,8 +158,9 @@ const INITIAL: Internal = {
   incomplete: false,
 };
 
-function readError(caught: unknown): string {
-  return caught instanceof Error ? caught.message : String(caught);
+/** Rendered as the search state's own error, so never a bare `String`. */
+function readError<Caught>(caught: Caught): string {
+  return errorFromThrown(caught).message;
 }
 
 /** The row ceiling a `loadAll` drain stops at — see this file's own doc. */

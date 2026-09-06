@@ -658,5 +658,6 @@ export const pl: Messages = {
   startup: {
     ledgerFailedTitle: "Nie udało się otworzyć księgi",
     ledgerFailedBody: "{{message}}",
+    ledgerBusyBody: "Księga jest wciąż otwarta w innej karcie. Zamknij ją i spróbuj ponownie.",
   },
 };

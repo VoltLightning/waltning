@@ -29,6 +29,7 @@ import {
   type PhoneLedgerController,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import { type WarmupResult, warmWorker } from "@waltning/client/ledger/warm-worker";
 import { currencies } from "@waltning/core/currencies";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import type { SqliteOpener } from "@waltning/ledger/open";
@@ -52,8 +53,10 @@ import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./p
  * imply — the number the OPFS pool has to be sized for.
  *
  * A pool slot is one OPFS file, and the VFS refuses a path it has no slot for
- * with `SQLITE_CANTOPEN` until something frees one — which nothing on the
- * startup path does. The peak here is six: `replica`, `outbox`, their two
+ * with `SQLITE_CANTOPEN`. Deleting a store frees its slot — `probeExists`
+ * below does exactly that on every launch — but the refused open frees
+ * nothing and is not retried, so the file that did not fit simply does not
+ * exist. The peak here is six: `replica`, `outbox`, their two
  * `.pre-migration` copies (both live at once, since a copy is discarded only
  * after the session opens cleanly), **one** rollback journal — the stores
  * migrate one after the other, so only one write transaction is open at a
@@ -184,49 +187,52 @@ function copyDatabase(from: string, to: string): void {
 export const PHONE_LEDGER_AVAILABLE = true as const;
 
 /**
- * **One async open answers both questions the first synchronous call depends
- * on**, because in the worker they are the same question.
+ * **The gate opens when the engine has answered, not when a timer says it
+ * should have.** Two things have to be true before any synchronous call, and
+ * one asynchronous open establishes both, because in the worker they are the
+ * same call.
  *
- * 1. **Is the worker running?** `invokeWorkerSync` spins a bounded
- *    `Atomics.pause` loop measured in tens of milliseconds, while a cold
- *    worker has to fetch its bundle and compile the wasm — so
- *    `openDatabaseSync` as the first-ever SQLite call on web times out by
- *    construction. An open through the async API waits without that timeout.
- * 2. **Is the OPFS access-handle pool free?** It is acquired for the **whole
+ * 1. **The worker is running.** `invokeWorkerSync` spins a bounded
+ *    `Atomics.pause` loop — about nine milliseconds on every current Chromium
+ *    — while a cold worker has to fetch its bundle and instantiate a ~620 KB
+ *    wasm module. `openDatabaseSync` as the first SQLite call on web times out
+ *    by construction, and the timeout is the only thing that surfaces: a
+ *    driver-internal `Sync operation timeout`, which names no cause and can be
+ *    classified as none. The asynchronous API has no such budget.
+ * 2. **The OPFS access-handle pool is free.** It is acquired for the **whole
  *    pool directory at once, per worker** — not per file, and not per open:
  *    the worker's `maybeInitAsync` runs `AccessHandlePoolVFS.create` before it
- *    so much as looks at the path, and that call takes a sync access handle on
- *    every file in the directory. So `:memory:` is not a way around it; a
- *    `:memory:` open acquires the pool exactly as a file open does. Which is
- *    what makes it the right probe: it asks the real question and creates no
- *    file while asking.
+ *    so much as looks at the path. So `:memory:` is not a way around it and
+ *    that is what makes it the right probe — it asks the real question and
+ *    creates no pool file while asking (`':memory:'` short-circuits before any
+ *    directory is prefixed).
  *
  * A document being replaced does not return its handles the instant the next
  * one starts running, so two loads a second or two apart put the new page's
  * acquisition against the old page's worker and it is refused. That is a
- * timing condition, not a broken ledger.
+ * timing condition, not a broken ledger, which is why it is retried here.
+ *
+ * **What happens when the retries run out is the whole point of the shape.**
+ * The synchronous open is *not* attempted against a worker that never
+ * answered — it could only report `Sync operation timeout`, and the failure
+ * screen would then state a driver string with no action in it and offer no
+ * retry, on precisely the condition a retry is for. Instead the probe's own
+ * error is the startup outcome: on the browser that is the `DOMException`
+ * naming the held pool, which `isPoolContention` can read.
  *
  * **This loop depends on two properties of the vendored driver that only the
  * fork provides** (`pnpm-workspace.yaml` states all four defects and why):
- *
- * - **A refused acquisition leaves the worker able to try again** — the VFS
- *   trio is published only once all three exist, and a partial acquisition is
- *   released. Without that, one refusal is permanent for the life of the page
- *   and every attempt below is certain to fail.
- * - **A successful async call resolves** — the channel keys its `postMessage`
- *   on the error rather than on a truthy result, so a void operation like
- *   `open` is not reported as a failure. Without that, the loop's early
- *   `return` is unreachable, every load pays the whole backoff, and the gate
- *   distinguishes nothing. `tests/dependency-patches.test.ts` drives both
- *   directions of that channel.
+ * a refused acquisition leaves the worker able to try again, and a successful
+ * async call resolves rather than rejecting. `tests/dependency-patches.test.ts`
+ * drives both against the installed files.
  */
 const OPEN_BACKOFF_MS = [0, 150, 300, 600, 1200] as const;
 
-let ready = false;
+/** `null` while the probe is still running — the layout renders its blank frame. */
+let warmup: WarmupResult | null = null;
 const readyListeners = new Set<() => void>();
 
-function markReady() {
-  ready = true;
+function announce() {
   for (const listener of readyListeners) listener();
 }
 
@@ -234,28 +240,36 @@ function after(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * **The gate opens after the last attempt whether or not it succeeded**, and
- * that is deliberate: a gate that waited for success would hang the app on a
- * genuinely broken worker with nothing on screen. Five attempts over ~2 s is
- * longer than a page swap; past that the synchronous open below runs, fails
- * loudly, and the failure screen says what happened — with a retry when the
- * cause is one another attempt can clear (`isPoolContention`).
- */
-async function prepareWorker(): Promise<void> {
-  for (const delay of OPEN_BACKOFF_MS) {
-    if (delay > 0) await after(delay);
-    try {
-      const probe = await openDatabaseAsync(":memory:");
-      await probe.closeAsync();
-      return;
-    } catch {
-      // The previous document's worker still holds the pool. Wait and ask again.
-    }
-  }
+async function probeWorker(): Promise<void> {
+  const probe = await openDatabaseAsync(":memory:");
+  await probe.closeAsync();
 }
 
-void prepareWorker().finally(markReady);
+function runWarmup(): void {
+  warmup = null;
+  announce();
+  void warmWorker(probeWorker, OPEN_BACKOFF_MS, after).then((result) => {
+    warmup = result;
+    announce();
+  });
+}
+
+runWarmup();
+
+/**
+ * Re-run the gate, then let the caller start again.
+ *
+ * **Fire-and-forget on purpose.** It flips the module back to "still probing",
+ * which turns `usePhoneLedgerReady()` false, which is what puts the blank
+ * frame back on screen; when the probe settles the gate opens again and the
+ * caller's own guard runs `startPhoneLedger` once. A `retry` that awaited this
+ * would have to be async inside a render, which is the one thing the startup
+ * hook exists to avoid.
+ */
+export function retryPhoneLedger(): void {
+  startup = null;
+  runWarmup();
+}
 
 function subscribeReady(listener: () => void): () => void {
   readyListeners.add(listener);
@@ -263,10 +277,10 @@ function subscribeReady(listener: () => void): () => void {
 }
 
 function readReady(): boolean {
-  return ready;
+  return warmup !== null;
 }
 
-/** `true` once the worker can answer a synchronous call. The root layout gates on it. */
+/** `true` once the gate has settled, either way. The root layout gates on it. */
 export function usePhoneLedgerReady(): boolean {
   return useSyncExternalStore(subscribeReady, readReady, readReady);
 }
@@ -299,6 +313,17 @@ let startup: PhoneLedgerStartup | null = null;
  */
 export function startPhoneLedger(): PhoneLedgerStartup {
   if (startup) return startup;
+
+  // **A cold worker is answered here, not by the driver.** Nine milliseconds
+  // of spin cannot cover a wasm instantiation, so a synchronous open against a
+  // worker that never warmed reports `Sync operation timeout` — a string that
+  // names no cause, offers no action, and is classified as nothing. The
+  // probe's own refusal is the readable account of the same failure, so it is
+  // the outcome, and no synchronous call is made at all.
+  if (warmup?.status !== "warm") {
+    const error = warmup?.error ?? new Error("the browser's SQLite worker has not answered yet");
+    return { status: "failed", error, retryable: isPoolContention(error) };
+  }
 
   try {
     const session = createLocalLedgerSession({

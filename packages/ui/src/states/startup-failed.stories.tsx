@@ -54,8 +54,20 @@ export const Failed: Story = {};
  * because there is no claim about what was lost that holds on every path that
  * reaches this screen (`startup-failed.tsx`).
  */
+/**
+ * The `error` here is the browser's real refusal, at its real length, and the
+ * point of the picture is that **none of it reaches the screen**: the
+ * recoverable branch says its own sentence and the `DOMException` goes to the
+ * development log. A short placeholder here would have photographed a state
+ * no code path produces.
+ */
 export const Retryable: Story = {
-  args: { error: new Error("placeholder failure reason"), onRetry: noop },
+  args: {
+    error: new Error(
+      "Failed to execute 'createSyncAccessHandle' on 'FileSystemFileHandle': Access Handles cannot be created if there is another open Access Handle or Writable stream associated with the same file.",
+    ),
+    onRetry: noop,
+  },
 };
 
 function noop() {}

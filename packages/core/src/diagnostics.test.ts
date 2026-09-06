@@ -150,14 +150,22 @@ describe("errorFromThrown", () => {
     expect(errorFromThrown({}).message).toBe("[Object thrown, no fields]");
   });
 
-  /** `code` is often the only identifying field, and the log had it while the screen did not. */
-  it("carries the code into the message the screen shows", () => {
+  /**
+   * `code` fills in for a missing message and never decorates one that is
+   * already there: a `DOMException`'s legacy `7` appended to a sentence
+   * someone is meant to read is a bare number on screen for no reader.
+   */
+  it("uses the code only where there is no message to show", () => {
     expect(errorFromThrown({ code: "SQLITE_BUSY" }).message).toBe(
       "[Object thrown with code] (SQLITE_BUSY)",
     );
     expect(errorFromThrown({ Acme: "dup" }).message).toBe("[Object thrown with 1 field(s)]");
-    expect(errorFromThrown(Object.assign(new Error("is locked"), { code: 5 })).message).toBe(
-      "is locked (5)",
+
+    const refusal = Object.assign(new Error("The access handle is already held."), { code: 7 });
+
+    expect(errorFromThrown(refusal).message).toBe("The access handle is already held.");
+    expect(errorFromThrown(Object.assign(new Error(""), { code: 7 })).message).toBe(
+      "Error with no message (7)",
     );
   });
 
@@ -168,12 +176,15 @@ describe("errorFromThrown", () => {
   });
 
   it("keeps the name, and the original as the cause, when it has to restate", () => {
-    const error = Object.assign(new Error("is locked"), { code: "SQLITE_BUSY" });
+    // Restated because the message is empty; `name` is what `isPoolContention`
+    // reads, so losing it would reclassify a held pool as terminal.
+    const error = new Error("");
     error.name = "NoModificationAllowedError";
 
     const restated = errorFromThrown(error);
 
     expect(restated.name).toBe("NoModificationAllowedError");
+    expect(restated.message).toBe("NoModificationAllowedError with no message");
     expect(restated.cause).toBe(error);
   });
 

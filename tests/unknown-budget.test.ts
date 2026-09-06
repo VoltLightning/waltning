@@ -194,10 +194,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "`error.cause` is unknown by construction; the code beside it is now tRPC's own union",
   },
-  "packages/client/src/ledger/use-transaction-search.ts": {
-    max: 1,
-    why: "a catch binding — the search reports whatever the replica threw, narrowed by a type guard rather than cast",
-  },
   "packages/client/src/query/use-query.ts": {
     max: 2,
     why: "a dependency array is heterogeneous by definition, and a promise rejection is a catch binding",

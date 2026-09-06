@@ -61,20 +61,25 @@ export function StartupFailed({ error, onRetry }: StartupFailedProps) {
   const claim = onRetry
     ? ({
         variant: "recoverable",
+        // **Not `error.message`.** This branch has one producer — the browser
+        // refusing its OPFS pool to a page that has just replaced another —
+        // and what it wrote is a long English sentence about
+        // `createSyncAccessHandle` with no action in it. The failing layer's
+        // own words are right for a migration refusal and wrong here, so the
+        // recoverable branch speaks for itself and the `DOMException` goes to
+        // the development log (`_layout.tsx`'s own diagnostic).
+        why: t("startup.ledgerBusyBody"),
         action: { label: t("common.retry"), onPress: onRetry },
       } as const)
-    : ({ variant: "terminal" } as const);
+    : ({
+        variant: "terminal",
+        why: t("startup.ledgerFailedBody", { message: error.message }),
+      } as const);
 
   return (
     <GroundPanel>
       <View style={styles.center}>
-        {/* The migrator's own sentence is written for a person, so it is shown
-            verbatim rather than replaced with a generic one. */}
-        <ErrorState
-          what={t("startup.ledgerFailedTitle")}
-          why={t("startup.ledgerFailedBody", { message: error.message })}
-          {...claim}
-        />
+        <ErrorState what={t("startup.ledgerFailedTitle")} {...claim} />
       </View>
     </GroundPanel>
   );

@@ -41,6 +41,17 @@
  * always did. Everything about the hook's shape survives it, including the
  * StrictMode property: the second of the pair still sees `started` already
  * flipped by the first.
+ *
+ * **`prepare` is what makes a retry a real attempt rather than a re-render.**
+ * `ready` is the platform's own gate, and on the browser it is *false* again
+ * while the worker is being re-probed — so a retry that only reset the guard
+ * would call `start` against exactly the state that just failed. `prepare`
+ * asks the platform to re-open its gate; `ready` then falls, the caller
+ * renders its blank frame, and `start` runs once when the gate settles. It is
+ * called synchronously and its result ignored on purpose: the platform's own
+ * `ready` signal is what this hook follows, and awaiting anything inside a
+ * render is what this hook exists to avoid. Omitted (the device), `retry` is
+ * the plain reset it always was, because `ready` there is constant `true`.
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -55,6 +66,7 @@ export type PhoneLedgerStartupState<T> = {
 export function usePhoneLedgerStartup<T>(
   ready: boolean,
   start: () => T,
+  prepare?: () => void,
 ): PhoneLedgerStartupState<T> {
   const started = useRef(false);
   const result = useRef<T | null>(null);
@@ -66,8 +78,9 @@ export function usePhoneLedgerStartup<T>(
   const retry = useCallback(() => {
     started.current = false;
     result.current = null;
+    prepare?.();
     setAttempt(nextAttempt);
-  }, []);
+  }, [prepare]);
 
   if (ready && !started.current) {
     started.current = true;

@@ -130,6 +130,16 @@ export function startPhoneLedger(): PhoneLedgerStartup {
   return startup;
 }
 
+/**
+ * Nothing to warm and nothing to wait for: the device opens synchronously
+ * against its own filesystem, so a retry is the caller's own re-run of
+ * `startPhoneLedger`. Clearing the cached outcome is all this can usefully do
+ * — and `retryable` is constantly `false` here, so nothing offers it.
+ */
+export function retryPhoneLedger(): void {
+  startup = null;
+}
+
 /** The device opens synchronously with no worker to warm — always ready. */
 export function usePhoneLedgerReady(): true {
   return true;
