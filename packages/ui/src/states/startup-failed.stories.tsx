@@ -63,9 +63,25 @@ export const Failed: Story = {};
  */
 export const Retryable: Story = {
   args: {
+    cause: "ledgerBusy",
     error: new Error(
       "Failed to execute 'createSyncAccessHandle' on 'FileSystemFileHandle': Access Handles cannot be created if there is another open Access Handle or Writable stream associated with the same file.",
     ),
+    onRetry: noop,
+  },
+};
+
+/**
+ * The other way the platform fails before the ledger is reached: the storage
+ * engine never came up — no answer within the deadline, a worker whose module
+ * could not load, cross-origin isolation headers missing. Same shape as
+ * `Retryable`, different sentence, because "another tab has it open" would be
+ * a lie about a missing asset.
+ */
+export const EngineUnavailable: Story = {
+  args: {
+    error: new Error("the storage engine did not answer within 8000ms"),
+    cause: "engineUnavailable",
     onRetry: noop,
   },
 };

@@ -659,5 +659,7 @@ export const pl: Messages = {
     ledgerFailedTitle: "Nie udało się otworzyć księgi",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody: "Księga jest wciąż otwarta w innej karcie. Zamknij ją i spróbuj ponownie.",
+    ledgerUnavailableBody:
+      "Silnik księgi nie wystartował. Ponowne wczytanie strony zwykle to naprawia.",
   },
 };

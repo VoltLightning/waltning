@@ -56,7 +56,17 @@ export type PhoneLedgerStartup =
    * next attempt. The field exists so the three variants describe one shape
    * and `_layout.tsx` reads one field.
    */
-  | { status: "failed"; error: Error; retryable: false };
+  | {
+      status: "failed";
+      error: Error;
+      retryable: false;
+      /**
+       * Never set here: `cause` names a way the *platform* failed to get
+       * the engine up, and the device has no such step — every failure it
+       * can have is the ledger's own, shown in the ledger's own words.
+       */
+      cause?: undefined;
+    };
 
 let startup: PhoneLedgerStartup | null = null;
 

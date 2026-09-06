@@ -53,6 +53,9 @@ describe("diagnostic errors", () => {
     expect(record).toEqual({
       name: "ThrownValue",
       message: "[Object thrown with name, +1 other field(s)]",
+      // `authored` is how `errorFromThrown` knows this is a description of the
+      // value rather than words its thrower wrote — see `presentableMessage`.
+      authored: true,
     });
     expect(JSON.stringify(record)).not.toContain("Acme");
 
@@ -77,6 +80,7 @@ describe("diagnostic errors", () => {
     expect(describeDiagnosticError(404)).toEqual({
       name: "ThrownValue",
       message: "[number thrown: 404]",
+      authored: true,
     });
   });
 
@@ -86,6 +90,7 @@ describe("diagnostic errors", () => {
     expect(described).toEqual({
       name: "ThrownValue",
       message: "[Object thrown with 2 field(s)]",
+      authored: true,
     });
     expect(JSON.stringify(described)).not.toContain("Private account");
     expect(JSON.stringify(described)).not.toContain("12.00");
@@ -155,6 +160,23 @@ describe("errorFromThrown", () => {
    * already there: a `DOMException`'s legacy `7` appended to a sentence
    * someone is meant to read is a bare number on screen for no reader.
    */
+  /**
+   * The flag, not the bracket. `expo-sqlite`'s own worker throws
+   * `[importAssetDatabaseAsync] …`, so a leading `[` is not a marker for "this
+   * module wrote it" — and reading it as one puts the bare code back on a
+   * sentence a person is meant to read.
+   */
+  it("does not treat a thrower's own bracketed message as its own", () => {
+    const bracketed = Object.assign(
+      new Error("[importAssetDatabaseAsync] Failed to fetch asset database: Not Found"),
+      { code: 5 },
+    );
+
+    expect(errorFromThrown(bracketed).message).toBe(
+      "[importAssetDatabaseAsync] Failed to fetch asset database: Not Found",
+    );
+  });
+
   it("uses the code only where there is no message to show", () => {
     expect(errorFromThrown({ code: "SQLITE_BUSY" }).message).toBe(
       "[Object thrown with code] (SQLITE_BUSY)",

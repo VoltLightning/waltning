@@ -189,6 +189,37 @@ console.log(JSON.stringify({ success: await outcomeOf(null), failure: await outc
 `;
 
 /**
+ * The load-failure half: a worker whose module never evaluated takes the
+ * message and answers nothing. Run with `--import tsx` for the same reason as
+ * the probes above.
+ */
+const workerLoadFailureProbe = `
+globalThis.__DEV__ = false;
+const channel = await import(process.env.CHANNEL_URL);
+globalThis.self = { postMessage: () => {} };
+
+// Its script 404'd, or the wasm asset is missing, or the isolation headers are
+// gone: no onmessage handler was ever installed, so the post lands nowhere.
+const worker = { postMessage() {} };
+
+let outcome = { settled: false };
+channel.invokeWorkerAsync(worker, 'open', {}).then(
+  () => {
+    outcome = { settled: true, resolved: true };
+  },
+  (e) => {
+    outcome = { settled: true, resolved: false, message: e.message };
+  },
+);
+
+await new Promise((resolve) => setTimeout(resolve, 0));
+const before = { ...outcome };
+channel.failPendingWorkerCalls(new Error('the SQLite worker failed to load: script error'));
+await new Promise((resolve) => setTimeout(resolve, 0));
+console.log(JSON.stringify({ before, after: outcome }));
+`;
+
+/**
  * Plain Node ESM: every import under `wa-sqlite/` carries its `.js`.
  *
  * One harness, three questions, chosen by environment so the fake OPFS
@@ -379,7 +410,7 @@ describe("the Expo SQLite web channel patch", () => {
   /**
    * **The `[object Object]` startup screen, reproduced.** `serialize` is
    * `JSON.stringify` and an `Error` has no own enumerable properties, so
-   * `serialize({ error })` was `{"error":{}}`; the main thread deserialised
+   * `serialize({ error })` was `{"error":}`; the main thread deserialised
    * `{}` and `new Error({})` gave the message `"[object Object]"`. Every
    * synchronous failure in the browser — a held OPFS pool included — arrived
    * saying nothing.
@@ -404,6 +435,51 @@ describe("the Expo SQLite web channel patch", () => {
       message: "NoModificationAllowedError: pool is held",
       code: "SQLITE_BUSY",
     });
+  });
+
+  /**
+   * **Nothing in the driver ever times a worker call out.** `invokeWorkerAsync`
+   * parks a deferred and posts; a worker whose module never evaluated installs
+   * no `onmessage`, so the message lands nowhere and every caller awaits
+   * forever — which is an application hanging with no error on any channel,
+   * and on this app a blank frame with no sentence and no button. The patch
+   * gives `SQLiteModule` an `error` listener that rejects what is pending.
+   *
+   * The probe proves the rejecting half against the installed module; the
+   * listener that calls it is pinned below, because `SQLiteModule.ts` imports
+   * `expo` and cannot be loaded under Node.
+   */
+  it("rejects the calls left pending by a worker that never loaded", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      ["--import", "tsx", "-e", workerLoadFailureProbe],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, CHANNEL_URL: `${expoSqliteUrl}/web/WorkerChannel.ts` },
+        stdio: "pipe",
+        encoding: "utf8",
+      },
+    );
+
+    expect(JSON.parse(stdout.trim())).toEqual({
+      // Parked, with nothing in the driver to time it out.
+      before: { settled: false },
+      after: {
+        settled: true,
+        resolved: false,
+        message: "the SQLite worker failed to load: script error",
+      },
+    });
+  });
+
+  it("listens for the worker's own load failure, and drops the handle", () => {
+    const module = readFileSync(join(fileURLToPath(expoSqliteUrl), "web/SQLiteModule.ts"), "utf8");
+
+    expect(module).toContain("worker.addEventListener('error'");
+    expect(module).toContain("failPendingWorkerCalls(");
+    // Dropped so the next call builds a fresh worker rather than posting into
+    // one that never evaluated.
+    expect(module).toContain("      worker = null;");
   });
 
   /**

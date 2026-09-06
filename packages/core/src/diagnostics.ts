@@ -3,6 +3,15 @@
 export type DiagnosticError = {
   name: string;
   message: string;
+  /**
+   * `true` when `message` is this module's own description of the thrown
+   * value rather than words the thrower wrote — `[Object thrown with …]`,
+   * `[null thrown]`. A flag rather than a look at the text: the driver this
+   * app vendors throws `[importAssetDatabaseAsync] Failed to fetch …`, and a
+   * `ZodError`'s message is `JSON.stringify` over its issues, so a leading
+   * bracket is not the marker it looks like.
+   */
+  authored?: true;
   stack?: string;
   code?: string | number;
   cause?: DiagnosticError;
@@ -119,14 +128,16 @@ export function errorFromThrown<Caught>(caught: Caught): Error {
  * (`design-system/08` §8.2: never a bare code). Where there is no sentence,
  * the code is the most identifying thing there is, so it is kept.
  *
- * "Said nothing" is every message this module wrote itself, which are exactly
- * the bracketed ones — `[Object thrown with …]`, `[null thrown]` — and an
- * empty one. A message from the thrower never starts with `[`.
+ * "Said nothing" is `authored` — a flag this module sets on its own
+ * descriptions — plus an empty message. It was a leading `[`, which read like
+ * a safe marker and is not one: `expo-sqlite`'s own worker throws
+ * `[importAssetDatabaseAsync] Failed to fetch asset database: …`, and a
+ * `ZodError`'s message is `JSON.stringify` over its issues.
  */
 function presentableMessage(described: DiagnosticError): string {
   const code = described.code === undefined ? "" : ` (${described.code})`;
   if (described.message.length === 0) return `${described.name} with no message${code}`;
-  return described.message.startsWith("[") ? `${described.message}${code}` : described.message;
+  return described.authored ? `${described.message}${code}` : described.message;
 }
 
 /** Diagnostics are evidence about an operation, never part of its outcome. */
@@ -149,20 +160,24 @@ function codeOf(error: Error): string | number | undefined {
 }
 
 function describeThrownValue<Caught>(caught: Caught): DiagnosticError {
-  if (caught === null) return { name: "ThrownValue", message: "[null thrown]" };
-  if (caught === undefined) return { name: "ThrownValue", message: "[undefined thrown]" };
+  if (caught === null) return { name: "ThrownValue", message: "[null thrown]", authored: true };
+  if (caught === undefined)
+    return { name: "ThrownValue", message: "[undefined thrown]", authored: true };
   if (typeof caught === "string") {
     // An empty message renders as an empty line on a failure screen — the
     // tag, the title, a blank, and a button — so it is named instead.
-    return {
-      name: "ThrownValue",
-      message: caught.length > 0 ? boundedMessage(caught) : "[empty string thrown]",
-    };
+    return caught.length > 0
+      ? { name: "ThrownValue", message: boundedMessage(caught) }
+      : { name: "ThrownValue", message: "[empty string thrown]", authored: true };
   }
   if (typeof caught !== "object" && typeof caught !== "function") {
     // Numbers, booleans, bigints and symbols render themselves in full and
     // hold no fields, so the value is the whole of what there is to say.
-    return { name: "ThrownValue", message: `[${typeof caught} thrown: ${String(caught)}]` };
+    return {
+      name: "ThrownValue",
+      message: `[${typeof caught} thrown: ${String(caught)}]`,
+      authored: true,
+    };
   }
   return describeThrownObject(caught);
 }
@@ -198,15 +213,20 @@ function describeThrownObject(caught: object): DiagnosticError {
     errorShaped && "name" in caught && typeof caught.name === "string" && caught.name.length > 0
       ? caught.name
       : "ThrownValue";
-  const message =
+  const spoken =
     errorShaped &&
     "message" in caught &&
     typeof caught.message === "string" &&
     caught.message.length > 0
       ? boundedMessage(caught.message)
-      : describeShape(caught);
+      : null;
 
-  return { name, message, ...(code !== undefined ? { code } : {}) };
+  return {
+    name,
+    message: spoken ?? describeShape(caught),
+    ...(spoken === null ? { authored: true as const } : {}),
+    ...(code !== undefined ? { code } : {}),
+  };
 }
 
 /**

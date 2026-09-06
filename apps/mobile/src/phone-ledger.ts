@@ -18,7 +18,17 @@ export type PhoneLedgerStartup =
    * though this variant only ever answers `false`; `.native.ts` narrows it to
    * `false` and `.web.ts` decides it per attempt.
    */
-  | { status: "failed"; error: Error; retryable: boolean };
+  | {
+      status: "failed";
+      error: Error;
+      retryable: boolean;
+      /**
+       * Never set here: `cause` names a way the *platform* failed to get
+       * the engine up, and the device has no such step — every failure it
+       * can have is the ledger's own, shown in the ledger's own words.
+       */
+      cause?: undefined;
+    };
 
 let startup: PhoneLedgerStartup | null = null;
 

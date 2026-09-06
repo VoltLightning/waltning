@@ -112,11 +112,13 @@ durability rather than deciding whether the phone works:
   files. The size of that fork is the honest cost of running this engine in a
   browser.
 
-  On that base, **the readiness gate retries, and it opens on an answer rather
-  than on a clock.** The gate the browser already waits on — the one that keeps
-  the first synchronous call off a cold worker — probes with an async
-  `:memory:` open, retried with a short backoff, because that one call answers
-  both questions: the worker is running, and the pool is free.
+  On that base, **the readiness gate opens when the engine has answered.** It
+  probes with an async `:memory:` open, retried with a short backoff, because
+  that one call answers both questions at once: the worker is running, and the
+  pool is free. Every attempt carries a deadline — the driver parks its
+  requests and times none of them out, and a worker whose module cannot
+  evaluate never installs a handler at all, so "no answer" has to be an outcome
+  rather than an await that never returns.
 
   **When the retries run out, the synchronous open is not attempted at all.**
   The driver's synchronous API is a spin on a `SharedArrayBuffer` with a
@@ -125,10 +127,7 @@ durability rather than deciding whether the phone works:
   its wasm and take its handles. So a synchronous open against one does not
   fail with the reason it failed; it fails with a driver timeout, which names
   no cause and can be classified as none. The probe's own refusal is the
-  readable account of the same condition, so that is the startup outcome. This
-  is why the gate has to distinguish *answered* from *gave up*: a gate that
-  only measured time would hand a cold worker to a synchronous caller and lose
-  the only diagnosis there was.
+  readable account of the same condition, so that is the startup outcome.
 
   **The pool's capacity is a number this app owns.** A slot is one OPFS file
   and a path with no slot is refused. Deleting a store frees its slot, and the
@@ -144,27 +143,30 @@ durability rather than deciding whether the phone works:
   `phone-ledger.web.ts` carries the arithmetic beside the paths that drive it,
   because adding a third store changes the number.
 
-  **Startup failure is therefore two claims, not one.** *Transient* means the
-  cause can be named as one another attempt clears — the browser's refusal for
-  a held pool, and that alone — and the failure screen then offers **Try
-  again**, which re-opens the platform's gate before starting again, because
-  starting against the state that just failed is not an attempt. The platform
-  seam caches no such failure (`architecture/11`: a success is a singleton
-  worth keeping, a held pool is not). Everything else is *terminal* by default,
-  a refused migration and an unreadable file alike. Classifying by which call
-  threw rather than by the named cause is what turns a corrupt file into a
-  button someone presses forever. On the device every failure is terminal —
-  one process, one document directory, no second holder.
+  **Startup failure is therefore two claims, not one, and which one it is
+  follows from where it happened.** A failure to get the engine up is
+  *transient*: a held pool clears by itself, and an engine that did not answer
+  may be a slow device, a cold cache or a deployment being fixed while someone
+  looks at the screen. Both offer **Try again**, which re-opens the platform's
+  gate before starting again — starting against the state that just failed is
+  not an attempt — and the platform seam caches neither (`architecture/11`: a
+  success is a singleton worth keeping, a moment is not). A failure *after* the
+  engine answered is *terminal*: the ledger refused a file, and it will refuse
+  the same file next time. Classifying by which call threw rather than by where
+  it threw is what turns a corrupt file into a button someone presses forever.
+  On the device every failure is terminal — one process, one document
+  directory, no second holder, and no step where the engine has to be brought
+  up at all.
 
   **The two claims say different things, because they know different amounts.**
-  A terminal failure shows the failing layer's own sentence: the migrator
-  writes for a person, and replacing it would throw away the only account of
-  what is wrong. A transient one does not — its single producer is the
-  browser, whose refusal is a long English paragraph naming a File System
-  Access API method, which is neither translated nor actionable
+  A terminal failure shows the failing layer's own sentence: the migrator and
+  the session write for a person, and replacing their account would throw away
+  the only description of what is wrong. A transient one has no such sentence
+  to show — what its producers write is a browser's English paragraph naming a
+  File System Access API method, or a timeout — so it says one of the app's
+  own, in the reader's own language, chosen by which of the two causes it was
   (`design-system/08` §8.2: never a bare code, always words a reader can act
-  on). So that branch says the app's own sentence, in the reader's own
-  language, and the `DOMException` goes to the development log.
+  on). The original goes to the development log.
 
   Naming a cause at all depends on the worker's error crossing the boundary
   with its `name`, `message` and `code` intact. Serialised the way the

@@ -29,9 +29,8 @@ import {
   type PhoneLedgerController,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
-import { type WarmupResult, warmWorker } from "@waltning/client/ledger/warm-worker";
+import { createLedgerGate, type LedgerFailureCause } from "@waltning/client/ledger/ledger-gate";
 import { currencies } from "@waltning/core/currencies";
-import { errorFromThrown } from "@waltning/core/diagnostics";
 import type { SqliteOpener } from "@waltning/ledger/open";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
 import { createLocalLedgerSession } from "@waltning/ledger/session";
@@ -79,41 +78,6 @@ type PhoneSqliteOpener = SqliteOpener<SQLiteRunResult, typeof ledgerSchema>;
  * database, not its name.
  */
 const openHandles = new Map<string, SQLiteDatabase>();
-
-/**
- * **The one failure another attempt can clear, named rather than guessed.**
- *
- * The browser rejects `createSyncAccessHandle` with a `DOMException` called
- * `NoModificationAllowedError` while another document still holds the OPFS
- * access-handle pool — and that name is the whole signal. It survives the
- * worker boundary because the patched channel sends `name` alongside `message`
- * (`pnpm-workspace.yaml`, patch 2); before that every synchronous failure in
- * the browser arrived as the message `[object Object]` and nothing downstream
- * could tell one from another.
- *
- * **Which line threw is not the question.** An earlier version answered
- * "did the throw come from an open call?", which classifies a corrupt replica
- * (`SQLITE_NOTADB`) and an exhausted pool (`SQLITE_CANTOPEN`) as retryable —
- * both permanent, both then offered a button that re-runs the whole
- * open/migrate path forever. The safe default is the opposite one: offer a
- * retry only where the cause can be named.
- *
- * **An exhausted pool stays terminal, and the mitigation is capacity.** A
- * refused slot is refused on every later attempt of the same open, so a button
- * would be a lie; the answer is that the pool is sized well above this app's
- * own peak in the first place (see `LEDGER_PATHS`), not that the failure is
- * retried.
- */
-const POOL_CONTENTION = "NoModificationAllowedError";
-
-/** The cause chain too — `session.ts` wraps a rebuild failure and keeps `cause`. */
-function isPoolContention(error: Error): boolean {
-  for (let step: Error | undefined = error, depth = 0; step && depth < 8; depth += 1) {
-    if (step.name === POOL_CONTENTION || step.message.includes(POOL_CONTENTION)) return true;
-    step = step.cause instanceof Error ? step.cause : undefined;
-  }
-  return false;
-}
 
 /**
  * Close whatever this module opened before a startup gave up.
@@ -187,19 +151,60 @@ function copyDatabase(from: string, to: string): void {
 export const PHONE_LEDGER_AVAILABLE = true as const;
 
 /**
- * **The gate opens when the engine has answered, not when a timer says it
- * should have.** Two things have to be true before any synchronous call, and
- * one asynchronous open establishes both, because in the worker they are the
- * same call.
+ * **The synchronous half, and the only thing in this file the gate cannot
+ * decide for itself.** Called once, and only after the probe has resolved —
+ * every `openDatabaseSync`, `probeExists` and `copyDatabase` below it runs
+ * inside this call, against a worker that has already answered.
  *
- * 1. **The worker is running.** `invokeWorkerSync` spins a bounded
+ * It throws rather than returning a failure: `createLedgerGate` classifies,
+ * releases and caches, because none of those three depend on `expo-sqlite`.
+ */
+function openSession(): PhoneLedgerController {
+  const session = createLocalLedgerSession({
+    open: openPhoneDatabase,
+    paths: LEDGER_PATHS,
+    journalMode: "rollback",
+    fs: {
+      exists: probeExists,
+      copy: copyDatabase,
+      remove: (path) => deleteDatabaseSync(path),
+    },
+    removeDatabase: (path) => deleteDatabaseSync(path),
+    // The whole reference set, not the pivot alone — the same bootstrap the
+    // phone gets, because it is the same ledger.
+    bootstrapCurrencies: currencies.map(({ rateSource: _rateSource, ...currency }) => currency),
+    diagnostics: mobileDiagnostics,
+    // Every current install is disposable until first install (the owner's
+    // ruling) — decided here, at the platform seam, never by a schema version.
+    preJournalStores: "rebuild",
+  });
+  const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
+  // H1 — the header's live fallback, wired before anything reads it.
+  setLivePivotReader(() => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null);
+  // M2 — `controller.subscribe` fires after every successful write,
+  // `change_pivot` included, so a mounted display-currency consumer follows live.
+  setLivePivotSubscriber(controller.subscribe);
+  // §7.0's default (first pinned, else the live pivot), read from this ledger
+  // rather than `platform.ts`'s bootstrap constant — see
+  // `initialize-display-currency.ts`. Guarded on hydration inside; never
+  // awaited here, same as the fire-and-forget `hydrate()` in `_layout.tsx`.
+  void initializeDisplayCurrencyFromLedger(displayCurrency, session.listCurrencySettings);
+  return controller;
+}
+
+/**
+ * **The gate opens when the engine has answered, not when a timer says it
+ * should have** — and one asynchronous open establishes everything it needs,
+ * because in the worker the two questions are the same call.
+ *
+ * 1. **Is the worker running?** `invokeWorkerSync` spins a bounded
  *    `Atomics.pause` loop — about nine milliseconds on every current Chromium
  *    — while a cold worker has to fetch its bundle and instantiate a ~620 KB
  *    wasm module. `openDatabaseSync` as the first SQLite call on web times out
  *    by construction, and the timeout is the only thing that surfaces: a
  *    driver-internal `Sync operation timeout`, which names no cause and can be
  *    classified as none. The asynchronous API has no such budget.
- * 2. **The OPFS access-handle pool is free.** It is acquired for the **whole
+ * 2. **Is the OPFS access-handle pool free?** It is acquired for the **whole
  *    pool directory at once, per worker** — not per file, and not per open:
  *    the worker's `maybeInitAsync` runs `AccessHandlePoolVFS.create` before it
  *    so much as looks at the path. So `:memory:` is not a way around it and
@@ -210,31 +215,31 @@ export const PHONE_LEDGER_AVAILABLE = true as const;
  * A document being replaced does not return its handles the instant the next
  * one starts running, so two loads a second or two apart put the new page's
  * acquisition against the old page's worker and it is refused. That is a
- * timing condition, not a broken ledger, which is why it is retried here.
+ * timing condition, not a broken ledger, which is why it is retried.
  *
- * **What happens when the retries run out is the whole point of the shape.**
- * The synchronous open is *not* attempted against a worker that never
- * answered — it could only report `Sync operation timeout`, and the failure
- * screen would then state a driver string with no action in it and offer no
- * retry, on precisely the condition a retry is for. Instead the probe's own
- * error is the startup outcome: on the browser that is the `DOMException`
- * naming the held pool, which `isPoolContention` can read.
+ * **The deadline is the other half of "answered".** The driver parks a
+ * deferred and posts; nothing in it ever times that out, and a worker whose
+ * module cannot evaluate — a missing wasm asset, cross-origin isolation
+ * headers dropped from the dev server or the Caddyfile — never installs its
+ * `onmessage` handler at all. Awaiting that is awaiting forever, which renders
+ * as a blank frame with no sentence and no button. Eight seconds is long
+ * enough for a cold cache on a slow phone and short enough to still be a
+ * screen rather than a void; the deadline is per attempt, so a slow device
+ * gets the whole schedule.
  *
- * **This loop depends on two properties of the vendored driver that only the
- * fork provides** (`pnpm-workspace.yaml` states all four defects and why):
- * a refused acquisition leaves the worker able to try again, and a successful
- * async call resolves rather than rejecting. `tests/dependency-patches.test.ts`
- * drives both against the installed files.
+ * **The decisions this feeds are not here.** `createLedgerGate`
+ * (`packages/client`) holds when a synchronous open may be attempted, what the
+ * screen says when it may not, what is worth another attempt and what is
+ * cached — none of which names a platform API, all of which is driven by
+ * `ledger-gate.test.ts` with stubs. What is left in this file is `expo-sqlite`.
+ *
+ * **Two properties only the vendored fork provides** (`pnpm-workspace.yaml`
+ * states all four defects and why): a refused acquisition leaves the worker
+ * able to try again, and a successful async call resolves rather than
+ * rejecting. `tests/dependency-patches.test.ts` drives both against the
+ * installed files.
  */
-const OPEN_BACKOFF_MS = [0, 150, 300, 600, 1200] as const;
-
-/** `null` while the probe is still running — the layout renders its blank frame. */
-let warmup: WarmupResult | null = null;
-const readyListeners = new Set<() => void>();
-
-function announce() {
-  for (const listener of readyListeners) listener();
-}
+const WARMUP_SCHEDULE = { delays: [0, 150, 300, 600, 1200], deadlineMs: 8000 } as const;
 
 function after(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -245,16 +250,13 @@ async function probeWorker(): Promise<void> {
   await probe.closeAsync();
 }
 
-function runWarmup(): void {
-  warmup = null;
-  announce();
-  void warmWorker(probeWorker, OPEN_BACKOFF_MS, after).then((result) => {
-    warmup = result;
-    announce();
-  });
-}
-
-runWarmup();
+const gate = createLedgerGate<PhoneLedgerController>({
+  probe: probeWorker,
+  open: openSession,
+  release: releaseOpenHandles,
+  schedule: WARMUP_SCHEDULE,
+  wait: after,
+});
 
 /**
  * Re-run the gate, then let the caller start again.
@@ -267,112 +269,34 @@ runWarmup();
  * hook exists to avoid.
  */
 export function retryPhoneLedger(): void {
-  startup = null;
-  runWarmup();
-}
-
-function subscribeReady(listener: () => void): () => void {
-  readyListeners.add(listener);
-  return () => readyListeners.delete(listener);
-}
-
-function readReady(): boolean {
-  return warmup !== null;
+  gate.retry();
 }
 
 /** `true` once the gate has settled, either way. The root layout gates on it. */
 export function usePhoneLedgerReady(): boolean {
-  return useSyncExternalStore(subscribeReady, readReady, readReady);
+  return useSyncExternalStore(gate.subscribe, gate.ready, gate.ready);
 }
 
 export type PhoneLedgerStartup =
   | { status: "ready"; controller: PhoneLedgerController }
   /**
-   * `true` only for the one cause `isPoolContention` can name — a document
-   * that lost the race for the OPFS pool. Everything else, corrupt file and
-   * refused migration alike, is terminal by default.
+   * `cause` present means the platform could not get the engine up and the
+   * screen says a sentence of its own; absent means the ledger refused after
+   * the engine answered, and its own words are shown. `createLedgerGate` is
+   * where that is decided.
    */
-  | { status: "failed"; error: Error; retryable: boolean };
-
-let startup: PhoneLedgerStartup | null = null;
+  | {
+      status: "failed";
+      error: Error;
+      retryable: boolean;
+      cause?: LedgerFailureCause;
+    };
 
 /**
- * Built on first use rather than at module scope — module evaluation happens
- * before the warm-up above can possibly have finished, and the first caller
- * is the root layout, which waits for `usePhoneLedgerReady()`.
- * `createLocalLedgerSession` has already emitted its own `ledger_startup`
- * failure diagnostic, so nothing more is logged here.
- *
- * **A success is cached and a retryable failure is not.** A session is a
- * singleton and a migration refusal is a fact about a file, so both are
- * answers this function keeps. A held pool is neither: it is a statement about
- * a moment that has already passed by the time anyone reads it, and caching it
- * would make the failure screen's own "Try again" a button that re-renders the
- * same sentence. Every retryable attempt releases the handles it took before
- * it returns, so the next one meets the pool it would have met anyway.
+ * The startup outcome. Delegated whole to the gate, which never makes a
+ * synchronous call against an engine that has not answered — see its header,
+ * and `openSession` below for the part that is actually `expo-sqlite`.
  */
 export function startPhoneLedger(): PhoneLedgerStartup {
-  if (startup) return startup;
-
-  // **A cold worker is answered here, not by the driver.** Nine milliseconds
-  // of spin cannot cover a wasm instantiation, so a synchronous open against a
-  // worker that never warmed reports `Sync operation timeout` — a string that
-  // names no cause, offers no action, and is classified as nothing. The
-  // probe's own refusal is the readable account of the same failure, so it is
-  // the outcome, and no synchronous call is made at all.
-  if (warmup?.status !== "warm") {
-    const error = warmup?.error ?? new Error("the browser's SQLite worker has not answered yet");
-    return { status: "failed", error, retryable: isPoolContention(error) };
-  }
-
-  try {
-    const session = createLocalLedgerSession({
-      open: openPhoneDatabase,
-      paths: LEDGER_PATHS,
-      journalMode: "rollback",
-      fs: {
-        exists: probeExists,
-        copy: copyDatabase,
-        remove: (path) => deleteDatabaseSync(path),
-      },
-      removeDatabase: (path) => deleteDatabaseSync(path),
-      // The whole reference set, not the pivot alone — the same bootstrap the
-      // phone gets, because it is the same ledger.
-      bootstrapCurrencies: currencies.map(({ rateSource: _rateSource, ...currency }) => currency),
-      diagnostics: mobileDiagnostics,
-      // Every current install is disposable until first install (the
-      // owner's ruling) — decided here, at the platform seam, never by a
-      // schema version.
-      preJournalStores: "rebuild",
-    });
-    const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
-    // H1 — the header's live fallback, wired before anything reads it.
-    setLivePivotReader(
-      () => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null,
-    );
-    // M2 — `controller.subscribe` fires after every successful write,
-    // `change_pivot` included, so a mounted display-currency consumer
-    // follows live.
-    setLivePivotSubscriber(controller.subscribe);
-    // §7.0's default (first pinned, else the live pivot), read from this
-    // ledger rather than `platform.ts`'s bootstrap constant — see
-    // `initialize-display-currency.ts`. Guarded on hydration inside; never
-    // awaited here, same as the fire-and-forget `hydrate()` in `_layout.tsx`.
-    void initializeDisplayCurrencyFromLedger(displayCurrency, session.listCurrencySettings);
-
-    startup = { status: "ready", controller };
-    return startup;
-  } catch (caught) {
-    // `catch` bindings are `unknown` because the language gives no choice.
-    // What crosses the worker boundary is always an `Error` — the driver
-    // normalises it — so what matters is that it now carries the *worker's*
-    // name and message rather than the constant `[object Object]` the channel
-    // used to produce (`pnpm-workspace.yaml`, patch 2). `errorFromThrown`
-    // covers the non-`Error` throws that reach here from everywhere else.
-    const error = errorFromThrown(caught);
-    const failure = { status: "failed", error, retryable: isPoolContention(error) } as const;
-    releaseOpenHandles();
-    if (!failure.retryable) startup = failure;
-    return failure;
-  }
+  return gate.start();
 }

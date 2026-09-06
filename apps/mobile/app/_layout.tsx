@@ -189,6 +189,7 @@ export default function RootLayout() {
               ) : (
                 <StartupFailed
                   error={startup.error}
+                  cause={startup.cause}
                   onRetry={startup.retryable ? retry : undefined}
                 />
               )

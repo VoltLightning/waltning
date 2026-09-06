@@ -1249,6 +1249,14 @@ export const en = {
      * The `DOMException` itself reaches the development log instead.
      */
     ledgerBusyBody: "Another tab still has the ledger open. Close it and try again.",
+    /**
+     * The other way the platform fails before the ledger is reached: the
+     * storage engine never came up at all — no answer within the deadline,
+     * a worker whose module could not load, cross-origin isolation headers
+     * missing. None of those has a sentence worth showing (a timeout, or a
+     * `CompileError`), and reloading is the one thing that helps.
+     */
+    ledgerUnavailableBody: "The ledger engine did not start. Reloading usually fixes it.",
   },
 } as const;
 

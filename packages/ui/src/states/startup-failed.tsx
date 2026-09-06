@@ -9,13 +9,15 @@
  * about it is `apps/mobile`'s to own. `_layout.tsx` imports it exactly the
  * way it imports every other composed piece of the shell.
  *
- * **Two failures, and they are not the same claim.** A migration that refused
- * a file will refuse it again, so there is nothing to offer but the sentence
- * the migrator wrote: `terminal`, no action, the shape this screen has always
- * had. But the browser's SQLite worker holds its files for one document at a
- * time, so a page loaded seconds after the last one can find the pool still
- * held — a failure about a *moment*, which the very next attempt usually
- * clears. That one is `recoverable`, and it carries `onRetry`.
+ * **Two failures, and they are not the same claim.** A ledger that refused a
+ * file will refuse it again, so there is nothing to offer but the sentence
+ * that layer wrote: `terminal`, no action, the shape this screen has always
+ * had. The other kind is the platform never getting its storage engine up —
+ * the browser's files still held by the document being replaced, or a worker
+ * that did not answer at all — which the next attempt often clears. That one
+ * is `recoverable`, carries `onRetry`, and says a sentence of this app's own,
+ * chosen by `cause`, because what those producers write is a browser's
+ * untranslated paragraph rather than words a reader can act on.
  *
  * `onRetry` optional rather than a `variant` prop: the caller does not choose
  * a colour, it says whether it has something to run — and having something to
@@ -37,13 +39,25 @@ import { GroundPanel } from "../shell/card";
 import { makeStyles } from "../theme/styles.ts";
 import { ErrorState } from "./error-state";
 
+/**
+ * Which sentence this screen says. Absent means the ledger refused after its
+ * engine was up, and the refusing layer's own words are shown.
+ */
+export type StartupFailedCause = "ledgerBusy" | "engineUnavailable";
+
 export type StartupFailedProps = {
   error: Error;
   /** Present only when another attempt could succeed — see the header. */
   onRetry?: (() => void) | undefined;
+  cause?: StartupFailedCause | undefined;
 };
 
-export function StartupFailed({ error, onRetry }: StartupFailedProps) {
+const RECOVERABLE_BODY = {
+  ledgerBusy: "startup.ledgerBusyBody",
+  engineUnavailable: "startup.ledgerUnavailableBody",
+} as const;
+
+export function StartupFailed({ error, onRetry, cause }: StartupFailedProps) {
   const t = useT();
   const styles = useStyles();
 
@@ -61,14 +75,14 @@ export function StartupFailed({ error, onRetry }: StartupFailedProps) {
   const claim = onRetry
     ? ({
         variant: "recoverable",
-        // **Not `error.message`.** This branch has one producer — the browser
-        // refusing its OPFS pool to a page that has just replaced another —
-        // and what it wrote is a long English sentence about
-        // `createSyncAccessHandle` with no action in it. The failing layer's
-        // own words are right for a migration refusal and wrong here, so the
-        // recoverable branch speaks for itself and the `DOMException` goes to
-        // the development log (`_layout.tsx`'s own diagnostic).
-        why: t("startup.ledgerBusyBody"),
+        // **Not `error.message`.** Every producer of this branch is the
+        // platform failing to get its storage engine up, and what those write
+        // is a browser's untranslated paragraph about an API method, or a
+        // timeout — no sentence with an action in it. The failing layer's own
+        // words are right for a ledger refusal and wrong here, so this branch
+        // speaks for itself and the `DOMException` goes to the development log
+        // (`_layout.tsx`'s own diagnostic).
+        why: t(RECOVERABLE_BODY[cause ?? "ledgerBusy"]),
         action: { label: t("common.retry"), onPress: onRetry },
       } as const)
     : ({
